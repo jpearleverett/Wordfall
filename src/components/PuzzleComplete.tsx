@@ -6,7 +6,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { COLORS, ECONOMY } from '../constants';
+import { GameMode } from '../types';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -15,6 +16,8 @@ interface PuzzleCompleteProps {
   combo: number;
   level: number;
   isDaily: boolean;
+  mode?: GameMode;
+  perfectRun?: boolean;
   onNextLevel: () => void;
   onHome: () => void;
   onRetry: () => void;
@@ -73,12 +76,15 @@ export function PuzzleComplete({
   combo,
   level,
   isDaily,
+  mode = 'classic',
+  perfectRun = false,
   onNextLevel,
   onHome,
   onRetry,
 }: PuzzleCompleteProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+  const perfectAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -93,27 +99,53 @@ export function PuzzleComplete({
         useNativeDriver: true,
       }),
     ]).start();
+
+    if (perfectRun) {
+      Animated.sequence([
+        Animated.delay(1200),
+        Animated.spring(perfectAnim, {
+          toValue: 1,
+          friction: 4,
+          tension: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
   }, []);
+
+  const getTitle = () => {
+    if (isDaily) return 'DAILY COMPLETE!';
+    if (perfectRun) return 'PERFECT CLEAR!';
+    switch (mode) {
+      case 'cascade': return 'CASCADE COMPLETE!';
+      case 'expert': return 'EXPERT CLEARED!';
+      case 'timePressure': return 'TIME BEATEN!';
+      case 'perfectSolve': return 'FLAWLESS!';
+      default: return 'PUZZLE CLEARED!';
+    }
+  };
+
+  // Calculate coin reward
+  const difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
+  const coinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
+
+  const perfectScale = perfectAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
 
   return (
     <Animated.View
-      style={[
-        styles.overlay,
-        {
-          opacity: fadeAnim,
-        },
-      ]}
+      style={[styles.overlay, { opacity: fadeAnim }]}
     >
       <Animated.View
-        style={[
-          styles.card,
-          {
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
+        style={[styles.card, { transform: [{ translateY: slideAnim }] }]}
       >
-        <Text style={styles.title}>
-          {isDaily ? 'DAILY COMPLETE!' : 'PUZZLE CLEARED!'}
+        <Text style={[
+          styles.title,
+          perfectRun && styles.titlePerfect,
+        ]}>
+          {getTitle()}
         </Text>
 
         <View style={styles.starsRow}>
@@ -121,6 +153,16 @@ export function PuzzleComplete({
           <Star filled={stars >= 2} delay={500} size={52} />
           <Star filled={stars >= 3} delay={800} size={44} />
         </View>
+
+        {/* Perfect badge */}
+        {perfectRun && (
+          <Animated.View style={[
+            styles.perfectBadge,
+            { transform: [{ scale: perfectScale }] },
+          ]}>
+            <Text style={styles.perfectText}>💎 PERFECT</Text>
+          </Animated.View>
+        )}
 
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
@@ -137,8 +179,26 @@ export function PuzzleComplete({
           </View>
         </View>
 
+        {/* Rewards */}
+        <View style={styles.rewardsRow}>
+          <View style={styles.rewardItem}>
+            <Text style={styles.rewardIcon}>🪙</Text>
+            <Text style={styles.rewardValue}>+{coinReward}</Text>
+          </View>
+          {perfectRun && (
+            <View style={styles.rewardItem}>
+              <Text style={styles.rewardIcon}>💎</Text>
+              <Text style={styles.rewardValue}>+{ECONOMY.perfectClearGems}</Text>
+            </View>
+          )}
+          <View style={styles.rewardItem}>
+            <Text style={styles.rewardIcon}>★</Text>
+            <Text style={styles.rewardValue}>+{stars}</Text>
+          </View>
+        </View>
+
         <View style={styles.buttons}>
-          {!isDaily && (
+          {!isDaily && mode !== 'endless' && (
             <Pressable
               style={[styles.button, styles.primaryButton]}
               onPress={onNextLevel}
@@ -197,30 +257,50 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     color: COLORS.textPrimary,
     letterSpacing: 3,
     marginBottom: 16,
     textAlign: 'center',
   },
+  titlePerfect: {
+    color: COLORS.gold,
+    textShadowColor: COLORS.goldGlow,
+    textShadowRadius: 12,
+  },
   starsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 12,
   },
   star: {
     color: COLORS.star,
     textShadowColor: COLORS.goldGlow,
     textShadowRadius: 12,
   },
+  perfectBadge: {
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    marginBottom: 12,
+  },
+  perfectText: {
+    color: COLORS.gold,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
   statsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
-    marginBottom: 24,
+    marginBottom: 16,
     paddingHorizontal: 8,
   },
   statItem: {
@@ -238,6 +318,30 @@ const styles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+  rewardsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginBottom: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 12,
+    width: '100%',
+  },
+  rewardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  rewardIcon: {
+    fontSize: 16,
+  },
+  rewardValue: {
+    color: COLORS.gold,
+    fontSize: 14,
+    fontWeight: '800',
   },
   buttons: {
     width: '100%',

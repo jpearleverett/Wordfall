@@ -1,0 +1,489 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import { COLORS } from '../constants';
+import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
+
+const THEMES = [
+  { id: 'dark', name: 'Dark', color: '#0a0e27' },
+  { id: 'midnight', name: 'Midnight', color: '#0d1117' },
+  { id: 'ocean', name: 'Ocean', color: '#0a1628' },
+  { id: 'forest', name: 'Forest', color: '#0a1a0f' },
+  { id: 'sunset', name: 'Sunset', color: '#1a0a0a' },
+];
+
+interface SettingsScreenProps {
+  settings?: any;
+  onUpdateSetting?: (key: string, value: any) => void;
+  onResetProgress?: () => void;
+  onSignOut?: () => void;
+}
+
+const SettingsScreen: React.FC<SettingsScreenProps> = ({
+  settings: settingsProp,
+  onUpdateSetting: onUpdateSettingProp,
+  onResetProgress: onResetProgressProp,
+  onSignOut: onSignOutProp,
+}) => {
+  const contextSettings = useSettings();
+  const { signOut } = useAuth();
+
+  const settings = settingsProp ?? contextSettings;
+  const onUpdateSetting = onUpdateSettingProp ?? ((key: string, value: any) => contextSettings.updateSetting(key as any, value));
+  const onResetProgress = onResetProgressProp ?? (() => {});
+  const onSignOut = onSignOutProp ?? signOut;
+
+  const sfxVolume = settings?.sfxVolume ?? 80;
+  const musicVolume = settings?.musicVolume ?? 60;
+  const hapticsEnabled = settings?.hapticsEnabled ?? settings?.haptics ?? true;
+  const notificationsEnabled = settings?.notificationsEnabled ?? settings?.notifications ?? true;
+  const selectedTheme = settings?.theme ?? 'dark';
+  const isSignedIn = settings?.isSignedIn ?? false;
+  const adsRemoved = settings?.adsRemoved ?? false;
+  const premiumPass = settings?.premiumPass ?? false;
+  const appVersion = settings?.version ?? '1.0.0';
+
+  const handleVolumeChange = (key: string, currentValue: number, delta: number) => {
+    const newValue = Math.max(0, Math.min(100, currentValue + delta));
+    onUpdateSetting(key, newValue);
+  };
+
+  const confirmResetProgress = () => {
+    Alert.alert(
+      'Reset Progress',
+      'This will permanently delete all your game progress. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset', style: 'destructive', onPress: onResetProgress },
+      ],
+    );
+  };
+
+  const confirmSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', onPress: onSignOut },
+      ],
+    );
+  };
+
+  const renderVolumeControl = (label: string, settingKey: string, value: number) => (
+    <View style={styles.settingRow}>
+      <Text style={styles.settingLabel}>{label}</Text>
+      <View style={styles.volumeControl}>
+        <TouchableOpacity
+          style={styles.volumeBtn}
+          onPress={() => handleVolumeChange(settingKey, value, -10)}
+        >
+          <Text style={styles.volumeBtnText}>-</Text>
+        </TouchableOpacity>
+        <View style={styles.volumeBarContainer}>
+          <View style={styles.volumeBarBg}>
+            <View
+              style={[styles.volumeBarFill, { width: `${value}%` }]}
+            />
+          </View>
+          <Text style={styles.volumeValue}>{value}%</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.volumeBtn}
+          onPress={() => handleVolumeChange(settingKey, value, 10)}
+        >
+          <Text style={styles.volumeBtnText}>+</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderToggle = (label: string, value: boolean, settingKey: string) => (
+    <View style={styles.settingRow}>
+      <Text style={styles.settingLabel}>{label}</Text>
+      <TouchableOpacity
+        style={[styles.toggle, value && styles.toggleOn]}
+        onPress={() => onUpdateSetting(settingKey, !value)}
+      >
+        <View style={[styles.toggleThumb, value && styles.toggleThumbOn]} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>SETTINGS</Text>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Sound Section */}
+        <Text style={styles.sectionTitle}>Sound</Text>
+        <View style={styles.card}>
+          {renderVolumeControl('SFX Volume', 'sfxVolume', sfxVolume)}
+          <View style={styles.divider} />
+          {renderVolumeControl('Music Volume', 'musicVolume', musicVolume)}
+        </View>
+
+        {/* Gameplay Section */}
+        <Text style={styles.sectionTitle}>Gameplay</Text>
+        <View style={styles.card}>
+          {renderToggle('Haptics', hapticsEnabled, 'haptics')}
+          <View style={styles.divider} />
+          {renderToggle('Notifications', notificationsEnabled, 'notifications')}
+        </View>
+
+        {/* Theme Section */}
+        <Text style={styles.sectionTitle}>Theme</Text>
+        <View style={styles.card}>
+          {THEMES.map((theme, index) => (
+            <React.Fragment key={theme.id}>
+              {index > 0 && <View style={styles.divider} />}
+              <TouchableOpacity
+                style={styles.themeRow}
+                onPress={() => onUpdateSetting('theme', theme.id)}
+              >
+                <View
+                  style={[styles.themePreview, { backgroundColor: theme.color }]}
+                />
+                <Text style={styles.settingLabel}>{theme.name}</Text>
+                <View style={styles.radioOuter}>
+                  {selectedTheme === theme.id && (
+                    <View style={styles.radioInner} />
+                  )}
+                </View>
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
+        </View>
+
+        {/* Account Section */}
+        <Text style={styles.sectionTitle}>Account</Text>
+        <View style={styles.card}>
+          {isSignedIn ? (
+            <>
+              <TouchableOpacity style={styles.actionRow}>
+                <Text style={styles.settingLabel}>Link Account</Text>
+                <Text style={styles.chevron}>›</Text>
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              <TouchableOpacity style={styles.actionRow} onPress={confirmSignOut}>
+                <Text style={[styles.settingLabel, { color: COLORS.coral }]}>
+                  Sign Out
+                </Text>
+                <Text style={[styles.chevron, { color: COLORS.coral }]}>›</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={() => onUpdateSetting('isSignedIn', true)}
+            >
+              <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
+                Sign In
+              </Text>
+              <Text style={[styles.chevron, { color: COLORS.accent }]}>›</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Purchases Section */}
+        <Text style={styles.sectionTitle}>Purchases</Text>
+        <View style={styles.card}>
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Ad Removal</Text>
+            <View
+              style={[
+                styles.statusBadge,
+                adsRemoved ? styles.statusActive : styles.statusInactive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  adsRemoved ? styles.statusTextActive : styles.statusTextInactive,
+                ]}
+              >
+                {adsRemoved ? 'Active' : 'Not Purchased'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Premium Pass</Text>
+            <View
+              style={[
+                styles.statusBadge,
+                premiumPass ? styles.statusActive : styles.statusInactive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  premiumPass ? styles.statusTextActive : styles.statusTextInactive,
+                ]}
+              >
+                {premiumPass ? 'Active' : 'Not Purchased'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* About Section */}
+        <Text style={styles.sectionTitle}>About</Text>
+        <View style={styles.card}>
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Version</Text>
+            <Text style={styles.settingValue}>{appVersion}</Text>
+          </View>
+          <View style={styles.divider} />
+          <TouchableOpacity style={styles.actionRow}>
+            <Text style={styles.settingLabel}>Privacy Policy</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <TouchableOpacity style={styles.actionRow}>
+            <Text style={styles.settingLabel}>Terms of Service</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Danger Zone */}
+        <Text style={[styles.sectionTitle, { color: COLORS.coral }]}>
+          Danger Zone
+        </Text>
+        <View style={[styles.card, styles.dangerCard]}>
+          <TouchableOpacity
+            style={styles.dangerButton}
+            onPress={confirmResetProgress}
+          >
+            <Text style={styles.dangerButtonText}>Reset Progress</Text>
+            <Text style={styles.dangerSubtext}>
+              This will permanently delete all data
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 16,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.accent,
+    letterSpacing: 4,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 16,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: 24,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.bgLight,
+    marginHorizontal: 16,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  settingLabel: {
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  settingValue: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+  },
+  volumeControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  volumeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: COLORS.surfaceLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volumeBtnText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  volumeBarContainer: {
+    alignItems: 'center',
+    width: 100,
+  },
+  volumeBarBg: {
+    width: '100%',
+    height: 6,
+    backgroundColor: COLORS.cellDefault,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  volumeBarFill: {
+    height: '100%',
+    backgroundColor: COLORS.accent,
+    borderRadius: 3,
+  },
+  volumeValue: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 3,
+  },
+  toggle: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.cellDefault,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleOn: {
+    backgroundColor: COLORS.accent,
+  },
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.textSecondary,
+  },
+  toggleThumbOn: {
+    alignSelf: 'flex-end',
+    backgroundColor: COLORS.textPrimary,
+  },
+  themeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  themePreview: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: COLORS.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 'auto',
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.accent,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  chevron: {
+    fontSize: 22,
+    color: COLORS.textMuted,
+    fontWeight: '300',
+  },
+  statusBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusActive: {
+    backgroundColor: COLORS.green + '25',
+  },
+  statusInactive: {
+    backgroundColor: COLORS.cellDefault,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusTextActive: {
+    color: COLORS.green,
+  },
+  statusTextInactive: {
+    color: COLORS.textMuted,
+  },
+  dangerCard: {
+    borderColor: COLORS.coral + '40',
+  },
+  dangerButton: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  dangerButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.coral,
+    marginBottom: 4,
+  },
+  dangerSubtext: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  bottomSpacer: {
+    height: 40,
+  },
+});
+
+export default SettingsScreen;

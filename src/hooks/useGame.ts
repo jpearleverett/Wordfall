@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useRef } from 'react';
+import { useReducer, useCallback, useRef, useEffect } from 'react';
 import {
   GameState,
   GameAction,
@@ -6,12 +6,46 @@ import {
   CellPosition,
   Direction,
   WordPlacement,
+  GameMode,
+  GameStatus,
 } from '../types';
 import { removeCellsAndApplyGravity, cloneGrid } from '../engine/gravity';
 import { findWordInGrid, isDeadEnd, getHint } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE } from '../constants';
+import { soundManager } from '../services/sound';
+import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 
-function createInitialState(board: Board, level: number): GameState {
+function getHintsForMode(mode: GameMode): number {
+  switch (mode) {
+    case 'expert':
+    case 'perfectSolve':
+      return 0;
+    case 'relax':
+      return 99;
+    default:
+      return INITIAL_HINTS;
+  }
+}
+
+function getUndosForMode(mode: GameMode): number {
+  switch (mode) {
+    case 'expert':
+    case 'perfectSolve':
+      return 0;
+    case 'relax':
+      return 99;
+    default:
+      return INITIAL_UNDOS;
+  }
+}
+
+function createInitialState(
+  board: Board,
+  level: number,
+  mode: GameMode = 'classic',
+  maxMoves: number = 0,
+  timeRemaining: number = 0,
+): GameState {
   return {
     board: {
       ...board,
@@ -21,13 +55,19 @@ function createInitialState(board: Board, level: number): GameState {
     selectionDirection: null,
     score: 0,
     moves: 0,
-    hintsLeft: INITIAL_HINTS,
-    undosLeft: INITIAL_UNDOS,
+    maxMoves,
+    hintsLeft: getHintsForMode(mode),
+    undosLeft: getUndosForMode(mode),
     history: [],
     status: 'playing',
     level,
     combo: 0,
     maxCombo: 0,
+    mode,
+    timeRemaining,
+    cascadeMultiplier: 1,
+    perfectRun: true,
+    chainCount: 0,
   };
 }
 
@@ -62,6 +102,29 @@ function areAdjacent(
   return { adjacent: false, direction: dir };
 }
 
+function calculateScore(
+  word: string,
+  comboLevel: number,
+  mode: GameMode,
+  cascadeMultiplier: number,
+): number {
+  const baseScore = SCORE.wordFound + word.length * SCORE.bonusPerLetter;
+  const comboBonus = Math.floor(baseScore * (comboLevel - 1) * SCORE.comboMultiplier);
+  let total = baseScore + comboBonus;
+
+  // Cascade mode multiplier
+  if (mode === 'cascade') {
+    total = Math.floor(total * cascadeMultiplier);
+  }
+
+  // Expert mode bonus
+  if (mode === 'expert') {
+    total = Math.floor(total * 1.5);
+  }
+
+  return total;
+}
+
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'SELECT_CELL': {
@@ -69,7 +132,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const { position } = action;
       const { selectedCells, selectionDirection, board } = state;
 
-      // Check if cell has a letter
       if (!board.grid[position.row]?.[position.col]) return state;
 
       // If tapping an already selected cell, deselect from that point
@@ -77,7 +139,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         c => c.row === position.row && c.col === position.col
       );
       if (existingIndex >= 0) {
-        // Deselect this and all after it
         const newSelected = selectedCells.slice(0, existingIndex);
         return {
           ...state,
@@ -88,6 +149,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       // If no cells selected, start selection
       if (selectedCells.length === 0) {
+        tapHaptic();
+        soundManager.playSound('tap');
         return {
           ...state,
           selectedCells: [position],
@@ -105,6 +168,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       if (!adjacent) {
         // Start new selection
+        tapHaptic();
+        soundManager.playSound('tap');
         return {
           ...state,
           selectedCells: [position],
@@ -112,6 +177,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         };
       }
 
+      tapHaptic();
+      soundManager.playSound('tap');
       const newSelected = [...selectedCells, position];
       return {
         ...state,
@@ -129,7 +196,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'SUBMIT_WORD': {
       if (state.status !== 'playing') return state;
-      const { selectedCells, board } = state;
+      const { selectedCells, board, mode } = state;
       if (selectedCells.length === 0) return state;
 
       const word = getSelectedWord(board.grid, selectedCells);
@@ -141,10 +208,33 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       if (wordIndex === -1) {
         // Not a target word - clear selection
-        return { ...state, selectedCells: [], selectionDirection: null };
+        errorHaptic();
+        soundManager.playSound('wordInvalid');
+
+        // Perfect solve mode: any wrong tap = fail
+        if (mode === 'perfectSolve') {
+          return {
+            ...state,
+            selectedCells: [],
+            selectionDirection: null,
+            perfectRun: false,
+            status: 'failed',
+          };
+        }
+
+        return {
+          ...state,
+          selectedCells: [],
+          selectionDirection: null,
+          perfectRun: false,
+        };
       }
 
-      // Word found! Save history for undo
+      // Word found!
+      wordFoundHaptic();
+      soundManager.playSound('wordFound');
+
+      // Save history for undo
       const historyEntry = {
         grid: cloneGrid(board.grid),
         words: board.words.map(w => ({ ...w })),
@@ -160,15 +250,30 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       // Calculate score
       const comboLevel = state.combo + 1;
-      const baseScore =
-        SCORE.wordFound + word.length * SCORE.bonusPerLetter;
-      const comboBonus = Math.floor(
-        baseScore * (comboLevel - 1) * SCORE.comboMultiplier
-      );
-      const wordScore = baseScore + comboBonus;
+      const newCascadeMultiplier = mode === 'cascade'
+        ? state.cascadeMultiplier + 0.25
+        : state.cascadeMultiplier;
+      const wordScore = calculateScore(word, comboLevel, mode, newCascadeMultiplier);
+
+      if (comboLevel > 1) {
+        comboHaptic();
+        soundManager.playSound('combo');
+      }
 
       // Check win condition
       const allFound = newWords.every(w => w.found);
+      const newMoves = state.moves + 1;
+
+      // Check limited moves failure
+      let newStatus: GameStatus = allFound ? 'won' : 'playing';
+      if (mode === 'limitedMoves' && state.maxMoves > 0 && newMoves >= state.maxMoves && !allFound) {
+        newStatus = 'failed';
+      }
+
+      if (allFound) {
+        successHaptic();
+        soundManager.playSound('puzzleComplete');
+      }
 
       const newState: GameState = {
         ...state,
@@ -176,11 +281,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectedCells: [],
         selectionDirection: null,
         score: state.score + wordScore,
-        moves: state.moves + 1,
+        moves: newMoves,
         combo: comboLevel,
         maxCombo: Math.max(state.maxCombo, comboLevel),
+        cascadeMultiplier: newCascadeMultiplier,
         history: [...state.history, historyEntry],
-        status: allFound ? 'won' : 'playing',
+        status: newStatus,
       };
 
       return newState;
@@ -196,7 +302,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const hint = getHint(state.board.grid, remainingWords);
       if (!hint) return state;
 
-      // Select the hint word's positions
+      soundManager.playSound('hintUsed');
+
       return {
         ...state,
         selectedCells: hint.positions,
@@ -206,25 +313,23 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             ? 'horizontal'
             : 'vertical',
         hintsLeft: state.hintsLeft - 1,
+        perfectRun: false,
       };
     }
 
     case 'UNDO_MOVE': {
-      if (state.history.length === 0 || state.status !== 'playing')
-        return state;
+      if (state.history.length === 0 || state.status !== 'playing') return state;
       if (state.undosLeft <= 0) return state;
 
       const lastHistory = state.history[state.history.length - 1];
-
-      // Find which word was last found and un-find it
-      const newWords = lastHistory.words;
+      soundManager.playSound('undoUsed');
 
       return {
         ...state,
         board: {
           ...state.board,
           grid: lastHistory.grid,
-          words: newWords,
+          words: lastHistory.words,
         },
         selectedCells: [],
         selectionDirection: null,
@@ -232,25 +337,103 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         undosLeft: state.undosLeft - 1,
         history: state.history.slice(0, -1),
         combo: 0,
+        cascadeMultiplier: state.mode === 'cascade' ? 1 : state.cascadeMultiplier,
+        perfectRun: false,
       };
     }
 
     case 'NEW_GAME':
-      return createInitialState(action.board, action.level);
+      return createInitialState(
+        action.board,
+        action.level,
+        action.mode || 'classic',
+        action.maxMoves || 0,
+        action.timeRemaining || 0,
+      );
 
     case 'RESET_COMBO':
-      return { ...state, combo: 0 };
+      return {
+        ...state,
+        combo: 0,
+        cascadeMultiplier: state.mode === 'cascade' ? 1 : state.cascadeMultiplier,
+      };
+
+    case 'TICK_TIMER': {
+      if (state.status !== 'playing' || state.timeRemaining <= 0) return state;
+      const newTime = state.timeRemaining - 1;
+      if (newTime <= 0) {
+        return { ...state, timeRemaining: 0, status: 'timeout' };
+      }
+      return { ...state, timeRemaining: newTime };
+    }
+
+    case 'SHUFFLE_FILLER': {
+      if (state.status !== 'playing') return state;
+      // Shuffle all non-word cells
+      const { grid, words } = state.board;
+      const newGrid = cloneGrid(grid);
+
+      // Collect positions that are part of words
+      const wordPositions = new Set<string>();
+      words.forEach(w => {
+        if (!w.found) {
+          // Find where this word currently is
+          const occurrences = findWordInGrid(newGrid, w.word);
+          if (occurrences.length > 0) {
+            occurrences[0].forEach(pos => wordPositions.add(`${pos.row},${pos.col}`));
+          }
+        }
+      });
+
+      // Shuffle non-word cells
+      const vowels = 'AEIOU';
+      const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
+      for (let r = 0; r < newGrid.length; r++) {
+        for (let c = 0; c < newGrid[0].length; c++) {
+          if (newGrid[r][c] && !wordPositions.has(`${r},${c}`)) {
+            const useVowel = Math.random() < 0.35;
+            const pool = useVowel ? vowels : consonants;
+            newGrid[r][c] = {
+              ...newGrid[r][c]!,
+              letter: pool[Math.floor(Math.random() * pool.length)],
+            };
+          }
+        }
+      }
+
+      return {
+        ...state,
+        board: { ...state.board, grid: newGrid },
+      };
+    }
 
     default:
       return state;
   }
 }
 
-export function useGame(initialBoard: Board, level: number) {
+export function useGame(
+  initialBoard: Board,
+  level: number,
+  mode: GameMode = 'classic',
+  maxMoves: number = 0,
+  timeLimit: number = 0,
+) {
   const [state, dispatch] = useReducer(
     gameReducer,
-    createInitialState(initialBoard, level)
+    createInitialState(initialBoard, level, mode, maxMoves, timeLimit)
   );
+
+  // Timer for timed modes
+  useEffect(() => {
+    if (mode !== 'timePressure' || state.status !== 'playing' || state.timeRemaining <= 0) return;
+
+    const interval = setInterval(() => {
+      dispatch({ type: 'TICK_TIMER' });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [mode, state.status, state.timeRemaining]);
 
   const selectCell = useCallback((position: CellPosition) => {
     dispatch({ type: 'SELECT_CELL', position });
@@ -264,7 +447,7 @@ export function useGame(initialBoard: Board, level: number) {
     dispatch({ type: 'SUBMIT_WORD' });
   }, []);
 
-  const useHint = useCallback(() => {
+  const useHintAction = useCallback(() => {
     dispatch({ type: 'USE_HINT' });
   }, []);
 
@@ -272,8 +455,12 @@ export function useGame(initialBoard: Board, level: number) {
     dispatch({ type: 'UNDO_MOVE' });
   }, []);
 
-  const newGame = useCallback((board: Board, newLevel: number) => {
-    dispatch({ type: 'NEW_GAME', board, level: newLevel });
+  const newGame = useCallback((board: Board, newLevel: number, newMode?: GameMode, newMaxMoves?: number, newTimeLimit?: number) => {
+    dispatch({ type: 'NEW_GAME', board, level: newLevel, mode: newMode, maxMoves: newMaxMoves, timeRemaining: newTimeLimit });
+  }, []);
+
+  const shuffleFiller = useCallback(() => {
+    dispatch({ type: 'SHUFFLE_FILLER' });
   }, []);
 
   // Get the currently forming word
@@ -296,7 +483,7 @@ export function useGame(initialBoard: Board, level: number) {
   const foundWords = state.board.words.filter(w => w.found).length;
   const stars =
     state.status === 'won'
-      ? state.hintsLeft >= INITIAL_HINTS && state.moves <= totalWords
+      ? state.perfectRun && state.moves <= totalWords
         ? 3
         : state.moves <= totalWords + 1
         ? 2
@@ -308,9 +495,10 @@ export function useGame(initialBoard: Board, level: number) {
     selectCell,
     clearSelection,
     submitWord,
-    useHint,
+    useHint: useHintAction,
     undoMove,
     newGame,
+    shuffleFiller,
     currentWord,
     isValidWord,
     isStuck,
