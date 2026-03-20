@@ -41,64 +41,58 @@ export function GameHeader({
   onBack,
 }: GameHeaderProps) {
   const modeConfig = MODE_CONFIGS[mode];
-  const modeLabel = isDaily ? 'DAILY' : mode !== 'classic' ? modeConfig.name.toUpperCase() : `LEVEL ${level}`;
+  const modeLabel = isDaily ? 'Daily Challenge' : mode !== 'classic' ? modeConfig.name : `Level ${level}`;
+  const progress = totalWords > 0 ? (foundWords / totalWords) * 100 : 0;
 
   return (
-    <View style={styles.container}>
-      {/* Top row: back, level info, score */}
-      <View style={styles.topRow}>
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
-          onPress={onBack}
-        >
-          <Text style={styles.backText}>{'<'}</Text>
-        </Pressable>
+    <View style={styles.wrapper}>
+      <View style={styles.chromeCard}>
+        <View style={[styles.chromeGlow, { backgroundColor: `${modeConfig.color}22` }]} />
 
-        <View style={styles.levelInfo}>
-          <View style={styles.modeTag}>
-            <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
-            <Text style={styles.levelText}>{modeLabel}</Text>
+        <View style={styles.topRow}>
+          <Pressable
+            style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
+            onPress={onBack}
+          >
+            <Text style={styles.backText}>{'‹'}</Text>
+          </Pressable>
+
+          <View style={styles.centerBlock}>
+            <View style={[styles.modeBadge, { borderColor: `${modeConfig.color}66`, backgroundColor: `${modeConfig.color}16` }]}>
+              <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
+              <Text style={styles.modeText}>{modeLabel}</Text>
+            </View>
+            <Text style={styles.progressCopy}>{foundWords}/{totalWords} target words solved</Text>
           </View>
-          <Text style={styles.progressText}>
-            {foundWords}/{totalWords} words
-          </Text>
+
+          <View style={styles.scoreBlock}>
+            <Text style={styles.scoreLabel}>Score</Text>
+            <Text style={styles.scoreValue}>{score.toLocaleString()}</Text>
+          </View>
         </View>
 
-        <View style={styles.scoreContainer}>
-          <Text style={styles.scoreLabel}>SCORE</Text>
-          <Text style={styles.scoreValue}>{score}</Text>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: modeConfig.color }]} />
         </View>
-      </View>
 
-      {/* Progress bar */}
-      <View style={styles.progressBarOuter}>
-        <View
-          style={[
-            styles.progressBarInner,
-            {
-              width: `${(foundWords / totalWords) * 100}%`,
-              backgroundColor: modeConfig.color || COLORS.accent,
-            },
-          ]}
-        />
-      </View>
-
-      {/* Bottom row: combo, action buttons */}
-      <View style={styles.bottomRow}>
-        <View style={styles.comboContainer}>
-          {combo > 1 && (
-            <Text style={styles.comboText}>
-              {combo}x COMBO
+        <View style={styles.metricsRow}>
+          <View style={styles.metricPill}>
+            <Text style={styles.metricLabel}>Combo</Text>
+            <Text style={[styles.metricValue, combo > 1 && styles.metricValueHot]}>{combo > 1 ? `${combo}x` : '—'}</Text>
+          </View>
+          <View style={styles.metricPill}>
+            <Text style={styles.metricLabel}>{maxMoves > 0 ? 'Moves' : 'Progress'}</Text>
+            <Text style={styles.metricValue}>{maxMoves > 0 ? `${moves}/${maxMoves}` : `${Math.round(progress)}%`}</Text>
+          </View>
+          <View style={styles.metricPill}>
+            <Text style={styles.metricLabel}>{mode === 'cascade' ? 'Cascade' : 'Tempo'}</Text>
+            <Text style={[styles.metricValue, mode === 'cascade' && styles.metricValueGold]}>
+              {mode === 'cascade' ? `${cascadeMultiplier.toFixed(1)}x` : timeRemaining > 0 ? `${timeRemaining}s` : 'Steady'}
             </Text>
-          )}
-          {mode === 'cascade' && cascadeMultiplier > 1 && (
-            <Text style={styles.multiplierText}>
-              {cascadeMultiplier.toFixed(1)}x
-            </Text>
-          )}
+          </View>
         </View>
 
-        <View style={styles.actions}>
+        <View style={styles.actionsRow}>
           {modeConfig.rules.allowUndo && (
             <Pressable
               style={({ pressed }) => [
@@ -110,9 +104,10 @@ export function GameHeader({
               disabled={undosLeft <= 0}
             >
               <Text style={styles.actionIcon}>↩</Text>
-              <Text style={styles.actionCount}>
-                {modeConfig.rules.unlimitedUndo ? '∞' : undosLeft}
-              </Text>
+              <View>
+                <Text style={styles.actionTitle}>Undo</Text>
+                <Text style={styles.actionCount}>{modeConfig.rules.unlimitedUndo ? 'Unlimited' : `${undosLeft} left`}</Text>
+              </View>
             </Pressable>
           )}
 
@@ -128,7 +123,10 @@ export function GameHeader({
               disabled={hintsLeft <= 0}
             >
               <Text style={styles.actionIcon}>💡</Text>
-              <Text style={styles.actionCount}>{hintsLeft}</Text>
+              <View>
+                <Text style={styles.actionTitle}>Hint</Text>
+                <Text style={styles.actionCount}>{hintsLeft} ready</Text>
+              </View>
             </Pressable>
           )}
         </View>
@@ -138,131 +136,177 @@ export function GameHeader({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 4,
+    paddingBottom: 6,
+  },
+  chromeCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+    padding: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  chromeGlow: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    right: -50,
+    top: -40,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.surfaceLight,
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: COLORS.bgLight,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
   },
   backText: {
     color: COLORS.textPrimary,
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: '700',
+    marginTop: -2,
   },
-  levelInfo: {
-    alignItems: 'center',
+  centerBlock: {
+    flex: 1,
+    paddingHorizontal: 12,
   },
-  modeTag: {
+  modeBadge: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    marginBottom: 6,
   },
   modeIcon: {
-    fontSize: 16,
+    fontSize: 14,
   },
-  levelText: {
+  modeText: {
     color: COLORS.textPrimary,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 2,
+    letterSpacing: 0.8,
   },
-  progressText: {
+  progressCopy: {
     color: COLORS.textSecondary,
     fontSize: 12,
-    marginTop: 2,
   },
-  scoreContainer: {
+  scoreBlock: {
+    minWidth: 88,
     alignItems: 'flex-end',
   },
   scoreLabel: {
     color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 1,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 2,
   },
   scoreValue: {
     color: COLORS.gold,
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
   },
-  progressBarOuter: {
-    height: 4,
-    backgroundColor: COLORS.surfaceLight,
-    borderRadius: 2,
-    marginTop: 8,
-    marginBottom: 4,
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: COLORS.bgLight,
     overflow: 'hidden',
+    marginTop: 14,
+    marginBottom: 14,
   },
-  progressBarInner: {
+  progressFill: {
     height: '100%',
-    backgroundColor: COLORS.accent,
-    borderRadius: 2,
+    borderRadius: 999,
   },
-  bottomRow: {
+  metricsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  comboContainer: {
-    minHeight: 24,
-    justifyContent: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
+    marginBottom: 12,
   },
-  comboText: {
-    color: COLORS.coral,
+  metricPill: {
+    flex: 1,
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+  },
+  metricLabel: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  metricValue: {
+    color: COLORS.textPrimary,
     fontSize: 16,
     fontWeight: '800',
-    letterSpacing: 1,
   },
-  multiplierText: {
+  metricValueHot: {
+    color: COLORS.coral,
+  },
+  metricValueGold: {
     color: COLORS.gold,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+  },
+  hintButton: {
+    backgroundColor: 'rgba(255, 215, 0, 0.12)',
+    borderColor: 'rgba(255, 215, 0, 0.24)',
+  },
+  actionDisabled: {
+    opacity: 0.45,
+  },
+  actionIcon: {
+    fontSize: 18,
+  },
+  actionTitle: {
+    color: COLORS.textPrimary,
     fontSize: 14,
     fontWeight: '800',
   },
-  actions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: COLORS.surfaceLight,
-    gap: 4,
-  },
-  hintButton: {
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-  },
-  actionDisabled: {
-    opacity: 0.4,
-  },
-  actionIcon: {
-    fontSize: 16,
-  },
   actionCount: {
     color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
   },
   btnPressed: {
-    transform: [{ scale: 0.92 }],
-    opacity: 0.8,
+    transform: [{ scale: 0.97 }],
+    opacity: 0.88,
   },
 });

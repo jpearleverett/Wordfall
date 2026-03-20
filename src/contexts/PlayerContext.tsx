@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -296,16 +297,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           (sum, s) => sum + s,
           0,
         );
+        const highestCompletedLevel = Math.max(prev.highestLevel, level);
+        const nextCurrentLevel = Math.max(prev.currentLevel, level + 1);
+        const activeChapter = getChapterForLevel(nextCurrentLevel) ?? CHAPTERS[CHAPTERS.length - 1];
+        const completedWingIds = Array.from(
+          new Set(
+            CHAPTERS.filter((chapter) => chapter.id < activeChapter.id).map((chapter) => chapter.wingId),
+          ),
+        );
 
         return {
           ...prev,
           totalScore: prev.totalScore + score,
           puzzlesSolved: prev.puzzlesSolved + 1,
           perfectSolves: isPerfect ? prev.perfectSolves + 1 : prev.perfectSolves,
-          highestLevel: Math.max(prev.highestLevel, level),
-          currentLevel: Math.max(prev.currentLevel, level + 1),
+          highestLevel: highestCompletedLevel,
+          currentLevel: nextCurrentLevel,
+          currentChapter: activeChapter.id,
           starsByLevel: newStarsByLevel,
           totalStars,
+          restoredWings: Array.from(new Set([...prev.restoredWings, ...completedWingIds])),
           lastActiveDate: getToday(),
         };
       });

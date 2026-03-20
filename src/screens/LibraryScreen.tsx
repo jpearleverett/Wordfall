@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,67 +9,23 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
+import { CHAPTERS } from '../data/chapters';
+import { Chapter } from '../types';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { LibraryHeroIllustration } from '../components/common/HeroIllustrations';
 
 const { width } = Dimensions.get('window');
 
-const WINGS = [
-  {
-    id: 'nature',
-    name: 'Nature',
-    icon: '🌿',
-    chapters: ['Forest Floor', 'Mountain Peak', 'River Delta', 'Meadow Bloom'],
-    color: '#4caf50',
-  },
-  {
-    id: 'science',
-    name: 'Science',
-    icon: '🔬',
-    chapters: ['Chemistry Lab', 'Physics Hall', 'Biology Wing', 'Astronomy Dome'],
-    color: '#00d4ff',
-  },
-  {
-    id: 'mythology',
-    name: 'Mythology',
-    icon: '⚡',
-    chapters: ['Greek Pantheon', 'Norse Legends', 'Egyptian Vault', 'Eastern Tales'],
-    color: '#ffd700',
-  },
-  {
-    id: 'ocean',
-    name: 'Ocean',
-    icon: '🌊',
-    chapters: ['Coral Reef', 'Deep Trench', 'Tidal Pool', 'Open Sea'],
-    color: '#2196f3',
-  },
-  {
-    id: 'arts',
-    name: 'Arts',
-    icon: '🎨',
-    chapters: ['Gallery Hall', 'Music Room', 'Theater Stage', 'Sculpture Garden'],
-    color: '#e91e63',
-  },
-  {
-    id: 'space',
-    name: 'Space',
-    icon: '🚀',
-    chapters: ['Launch Pad', 'Orbit Station', 'Lunar Base', 'Deep Cosmos'],
-    color: '#a855f7',
-  },
-  {
-    id: 'history',
-    name: 'History',
-    icon: '📜',
-    chapters: ['Ancient Scripts', 'Medieval Texts', 'Renaissance Works', 'Modern Archives'],
-    color: '#ff9800',
-  },
-  {
-    id: 'elements',
-    name: 'Elements',
-    icon: '🔥',
-    chapters: ['Fire Chamber', 'Water Basin', 'Earth Core', 'Wind Tower'],
-    color: '#ff6b6b',
-  },
-];
+const WING_META: Record<string, { name: string; icon: string; color: string; aura: string }> = {
+  nature: { name: 'Nature', icon: '🌿', color: '#4caf50', aura: 'rgba(76, 175, 80, 0.16)' },
+  science: { name: 'Science', icon: '🔬', color: '#00d4ff', aura: 'rgba(0, 212, 255, 0.16)' },
+  mythology: { name: 'Mythology', icon: '⚡', color: '#ffd700', aura: 'rgba(255, 215, 0, 0.16)' },
+  ocean: { name: 'Ocean', icon: '🌊', color: '#2196f3', aura: 'rgba(33, 150, 243, 0.16)' },
+  arts: { name: 'Arts', icon: '🎨', color: '#e91e63', aura: 'rgba(233, 30, 99, 0.16)' },
+  space: { name: 'Space', icon: '🚀', color: '#a855f7', aura: 'rgba(168, 85, 247, 0.16)' },
+  history: { name: 'History', icon: '📜', color: '#ff9800', aura: 'rgba(255, 152, 0, 0.16)' },
+  elements: { name: 'Elements', icon: '✨', color: '#ff6b6b', aura: 'rgba(255, 107, 107, 0.16)' },
+};
 
 interface LibraryScreenProps {
   restoredWings?: string[];
@@ -88,222 +44,194 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const decorations = decorationsProp ?? player.placedDecorations;
   const [selectedWing, setSelectedWing] = useState<string | null>(null);
 
-  const getWingProgress = (wingId: string): number => {
-    if (restoredWings.includes(wingId)) return 100;
-    const wingIndex = WINGS.findIndex((w) => w.id === wingId);
-    const chaptersPerWing = 4;
-    const wingStartChapter = wingIndex * chaptersPerWing;
-    const chaptersCompleted = Math.max(
-      0,
-      Math.min(chaptersPerWing, currentChapter - wingStartChapter),
-    );
-    return Math.round((chaptersCompleted / chaptersPerWing) * 100);
+  const wings = useMemo(() => {
+    const wingIds = Array.from(new Set(CHAPTERS.map((chapter) => chapter.wingId)));
+    return wingIds.map((wingId) => ({
+      id: wingId,
+      ...WING_META[wingId],
+      chapters: CHAPTERS.filter((chapter) => chapter.wingId === wingId),
+    }));
+  }, []);
+
+  const totalLibraryStars = Object.values(player.starsByLevel).reduce((sum, value) => sum + value, 0);
+  const selectedWingData = wings.find((wing) => wing.id === selectedWing) ?? wings[0];
+
+  const getWingProgress = (chapters: Chapter[]) => {
+    const completed = chapters.filter((chapter) => chapter.id < currentChapter).length;
+    const inProgress = chapters.some((chapter) => chapter.id === currentChapter) ? 0.5 : 0;
+    const percent = Math.round(((completed + inProgress) / chapters.length) * 100);
+    return Math.min(100, percent);
   };
 
-  const getChapterStatus = (wingId: string, chapterIndex: number): 'complete' | 'current' | 'locked' => {
-    const wingIndex = WINGS.findIndex((w) => w.id === wingId);
-    const absoluteChapter = wingIndex * 4 + chapterIndex;
-    if (absoluteChapter < currentChapter) return 'complete';
-    if (absoluteChapter === currentChapter) return 'current';
+  const getChapterStatus = (chapterId: number): 'complete' | 'current' | 'locked' => {
+    if (chapterId < currentChapter) return 'complete';
+    if (chapterId === currentChapter) return 'current';
     return 'locked';
   };
 
-  const selectedWingData = WINGS.find((w) => w.id === selectedWing);
-
-  const renderWingDetail = () => {
-    if (!selectedWingData) return null;
-    const progress = getWingProgress(selectedWingData.id);
-    const isRestored = restoredWings.includes(selectedWingData.id);
-    const decoration = decorations[selectedWingData.id];
-
-    return (
-      <View style={[styles.detailPanel, { borderColor: selectedWingData.color }]}>
-        <TouchableOpacity
-          style={styles.detailClose}
-          onPress={() => setSelectedWing(null)}
-        >
-          <Text style={styles.detailCloseText}>Close</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.detailIcon}>{selectedWingData.icon}</Text>
-        <Text style={[styles.detailName, { color: selectedWingData.color }]}>
-          {selectedWingData.name} Wing
-        </Text>
-        <Text style={styles.detailStatus}>
-          {isRestored ? 'Fully Restored' : `${progress}% Restored`}
-        </Text>
-
-        <View style={styles.shelfContainer}>
-          <View style={styles.shelfBg}>
-            <View
-              style={[
-                styles.shelfFill,
-                {
-                  width: `${progress}%`,
-                  backgroundColor: selectedWingData.color,
-                },
-              ]}
-            />
-          </View>
-          <View style={styles.shelfDividers}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={styles.shelfDivider} />
-            ))}
-          </View>
-        </View>
-
-        <Text style={styles.chaptersTitle}>Chapters</Text>
-        {selectedWingData.chapters.map((chapter, idx) => {
-          const status = getChapterStatus(selectedWingData.id, idx);
-          return (
-            <View key={chapter} style={styles.chapterRow}>
-              <View
-                style={[
-                  styles.chapterDot,
-                  status === 'complete' && { backgroundColor: COLORS.green },
-                  status === 'current' && { backgroundColor: selectedWingData.color },
-                  status === 'locked' && { backgroundColor: COLORS.cellDefault },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.chapterName,
-                  status === 'locked' && styles.chapterLocked,
-                ]}
-              >
-                {status === 'locked' ? '???' : chapter}
-              </Text>
-              <Text style={styles.chapterStatus}>
-                {status === 'complete' ? '✓' : status === 'current' ? 'In Progress' : '🔒'}
-              </Text>
-            </View>
-          );
-        })}
-
-        <View style={styles.decorationSection}>
-          <Text style={styles.decorationTitle}>Decoration</Text>
-          <View style={styles.decorationSlot}>
-            {decoration ? (
-              <Text style={styles.decorationEmoji}>{decoration}</Text>
-            ) : (
-              <Text style={styles.decorationEmpty}>Empty Slot</Text>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  };
+  const selectedProgress = getWingProgress(selectedWingData.chapters);
+  const nextWingToRestore = wings.find((wing) => !restoredWings.includes(wing.id));
+  const nextMilestoneStars = CHAPTERS.find((chapter) => chapter.id === currentChapter + 1)?.requiredStars;
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>THE LIBRARY</Text>
-        <Text style={styles.headerSubtitle}>
-          {restoredWings.length} of {WINGS.length} wings restored
-        </Text>
-      </View>
-
+      <AmbientBackdrop variant="library" />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.libraryOverview}>
-          <View style={styles.overviewRow}>
-            {WINGS.slice(0, 4).map((wing) => {
+        <View style={styles.heroCard}>
+          <View style={styles.heroGlow} />
+          <Text style={styles.heroEyebrow}>THE WORD ARCHITECT</Text>
+          <Text style={styles.heroTitle}>Restore the grand library, one chapter at a time.</Text>
+          <Text style={styles.heroSubtitle}>
+            {restoredWings.length} of {wings.length} wings rebuilt • {totalLibraryStars} stars collected • Chapter {currentChapter} active
+          </Text>
+          <LibraryHeroIllustration />
+
+          <View style={styles.heroStatsRow}>
+            <View style={styles.heroStatCard}>
+              <Text style={styles.heroStatValue}>{player.currentLevel}</Text>
+              <Text style={styles.heroStatLabel}>Level</Text>
+            </View>
+            <View style={styles.heroStatCard}>
+              <Text style={styles.heroStatValue}>{player.puzzlesSolved}</Text>
+              <Text style={styles.heroStatLabel}>Puzzles</Text>
+            </View>
+            <View style={styles.heroStatCard}>
+              <Text style={styles.heroStatValue}>{restoredWings.length}</Text>
+              <Text style={styles.heroStatLabel}>Restored</Text>
+            </View>
+          </View>
+
+          <View style={styles.nextGoalCard}>
+            <Text style={styles.nextGoalLabel}>Next restoration goal</Text>
+            <Text style={styles.nextGoalTitle}>
+              {nextWingToRestore ? `${nextWingToRestore.icon} ${nextWingToRestore.name} Wing` : '✨ Entire library restored'}
+            </Text>
+            <Text style={styles.nextGoalMeta}>
+              {nextMilestoneStars ? `Need ${nextMilestoneStars} total stars to unlock the next chapter gate.` : 'You have reached the end of the current chapter map.'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.overviewPanel}>
+          <View style={styles.overviewHeaderRow}>
+            <Text style={styles.sectionTitle}>Wing overview</Text>
+            <Text style={styles.sectionMeta}>{wings.length * 5} total chapters</Text>
+          </View>
+          <View style={styles.overviewGrid}>
+            {wings.map((wing) => {
+              const progress = getWingProgress(wing.chapters);
               const isRestored = restoredWings.includes(wing.id);
+              const isSelected = selectedWingData.id === wing.id;
               return (
-                <View
+                <TouchableOpacity
                   key={wing.id}
                   style={[
-                    styles.miniWing,
-                    isRestored && { borderColor: wing.color, backgroundColor: wing.color + '15' },
+                    styles.overviewWing,
+                    { borderColor: isSelected ? wing.color : COLORS.surfaceLight, backgroundColor: isSelected ? wing.aura : COLORS.bgLight },
                   ]}
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedWing(wing.id)}
                 >
-                  <Text style={styles.miniWingIcon}>{wing.icon}</Text>
-                </View>
-              );
-            })}
-          </View>
-          <View style={styles.overviewCenter}>
-            <Text style={styles.overviewIcon}>🏛️</Text>
-          </View>
-          <View style={styles.overviewRow}>
-            {WINGS.slice(4, 8).map((wing) => {
-              const isRestored = restoredWings.includes(wing.id);
-              return (
-                <View
-                  key={wing.id}
-                  style={[
-                    styles.miniWing,
-                    isRestored && { borderColor: wing.color, backgroundColor: wing.color + '15' },
-                  ]}
-                >
-                  <Text style={styles.miniWingIcon}>{wing.icon}</Text>
-                </View>
+                  <Text style={styles.overviewWingIcon}>{wing.icon}</Text>
+                  <Text style={[styles.overviewWingName, isSelected && { color: wing.color }]}>{wing.name}</Text>
+                  <Text style={styles.overviewWingProgress}>{isRestored ? 'Restored' : `${progress}%`}</Text>
+                </TouchableOpacity>
               );
             })}
           </View>
         </View>
 
-        {selectedWing ? (
-          renderWingDetail()
-        ) : (
-          WINGS.map((wing) => {
-            const progress = getWingProgress(wing.id);
-            const isRestored = restoredWings.includes(wing.id);
+        <View style={[styles.featurePanel, { borderColor: selectedWingData.color }]}>
+          <View style={[styles.featurePanelGlow, { backgroundColor: selectedWingData.aura }]} />
+          <View style={styles.featureHeader}>
+            <View>
+              <Text style={styles.featureEyebrow}>ACTIVE WING</Text>
+              <Text style={[styles.featureTitle, { color: selectedWingData.color }]}>
+                {selectedWingData.icon} {selectedWingData.name} Wing
+              </Text>
+              <Text style={styles.featureSubtitle}>
+                {selectedWingData.chapters.length} chapters • {selectedProgress}% restored
+              </Text>
+            </View>
+            <View style={styles.featureDecorationBadge}>
+              <Text style={styles.featureDecorationBadgeText}>{decorations[selectedWingData.id] ?? '🪑'}</Text>
+            </View>
+          </View>
 
+          <View style={styles.featureProgressTrack}>
+            <View
+              style={[
+                styles.featureProgressFill,
+                { width: `${selectedProgress}%`, backgroundColor: selectedWingData.color },
+              ]}
+            />
+          </View>
+
+          <View style={styles.infoCardsRow}>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoCardLabel}>Decoration slot</Text>
+              <Text style={styles.infoCardValue}>{decorations[selectedWingData.id] ?? 'Empty'}</Text>
+            </View>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoCardLabel}>Required stars</Text>
+              <Text style={styles.infoCardValue}>{selectedWingData.chapters[selectedWingData.chapters.length - 1]?.requiredStars ?? 0}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.sectionTitle}>Chapter roadmap</Text>
+          {selectedWingData.chapters.map((chapter) => {
+            const status = getChapterStatus(chapter.id);
             return (
-              <TouchableOpacity
-                key={wing.id}
-                style={[
-                  styles.wingCard,
-                  isRestored && { borderColor: wing.color },
-                ]}
-                onPress={() => setSelectedWing(wing.id)}
-                activeOpacity={0.7}
-              >
-                {isRestored && (
-                  <View
-                    style={[styles.wingGlow, { backgroundColor: wing.color + '10' }]}
-                  />
-                )}
-                <View style={styles.wingLeft}>
-                  <Text style={styles.wingIcon}>{wing.icon}</Text>
+              <View key={chapter.id} style={styles.chapterCard}>
+                <View
+                  style={[
+                    styles.chapterIconWrap,
+                    status === 'complete' && { backgroundColor: COLORS.greenGlow, borderColor: COLORS.green },
+                    status === 'current' && { backgroundColor: selectedWingData.aura, borderColor: selectedWingData.color },
+                  ]}
+                >
+                  <Text style={styles.chapterIcon}>{chapter.icon}</Text>
                 </View>
-                <View style={styles.wingInfo}>
-                  <Text
-                    style={[
-                      styles.wingName,
-                      isRestored && { color: wing.color },
-                    ]}
-                  >
-                    {wing.name} Wing
-                  </Text>
-                  <View style={styles.shelfSmall}>
-                    <View style={styles.shelfSmallBg}>
-                      <View
+                <View style={styles.chapterMain}>
+                  <View style={styles.chapterTitleRow}>
+                    <Text style={styles.chapterTitle}>{chapter.name}</Text>
+                    <View
+                      style={[
+                        styles.chapterPill,
+                        status === 'complete' && styles.chapterPillComplete,
+                        status === 'current' && { borderColor: selectedWingData.color, backgroundColor: selectedWingData.aura },
+                      ]}
+                    >
+                      <Text
                         style={[
-                          styles.shelfSmallFill,
-                          { width: `${progress}%`, backgroundColor: wing.color },
+                          styles.chapterPillText,
+                          status === 'complete' && styles.chapterPillTextComplete,
+                          status === 'current' && { color: selectedWingData.color },
                         ]}
-                      />
+                      >
+                        {status === 'complete' ? 'COMPLETE' : status === 'current' ? 'CURRENT' : 'LOCKED'}
+                      </Text>
                     </View>
                   </View>
-                  <Text style={styles.wingProgress}>
-                    {isRestored ? 'Fully Restored' : `${progress}% complete`}
+                  <Text style={styles.chapterDescription}>{chapter.description}</Text>
+                  <View style={styles.chapterMetaRow}>
+                    <Text style={styles.chapterMeta}>{chapter.puzzleCount} puzzles</Text>
+                    <Text style={styles.chapterMeta}>Gate: {chapter.requiredStars}★</Text>
+                    <Text style={styles.chapterMeta}>{chapter.difficulty.toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.chapterThemeWords}>
+                    Theme words: {chapter.themeWords.slice(0, 5).join(', ')}
                   </Text>
                 </View>
-                <View style={styles.wingRight}>
-                  <Text style={styles.wingChapters}>
-                    {wing.chapters.length} ch.
-                  </Text>
-                  {isRestored && <Text style={styles.wingStar}>⭐</Text>}
-                </View>
-              </TouchableOpacity>
+              </View>
             );
-          })
-        )}
+          })}
+        </View>
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </View>
@@ -315,246 +243,329 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.bg,
   },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 16,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.accent,
-    letterSpacing: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 6,
-  },
   scrollView: {
     flex: 1,
   },
   content: {
     paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 48,
   },
-  libraryOverview: {
-    alignItems: 'center',
+  heroCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
-  },
-  overviewRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  overviewCenter: {
-    marginVertical: 10,
-  },
-  overviewIcon: {
-    fontSize: 40,
-  },
-  miniWing: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.bgLight,
-    borderWidth: 1,
-    borderColor: COLORS.cellDefault,
-  },
-  miniWingIcon: {
-    fontSize: 20,
-  },
-  wingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
+    borderRadius: 28,
+    padding: 22,
+    marginBottom: 18,
     borderWidth: 1,
     borderColor: COLORS.surfaceLight,
     overflow: 'hidden',
   },
-  wingGlow: {
+  heroGlow: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: -80,
+    right: -50,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: COLORS.accentGlow,
+    opacity: 0.65,
   },
-  wingLeft: {
-    marginRight: 14,
+  heroEyebrow: {
+    fontSize: 12,
+    letterSpacing: 2,
+    color: COLORS.gold,
+    fontWeight: '800',
+    marginBottom: 12,
   },
-  wingIcon: {
-    fontSize: 32,
+  heroTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    color: COLORS.textPrimary,
+    fontWeight: '800',
+    marginBottom: 10,
+    maxWidth: width - 96,
   },
-  wingInfo: {
+  heroSubtitle: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.textSecondary,
+    marginBottom: 18,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  heroStatCard: {
     flex: 1,
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 18,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
   },
-  wingName: {
-    fontSize: 16,
+  heroStatValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  heroStatLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  nextGoalCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  nextGoalLabel: {
+    fontSize: 11,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: COLORS.textMuted,
+    marginBottom: 8,
+  },
+  nextGoalTitle: {
+    fontSize: 18,
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginBottom: 6,
   },
-  shelfSmall: {
-    marginBottom: 4,
-  },
-  shelfSmallBg: {
-    height: 8,
-    backgroundColor: COLORS.cellDefault,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  shelfSmallFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  wingProgress: {
-    fontSize: 12,
+  nextGoalMeta: {
+    fontSize: 13,
+    lineHeight: 20,
     color: COLORS.textSecondary,
   },
-  wingRight: {
-    alignItems: 'center',
-    marginLeft: 10,
+  overviewPanel: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+    marginBottom: 18,
   },
-  wingChapters: {
+  overviewHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  sectionMeta: {
     fontSize: 12,
     color: COLORS.textMuted,
-    marginBottom: 4,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
-  wingStar: {
-    fontSize: 18,
+  overviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  detailPanel: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
+  overviewWing: {
+    width: '23%',
+    minWidth: 72,
+    borderRadius: 18,
+    paddingVertical: 14,
     alignItems: 'center',
+    borderWidth: 1,
   },
-  detailClose: {
-    alignSelf: 'flex-end',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-  },
-  detailCloseText: {
-    fontSize: 14,
-    color: COLORS.accent,
-    fontWeight: '600',
-  },
-  detailIcon: {
-    fontSize: 48,
+  overviewWingIcon: {
+    fontSize: 24,
     marginBottom: 8,
   },
-  detailName: {
-    fontSize: 22,
+  overviewWingName: {
+    fontSize: 12,
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  overviewWingProgress: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  featurePanel: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 28,
+    padding: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  featurePanelGlow: {
+    position: 'absolute',
+    top: -60,
+    left: -20,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+  },
+  featureHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  featureEyebrow: {
+    fontSize: 11,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: COLORS.textMuted,
+    marginBottom: 6,
+  },
+  featureTitle: {
+    fontSize: 26,
     fontWeight: '800',
     marginBottom: 4,
   },
-  detailStatus: {
+  featureSubtitle: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginBottom: 16,
   },
-  shelfContainer: {
-    width: '100%',
-    marginBottom: 20,
-  },
-  shelfBg: {
-    height: 24,
-    backgroundColor: COLORS.cellDefault,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  shelfFill: {
-    height: '100%',
-    borderRadius: 6,
-  },
-  shelfDividers: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-  },
-  shelfDivider: {
-    width: 1,
-    height: '100%',
-    backgroundColor: COLORS.bg + '80',
-  },
-  chaptersTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    alignSelf: 'flex-start',
-    marginBottom: 10,
-  },
-  chapterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.bgLight,
-  },
-  chapterDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 12,
-  },
-  chapterName: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    fontWeight: '500',
-  },
-  chapterLocked: {
-    color: COLORS.textMuted,
-  },
-  chapterStatus: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  decorationSection: {
-    width: '100%',
-    marginTop: 16,
-  },
-  decorationTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  decorationSlot: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
+  featureDecorationBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     backgroundColor: COLORS.bgLight,
     borderWidth: 1,
-    borderColor: COLORS.cellDefault,
-    borderStyle: 'dashed',
+    borderColor: COLORS.surfaceLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  decorationEmoji: {
-    fontSize: 28,
+  featureDecorationBadgeText: {
+    fontSize: 24,
   },
-  decorationEmpty: {
-    fontSize: 10,
+  featureProgressTrack: {
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: COLORS.bgLight,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  featureProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  infoCardsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 18,
+  },
+  infoCard: {
+    flex: 1,
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+  },
+  infoCardLabel: {
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
     color: COLORS.textMuted,
-    textAlign: 'center',
+    marginBottom: 8,
+  },
+  infoCardValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  chapterCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+    marginBottom: 12,
+  },
+  chapterIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  chapterIcon: {
+    fontSize: 22,
+  },
+  chapterMain: {
+    flex: 1,
+  },
+  chapterTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    gap: 8,
+  },
+  chapterTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  chapterPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+    backgroundColor: COLORS.surface,
+  },
+  chapterPillComplete: {
+    borderColor: COLORS.green,
+    backgroundColor: COLORS.greenGlow,
+  },
+  chapterPillText: {
+    fontSize: 10,
+    letterSpacing: 1,
+    fontWeight: '800',
+    color: COLORS.textMuted,
+  },
+  chapterPillTextComplete: {
+    color: COLORS.green,
+  },
+  chapterDescription: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: COLORS.textSecondary,
+    marginBottom: 10,
+  },
+  chapterMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 8,
+  },
+  chapterMeta: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  chapterThemeWords: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.textSecondary,
   },
   bottomSpacer: {
-    height: 40,
+    height: 24,
   },
 });
 
