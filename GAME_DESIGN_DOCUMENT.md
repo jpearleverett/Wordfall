@@ -519,3 +519,266 @@ Energy systems work for games where the core loop is simple and fast (match-3). 
 - **No deceptive countdowns.** Timer-based offers show real end times. No fake urgency.
 - **Spending caps:** Optional parental controls and spending limit settings.
 - **No gacha mechanics.** Collections are earned through gameplay, not random purchases.
+
+---
+
+## 13. Day 0–7 Onboarding Plan
+
+### Day 0 — First Session (5–10 minutes)
+
+**Puzzle 1 (Tutorial A): "Tap to Find"**
+- 4×4 grid, 2 words (3 letters each). No gravity interaction needed.
+- Teaches: tap letters in order → word clears.
+- All words can be solved in any order.
+- "Great! You found both words!"
+
+**Puzzle 2 (Tutorial B): "Letters Fall"**
+- 4×5 grid, 2 words. After clearing the first word, letters visibly fall.
+- Camera briefly slows gravity animation to 600ms (2x normal) so the player sees it clearly.
+- Tooltip: "When letters disappear, the ones above fall down."
+- Both orders work — this puzzle introduces gravity visually without punishing.
+
+**Puzzle 3 (Tutorial C): "Order Matters"**
+- 5×5 grid, 3 words. One word is only reachable if another word is cleared first (gravity dependency).
+- If the player tries the wrong order and gets stuck: "Hmm, that word isn't available yet. Try a different one first!" → gentle undo prompt.
+- This is the "aha" moment — the player discovers that order matters.
+- On success: celebration screen with "You outsmarted the board!" message.
+
+**Puzzles 4–6:** Gentle difficulty ramp. Introduce the star system ("3 stars for solving with no hints!"). Introduce the hint button with a free use.
+
+**End of Day 0:** Player has completed 5–6 puzzles, understands the core mechanic, has seen gravity, experienced "order matters," and earned their first chapter progress.
+
+### Day 1 — Return and Habit
+
+- **Daily puzzle introduced.** "A new puzzle every day — same for everyone!"
+- **Streak counter appears.** "Day 1! Come back tomorrow to keep your streak."
+- **3 daily missions unlocked.** Simple missions: "Complete 2 puzzles," "Find 5 words."
+- Player continues chapter progression. Difficulty reaches "easy-medium."
+
+### Day 2 — First Collection
+
+- **Word Atlas collection introduced.** After finding a word that matches a collection slot: "You found EAGLE! That's part of your Animals page!"
+- **Library meta-game teased.** Brief animation showing an empty library wing with "Complete chapters to restore this wing."
+
+### Day 3 — First Challenge
+
+- **First puzzle where wrong order causes a dead-end.** Player experiences their first genuine strategic failure.
+- **Undo feature highlighted.** "Don't worry — use Undo to try a different approach."
+- **Daily value pack offered.** First monetization surface. Non-intrusive, dismissible.
+
+### Day 4 — Social Introduction
+
+- **Clubs unlocked.** "Join a club to play with others!"
+- **Friend challenge teased.** "Send this puzzle to a friend and compare scores."
+
+### Day 5 — Mode Variety
+
+- **Cascade mode unlocked.** "Try building combos for bonus points!"
+- **First medium-difficulty chapter puzzles.** Player feels the difficulty step up and reaches for hints.
+
+### Day 6 — Event Teaser
+
+- **Weekly challenge preview.** "This week's special puzzle starts tomorrow!"
+- **Collection progress visible.** Player sees they're 60% through their first atlas page.
+
+### Day 7 — Weekly Payoff
+
+- **7-day login streak reward.** Celebration + rare tile + gems.
+- **Weekly challenge available.** 5 escalating puzzles with leaderboard.
+- **Chapter 1 likely near completion.** Library restoration animation plays.
+
+---
+
+## 14. 12-Week Live-Ops Calendar
+
+| Week | Event | Duration | Description | Target Segment |
+|------|-------|----------|-------------|----------------|
+| 1 | **Launch Week Celebration** | 7 days | 2x coins, free daily hints, easy daily puzzles | All players |
+| 2 | **Speed Solve Sprint** | 3 days (Thu–Sat) | Timed puzzles, leaderboard by fastest completion | Competitive |
+| 3 | **Nature Words Collection** | 7 days | Themed puzzles with nature vocabulary, collect stamps | Collectors |
+| 4 | **Perfect Clear Challenge** | 5 days (Mon–Fri) | No-hint, no-undo puzzles. Gold badge for 5/5 | Mastery seekers |
+| 5 | **Club Rally Week** | 7 days | Club cumulative score competition, tier rewards | Social/clubs |
+| 6 | **Cascade Championship** | 3 days (Fri–Sun) | Cascade mode tournament, highest combo wins | Score chasers |
+| 7 | **Mystery Words Event** | 7 days | Target words are hidden until found via gravity reveal | All players |
+| 8 | **Retro Rewind** | 5 days | Replay classic puzzles from weeks 1–4 with new objectives | Returning players |
+| 9 | **Ocean Theme Week** | 7 days | Ocean vocabulary, blue theme, whale decoration unlock | Collectors, decorators |
+| 10 | **Expert Gauntlet** | 3 days (Fri–Sun) | 10 expert-difficulty puzzles. Top 100 get exclusive frame | Top players |
+| 11 | **Community Milestone** | 7 days | Global puzzle count target. All players contribute. Milestone = reward for all | Community |
+| 12 | **Season Finale Festival** | 7 days | Double everything, seasonal album deadline, final stamp push | All players |
+
+### Event Design Template
+
+**Speed Solve Sprint (Week 2 example):**
+- **Player fantasy:** "I'm the fastest thinker."
+- **Duration:** 3 days (Thursday–Saturday)
+- **Entry:** Free, unlimited attempts
+- **Mechanic:** Standard puzzles with a visible timer. Score = base points × time bonus multiplier (faster = higher)
+- **Reward structure:** Tier-based (Bronze/Silver/Gold by score thresholds) + leaderboard prizes (top 10 get exclusive cosmetic)
+- **Economy:** Event coins earned per puzzle → spent in event shop for tiles, hints, decorations
+- **UI:** Special event banner on home screen, event tab in navigation, live leaderboard
+- **Gravity-mechanic usage:** Standard puzzles — speed rewards those who can predict gravity quickly
+- **Monetization:** Event booster bundle ($1.99: extra time per puzzle + 2x event coins)
+- **Fairness risk:** Low — skill-based, unlimited attempts, tier rewards accessible to all
+
+**Mystery Words Event (Week 7 example):**
+- **Player fantasy:** "I'm discovering hidden words through clever play."
+- **Duration:** 7 days
+- **Entry:** Free
+- **Mechanic:** Target word list is partially hidden. Some words only reveal when gravity from clearing a visible word makes them appear. Players must clear visible words to discover hidden ones.
+- **Reward structure:** Progressive unlock — each hidden word found earns event currency
+- **Why it works for Wordfall specifically:** This mode amplifies the gravity-discovery mechanic. Players must think "what might appear if I clear this?" — pure Wordfall strategy.
+- **Monetization:** "Reveal" booster shows one hidden word name (but not position)
+
+---
+
+## 15. Analytics and A/B Testing Plan
+
+### Core Metrics
+
+| Metric | Purpose | Target |
+|--------|---------|--------|
+| D1 Retention | First-day return | >40% |
+| D7 Retention | Weekly return | >20% |
+| D30 Retention | Monthly return | >10% |
+| Session length | Engagement depth | 8–15 minutes |
+| Sessions per day | Return frequency | 2–3 |
+| Puzzles per session | Content consumption | 3–5 |
+| Puzzle completion rate | Content difficulty | >85% |
+| Level fail rate | Frustration detection | <15% per level |
+| Payer conversion (D30) | Monetization health | 3–5% |
+| ARPDAU | Revenue per user | $0.05–0.15 |
+
+### Game-Specific Diagnostics
+
+| Metric | What It Reveals |
+|--------|----------------|
+| % who understand gravity by Level 5 | Onboarding effectiveness |
+| Wrong-order failure rate by level | Difficulty calibration |
+| Dead-end detection rate | Board generation quality |
+| Average words found before dead-end | How far players get before mistakes |
+| Hint usage before quitting | Frustration threshold |
+| Undo usage per puzzle by difficulty | Error recovery behavior |
+| Time between word selections | Thinking time (indicates engagement vs confusion) |
+| Restart rate by level | Retry willingness vs abandonment |
+| Board abandonment rate | Content quality signal |
+| Soft frustration frequency | Productive challenge (desirable) |
+| Hard frustration frequency | Destructive frustration (must reduce) |
+
+### Recommended A/B Tests
+
+**Phase 1 (Launch):**
+1. **Board size:** 5×6 vs 6×7 for early levels — which retains better?
+2. **Word count:** 3 vs 4 words for first 10 levels — which teaches better?
+3. **Hint presentation:** Passive hint button vs proactive "Need help?" prompt after 30s idle
+4. **Undo generosity:** 3 vs 5 free undos per puzzle
+5. **Gravity animation speed:** 200ms vs 300ms vs 400ms
+
+**Phase 2 (Weeks 2–4):**
+6. **Difficulty ramp:** Gradual (1 knob per 3 levels) vs steep (multiple knobs per level)
+7. **Monetization surface timing:** First offer at Level 3 vs Level 5 vs Level 8
+8. **Daily puzzle difficulty:** Easy vs Medium for daily challenge
+9. **Streak forgiveness:** 1 grace day vs 2 grace days
+
+**Phase 3 (Months 2–3):**
+10. **Event timing:** 3-day events vs 7-day events
+11. **Social unlock:** Day 2 vs Day 4 vs Day 7 for club unlock
+12. **Collection visibility:** Always visible vs unlocked at Level 10
+13. **Reward cadence:** Frequent small rewards vs occasional large rewards
+14. **Map pacing:** 15 levels per chapter vs 20 levels per chapter
+
+---
+
+## 16. Risks / Anti-Patterns to Avoid
+
+### Critical Risks
+
+**1. Puzzles too random / unsolvable-feeling.**
+If board generation produces too many puzzles where the player has no intuitive path forward, the game feels like trial-and-error instead of strategy. **Mitigation:** Rigorous solver validation, difficulty-appropriate branching factors, and puzzle quality scoring.
+
+**2. Over-reliance on obscure word order.**
+If the only valid solution requires a non-intuitive sequence that a player couldn't reasonably predict, the game feels unfair. **Mitigation:** Easy/medium puzzles must have multiple valid orderings. Hard/expert puzzles should have at least 2 valid paths. Never ship a puzzle with exactly 1 non-obvious solution.
+
+**3. Success depends on trial-and-error instead of insight.**
+If the player must try-fail-undo-try-fail-undo repeatedly, the game becomes frustrating, not strategic. **Mitigation:** Give players enough information to plan (show all target words, make gravity behavior clear). Ensure the first 1–2 moves in each puzzle have obvious correct choices.
+
+**4. Over-animating the board and reducing clarity.**
+Flashy gravity animations, particle effects, and screen shakes can obscure the post-gravity board state. The player needs to quickly read the new board. **Mitigation:** Animations must be fast (300ms), clean, and non-overlapping. Visual clarity always trumps visual spectacle.
+
+**5. Too many modes too early.**
+Launching with 10 modes confuses new players. **Mitigation:** Launch with Classic + Daily only. Unlock additional modes gradually through progression (Cascade at Level 10, Expert at Level 30, etc.).
+
+**6. Over-monetizing hints.**
+If hints feel essential and expensive, the game feels pay-to-win. **Mitigation:** 3 free hints per puzzle (always), easy puzzles never require hints, and purchased hints are cheap. The game must be completable without spending.
+
+**7. Poor board generation causing unfair puzzles.**
+This is the #1 technical risk. A bad generation algorithm produces dead-ends, trivial boards, or confusing layouts. **Mitigation:** Invest heavily in the solver/validator. Every puzzle must pass solvability + quality checks before shipping.
+
+**8. Word theme repetition.**
+If players see the same words (CAT, DOG, FISH) across dozens of puzzles, the game feels stale. **Mitigation:** 2,650+ word database, variety scoring in word selection, and themed chapters that rotate vocabulary.
+
+**9. Mechanics that distract from core strategy.**
+Adding power-ups, modifiers, or secondary objectives that make the core planning loop less important. **Mitigation:** All modes and features must amplify the gravity-ordering mechanic, not bypass it. The question "does this make order-planning more or less important?" should be asked for every new feature.
+
+**10. Making puzzles too linear.**
+If every puzzle has exactly one valid order and the player just needs to find it, the game becomes a linear logic puzzle with no experimentation space. **Mitigation:** Target multiple valid orderings per puzzle. Let players discover their own path, not just "the" path.
+
+---
+
+## 17. Prioritized Build Roadmap
+
+### Phase 1: Quick Wins (Weeks 1–4)
+
+Focus: Make the existing core mechanic clearer, more satisfying, and retention-ready.
+
+| Feature | Rationale | Retention Impact | Monetization Impact | Complexity |
+|---------|-----------|-----------------|--------------------|-----------|
+| Polished gravity animation (300ms, bounce, cascade stagger) | Core feel improvement | High | Indirect | Low |
+| Sound design (letter tap, gravity drop, word clear, combo) | Satisfaction multiplier | Medium | Indirect | Low |
+| Haptic feedback on selection and word clear | Tactile satisfaction | Medium | None | Low |
+| Star rating system (1–3 stars per puzzle) | Replayability motivation | High | Indirect | Low |
+| "Stuck" detection with undo prompt | Reduces rage-quit | High | Drives undo purchases | Medium |
+| Chain reaction visual celebration | Rewards smart play visually | Medium | Indirect | Low |
+| Level progression (40 chapters × 15–20 puzzles) | Content pipeline | Very High | Enables chapter bundles | Medium |
+| Daily challenge with streak | D1/D7 retention anchor | Very High | Streak protection items | Medium |
+| Basic hint/undo economy (free per puzzle + purchasable) | Core monetization loop | Medium | High | Medium |
+| Starter pack offer | Early conversion | Low | High | Low |
+
+**Dependency risks:** Board generation reliability is the critical-path dependency. If generation is slow or produces poor puzzles, everything downstream suffers.
+
+### Phase 2: Medium-Complexity Systems (Weeks 5–12)
+
+Focus: Build the meta-game, retention loops, and collection systems.
+
+| Feature | Rationale | Retention Impact | Monetization Impact | Complexity |
+|---------|-----------|-----------------|--------------------|-----------|
+| Library meta-game (visual world progression) | Long-term motivation | High | Cosmetic purchases | High |
+| Word Atlas collection system | Ambient goal creation | Medium | Collection packs | Medium |
+| Rare Letter Tiles collection | Excitement spikes, trading | Medium | Tile packs | Medium |
+| 3 daily missions + bonus chest | Daily return motivation | High | Mission refresh (gems) | Medium |
+| Cascade mode | Score-chasing variety | Medium | Event entries | Medium |
+| Weekly challenge (5 puzzles + leaderboard) | Weekly return anchor | High | Event boosters | Medium |
+| Monthly mastery track (free + premium tiers) | Long-term engagement arc | High | Premium pass ($4.99) | High |
+| Board Preview booster | Strategic assist option | Low | Booster purchases | Low |
+| Cosmetic themes (3–5 grid/background themes) | Personalization | Low | Cosmetic packs | Medium |
+| Basic event framework (Speed Solve, Perfect Clear) | Live-ops foundation | High | Event bundles | High |
+
+**Dependency risks:** Collection systems require careful balancing to avoid feeling grindy. Monthly mastery track requires reliable daily content flow.
+
+### Phase 3: Long-Term Scale Systems (Weeks 13–24)
+
+Focus: Social, advanced events, content tools, and live-service infrastructure.
+
+| Feature | Rationale | Retention Impact | Monetization Impact | Complexity |
+|---------|-----------|-----------------|--------------------|-----------|
+| Clubs (creation, weekly score, club puzzle) | Social retention multiplier | Very High | Club-exclusive offers | High |
+| Friend challenges (async) | Viral loop, social bonds | Medium | None directly | Medium |
+| Seasonal stamp albums | Time-bounded motivation | High | Season pass | Medium |
+| Mystery Words event mode | Gravity-specific event innovation | Medium | Event boosters | High |
+| Community milestones (global goals) | Shared purpose | Medium | None | Medium |
+| Smart Solve replay sharing | Viral/organic growth | Low–Medium | None | High |
+| Player segmentation (skill/engagement tiers) | Targeted difficulty and offers | Medium | Improves conversion | High |
+| Content creation tools (puzzle editor for devs) | Scalable content pipeline | Very High (indirect) | Enables faster content | Very High |
+| A/B testing infrastructure | Data-driven optimization | High (indirect) | Improves all metrics | High |
+| Comeback/reactivation campaigns | Win-back lapsed players | Medium | Re-conversion | Medium |
+
+**Dependency risks:** Social systems require moderation infrastructure. Content tools require significant engineering investment but unlock sustainable content scaling. Segmentation requires enough data (minimum ~50k DAU) to be meaningful.
