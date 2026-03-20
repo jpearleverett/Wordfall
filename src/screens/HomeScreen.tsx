@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { COLORS, SCREEN_HEIGHT } from '../constants';
+import { COLORS, SCREEN_HEIGHT, ECONOMY } from '../constants';
 import { Difficulty, PlayerProgress } from '../types';
 
 interface HomeScreenProps {
@@ -15,6 +15,8 @@ interface HomeScreenProps {
   onPlay: (difficulty?: Difficulty) => void;
   onDaily: () => void;
   onResetProgress: () => void;
+  onOpenShop?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export function HomeScreen({
@@ -22,6 +24,8 @@ export function HomeScreen({
   onPlay,
   onDaily,
   onResetProgress,
+  onOpenShop,
+  onOpenSettings,
 }: HomeScreenProps) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const buttonsAnim = useRef(new Animated.Value(0)).current;
@@ -61,11 +65,29 @@ export function HomeScreen({
     0
   );
 
+  // Determine streak milestone
+  const nextMilestone = [7, 14, 30, 60, 100].find(m => m > progress.currentStreak) || 100;
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
     >
+      {/* Top actions */}
+      <View style={styles.topBar}>
+        {onOpenSettings && (
+          <Pressable style={styles.iconButton} onPress={onOpenSettings}>
+            <Text style={styles.iconButtonText}>⚙</Text>
+          </Pressable>
+        )}
+        <View style={{ flex: 1 }} />
+        {onOpenShop && (
+          <Pressable style={styles.iconButton} onPress={onOpenShop}>
+            <Text style={styles.iconButtonText}>🛒</Text>
+          </Pressable>
+        )}
+      </View>
+
       {/* Title */}
       <Animated.View
         style={[styles.titleContainer, { transform: [{ scale: titleScale }] }]}
@@ -86,7 +108,9 @@ export function HomeScreen({
           <Text style={styles.statLabel}>Solved</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>{progress.currentStreak}</Text>
+          <Text style={[styles.statValue, progress.currentStreak >= 7 && styles.streakHighlight]}>
+            {progress.currentStreak}
+          </Text>
           <Text style={styles.statLabel}>Streak</Text>
         </View>
         <View style={styles.stat}>
@@ -94,6 +118,23 @@ export function HomeScreen({
           <Text style={styles.statLabel}>Level</Text>
         </View>
       </View>
+
+      {/* Streak progress */}
+      {progress.currentStreak > 0 && (
+        <View style={styles.streakBar}>
+          <Text style={styles.streakText}>
+            🔥 {progress.currentStreak} day streak! Next milestone: {nextMilestone} days
+          </Text>
+          <View style={styles.streakProgress}>
+            <View
+              style={[
+                styles.streakProgressInner,
+                { width: `${Math.min(100, (progress.currentStreak / nextMilestone) * 100)}%` },
+              ]}
+            />
+          </View>
+        </View>
+      )}
 
       <Animated.View
         style={{
@@ -124,6 +165,9 @@ export function HomeScreen({
           <Text style={styles.dailyButtonText}>
             {dailyDone ? '✓  DAILY COMPLETE' : '☀  DAILY CHALLENGE'}
           </Text>
+          {!dailyDone && (
+            <Text style={styles.dailyReward}>+{ECONOMY.dailyCompleteCoins} coins</Text>
+          )}
         </Pressable>
 
         {/* Difficulty quick picks */}
@@ -172,9 +216,25 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 24,
-    paddingTop: SCREEN_HEIGHT * 0.08,
+    paddingTop: 16,
     paddingBottom: 40,
     alignItems: 'center',
+  },
+  topBar: {
+    flexDirection: 'row',
+    width: '100%',
+    marginBottom: 8,
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconButtonText: {
+    fontSize: 20,
   },
   titleContainer: {
     alignItems: 'center',
@@ -207,7 +267,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 28,
+    marginBottom: 12,
     width: '100%',
     justifyContent: 'space-around',
   },
@@ -226,6 +286,38 @@ const styles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+  streakHighlight: {
+    color: COLORS.coral,
+    textShadowColor: COLORS.coralGlow,
+    textShadowRadius: 8,
+  },
+  streakBar: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: COLORS.coral,
+  },
+  streakText: {
+    color: COLORS.coral,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  streakProgress: {
+    height: 6,
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  streakProgressInner: {
+    height: '100%',
+    backgroundColor: COLORS.coral,
+    borderRadius: 3,
   },
   button: {
     width: '100%',
@@ -262,6 +354,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     letterSpacing: 2,
+  },
+  dailyReward: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    marginTop: 2,
   },
   sectionTitle: {
     color: COLORS.textMuted,

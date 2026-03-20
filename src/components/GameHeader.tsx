@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS } from '../constants';
+import { COLORS, MODE_CONFIGS } from '../constants';
+import { GameMode } from '../types';
 
 interface GameHeaderProps {
   level: number;
@@ -12,6 +13,10 @@ interface GameHeaderProps {
   foundWords: number;
   totalWords: number;
   isDaily?: boolean;
+  mode?: GameMode;
+  maxMoves?: number;
+  timeRemaining?: number;
+  cascadeMultiplier?: number;
   onHint: () => void;
   onUndo: () => void;
   onBack: () => void;
@@ -27,10 +32,17 @@ export function GameHeader({
   foundWords,
   totalWords,
   isDaily,
+  mode = 'classic',
+  maxMoves = 0,
+  timeRemaining = 0,
+  cascadeMultiplier = 1,
   onHint,
   onUndo,
   onBack,
 }: GameHeaderProps) {
+  const modeConfig = MODE_CONFIGS[mode];
+  const modeLabel = isDaily ? 'DAILY' : mode !== 'classic' ? modeConfig.name.toUpperCase() : `LEVEL ${level}`;
+
   return (
     <View style={styles.container}>
       {/* Top row: back, level info, score */}
@@ -40,9 +52,10 @@ export function GameHeader({
         </Pressable>
 
         <View style={styles.levelInfo}>
-          <Text style={styles.levelText}>
-            {isDaily ? 'DAILY' : `LEVEL ${level}`}
-          </Text>
+          <View style={styles.modeTag}>
+            <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
+            <Text style={styles.levelText}>{modeLabel}</Text>
+          </View>
           <Text style={styles.progressText}>
             {foundWords}/{totalWords} words
           </Text>
@@ -59,7 +72,10 @@ export function GameHeader({
         <View
           style={[
             styles.progressBarInner,
-            { width: `${(foundWords / totalWords) * 100}%` },
+            {
+              width: `${(foundWords / totalWords) * 100}%`,
+              backgroundColor: modeConfig.color || COLORS.accent,
+            },
           ]}
         />
       </View>
@@ -72,33 +88,44 @@ export function GameHeader({
               {combo}x COMBO
             </Text>
           )}
+          {mode === 'cascade' && cascadeMultiplier > 1 && (
+            <Text style={styles.multiplierText}>
+              {cascadeMultiplier.toFixed(1)}x
+            </Text>
+          )}
         </View>
 
         <View style={styles.actions}>
-          <Pressable
-            style={[
-              styles.actionButton,
-              undosLeft <= 0 && styles.actionDisabled,
-            ]}
-            onPress={onUndo}
-            disabled={undosLeft <= 0}
-          >
-            <Text style={styles.actionIcon}>↩</Text>
-            <Text style={styles.actionCount}>{undosLeft}</Text>
-          </Pressable>
+          {modeConfig.rules.allowUndo && (
+            <Pressable
+              style={[
+                styles.actionButton,
+                undosLeft <= 0 && styles.actionDisabled,
+              ]}
+              onPress={onUndo}
+              disabled={undosLeft <= 0}
+            >
+              <Text style={styles.actionIcon}>↩</Text>
+              <Text style={styles.actionCount}>
+                {modeConfig.rules.unlimitedUndo ? '∞' : undosLeft}
+              </Text>
+            </Pressable>
+          )}
 
-          <Pressable
-            style={[
-              styles.actionButton,
-              styles.hintButton,
-              hintsLeft <= 0 && styles.actionDisabled,
-            ]}
-            onPress={onHint}
-            disabled={hintsLeft <= 0}
-          >
-            <Text style={styles.actionIcon}>💡</Text>
-            <Text style={styles.actionCount}>{hintsLeft}</Text>
-          </Pressable>
+          {modeConfig.rules.allowHints && (
+            <Pressable
+              style={[
+                styles.actionButton,
+                styles.hintButton,
+                hintsLeft <= 0 && styles.actionDisabled,
+              ]}
+              onPress={onHint}
+              disabled={hintsLeft <= 0}
+            >
+              <Text style={styles.actionIcon}>💡</Text>
+              <Text style={styles.actionCount}>{hintsLeft}</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </View>
@@ -132,9 +159,17 @@ const styles = StyleSheet.create({
   levelInfo: {
     alignItems: 'center',
   },
+  modeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modeIcon: {
+    fontSize: 16,
+  },
   levelText: {
     color: COLORS.textPrimary,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: 2,
   },
@@ -179,12 +214,20 @@ const styles = StyleSheet.create({
   comboContainer: {
     minHeight: 24,
     justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   comboText: {
     color: COLORS.coral,
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  multiplierText: {
+    color: COLORS.gold,
+    fontSize: 14,
+    fontWeight: '800',
   },
   actions: {
     flexDirection: 'row',
