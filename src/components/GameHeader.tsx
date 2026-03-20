@@ -47,7 +47,10 @@ export function GameHeader({
     <View style={styles.container}>
       {/* Top row: back, level info, score */}
       <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={onBack}>
+        <Pressable
+          style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
+          onPress={onBack}
+        >
           <Text style={styles.backText}>{'<'}</Text>
         </Pressable>
 
@@ -98,9 +101,10 @@ export function GameHeader({
         <View style={styles.actions}>
           {modeConfig.rules.allowUndo && (
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.actionButton,
                 undosLeft <= 0 && styles.actionDisabled,
+                pressed && styles.btnPressed,
               ]}
               onPress={onUndo}
               disabled={undosLeft <= 0}
@@ -114,10 +118,11 @@ export function GameHeader({
 
           {modeConfig.rules.allowHints && (
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.actionButton,
                 styles.hintButton,
                 hintsLeft <= 0 && styles.actionDisabled,
+                pressed && styles.btnPressed,
               ]}
               onPress={onHint}
               disabled={hintsLeft <= 0}
@@ -255,5 +260,9 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 13,
     fontWeight: '700',
+  },
+  btnPressed: {
+    transform: [{ scale: 0.92 }],
+    opacity: 0.8,
   },
 });

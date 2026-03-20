@@ -89,6 +89,9 @@ export function GameScreen({
   const [showValidFlash, setShowValidFlash] = useState(false);
   const invalidFlashAnim = useRef(new Animated.Value(0)).current;
   const [lastInvalidTime, setLastInvalidTime] = useState(0);
+  const scorePopupAnim = useRef(new Animated.Value(0)).current;
+  const [scorePopup, setScorePopup] = useState<{ points: number; label: string } | null>(null);
+  const prevScoreRef = useRef(state.score);
 
   // Chain celebration animation
   const showChainCelebration = useCallback(() => {
@@ -116,6 +119,31 @@ export function GameScreen({
       showChainCelebration();
     }
   }, [state.combo]);
+
+  // Score popup when score changes (word found)
+  useEffect(() => {
+    const diff = state.score - prevScoreRef.current;
+    prevScoreRef.current = state.score;
+    if (diff > 0 && state.status === 'playing') {
+      const label = state.combo > 1 ? `+${diff} (${state.combo}x!)` : `+${diff}`;
+      setScorePopup({ points: diff, label });
+      scorePopupAnim.setValue(0);
+      Animated.sequence([
+        Animated.spring(scorePopupAnim, {
+          toValue: 1,
+          friction: 5,
+          tension: 180,
+          useNativeDriver: true,
+        }),
+        Animated.delay(600),
+        Animated.timing(scorePopupAnim, {
+          toValue: 2,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setScorePopup(null));
+    }
+  }, [state.score]);
 
   // Green flash + auto-submit when a valid word is selected
   useEffect(() => {
@@ -390,6 +418,43 @@ export function GameScreen({
         />
       )}
 
+      {/* Score popup */}
+      {scorePopup && (
+        <Animated.View
+          style={[
+            styles.scorePopup,
+            {
+              opacity: scorePopupAnim.interpolate({
+                inputRange: [0, 0.5, 1, 1.8, 2],
+                outputRange: [0, 1, 1, 1, 0],
+              }),
+              transform: [
+                {
+                  translateY: scorePopupAnim.interpolate({
+                    inputRange: [0, 1, 2],
+                    outputRange: [20, 0, -40],
+                  }),
+                },
+                {
+                  scale: scorePopupAnim.interpolate({
+                    inputRange: [0, 0.3, 1, 2],
+                    outputRange: [0.5, 1.2, 1, 0.8],
+                  }),
+                },
+              ],
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={[
+            styles.scorePopupText,
+            state.combo > 1 && styles.scorePopupCombo,
+          ]}>
+            {scorePopup.label}
+          </Text>
+        </Animated.View>
+      )}
+
       {/* Grid area */}
       <View style={styles.gridArea}>
         {/* Show preview grid if active */}
@@ -424,7 +489,10 @@ export function GameScreen({
       {hasAnyBoosters && state.status === 'playing' && (
         <View style={styles.boosterBar}>
           {state.boosterCounts.shuffleFiller > 0 && (
-            <Pressable style={styles.boosterButton} onPress={handleShuffle}>
+            <Pressable
+              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
+              onPress={handleShuffle}
+            >
               <Text style={styles.boosterIcon}>🔀</Text>
               <Text style={styles.boosterLabel}>Shuffle</Text>
               <View style={styles.boosterCount}>
@@ -434,7 +502,11 @@ export function GameScreen({
           )}
           {state.boosterCounts.freezeColumn > 0 && (
             <Pressable
-              style={[styles.boosterButton, freezeMode && styles.boosterActive]}
+              style={({ pressed }) => [
+                styles.boosterButton,
+                freezeMode && styles.boosterActive,
+                pressed && styles.boosterPressed,
+              ]}
               onPress={handleFreezeToggle}
             >
               <Text style={styles.boosterIcon}>❄️</Text>
@@ -445,7 +517,10 @@ export function GameScreen({
             </Pressable>
           )}
           {state.boosterCounts.boardPreview > 0 && state.selectedCells.length > 0 && (
-            <Pressable style={styles.boosterButton} onPress={handlePreviewToggle}>
+            <Pressable
+              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
+              onPress={handlePreviewToggle}
+            >
               <Text style={styles.boosterIcon}>👁️</Text>
               <Text style={styles.boosterLabel}>Preview</Text>
               <View style={styles.boosterCount}>
@@ -501,15 +576,24 @@ export function GameScreen({
               <Text style={styles.failedStat}>Score: {state.score}</Text>
             </View>
             <View style={styles.failedButtons}>
-              <Pressable style={styles.retryButton} onPress={handleRetry}>
+              <Pressable
+                style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
+                onPress={handleRetry}
+              >
                 <Text style={styles.retryButtonText}>RETRY</Text>
               </Pressable>
               {state.undosLeft > 0 && state.history.length > 0 && (
-                <Pressable style={styles.undoRecoverButton} onPress={handleUndo}>
+                <Pressable
+                  style={({ pressed }) => [styles.undoRecoverButton, pressed && styles.buttonPressed]}
+                  onPress={handleUndo}
+                >
                   <Text style={styles.undoRecoverText}>↩ UNDO LAST MOVE</Text>
                 </Pressable>
               )}
-              <Pressable style={styles.homeButton} onPress={onHome}>
+              <Pressable
+                style={({ pressed }) => [styles.homeButton, pressed && styles.buttonPressed]}
+                onPress={onHome}
+              >
                 <Text style={styles.homeButtonText}>HOME</Text>
               </Pressable>
             </View>
@@ -666,6 +750,34 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.green,
     zIndex: 50,
   },
+  scorePopup: {
+    position: 'absolute',
+    top: '35%',
+    alignSelf: 'center',
+    zIndex: 250,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 212, 255, 0.9)',
+    elevation: 20,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  scorePopupText: {
+    color: COLORS.bg,
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  scorePopupCombo: {
+    color: COLORS.bg,
+    fontSize: 26,
+    textShadowColor: 'rgba(255, 215, 0, 0.5)',
+    textShadowRadius: 8,
+  },
   previewContainer: {
     alignItems: 'center',
   },
@@ -708,6 +820,10 @@ const styles = StyleSheet.create({
   boosterActive: {
     borderColor: COLORS.accent,
     backgroundColor: 'rgba(0, 212, 255, 0.15)',
+  },
+  boosterPressed: {
+    transform: [{ scale: 0.92 }],
+    opacity: 0.8,
   },
   boosterIcon: {
     fontSize: 20,
@@ -816,5 +932,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 1,
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.9,
   },
 });

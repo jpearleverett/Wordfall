@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { COLORS, SCREEN_HEIGHT, ECONOMY } from '../constants';
+import { COLORS, ECONOMY } from '../constants';
 import { Difficulty, PlayerProgress } from '../types';
 
 interface HomeScreenProps {
@@ -136,6 +136,45 @@ export function HomeScreen({
         </View>
       )}
 
+      {/* Daily Login Rewards */}
+      <View style={styles.loginRewardsContainer}>
+        <Text style={styles.loginRewardsTitle}>DAILY REWARDS</Text>
+        <View style={styles.loginRewardsRow}>
+          {ECONOMY.loginRewards.map((reward, idx) => {
+            const day = idx + 1;
+            const isClaimed = progress.currentStreak > idx;
+            const isToday = progress.currentStreak === idx;
+            return (
+              <View
+                key={day}
+                style={[
+                  styles.loginDay,
+                  isClaimed && styles.loginDayClaimed,
+                  isToday && styles.loginDayToday,
+                ]}
+              >
+                <Text style={[
+                  styles.loginDayNum,
+                  isClaimed && styles.loginDayNumClaimed,
+                  isToday && styles.loginDayNumToday,
+                ]}>
+                  D{day}
+                </Text>
+                <Text style={styles.loginDayReward}>
+                  {isClaimed ? '✓' : `🪙${reward.coins}`}
+                </Text>
+                {(reward as any).gems && !isClaimed && (
+                  <Text style={styles.loginDayBonus}>💎{(reward as any).gems}</Text>
+                )}
+                {(reward as any).rareTile && !isClaimed && (
+                  <Text style={styles.loginDayBonus}>🎁</Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </View>
+
       <Animated.View
         style={{
           transform: [{ translateY: buttonsTranslate }],
@@ -145,7 +184,11 @@ export function HomeScreen({
       >
         {/* Play button */}
         <Pressable
-          style={[styles.button, styles.playButton]}
+          style={({ pressed }) => [
+            styles.button,
+            styles.playButton,
+            pressed && styles.buttonPressed,
+          ]}
           onPress={() => onPlay()}
         >
           <Text style={styles.playButtonText}>
@@ -155,10 +198,11 @@ export function HomeScreen({
 
         {/* Daily Challenge */}
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.button,
             styles.dailyButton,
             dailyDone && styles.dailyDone,
+            pressed && styles.buttonPressed,
           ]}
           onPress={onDaily}
         >
@@ -177,7 +221,11 @@ export function HomeScreen({
             diff => (
               <Pressable
                 key={diff}
-                style={[styles.diffButton, styles[`diff_${diff}` as keyof typeof styles] as any]}
+                style={({ pressed }) => [
+                  styles.diffButton,
+                  styles[`diff_${diff}` as keyof typeof styles] as any,
+                  pressed && styles.buttonPressed,
+                ]}
                 onPress={() => onPlay(diff)}
               >
                 <Text style={styles.diffText}>{diff.toUpperCase()}</Text>
@@ -416,6 +464,72 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     fontWeight: '700',
     marginTop: 4,
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.9,
+  },
+  loginRewardsContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    width: '100%',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
+  },
+  loginRewardsTitle: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 3,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  loginRewardsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  loginDay: {
+    alignItems: 'center',
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: COLORS.bgLight,
+    minWidth: 40,
+    flex: 1,
+    marginHorizontal: 2,
+  },
+  loginDayClaimed: {
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    borderWidth: 1,
+    borderColor: COLORS.green,
+  },
+  loginDayToday: {
+    backgroundColor: 'rgba(0, 212, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+  loginDayNum: {
+    color: COLORS.textMuted,
+    fontSize: 9,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  loginDayNumClaimed: {
+    color: COLORS.green,
+  },
+  loginDayNumToday: {
+    color: COLORS.accent,
+  },
+  loginDayReward: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  loginDayBonus: {
+    fontSize: 8,
+    color: COLORS.gold,
+    marginTop: 1,
   },
   resetButton: {
     paddingVertical: 10,
