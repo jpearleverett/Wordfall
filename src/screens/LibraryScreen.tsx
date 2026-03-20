@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 import { CHAPTERS } from '../data/chapters';
 import { Chapter } from '../types';
@@ -17,14 +18,14 @@ import { LibraryHeroIllustration } from '../components/common/HeroIllustrations'
 const { width } = Dimensions.get('window');
 
 const WING_META: Record<string, { name: string; icon: string; color: string; aura: string }> = {
-  nature: { name: 'Nature', icon: '🌿', color: '#4caf50', aura: 'rgba(76, 175, 80, 0.16)' },
-  science: { name: 'Science', icon: '🔬', color: '#00d4ff', aura: 'rgba(0, 212, 255, 0.16)' },
-  mythology: { name: 'Mythology', icon: '⚡', color: '#ffd700', aura: 'rgba(255, 215, 0, 0.16)' },
-  ocean: { name: 'Ocean', icon: '🌊', color: '#2196f3', aura: 'rgba(33, 150, 243, 0.16)' },
-  arts: { name: 'Arts', icon: '🎨', color: '#e91e63', aura: 'rgba(233, 30, 99, 0.16)' },
-  space: { name: 'Space', icon: '🚀', color: '#a855f7', aura: 'rgba(168, 85, 247, 0.16)' },
-  history: { name: 'History', icon: '📜', color: '#ff9800', aura: 'rgba(255, 152, 0, 0.16)' },
-  elements: { name: 'Elements', icon: '✨', color: '#ff6b6b', aura: 'rgba(255, 107, 107, 0.16)' },
+  nature: { name: 'Nature', icon: '\u{1F33F}', color: '#4caf50', aura: 'rgba(76, 175, 80, 0.16)' },
+  science: { name: 'Science', icon: '\u{1F52C}', color: '#00d4ff', aura: 'rgba(0, 212, 255, 0.16)' },
+  mythology: { name: 'Mythology', icon: '\u26A1', color: '#ffd700', aura: 'rgba(255, 215, 0, 0.16)' },
+  ocean: { name: 'Ocean', icon: '\u{1F30A}', color: '#2196f3', aura: 'rgba(33, 150, 243, 0.16)' },
+  arts: { name: 'Arts', icon: '\u{1F3A8}', color: '#e91e63', aura: 'rgba(233, 30, 99, 0.16)' },
+  space: { name: 'Space', icon: '\u{1F680}', color: '#a855f7', aura: 'rgba(168, 85, 247, 0.16)' },
+  history: { name: 'History', icon: '\u{1F4DC}', color: '#ff9800', aura: 'rgba(255, 152, 0, 0.16)' },
+  elements: { name: 'Elements', icon: '\u2728', color: '#ff6b6b', aura: 'rgba(255, 107, 107, 0.16)' },
 };
 
 interface LibraryScreenProps {
@@ -82,11 +83,17 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroCard}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <View style={styles.heroGlow} />
           <Text style={styles.heroEyebrow}>THE WORD ARCHITECT</Text>
           <Text style={styles.heroTitle}>Restore the grand library, one chapter at a time.</Text>
           <Text style={styles.heroSubtitle}>
-            {restoredWings.length} of {wings.length} wings rebuilt • {totalLibraryStars} stars collected • Chapter {currentChapter} active
+            {restoredWings.length} of {wings.length} wings rebuilt {'\u2022'} {totalLibraryStars} stars collected {'\u2022'} Chapter {currentChapter} active
           </Text>
           <LibraryHeroIllustration />
 
@@ -108,7 +115,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           <View style={styles.nextGoalCard}>
             <Text style={styles.nextGoalLabel}>Next restoration goal</Text>
             <Text style={styles.nextGoalTitle}>
-              {nextWingToRestore ? `${nextWingToRestore.icon} ${nextWingToRestore.name} Wing` : '✨ Entire library restored'}
+              {nextWingToRestore ? `${nextWingToRestore.icon} ${nextWingToRestore.name} Wing` : '\u2728 Entire library restored'}
             </Text>
             <Text style={styles.nextGoalMeta}>
               {nextMilestoneStars ? `Need ${nextMilestoneStars} total stars to unlock the next chapter gate.` : 'You have reached the end of the current chapter map.'}
@@ -117,6 +124,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         </View>
 
         <View style={styles.overviewPanel}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <View style={styles.overviewHeaderRow}>
             <Text style={styles.sectionTitle}>Wing overview</Text>
             <Text style={styles.sectionMeta}>{wings.length * 5} total chapters</Text>
@@ -131,7 +144,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   key={wing.id}
                   style={[
                     styles.overviewWing,
-                    { borderColor: isSelected ? wing.color : COLORS.surfaceLight, backgroundColor: isSelected ? wing.aura : COLORS.bgLight },
+                    { borderColor: isSelected ? wing.color : 'rgba(255,255,255,0.1)', backgroundColor: isSelected ? wing.aura : 'rgba(255,255,255,0.05)' },
                   ]}
                   activeOpacity={0.85}
                   onPress={() => setSelectedWing(wing.id)}
@@ -146,6 +159,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         </View>
 
         <View style={[styles.featurePanel, { borderColor: selectedWingData.color }]}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <View style={[styles.featurePanelGlow, { backgroundColor: selectedWingData.aura }]} />
           <View style={styles.featureHeader}>
             <View>
@@ -154,11 +173,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 {selectedWingData.icon} {selectedWingData.name} Wing
               </Text>
               <Text style={styles.featureSubtitle}>
-                {selectedWingData.chapters.length} chapters • {selectedProgress}% restored
+                {selectedWingData.chapters.length} chapters {'\u2022'} {selectedProgress}% restored
               </Text>
             </View>
             <View style={styles.featureDecorationBadge}>
-              <Text style={styles.featureDecorationBadgeText}>{decorations[selectedWingData.id] ?? '🪑'}</Text>
+              <Text style={styles.featureDecorationBadgeText}>{decorations[selectedWingData.id] ?? '\u{1FA91}'}</Text>
             </View>
           </View>
 
@@ -220,7 +239,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   <Text style={styles.chapterDescription}>{chapter.description}</Text>
                   <View style={styles.chapterMetaRow}>
                     <Text style={styles.chapterMeta}>{chapter.puzzleCount} puzzles</Text>
-                    <Text style={styles.chapterMeta}>Gate: {chapter.requiredStars}★</Text>
+                    <Text style={styles.chapterMeta}>Gate: {chapter.requiredStars}{'\u2605'}</Text>
                     <Text style={styles.chapterMeta}>{chapter.difficulty.toUpperCase()}</Text>
                   </View>
                   <Text style={styles.chapterThemeWords}>
@@ -252,13 +271,17 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   heroCard: {
-    backgroundColor: COLORS.surface,
     borderRadius: 28,
     padding: 22,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
   },
   heroGlow: {
     position: 'absolute',
@@ -276,6 +299,9 @@ const styles = StyleSheet.create({
     color: COLORS.gold,
     fontWeight: '800',
     marginBottom: 12,
+    textShadowColor: 'rgba(255,215,0,0.3)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   heroTitle: {
     fontSize: 28,
@@ -284,6 +310,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 10,
     maxWidth: width - 96,
+    textShadowColor: 'rgba(255,255,255,0.15)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   heroSubtitle: {
     fontSize: 14,
@@ -298,18 +327,21 @@ const styles = StyleSheet.create({
   },
   heroStatCard: {
     flex: 1,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 18,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   heroStatValue: {
     fontSize: 22,
     fontWeight: '800',
     color: COLORS.textPrimary,
     marginBottom: 6,
+    textShadowColor: 'rgba(255,255,255,0.15)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   heroStatLabel: {
     fontSize: 12,
@@ -343,12 +375,17 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   overviewPanel: {
-    backgroundColor: COLORS.surface,
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
     marginBottom: 18,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   overviewHeaderRow: {
     flexDirection: 'row',
@@ -361,6 +398,9 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontWeight: '700',
     marginBottom: 12,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   sectionMeta: {
     fontSize: 12,
@@ -396,11 +436,15 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
   featurePanel: {
-    backgroundColor: COLORS.surface,
     borderRadius: 28,
     padding: 20,
     borderWidth: 1,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
   },
   featurePanelGlow: {
     position: 'absolute',
@@ -427,6 +471,9 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '800',
     marginBottom: 4,
+    textShadowColor: 'rgba(255,255,255,0.15)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   featureSubtitle: {
     fontSize: 14,
@@ -436,9 +483,9 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -463,11 +510,11 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     flex: 1,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   infoCardLabel: {
     fontSize: 11,
@@ -483,20 +530,20 @@ const styles = StyleSheet.create({
   },
   chapterCard: {
     flexDirection: 'row',
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 22,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
     marginBottom: 12,
   },
   chapterIconWrap: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -525,8 +572,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
-    backgroundColor: COLORS.surface,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   chapterPillComplete: {
     borderColor: COLORS.green,

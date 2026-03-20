@@ -1,18 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
-
-const COLORS = {
-  bg: '#0a0e27',
-  surface: '#1a1f45',
-  surfaceLight: '#252b5e',
-  textPrimary: '#ffffff',
-  textSecondary: '#8890b5',
-  accent: '#00d4ff',
-  green: '#4caf50',
-  gold: '#ffd700',
-  coral: '#ff6b6b',
-  textMuted: '#4a5280',
-};
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS } from '../../constants';
 
 interface TimerDisplayProps {
   totalSeconds: number;
@@ -25,6 +14,12 @@ function getTimerColor(fraction: number): string {
   if (fraction > 0.5) return COLORS.green;
   if (fraction > 0.25) return COLORS.gold;
   return COLORS.coral;
+}
+
+function getTimerGlow(fraction: number): string {
+  if (fraction > 0.5) return COLORS.greenGlow;
+  if (fraction > 0.25) return COLORS.goldGlow;
+  return COLORS.coralGlow;
 }
 
 function formatTime(seconds: number): string {
@@ -99,12 +94,12 @@ export default function TimerDisplay({
 
   const fraction = totalSeconds > 0 ? remaining / totalSeconds : 0;
   const color = getTimerColor(fraction);
+  const glowColor = getTimerGlow(fraction);
+  const isLow = fraction <= 0.25 && remaining > 0;
 
   // Progress ring values
   const ringSize = 80;
   const strokeWidth = 6;
-  const radius = (ringSize - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
 
   return (
     <Animated.View
@@ -114,8 +109,26 @@ export default function TimerDisplay({
         { transform: [{ scale: pulseAnim }] },
       ]}
     >
+      {/* Outer glow layer */}
+      <View style={[styles.outerGlow, { shadowColor: color }]} />
+
       {/* Background ring */}
       <View style={[styles.ring, { width: ringSize, height: ringSize }]}>
+        <LinearGradient
+          colors={['rgba(37, 43, 94, 0.8)', 'rgba(26, 31, 69, 0.6)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            styles.ringTrackGradient,
+            {
+              width: ringSize,
+              height: ringSize,
+              borderRadius: ringSize / 2,
+              borderWidth: strokeWidth,
+              borderColor: 'transparent',
+            },
+          ]}
+        />
         <View
           style={[
             styles.ringTrack,
@@ -124,11 +137,11 @@ export default function TimerDisplay({
               height: ringSize,
               borderRadius: ringSize / 2,
               borderWidth: strokeWidth,
-              borderColor: COLORS.surfaceLight,
+              borderColor: 'rgba(255,255,255,0.06)',
             },
           ]}
         />
-        {/* Foreground ring segments (approximated with bordered views) */}
+        {/* Foreground ring segments */}
         <View
           style={[
             styles.ringFill,
@@ -144,12 +157,28 @@ export default function TimerDisplay({
               borderLeftColor: fraction > 0 ? color : 'transparent',
               transform: [{ rotate: '-90deg' }],
               opacity: fraction > 0 ? 1 : 0,
+              shadowColor: color,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.6,
+              shadowRadius: 8,
             },
           ]}
         />
         {/* Center text */}
         <View style={styles.ringCenter}>
-          <Text style={[styles.time, { color }]}>{formatTime(remaining)}</Text>
+          <Text
+            style={[
+              styles.time,
+              {
+                color,
+                textShadowColor: isLow ? glowColor : 'transparent',
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: isLow ? 12 : 0,
+              },
+            ]}
+          >
+            {formatTime(remaining)}
+          </Text>
           {paused && <Text style={styles.pausedLabel}>PAUSED</Text>}
         </View>
       </View>
@@ -162,9 +191,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  outerGlow: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 10,
+  },
   ring: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  ringTrackGradient: {
+    position: 'absolute',
   },
   ringTrack: {
     position: 'absolute',

@@ -8,7 +8,8 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, SHADOWS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
@@ -94,10 +95,17 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </View>
         {searchText.length > 0 && (
           <TouchableOpacity
-            style={styles.joinButton}
             onPress={() => onJoinClub(searchText)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.joinButtonText}>Search & Join</Text>
+            <LinearGradient
+              colors={[...GRADIENTS.button.primary] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.joinButton}
+            >
+              <Text style={styles.joinButtonText}>Search & Join</Text>
+            </LinearGradient>
           </TouchableOpacity>
         )}
       </View>
@@ -164,11 +172,16 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       >
         {/* Club Header */}
         <View style={styles.clubHeader}>
-          <View style={styles.clubShield}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.clubShield}
+          >
             <Text style={styles.clubShieldText}>
               {data.name.charAt(0).toUpperCase()}
             </Text>
-          </View>
+          </LinearGradient>
           <Text style={styles.clubName}>{data.name}</Text>
           <Text style={styles.clubMemberCount}>
             {data.memberCount} / {data.maxMembers} Members
@@ -296,6 +309,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.accent,
     letterSpacing: 4,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   scrollView: {
     flex: 1,
@@ -337,11 +353,12 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    backgroundColor: 'rgba(26, 31, 69, 0.8)',
+    borderRadius: 14,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.soft,
   },
   searchIcon: {
     fontSize: 16,
@@ -354,11 +371,11 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   joinButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 10,
+    ...SHADOWS.glow(COLORS.accent),
   },
   joinButtonText: {
     fontSize: 15,
@@ -372,13 +389,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    backgroundColor: 'rgba(26, 31, 69, 0.6)',
+    borderRadius: 16,
     paddingVertical: 20,
     borderWidth: 2,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(0, 212, 255, 0.15)',
     borderStyle: 'dashed',
     gap: 10,
+    ...SHADOWS.soft,
   },
   createButtonIcon: {
     fontSize: 24,
@@ -391,11 +409,12 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
   createForm: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    backgroundColor: 'rgba(26, 31, 69, 0.8)',
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.medium,
   },
   createInput: {
     height: 48,
@@ -447,20 +466,16 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   clubShield: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
+    width: 76,
+    height: 76,
+    borderRadius: 22,
     borderWidth: 2,
-    borderColor: COLORS.accent,
+    borderColor: COLORS.accent + '60',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
+    overflow: 'hidden',
+    ...SHADOWS.glow(COLORS.accent),
   },
   clubShieldText: {
     fontSize: 32,

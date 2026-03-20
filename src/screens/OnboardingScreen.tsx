@@ -7,7 +7,8 @@ import {
   Dimensions,
   Animated,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS } from '../constants';
 
 const { width, height } = Dimensions.get('window');
 
@@ -235,26 +236,38 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
       case 1:
         return (
           <View style={styles.illustrationCenter}>
-            <View style={styles.miniGrid}>
-              {['W', 'O', 'R', 'D', 'F', 'A', 'L', 'L', '!'].map((letter, idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.miniCell,
-                    idx < 4 && styles.miniCellSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.miniCellText,
-                      idx < 4 && styles.miniCellTextSelected,
-                    ]}
-                  >
-                    {letter}
-                  </Text>
-                </View>
-              ))}
-            </View>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              style={styles.miniGridBg}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.miniGrid}>
+                {['W', 'O', 'R', 'D', 'F', 'A', 'L', 'L', '!'].map((letter, idx) => (
+                  idx < 4 ? (
+                    <LinearGradient
+                      key={idx}
+                      colors={[...GRADIENTS.tile.selected] as [string, string]}
+                      style={styles.miniCell}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.miniCellTextSelected}>{letter}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <LinearGradient
+                      key={idx}
+                      colors={[...GRADIENTS.tile.default] as [string, string]}
+                      style={styles.miniCell}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <Text style={styles.miniCellText}>{letter}</Text>
+                    </LinearGradient>
+                  )
+                ))}
+              </View>
+            </LinearGradient>
             <Animated.View
               style={[styles.handPointer, { transform: [{ translateY: handTranslateY }] }]}
             >
@@ -268,36 +281,66 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
           <View style={styles.illustrationCenter}>
             <View style={styles.gravityDemo}>
               <View style={styles.gravityRow}>
-                <View style={[styles.miniCell, styles.miniCellSelected]}>
+                <LinearGradient
+                  colors={[...GRADIENTS.tile.selected] as [string, string]}
+                  style={styles.miniCell}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
                   <Text style={styles.miniCellTextSelected}>C</Text>
-                </View>
+                </LinearGradient>
                 <Animated.View
                   style={[
-                    styles.miniCell,
-                    styles.miniCellFalling,
                     {
                       transform: [{ translateY: letterFallY }],
                       opacity: letterFallOpacity,
                     },
                   ]}
                 >
-                  <Text style={styles.miniCellTextSelected}>A</Text>
+                  <LinearGradient
+                    colors={[COLORS.accent, '#0099cc'] as [string, string]}
+                    style={styles.miniCell}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Text style={styles.miniCellTextSelected}>A</Text>
+                  </LinearGradient>
                 </Animated.View>
-                <View style={[styles.miniCell, styles.miniCellSelected]}>
+                <LinearGradient
+                  colors={[...GRADIENTS.tile.selected] as [string, string]}
+                  style={styles.miniCell}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
                   <Text style={styles.miniCellTextSelected}>T</Text>
-                </View>
+                </LinearGradient>
               </View>
               <Text style={styles.gravityArrow}>↓</Text>
               <View style={styles.gravityRow}>
-                <View style={styles.miniCell}>
+                <LinearGradient
+                  colors={[...GRADIENTS.tile.default] as [string, string]}
+                  style={styles.miniCell}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
                   <Text style={styles.miniCellText}>_</Text>
-                </View>
-                <View style={styles.miniCell}>
+                </LinearGradient>
+                <LinearGradient
+                  colors={[...GRADIENTS.tile.default] as [string, string]}
+                  style={styles.miniCell}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
                   <Text style={styles.miniCellText}>_</Text>
-                </View>
-                <View style={styles.miniCell}>
+                </LinearGradient>
+                <LinearGradient
+                  colors={[...GRADIENTS.tile.default] as [string, string]}
+                  style={styles.miniCell}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
                   <Text style={styles.miniCellText}>_</Text>
-                </View>
+                </LinearGradient>
               </View>
             </View>
           </View>
@@ -307,20 +350,35 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
         return (
           <View style={styles.illustrationCenter}>
             <View style={styles.strategyRow}>
-              <View style={styles.strategyBubble}>
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard] as [string, string]}
+                style={styles.strategyBubble}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
                 <Text style={[styles.strategyNum, { color: COLORS.accent }]}>1</Text>
                 <Text style={styles.strategyWord}>CAT</Text>
-              </View>
+              </LinearGradient>
               <Text style={styles.strategyArrowText}>then</Text>
-              <View style={styles.strategyBubble}>
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard] as [string, string]}
+                style={styles.strategyBubble}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
                 <Text style={[styles.strategyNum, { color: COLORS.gold }]}>2</Text>
                 <Text style={styles.strategyWord}>DOG</Text>
-              </View>
+              </LinearGradient>
               <Text style={styles.strategyArrowText}>then</Text>
-              <View style={styles.strategyBubble}>
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard] as [string, string]}
+                style={styles.strategyBubble}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
                 <Text style={[styles.strategyNum, { color: COLORS.green }]}>3</Text>
                 <Text style={styles.strategyWord}>STAR</Text>
-              </View>
+              </LinearGradient>
             </View>
           </View>
         );
@@ -369,13 +427,22 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
         <View style={styles.textArea}>
           <Animated.View
             style={[
-              styles.iconBadge,
-              { borderColor: step.color, transform: [{ scale: iconScaleAnim }] },
+              styles.iconBadgeOuter,
+              { transform: [{ scale: iconScaleAnim }] },
             ]}
           >
-            <Text style={styles.iconText}>{step.icon}</Text>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              style={[styles.iconBadge, { borderColor: step.color }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text style={styles.iconText}>{step.icon}</Text>
+            </LinearGradient>
           </Animated.View>
-          <Text style={[styles.stepTitle, { color: step.color }]}>{step.title}</Text>
+          <Text style={[styles.stepTitle, { color: step.color, textShadowColor: step.color + '60' }]}>
+            {step.title}
+          </Text>
           <Text style={styles.stepSubtitle}>{step.subtitle}</Text>
           <Text style={styles.stepDescription}>{step.description}</Text>
         </View>
@@ -385,38 +452,70 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
       <View style={styles.bottomArea}>
         {/* Dot indicators */}
         <View style={styles.dotsContainer}>
-          {STEPS.map((s, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                index === currentStep && [styles.dotActive, { backgroundColor: step.color }],
-                index < currentStep && [styles.dotComplete, { backgroundColor: step.color + '60' }],
-              ]}
-            />
-          ))}
+          {STEPS.map((s, index) => {
+            const isActive = index === currentStep;
+            const isComplete = index < currentStep;
+            return isActive ? (
+              <LinearGradient
+                key={index}
+                colors={[step.color, step.color + 'AA'] as [string, string]}
+                style={[styles.dot, styles.dotActive]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <View style={[styles.dotGlowInner, { shadowColor: step.color }]} />
+              </LinearGradient>
+            ) : (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  isComplete && [styles.dotComplete, { backgroundColor: step.color + '60' }],
+                ]}
+              />
+            );
+          })}
         </View>
 
         {/* Navigation buttons */}
         <View style={styles.buttonsRow}>
           {currentStep > 0 && (
             <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
-              <Text style={styles.backBtnText}>Back</Text>
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard] as [string, string]}
+                style={styles.backBtnGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              >
+                <Text style={styles.backBtnText}>Back</Text>
+              </LinearGradient>
             </TouchableOpacity>
           )}
           <TouchableOpacity
             style={[
               styles.nextBtn,
-              { backgroundColor: step.color },
               currentStep === 0 && { flex: 1 },
-              isLastStep && styles.startBtnShadow,
             ]}
             onPress={handleNext}
             activeOpacity={0.8}
           >
-            <Text style={styles.nextBtnText}>
-              {isLastStep ? "LET'S GO!" : 'NEXT'}
-            </Text>
+            <LinearGradient
+              colors={
+                isLastStep
+                  ? ([...GRADIENTS.button.gold] as [string, string])
+                  : ([...GRADIENTS.button.primary] as [string, string])
+              }
+              style={[
+                styles.nextBtnGradient,
+                isLastStep && styles.startBtnShadow,
+              ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text style={styles.nextBtnText}>
+                {isLastStep ? "LET'S GO!" : 'NEXT'}
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
@@ -467,6 +566,15 @@ const styles = StyleSheet.create({
     fontSize: 80,
     zIndex: 1,
   },
+  miniGridBg: {
+    borderRadius: 16,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 10,
+  },
   miniGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -477,15 +585,13 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 10,
-    backgroundColor: COLORS.cellDefault,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  miniCellSelected: {
-    backgroundColor: COLORS.cellSelected,
-  },
-  miniCellFalling: {
-    backgroundColor: COLORS.accent,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   miniCellText: {
     fontSize: 18,
@@ -515,6 +621,9 @@ const styles = StyleSheet.create({
     fontSize: 28,
     color: COLORS.accent,
     fontWeight: '700',
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
   strategyRow: {
     flexDirection: 'row',
@@ -522,13 +631,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   strategyBubble: {
-    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.surfaceLight,
     minWidth: 60,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
   },
   strategyNum: {
     fontSize: 11,
@@ -549,20 +662,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
   },
+  iconBadgeOuter: {
+    marginBottom: 16,
+  },
   iconBadge: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    marginBottom: 16,
-    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 10,
   },
   iconText: {
     fontSize: 30,
@@ -573,6 +687,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 6,
     letterSpacing: 1,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 16,
   },
   stepSubtitle: {
     fontSize: 16,
@@ -598,6 +714,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginBottom: 24,
+    alignItems: 'center',
   },
   dot: {
     width: 8,
@@ -607,6 +724,21 @@ const styles = StyleSheet.create({
   },
   dotActive: {
     width: 24,
+    height: 10,
+    borderRadius: 5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  dotGlowInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 4,
   },
   dotComplete: {},
   buttonsRow: {
@@ -616,10 +748,20 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  backBtnGradient: {
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
   },
   backBtnText: {
     color: COLORS.textSecondary,
@@ -628,10 +770,18 @@ const styles = StyleSheet.create({
   },
   nextBtn: {
     flex: 2,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  nextBtnGradient: {
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
-    elevation: 4,
   },
   nextBtnText: {
     color: COLORS.bg,
@@ -641,10 +791,10 @@ const styles = StyleSheet.create({
   },
   startBtnShadow: {
     shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 10,
   },
 });
 

@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, DimensionValue, StyleSheet, View } from 'react-native';
 import { COLORS } from '../../constants';
 
 interface AmbientBackdropProps {
   variant?: 'home' | 'library';
 }
 
-function FloatingOrb({ color, size, top, left, duration, xOffset, yOffset }: { color: string; size: number; top: string; left: string; duration: number; xOffset: number; yOffset: number }) {
+function FloatingOrb({ color, size, top, left, duration, xOffset, yOffset }: { color: string; size: number; top: DimensionValue; left: DimensionValue; duration: number; xOffset: number; yOffset: number }) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -27,16 +27,12 @@ function FloatingOrb({ color, size, top, left, duration, xOffset, yOffset }: { c
   }, [anim, duration]);
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.orb,
-        {
+    <View pointerEvents="none" style={[styles.orb, { top, left }]}>
+      <Animated.View
+        style={{
           width: size,
           height: size,
           borderRadius: size / 2,
-          top,
-          left,
           backgroundColor: color,
           opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.2, 0.4, 0.2] }),
           transform: [
@@ -44,13 +40,13 @@ function FloatingOrb({ color, size, top, left, duration, xOffset, yOffset }: { c
             { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [yOffset, -yOffset] }) },
             { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.9, 1.08, 0.9] }) },
           ],
-        },
-      ]}
-    />
+        }}
+      />
+    </View>
   );
 }
 
-function TwinklingSparkle({ top, left, color, size, delay }: { top: string; left: string; color: string; size: number; delay: number }) {
+function TwinklingSparkle({ top, left, color, size, delay }: { top: DimensionValue; left: DimensionValue; color: string; size: number; delay: number }) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -72,13 +68,9 @@ function TwinklingSparkle({ top, left, color, size, delay }: { top: string; left
   }, [anim, delay]);
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.sparkle,
-        {
-          top,
-          left,
+    <View pointerEvents="none" style={[styles.sparkle, { top, left }]}>
+      <Animated.View
+        style={{
           width: size,
           height: size,
           borderRadius: size / 2,
@@ -87,9 +79,9 @@ function TwinklingSparkle({ top, left, color, size, delay }: { top: string; left
           transform: [
             { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.6, 1.2, 0.6] }) },
           ],
-        },
-      ]}
-    />
+        }}
+      />
+    </View>
   );
 }
 
@@ -98,8 +90,8 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
     () =>
       Array.from({ length: 24 }, (_, index) => ({
         id: index,
-        top: `${6 + ((index * 17) % 82)}%`,
-        left: `${3 + ((index * 23) % 90)}%`,
+        top: `${6 + ((index * 17) % 82)}%` as DimensionValue,
+        left: `${3 + ((index * 23) % 90)}%` as DimensionValue,
         color: index % 4 === 0 ? COLORS.goldGlow : index % 3 === 0 ? COLORS.purpleGlow : index % 2 === 0 ? COLORS.accentGlow : 'rgba(255,255,255,0.5)',
         size: 2 + (index % 4),
         delay: (index * 340) % 2400,
