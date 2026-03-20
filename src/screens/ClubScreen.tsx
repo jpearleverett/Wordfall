@@ -39,12 +39,14 @@ interface ClubScreenProps {
 }
 
 const ClubScreen: React.FC<ClubScreenProps> = ({
-  clubId = null,
+  clubId: clubIdProp,
   clubData = null,
   onCreateClub = () => {},
   onJoinClub = () => {},
   onLeaveClub = () => {},
 }) => {
+  const player = usePlayer();
+  const clubId = clubIdProp !== undefined ? clubIdProp : player.clubId;
   const [searchText, setSearchText] = useState('');
   const [createName, setCreateName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
