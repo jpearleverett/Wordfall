@@ -18,6 +18,7 @@ interface LetterCellProps {
   onPress: () => void;
   isFrozen?: boolean;
   isValidWord?: boolean;
+  isMoved?: boolean;
 }
 
 export const LetterCell = React.memo(function LetterCell({
@@ -30,9 +31,11 @@ export const LetterCell = React.memo(function LetterCell({
   onPress,
   isFrozen = false,
   isValidWord = false,
+  isMoved = false,
 }: LetterCellProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const movedAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (isSelected) {
@@ -70,6 +73,18 @@ export const LetterCell = React.memo(function LetterCell({
     }
   }, [isSelected]);
 
+  // Moved cell highlight animation (post-gravity)
+  useEffect(() => {
+    if (isMoved) {
+      movedAnim.setValue(1);
+      Animated.timing(movedAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [isMoved]);
+
   // Determine cell color based on state
   const getBackgroundColor = () => {
     if (isValidWord) return COLORS.green;
@@ -103,6 +118,16 @@ export const LetterCell = React.memo(function LetterCell({
     ],
   });
 
+  const movedBorderColor = movedAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['transparent', 'rgba(0, 212, 255, 0.6)'],
+  });
+
+  const movedShadowOpacity = movedAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.5],
+  });
+
   return (
     <Pressable onPress={onPress}>
       <Animated.View
@@ -113,9 +138,12 @@ export const LetterCell = React.memo(function LetterCell({
             height: size,
             borderRadius: size * 0.18,
             backgroundColor: bgColor,
-            borderColor: borderColor,
+            borderColor: isMoved && !isSelected ? movedBorderColor : borderColor,
             borderWidth: 2,
             transform: [{ scale: scaleAnim }],
+            shadowColor: isMoved ? COLORS.accent : '#000',
+            shadowOpacity: isMoved ? movedShadowOpacity : 0.3,
+            shadowRadius: isMoved ? 6 : 3,
           },
         ]}
       >

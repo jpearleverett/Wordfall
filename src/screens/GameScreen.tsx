@@ -17,6 +17,8 @@ import { WordBank } from '../components/WordBank';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import { COLORS, MODE_CONFIGS, ANIM } from '../constants';
+import { soundManager } from '../services/sound';
+import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 
 if (
   Platform.OS === 'android' &&
@@ -88,15 +90,30 @@ export function GameScreen({
   const validFlashAnim = useRef(new Animated.Value(0)).current;
   const [showValidFlash, setShowValidFlash] = useState(false);
   const invalidFlashAnim = useRef(new Animated.Value(0)).current;
-  const [lastInvalidTime, setLastInvalidTime] = useState(0);
+  const [showInvalidFlash, setShowInvalidFlash] = useState(false);
   const scorePopupAnim = useRef(new Animated.Value(0)).current;
   const [scorePopup, setScorePopup] = useState<{ points: number; label: string } | null>(null);
   const prevScoreRef = useRef(state.score);
+  const [showIdleHint, setShowIdleHint] = useState(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showModeIntro, setShowModeIntro] = useState(true);
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const prevFoundWordsRef = useRef(foundWords);
+  const [movedCells, setMovedCells] = useState<CellPosition[]>([]);
 
-  // Chain celebration animation
+  // Chain celebration animation with screen shake
   const showChainCelebration = useCallback(() => {
     setChainVisible(true);
     chainAnim.setValue(0);
+    void comboHaptic();
+    void soundManager.playSound('combo');
+    // Screen shake for chain
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 3, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -3, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 2, duration: 40, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 40, useNativeDriver: true }),
+    ]).start();
     Animated.sequence([
       Animated.spring(chainAnim, {
         toValue: 1,
@@ -111,7 +128,7 @@ export function GameScreen({
         useNativeDriver: true,
       }),
     ]).start(() => setChainVisible(false));
-  }, [chainAnim]);
+  }, [chainAnim, shakeAnim]);
 
   // Show chain celebration on combo > 1
   useEffect(() => {
@@ -120,6 +137,77 @@ export function GameScreen({
     }
   }, [state.combo]);
 
+  // Invalid word flash animation
+  const showInvalidFlashAnim = useCallback(() => {
+    setShowInvalidFlash(true);
+    void errorHaptic();
+    void soundManager.playSound('wordInvalid');
+    invalidFlashAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(invalidFlashAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(invalidFlashAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setShowInvalidFlash(false));
+  }, [invalidFlashAnim]);
+
+  // Idle hint prompt (20 seconds of inactivity)
+  const resetIdleTimer = useCallback(() => {
+    setShowIdleHint(false);
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (state.status === 'playing' && state.hintsLeft > 0) {
+      idleTimerRef.current = setTimeout(() => {
+        setShowIdleHint(true);
+      }, 20000);
+    }
+  }, [state.status, state.hintsLeft]);
+
+  useEffect(() => {
+    resetIdleTimer();
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [state.selectedCells.length, foundWords, resetIdleTimer]);
+
+  // Hide mode intro after 2 seconds
+  useEffect(() => {
+    if (showModeIntro && mode !== 'classic') {
+      const timer = setTimeout(() => setShowModeIntro(false), 2500);
+      return () => clearTimeout(timer);
+    } else {
+      setShowModeIntro(false);
+    }
+  }, [mode]);
+
+  // Track post-gravity moved cells
+  useEffect(() => {
+    if (foundWords > prevFoundWordsRef.current && state.status === 'playing') {
+      // After a word is found and gravity applied, highlight shifted cells
+      const moved: CellPosition[] = [];
+      const grid = state.board.grid;
+      for (let col = 0; col < grid[0].length; col++) {
+        let shifted = false;
+        for (let row = grid.length - 1; row >= 0; row--) {
+          if (grid[row][col] === null) {
+            shifted = true;
+          } else if (shifted) {
+            moved.push({ row, col });
+          }
+        }
+      }
+      setMovedCells(moved);
+      const timer = setTimeout(() => setMovedCells([]), 400);
+      return () => clearTimeout(timer);
+    }
+    prevFoundWordsRef.current = foundWords;
+  }, [foundWords, state.status]);
+
   // Score popup when score changes (word found)
   useEffect(() => {
     const diff = state.score - prevScoreRef.current;
@@ -127,6 +215,8 @@ export function GameScreen({
     if (diff > 0 && state.status === 'playing') {
       const label = state.combo > 1 ? `+${diff} (${state.combo}x!)` : `+${diff}`;
       setScorePopup({ points: diff, label });
+      void wordFoundHaptic();
+      void soundManager.playSound('wordFound');
       scorePopupAnim.setValue(0);
       Animated.sequence([
         Animated.spring(scorePopupAnim, {
@@ -177,6 +267,8 @@ export function GameScreen({
   // Show completion modal
   useEffect(() => {
     if (state.status === 'won' && !showComplete) {
+      void successHaptic();
+      void soundManager.playSound('puzzleComplete');
       const timer = setTimeout(() => {
         setShowComplete(true);
         onComplete(stars, state.score);
@@ -203,32 +295,43 @@ export function GameScreen({
     }
   }, [isStuck, state.status]);
 
-  // Detect invalid word submission (when selection is cleared without a valid word being found)
-  useEffect(() => {
-    // Track when perfectRun goes from true to false (an invalid tap happened)
-    if (!state.perfectRun && state.status === 'playing' && state.moves > 0) {
-      // This could indicate an invalid submission happened
-    }
-  }, [state.perfectRun]);
-
   const handleCellPress = useCallback(
     (position: CellPosition) => {
+      resetIdleTimer();
+      void tapHaptic();
+      void soundManager.playSound('tap');
       if (freezeMode) {
-        // In freeze mode, tapping a column toggles its frozen state
         freezeColumn(position.col);
         setFreezeMode(false);
         return;
       }
+      // Check if this tap is on an already-selected cell (deselection) or invalid adjacency
+      const isAlreadySelected = state.selectedCells.some(
+        c => c.row === position.row && c.col === position.col
+      );
+      if (!isAlreadySelected && state.selectedCells.length > 0) {
+        const last = state.selectedCells[state.selectedCells.length - 1];
+        const rowDiff = Math.abs(position.row - last.row);
+        const colDiff = Math.abs(position.col - last.col);
+        const isAdjacent = (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
+        if (!isAdjacent) {
+          showInvalidFlashAnim();
+          clearSelection();
+          return;
+        }
+      }
       selectCell(position);
     },
-    [selectCell, freezeMode, freezeColumn]
+    [selectCell, freezeMode, freezeColumn, clearSelection, state.selectedCells, resetIdleTimer, showInvalidFlashAnim]
   );
 
   const handleHint = useCallback(() => {
+    void soundManager.playSound('hintUsed');
     useHint();
   }, [useHint]);
 
   const handleUndo = useCallback(() => {
+    void soundManager.playSound('undoUsed');
     LayoutAnimation.configureNext(
       LayoutAnimation.create(
         300,
@@ -238,7 +341,8 @@ export function GameScreen({
     );
     undoMove();
     setShowStuck(false);
-    setShowFailed(false); // Allow undo from failed state
+    setShowFailed(false);
+    setShowIdleHint(false);
   }, [undoMove]);
 
   const handleRetry = useCallback(() => {
@@ -265,12 +369,14 @@ export function GameScreen({
   // Booster handlers
   const handleShuffle = useCallback(() => {
     if (state.boosterCounts.shuffleFiller > 0) {
+      void soundManager.playSound('buttonPress');
       useBooster('shuffleFiller');
     }
   }, [useBooster, state.boosterCounts.shuffleFiller]);
 
   const handleFreezeToggle = useCallback(() => {
     if (state.boosterCounts.freezeColumn > 0) {
+      void soundManager.playSound('buttonPress');
       setFreezeMode(prev => !prev);
     }
   }, [state.boosterCounts.freezeColumn]);
@@ -308,8 +414,32 @@ export function GameScreen({
     state.boosterCounts.freezeColumn > 0 ||
     state.boosterCounts.boardPreview > 0;
 
+  const invalidFlashOpacity = invalidFlashAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.25],
+  });
+
   return (
+    <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
     <SafeAreaView style={styles.container}>
+      {/* Mode intro banner */}
+      {showModeIntro && mode !== 'classic' && (
+        <View style={[styles.modeIntroBanner, { borderColor: modeConfig.color }]}>
+          <Text style={[styles.modeIntroText, { color: modeConfig.color }]}>
+            {modeConfig.icon} {modeConfig.name.toUpperCase()}
+          </Text>
+          <Text style={styles.modeIntroDesc}>
+            {mode === 'perfectSolve' ? 'No mistakes allowed!' :
+             mode === 'limitedMoves' ? `Complete in ${effectiveMaxMoves} moves!` :
+             mode === 'timePressure' ? `Beat the clock! ${formatTime(effectiveTimeLimit)}` :
+             mode === 'cascade' ? 'Build combos for bonus multipliers!' :
+             mode === 'expert' ? 'No hints. No mercy.' :
+             mode === 'relax' ? 'Take your time. Enjoy the words.' :
+             modeConfig.description}
+          </Text>
+        </View>
+      )}
+
       <GameHeader
         level={level}
         score={state.score}
@@ -386,12 +516,32 @@ export function GameScreen({
         </View>
       )}
 
-      {/* Stuck warning */}
+      {/* Idle hint prompt */}
+      {showIdleHint && state.hintsLeft > 0 && state.status === 'playing' && (
+        <Pressable
+          style={styles.idleHintBanner}
+          onPress={() => { setShowIdleHint(false); handleHint(); }}
+        >
+          <Text style={styles.idleHintText}>
+            Need help? Tap here or press 💡 for a hint
+          </Text>
+        </Pressable>
+      )}
+
+      {/* Stuck warning with inline undo */}
       {showStuck && (
         <View style={styles.stuckBanner}>
           <Text style={styles.stuckText}>
-            Stuck! Try undoing your last move.
+            Stuck! {state.undosLeft > 0 ? 'Undo your last move to try a different approach.' : 'Try retrying the puzzle.'}
           </Text>
+          {state.undosLeft > 0 && state.history.length > 0 && (
+            <Pressable
+              style={({ pressed }) => [styles.stuckUndoButton, pressed && styles.buttonPressed]}
+              onPress={handleUndo}
+            >
+              <Text style={styles.stuckUndoText}>↩ UNDO</Text>
+            </Pressable>
+          )}
         </View>
       )}
 
@@ -414,6 +564,14 @@ export function GameScreen({
       {showValidFlash && (
         <Animated.View
           style={[styles.validFlashOverlay, { opacity: validFlashOpacity }]}
+          pointerEvents="none"
+        />
+      )}
+
+      {/* Invalid word red flash overlay */}
+      {showInvalidFlash && (
+        <Animated.View
+          style={[styles.invalidFlashOverlay, { opacity: invalidFlashOpacity }]}
           pointerEvents="none"
         />
       )}
@@ -481,6 +639,7 @@ export function GameScreen({
             onCellPress={handleCellPress}
             frozenColumns={state.frozenColumns}
             validWord={showValidFlash}
+            movedCells={movedCells}
           />
         )}
       </View>
@@ -601,6 +760,7 @@ export function GameScreen({
         </View>
       )}
     </SafeAreaView>
+    </Animated.View>
   );
 }
 
@@ -749,6 +909,61 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.green,
     zIndex: 50,
+  },
+  invalidFlashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.coral,
+    zIndex: 50,
+  },
+  idleHintBanner: {
+    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+  idleHintText: {
+    color: COLORS.accent,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  stuckUndoButton: {
+    backgroundColor: COLORS.gold,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  stuckUndoText: {
+    color: COLORS.bg,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  modeIntroBanner: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 4,
+    borderWidth: 1,
+  },
+  modeIntroText: {
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: 2,
+  },
+  modeIntroDesc: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
   },
   scorePopup: {
     position: 'absolute',
