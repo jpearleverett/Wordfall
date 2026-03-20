@@ -9,11 +9,47 @@ import {
   GameMode,
   GameStatus,
 } from '../types';
-import { removeCellsAndApplyGravity, cloneGrid } from '../engine/gravity';
+import { removeCellsAndApplyGravity, removeCells, applyGravity, cloneGrid } from '../engine/gravity';
 import { findWordInGrid, isDeadEnd, getHint } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE } from '../constants';
 import { soundManager } from '../services/sound';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
+
+/**
+ * Apply gravity but skip frozen columns — letters in frozen columns stay in place.
+ */
+function applyGravityWithFrozen(grid: (import('../types').Cell | null)[][], frozenCols: number[]): (import('../types').Cell | null)[][] {
+  if (frozenCols.length === 0) return applyGravity(grid);
+
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const newGrid: (import('../types').Cell | null)[][] = Array.from({ length: rows }, () =>
+    Array(cols).fill(null)
+  );
+
+  for (let col = 0; col < cols; col++) {
+    if (frozenCols.includes(col)) {
+      // Copy column as-is (no gravity)
+      for (let row = 0; row < rows; row++) {
+        newGrid[row][col] = grid[row][col];
+      }
+    } else {
+      // Normal gravity: compact cells to bottom
+      const cells: import('../types').Cell[] = [];
+      for (let row = 0; row < rows; row++) {
+        if (grid[row][col] !== null) {
+          cells.push(grid[row][col]!);
+        }
+      }
+      const startRow = rows - cells.length;
+      for (let i = 0; i < cells.length; i++) {
+        newGrid[startRow + i][col] = cells[i];
+      }
+    }
+  }
+
+  return newGrid;
+}
 
 function getHintsForMode(mode: GameMode): number {
   switch (mode) {
@@ -68,6 +104,13 @@ function createInitialState(
     cascadeMultiplier: 1,
     perfectRun: true,
     chainCount: 0,
+    frozenColumns: [],
+    previewGrid: null,
+    boosterCounts: {
+      freezeColumn: 2,
+      boardPreview: 1,
+      shuffleFiller: 1,
+    },
   };
 }
 
@@ -240,8 +283,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         words: board.words.map(w => ({ ...w })),
       };
 
-      // Remove letters and apply gravity
-      const newGrid = removeCellsAndApplyGravity(board.grid, selectedCells);
+      // Remove letters and apply gravity (respecting frozen columns)
+      const gridAfterRemoval = removeCells(board.grid, selectedCells);
+      const newGrid = applyGravityWithFrozen(gridAfterRemoval, state.frozenColumns);
 
       // Update word status
       const newWords = board.words.map((w, i) =>
@@ -287,6 +331,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         cascadeMultiplier: newCascadeMultiplier,
         history: [...state.history, historyEntry],
         status: newStatus,
+        frozenColumns: [], // Reset frozen columns after each move
+        previewGrid: null, // Clear any preview
       };
 
       return newState;
@@ -318,7 +364,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'UNDO_MOVE': {
-      if (state.history.length === 0 || state.status !== 'playing') return state;
+      if (state.history.length === 0) return state;
+      // Allow undo in 'playing' state, or when 'failed' (to recover from dead-ends/perfectSolve)
+      if (state.status !== 'playing' && state.status !== 'failed') return state;
       if (state.undosLeft <= 0) return state;
 
       const lastHistory = state.history[state.history.length - 1];
@@ -339,6 +387,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         combo: 0,
         cascadeMultiplier: state.mode === 'cascade' ? 1 : state.cascadeMultiplier,
         perfectRun: false,
+        status: 'playing', // Reset status so player can continue after undo
       };
     }
 
@@ -407,6 +456,82 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'FREEZE_COLUMN': {
+      if (state.status !== 'playing') return state;
+      if (state.boosterCounts.freezeColumn <= 0) return state;
+      const { col } = action;
+      // Toggle frozen column
+      const isFrozen = state.frozenColumns.includes(col);
+      const newFrozen = isFrozen
+        ? state.frozenColumns.filter(c => c !== col)
+        : [...state.frozenColumns, col];
+      return {
+        ...state,
+        frozenColumns: newFrozen,
+        boosterCounts: isFrozen
+          ? { ...state.boosterCounts, freezeColumn: state.boosterCounts.freezeColumn + 1 }
+          : { ...state.boosterCounts, freezeColumn: state.boosterCounts.freezeColumn - 1 },
+      };
+    }
+
+    case 'PREVIEW_MOVE': {
+      if (state.status !== 'playing') return state;
+      const { positions } = action;
+      if (positions.length === 0) {
+        // Clear preview
+        return { ...state, previewGrid: null };
+      }
+      // Show what the board would look like after removing these cells
+      const previewResult = removeCellsAndApplyGravity(state.board.grid, positions);
+      return { ...state, previewGrid: previewResult };
+    }
+
+    case 'USE_BOOSTER': {
+      if (state.status !== 'playing') return state;
+      const { booster } = action;
+      if (booster === 'shuffleFiller' && state.boosterCounts.shuffleFiller > 0) {
+        // Delegate to SHUFFLE_FILLER logic
+        const { grid: bGrid, words: bWords } = state.board;
+        const newBGrid = cloneGrid(bGrid);
+        const bWordPositions = new Set<string>();
+        bWords.forEach(w => {
+          if (!w.found) {
+            const occurrences = findWordInGrid(newBGrid, w.word);
+            if (occurrences.length > 0) {
+              occurrences[0].forEach(pos => bWordPositions.add(`${pos.row},${pos.col}`));
+            }
+          }
+        });
+        const bVowels = 'AEIOU';
+        const bConsonants = 'BCDFGHJKLMNPQRSTVWXYZ';
+        for (let r = 0; r < newBGrid.length; r++) {
+          for (let c = 0; c < newBGrid[0].length; c++) {
+            if (newBGrid[r][c] && !bWordPositions.has(`${r},${c}`)) {
+              const useV = Math.random() < 0.35;
+              const pool = useV ? bVowels : bConsonants;
+              newBGrid[r][c] = {
+                ...newBGrid[r][c]!,
+                letter: pool[Math.floor(Math.random() * pool.length)],
+              };
+            }
+          }
+        }
+        return {
+          ...state,
+          board: { ...state.board, grid: newBGrid },
+          boosterCounts: { ...state.boosterCounts, shuffleFiller: state.boosterCounts.shuffleFiller - 1 },
+        };
+      }
+      if (booster === 'boardPreview' && state.boosterCounts.boardPreview > 0) {
+        // Board preview is activated — handled via UI state, just track usage
+        return {
+          ...state,
+          boosterCounts: { ...state.boosterCounts, boardPreview: state.boosterCounts.boardPreview - 1 },
+        };
+      }
+      return state;
+    }
+
     default:
       return state;
   }
@@ -463,6 +588,22 @@ export function useGame(
     dispatch({ type: 'SHUFFLE_FILLER' });
   }, []);
 
+  const freezeColumn = useCallback((col: number) => {
+    dispatch({ type: 'FREEZE_COLUMN', col });
+  }, []);
+
+  const previewMove = useCallback((positions: CellPosition[]) => {
+    dispatch({ type: 'PREVIEW_MOVE', positions });
+  }, []);
+
+  const clearPreview = useCallback(() => {
+    dispatch({ type: 'PREVIEW_MOVE', positions: [] });
+  }, []);
+
+  const useBooster = useCallback((booster: string) => {
+    dispatch({ type: 'USE_BOOSTER', booster });
+  }, []);
+
   // Get the currently forming word
   const currentWord = getSelectedWord(state.board.grid, state.selectedCells);
 
@@ -499,6 +640,10 @@ export function useGame(
     undoMove,
     newGame,
     shuffleFiller,
+    freezeColumn,
+    previewMove,
+    clearPreview,
+    useBooster,
     currentWord,
     isValidWord,
     isStuck,

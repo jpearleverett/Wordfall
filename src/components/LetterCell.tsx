@@ -16,6 +16,8 @@ interface LetterCellProps {
   isHinted: boolean;
   selectionIndex: number;
   onPress: () => void;
+  isFrozen?: boolean;
+  isValidWord?: boolean;
 }
 
 export const LetterCell = React.memo(function LetterCell({
@@ -26,6 +28,8 @@ export const LetterCell = React.memo(function LetterCell({
   isHinted,
   selectionIndex,
   onPress,
+  isFrozen = false,
+  isValidWord = false,
 }: LetterCellProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -66,14 +70,37 @@ export const LetterCell = React.memo(function LetterCell({
     }
   }, [isSelected]);
 
+  // Determine cell color based on state
+  const getBackgroundColor = () => {
+    if (isValidWord) return COLORS.green;
+    if (isSelected && isHinted) return COLORS.cellHint;
+    if (isSelected) return COLORS.cellSelected;
+    if (isFrozen) return 'rgba(0, 212, 255, 0.2)';
+    return COLORS.cellDefault;
+  };
+
+  const getBorderColor = () => {
+    if (isValidWord) return COLORS.green;
+    if (isSelected && isHinted) return COLORS.gold;
+    if (isSelected) return COLORS.accent;
+    if (isFrozen) return COLORS.accent;
+    return 'transparent';
+  };
+
   const bgColor = glowAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.cellDefault, isHinted ? COLORS.cellHint : COLORS.cellSelected],
+    outputRange: [
+      isFrozen ? 'rgba(0, 212, 255, 0.2)' : COLORS.cellDefault,
+      isValidWord ? COLORS.green : (isHinted ? COLORS.cellHint : COLORS.cellSelected),
+    ],
   });
 
   const borderColor = glowAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', isHinted ? COLORS.gold : COLORS.accent],
+    outputRange: [
+      isFrozen ? COLORS.accent : 'transparent',
+      isValidWord ? COLORS.green : (isHinted ? COLORS.gold : COLORS.accent),
+    ],
   });
 
   return (
@@ -97,11 +124,12 @@ export const LetterCell = React.memo(function LetterCell({
             styles.letter,
             { fontSize: size * 0.48 },
             isSelected && styles.letterSelected,
+            isValidWord && styles.letterValid,
           ]}
         >
           {letter}
         </Text>
-        {isSelected && selectionIndex >= 0 && (
+        {isSelected && selectionIndex >= 0 && !isValidWord && (
           <View
             style={[
               styles.indexBadge,
@@ -111,6 +139,16 @@ export const LetterCell = React.memo(function LetterCell({
             <Text style={[styles.indexText, { fontSize: size * 0.18 }]}>
               {selectionIndex + 1}
             </Text>
+          </View>
+        )}
+        {isValidWord && (
+          <View style={[styles.checkBadge, { borderRadius: size * 0.15 }]}>
+            <Text style={styles.checkText}>✓</Text>
+          </View>
+        )}
+        {isFrozen && !isSelected && (
+          <View style={styles.frozenIndicator}>
+            <Text style={styles.frozenIcon}>❄</Text>
           </View>
         )}
       </Animated.View>
@@ -139,6 +177,11 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.accentGlow,
     textShadowRadius: 8,
   },
+  letterValid: {
+    color: '#fff',
+    textShadowColor: COLORS.greenGlow,
+    textShadowRadius: 12,
+  },
   indexBadge: {
     position: 'absolute',
     top: 2,
@@ -150,5 +193,29 @@ const styles = StyleSheet.create({
   indexText: {
     color: COLORS.bg,
     fontWeight: '800',
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: COLORS.green,
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  frozenIndicator: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+  },
+  frozenIcon: {
+    fontSize: 8,
+    opacity: 0.6,
   },
 });

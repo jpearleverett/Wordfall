@@ -15,9 +15,9 @@ const CARD_WIDTH = (width - 48) / 2;
 
 const MODES = [
   { id: 'classic', name: 'Classic', icon: '📖', desc: 'Solve all listed words', unlockLevel: 1 },
-  { id: 'limited', name: 'Limited Moves', icon: '🎯', desc: 'Complete in exactly N moves', unlockLevel: 5 },
-  { id: 'timed', name: 'Time Pressure', icon: '⏱️', desc: 'Beat the clock', unlockLevel: 8 },
-  { id: 'perfect', name: 'Perfect Solve', icon: '💎', desc: 'Zero mistakes, no assists', unlockLevel: 12 },
+  { id: 'limitedMoves', name: 'Limited Moves', icon: '🎯', desc: 'Complete in exactly N moves', unlockLevel: 5 },
+  { id: 'timePressure', name: 'Time Pressure', icon: '⏱️', desc: 'Beat the clock', unlockLevel: 8 },
+  { id: 'perfectSolve', name: 'Perfect Solve', icon: '💎', desc: 'Zero mistakes, no assists', unlockLevel: 12 },
   { id: 'cascade', name: 'Cascade', icon: '🔥', desc: 'Build combo multipliers', unlockLevel: 6 },
   { id: 'daily', name: 'Daily Challenge', icon: '☀️', desc: 'Same puzzle for everyone', unlockLevel: 1 },
   { id: 'weekly', name: 'Weekly Special', icon: '🏆', desc: 'Curated hard puzzle', unlockLevel: 10 },

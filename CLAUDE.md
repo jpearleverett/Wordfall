@@ -52,20 +52,22 @@ src/
 
 | File | Purpose |
 |------|---------|
-| `App.tsx` | Entry point. 5 bottom tabs, nested stack navigators, provider wrappers |
+| `App.tsx` | Entry point. 5 bottom tabs, nested stack navigators, provider wrappers, full context wiring for game rewards/progression |
 | `src/types.ts` | ALL type definitions. Edit here when adding new data structures |
 | `src/constants.ts` | Colors, difficulty configs, mode configs, scoring, economy, animations |
-| `src/hooks/useGame.ts` | Core game state reducer - handles all 12+ game actions |
+| `src/hooks/useGame.ts` | Core game state reducer - handles 15+ game actions including boosters |
 | `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG and solvability validation |
-| `src/engine/gravity.ts` | Column-based gravity physics (letters fall down) |
+| `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
 | `src/engine/solver.ts` | Recursive backtracking solver, dead-end detection, hint generation |
 | `src/contexts/PlayerContext.tsx` | Master player data hub (progress, collections, missions, streaks, cosmetics, library) |
+| `src/components/PuzzleComplete.tsx` | Victory screen with confetti particles, animated score counter, staggered reveals |
+| `src/components/WordBank.tsx` | Animated word chips with celebration scale, glow pulse, valid word state |
 | `GAME_DESIGN_DOCUMENT.md` | Full 48KB GDD with 17 sections - the source of truth for features |
 | `PLAN.md` | 20-phase implementation roadmap |
 
 ### State Management
 
-- **Game state:** `useGame` hook with `useReducer` in `GameScreen`. Actions: SELECT_CELL, SUBMIT_WORD, USE_HINT, UNDO_MOVE, NEW_GAME, TICK_TIMER, SHUFFLE_FILLER, etc.
+- **Game state:** `useGame` hook with `useReducer` in `GameScreen`. Actions: SELECT_CELL, SUBMIT_WORD, USE_HINT, UNDO_MOVE, NEW_GAME, TICK_TIMER, SHUFFLE_FILLER, FREEZE_COLUMN, PREVIEW_MOVE, USE_BOOSTER, etc. State includes `frozenColumns`, `previewGrid`, `boosterCounts`.
 - **Player data:** `PlayerContext` - progress, collections, missions, streaks, cosmetics, library. Persisted to AsyncStorage.
 - **Economy:** `EconomyContext` - coins, gems, hintTokens, eventStars, libraryPoints. Persisted to AsyncStorage.
 - **Settings:** `SettingsContext` - volume, haptics, notifications, theme. Persisted to AsyncStorage.
@@ -100,12 +102,19 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 ## Game Mechanics
 
 ### Core Loop
-1. Player sees a grid of letters with target words listed
+1. Player sees a grid of letters with target words listed in the WordBank
 2. Tap letters in sequence (horizontal or vertical adjacency only) to spell words
-3. When a valid word is selected, it auto-submits after 400ms
-4. Cleared letters disappear; letters above fall due to gravity
-5. Gravity can reveal new word arrangements (chain opportunity)
-6. Find all words to complete the puzzle
+3. When a valid word is selected, cells turn green with checkmarks and auto-submit after 400ms
+4. Cleared letters disappear; letters above fall due to gravity (with LayoutAnimation)
+5. Score popup floats up showing points earned (with combo multiplier display)
+6. Chain celebrations ("2x CHAIN!") appear on consecutive word finds
+7. Find all words to trigger victory screen with confetti, animated score counter, and star reveals
+
+### Boosters
+Three booster types available during gameplay:
+- **Freeze Column**: Prevents gravity from affecting a selected column for one move
+- **Board Preview**: Shows what the board will look like after submitting the current selection
+- **Shuffle Filler**: Randomizes non-word filler letters on the board
 
 ### Board Generation
 - Uses Mulberry32 seeded PRNG for reproducible puzzles
@@ -138,33 +147,52 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 - Grid padding: 12px, cell gap: 4px
 - Cell size computed dynamically based on column count and screen width
 
+### Animations & Visual Feedback
+- **Cell selection**: Scale down 0.9 → spring to 1.05 with animated glow border
+- **Valid word detection**: Cells turn green with checkmarks, green flash overlay on screen
+- **Score popup**: Springs in, holds 600ms, floats up and fades out. Shows combo multiplier
+- **Chain celebration**: "Nx CHAIN!" popup with spring scale animation
+- **WordBank chips**: Found words scale up 1.15x with spring then settle; active words have pulsing glow
+- **Puzzle complete**: Confetti particles (24 particles, 8 colors), stars pop in with staggered delays and rotation, score counts up from 0, rewards and buttons slide in sequentially
+- **Button press**: All Pressable buttons scale to 0.92-0.96x on press with opacity change
+- **Screen transitions**: Title springs in, buttons slide up with spring physics
+
 ## Implementation Status
 
 ### Complete
 - Core gameplay engine (board gen, gravity, solver, word selection)
-- All 10 game mode support in the reducer
+- All 10 game mode support in the reducer (with correct mode IDs)
 - 5-tab navigation with 12 screens
 - 4 context providers with AsyncStorage persistence
-- Sound manager, haptics, analytics services
+- Sound manager, haptics, analytics services (SFX calls wired, no audio assets yet)
 - 40 chapters across 8 library wings
 - 12 Word Atlas pages, 6 rare tile sets, 4 seasonal albums
 - 12-week rotating event calendar (10 event types)
 - 22 daily mission templates
 - 50+ cosmetic items (themes, frames, titles, decorations)
-- Economy system framework
+- Economy system with full reward wiring (coins, gems, library points on puzzle complete)
+- Booster system (Freeze Column, Board Preview, Shuffle Filler) with UI and reducer support
+- Visual polish: score popups, confetti, animated score counter, button press feedback
+- Animated WordBank with celebration, glow, and valid-word states
+- Chain celebration popup on combos
+- Valid word green flash + auto-submit
+- Daily login reward UI (7-day cycle on HomeScreen)
+- Perfect Solve undo recovery (undo from failed state)
+- App.tsx fully wired: onComplete awards rewards, onNextLevel generates next board, auto-onboarding
+- 5-step onboarding with animated illustrations (mini grid, gravity demo, strategy bubbles)
 - TypeScript compiles with zero errors
 
 ### Scaffolded / Needs Work
+- Audio asset files (sound effects, music) - SoundManager exists but no .mp3/.wav files
+- Image assets (icons, illustrations) - using emoji placeholders
 - Firebase Cloud Functions (server-side scheduled tasks)
+- Actual Firestore sync (currently AsyncStorage only)
 - Real-time leaderboard computation
 - IAP integration (expo-in-app-purchases)
 - Ad integration (rewarded ads for hints)
 - Push notifications
 - Friend challenge matchmaking
 - Club chat real-time messaging
-- Audio asset files (sound effects, music)
-- Image assets (icons, illustrations)
-- Actual Firestore sync (currently AsyncStorage only)
 - End-to-end testing
 - Deep linking
 
@@ -189,6 +217,7 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 
 - **No energy walls** on core play - ethical F2P design
 - **Hints/undos are consumables** (3 each per puzzle by default, purchasable)
+- **Boosters** (freezeColumn, boardPreview, shuffleFiller) are per-puzzle consumables tracked in `boosterCounts`
 - **Portrait orientation only** (set in app.json)
 - **Dark mode only** - no light theme
 - **`--legacy-peer-deps` required** for npm install due to React Navigation peer dep conflicts

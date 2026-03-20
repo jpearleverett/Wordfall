@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Pressable,
@@ -21,6 +21,109 @@ interface PuzzleCompleteProps {
   onNextLevel: () => void;
   onHome: () => void;
   onRetry: () => void;
+}
+
+// Confetti particle component
+function ConfettiParticle({ delay, color, startX }: { delay: number; color: string; startX: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const swayAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.parallel([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 2000 + Math.random() * 1000,
+          useNativeDriver: true,
+        }),
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(swayAnim, {
+              toValue: 1,
+              duration: 400 + Math.random() * 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(swayAnim, {
+              toValue: -1,
+              duration: 400 + Math.random() * 300,
+              useNativeDriver: true,
+            }),
+          ]),
+        ),
+      ]),
+    ]).start();
+  }, []);
+
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-60, 500],
+  });
+
+  const translateX = swayAnim.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-20, 20],
+  });
+
+  const rotate = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', `${360 + Math.random() * 360}deg`],
+  });
+
+  const opacity = anim.interpolate({
+    inputRange: [0, 0.1, 0.7, 1],
+    outputRange: [0, 1, 1, 0],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.confettiParticle,
+        {
+          left: startX,
+          backgroundColor: color,
+          width: 6 + Math.random() * 6,
+          height: 6 + Math.random() * 10,
+          borderRadius: Math.random() > 0.5 ? 10 : 2,
+          opacity,
+          transform: [{ translateY }, { translateX }, { rotate }],
+        },
+      ]}
+    />
+  );
+}
+
+// Animated score counter
+function AnimatedScore({ targetScore }: { targetScore: number }) {
+  const [displayScore, setDisplayScore] = useState(0);
+
+  useEffect(() => {
+    const duration = 1200;
+    const steps = 30;
+    const increment = targetScore / steps;
+    let current = 0;
+    let step = 0;
+
+    const interval = setInterval(() => {
+      step++;
+      // Ease-out: fast start, slow end
+      const progress = step / steps;
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      current = Math.round(targetScore * easedProgress);
+      setDisplayScore(current);
+
+      if (step >= steps) {
+        setDisplayScore(targetScore);
+        clearInterval(interval);
+      }
+    }, duration / steps);
+
+    return () => clearInterval(interval);
+  }, [targetScore]);
+
+  return (
+    <Text style={styles.statValue}>{displayScore}</Text>
+  );
 }
 
 function Star({
@@ -53,13 +156,18 @@ function Star({
     outputRange: [0, 1.3, 1],
   });
 
+  const rotate = anim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['0deg', '-15deg', '0deg'],
+  });
+
   return (
     <Animated.Text
       style={[
         styles.star,
         {
           fontSize: size,
-          transform: [{ scale }],
+          transform: [{ scale }, { rotate }],
           opacity: filled ? 1 : 0.3,
         },
       ]}
@@ -68,6 +176,17 @@ function Star({
     </Animated.Text>
   );
 }
+
+const CONFETTI_COLORS = [
+  COLORS.accent,
+  COLORS.gold,
+  COLORS.green,
+  COLORS.coral,
+  COLORS.purple,
+  COLORS.orange,
+  COLORS.teal,
+  '#fff',
+];
 
 export function PuzzleComplete({
   score,
@@ -85,17 +204,34 @@ export function PuzzleComplete({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const perfectAnim = useRef(new Animated.Value(0)).current;
+  const buttonsAnim = useRef(new Animated.Value(0)).current;
+  const rewardsAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          friction: 6,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(600),
+      Animated.spring(rewardsAnim, {
         toValue: 1,
-        duration: 400,
+        friction: 5,
+        tension: 100,
         useNativeDriver: true,
       }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
+      Animated.spring(buttonsAnim, {
+        toValue: 1,
         friction: 6,
+        tension: 80,
         useNativeDriver: true,
       }),
     ]).start();
@@ -134,10 +270,40 @@ export function PuzzleComplete({
     outputRange: [0, 1],
   });
 
+  const rewardsScale = rewardsAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.8, 1],
+  });
+
+  const buttonsTranslate = buttonsAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [30, 0],
+  });
+
+  // Generate confetti particles
+  const confettiParticles = Array.from({ length: 24 }, (_, i) => ({
+    id: i,
+    delay: Math.random() * 800,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    startX: Math.random() * 300,
+  }));
+
   return (
     <Animated.View
       style={[styles.overlay, { opacity: fadeAnim }]}
     >
+      {/* Confetti */}
+      <View style={styles.confettiContainer} pointerEvents="none">
+        {confettiParticles.map(p => (
+          <ConfettiParticle
+            key={p.id}
+            delay={p.delay}
+            color={p.color}
+            startX={p.startX}
+          />
+        ))}
+      </View>
+
       <Animated.View
         style={[styles.card, { transform: [{ translateY: slideAnim }] }]}
       >
@@ -166,7 +332,7 @@ export function PuzzleComplete({
 
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{score}</Text>
+            <AnimatedScore targetScore={score} />
             <Text style={styles.statLabel}>Score</Text>
           </View>
           <View style={styles.statItem}>
@@ -180,7 +346,13 @@ export function PuzzleComplete({
         </View>
 
         {/* Rewards */}
-        <View style={styles.rewardsRow}>
+        <Animated.View style={[
+          styles.rewardsRow,
+          {
+            opacity: rewardsAnim,
+            transform: [{ scale: rewardsScale }],
+          },
+        ]}>
           <View style={styles.rewardItem}>
             <Text style={styles.rewardIcon}>🪙</Text>
             <Text style={styles.rewardValue}>+{coinReward}</Text>
@@ -195,12 +367,22 @@ export function PuzzleComplete({
             <Text style={styles.rewardIcon}>★</Text>
             <Text style={styles.rewardValue}>+{stars}</Text>
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.buttons}>
+        <Animated.View style={[
+          styles.buttons,
+          {
+            opacity: buttonsAnim,
+            transform: [{ translateY: buttonsTranslate }],
+          },
+        ]}>
           {!isDaily && mode !== 'endless' && (
             <Pressable
-              style={[styles.button, styles.primaryButton]}
+              style={({ pressed }) => [
+                styles.button,
+                styles.primaryButton,
+                pressed && styles.buttonPressed,
+              ]}
               onPress={onNextLevel}
             >
               <Text style={styles.primaryButtonText}>
@@ -210,7 +392,11 @@ export function PuzzleComplete({
           )}
 
           <Pressable
-            style={[styles.button, styles.secondaryButton]}
+            style={({ pressed }) => [
+              styles.button,
+              styles.secondaryButton,
+              pressed && styles.buttonPressed,
+            ]}
             onPress={onRetry}
           >
             <Text style={styles.secondaryButtonText}>
@@ -219,14 +405,18 @@ export function PuzzleComplete({
           </Pressable>
 
           <Pressable
-            style={[styles.button, styles.secondaryButton]}
+            style={({ pressed }) => [
+              styles.button,
+              styles.secondaryButton,
+              pressed && styles.buttonPressed,
+            ]}
             onPress={onHome}
           >
             <Text style={styles.secondaryButtonText}>
               HOME
             </Text>
           </Pressable>
-        </View>
+        </Animated.View>
       </Animated.View>
     </Animated.View>
   );
@@ -240,6 +430,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
     zIndex: 100,
+  },
+  confettiContainer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  confettiParticle: {
+    position: 'absolute',
+    top: -10,
   },
   card: {
     backgroundColor: COLORS.surface,
@@ -351,6 +549,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.9,
   },
   primaryButton: {
     backgroundColor: COLORS.accent,
