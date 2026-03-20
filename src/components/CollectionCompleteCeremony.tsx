@@ -1,0 +1,127 @@
+import React, { useEffect, useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+
+interface CollectionCompleteCeremonyProps {
+  collectionName: string;
+  collectionIcon: string;
+  reward: { coins: number; gems: number };
+  onDismiss: () => void;
+}
+
+export function CollectionCompleteCeremony({
+  collectionName,
+  collectionIcon,
+  reward,
+  onDismiss,
+}: CollectionCompleteCeremonyProps) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 100, useNativeDriver: true }),
+    ]).start();
+  }, [fadeAnim, scaleAnim]);
+
+  return (
+    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+        <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
+          <Text style={styles.ribbon}>COLLECTION COMPLETE</Text>
+          <Text style={styles.icon}>{collectionIcon}</Text>
+          <Text style={styles.name}>{collectionName}</Text>
+          <Text style={styles.subtitle}>You found every item!</Text>
+
+          <View style={styles.rewardRow}>
+            <View style={styles.rewardChip}>
+              <Text style={styles.rewardEmoji}>🪙</Text>
+              <Text style={styles.rewardAmount}>+{reward.coins}</Text>
+            </View>
+            {reward.gems > 0 && (
+              <View style={styles.rewardChip}>
+                <Text style={styles.rewardEmoji}>💎</Text>
+                <Text style={[styles.rewardAmount, { color: COLORS.accent }]}>+{reward.gems}</Text>
+              </View>
+            )}
+          </View>
+
+          <Pressable style={({ pressed }) => [pressed && styles.buttonPressed]} onPress={onDismiss}>
+            <LinearGradient colors={GRADIENTS.button.gold} style={styles.button}>
+              <Text style={styles.buttonText}>WONDERFUL!</Text>
+            </LinearGradient>
+          </Pressable>
+        </LinearGradient>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 200,
+  },
+  card: { width: '100%', maxWidth: 320, ...SHADOWS.strong },
+  cardInner: {
+    borderRadius: 28,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.gold + '30',
+  },
+  ribbon: {
+    color: COLORS.gold,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2,
+    marginBottom: 16,
+    textShadowColor: COLORS.goldGlow,
+    textShadowRadius: 8,
+  },
+  icon: { fontSize: 48, marginBottom: 12 },
+  name: {
+    color: COLORS.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  subtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    marginBottom: 20,
+  },
+  rewardRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  rewardChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  rewardEmoji: { fontSize: 16 },
+  rewardAmount: { color: COLORS.gold, fontWeight: '800', fontSize: 14 },
+  button: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    alignItems: 'center',
+    ...SHADOWS.glow(COLORS.gold),
+  },
+  buttonText: {
+    color: COLORS.bg,
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  buttonPressed: { transform: [{ scale: 0.96 }], opacity: 0.88 },
+});

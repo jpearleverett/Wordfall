@@ -1,0 +1,181 @@
+import React, { useEffect, useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+
+interface ModeUnlockCeremonyProps {
+  modeName: string;
+  modeIcon: string;
+  modeDescription: string;
+  modeColor: string;
+  onDismiss: () => void;
+  onTryNow?: () => void;
+}
+
+export function ModeUnlockCeremony({
+  modeName,
+  modeIcon,
+  modeDescription,
+  modeColor,
+  onDismiss,
+  onTryNow,
+}: ModeUnlockCeremonyProps) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.7)).current;
+  const iconAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.spring(scaleAnim, { toValue: 1, friction: 6, tension: 100, useNativeDriver: true }),
+      ]),
+      Animated.spring(iconAnim, { toValue: 1, friction: 4, tension: 150, useNativeDriver: true }),
+    ]).start();
+  }, [fadeAnim, scaleAnim, iconAnim]);
+
+  const dismiss = () => {
+    Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(onDismiss);
+  };
+
+  return (
+    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.cardOuter, { transform: [{ scale: scaleAnim }] }]}>
+        <LinearGradient
+          colors={GRADIENTS.surfaceCard}
+          style={[styles.card, SHADOWS.strong]}
+        >
+          <View style={[styles.iconGlow, { backgroundColor: modeColor + '20' }]} />
+          <Text style={styles.unlockLabel}>NEW MODE UNLOCKED</Text>
+          <Animated.View style={{
+            transform: [
+              { scale: iconAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
+              { rotate: iconAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['0deg', '-10deg', '0deg'] }) },
+            ],
+          }}>
+            <View style={[styles.iconCircle, { borderColor: modeColor + '50', backgroundColor: modeColor + '15' }]}>
+              <Text style={styles.icon}>{modeIcon}</Text>
+            </View>
+          </Animated.View>
+          <Text style={[styles.modeName, { color: modeColor }]}>{modeName.toUpperCase()}</Text>
+          <Text style={styles.modeDescription}>{modeDescription}</Text>
+          <View style={styles.buttons}>
+            {onTryNow && (
+              <Pressable
+                style={({ pressed }) => [pressed && styles.pressed]}
+                onPress={() => { dismiss(); onTryNow(); }}
+              >
+                <LinearGradient
+                  colors={[modeColor, modeColor + 'CC']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.tryButton, SHADOWS.glow(modeColor)]}
+                >
+                  <Text style={styles.tryButtonText}>TRY IT NOW</Text>
+                </LinearGradient>
+              </Pressable>
+            )}
+            <Pressable
+              style={({ pressed }) => [styles.laterButton, pressed && styles.pressed]}
+              onPress={dismiss}
+            >
+              <Text style={styles.laterButtonText}>Later</Text>
+            </Pressable>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 200,
+  },
+  cardOuter: {
+    width: '100%',
+    maxWidth: 340,
+  },
+  card: {
+    borderRadius: 28,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  iconGlow: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    top: -40,
+  },
+  unlockLabel: {
+    color: COLORS.gold,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 3,
+    marginBottom: 20,
+    textShadowColor: COLORS.goldGlow,
+    textShadowRadius: 8,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    marginBottom: 16,
+  },
+  icon: {
+    fontSize: 36,
+  },
+  modeName: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  modeDescription: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  buttons: {
+    width: '100%',
+    gap: 10,
+  },
+  tryButton: {
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  tryButtonText: {
+    color: COLORS.bg,
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  laterButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  laterButtonText: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  pressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.85,
+  },
+});

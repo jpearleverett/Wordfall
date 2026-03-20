@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
+import { Tooltip } from '../components/common/Tooltip';
 
 const { width } = Dimensions.get('window');
 const TILE_SIZE = (width - 80) / 7;
@@ -60,6 +61,9 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
   const player = usePlayer();
   const collections = collectionsProp ?? player.collections;
   const [activeTab, setActiveTab] = useState<TabName>('Word Atlas');
+  const [showTooltip, setShowTooltip] = useState(
+    !player.tooltipsShown.includes('collections_screen')
+  );
 
   const atlasPages = collections?.atlas ?? DEFAULT_ATLAS_PAGES;
   const collectedTiles: string[] = collections?.tiles ?? [];
@@ -287,6 +291,15 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
       <View style={styles.header}>
         <Text style={styles.headerTitle}>COLLECTIONS</Text>
       </View>
+      <Tooltip
+        message="Collect words, rare tiles, and seasonal stamps as you play. Complete sets for bonus rewards!"
+        visible={showTooltip}
+        onDismiss={() => {
+          setShowTooltip(false);
+          player.markTooltipShown('collections_screen');
+        }}
+        position="top"
+      />
       <View style={styles.tabBar}>
         <LinearGradient
           colors={[...GRADIENTS.surface]}

@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CHAPTERS, getChapterForLevel } from '../data/chapters';
+import { CeremonyItem, WeeklyGoalsState } from '../types';
+import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
+import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
+import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -92,6 +96,24 @@ interface PlayerData {
   // Comebacks
   lastActiveDate: string;
   comebackRewardsClaimed: string[];
+
+  // Weekly Goals
+  weeklyGoals: WeeklyGoalsState | null;
+
+  // Ceremonies
+  pendingCeremonies: CeremonyItem[];
+
+  // Tooltips
+  tooltipsShown: string[];
+
+  // Difficulty Pacing
+  failCountByLevel: Record<number, number>;
+  consecutiveFailures: number;
+  lastLevelStars: number;
+
+  // Tracking
+  wordsFoundTotal: number;
+  modesPlayedThisWeek: string[];
 }
 
 interface PlayerContextType extends PlayerData {
@@ -134,6 +156,28 @@ interface PlayerContextType extends PlayerData {
 
   // Comebacks
   checkComebackRewards: () => string[];
+
+  // Feature unlocks
+  unlockFeature: (featureId: string) => void;
+  checkFeatureUnlocks: (level: number) => CeremonyItem[];
+
+  // Tooltips
+  markTooltipShown: (id: string) => void;
+
+  // Weekly Goals
+  initWeeklyGoals: () => void;
+  updateWeeklyGoalProgress: (trackingKey: string, value: number) => void;
+
+  // Ceremonies
+  queueCeremony: (ceremony: CeremonyItem) => void;
+  popCeremony: () => CeremonyItem | null;
+
+  // Difficulty pacing
+  recordFailure: (level: number) => void;
+  needsBreather: () => boolean;
+
+  // Achievements checking
+  checkAchievements: (extraData?: { maxCombo?: number }) => CeremonyItem[];
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -214,6 +258,24 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Comebacks
   lastActiveDate: '',
   comebackRewardsClaimed: [],
+
+  // Weekly Goals
+  weeklyGoals: null,
+
+  // Ceremonies
+  pendingCeremonies: [],
+
+  // Tooltips
+  tooltipsShown: [],
+
+  // Difficulty Pacing
+  failCountByLevel: {},
+  consecutiveFailures: 0,
+  lastLevelStars: 0,
+
+  // Tracking
+  wordsFoundTotal: 0,
+  modesPlayedThisWeek: [],
 };
 
 // ─── Context ────────────────────────────────────────────────────────────────
@@ -241,6 +303,16 @@ const PlayerContext = createContext<PlayerContextType>({
   recordModePlay: () => {},
   completeAchievement: () => {},
   checkComebackRewards: () => [],
+  unlockFeature: () => {},
+  checkFeatureUnlocks: () => [],
+  markTooltipShown: () => {},
+  initWeeklyGoals: () => {},
+  updateWeeklyGoalProgress: () => {},
+  queueCeremony: () => {},
+  popCeremony: () => null,
+  recordFailure: () => {},
+  needsBreather: () => false,
+  checkAchievements: () => [],
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -644,6 +716,180 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ── Feature Unlocks ────────────────────────────────────────────────────
+
+  const unlockFeature = useCallback((featureId: string) => {
+    setData((prev) => {
+      if (prev.featuresUnlocked.includes(featureId)) return prev;
+      return {
+        ...prev,
+        featuresUnlocked: [...prev.featuresUnlocked, featureId],
+      };
+    });
+  }, []);
+
+  const checkFeatureUnlocks = useCallback((level: number): CeremonyItem[] => {
+    const ceremonies: CeremonyItem[] = [];
+    for (const feature of FEATURE_UNLOCK_SCHEDULE) {
+      if (feature.unlockLevel <= level && !data.featuresUnlocked.includes(feature.id)) {
+        ceremonies.push({
+          type: 'feature_unlock',
+          data: { ...feature },
+        });
+        setData((prev) => ({
+          ...prev,
+          featuresUnlocked: [...prev.featuresUnlocked, feature.id],
+        }));
+      }
+    }
+    return ceremonies;
+  }, [data.featuresUnlocked]);
+
+  // ── Tooltips ──────────────────────────────────────────────────────────
+
+  const markTooltipShown = useCallback((id: string) => {
+    setData((prev) => {
+      if (prev.tooltipsShown.includes(id)) return prev;
+      return {
+        ...prev,
+        tooltipsShown: [...prev.tooltipsShown, id],
+      };
+    });
+  }, []);
+
+  // ── Weekly Goals ──────────────────────────────────────────────────────
+
+  const initWeeklyGoals = useCallback(() => {
+    setData((prev) => {
+      if (prev.weeklyGoals && !isNewWeek(prev.weeklyGoals.weekStart)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        weeklyGoals: generateWeeklyGoals(),
+        modesPlayedThisWeek: [],
+      };
+    });
+  }, []);
+
+  const updateWeeklyGoalProgress = useCallback((trackingKey: string, value: number) => {
+    setData((prev) => {
+      if (!prev.weeklyGoals) return prev;
+      const updatedGoals = prev.weeklyGoals.goals.map((g) => {
+        if (g.trackingKey !== trackingKey || g.completed) return g;
+        const newProgress = g.progress + value;
+        return {
+          ...g,
+          progress: newProgress,
+          completed: newProgress >= g.target,
+        };
+      });
+      return {
+        ...prev,
+        weeklyGoals: { ...prev.weeklyGoals, goals: updatedGoals },
+      };
+    });
+  }, []);
+
+  // ── Ceremonies ────────────────────────────────────────────────────────
+
+  const queueCeremony = useCallback((ceremony: CeremonyItem) => {
+    setData((prev) => ({
+      ...prev,
+      pendingCeremonies: [...prev.pendingCeremonies, ceremony],
+    }));
+  }, []);
+
+  const popCeremony = useCallback((): CeremonyItem | null => {
+    let ceremony: CeremonyItem | null = null;
+    setData((prev) => {
+      if (prev.pendingCeremonies.length === 0) return prev;
+      ceremony = prev.pendingCeremonies[0];
+      return {
+        ...prev,
+        pendingCeremonies: prev.pendingCeremonies.slice(1),
+      };
+    });
+    return ceremony;
+  }, []);
+
+  // ── Difficulty Pacing ─────────────────────────────────────────────────
+
+  const recordFailure = useCallback((level: number) => {
+    setData((prev) => ({
+      ...prev,
+      failCountByLevel: {
+        ...prev.failCountByLevel,
+        [level]: (prev.failCountByLevel[level] || 0) + 1,
+      },
+      consecutiveFailures: prev.consecutiveFailures + 1,
+    }));
+  }, []);
+
+  const needsBreather = useCallback((): boolean => {
+    return data.consecutiveFailures >= 2 || data.lastLevelStars === 1;
+  }, [data.consecutiveFailures, data.lastLevelStars]);
+
+  // ── Achievement Checking ──────────────────────────────────────────────
+
+  const checkAchievements = useCallback((extraData?: { maxCombo?: number }): CeremonyItem[] => {
+    const ceremonies: CeremonyItem[] = [];
+    const valueMap: Record<string, number> = {
+      word_finder: data.wordsFoundTotal,
+      puzzle_solver: data.puzzlesSolved,
+      perfect_player: data.perfectSolves,
+      high_scorer: data.totalScore,
+      chain_reaction: extraData?.maxCombo || 0,
+      streak_master: data.streaks.currentStreak,
+      daily_devotee: data.dailyCompleted.length,
+      atlas_scholar: Object.keys(data.collections.atlasPages).length,
+      tile_collector: Object.keys(data.collections.rareTiles).length,
+      library_restorer: data.restoredWings.length,
+      mode_explorer: Object.keys(data.modeStats).filter((m) => data.modeStats[m].played > 0).length,
+      speed_demon: data.modeStats.timePressure?.wins || 0,
+      level_climber: data.highestLevel,
+      star_collector: data.totalStars,
+    };
+
+    for (const achievement of ACHIEVEMENTS) {
+      const value = valueMap[achievement.id] || 0;
+      const tier = getAchievementTier(achievement, value);
+      if (!tier) continue;
+      const tierId = getAchievementTierId(achievement.id, tier);
+      if (data.achievementIds.includes(tierId)) continue;
+
+      // Check lower tiers first
+      const tierIndex = achievement.tiers.findIndex((t) => t.level === tier);
+      const lowerTiers = achievement.tiers.slice(0, tierIndex);
+      for (const lt of lowerTiers) {
+        const ltId = getAchievementTierId(achievement.id, lt.level);
+        if (!data.achievementIds.includes(ltId)) {
+          setData((prev) => ({
+            ...prev,
+            achievementIds: [...prev.achievementIds, ltId],
+          }));
+        }
+      }
+
+      ceremonies.push({
+        type: 'achievement',
+        data: {
+          id: tierId,
+          icon: achievement.icon,
+          name: achievement.name,
+          description: achievement.description,
+          tier,
+          reward: achievement.tiers[tierIndex].reward,
+        },
+      });
+      setData((prev) => ({
+        ...prev,
+        achievementIds: [...prev.achievementIds, tierId],
+      }));
+    }
+    return ceremonies;
+  }, [data]);
+
   // ── Comebacks ───────────────────────────────────────────────────────────
 
   const checkComebackRewards = useCallback((): string[] => {
@@ -712,6 +958,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         recordModePlay,
         completeAchievement,
         checkComebackRewards,
+        unlockFeature,
+        checkFeatureUnlocks,
+        markTooltipShown,
+        initWeeklyGoals,
+        updateWeeklyGoalProgress,
+        queueCeremony,
+        popCeremony,
+        recordFailure,
+        needsBreather,
+        checkAchievements,
       }}
     >
       {children}

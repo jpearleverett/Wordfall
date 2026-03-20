@@ -492,6 +492,31 @@ export const SHOP_ITEMS = {
   adRemoval: { id: 'ad_removal', price: '$4.99' },
 };
 
+// Feature unlock schedule (progressive disclosure)
+export const FEATURE_UNLOCK_SCHEDULE: {
+  id: string;
+  unlockLevel: number;
+  icon: string;
+  title: string;
+  description: string;
+  accentColor: string;
+}[] = [
+  { id: 'tab_play', unlockLevel: 1, icon: '▶', title: 'Play', description: 'Access game modes', accentColor: COLORS.accent },
+  { id: 'tab_collections', unlockLevel: 5, icon: '◆', title: 'Collections Unlocked!', description: 'Discover Word Atlas, Rare Tiles, and Seasonal Stamps. Collect them all!', accentColor: COLORS.gold },
+  { id: 'tab_library', unlockLevel: 8, icon: '❏', title: 'The Grand Library!', description: 'Restore 8 wings of the ancient library. Place decorations and build your sanctuary.', accentColor: COLORS.purple },
+  { id: 'boosters', unlockLevel: 6, icon: '⚡', title: 'Boosters Unlocked!', description: 'Use Freeze, Preview, and Shuffle to gain the edge on tough puzzles.', accentColor: COLORS.teal },
+  { id: 'events', unlockLevel: 10, icon: '🏆', title: 'Events Unlocked!', description: 'Compete in weekly events for exclusive rewards and climb the leaderboards.', accentColor: COLORS.coral },
+  { id: 'weekly_goals', unlockLevel: 5, icon: '📋', title: 'Weekly Goals!', description: 'Complete weekly objectives for bonus gems and exclusive rewards.', accentColor: COLORS.green },
+];
+
+// Breather difficulty config (slightly easier version of current difficulty)
+export function getBreatherConfig(level: number): BoardConfig {
+  if (level <= 5) return DIFFICULTY_CONFIGS.easy;
+  if (level <= 15) return { ...DIFFICULTY_CONFIGS.easy, wordCount: 4, maxWordLength: 4, difficulty: 'medium' as const };
+  if (level <= 30) return DIFFICULTY_CONFIGS.medium;
+  return DIFFICULTY_CONFIGS.hard;
+}
+
 // Events
 export const EVENT_SCHEDULE = {
   weeklyResetDay: 1, // Monday

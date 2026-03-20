@@ -39,6 +39,13 @@ interface GameScreenProps {
   onComplete: (stars: number, score: number) => void;
   onNextLevel: () => void;
   onHome: () => void;
+  // Completion data (passed from App.tsx wrapper after handleComplete)
+  isFirstWin?: boolean;
+  leveledUp?: boolean;
+  newLevel?: number;
+  difficultyTransition?: { from: string; to: string } | null;
+  nextLevelPreview?: { level: number; difficulty: string } | null;
+  shareText?: string;
 }
 
 function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): CellPosition[] {
@@ -78,6 +85,12 @@ export function GameScreen({
   onComplete,
   onNextLevel,
   onHome,
+  isFirstWin = false,
+  leveledUp = false,
+  newLevel = 0,
+  difficultyTransition = null,
+  nextLevelPreview = null,
+  shareText = '',
 }: GameScreenProps) {
   const modeConfig = MODE_CONFIGS[mode];
   const effectiveTimeLimit = modeConfig.rules.hasTimer
@@ -740,28 +753,66 @@ export function GameScreen({
           isDaily={isDaily}
           mode={mode}
           perfectRun={state.perfectRun}
+          isFirstWin={isFirstWin}
+          leveledUp={leveledUp}
+          newLevel={newLevel}
+          difficultyTransition={difficultyTransition}
+          nextLevelPreview={nextLevelPreview}
+          shareText={shareText}
           onNextLevel={handleNextLevel}
           onHome={onHome}
           onRetry={handleRetry}
         />
       )}
 
-      {/* Failed overlay */}
+      {/* Failed overlay with near-miss encouragement */}
       {showFailed && (
         <View style={styles.failedOverlay}>
           <View style={styles.failedCard}>
-            <Text style={styles.failedTitle}>
-              {state.status === 'timeout' ? '⏱ TIME\'S UP!' : '❌ PUZZLE FAILED'}
-            </Text>
-            <Text style={styles.failedSubtext}>
-              {state.status === 'timeout'
-                ? 'You ran out of time. Try again?'
-                : mode === 'perfectSolve'
-                  ? 'Perfect mode requires zero mistakes.'
-                  : `You used all ${effectiveMaxMoves} moves.`}
-            </Text>
+            {/* Near-miss encouragement */}
+            {foundWords > 0 && foundWords >= totalWords - 1 ? (
+              <>
+                <Text style={styles.failedTitle}>SO CLOSE!</Text>
+                <Text style={styles.failedSubtext}>
+                  You found {foundWords} of {totalWords} words — just {totalWords - foundWords} more!
+                </Text>
+              </>
+            ) : foundWords > 0 ? (
+              <>
+                <Text style={styles.failedTitle}>
+                  {state.status === 'timeout' ? '⏱ TIME\'S UP!' : 'KEEP GOING!'}
+                </Text>
+                <Text style={styles.failedSubtext}>
+                  You found {foundWords} of {totalWords} words. You're making progress!
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.failedTitle}>
+                  {state.status === 'timeout' ? '⏱ TIME\'S UP!' : '❌ PUZZLE FAILED'}
+                </Text>
+                <Text style={styles.failedSubtext}>
+                  {state.status === 'timeout'
+                    ? 'You ran out of time. Try again?'
+                    : mode === 'perfectSolve'
+                      ? 'Perfect mode requires zero mistakes.'
+                      : `You used all ${effectiveMaxMoves} moves.`}
+                </Text>
+              </>
+            )}
+            {/* Progress bar */}
+            {totalWords > 0 && (
+              <View style={styles.failedProgressContainer}>
+                <View style={styles.failedProgressTrack}>
+                  <View style={[
+                    styles.failedProgressFill,
+                    { width: `${Math.max((foundWords / totalWords) * 100, 2)}%` },
+                  ]} />
+                </View>
+                <Text style={styles.failedProgressText}>{foundWords}/{totalWords} words</Text>
+              </View>
+            )}
             <View style={styles.failedStats}>
-              <Text style={styles.failedStat}>Words Found: {foundWords}/{totalWords}</Text>
               <Text style={styles.failedStat}>Score: {state.score}</Text>
             </View>
             <View style={styles.failedButtons}>
@@ -769,7 +820,7 @@ export function GameScreen({
                 style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
                 onPress={handleRetry}
               >
-                <Text style={styles.retryButtonText}>RETRY</Text>
+                <Text style={styles.retryButtonText}>TRY AGAIN</Text>
               </Pressable>
               {state.undosLeft > 0 && state.history.length > 0 && (
                 <Pressable
@@ -1178,6 +1229,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
     lineHeight: 22,
+  },
+  failedProgressContainer: {
+    width: '100%',
+    marginBottom: 12,
+  },
+  failedProgressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  failedProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: COLORS.accent,
+  },
+  failedProgressText: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    textAlign: 'center',
+    fontWeight: '700',
   },
   failedStats: {
     marginBottom: 20,

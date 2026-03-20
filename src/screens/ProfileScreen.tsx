@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
+import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
 
 const { width } = Dimensions.get('window');
 
@@ -164,43 +165,61 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           ))}
         </View>
 
-        {/* Achievement Badges */}
-        <Text style={styles.sectionTitle}>Achievements</Text>
-        {p.badges.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.badgesScroll}
-            contentContainerStyle={styles.badgesContent}
-          >
-            {p.badges.map((badge) => (
-              <View key={badge.id} style={styles.badgeCard}>
+        {/* Achievements Grid */}
+        <Text style={styles.sectionTitle}>
+          Achievements ({playerContext.achievementIds.length}/{ACHIEVEMENTS.length * 3})
+        </Text>
+        <View style={styles.achievementsGrid}>
+          {ACHIEVEMENTS.map((achievement: AchievementDef) => {
+            const earnedTiers = achievement.tiers.filter(t =>
+              playerContext.achievementIds.includes(`${achievement.id}_${t.level}`)
+            );
+            const highestTier = earnedTiers.length > 0
+              ? earnedTiers[earnedTiers.length - 1].level
+              : null;
+            const tierColor = highestTier === 'gold' ? COLORS.gold
+              : highestTier === 'silver' ? '#c0c0c0'
+              : highestTier === 'bronze' ? '#cd7f32'
+              : 'rgba(255,255,255,0.15)';
+
+            return (
+              <View
+                key={achievement.id}
+                style={[
+                  styles.achievementCard,
+                  highestTier && { borderColor: tierColor + '60' },
+                ]}
+              >
                 <LinearGradient
                   colors={[...GRADIENTS.surfaceCard]}
                   style={StyleSheet.absoluteFill}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
                 />
-                <Text style={styles.badgeIcon}>{badge.icon}</Text>
-                <Text style={styles.badgeName} numberOfLines={1}>
-                  {badge.name}
-                </Text>
+                <Text style={styles.achievementIcon}>{achievement.icon}</Text>
+                <Text style={styles.achievementName} numberOfLines={1}>{achievement.name}</Text>
+                <View style={styles.tierDots}>
+                  {achievement.tiers.map(t => {
+                    const earned = playerContext.achievementIds.includes(`${achievement.id}_${t.level}`);
+                    const dotColor = t.level === 'gold' ? COLORS.gold
+                      : t.level === 'silver' ? '#c0c0c0' : '#cd7f32';
+                    return (
+                      <View
+                        key={t.level}
+                        style={[
+                          styles.tierDot,
+                          earned
+                            ? { backgroundColor: dotColor }
+                            : { backgroundColor: 'rgba(255,255,255,0.1)' },
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
               </View>
-            ))}
-          </ScrollView>
-        ) : (
-          <View style={styles.emptyBadges}>
-            <LinearGradient
-              colors={[...GRADIENTS.surfaceCard]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-            />
-            <Text style={styles.emptyBadgesText}>
-              Complete challenges to earn badges!
-            </Text>
-          </View>
-        )}
+            );
+          })}
+        </View>
 
         {/* Collection Progress */}
         <Text style={styles.sectionTitle}>Collection Progress</Text>
@@ -443,48 +462,44 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
-  badgesScroll: {
-    marginBottom: 4,
-  },
-  badgesContent: {
+  achievementsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
-    paddingRight: 16,
   },
-  badgeCard: {
-    width: 80,
+  achievementCard: {
+    width: CARD_WIDTH,
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.gold,
+    borderColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
-    shadowColor: COLORS.gold,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  badgeIcon: {
-    fontSize: 28,
+  achievementIcon: {
+    fontSize: 24,
     marginBottom: 4,
   },
-  badgeName: {
+  achievementName: {
     fontSize: 10,
-    color: COLORS.textSecondary,
+    color: COLORS.textPrimary,
     textAlign: 'center',
     fontWeight: '600',
+    marginBottom: 6,
   },
-  emptyBadges: {
-    borderRadius: 14,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    overflow: 'hidden',
+  tierDots: {
+    flexDirection: 'row',
+    gap: 4,
   },
-  emptyBadgesText: {
-    fontSize: 14,
-    color: COLORS.textMuted,
+  tierDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   collectionsCard: {
     borderRadius: 14,

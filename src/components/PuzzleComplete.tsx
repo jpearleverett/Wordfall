@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -19,9 +20,16 @@ interface PuzzleCompleteProps {
   isDaily: boolean;
   mode?: GameMode;
   perfectRun?: boolean;
+  isFirstWin?: boolean;
+  leveledUp?: boolean;
+  newLevel?: number;
+  difficultyTransition?: { from: string; to: string } | null;
+  nextLevelPreview?: { level: number; difficulty: string } | null;
+  shareText?: string;
   onNextLevel: () => void;
   onHome: () => void;
   onRetry: () => void;
+  onShare?: () => void;
 }
 
 const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
@@ -183,9 +191,16 @@ export function PuzzleComplete({
   isDaily,
   mode = 'classic',
   perfectRun = false,
+  isFirstWin = false,
+  leveledUp = false,
+  newLevel = 0,
+  difficultyTransition = null,
+  nextLevelPreview = null,
+  shareText = '',
   onNextLevel,
   onHome,
   onRetry,
+  onShare,
 }: PuzzleCompleteProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(30)).current;
@@ -391,6 +406,43 @@ export function PuzzleComplete({
               </View>
             </Animated.View>
 
+            {/* First Win / Level Up / Difficulty Transition */}
+            {isFirstWin && (
+              <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.gold + '20', borderColor: COLORS.gold + '40', opacity: statsAnim }]}>
+                <Text style={styles.levelUpEmoji}>🎉</Text>
+                <View>
+                  <Text style={[styles.levelUpText, { color: COLORS.gold }]}>WELCOME TO WORDFALL!</Text>
+                  <Text style={styles.levelUpSubtext}>Your adventure begins</Text>
+                </View>
+              </Animated.View>
+            )}
+            {!isFirstWin && leveledUp && newLevel > 0 && (
+              <Animated.View style={[styles.levelUpBadge, { opacity: statsAnim }]}>
+                <Text style={styles.levelUpEmoji}>⬆️</Text>
+                <View>
+                  <Text style={styles.levelUpText}>LEVEL UP!</Text>
+                  <Text style={styles.levelUpSubtext}>You reached Level {newLevel}</Text>
+                </View>
+              </Animated.View>
+            )}
+            {difficultyTransition && (
+              <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.purple + '20', borderColor: COLORS.purple + '40', opacity: statsAnim }]}>
+                <Text style={styles.levelUpEmoji}>🏆</Text>
+                <View>
+                  <Text style={[styles.levelUpText, { color: COLORS.purple }]}>NEW CHALLENGE TIER!</Text>
+                  <Text style={styles.levelUpSubtext}>{difficultyTransition.from} → {difficultyTransition.to}</Text>
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Next Level Preview */}
+            {nextLevelPreview && !isDaily && (
+              <Animated.View style={[styles.nextPreview, { opacity: statsAnim }]}>
+                <Text style={styles.nextPreviewLabel}>COMING UP</Text>
+                <Text style={styles.nextPreviewText}>Level {nextLevelPreview.level} — {nextLevelPreview.difficulty}</Text>
+              </Animated.View>
+            )}
+
             <Animated.View
               style={[
                 styles.actionsColumn,
@@ -417,6 +469,17 @@ export function PuzzleComplete({
                 <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onRetry}>
                   <Text style={styles.secondaryButtonText}>Retry</Text>
                 </Pressable>
+                {shareText ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.secondaryButton, styles.shareButton, pressed && styles.buttonPressed]}
+                    onPress={() => {
+                      Share.share({ message: shareText }).catch(() => {});
+                      onShare?.();
+                    }}
+                  >
+                    <Text style={styles.shareButtonText}>Share</Text>
+                  </Pressable>
+                ) : null}
                 <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
                   <Text style={styles.secondaryButtonText}>Home</Text>
                 </Pressable>
@@ -692,5 +755,56 @@ const styles = StyleSheet.create({
   buttonPressed: {
     transform: [{ scale: 0.97 }],
     opacity: 0.88,
+  },
+  levelUpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.accent + '18',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '30',
+  },
+  levelUpEmoji: {
+    fontSize: 24,
+  },
+  levelUpText: {
+    color: COLORS.accent,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  levelUpSubtext: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  nextPreview: {
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingVertical: 8,
+  },
+  nextPreviewLabel: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
+  nextPreviewText: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  shareButton: {
+    borderColor: COLORS.accent + '30',
+    backgroundColor: COLORS.accent + '10',
+  },
+  shareButtonText: {
+    color: COLORS.accent,
+    fontWeight: '800',
   },
 });

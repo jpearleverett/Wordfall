@@ -490,6 +490,48 @@ export const DEFAULT_ONBOARDING: OnboardingState = {
   tooltipsShown: [],
 };
 
+// ============ FEATURE UNLOCKS ============
+export type FeatureUnlockId =
+  | 'tab_play'
+  | 'tab_collections'
+  | 'tab_library'
+  | 'tab_profile'
+  | 'boosters'
+  | 'events'
+  | 'weekly_goals';
+
+export interface FeatureUnlockDef {
+  id: FeatureUnlockId;
+  unlockLevel: number;
+  icon: string;
+  title: string;
+  description: string;
+  accentColor: string;
+}
+
+// ============ WEEKLY GOALS ============
+export interface WeeklyGoal {
+  templateId: string;
+  description: string;
+  target: number;
+  progress: number;
+  completed: boolean;
+  trackingKey: string;
+  reward: { coins: number; gems: number };
+}
+
+export interface WeeklyGoalsState {
+  goals: WeeklyGoal[];
+  weekStart: string;
+  allCompleteBonus: { coins: number; gems: number };
+}
+
+// ============ CEREMONY QUEUE ============
+export interface CeremonyItem {
+  type: 'feature_unlock' | 'mode_unlock' | 'achievement' | 'streak_milestone' | 'collection_complete' | 'level_up' | 'difficulty_transition';
+  data: Record<string, any>;
+}
+
 // ============ ANALYTICS ============
 export type AnalyticsEvent =
   | 'puzzle_start'
