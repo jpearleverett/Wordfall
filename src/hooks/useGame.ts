@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useRef, useEffect } from 'react';
+import { useReducer, useCallback, useEffect } from 'react';
 import {
   GameState,
   GameAction,
@@ -9,11 +9,9 @@ import {
   GameMode,
   GameStatus,
 } from '../types';
-import { removeCellsAndApplyGravity, removeCells, applyGravity, cloneGrid } from '../engine/gravity';
+import { removeCells, applyGravity, cloneGrid } from '../engine/gravity';
 import { findWordInGrid, isDeadEnd, getHint } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE } from '../constants';
-import { soundManager } from '../services/sound';
-import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 
 /**
  * Apply gravity but skip frozen columns — letters in frozen columns stay in place.
@@ -188,8 +186,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       // If no cells selected, start selection
       if (selectedCells.length === 0) {
-        tapHaptic();
-        soundManager.playSound('tap');
         return {
           ...state,
           selectedCells: [position],
@@ -207,8 +203,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       if (!adjacent) {
         // Start new selection
-        tapHaptic();
-        soundManager.playSound('tap');
         return {
           ...state,
           selectedCells: [position],
@@ -216,8 +210,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         };
       }
 
-      tapHaptic();
-      soundManager.playSound('tap');
       const newSelected = [...selectedCells, position];
       return {
         ...state,
@@ -247,9 +239,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       if (wordIndex === -1) {
         // Not a target word - clear selection
-        errorHaptic();
-        soundManager.playSound('wordInvalid');
-
         // Perfect solve mode: any wrong tap = fail
         if (mode === 'perfectSolve') {
           return {
@@ -270,9 +259,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       // Word found!
-      wordFoundHaptic();
-      soundManager.playSound('wordFound');
-
       // Save history for undo
       const historyEntry = {
         grid: cloneGrid(board.grid),
@@ -295,11 +281,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         : state.cascadeMultiplier;
       const wordScore = calculateScore(word, comboLevel, mode, newCascadeMultiplier);
 
-      if (comboLevel > 1) {
-        comboHaptic();
-        soundManager.playSound('combo');
-      }
-
       // Check win condition
       const allFound = newWords.every(w => w.found);
       const newMoves = state.moves + 1;
@@ -308,11 +289,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       let newStatus: GameStatus = allFound ? 'won' : 'playing';
       if (mode === 'limitedMoves' && state.maxMoves > 0 && newMoves >= state.maxMoves && !allFound) {
         newStatus = 'failed';
-      }
-
-      if (allFound) {
-        successHaptic();
-        soundManager.playSound('puzzleComplete');
       }
 
       const newState: GameState = {
@@ -344,8 +320,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const hint = getHint(state.board.grid, remainingWords);
       if (!hint) return state;
 
-      soundManager.playSound('hintUsed');
-
       return {
         ...state,
         selectedCells: hint.positions,
@@ -362,7 +336,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.undosLeft <= 0) return state;
 
       const lastHistory = state.history[state.history.length - 1];
-      soundManager.playSound('undoUsed');
 
       return {
         ...state,
@@ -474,7 +447,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...state, previewGrid: null };
       }
       // Show what the board would look like after removing these cells
-      const previewResult = removeCellsAndApplyGravity(state.board.grid, positions);
+      const previewResult = applyGravityWithFrozen(removeCells(state.board.grid, positions), state.frozenColumns);
       return { ...state, previewGrid: previewResult };
     }
 

@@ -35,6 +35,7 @@ export const LetterCell = React.memo(function LetterCell({
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const movedAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (isSelected) {
@@ -57,6 +58,21 @@ export const LetterCell = React.memo(function LetterCell({
         duration: 150,
         useNativeDriver: false,
       }).start();
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 550,
+            useNativeDriver: false,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0,
+            duration: 550,
+            useNativeDriver: false,
+          }),
+        ])
+      ).start();
     } else {
       Animated.spring(scaleAnim, {
         toValue: 1,
@@ -69,8 +85,10 @@ export const LetterCell = React.memo(function LetterCell({
         duration: 100,
         useNativeDriver: false,
       }).start();
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(0);
     }
-  }, [isSelected]);
+  }, [isSelected, pulseAnim]);
 
   // Moved cell highlight animation (post-gravity)
   useEffect(() => {
@@ -127,6 +145,11 @@ export const LetterCell = React.memo(function LetterCell({
     outputRange: [0, 0.5],
   });
 
+  const topGlowOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.18, 0.36],
+  });
+
   return (
     <View pointerEvents="none">
       <Animated.View
@@ -142,10 +165,37 @@ export const LetterCell = React.memo(function LetterCell({
             transform: [{ scale: scaleAnim }],
             shadowColor: isMoved ? COLORS.accent : '#000',
             shadowOpacity: isMoved ? movedShadowOpacity : 0.3,
-            shadowRadius: isMoved ? 6 : 3,
+            shadowRadius: isMoved ? 8 : 4,
           },
         ]}
       >
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.innerGlow,
+            {
+              opacity: isSelected ? topGlowOpacity : 0.16,
+              backgroundColor: isValidWord
+                ? COLORS.greenGlow
+                : isHinted
+                ? COLORS.goldGlow
+                : isSelected
+                ? COLORS.accentGlow
+                : 'rgba(255,255,255,0.08)',
+            },
+          ]}
+        />
+        <View
+          pointerEvents="none"
+          style={[
+            styles.specularHighlight,
+            {
+              backgroundColor: isSelected || isValidWord
+                ? 'rgba(255,255,255,0.22)'
+                : 'rgba(255,255,255,0.12)',
+            },
+          ]}
+        />
         <Text
           style={[
             styles.letter,
@@ -188,16 +238,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     margin: 2,
+    overflow: 'hidden',
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 3,
   },
+  innerGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+  },
+  specularHighlight: {
+    position: 'absolute',
+    top: '8%',
+    left: '12%',
+    right: '12%',
+    height: '28%',
+    borderRadius: 999,
+  },
   letter: {
     color: COLORS.textPrimary,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
   letterSelected: {
     color: '#fff',

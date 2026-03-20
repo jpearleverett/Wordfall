@@ -16,6 +16,7 @@ import { GameGrid } from '../components/Grid';
 import { WordBank } from '../components/WordBank';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { COLORS, MODE_CONFIGS, ANIM } from '../constants';
 import { soundManager } from '../services/sound';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
@@ -37,6 +38,33 @@ interface GameScreenProps {
   onComplete: (stars: number, score: number) => void;
   onNextLevel: () => void;
   onHome: () => void;
+}
+
+function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): CellPosition[] {
+  const previousPositions = new Map<string, CellPosition>();
+
+  previousGrid.forEach((row, rowIndex) => {
+    row.forEach((cell, colIndex) => {
+      if (cell) {
+        previousPositions.set(cell.id, { row: rowIndex, col: colIndex });
+      }
+    });
+  });
+
+  const moved: CellPosition[] = [];
+
+  nextGrid.forEach((row, rowIndex) => {
+    row.forEach((cell, colIndex) => {
+      if (!cell) return;
+      const previousPosition = previousPositions.get(cell.id);
+      if (!previousPosition) return;
+      if (previousPosition.row !== rowIndex || previousPosition.col !== colIndex) {
+        moved.push({ row: rowIndex, col: colIndex });
+      }
+    });
+  });
+
+  return moved;
 }
 
 export function GameScreen({
@@ -185,22 +213,22 @@ export function GameScreen({
     }
   }, [mode]);
 
+  useEffect(() => {
+    void soundManager.playMusic(mode === 'timePressure' ? 'tense' : 'gameplay');
+
+    return () => {
+      void soundManager.playMusic('menu');
+    };
+  }, [mode]);
+
   // Track post-gravity moved cells
   useEffect(() => {
     if (foundWords > prevFoundWordsRef.current && state.status === 'playing') {
-      // After a word is found and gravity applied, highlight shifted cells
-      const moved: CellPosition[] = [];
-      const grid = state.board.grid;
-      for (let col = 0; col < grid[0].length; col++) {
-        let shifted = false;
-        for (let row = grid.length - 1; row >= 0; row--) {
-          if (grid[row][col] === null) {
-            shifted = true;
-          } else if (shifted) {
-            moved.push({ row, col });
-          }
-        }
-      }
+      const previousGrid = state.history[state.history.length - 1]?.grid;
+      const moved = previousGrid
+        ? getMovedCellPositions(previousGrid, state.board.grid)
+        : [];
+      void soundManager.playSound('gravity');
       setMovedCells(moved);
       const timer = setTimeout(() => setMovedCells([]), 400);
       return () => clearTimeout(timer);
@@ -422,6 +450,7 @@ export function GameScreen({
   return (
     <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
     <SafeAreaView style={styles.container}>
+      <AmbientBackdrop variant="home" />
       {/* Mode intro banner */}
       {showModeIntro && mode !== 'classic' && (
         <View style={[styles.modeIntroBanner, { borderColor: modeConfig.color }]}>

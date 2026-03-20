@@ -193,6 +193,8 @@ export function GameGrid({
         ref={gridRef}
         style={[styles.gridContainer, { width: gridWidth, height: gridHeight }]}
       >
+        <View pointerEvents="none" style={styles.boardAura} />
+        <View pointerEvents="none" style={styles.boardHighlight} />
         {columns.map((column, colIndex) => (
           <View
             key={colIndex}
@@ -242,11 +244,33 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: CELL_GAP / 2,
     alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceLight,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  boardAura: {
+    position: 'absolute',
+    top: -40,
+    right: -30,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: COLORS.accentGlow,
+    opacity: 0.45,
+  },
+  boardHighlight: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    top: 10,
+    height: 18,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   column: {
     flexDirection: 'column',
