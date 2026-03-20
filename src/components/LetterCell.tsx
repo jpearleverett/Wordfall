@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -129,7 +128,7 @@ export const LetterCell = React.memo(function LetterCell({
   });
 
   return (
-    <Pressable onPress={onPress}>
+    <View pointerEvents="none">
       <Animated.View
         style={[
           styles.cell,
@@ -180,7 +179,7 @@ export const LetterCell = React.memo(function LetterCell({
           </View>
         )}
       </Animated.View>
-    </Pressable>
+    </View>
   );
 });
 

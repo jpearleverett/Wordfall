@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -607,15 +608,17 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <SettingsProvider>
-        <EconomyProvider>
-          <PlayerProvider>
-            <AppContent />
-          </PlayerProvider>
-        </EconomyProvider>
-      </SettingsProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <SettingsProvider>
+          <EconomyProvider>
+            <PlayerProvider>
+              <AppContent />
+            </PlayerProvider>
+          </EconomyProvider>
+        </SettingsProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

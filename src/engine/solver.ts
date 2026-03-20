@@ -1,8 +1,16 @@
 import { Grid, WordPlacement, CellPosition } from '../types';
 import { removeCellsAndApplyGravity, cloneGrid } from './gravity';
 
+// 8-directional deltas: right, left, down, up, and 4 diagonals
+const DIRS = [
+  [0, 1], [0, -1], [1, 0], [-1, 0],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+];
+
 /**
- * Find all occurrences of a word in the grid (horizontal and vertical).
+ * Find all occurrences of a word in the grid along any path of
+ * 8-directionally adjacent cells (including diagonals, zigzag, etc.).
+ * Each cell can only be used once per path.
  * Returns arrays of positions for each occurrence.
  */
 export function findWordInGrid(
@@ -12,39 +20,36 @@ export function findWordInGrid(
   const results: CellPosition[][] = [];
   const rows = grid.length;
   const cols = grid[0].length;
-  const len = word.length;
 
-  // Horizontal search
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c <= cols - len; c++) {
-      let match = true;
-      const positions: CellPosition[] = [];
-      for (let i = 0; i < len; i++) {
-        const cell = grid[r][c + i];
-        if (!cell || cell.letter !== word[i]) {
-          match = false;
-          break;
-        }
-        positions.push({ row: r, col: c + i });
-      }
-      if (match) results.push(positions);
+  if (word.length === 0) return results;
+
+  const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+
+  function dfs(r: number, c: number, idx: number, path: CellPosition[]): void {
+    if (idx === word.length) {
+      results.push([...path]);
+      return;
     }
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return;
+    if (visited[r][c]) return;
+    const cell = grid[r][c];
+    if (!cell || cell.letter !== word[idx]) return;
+
+    visited[r][c] = true;
+    path.push({ row: r, col: c });
+
+    for (const [dr, dc] of DIRS) {
+      dfs(r + dr, c + dc, idx + 1, path);
+    }
+
+    path.pop();
+    visited[r][c] = false;
   }
 
-  // Vertical search
-  for (let c = 0; c < cols; c++) {
-    for (let r = 0; r <= rows - len; r++) {
-      let match = true;
-      const positions: CellPosition[] = [];
-      for (let i = 0; i < len; i++) {
-        const cell = grid[r + i][c];
-        if (!cell || cell.letter !== word[i]) {
-          match = false;
-          break;
-        }
-        positions.push({ row: r + i, col: c });
-      }
-      if (match) results.push(positions);
+  // Start DFS from every cell that matches the first letter
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      dfs(r, c, 0, []);
     }
   }
 

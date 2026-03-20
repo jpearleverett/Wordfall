@@ -60,7 +60,7 @@ Wordfall is a gravity-based strategic word puzzle game for mobile. Unlike tradit
 ### The Three Loops
 
 **10-Second Understanding Loop:**
-See grid → scan for a target word → tap letters to select → word highlights green → letters vanish → gravity drops → board transforms. The player immediately grasps: "I find words, they disappear, things fall."
+See grid → scan for a target word → tap or drag across letters to select → word highlights green → letters vanish → gravity drops → board transforms. The player immediately grasps: "I find words, they disappear, things fall."
 
 **60-Second Puzzle Engagement Loop:**
 Scan available words → assess which are safe to remove → choose one → execute and observe gravity → reassess the board → repeat. Each word removal takes ~10-15 seconds (scan + decide + tap), so a 4-5 word puzzle fills ~60 seconds of engaged play.
@@ -75,7 +75,7 @@ Complete puzzle → see star rating → see score and combo stats → see progre
 **Word selection feedback:**
 - First tap: cell pulses with cyan highlight, subtle haptic
 - Subsequent taps: cells light up sequentially with a numbered badge showing order
-- Invalid direction tap: brief red flash, selection resets
+- Invalid tap (non-adjacent cell): brief red flash, selection resets
 - Valid word match: all selected cells turn green simultaneously, the word text above the grid glows
 
 **Gravity animation timing:** 300ms ease-out drop. Letters should feel like they have weight — not instant, not floaty. A slight bounce at landing (50ms overshoot) adds physicality. Stagger column animations by 30ms so it feels like a cascade, not a simultaneous jump.
@@ -86,7 +86,7 @@ Complete puzzle → see star rating → see score and combo stats → see progre
 
 ### Design Decisions
 
-**Word patterns:** Straight lines only (horizontal and vertical). Diagonal and free-form selection would dilute the gravity mechanic — gravity only affects vertical position, so horizontal words are stable and vertical words shift. This creates a natural asymmetry that rewards understanding the physics.
+**Word patterns:** Any path of 8-directionally adjacent cells — horizontal, vertical, diagonal, and zigzag (e.g., right → diagonal-down-left → right → down). Words are placed along freeform adjacent paths during board generation, and the solver/selection system supports the same. This creates rich, interconnected boards where words can weave through the grid in unexpected ways, adding discovery and strategic depth. Players can tap or drag across tiles to select letters.
 
 **Show full word list upfront:** Yes. The strategic element is about ordering, not about guessing what words exist. Hiding the list would make the game feel like a standard word search. Showing all targets lets the player plan.
 
@@ -114,7 +114,7 @@ Complete puzzle → see star rating → see score and combo stats → see progre
 ### Generation Algorithm
 
 1. **Word selection:** Choose N words from the curated dictionary, favoring variety in starting letters and avoiding substring relationships.
-2. **Placement:** Place words in the grid one at a time, trying random positions and directions (horizontal/vertical). Overlapping positions must have matching letters.
+2. **Placement:** Place words in the grid one at a time along random adjacent paths (any direction: horizontal, vertical, diagonal, zigzag). Each letter must be 8-directionally adjacent to the previous one, but the path can freely change direction. Overlapping positions must have matching letters.
 3. **Fill:** Populate remaining cells with random letters, biased toward consonants (65%) to reduce accidental word formation.
 4. **Validation:** Run the recursive backtracking solver to confirm at least one valid ordering exists.
 5. **Difficulty rating:** Count valid orderings and measure gravity dependency depth. If the puzzle doesn't match the target difficulty, retry.
@@ -528,7 +528,7 @@ Energy systems work for games where the core loop is simple and fast (match-3). 
 
 **Puzzle 1 (Tutorial A): "Tap to Find"**
 - 4×4 grid, 2 words (3 letters each). No gravity interaction needed.
-- Teaches: tap letters in order → word clears.
+- Teaches: tap or drag across letters → word clears.
 - All words can be solved in any order.
 - "Great! You found both words!"
 

@@ -126,23 +126,19 @@ function getSelectedWord(
 function areAdjacent(
   a: CellPosition,
   b: CellPosition,
-  dir: Direction | null
+  _dir: Direction | null
 ): { adjacent: boolean; direction: Direction | null } {
   const rowDiff = Math.abs(a.row - b.row);
   const colDiff = Math.abs(a.col - b.col);
 
-  if (rowDiff === 0 && colDiff === 1) {
-    if (dir === null || dir === 'horizontal') {
-      return { adjacent: true, direction: 'horizontal' };
-    }
-  }
-  if (rowDiff === 1 && colDiff === 0) {
-    if (dir === null || dir === 'vertical') {
-      return { adjacent: true, direction: 'vertical' };
-    }
+  // Allow all 8 directions: horizontal, vertical, and diagonal
+  const isAdjacent = rowDiff <= 1 && colDiff <= 1 && (rowDiff + colDiff > 0);
+
+  if (isAdjacent) {
+    return { adjacent: true, direction: null };
   }
 
-  return { adjacent: false, direction: dir };
+  return { adjacent: false, direction: null };
 }
 
 function calculateScore(
@@ -353,11 +349,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         selectedCells: hint.positions,
-        selectionDirection:
-          hint.positions.length >= 2 &&
-          hint.positions[0].row === hint.positions[1].row
-            ? 'horizontal'
-            : 'vertical',
+        selectionDirection: null,
         hintsLeft: state.hintsLeft - 1,
         perfectRun: false,
       };
