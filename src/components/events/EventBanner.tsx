@@ -6,7 +6,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../../constants';
+import { COLORS, GRADIENTS, SHADOWS } from '../../constants';
 
 interface EventBannerProps {
   eventName: string;
@@ -95,17 +95,15 @@ export default function EventBanner({
 
 const styles = StyleSheet.create({
   wrapper: {
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
     marginBottom: 16,
     minHeight: 120,
     borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.15)',
+    borderColor: 'rgba(168, 85, 247, 0.2)',
+    ...SHADOWS.strong,
     shadowColor: COLORS.purple,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowOpacity: 0.3,
   },
   cyanSweep: {
     position: 'absolute',
@@ -130,7 +128,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   content: {
     flexDirection: 'row',
@@ -179,9 +177,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 4,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowColor: 'rgba(255,255,255,0.12)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   description: {
     color: COLORS.textSecondary,
@@ -210,21 +208,19 @@ const styles = StyleSheet.create({
   },
   playCircleOuter: {
     borderRadius: 28,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 18,
-    elevation: 14,
+    ...SHADOWS.glow(COLORS.accent),
+    shadowOpacity: 0.7,
+    shadowRadius: 20,
     marginBottom: 6,
   },
   playCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   playArrow: {
     color: '#000',

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../../constants';
+import { COLORS, GRADIENTS, SHADOWS } from '../../constants';
 
 interface Reward {
   threshold: number;
@@ -156,7 +156,8 @@ const MILESTONE_SIZE = 26;
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 2,
   },
   header: {
     flexDirection: 'row',
@@ -167,7 +168,11 @@ const styles = StyleSheet.create({
   progressLabel: {
     color: COLORS.textSecondary,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(255,255,255,0.06)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 3,
   },
   progressValue: {
     color: COLORS.textPrimary,
@@ -191,15 +196,16 @@ const styles = StyleSheet.create({
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
   },
   fillOuter: {
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
     overflow: 'hidden',
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 8,
+    ...SHADOWS.glow(COLORS.accent),
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
   },
   fill: {
     flex: 1,
@@ -212,7 +218,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: TRACK_HEIGHT / 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.28)',
     borderTopLeftRadius: TRACK_HEIGHT / 2,
     borderTopRightRadius: TRACK_HEIGHT / 2,
   },
@@ -226,18 +232,14 @@ const styles = StyleSheet.create({
     padding: 1,
   },
   milestoneClaimedGlow: {
-    shadowColor: COLORS.green,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 12,
-    elevation: 8,
+    ...SHADOWS.glow(COLORS.green),
+    shadowOpacity: 0.8,
+    shadowRadius: 14,
   },
   milestoneReachedGlow: {
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 12,
-    elevation: 8,
+    ...SHADOWS.glow(COLORS.gold),
+    shadowOpacity: 0.8,
+    shadowRadius: 14,
   },
   milestoneCircle: {
     width: MILESTONE_SIZE,
@@ -248,12 +250,12 @@ const styles = StyleSheet.create({
   },
   milestoneReachedBorder: {
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   milestoneUnreached: {
     backgroundColor: COLORS.surface,
     borderWidth: 2,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   milestoneCheck: {
     color: '#fff',
