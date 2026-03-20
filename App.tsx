@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -128,6 +129,7 @@ function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
 
 // Main Tab Navigator
 function MainTabs() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -136,8 +138,8 @@ function MainTabs() {
           backgroundColor: '#151a3e',
           borderTopColor: 'rgba(255,255,255,0.06)',
           borderTopWidth: 1,
-          height: 62,
-          paddingBottom: 6,
+          height: 62 + insets.bottom,
+          paddingBottom: 6 + insets.bottom,
           paddingTop: 6,
           elevation: 20,
           shadowColor: '#000',
@@ -643,15 +645,17 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <SettingsProvider>
-          <EconomyProvider>
-            <PlayerProvider>
-              <AppContent />
-            </PlayerProvider>
-          </EconomyProvider>
-        </SettingsProvider>
-      </AuthProvider>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <SettingsProvider>
+            <EconomyProvider>
+              <PlayerProvider>
+                <AppContent />
+              </PlayerProvider>
+            </EconomyProvider>
+          </SettingsProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
