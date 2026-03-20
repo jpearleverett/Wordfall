@@ -106,7 +106,23 @@ function ProfileStackScreen() {
 // Tab icon component
 function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
   return (
-    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>{icon}</Text>
+    <View style={{ alignItems: 'center' }}>
+      <Text style={{ fontSize: 24, opacity: focused ? 1 : 0.4, color: focused ? COLORS.accent : COLORS.textMuted }}>{icon}</Text>
+      {focused && (
+        <View style={{
+          width: 4,
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: COLORS.accent,
+          marginTop: 2,
+          shadowColor: COLORS.accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.8,
+          shadowRadius: 4,
+          elevation: 4,
+        }} />
+      )}
+    </View>
   );
 }
 
@@ -117,24 +133,24 @@ function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: COLORS.surface,
-          borderTopColor: COLORS.surfaceLight,
+          backgroundColor: '#151a3e',
+          borderTopColor: 'rgba(255,255,255,0.06)',
           borderTopWidth: 1,
-          height: 65,
-          paddingBottom: 8,
-          paddingTop: 8,
-          elevation: 16,
+          height: 62,
+          paddingBottom: 6,
+          paddingTop: 6,
+          elevation: 20,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
+          shadowOffset: { width: 0, height: -6 },
+          shadowOpacity: 0.4,
+          shadowRadius: 12,
         },
         tabBarActiveTintColor: COLORS.accent,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '700',
-          letterSpacing: 0.5,
+          fontWeight: '800',
+          letterSpacing: 0.6,
         },
       }}
     >
@@ -142,35 +158,35 @@ function MainTabs() {
         name="Home"
         component={HomeStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="🏠" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="⌂" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Play"
         component={PlayStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="🎮" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="▶" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Collections"
         component={CollectionsStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="💎" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="◆" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Library"
         component={LibraryStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="📚" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="❏" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="👤" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="●" focused={focused} />,
         }}
       />
     </Tab.Navigator>

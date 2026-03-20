@@ -6,7 +6,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import { COLORS, ECONOMY } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, ECONOMY, GRADIENTS, SHADOWS } from '../constants';
 import { GameMode } from '../types';
 
 interface PuzzleCompleteProps {
@@ -23,9 +24,14 @@ interface PuzzleCompleteProps {
   onRetry: () => void;
 }
 
+const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
+
 function ConfettiParticle({ delay, color, startX }: { delay: number; color: string; startX: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   const swayAnim = useRef(new Animated.Value(0)).current;
+
+  const shape = useMemo(() => CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)], []);
+  const baseSize = useMemo(() => 6 + Math.random() * 12, []);
 
   useEffect(() => {
     Animated.sequence([
@@ -59,6 +65,10 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
   const rotate = anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${320 + Math.random() * 260}deg`] });
   const opacity = anim.interpolate({ inputRange: [0, 0.08, 0.75, 1], outputRange: [0, 1, 1, 0] });
 
+  const width = shape === 'rect' ? baseSize * 0.5 : baseSize;
+  const height = shape === 'rect' ? baseSize * 1.4 : baseSize;
+  const borderRadius = shape === 'circle' ? baseSize / 2 : shape === 'rect' ? 2 : 3;
+
   return (
     <Animated.View
       style={[
@@ -66,9 +76,9 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
         {
           left: startX,
           backgroundColor: color,
-          width: 8 + Math.random() * 8,
-          height: 8 + Math.random() * 12,
-          borderRadius: Math.random() > 0.5 ? 10 : 3,
+          width,
+          height,
+          borderRadius,
           opacity,
           transform: [{ translateY }, { translateX }, { rotate }],
         },
@@ -117,22 +127,39 @@ function Star({ filled, delay, size }: { filled: boolean; delay: number; size: n
     ]).start();
   }, [anim, delay, filled]);
 
+  const glowSize = size + 24;
+
   return (
-    <Animated.Text
-      style={[
-        styles.star,
-        {
-          fontSize: size,
-          opacity: filled ? 1 : 0.25,
-          transform: [
-            { scale: anim.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 1.28, 1] }) },
-            { rotate: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['0deg', '-12deg', '0deg'] }) },
-          ],
-        },
-      ]}
-    >
-      ★
-    </Animated.Text>
+    <View style={{ alignItems: 'center', justifyContent: 'center', width: size + 28, height: size + 28 }}>
+      {filled && (
+        <View
+          style={[
+            styles.starGlowRing,
+            {
+              width: glowSize,
+              height: glowSize,
+              borderRadius: glowSize / 2,
+            },
+          ]}
+        />
+      )}
+      <Animated.Text
+        style={[
+          styles.star,
+          {
+            fontSize: size,
+            opacity: filled ? 1 : 0.25,
+            position: 'absolute',
+            transform: [
+              { scale: anim.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 1.28, 1] }) },
+              { rotate: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['0deg', '-12deg', '0deg'] }) },
+            ],
+          },
+        ]}
+      >
+        ★
+      </Animated.Text>
+    </View>
   );
 }
 
@@ -223,7 +250,7 @@ export function PuzzleComplete({
 
   const confetti = useMemo(
     () =>
-      Array.from({ length: 28 }, (_, index) => ({
+      Array.from({ length: 32 }, (_, index) => ({
         id: index,
         delay: Math.random() * 360,
         color: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
@@ -231,6 +258,10 @@ export function PuzzleComplete({
       })),
     [],
   );
+
+  const borderColors = perfectRun
+    ? [COLORS.gold, 'rgba(255,215,0,0.6)', COLORS.gold]
+    : [COLORS.accent, 'rgba(0,212,255,0.5)', COLORS.accent];
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
@@ -243,107 +274,156 @@ export function PuzzleComplete({
         />
       ))}
 
-      <Animated.View style={[styles.card, { transform: [{ translateY: cardAnim }] }]}>
-        <View style={styles.heroGlow} />
-        <View style={styles.heroGlowSecondary} />
-
-        <Animated.View
-          style={[
-            styles.ribbon,
-            {
-              opacity: ribbonAnim,
-              transform: [
-                { scale: ribbonAnim.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) },
-                { translateY: ribbonAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-              ],
-            },
-          ]}
+      <Animated.View style={[styles.cardOuter, { transform: [{ translateY: cardAnim }] }]}>
+        {/* Gradient border wrapper */}
+        <LinearGradient
+          colors={borderColors as [string, string, ...string[]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientBorder}
         >
-          <Text style={styles.ribbonText}>{perfectRun ? '✨ PERFECT RUN' : isDaily ? '☀ DAILY WIN' : '🏆 STAGE COMPLETE'}</Text>
-        </Animated.View>
+          <LinearGradient
+            colors={GRADIENTS.victoryCard as unknown as [string, string, ...string[]]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={styles.card}
+          >
+            <View style={styles.heroGlow} />
+            <View style={styles.heroGlowSecondary} />
 
-        <Text style={[styles.title, perfectRun && styles.titlePerfect]}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+            <Animated.View
+              style={[
+                styles.ribbon,
+                {
+                  opacity: ribbonAnim,
+                  transform: [
+                    { scale: ribbonAnim.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) },
+                    { translateY: ribbonAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+                  ],
+                },
+              ]}
+            >
+              <Text style={styles.ribbonText}>{perfectRun ? '✨ PERFECT RUN' : isDaily ? '☀ DAILY WIN' : '🏆 STAGE COMPLETE'}</Text>
+            </Animated.View>
 
-        <View style={styles.starsRow}>
-          <Star filled={stars >= 1} delay={140} size={44} />
-          <Star filled={stars >= 2} delay={340} size={56} />
-          <Star filled={stars >= 3} delay={560} size={44} />
-        </View>
+            <Text style={[styles.title, perfectRun && styles.titlePerfect]}>{title}</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
 
-        <View style={styles.scorePanel}>
-          <Text style={styles.scoreLabel}>Final Score</Text>
-          <AnimatedScore targetScore={score} />
-        </View>
-
-        <Animated.View
-          style={[
-            styles.statsGrid,
-            {
-              opacity: statsAnim,
-              transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) }],
-            },
-          ]}
-        >
-          <View style={styles.statCard}>
-            <Text style={styles.statCardLabel}>Moves</Text>
-            <Text style={styles.statCardValue}>{moves}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statCardLabel}>Best Combo</Text>
-            <Text style={styles.statCardValue}>{combo > 1 ? `${combo}x` : '—'}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statCardLabel}>Stars</Text>
-            <Text style={styles.statCardValue}>{stars}/3</Text>
-          </View>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.rewardsCard,
-            {
-              opacity: statsAnim,
-              transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
-            },
-          ]}
-        >
-          <Text style={styles.rewardsTitle}>Rewards</Text>
-          <View style={styles.rewardRow}>
-            <View style={styles.rewardChip}>
-              <Text style={styles.rewardIcon}>🪙</Text>
-              <Text style={styles.rewardText}>+{coinReward} coins</Text>
+            <View style={styles.starsRow}>
+              <Star filled={stars >= 1} delay={140} size={48} />
+              <Star filled={stars >= 2} delay={340} size={64} />
+              <Star filled={stars >= 3} delay={560} size={48} />
             </View>
-            {perfectRun && (
-              <View style={styles.rewardChipGold}>
-                <Text style={styles.rewardIcon}>💎</Text>
-                <Text style={styles.rewardTextGold}>+{ECONOMY.perfectClearGems} gems</Text>
-              </View>
-            )}
-          </View>
-        </Animated.View>
 
-        <Animated.View
-          style={[
-            styles.actionsColumn,
-            {
-              opacity: actionsAnim,
-              transform: [{ translateY: actionsAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
-            },
-          ]}
-        >
-          <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={onNextLevel}>
-            <Text style={styles.primaryButtonText}>{isDaily ? 'PLAY ANOTHER MODE' : 'NEXT LEVEL'}</Text>
-          </Pressable>
-          <View style={styles.secondaryRow}>
-            <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onRetry}>
-              <Text style={styles.secondaryButtonText}>Retry</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
-              <Text style={styles.secondaryButtonText}>Home</Text>
-            </Pressable>
-          </View>
-        </Animated.View>
+            <LinearGradient
+              colors={GRADIENTS.scorePanel as unknown as [string, string, ...string[]]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={styles.scorePanel}
+            >
+              <Text style={styles.scoreLabel}>Final Score</Text>
+              <AnimatedScore targetScore={score} />
+            </LinearGradient>
+
+            <Animated.View
+              style={[
+                styles.statsGrid,
+                {
+                  opacity: statsAnim,
+                  transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) }],
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
+                style={styles.statCard}
+              >
+                <Text style={styles.statCardLabel}>Moves</Text>
+                <Text style={styles.statCardValue}>{moves}</Text>
+              </LinearGradient>
+              <LinearGradient
+                colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
+                style={styles.statCard}
+              >
+                <Text style={styles.statCardLabel}>Best Combo</Text>
+                <Text style={styles.statCardValue}>{combo > 1 ? `${combo}x` : '—'}</Text>
+              </LinearGradient>
+              <LinearGradient
+                colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
+                style={styles.statCard}
+              >
+                <Text style={styles.statCardLabel}>Stars</Text>
+                <Text style={styles.statCardValue}>{stars}/3</Text>
+              </LinearGradient>
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.rewardsCard,
+                {
+                  opacity: statsAnim,
+                  transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+                },
+              ]}
+            >
+              <Text style={styles.rewardsTitle}>Rewards</Text>
+              <View style={styles.rewardRow}>
+                <LinearGradient
+                  colors={['#1a2050', '#222860'] as [string, string, ...string[]]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.rewardChip}
+                >
+                  <Text style={styles.rewardIcon}>🪙</Text>
+                  <Text style={styles.rewardText}>+{coinReward} coins</Text>
+                </LinearGradient>
+                {perfectRun && (
+                  <LinearGradient
+                    colors={['rgba(255,215,0,0.18)', 'rgba(255,159,0,0.12)'] as [string, string, ...string[]]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.rewardChipGold}
+                  >
+                    <Text style={styles.rewardIcon}>💎</Text>
+                    <Text style={styles.rewardTextGold}>+{ECONOMY.perfectClearGems} gems</Text>
+                  </LinearGradient>
+                )}
+              </View>
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.actionsColumn,
+                {
+                  opacity: actionsAnim,
+                  transform: [{ translateY: actionsAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+                },
+              ]}
+            >
+              <Pressable
+                style={({ pressed }) => [pressed && styles.buttonPressed]}
+                onPress={onNextLevel}
+              >
+                <LinearGradient
+                  colors={GRADIENTS.button.primary as unknown as [string, string, ...string[]]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.primaryButton}
+                >
+                  <Text style={styles.primaryButtonText}>{isDaily ? 'PLAY ANOTHER MODE' : 'NEXT LEVEL'}</Text>
+                </LinearGradient>
+              </Pressable>
+              <View style={styles.secondaryRow}>
+                <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onRetry}>
+                  <Text style={styles.secondaryButtonText}>Retry</Text>
+                </Pressable>
+                <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
+                  <Text style={styles.secondaryButtonText}>Home</Text>
+                </Pressable>
+              </View>
+            </Animated.View>
+          </LinearGradient>
+        </LinearGradient>
       </Animated.View>
     </Animated.View>
   );
@@ -361,54 +441,60 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -30,
   },
-  card: {
+  cardOuter: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: COLORS.surface,
-    borderRadius: 30,
+    ...SHADOWS.strong,
+    shadowColor: COLORS.accent,
+    shadowOpacity: 0.2,
+    shadowRadius: 30,
+  },
+  gradientBorder: {
+    borderRadius: 32,
+    padding: 1.5,
+  },
+  card: {
+    borderRadius: 30.5,
     padding: 24,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    elevation: 16,
   },
   heroGlow: {
     position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
     backgroundColor: COLORS.accentGlow,
-    top: -90,
-    right: -50,
+    top: -100,
+    right: -60,
+    opacity: 0.7,
   },
   heroGlowSecondary: {
     position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
     backgroundColor: COLORS.purpleGlow,
-    bottom: -80,
-    left: -30,
+    bottom: -90,
+    left: -40,
+    opacity: 0.6,
   },
   ribbon: {
     alignSelf: 'center',
     marginBottom: 14,
     borderRadius: 999,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   ribbonText: {
     color: COLORS.gold,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.4,
+    textShadowColor: COLORS.goldGlow,
+    textShadowRadius: 8,
   },
   title: {
     color: COLORS.textPrimary,
@@ -416,63 +502,77 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
     marginBottom: 8,
+    textShadowColor: 'rgba(255,255,255,0.15)',
+    textShadowRadius: 12,
   },
   titlePerfect: {
     color: COLORS.gold,
+    textShadowColor: COLORS.goldGlow,
+    textShadowRadius: 16,
   },
   subtitle: {
     color: COLORS.textSecondary,
     fontSize: 14,
     lineHeight: 22,
     textAlign: 'center',
-    marginBottom: 18,
+    marginBottom: 20,
   },
   starsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 18,
+    gap: 6,
+    marginBottom: 20,
+  },
+  starGlowRing: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255,215,0,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,215,0,0.25)',
   },
   star: {
     color: COLORS.star,
     textShadowColor: COLORS.goldGlow,
-    textShadowRadius: 18,
+    textShadowRadius: 22,
   },
   scorePanel: {
     alignItems: 'center',
-    backgroundColor: COLORS.bgLight,
     borderRadius: 24,
-    paddingVertical: 18,
-    marginBottom: 16,
+    paddingVertical: 20,
+    marginBottom: 18,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.medium,
+    shadowColor: COLORS.accent,
+    shadowOpacity: 0.15,
   },
   scoreLabel: {
     color: COLORS.textMuted,
     fontSize: 11,
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   scoreValue: {
-    color: COLORS.textPrimary,
-    fontSize: 36,
+    color: COLORS.gold,
+    fontSize: 40,
     fontWeight: '900',
+    textShadowColor: COLORS.goldGlow,
+    textShadowRadius: 14,
   },
   statsGrid: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 16,
+    marginBottom: 18,
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.bgLight,
     borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.06)',
+    ...SHADOWS.soft,
   },
   statCardLabel: {
     color: COLORS.textMuted,
@@ -487,20 +587,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowRadius: 6,
   },
   rewardsCard: {
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: 22,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-    marginBottom: 18,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 20,
+    ...SHADOWS.soft,
   },
   rewardsTitle: {
     color: COLORS.textPrimary,
     fontSize: 16,
     fontWeight: '800',
-    marginBottom: 10,
+    marginBottom: 12,
+    textShadowColor: 'rgba(255,255,255,0.08)',
+    textShadowRadius: 4,
   },
   rewardRow: {
     flexDirection: 'row',
@@ -511,39 +616,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.bgLight,
     borderRadius: 999,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.soft,
+    shadowColor: COLORS.accent,
+    shadowOpacity: 0.15,
   },
   rewardChipGold: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,215,0,0.12)',
     borderRadius: 999,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.25)',
+    ...SHADOWS.soft,
+    shadowColor: COLORS.gold,
+    shadowOpacity: 0.25,
   },
   rewardIcon: {
-    fontSize: 16,
+    fontSize: 18,
   },
   rewardText: {
     color: COLORS.textPrimary,
     fontWeight: '700',
+    fontSize: 14,
   },
   rewardTextGold: {
     color: COLORS.gold,
     fontWeight: '800',
+    fontSize: 14,
+    textShadowColor: COLORS.goldGlow,
+    textShadowRadius: 6,
   },
   actionsColumn: {
-    gap: 10,
+    gap: 12,
   },
   primaryButton: {
-    backgroundColor: COLORS.accent,
     borderRadius: 18,
-    paddingVertical: 16,
+    paddingVertical: 17,
     alignItems: 'center',
+    ...SHADOWS.medium,
+    shadowColor: COLORS.accent,
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
   },
   primaryButtonText: {
     color: COLORS.bg,
@@ -557,12 +677,13 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     flex: 1,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 18,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
+    ...SHADOWS.soft,
   },
   secondaryButtonText: {
     color: COLORS.textPrimary,

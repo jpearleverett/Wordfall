@@ -6,20 +6,8 @@ import {
   Animated,
   StyleSheet,
 } from 'react-native';
-
-const COLORS = {
-  bg: '#0a0e27',
-  surface: '#1a1f45',
-  surfaceLight: '#252b5e',
-  textPrimary: '#ffffff',
-  textSecondary: '#8890b5',
-  textMuted: '#4a5280',
-  accent: '#00d4ff',
-  accentGlow: 'rgba(0, 212, 255, 0.3)',
-  gold: '#ffd700',
-  green: '#4caf50',
-  coral: '#ff6b6b',
-};
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS } from '../../constants';
 
 interface ShopItemProps {
   name: string;
@@ -69,71 +57,107 @@ export default function ShopItem({
     >
       <Animated.View
         style={[
-          styles.card,
-          bestValue && styles.bestValueCard,
+          styles.cardOuter,
+          bestValue && styles.bestValueOuter,
           purchased && styles.purchasedCard,
           { transform: [{ scale: scaleAnim }] },
         ]}
       >
-        {/* Best Value badge */}
-        {bestValue && (
-          <View style={styles.bestValueBadge}>
-            <Text style={styles.bestValueText}>BEST VALUE</Text>
-          </View>
-        )}
-
-        {/* Icon area */}
-        <View style={styles.iconContainer}>
-          <Text style={styles.icon}>{icon}</Text>
-        </View>
-
-        {/* Info */}
-        <View style={styles.info}>
-          <Text style={styles.name} numberOfLines={1}>
-            {name}
-          </Text>
-          <Text style={styles.description} numberOfLines={2}>
-            {description}
-          </Text>
-        </View>
-
-        {/* Price / purchased button */}
-        <View
-          style={[
-            styles.priceButton,
-            purchased ? styles.purchasedButton : styles.activeButton,
-          ]}
+        <LinearGradient
+          colors={[GRADIENTS.surfaceCard[0], GRADIENTS.surfaceCard[1]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.card}
         >
-          {purchased ? (
-            <Text style={styles.purchasedText}>{'\u2713'} Owned</Text>
-          ) : (
-            <Text style={styles.priceText}>{price}</Text>
+          {/* Subtle top highlight */}
+          <View style={styles.cardTopHighlight} />
+
+          {/* Best Value badge */}
+          {bestValue && (
+            <LinearGradient
+              colors={['#ffe066', '#ffd700', '#f0a500']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.bestValueBadge}
+            >
+              <Text style={styles.bestValueText}>BEST VALUE</Text>
+            </LinearGradient>
           )}
-        </View>
+
+          {/* Icon area */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.03)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.iconContainer}
+          >
+            <Text style={styles.icon}>{icon}</Text>
+          </LinearGradient>
+
+          {/* Info */}
+          <View style={styles.info}>
+            <Text style={styles.name} numberOfLines={1}>
+              {name}
+            </Text>
+            <Text style={styles.description} numberOfLines={2}>
+              {description}
+            </Text>
+          </View>
+
+          {/* Price / purchased button */}
+          {purchased ? (
+            <View style={styles.purchasedButton}>
+              <Text style={styles.purchasedText}>{'\u2713'} Owned</Text>
+            </View>
+          ) : (
+            <LinearGradient
+              colors={[GRADIENTS.button.primary[0], GRADIENTS.button.primary[1]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.priceButton}
+            >
+              <Text style={styles.priceText}>{price}</Text>
+            </LinearGradient>
+          )}
+        </LinearGradient>
       </Animated.View>
     </TouchableWithoutFeedback>
   );
 }
 
 const styles = StyleSheet.create({
+  cardOuter: {
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  bestValueOuter: {
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
   card: {
-    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
-    marginBottom: 12,
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
   },
-  bestValueCard: {
-    borderColor: COLORS.gold,
-    borderWidth: 1.5,
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 8,
+  cardTopHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   purchasedCard: {
     opacity: 0.65,
@@ -142,11 +166,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -1,
     right: 16,
-    backgroundColor: COLORS.gold,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderBottomLeftRadius: 6,
     borderBottomRightRadius: 6,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 4,
   },
   bestValueText: {
     color: '#000',
@@ -158,10 +186,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: COLORS.surfaceLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   icon: {
     fontSize: 24,
@@ -188,17 +217,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 80,
-  },
-  activeButton: {
-    backgroundColor: COLORS.accent,
     shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   purchasedButton: {
-    backgroundColor: COLORS.surfaceLight,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 80,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   priceText: {
     color: '#000',

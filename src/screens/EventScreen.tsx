@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, SHADOWS } from '../constants';
 
 const { width } = Dimensions.get('window');
 
@@ -124,28 +125,51 @@ const EventScreen: React.FC<EventScreenProps> = ({
         showsVerticalScrollIndicator={false}
       >
         {/* Event Banner */}
-        <View style={[styles.banner, { borderColor: data.bannerColor }]}>
-          <View
-            style={[styles.bannerGlow, { backgroundColor: data.bannerColor + '15' }]}
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          style={[styles.banner, { borderColor: data.bannerColor }]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <LinearGradient
+            colors={[data.bannerColor + '25', 'transparent'] as [string, string]}
+            style={styles.bannerGlow}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
           />
           <Text style={styles.bannerIcon}>{data.bannerIcon}</Text>
-          <Text style={[styles.bannerName, { color: data.bannerColor }]}>
+          <Text style={[styles.bannerName, { color: data.bannerColor, textShadowColor: data.bannerColor + '60' }]}>
             {data.name}
           </Text>
-          <View style={[styles.timerBadge, { backgroundColor: data.bannerColor + '20' }]}>
+          <LinearGradient
+            colors={[data.bannerColor + '30', data.bannerColor + '10'] as [string, string]}
+            style={styles.timerBadge}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
             <Text style={[styles.timerText, { color: data.bannerColor }]}>
               {timeRemaining} remaining
             </Text>
-          </View>
-        </View>
+          </LinearGradient>
+        </LinearGradient>
 
         {/* Description */}
-        <View style={styles.descCard}>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          style={styles.descCard}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
           <Text style={styles.descText}>{data.description}</Text>
-        </View>
+        </LinearGradient>
 
         {/* Progress Bar */}
-        <View style={styles.progressSection}>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          style={styles.progressSection}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
           <View style={styles.progressHeader}>
             <Text style={styles.progressLabel}>Event Progress</Text>
             <Text style={styles.progressValue}>
@@ -153,14 +177,14 @@ const EventScreen: React.FC<EventScreenProps> = ({
             </Text>
           </View>
           <View style={styles.progressBarBg}>
-            <View
+            <LinearGradient
+              colors={[data.bannerColor ?? COLORS.accent, (data.bannerColor ?? COLORS.accent) + 'CC'] as [string, string]}
               style={[
                 styles.progressBarFill,
-                {
-                  width: `${Math.min(progressPercent, 100)}%`,
-                  backgroundColor: data.bannerColor,
-                },
+                { width: `${Math.min(progressPercent, 100)}%` },
               ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
             />
             {/* Milestone markers */}
             {data.rewards.map((reward) => {
@@ -189,6 +213,13 @@ const EventScreen: React.FC<EventScreenProps> = ({
                     style={[
                       styles.rewardCircle,
                       isReached && styles.rewardCircleReached,
+                      isReached && {
+                        shadowColor: COLORS.gold,
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 0.5,
+                        shadowRadius: 10,
+                        elevation: 8,
+                      },
                     ]}
                   >
                     <Text style={styles.rewardIcon}>
@@ -206,77 +237,106 @@ const EventScreen: React.FC<EventScreenProps> = ({
               );
             })}
           </View>
-        </View>
+        </LinearGradient>
 
         {/* Event Puzzles */}
         <View style={styles.puzzlesSection}>
           <View style={styles.puzzlesHeader}>
             <Text style={styles.sectionTitle}>Event Puzzles</Text>
-            <TouchableOpacity style={styles.playAllBtn} onPress={onPlayEventPuzzle}>
-              <Text style={styles.playAllText}>Play Next</Text>
+            <TouchableOpacity onPress={onPlayEventPuzzle} activeOpacity={0.8}>
+              <LinearGradient
+                colors={[...GRADIENTS.button.primary] as [string, string]}
+                style={styles.playAllBtn}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={styles.playAllText}>Play Next</Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
           {data.puzzles.map((puzzle) => (
             <TouchableOpacity
               key={puzzle.id}
-              style={[
-                styles.puzzleRow,
-                puzzle.completed && styles.puzzleRowComplete,
-              ]}
               onPress={onPlayEventPuzzle}
               activeOpacity={0.7}
             >
-              <View
-                style={[
-                  styles.puzzleDot,
+              <LinearGradient
+                colors={
                   puzzle.completed
-                    ? { backgroundColor: COLORS.green }
-                    : { backgroundColor: COLORS.cellDefault },
+                    ? ([COLORS.cellFound, '#122e1e'] as [string, string])
+                    : ([...GRADIENTS.surfaceCard] as [string, string])
+                }
+                style={[
+                  styles.puzzleRow,
+                  puzzle.completed && styles.puzzleRowComplete,
                 ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
               >
-                {puzzle.completed && (
-                  <Text style={styles.puzzleCheck}>✓</Text>
-                )}
-              </View>
-              <View style={styles.puzzleInfo}>
-                <Text
+                <View
                   style={[
-                    styles.puzzleName,
-                    puzzle.completed && styles.puzzleNameComplete,
+                    styles.puzzleDot,
+                    puzzle.completed
+                      ? { backgroundColor: COLORS.green }
+                      : { backgroundColor: COLORS.cellDefault },
                   ]}
                 >
-                  {puzzle.name}
-                </Text>
-                <Text
-                  style={[
-                    styles.puzzleDifficulty,
-                    { color: getDifficultyColor(puzzle.difficulty) },
-                  ]}
-                >
-                  {puzzle.difficulty}
-                </Text>
-              </View>
-              <Text style={styles.puzzleChevron}>›</Text>
+                  {puzzle.completed && (
+                    <Text style={styles.puzzleCheck}>✓</Text>
+                  )}
+                </View>
+                <View style={styles.puzzleInfo}>
+                  <Text
+                    style={[
+                      styles.puzzleName,
+                      puzzle.completed && styles.puzzleNameComplete,
+                    ]}
+                  >
+                    {puzzle.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.puzzleDifficulty,
+                      { color: getDifficultyColor(puzzle.difficulty) },
+                    ]}
+                  >
+                    {puzzle.difficulty}
+                  </Text>
+                </View>
+                <Text style={styles.puzzleChevron}>›</Text>
+              </LinearGradient>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Event Shop Button */}
-        <TouchableOpacity style={styles.shopButton} onPress={onOpenEventShop}>
-          <Text style={styles.shopButtonIcon}>🛍️</Text>
-          <View style={styles.shopButtonInfo}>
-            <Text style={styles.shopButtonTitle}>Event Shop</Text>
-            <Text style={styles.shopButtonDesc}>
-              Spend tokens on exclusive items
-            </Text>
-          </View>
-          <Text style={styles.shopChevron}>›</Text>
+        <TouchableOpacity onPress={onOpenEventShop} activeOpacity={0.8}>
+          <LinearGradient
+            colors={[COLORS.gold + '20', COLORS.gold + '08'] as [string, string]}
+            style={styles.shopButton}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Text style={styles.shopButtonIcon}>🛍️</Text>
+            <View style={styles.shopButtonInfo}>
+              <Text style={styles.shopButtonTitle}>Event Shop</Text>
+              <Text style={styles.shopButtonDesc}>
+                Spend tokens on exclusive items
+              </Text>
+            </View>
+            <Text style={styles.shopChevron}>›</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
         {/* Leaderboard Preview */}
         <View style={styles.leaderboardSection}>
           <Text style={styles.sectionTitle}>Event Leaderboard</Text>
-          <View style={styles.leaderboardCard}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard] as [string, string]}
+            style={styles.leaderboardCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
             {data.leaderboard.slice(0, 5).map((entry, index) => (
               <View key={index}>
                 {index > 0 && <View style={styles.leaderboardDivider} />}
@@ -291,7 +351,20 @@ const EventScreen: React.FC<EventScreenProps> = ({
                       ? ['🥇', '🥈', '🥉'][index]
                       : `${index + 1}`}
                   </Text>
-                  <View style={styles.leaderboardAvatar}>
+                  <View
+                    style={[
+                      styles.leaderboardAvatar,
+                      index < 3 && {
+                        borderWidth: 2,
+                        borderColor: ['#FFD700', '#C0C0C0', '#CD7F32'][index],
+                        shadowColor: ['#FFD700', '#C0C0C0', '#CD7F32'][index],
+                        shadowOffset: { width: 0, height: 0 },
+                        shadowOpacity: 0.4,
+                        shadowRadius: 6,
+                        elevation: 4,
+                      },
+                    ]}
+                  >
                     <Text style={styles.leaderboardAvatarText}>
                       {entry.name.charAt(0)}
                     </Text>
@@ -299,13 +372,16 @@ const EventScreen: React.FC<EventScreenProps> = ({
                   <Text style={styles.leaderboardName} numberOfLines={1}>
                     {entry.name}
                   </Text>
-                  <Text style={styles.leaderboardScore}>
+                  <Text style={[
+                    styles.leaderboardScore,
+                    index < 3 && { color: ['#FFD700', '#C0C0C0', '#CD7F32'][index] },
+                  ]}>
                     {entry.score.toLocaleString()}
                   </Text>
                 </View>
               </View>
             ))}
-          </View>
+          </LinearGradient>
         </View>
 
         <View style={styles.bottomSpacer} />
@@ -327,35 +403,42 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   banner: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 18,
-    padding: 24,
+    borderRadius: 22,
+    padding: 28,
     alignItems: 'center',
     borderWidth: 1,
     overflow: 'hidden',
     marginBottom: 14,
+    ...SHADOWS.strong,
   },
   bannerGlow: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 100,
+    height: 120,
   },
   bannerIcon: {
-    fontSize: 52,
-    marginBottom: 10,
+    fontSize: 60,
+    marginBottom: 12,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 12,
   },
   bannerName: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
     marginBottom: 10,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
   },
   timerBadge: {
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   timerText: {
     fontSize: 15,
@@ -363,12 +446,12 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   descCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.medium,
   },
   descText: {
     fontSize: 14,
@@ -376,12 +459,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   progressSection: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 18,
+    padding: 18,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.medium,
   },
   progressHeader: {
     flexDirection: 'row',
@@ -399,15 +482,21 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   progressBarBg: {
-    height: 12,
-    backgroundColor: COLORS.cellDefault,
-    borderRadius: 6,
+    height: 16,
+    backgroundColor: 'rgba(42, 48, 96, 0.6)',
+    borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 6,
+    borderRadius: 8,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
   },
   milestoneMarker: {
     position: 'absolute',
@@ -427,19 +516,22 @@ const styles = StyleSheet.create({
     width: (width - 64) / 4,
   },
   rewardCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.bgLight,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(17, 22, 56, 0.8)',
     borderWidth: 1,
-    borderColor: COLORS.cellDefault,
+    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
+    ...SHADOWS.soft,
   },
   rewardCircleReached: {
     borderColor: COLORS.gold,
-    backgroundColor: COLORS.gold + '15',
+    backgroundColor: COLORS.gold + '18',
+    borderWidth: 2,
+    ...SHADOWS.glow(COLORS.gold),
   },
   rewardIcon: {
     fontSize: 20,
@@ -473,12 +565,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: COLORS.textPrimary,
+    textShadowColor: 'rgba(255,255,255,0.08)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   playAllBtn: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    ...SHADOWS.glow(COLORS.accent),
   },
   playAllText: {
     fontSize: 13,
@@ -488,15 +583,14 @@ const styles = StyleSheet.create({
   puzzleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 6,
+    borderRadius: 14,
+    padding: 15,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.soft,
   },
   puzzleRowComplete: {
-    backgroundColor: COLORS.cellFound,
     borderColor: COLORS.green + '40',
   },
   puzzleDot: {
@@ -536,12 +630,12 @@ const styles = StyleSheet.create({
   shopButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.gold + '15',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: COLORS.gold + '40',
+    ...SHADOWS.glow(COLORS.gold),
   },
   shopButtonIcon: {
     fontSize: 28,
@@ -555,6 +649,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.gold,
     marginBottom: 2,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   shopButtonDesc: {
     fontSize: 12,
@@ -569,12 +666,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   leaderboardCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
     marginTop: 10,
+    ...SHADOWS.medium,
   },
   leaderboardDivider: {
     height: 1,
@@ -595,13 +692,15 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   leaderboardAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.surfaceLight,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(37, 43, 94, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   leaderboardAvatarText: {
     fontSize: 14,

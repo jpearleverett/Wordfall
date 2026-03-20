@@ -8,7 +8,8 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, SHADOWS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
@@ -94,10 +95,17 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </View>
         {searchText.length > 0 && (
           <TouchableOpacity
-            style={styles.joinButton}
             onPress={() => onJoinClub(searchText)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.joinButtonText}>Search & Join</Text>
+            <LinearGradient
+              colors={[...GRADIENTS.button.primary] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.joinButton}
+            >
+              <Text style={styles.joinButtonText}>Search & Join</Text>
+            </LinearGradient>
           </TouchableOpacity>
         )}
       </View>
@@ -164,11 +172,16 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       >
         {/* Club Header */}
         <View style={styles.clubHeader}>
-          <View style={styles.clubShield}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.clubShield}
+          >
             <Text style={styles.clubShieldText}>
               {data.name.charAt(0).toUpperCase()}
             </Text>
-          </View>
+          </LinearGradient>
           <Text style={styles.clubName}>{data.name}</Text>
           <Text style={styles.clubMemberCount}>
             {data.memberCount} / {data.maxMembers} Members
@@ -176,28 +189,45 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </View>
 
         {/* Weekly Score */}
-        <View style={styles.weeklyScoreCard}>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.weeklyScoreCard}
+        >
           <Text style={styles.weeklyScoreLabel}>Weekly Club Score</Text>
           <Text style={styles.weeklyScoreValue}>
             {data.weeklyScore.toLocaleString()}
           </Text>
-        </View>
+        </LinearGradient>
 
         {/* Club Puzzle */}
-        <TouchableOpacity style={styles.clubPuzzleBtn}>
-          <Text style={styles.clubPuzzleIcon}>🧩</Text>
-          <View style={styles.clubPuzzleInfo}>
-            <Text style={styles.clubPuzzleTitle}>Club Puzzle</Text>
-            <Text style={styles.clubPuzzleDesc}>
-              Solve today's club challenge
-            </Text>
-          </View>
-          <Text style={styles.chevron}>›</Text>
+        <TouchableOpacity activeOpacity={0.8}>
+          <LinearGradient
+            colors={[COLORS.accent + '18', COLORS.accent + '08'] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.clubPuzzleBtn}
+          >
+            <Text style={styles.clubPuzzleIcon}>🧩</Text>
+            <View style={styles.clubPuzzleInfo}>
+              <Text style={styles.clubPuzzleTitle}>Club Puzzle</Text>
+              <Text style={styles.clubPuzzleDesc}>
+                Solve today's club challenge
+              </Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
         {/* Members */}
         <Text style={styles.sectionTitle}>Members</Text>
-        <View style={styles.membersCard}>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.membersCard}
+        >
           {data.members.length > 0 ? (
             data.members.map((member, index) => (
               <View key={member.id}>
@@ -238,7 +268,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
               <Text style={styles.emptyMembersText}>No members yet</Text>
             </View>
           )}
-        </View>
+        </LinearGradient>
 
         {/* Emoji Reactions */}
         <Text style={styles.sectionTitle}>Quick Reactions</Text>
@@ -296,6 +326,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.accent,
     letterSpacing: 4,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   scrollView: {
     flex: 1,
@@ -333,15 +366,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginBottom: 12,
+    textShadowColor: 'rgba(255,255,255,0.08)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    backgroundColor: 'rgba(26, 31, 69, 0.8)',
+    borderRadius: 14,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.soft,
   },
   searchIcon: {
     fontSize: 16,
@@ -354,11 +391,11 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   joinButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 10,
+    ...SHADOWS.glow(COLORS.accent),
   },
   joinButtonText: {
     fontSize: 15,
@@ -372,13 +409,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    backgroundColor: 'rgba(26, 31, 69, 0.6)',
+    borderRadius: 16,
     paddingVertical: 20,
     borderWidth: 2,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(0, 212, 255, 0.15)',
     borderStyle: 'dashed',
     gap: 10,
+    ...SHADOWS.soft,
   },
   createButtonIcon: {
     fontSize: 24,
@@ -391,11 +429,12 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
   createForm: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    backgroundColor: 'rgba(26, 31, 69, 0.8)',
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.medium,
   },
   createInput: {
     height: 48,
@@ -414,10 +453,12 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    backgroundColor: COLORS.surfaceLight,
-    borderRadius: 10,
+    backgroundColor: 'rgba(37, 43, 94, 0.8)',
+    borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   cancelBtnText: {
     fontSize: 14,
@@ -427,9 +468,10 @@ const styles = StyleSheet.create({
   confirmBtn: {
     flex: 1,
     backgroundColor: COLORS.accent,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
+    ...SHADOWS.glow(COLORS.accent),
   },
   confirmBtnDisabled: {
     opacity: 0.4,
@@ -447,20 +489,16 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   clubShield: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
+    width: 76,
+    height: 76,
+    borderRadius: 22,
     borderWidth: 2,
-    borderColor: COLORS.accent,
+    borderColor: COLORS.accent + '60',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
+    overflow: 'hidden',
+    ...SHADOWS.glow(COLORS.accent),
   },
   clubShieldText: {
     fontSize: 32,
@@ -472,19 +510,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.textPrimary,
     marginBottom: 4,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   clubMemberCount: {
     fontSize: 14,
     color: COLORS.textSecondary,
   },
   weeklyScoreCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 20,
+    borderRadius: 18,
+    padding: 22,
     alignItems: 'center',
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+    ...SHADOWS.medium,
   },
   weeklyScoreLabel: {
     fontSize: 13,
@@ -498,16 +540,19 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '800',
     color: COLORS.gold,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   clubPuzzleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.accent + '15',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: COLORS.accent + '40',
+    borderColor: COLORS.accent + '30',
+    ...SHADOWS.glow(COLORS.accent),
   },
   clubPuzzleIcon: {
     fontSize: 28,
@@ -532,12 +577,12 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   membersCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
     marginBottom: 20,
+    ...SHADOWS.medium,
   },
   memberRow: {
     flexDirection: 'row',
@@ -563,14 +608,17 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.surfaceLight,
+    backgroundColor: 'rgba(37, 43, 94, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   memberAvatarOnline: {
     borderWidth: 2,
     borderColor: COLORS.green,
+    ...SHADOWS.glow(COLORS.green),
   },
   memberAvatarText: {
     fontSize: 16,
@@ -603,6 +651,11 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: COLORS.green,
+    shadowColor: COLORS.green,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 2,
   },
   emptyMembers: {
     padding: 24,
@@ -615,20 +668,23 @@ const styles = StyleSheet.create({
   emojiBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    backgroundColor: 'rgba(26, 31, 69, 0.7)',
+    borderRadius: 16,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.soft,
   },
   emojiBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.bgLight,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(17, 22, 56, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   emojiBtnText: {
     fontSize: 18,
@@ -641,24 +697,30 @@ const styles = StyleSheet.create({
   },
   reactionEmoji: {
     fontSize: 20,
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
+    backgroundColor: 'rgba(26, 31, 69, 0.7)',
+    borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 4,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   leaveButton: {
     borderWidth: 1,
-    borderColor: COLORS.coral + '60',
-    borderRadius: 12,
+    borderColor: COLORS.coral + '40',
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
+    backgroundColor: COLORS.coral + '08',
   },
   leaveButtonText: {
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.coral,
+    textShadowColor: COLORS.coralGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   bottomSpacer: {
     height: 40,

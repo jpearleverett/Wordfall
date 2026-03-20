@@ -18,6 +18,12 @@ const COLORS = {
   accent: '#00d4ff',
 };
 
+const GLOW_COLORS: Record<string, string> = {
+  [COLORS.gold]: 'rgba(255, 215, 0, 0.5)',
+  [COLORS.purple]: 'rgba(168, 85, 247, 0.5)',
+  [COLORS.accent]: 'rgba(0, 212, 255, 0.5)',
+};
+
 interface CurrencyDisplayProps {
   coins?: number;
   gems?: number;
@@ -81,6 +87,8 @@ function CurrencyItem({ icon, amount, label, color, compact, onPress }: ItemProp
       ? `${(value / 1_000).toFixed(1)}K`
       : String(value);
 
+  const glowColor = GLOW_COLORS[color] || 'rgba(255,255,255,0.3)';
+
   const content = (
     <Animated.View
       style={[
@@ -90,7 +98,19 @@ function CurrencyItem({ icon, amount, label, color, compact, onPress }: ItemProp
       ]}
     >
       <Text style={styles.icon}>{icon}</Text>
-      <Text style={[styles.amount, { color }]}>{formatted}</Text>
+      <Text
+        style={[
+          styles.amount,
+          {
+            color,
+            textShadowColor: glowColor,
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: 8,
+          },
+        ]}
+      >
+        {formatted}
+      </Text>
       {!compact && label ? (
         <Text style={styles.label}>{label}</Text>
       ) : null}
@@ -121,6 +141,8 @@ export default function CurrencyDisplay({
 }: CurrencyDisplayProps) {
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
+      {/* Inner subtle glow */}
+      <View style={styles.innerGlow} />
       {coins > 0 || !compact ? (
         <CurrencyItem
           icon={'\uD83E\uDE99'}
@@ -162,18 +184,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    shadowColor: 'rgba(0, 212, 255, 0.15)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 6,
+    overflow: 'hidden',
   },
   containerCompact: {
     gap: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
+  },
+  innerGlow: {
+    position: 'absolute',
+    top: -20,
+    left: '20%',
+    width: '60%',
+    height: 40,
+    backgroundColor: 'rgba(0, 212, 255, 0.04)',
+    borderRadius: 40,
   },
   item: {
     flexDirection: 'row',

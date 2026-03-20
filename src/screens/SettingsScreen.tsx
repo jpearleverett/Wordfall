@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, SHADOWS } from '../constants';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -131,6 +132,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* Sound Section */}
         <Text style={styles.sectionTitle}>Sound</Text>
         <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           {renderVolumeControl('SFX Volume', 'sfxVolume', sfxVolume)}
           <View style={styles.divider} />
           {renderVolumeControl('Music Volume', 'musicVolume', musicVolume)}
@@ -139,6 +146,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* Gameplay Section */}
         <Text style={styles.sectionTitle}>Gameplay</Text>
         <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           {renderToggle('Haptics', hapticsEnabled, 'haptics')}
           <View style={styles.divider} />
           {renderToggle('Notifications', notificationsEnabled, 'notifications')}
@@ -147,6 +160,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* Theme Section */}
         <Text style={styles.sectionTitle}>Theme</Text>
         <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           {THEMES.map((theme, index) => (
             <React.Fragment key={theme.id}>
               {index > 0 && <View style={styles.divider} />}
@@ -171,18 +190,24 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* Account Section */}
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           {isSignedIn ? (
             <>
               <TouchableOpacity style={styles.actionRow}>
                 <Text style={styles.settingLabel}>Link Account</Text>
-                <Text style={styles.chevron}>›</Text>
+                <Text style={styles.chevron}>{'\u203A'}</Text>
               </TouchableOpacity>
               <View style={styles.divider} />
               <TouchableOpacity style={styles.actionRow} onPress={confirmSignOut}>
                 <Text style={[styles.settingLabel, { color: COLORS.coral }]}>
                   Sign Out
                 </Text>
-                <Text style={[styles.chevron, { color: COLORS.coral }]}>›</Text>
+                <Text style={[styles.chevron, { color: COLORS.coral }]}>{'\u203A'}</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -193,7 +218,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
                 Sign In
               </Text>
-              <Text style={[styles.chevron, { color: COLORS.accent }]}>›</Text>
+              <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -201,6 +226,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* Purchases Section */}
         <Text style={styles.sectionTitle}>Purchases</Text>
         <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Ad Removal</Text>
             <View
@@ -243,6 +274,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* About Section */}
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Version</Text>
             <Text style={styles.settingValue}>{appVersion}</Text>
@@ -250,12 +287,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <View style={styles.divider} />
           <TouchableOpacity style={styles.actionRow}>
             <Text style={styles.settingLabel}>Privacy Policy</Text>
-            <Text style={styles.chevron}>›</Text>
+            <Text style={styles.chevron}>{'\u203A'}</Text>
           </TouchableOpacity>
           <View style={styles.divider} />
           <TouchableOpacity style={styles.actionRow}>
             <Text style={styles.settingLabel}>Terms of Service</Text>
-            <Text style={styles.chevron}>›</Text>
+            <Text style={styles.chevron}>{'\u203A'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -264,6 +301,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           Danger Zone
         </Text>
         <View style={[styles.card, styles.dangerCard]}>
+          <LinearGradient
+            colors={['#2a1520', '#1e1218']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <TouchableOpacity
             style={styles.dangerButton}
             onPress={confirmResetProgress}
@@ -290,12 +333,17 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
     alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '800',
     color: COLORS.accent,
     letterSpacing: 4,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   scrollView: {
     flex: 1,
@@ -312,17 +360,20 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 8,
     marginLeft: 4,
+    textShadowColor: 'rgba(255,255,255,0.08)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.medium,
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     marginHorizontal: 16,
   },
   settingRow: {
@@ -347,10 +398,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   volumeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: COLORS.surfaceLight,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -374,6 +427,10 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: COLORS.accent,
     borderRadius: 3,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
   },
   volumeValue: {
     fontSize: 11,
@@ -381,25 +438,30 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   toggle: {
-    width: 50,
-    height: 28,
-    borderRadius: 14,
+    width: 52,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: COLORS.cellDefault,
     padding: 2,
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   toggleOn: {
     backgroundColor: COLORS.accent,
+    borderColor: 'rgba(0,212,255,0.3)',
+    ...SHADOWS.glow(COLORS.accent),
   },
   toggleThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: COLORS.textSecondary,
   },
   toggleThumbOn: {
     alignSelf: 'flex-end',
     backgroundColor: COLORS.textPrimary,
+    ...SHADOWS.soft,
   },
   themeRow: {
     flexDirection: 'row',
@@ -409,11 +471,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   themePreview: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.18)',
+    ...SHADOWS.medium,
   },
   radioOuter: {
     width: 22,
@@ -430,6 +493,11 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: COLORS.accent,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 2,
   },
   actionRow: {
     flexDirection: 'row',
@@ -444,15 +512,20 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   statusBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   statusActive: {
     backgroundColor: COLORS.green + '25',
+    borderColor: COLORS.green + '40',
+    ...SHADOWS.glow(COLORS.green),
   },
   statusInactive: {
-    backgroundColor: COLORS.cellDefault,
+    backgroundColor: 'rgba(42, 48, 96, 0.5)',
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   statusText: {
     fontSize: 12,
@@ -460,15 +533,19 @@ const styles = StyleSheet.create({
   },
   statusTextActive: {
     color: COLORS.green,
+    textShadowColor: 'rgba(76,175,80,0.3)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   statusTextInactive: {
     color: COLORS.textMuted,
   },
   dangerCard: {
     borderColor: COLORS.coral + '40',
+    ...SHADOWS.glow(COLORS.coral),
   },
   dangerButton: {
-    padding: 16,
+    padding: 20,
     alignItems: 'center',
   },
   dangerButtonText: {
@@ -476,6 +553,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.coral,
     marginBottom: 4,
+    textShadowColor: 'rgba(255,107,107,0.6)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
   },
   dangerSubtext: {
     fontSize: 12,

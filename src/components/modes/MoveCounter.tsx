@@ -1,15 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
-
-const COLORS = {
-  surface: '#1a1f45',
-  surfaceLight: '#252b5e',
-  textPrimary: '#ffffff',
-  textSecondary: '#8890b5',
-  green: '#4caf50',
-  gold: '#ffd700',
-  coral: '#ff6b6b',
-};
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS } from '../../constants';
 
 interface MoveCounterProps {
   current: number;
@@ -23,9 +15,16 @@ function getMoveColor(fraction: number): string {
   return COLORS.coral;
 }
 
+function getMoveGlow(fraction: number): string {
+  if (fraction > 0.5) return COLORS.greenGlow;
+  if (fraction > 0.25) return COLORS.goldGlow;
+  return COLORS.coralGlow;
+}
+
 export default function MoveCounter({ current, max, style }: MoveCounterProps) {
   const fraction = max > 0 ? current / max : 0;
   const color = getMoveColor(fraction);
+  const glowColor = getMoveGlow(fraction);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const prevCurrent = useRef(current);
 
@@ -56,7 +55,17 @@ export default function MoveCounter({ current, max, style }: MoveCounterProps) {
       <View style={styles.labelRow}>
         <Text style={styles.label}>Moves</Text>
         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-          <Text style={[styles.count, { color }]}>
+          <Text
+            style={[
+              styles.count,
+              {
+                color,
+                textShadowColor: glowColor,
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 8,
+              },
+            ]}
+          >
             {current}
             <Text style={styles.separator}>/</Text>
             <Text style={styles.max}>{max}</Text>
@@ -64,23 +73,33 @@ export default function MoveCounter({ current, max, style }: MoveCounterProps) {
         </Animated.View>
       </View>
 
-      <View style={styles.track}>
-        <View
-          style={[
-            styles.fill,
-            {
-              width: fillWidth as any,
-              backgroundColor: color,
-              shadowColor: color,
-            },
-          ]}
-        />
+      <View style={styles.trackOuter}>
+        <LinearGradient
+          colors={['rgba(37, 43, 94, 0.6)', 'rgba(26, 31, 69, 0.4)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.track}
+        >
+          <View
+            style={[
+              styles.fill,
+              {
+                width: fillWidth as any,
+                backgroundColor: color,
+                shadowColor: color,
+              },
+            ]}
+          >
+            {/* Inner highlight on fill bar */}
+            <View style={styles.fillHighlight} />
+          </View>
+        </LinearGradient>
       </View>
     </View>
   );
 }
 
-const TRACK_HEIGHT = 6;
+const TRACK_HEIGHT = 8;
 
 const styles = StyleSheet.create({
   container: {
@@ -110,9 +129,16 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontWeight: '600',
   },
+  trackOuter: {
+    borderRadius: TRACK_HEIGHT / 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   track: {
     height: TRACK_HEIGHT,
-    backgroundColor: COLORS.surfaceLight,
     borderRadius: TRACK_HEIGHT / 2,
     overflow: 'hidden',
   },
@@ -120,7 +146,19 @@ const styles = StyleSheet.create({
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  fillHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: TRACK_HEIGHT / 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderTopLeftRadius: TRACK_HEIGHT / 2,
+    borderTopRightRadius: TRACK_HEIGHT / 2,
   },
 });

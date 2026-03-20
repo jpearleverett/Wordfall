@@ -5,18 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-
-const COLORS = {
-  bg: '#0a0e27',
-  surface: '#1a1f45',
-  surfaceLight: '#252b5e',
-  textPrimary: '#ffffff',
-  textSecondary: '#8890b5',
-  accent: '#00d4ff',
-  accentGlow: 'rgba(0, 212, 255, 0.3)',
-  purple: '#a855f7',
-  coral: '#ff6b6b',
-};
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, SHADOWS } from '../../constants';
 
 interface EventBannerProps {
   eventName: string;
@@ -33,17 +23,44 @@ export default function EventBanner({
 }: EventBannerProps) {
   return (
     <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.wrapper}>
-      {/* Layered gradient-style background */}
-      <View style={styles.bgBase} />
-      <View style={styles.bgLayer1} />
-      <View style={styles.bgLayer2} />
-      <View style={styles.bgLayer3} />
+      {/* Rich multi-layer gradient background */}
+      <LinearGradient
+        colors={['#0d1235', '#151a48', '#0d1235']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      {/* Purple accent layer */}
+      <LinearGradient
+        colors={['rgba(168, 85, 247, 0.2)', 'rgba(168, 85, 247, 0.05)', 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      {/* Cyan accent sweep on right */}
+      <LinearGradient
+        colors={['transparent', 'rgba(0, 212, 255, 0.12)', 'rgba(0, 212, 255, 0.06)']}
+        start={{ x: 0.3, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.cyanSweep}
+      />
+      {/* Coral warm accent bottom-left */}
+      <LinearGradient
+        colors={['rgba(255, 107, 107, 0.1)', 'transparent']}
+        start={{ x: 0, y: 1 }}
+        end={{ x: 0.5, y: 0 }}
+        style={styles.coralAccent}
+      />
+      {/* Top edge highlight */}
+      <View style={styles.topHighlight} />
 
       {/* Content */}
       <View style={styles.content}>
         <View style={styles.left}>
           <View style={styles.liveRow}>
-            <View style={styles.liveDot} />
+            <View style={styles.liveDotOuter}>
+              <View style={styles.liveDot} />
+            </View>
             <Text style={styles.liveText}>LIVE EVENT</Text>
           </View>
           <Text style={styles.eventName} numberOfLines={1}>
@@ -59,8 +76,15 @@ export default function EventBanner({
         </View>
 
         <View style={styles.right}>
-          <View style={styles.playCircle}>
-            <Text style={styles.playArrow}>{'\u25B6'}</Text>
+          <View style={styles.playCircleOuter}>
+            <LinearGradient
+              colors={['#00e5ff', '#00bbdd', '#0099cc']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.playCircle}
+            >
+              <Text style={styles.playArrow}>{'\u25B6'}</Text>
+            </LinearGradient>
           </View>
           <Text style={styles.playLabel}>PLAY</Text>
         </View>
@@ -71,41 +95,40 @@ export default function EventBanner({
 
 const styles = StyleSheet.create({
   wrapper: {
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
     marginBottom: 16,
     minHeight: 120,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.2)',
+    ...SHADOWS.strong,
+    shadowColor: COLORS.purple,
+    shadowOpacity: 0.3,
   },
-  // Layered backgrounds to simulate a gradient effect
-  bgBase: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0d1235',
-  },
-  bgLayer1: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.purple,
-    opacity: 0.15,
-  },
-  bgLayer2: {
+  cyanSweep: {
     position: 'absolute',
     top: 0,
     right: 0,
-    width: '60%',
+    width: '65%',
     height: '100%',
-    backgroundColor: COLORS.accent,
-    opacity: 0.08,
     borderTopLeftRadius: 80,
     borderBottomLeftRadius: 40,
   },
-  bgLayer3: {
+  coralAccent: {
     position: 'absolute',
     bottom: 0,
     left: 0,
-    width: '40%',
-    height: '50%',
-    backgroundColor: COLORS.coral,
-    opacity: 0.06,
+    width: '45%',
+    height: '55%',
     borderTopRightRadius: 60,
+  },
+  topHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   content: {
     flexDirection: 'row',
@@ -121,24 +144,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
+  liveDotOuter: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255, 107, 107, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
   liveDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: COLORS.coral,
-    marginRight: 6,
+    shadowColor: COLORS.coral,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
   },
   liveText: {
     color: COLORS.coral,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.2,
+    textShadowColor: COLORS.coralGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   eventName: {
     color: COLORS.textPrimary,
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 4,
+    textShadowColor: 'rgba(255,255,255,0.12)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   description: {
     color: COLORS.textSecondary,
@@ -158,23 +199,28 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     fontSize: 13,
     fontWeight: '700',
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   right: {
     alignItems: 'center',
   },
+  playCircleOuter: {
+    borderRadius: 28,
+    ...SHADOWS.glow(COLORS.accent),
+    shadowOpacity: 0.7,
+    shadowRadius: 20,
+    marginBottom: 6,
+  },
   playCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.accent,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 10,
-    marginBottom: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   playArrow: {
     color: '#000',
@@ -186,5 +232,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
 });

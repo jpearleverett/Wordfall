@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
@@ -26,29 +27,29 @@ const TILE_SETS = [
 ];
 
 const DEFAULT_ATLAS_PAGES = [
-  { id: 'animals', name: 'Animals', icon: '🦁', total: 25, found: 0 },
-  { id: 'food', name: 'Food & Drink', icon: '🍕', total: 30, found: 0 },
-  { id: 'nature', name: 'Nature', icon: '🌲', total: 20, found: 0 },
-  { id: 'science', name: 'Science', icon: '🔬', total: 35, found: 0 },
-  { id: 'travel', name: 'Travel', icon: '✈️', total: 28, found: 0 },
-  { id: 'sports', name: 'Sports', icon: '⚽', total: 22, found: 0 },
-  { id: 'music', name: 'Music', icon: '🎵', total: 18, found: 0 },
-  { id: 'tech', name: 'Technology', icon: '💻', total: 32, found: 0 },
+  { id: 'animals', name: 'Animals', icon: '\u{1F981}', total: 25, found: 0 },
+  { id: 'food', name: 'Food & Drink', icon: '\u{1F355}', total: 30, found: 0 },
+  { id: 'nature', name: 'Nature', icon: '\u{1F332}', total: 20, found: 0 },
+  { id: 'science', name: 'Science', icon: '\u{1F52C}', total: 35, found: 0 },
+  { id: 'travel', name: 'Travel', icon: '\u2708\uFE0F', total: 28, found: 0 },
+  { id: 'sports', name: 'Sports', icon: '\u26BD', total: 22, found: 0 },
+  { id: 'music', name: 'Music', icon: '\u{1F3B5}', total: 18, found: 0 },
+  { id: 'tech', name: 'Technology', icon: '\u{1F4BB}', total: 32, found: 0 },
 ];
 
 const DEFAULT_STAMPS = [
-  { id: 'spring1', name: 'First Bloom', icon: '🌸', collected: false },
-  { id: 'spring2', name: 'Rain Shower', icon: '🌧️', collected: false },
-  { id: 'spring3', name: 'Butterfly', icon: '🦋', collected: false },
-  { id: 'spring4', name: 'Seedling', icon: '🌱', collected: false },
-  { id: 'spring5', name: 'Rainbow', icon: '🌈', collected: false },
-  { id: 'spring6', name: 'Bird Song', icon: '🐦', collected: false },
-  { id: 'spring7', name: 'Picnic', icon: '🧺', collected: false },
-  { id: 'spring8', name: 'Garden', icon: '🌻', collected: false },
-  { id: 'spring9', name: 'Kite', icon: '🪁', collected: false },
-  { id: 'spring10', name: 'Egg Hunt', icon: '🥚', collected: false },
-  { id: 'spring11', name: 'Ladybug', icon: '🐞', collected: false },
-  { id: 'spring12', name: 'Cherry', icon: '🍒', collected: false },
+  { id: 'spring1', name: 'First Bloom', icon: '\u{1F338}', collected: false },
+  { id: 'spring2', name: 'Rain Shower', icon: '\u{1F327}\uFE0F', collected: false },
+  { id: 'spring3', name: 'Butterfly', icon: '\u{1F98B}', collected: false },
+  { id: 'spring4', name: 'Seedling', icon: '\u{1F331}', collected: false },
+  { id: 'spring5', name: 'Rainbow', icon: '\u{1F308}', collected: false },
+  { id: 'spring6', name: 'Bird Song', icon: '\u{1F426}', collected: false },
+  { id: 'spring7', name: 'Picnic', icon: '\u{1F9FA}', collected: false },
+  { id: 'spring8', name: 'Garden', icon: '\u{1F33B}', collected: false },
+  { id: 'spring9', name: 'Kite', icon: '\u{1FA81}', collected: false },
+  { id: 'spring10', name: 'Egg Hunt', icon: '\u{1F95A}', collected: false },
+  { id: 'spring11', name: 'Ladybug', icon: '\u{1F41E}', collected: false },
+  { id: 'spring12', name: 'Cherry', icon: '\u{1F352}', collected: false },
 ];
 
 interface CollectionsScreenProps {
@@ -98,6 +99,12 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             key={page.id}
             style={[styles.atlasCard, isComplete && styles.atlasCardComplete]}
           >
+            <LinearGradient
+              colors={isComplete ? ['#1a2e1a', '#162814'] as const : [...GRADIENTS.surfaceCard]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
             {isComplete && <View style={styles.completeGlow} />}
             <Text style={styles.atlasIcon}>{page.icon}</Text>
             <View style={styles.atlasInfo}>
@@ -114,7 +121,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
               )}
             </View>
             {isComplete && (
-              <Text style={styles.checkmark}>✓</Text>
+              <Text style={styles.checkmark}>{'\u2713'}</Text>
             )}
           </TouchableOpacity>
         );
@@ -140,6 +147,12 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
         </View>
 
         <View style={styles.tileSetsSection}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <Text style={styles.tileSetsTitle}>Tile Sets</Text>
           {TILE_SETS.map((set) => {
             const collected = set.letters.filter((l) =>
@@ -219,6 +232,12 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.seasonBanner}>
+          <LinearGradient
+            colors={['#251e52', '#1e1842']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <Text style={styles.seasonName}>{seasonName}</Text>
           <Text style={styles.seasonProgress}>
             {collectedCount} / {stamps.length} stamps
@@ -235,6 +254,14 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                 stamp.collected ? styles.stampCollected : styles.stampMissing,
               ]}
             >
+              {stamp.collected && (
+                <LinearGradient
+                  colors={[...GRADIENTS.surfaceCard]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                />
+              )}
               <Text style={[styles.stampIcon, !stamp.collected && styles.stampIconDim]}>
                 {stamp.icon}
               </Text>
@@ -261,12 +288,26 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
         <Text style={styles.headerTitle}>COLLECTIONS</Text>
       </View>
       <View style={styles.tabBar}>
+        <LinearGradient
+          colors={[...GRADIENTS.surface]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
         {TABS.map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
           >
+            {activeTab === tab && (
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
+            )}
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
               {tab}
             </Text>
@@ -295,23 +336,33 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.accent,
     letterSpacing: 4,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   tabBar: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    backgroundColor: COLORS.bgLight,
     borderRadius: 12,
     padding: 4,
     marginBottom: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   tab: {
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 10,
+    overflow: 'hidden',
   },
   tabActive: {
-    backgroundColor: COLORS.surface,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   tabText: {
     fontSize: 13,
@@ -320,6 +371,9 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   tabContent: {
     flex: 1,
@@ -333,6 +387,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginBottom: 4,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   sectionSubtitle: {
     fontSize: 13,
@@ -345,16 +402,20 @@ const styles = StyleSheet.create({
   atlasCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   atlasCardComplete: {
     borderColor: COLORS.green,
-    backgroundColor: COLORS.cellFound,
   },
   completeGlow: {
     position: 'absolute',
@@ -367,9 +428,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.green,
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 6,
   },
   atlasIcon: {
     fontSize: 32,
@@ -386,6 +447,9 @@ const styles = StyleSheet.create({
   },
   atlasNameComplete: {
     color: COLORS.green,
+    textShadowColor: 'rgba(76,175,80,0.4)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   atlasProgress: {
     fontSize: 12,
@@ -412,12 +476,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   tileSetsSection: {
-    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   tileSetsTitle: {
     fontSize: 16,
@@ -441,6 +510,9 @@ const styles = StyleSheet.create({
   },
   tileSetComplete: {
     color: COLORS.gold,
+    textShadowColor: 'rgba(255,215,0,0.3)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   tileSetProgress: {
     fontSize: 12,
@@ -459,6 +531,11 @@ const styles = StyleSheet.create({
   },
   miniTileOwned: {
     backgroundColor: COLORS.gold,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 4,
   },
   miniTileMissing: {
     backgroundColor: COLORS.cellDefault,
@@ -478,6 +555,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginBottom: 12,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   tilesGrid: {
     flexDirection: 'row',
@@ -496,9 +576,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.gold,
     shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 6,
   },
   tileMissing: {
     backgroundColor: COLORS.cellDefault,
@@ -517,19 +597,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   seasonBanner: {
-    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 20,
     marginVertical: 12,
     borderWidth: 1,
     borderColor: COLORS.purple,
     alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: COLORS.purple,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 8,
   },
   seasonName: {
     fontSize: 22,
     fontWeight: '800',
     color: COLORS.purple,
     marginBottom: 6,
+    textShadowColor: 'rgba(168,85,247,0.4)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   seasonProgress: {
     fontSize: 13,
@@ -549,16 +637,21 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
+    overflow: 'hidden',
   },
   stampCollected: {
-    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.purple,
+    shadowColor: COLORS.purple,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
   stampMissing: {
     backgroundColor: COLORS.bgLight,
     borderWidth: 1,
-    borderColor: COLORS.cellDefault,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   stampIcon: {
     fontSize: 32,

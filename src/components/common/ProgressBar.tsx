@@ -1,11 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
-
-const COLORS = {
-  accent: '#00d4ff',
-  surfaceLight: '#252b5e',
-  textSecondary: '#8890b5',
-};
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS } from '../../constants';
 
 interface ProgressBarProps {
   progress: number; // 0-1
@@ -16,11 +12,25 @@ interface ProgressBarProps {
   animated?: boolean;
 }
 
+/**
+ * Attempt to lighten a hex color by mixing it toward white.
+ * Falls back to the original color for non-hex inputs.
+ */
+function lighten(hex: string, amount: number = 0.25): string {
+  const match = hex.match(/^#([0-9a-f]{6})$/i);
+  if (!match) return hex;
+  const num = parseInt(match[1], 16);
+  const r = Math.min(255, ((num >> 16) & 0xff) + Math.round(255 * amount));
+  const g = Math.min(255, ((num >> 8) & 0xff) + Math.round(255 * amount));
+  const b = Math.min(255, (num & 0xff) + Math.round(255 * amount));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
 export default function ProgressBar({
   progress,
   color = COLORS.accent,
-  backgroundColor = COLORS.surfaceLight,
-  height = 8,
+  backgroundColor = '#141838',
+  height = 10,
   showLabel = false,
   animated = true,
 }: ProgressBarProps) {
@@ -44,6 +54,9 @@ export default function ProgressBar({
     outputRange: ['0%', '100%'],
   });
 
+  const lighterColor = lighten(color, 0.2);
+  const borderRadius = height / 2;
+
   return (
     <View style={styles.container}>
       <View
@@ -52,7 +65,7 @@ export default function ProgressBar({
           {
             backgroundColor,
             height,
-            borderRadius: height / 2,
+            borderRadius,
           },
         ]}
       >
@@ -60,17 +73,35 @@ export default function ProgressBar({
           style={[
             styles.fill,
             {
-              backgroundColor: color,
               height,
-              borderRadius: height / 2,
+              borderRadius,
               width: widthInterpolation,
               shadowColor: color,
               shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.5,
-              shadowRadius: 6,
+              shadowOpacity: 0.7,
+              shadowRadius: 8,
+              elevation: 4,
             },
           ]}
-        />
+        >
+          <LinearGradient
+            colors={[lighterColor, color]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[StyleSheet.absoluteFill, { borderRadius }]}
+          />
+          {/* Glass shine highlight */}
+          <View
+            style={[
+              styles.shine,
+              {
+                height: height * 0.4,
+                borderRadius: height * 0.2,
+                top: height * 0.12,
+              },
+            ]}
+          />
+        </Animated.View>
       </View>
       {showLabel && (
         <Text style={styles.label}>
@@ -94,6 +125,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: 0,
+    overflow: 'hidden',
+  },
+  shine: {
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
   label: {
     marginLeft: 10,

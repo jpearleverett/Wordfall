@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, SHADOWS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
@@ -85,8 +86,11 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           const rankColor = getRankColor(entry.rank);
 
           return (
-            <View
+            <LinearGradient
               key={entry.id}
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
               style={[
                 styles.topCard,
                 isFirst && styles.topCardFirst,
@@ -98,6 +102,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                   styles.topAvatar,
                   isFirst && styles.topAvatarFirst,
                   { borderColor: rankColor },
+                  isFirst && SHADOWS.glow(rankColor),
                 ]}
               >
                 <Text
@@ -112,10 +117,10 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
               <Text style={styles.topName} numberOfLines={1}>
                 {entry.name}
               </Text>
-              <Text style={[styles.topScore, { color: rankColor }]}>
+              <Text style={[styles.topScore, { color: rankColor, textShadowColor: rankColor + '60', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }]}>
                 {entry.score.toLocaleString()}
               </Text>
-            </View>
+            </LinearGradient>
           );
         })}
       </View>
@@ -178,7 +183,12 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             {renderTopThree()}
 
             {/* Remaining entries */}
-            <View style={styles.listCard}>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.listCard}
+            >
               {entries.slice(3).map((entry, index) => {
                 const isCurrentUser = entry.id === currentUserId;
                 return (
@@ -234,13 +244,18 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                   </View>
                 );
               })}
-            </View>
+            </LinearGradient>
           </>
         )}
 
         {/* Current user bar (sticky at bottom if not in top list) */}
         {currentUser && currentUser.rank > 3 && (
-          <View style={styles.currentUserBar}>
+          <LinearGradient
+            colors={[COLORS.accent + '18', COLORS.accent + '08'] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.currentUserBar}
+          >
             <View style={styles.currentUserContent}>
               <Text style={styles.currentUserRank}>#{currentUser.rank}</Text>
               <View style={styles.currentUserAvatar}>
@@ -255,7 +270,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 {currentUser.score.toLocaleString()}
               </Text>
             </View>
-          </View>
+          </LinearGradient>
         )}
 
         <View style={styles.bottomSpacer} />
@@ -279,14 +294,20 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.accent,
     letterSpacing: 4,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   tabBar: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    backgroundColor: COLORS.bgLight,
-    borderRadius: 12,
+    backgroundColor: 'rgba(17, 22, 56, 0.8)',
+    borderRadius: 14,
     padding: 4,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    ...SHADOWS.soft,
   },
   tab: {
     flex: 1,
@@ -296,6 +317,9 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.soft,
   },
   tabText: {
     fontSize: 14,
@@ -315,13 +339,15 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(26, 31, 69, 0.4)',
   },
   scopeTabActive: {
-    borderColor: COLORS.accent,
+    borderColor: COLORS.accent + '60',
     backgroundColor: COLORS.accent + '15',
+    ...SHADOWS.glow(COLORS.accent),
   },
   scopeTabText: {
     fontSize: 13,
@@ -368,17 +394,19 @@ const styles = StyleSheet.create({
   },
   topCard: {
     width: (width - 52) / 3,
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+    ...SHADOWS.medium,
   },
   topCardFirst: {
     paddingVertical: 20,
-    borderColor: '#FFD700',
+    borderColor: '#FFD700' + '50',
     marginBottom: 10,
+    ...SHADOWS.glow('#FFD700'),
   },
   topRankEmoji: {
     fontSize: 22,
@@ -388,11 +416,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(17, 22, 56, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     marginBottom: 8,
+    ...SHADOWS.soft,
   },
   topAvatarFirst: {
     width: 56,
@@ -420,11 +449,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   listCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.medium,
   },
   listDivider: {
     height: 1,
@@ -437,7 +466,9 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   listRowHighlight: {
-    backgroundColor: COLORS.accent + '10',
+    backgroundColor: COLORS.accent + '12',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.accent + '60',
   },
   rankContainer: {
     width: 30,
@@ -456,10 +487,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.surfaceLight,
+    backgroundColor: 'rgba(37, 43, 94, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   listAvatarHighlight: {
     borderWidth: 2,
@@ -492,10 +525,11 @@ const styles = StyleSheet.create({
   },
   currentUserBar: {
     marginTop: 16,
-    backgroundColor: COLORS.accent + '15',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.accent,
+    borderColor: COLORS.accent + '50',
+    overflow: 'hidden',
+    ...SHADOWS.glow(COLORS.accent),
   },
   currentUserContent: {
     flexDirection: 'row',
@@ -532,6 +566,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   bottomSpacer: {
     height: 40,

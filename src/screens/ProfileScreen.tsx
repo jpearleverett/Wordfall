@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
@@ -55,12 +56,12 @@ const DEFAULT_PLAYER: PlayerData = {
 };
 
 const STAT_CARDS = [
-  { key: 'puzzlesSolved', label: 'Puzzles Solved', icon: '🧩' },
-  { key: 'totalStars', label: 'Total Stars', icon: '⭐' },
-  { key: 'bestStreak', label: 'Best Streak', icon: '🔥' },
-  { key: 'perfectSolves', label: 'Perfect Solves', icon: '💎' },
-  { key: 'totalScore', label: 'Total Score', icon: '🏆' },
-  { key: 'level', label: 'Current Level', icon: '📈' },
+  { key: 'puzzlesSolved', label: 'Puzzles Solved', icon: '\u{1F9E9}' },
+  { key: 'totalStars', label: 'Total Stars', icon: '\u2B50' },
+  { key: 'bestStreak', label: 'Best Streak', icon: '\u{1F525}' },
+  { key: 'perfectSolves', label: 'Perfect Solves', icon: '\u{1F48E}' },
+  { key: 'totalScore', label: 'Total Score', icon: '\u{1F3C6}' },
+  { key: 'level', label: 'Current Level', icon: '\u{1F4C8}' },
 ] as const;
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({
@@ -79,7 +80,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     bestStreak: playerContext.streaks.bestStreak,
     perfectSolves: playerContext.perfectSolves,
     totalScore: playerContext.totalScore,
-    badges: playerContext.achievementIds.map((id: string) => ({ id, name: id, icon: '🏅' })),
+    badges: playerContext.achievementIds.map((id: string) => ({ id, name: id, icon: '\u{1F3C5}' })),
     equippedCosmetics: {
       frame: playerContext.equippedFrame,
       theme: playerContext.equippedTheme,
@@ -111,7 +112,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <View style={styles.headerSpacer} />
           <Text style={styles.headerTitle}>PROFILE</Text>
           <TouchableOpacity style={styles.settingsBtn} onPress={onOpenSettings}>
-            <Text style={styles.settingsIcon}>⚙️</Text>
+            <Text style={styles.settingsIcon}>{'\u2699\uFE0F'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -119,10 +120,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <View style={styles.avatarSection}>
           <View style={styles.avatarRing}>
             <View style={styles.avatarCircle}>
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
               <Text style={styles.avatarLetter}>{initial}</Text>
             </View>
           </View>
           <View style={styles.levelBadge}>
+            <LinearGradient
+              colors={[...GRADIENTS.button.primary]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
             <Text style={styles.levelText}>Lv.{p.level}</Text>
           </View>
           <Text style={styles.playerName}>{p.name}</Text>
@@ -136,6 +149,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <View style={styles.statsGrid}>
           {STAT_CARDS.map((stat) => (
             <View key={stat.key} style={styles.statCard}>
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
               <Text style={styles.statIcon}>{stat.icon}</Text>
               <Text style={styles.statValue}>
                 {(p as any)[stat.key]?.toLocaleString?.() ?? 0}
@@ -156,6 +175,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           >
             {p.badges.map((badge) => (
               <View key={badge.id} style={styles.badgeCard}>
+                <LinearGradient
+                  colors={[...GRADIENTS.surfaceCard]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                />
                 <Text style={styles.badgeIcon}>{badge.icon}</Text>
                 <Text style={styles.badgeName} numberOfLines={1}>
                   {badge.name}
@@ -165,6 +190,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </ScrollView>
         ) : (
           <View style={styles.emptyBadges}>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
             <Text style={styles.emptyBadgesText}>
               Complete challenges to earn badges!
             </Text>
@@ -174,6 +205,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {/* Collection Progress */}
         <Text style={styles.sectionTitle}>Collection Progress</Text>
         <View style={styles.collectionsCard}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <View style={styles.collectionRow}>
             <Text style={styles.collectionLabel}>Word Atlas</Text>
             <Text style={styles.collectionPercent}>{p.atlasProgress}%</Text>
@@ -196,6 +233,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {/* Equipped Cosmetics */}
         <Text style={styles.sectionTitle}>Equipped Cosmetics</Text>
         <View style={styles.cosmeticsCard}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
           <View style={styles.cosmeticRow}>
             <Text style={styles.cosmeticLabel}>Frame</Text>
             <Text style={styles.cosmeticValue}>
@@ -220,6 +263,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* Edit Profile Button */}
         <TouchableOpacity style={styles.editButton} onPress={onEditProfile}>
+          <LinearGradient
+            colors={[...GRADIENTS.button.primary]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
 
@@ -257,6 +306,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.accent,
     letterSpacing: 4,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   settingsBtn: {
     width: 40,
@@ -281,30 +333,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.7,
+    shadowRadius: 20,
+    elevation: 12,
   },
   avatarCircle: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   avatarLetter: {
     fontSize: 40,
     fontWeight: '800',
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   levelBadge: {
     marginTop: -12,
-    backgroundColor: COLORS.accent,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 3,
     zIndex: 1,
+    overflow: 'hidden',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
   },
   levelText: {
     fontSize: 12,
@@ -316,10 +376,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.textPrimary,
     marginTop: 12,
+    textShadowColor: 'rgba(255,255,255,0.15)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   titleBadge: {
     marginTop: 6,
-    backgroundColor: COLORS.surfaceLight,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 4,
@@ -328,6 +391,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.gold,
+    textShadowColor: 'rgba(255,215,0,0.3)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   sectionTitle: {
     fontSize: 18,
@@ -335,6 +401,9 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginTop: 24,
     marginBottom: 12,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -343,12 +412,17 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: CARD_WIDTH,
-    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   statIcon: {
     fontSize: 22,
@@ -359,6 +433,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.textPrimary,
     marginBottom: 2,
+    textShadowColor: 'rgba(255,255,255,0.15)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   statLabel: {
     fontSize: 10,
@@ -375,12 +452,17 @@ const styles = StyleSheet.create({
   },
   badgeCard: {
     width: 80,
-    backgroundColor: COLORS.surface,
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.gold,
+    overflow: 'hidden',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
   },
   badgeIcon: {
     fontSize: 28,
@@ -393,23 +475,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   emptyBadges: {
-    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
   },
   emptyBadgesText: {
     fontSize: 14,
     color: COLORS.textMuted,
   },
   collectionsCard: {
-    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   collectionRow: {
     flexDirection: 'row',
@@ -437,11 +524,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   cosmeticsCard: {
-    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   cosmeticRow: {
     flexDirection: 'row',
@@ -460,19 +552,19 @@ const styles = StyleSheet.create({
   },
   cosmeticDivider: {
     height: 1,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   editButton: {
-    backgroundColor: COLORS.accent,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 24,
+    overflow: 'hidden',
     shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 10,
   },
   editButtonText: {
     fontSize: 16,

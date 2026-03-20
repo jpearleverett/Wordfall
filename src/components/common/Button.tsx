@@ -6,27 +6,10 @@ import {
   StyleSheet,
   ViewStyle,
   TextStyle,
+  View,
 } from 'react-native';
-
-const COLORS = {
-  bg: '#0a0e27',
-  bgLight: '#111638',
-  surface: '#1a1f45',
-  surfaceLight: '#252b5e',
-  textPrimary: '#ffffff',
-  textSecondary: '#8890b5',
-  textMuted: '#4a5280',
-  accent: '#00d4ff',
-  accentGlow: 'rgba(0, 212, 255, 0.3)',
-  gold: '#ffd700',
-  green: '#4caf50',
-  coral: '#ff6b6b',
-  purple: '#a855f7',
-  star: '#ffd700',
-  buttonPrimary: '#00d4ff',
-  buttonSecondary: '#252b5e',
-  buttonDanger: '#ff6b6b',
-};
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS } from '../../constants';
 
 interface ButtonProps {
   title: string;
@@ -47,6 +30,12 @@ const VARIANT_STYLES: Record<
   danger: { bg: COLORS.buttonDanger, text: '#ffffff' },
   ghost: { bg: 'transparent', text: COLORS.accent, border: COLORS.accent },
   gold: { bg: COLORS.gold, text: '#000000' },
+};
+
+const GRADIENT_VARIANTS: Record<string, readonly [string, string]> = {
+  primary: GRADIENTS.button.primary,
+  gold: GRADIENTS.button.gold,
+  danger: GRADIENTS.button.danger,
 };
 
 const SIZE_STYLES: Record<
@@ -71,7 +60,7 @@ export default function Button({
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.95,
+      toValue: 0.93,
       useNativeDriver: true,
       speed: 50,
       bounciness: 4,
@@ -89,21 +78,26 @@ export default function Button({
 
   const v = VARIANT_STYLES[variant] ?? VARIANT_STYLES.primary;
   const s = SIZE_STYLES[size] ?? SIZE_STYLES.medium;
+  const gradientColors = GRADIENT_VARIANTS[variant];
+  const hasGradient = !!gradientColors;
 
   const containerStyle: Animated.AnimatedProps<ViewStyle>[] = [
     styles.base,
     {
-      backgroundColor: v.bg,
-      paddingVertical: s.paddingV,
-      paddingHorizontal: s.paddingH,
       borderRadius: s.radius,
       transform: [{ scale: scaleAnim }],
       opacity: disabled ? 0.45 : 1,
     } as any,
+    !hasGradient && {
+      backgroundColor: v.bg,
+      paddingVertical: s.paddingV,
+      paddingHorizontal: s.paddingH,
+    },
     v.border ? { borderWidth: 1.5, borderColor: v.border } : undefined,
     fullWidth ? styles.fullWidth : undefined,
     variant === 'primary' && styles.primaryShadow,
     variant === 'gold' && styles.goldShadow,
+    variant === 'danger' && styles.dangerShadow,
   ].filter(Boolean) as any;
 
   const textStyle: TextStyle[] = [
@@ -114,6 +108,13 @@ export default function Button({
     },
   ];
 
+  const content = (
+    <>
+      {icon ? <Text style={styles.icon}>{icon}</Text> : null}
+      <Text style={textStyle}>{title}</Text>
+    </>
+  );
+
   return (
     <TouchableWithoutFeedback
       onPress={disabled ? undefined : onPress}
@@ -122,8 +123,35 @@ export default function Button({
       disabled={disabled}
     >
       <Animated.View style={containerStyle}>
-        {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-        <Text style={textStyle}>{title}</Text>
+        {hasGradient ? (
+          <LinearGradient
+            colors={[gradientColors[0], gradientColors[1]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[
+              styles.gradient,
+              {
+                paddingVertical: s.paddingV,
+                paddingHorizontal: s.paddingH,
+                borderRadius: s.radius,
+              },
+            ]}
+          >
+            {/* Inner highlight for 3D look */}
+            <LinearGradient
+              colors={['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.0)']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={[styles.innerHighlight, { borderRadius: s.radius }]}
+              locations={[0, 0.3]}
+            />
+            <View style={styles.contentRow}>
+              {content}
+            </View>
+          </LinearGradient>
+        ) : (
+          content
+        )}
       </Animated.View>
     </TouchableWithoutFeedback>
   );
@@ -131,6 +159,21 @@ export default function Button({
 
 const styles = StyleSheet.create({
   base: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  gradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  innerHighlight: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -147,16 +190,23 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   primaryShadow: {
-    shadowColor: COLORS.accent,
+    shadowColor: '#00d4ff',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
   },
   goldShadow: {
     shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  dangerShadow: {
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 8,
   },
