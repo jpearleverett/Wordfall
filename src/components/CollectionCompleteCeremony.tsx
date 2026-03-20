@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 
 interface CollectionCompleteCeremonyProps {
   collectionName: string;
@@ -28,6 +29,8 @@ export function CollectionCompleteCeremony({
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      <SparkleField count={26} intensity="intense" colors={[COLORS.gold, COLORS.accent, COLORS.purple, '#fff']} />
+      <CelebrationBurst centerX={180} centerY={200} particleCount={20} />
       <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>COLLECTION COMPLETE</Text>

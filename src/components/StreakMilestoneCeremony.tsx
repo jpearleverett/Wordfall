@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, STREAK } from '../constants';
+import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 
 interface StreakMilestoneCeremonyProps {
   milestone: number;
@@ -31,6 +32,8 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      <SparkleField count={24} intensity="intense" colors={[COLORS.coral, COLORS.gold, COLORS.orange, '#fff']} />
+      <CelebrationBurst centerX={180} centerY={250} particleCount={16} colors={[COLORS.coral, COLORS.gold, COLORS.orange]} />
       <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>STREAK MILESTONE</Text>

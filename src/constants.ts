@@ -10,90 +10,103 @@ export const MAX_GRID_WIDTH = SCREEN_WIDTH - GRID_PADDING * 2;
 export const CELL_SIZE = (col: number) =>
   Math.floor((MAX_GRID_WIDTH - CELL_GAP * (col - 1)) / col);
 
-// Colors
+// Colors — premium palette with rich jewel tones and luminous accents
 export const COLORS = {
-  bg: '#0a0e27',
-  bgLight: '#111638',
-  surface: '#1a1f45',
-  surfaceLight: '#252b5e',
+  bg: '#060918',
+  bgLight: '#0d1230',
+  surface: '#141940',
+  surfaceLight: '#1e2558',
 
-  cellDefault: '#2a3060',
+  cellDefault: '#232a5e',
   cellSelected: '#00d4ff',
   cellHint: '#ffd700',
   cellFound: '#1a3a2a',
 
-  textPrimary: '#ffffff',
-  textSecondary: '#8890b5',
-  textMuted: '#4a5280',
+  textPrimary: '#f0f2ff',
+  textSecondary: '#9099cc',
+  textMuted: '#525b8a',
 
   accent: '#00d4ff',
-  accentGlow: 'rgba(0, 212, 255, 0.45)',
+  accentLight: '#66e8ff',
+  accentDark: '#0088aa',
+  accentGlow: 'rgba(0, 212, 255, 0.50)',
   gold: '#ffd700',
-  goldGlow: 'rgba(255, 215, 0, 0.45)',
-  green: '#4caf50',
-  greenGlow: 'rgba(76, 175, 80, 0.4)',
-  coral: '#ff6b6b',
-  coralGlow: 'rgba(255, 107, 107, 0.4)',
-  purple: '#a855f7',
-  purpleGlow: 'rgba(168, 85, 247, 0.4)',
-  orange: '#ff9f43',
-  orangeGlow: 'rgba(255, 159, 67, 0.4)',
-  teal: '#2ed8a3',
-  tealGlow: 'rgba(46, 216, 163, 0.4)',
+  goldLight: '#ffe566',
+  goldGlow: 'rgba(255, 215, 0, 0.50)',
+  green: '#00e676',
+  greenGlow: 'rgba(0, 230, 118, 0.45)',
+  coral: '#ff5252',
+  coralGlow: 'rgba(255, 82, 82, 0.45)',
+  purple: '#b366ff',
+  purpleLight: '#d9a3ff',
+  purpleGlow: 'rgba(179, 102, 255, 0.45)',
+  orange: '#ff9100',
+  orangeGlow: 'rgba(255, 145, 0, 0.45)',
+  teal: '#1de9b6',
+  tealGlow: 'rgba(29, 233, 182, 0.45)',
+  pink: '#ff4081',
+  pinkGlow: 'rgba(255, 64, 129, 0.40)',
 
-  wordFound: '#4caf50',
-  wordPending: '#8890b5',
+  wordFound: '#00e676',
+  wordPending: '#9099cc',
   wordActive: '#00d4ff',
 
   star: '#ffd700',
-  starEmpty: '#2a3060',
+  starEmpty: '#232a5e',
 
   buttonPrimary: '#00d4ff',
-  buttonSecondary: '#252b5e',
-  buttonDanger: '#ff6b6b',
+  buttonSecondary: '#1e2558',
+  buttonDanger: '#ff5252',
   buttonGold: '#ffd700',
 
-  // Rarity colors
-  rarityCommon: '#8890b5',
+  // Rarity colors — richer saturation
+  rarityCommon: '#9099cc',
   rarityRare: '#00d4ff',
-  rarityEpic: '#a855f7',
+  rarityEpic: '#b366ff',
   rarityLegendary: '#ffd700',
 
   // Club tier colors
-  tierBronze: '#cd7f32',
-  tierSilver: '#c0c0c0',
+  tierBronze: '#d4893a',
+  tierSilver: '#d0d8e8',
   tierGold: '#ffd700',
-  tierDiamond: '#b9f2ff',
+  tierDiamond: '#a0f0ff',
 
   // Tab bar
   tabActive: '#00d4ff',
-  tabInactive: '#4a5280',
+  tabInactive: '#525b8a',
 };
 
-// Gradient presets for LinearGradient
+// Gradient presets for LinearGradient — premium multi-stop gradients
 export const GRADIENTS = {
   tile: {
-    default: ['#1e2460', '#2a3078'] as const,
-    selected: ['#00d4ff', '#0099cc'] as const,
-    valid: ['#2ecc71', '#27ae60'] as const,
-    hint: ['#ffd700', '#f0a500'] as const,
-    frozen: ['#1a3a5c', '#1e2d50'] as const,
+    default: ['#1a2058', '#252d70', '#1e2460'] as const,
+    selected: ['#00e5ff', '#00b4d8', '#0088aa'] as const,
+    valid: ['#00e676', '#00c853', '#009e42'] as const,
+    hint: ['#ffe066', '#ffd700', '#f0a500'] as const,
+    frozen: ['#1a3a6c', '#1e3560', '#162d50'] as const,
   },
   button: {
-    primary: ['#00d4ff', '#0088cc'] as const,
-    gold: ['#ffd700', '#ff9f00'] as const,
-    danger: ['#ff6b6b', '#ee5a24'] as const,
-    green: ['#2ecc71', '#27ae60'] as const,
+    primary: ['#00e5ff', '#00b4d8', '#0088cc'] as const,
+    gold: ['#ffe066', '#ffd700', '#f0a500'] as const,
+    danger: ['#ff6b6b', '#ff5252', '#ee3a3a'] as const,
+    green: ['#69f0ae', '#00e676', '#00c853'] as const,
   },
-  surface: ['#1c2150', '#161b3d'] as const,
-  surfaceCard: ['#1e2352', '#181d42'] as const,
-  header: ['#1e2352', '#141838'] as const,
-  bg: ['#080c22', '#0d1130', '#0a0e27'] as const,
-  grid: ['#151a42', '#1a1f4a'] as const,
-  gridBorder: ['rgba(0,212,255,0.15)', 'rgba(168,85,247,0.12)'] as const,
-  victoryCard: ['#1e2458', '#1a1f50', '#16193e'] as const,
-  scorePanel: ['#141838', '#1a1f4a'] as const,
-  tabBar: ['#1a1f45', '#161b3d'] as const,
+  surface: ['#161c48', '#101538'] as const,
+  surfaceCard: ['#1a2050', '#141a3e'] as const,
+  header: ['#1a2050', '#0f1430'] as const,
+  bg: ['#040714', '#080d22', '#060918'] as const,
+  grid: ['#0e1335', '#141a42', '#10153a'] as const,
+  gridBorder: ['rgba(0,212,255,0.22)', 'rgba(179,102,255,0.18)', 'rgba(0,212,255,0.12)'] as const,
+  victoryCard: ['#1a2058', '#161d4e', '#121840'] as const,
+  scorePanel: ['#101535', '#161c48'] as const,
+  tabBar: ['#141940', '#0f1430'] as const,
+
+  // New premium gradients
+  tileSurface: ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.02)'] as const,
+  glassOverlay: ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.0)'] as const,
+  boardGlow: ['rgba(0,212,255,0.08)', 'rgba(179,102,255,0.05)', 'transparent'] as const,
+  goldShine: ['rgba(255,230,102,0.3)', 'rgba(255,215,0,0.1)', 'transparent'] as const,
+  celebrationOverlay: ['rgba(0,212,255,0.08)', 'transparent', 'rgba(179,102,255,0.06)'] as const,
 };
 
 // Shadow presets

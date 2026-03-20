@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { SparkleField } from './effects/ParticleSystem';
 
 interface AchievementCeremonyProps {
   icon: string;
@@ -44,6 +45,7 @@ export function AchievementCeremony({
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      <SparkleField count={22} intensity="intense" colors={[tierColor, '#fff', COLORS.gold, COLORS.accent]} />
       <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: tierColor }]}>ACHIEVEMENT UNLOCKED</Text>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../../constants';
 
@@ -213,16 +213,16 @@ const styles = StyleSheet.create({
   },
   boardCard: {
     alignSelf: 'stretch',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.18)',
-    padding: 16,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 212, 255, 0.22)',
+    padding: 18,
     overflow: 'hidden',
     shadowColor: '#00d4ff',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 28,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 32,
+    elevation: 20,
   },
   boardCardTopHighlight: {
     position: 'absolute',
@@ -280,13 +280,13 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   tile: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.14)',
     overflow: 'hidden',
   },
   tileInnerHighlight: {
