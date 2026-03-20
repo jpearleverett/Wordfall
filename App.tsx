@@ -23,14 +23,13 @@ import ClubScreen from './src/screens/ClubScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
-import { useStorage } from './src/hooks/useStorage';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
-import { Board, Difficulty, GameMode } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS } from './src/constants';
+import { Board, Difficulty, GameMode, PlayerProgress } from './src/types';
+import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
-import { EconomyProvider } from './src/contexts/EconomyContext';
+import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
 import { SettingsProvider } from './src/contexts/SettingsContext';
-import { PlayerProvider } from './src/contexts/PlayerContext';
+import { PlayerProvider, usePlayer } from './src/contexts/PlayerContext';
 import { soundManager } from './src/services/sound';
 
 const Tab = createBottomTabNavigator();
@@ -62,7 +61,7 @@ function HomeStackScreen() {
 function PlayStackScreen() {
   return (
     <PlayStack.Navigator screenOptions={screenOptions}>
-      <PlayStack.Screen name="Modes" component={ModesScreen} />
+      <PlayStack.Screen name="Modes" component={ModesScreenWrapper} />
       <PlayStack.Screen name="Game" component={GameScreenWrapper} />
       <PlayStack.Screen name="Event" component={EventScreen} />
       <PlayStack.Screen name="Leaderboard" component={LeaderboardScreen} />
@@ -138,44 +137,179 @@ function MainTabs() {
         name="Home"
         component={HomeStackScreen}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="⌂" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="⌂" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Play"
         component={PlayStackScreen}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="▶" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="▶" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Collections"
         component={CollectionsStackScreen}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="◆" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="◆" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Library"
         component={LibraryStackScreen}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="📚" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="📚" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileStackScreen}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="●" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="●" focused={focused} />,
         }}
       />
     </Tab.Navigator>
   );
 }
 
-// Wrapper to pass navigation params to GameScreen
+// Modes screen wrapper - wires navigation to start game in selected mode
+function ModesScreenWrapper({ navigation }: any) {
+  const player = usePlayer();
+
+  const handleSelectMode = useCallback((modeId: string) => {
+    const mode = modeId as GameMode;
+    try {
+      let board: Board;
+      const config = getLevelConfig(player.currentLevel);
+
+      if (mode === 'daily') {
+        const today = new Date().toISOString().split('T')[0];
+        board = generateDailyBoard(today);
+        navigation.navigate('Game', { board, level: 0, mode: 'daily', isDaily: true });
+        return;
+      }
+
+      if (mode === 'weekly') {
+        // Weekly uses a harder config
+        board = generateBoard(DIFFICULTY_CONFIGS.hard, Date.now());
+        navigation.navigate('Game', { board, level: 0, mode: 'weekly' });
+        return;
+      }
+
+      // For other modes, use current level config
+      const seed = Date.now() + player.currentLevel * 1337;
+      board = generateBoard(config, seed);
+
+      const modeConfig = MODE_CONFIGS[mode];
+      navigation.navigate('Game', {
+        board,
+        level: player.currentLevel,
+        mode,
+        maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+        timeLimit: modeConfig.rules.timerSeconds || 0,
+      });
+    } catch (e) {
+      Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+    }
+  }, [player.currentLevel, navigation]);
+
+  return <ModesScreen onSelectMode={handleSelectMode} />;
+}
+
+// Wrapper to pass navigation params to GameScreen with full context wiring
 function GameScreenWrapper({ route, navigation }: any) {
   const params = route.params || {};
+  const player = usePlayer();
+  const economy = useEconomy();
+
+  const handleComplete = useCallback((stars: number, score: number) => {
+    const level = params.level || 0;
+    const mode = (params.mode || 'classic') as GameMode;
+    const isDaily = params.isDaily || false;
+
+    // Record puzzle completion in PlayerContext
+    const isPerfect = stars === 3;
+    player.recordPuzzleComplete(level, score, stars, isPerfect);
+
+    // Record mode play
+    player.recordModePlay(mode, score, true);
+
+    // Award coins based on difficulty
+    const difficulty: Difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
+    const coinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
+    economy.addCoins(coinReward);
+
+    // Award gems for perfect clears
+    if (isPerfect) {
+      economy.addGems(ECONOMY.perfectClearGems);
+    }
+
+    // Award library points
+    economy.addLibraryPoints(stars * 5);
+
+    // Handle daily completion
+    if (isDaily) {
+      const today = new Date().toISOString().split('T')[0];
+      player.recordDailyComplete(today);
+      economy.addCoins(ECONOMY.dailyCompleteCoins);
+      economy.addGems(ECONOMY.dailyCompleteGems);
+      player.updateStreak();
+    }
+
+    // Check for rare tile drop
+    const dropChance = COLLECTION.rareTileBaseChance
+      + (difficulty === 'hard' || difficulty === 'expert' ? COLLECTION.rareTileHardBonus : 0)
+      + (isPerfect ? COLLECTION.rareTilePerfectBonus : 0);
+    if (Math.random() < dropChance) {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const randomLetter = letters[Math.floor(Math.random() * letters.length)];
+      player.addRareTile(randomLetter);
+    }
+
+    // Check for atlas word collection from the words found
+    if (params.board) {
+      const board = params.board as Board;
+      board.words.forEach((wp: any) => {
+        // Atlas words are checked against all pages
+        // This is a simplified version - in production, we'd check against ATLAS_PAGES
+        player.collectAtlasWord('animals', wp.word.toUpperCase());
+      });
+    }
+  }, [params, player, economy]);
+
+  const handleNextLevel = useCallback(() => {
+    try {
+      const currentLevel = params.level || 0;
+      const nextLevel = currentLevel + 1;
+      const config = getLevelConfig(nextLevel);
+      const seed = nextLevel * 1337 + Date.now();
+      const board = generateBoard(config, seed);
+      const mode = (params.mode || 'classic') as GameMode;
+      const modeConfig = MODE_CONFIGS[mode];
+
+      // Navigate to new game with next level
+      navigation.replace('Game', {
+        board,
+        level: nextLevel,
+        mode,
+        isDaily: false,
+        maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+        timeLimit: modeConfig.rules.timerSeconds || 0,
+      });
+    } catch (e) {
+      Alert.alert('Error', 'Failed to generate next puzzle.');
+      navigation.goBack();
+    }
+  }, [params, navigation]);
+
+  if (!params.board) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Text style={{ color: COLORS.textMuted }}>No puzzle loaded</Text>
+      </View>
+    );
+  }
+
   return (
     <GameScreen
       board={params.board}
@@ -184,23 +318,49 @@ function GameScreenWrapper({ route, navigation }: any) {
       mode={params.mode || 'classic'}
       maxMoves={params.maxMoves || 0}
       timeLimit={params.timeLimit || 0}
-      onComplete={(stars: number, score: number) => {
-        // Handle completion
-      }}
-      onNextLevel={() => {
-        // Navigate to next level
-        navigation.goBack();
-      }}
+      onComplete={handleComplete}
+      onNextLevel={handleNextLevel}
       onHome={() => navigation.goBack()}
     />
   );
 }
 
-// Home main screen wrapper
+// Home main screen wrapper - uses PlayerContext instead of legacy useStorage
 function HomeMainScreen({ navigation }: any) {
-  const { progress, loaded, recordPuzzleComplete, recordDailyComplete, resetProgress } =
-    useStorage();
+  const player = usePlayer();
+  const economy = useEconomy();
   const [loading, setLoading] = useState(false);
+
+  // Check for comeback rewards on mount
+  useEffect(() => {
+    if (player.loaded) {
+      const rewards = player.checkComebackRewards();
+      if (rewards.length > 0) {
+        // Award comeback bonus
+        economy.addCoins(200);
+        economy.addHintTokens(5);
+        Alert.alert('Welcome Back!', 'We missed you! Here are some bonus coins and hints.');
+      }
+      // Update streak
+      player.updateStreak();
+      // Generate daily missions if needed
+      player.generateDailyMissions();
+    }
+  }, [player.loaded]);
+
+  // Convert PlayerContext data to PlayerProgress for HomeScreen
+  const progress: PlayerProgress = {
+    currentLevel: player.currentLevel,
+    highestLevel: player.highestLevel,
+    totalScore: player.totalScore,
+    puzzlesSolved: player.puzzlesSolved,
+    perfectSolves: player.perfectSolves,
+    bestStreak: player.streaks.bestStreak,
+    currentStreak: player.streaks.currentStreak,
+    lastPlayedDate: player.streaks.lastPlayDate,
+    dailyCompleted: player.dailyCompleted,
+    starsByLevel: player.starsByLevel,
+  };
 
   const startGame = useCallback(
     (difficulty?: Difficulty) => {
@@ -209,8 +369,8 @@ function HomeMainScreen({ navigation }: any) {
         try {
           const config = difficulty
             ? DIFFICULTY_CONFIGS[difficulty]
-            : getLevelConfig(progress.currentLevel);
-          const level = difficulty ? 0 : progress.currentLevel;
+            : getLevelConfig(player.currentLevel);
+          const level = difficulty ? 0 : player.currentLevel;
           const board = generateBoard(config, level * 1337 + Date.now());
           setLoading(false);
           navigation.navigate('Game', { board, level, mode: 'classic', isDaily: false });
@@ -220,7 +380,7 @@ function HomeMainScreen({ navigation }: any) {
         }
       }, 50);
     },
-    [progress.currentLevel, navigation]
+    [player.currentLevel, navigation]
   );
 
   const startDaily = useCallback(() => {
@@ -244,12 +404,26 @@ function HomeMainScreen({ navigation }: any) {
       'Are you sure? This will erase all saved progress.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Reset', style: 'destructive', onPress: () => resetProgress() },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => {
+            player.updateProgress({
+              currentLevel: 1,
+              highestLevel: 1,
+              totalScore: 0,
+              puzzlesSolved: 0,
+              perfectSolves: 0,
+              starsByLevel: {},
+              totalStars: 0,
+            });
+          },
+        },
       ]
     );
-  }, [resetProgress]);
+  }, [player]);
 
-  if (!loaded) {
+  if (!player.loaded) {
     return (
       <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color={COLORS.accent} />
@@ -276,6 +450,67 @@ function HomeMainScreen({ navigation }: any) {
   );
 }
 
+// Root app with onboarding check
+function AppContent() {
+  const player = usePlayer();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (player.loaded && !player.tutorialComplete) {
+      setShowOnboarding(true);
+    }
+  }, [player.loaded, player.tutorialComplete]);
+
+  if (!player.loaded) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={COLORS.accent} />
+      </View>
+    );
+  }
+
+  return (
+    <NavigationContainer
+      theme={{
+        dark: true,
+        colors: {
+          primary: COLORS.accent,
+          background: COLORS.bg,
+          card: COLORS.surface,
+          text: COLORS.textPrimary,
+          border: COLORS.surfaceLight,
+          notification: COLORS.coral,
+        },
+        fonts: {
+          regular: { fontFamily: 'System', fontWeight: '400' },
+          medium: { fontFamily: 'System', fontWeight: '500' },
+          bold: { fontFamily: 'System', fontWeight: '700' },
+          heavy: { fontFamily: 'System', fontWeight: '900' },
+        },
+      }}
+    >
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+      <RootStack.Navigator screenOptions={screenOptions}>
+        {showOnboarding ? (
+          <RootStack.Screen name="Onboarding">
+            {(props: any) => (
+              <OnboardingScreen
+                {...props}
+                onComplete={() => {
+                  player.updateProgress({ tutorialComplete: true });
+                  setShowOnboarding(false);
+                }}
+              />
+            )}
+          </RootStack.Screen>
+        ) : (
+          <RootStack.Screen name="MainTabs" component={MainTabs} />
+        )}
+      </RootStack.Navigator>
+    </NavigationContainer>
+  );
+}
+
 export default function App() {
   useEffect(() => {
     soundManager.init();
@@ -286,31 +521,7 @@ export default function App() {
       <SettingsProvider>
         <EconomyProvider>
           <PlayerProvider>
-            <NavigationContainer
-              theme={{
-                dark: true,
-                colors: {
-                  primary: COLORS.accent,
-                  background: COLORS.bg,
-                  card: COLORS.surface,
-                  text: COLORS.textPrimary,
-                  border: COLORS.surfaceLight,
-                  notification: COLORS.coral,
-                },
-                fonts: {
-                  regular: { fontFamily: 'System', fontWeight: '400' },
-                  medium: { fontFamily: 'System', fontWeight: '500' },
-                  bold: { fontFamily: 'System', fontWeight: '700' },
-                  heavy: { fontFamily: 'System', fontWeight: '900' },
-                },
-              }}
-            >
-              <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
-              <RootStack.Navigator screenOptions={screenOptions}>
-                <RootStack.Screen name="MainTabs" component={MainTabs} />
-                <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
-              </RootStack.Navigator>
-            </NavigationContainer>
+            <AppContent />
           </PlayerProvider>
         </EconomyProvider>
       </SettingsProvider>

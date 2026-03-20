@@ -23,6 +23,8 @@ interface GridProps {
   selectedCells: CellPosition[];
   hintedCells?: CellPosition[];
   onCellPress: (position: CellPosition) => void;
+  frozenColumns?: number[];
+  validWord?: boolean;
 }
 
 export function GameGrid({
@@ -30,6 +32,8 @@ export function GameGrid({
   selectedCells,
   hintedCells = [],
   onCellPress,
+  frozenColumns = [],
+  validWord = false,
 }: GridProps) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -50,6 +54,8 @@ export function GameGrid({
     hintedCells.forEach(c => set.add(`${c.row},${c.col}`));
     return set;
   }, [hintedCells]);
+
+  const frozenSet = useMemo(() => new Set(frozenColumns), [frozenColumns]);
 
   // Render columns for gravity-friendly layout
   const columns = useMemo(() => {
@@ -81,6 +87,7 @@ export function GameGrid({
               width: cellSize + CELL_GAP,
               height: gridHeight,
             },
+            frozenSet.has(colIndex) && styles.frozenColumn,
           ]}
         >
           <View style={{ flex: 1 }} />
@@ -100,6 +107,8 @@ export function GameGrid({
                 isHinted={isHinted}
                 selectionIndex={selIndex}
                 onPress={() => onCellPress({ row, col })}
+                isFrozen={frozenSet.has(col)}
+                isValidWord={validWord && isSelected}
               />
             );
           })}
@@ -126,5 +135,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'flex-end',
+  },
+  frozenColumn: {
+    backgroundColor: 'rgba(0, 212, 255, 0.08)',
+    borderRadius: 8,
   },
 });

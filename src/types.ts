@@ -65,6 +65,13 @@ export interface GameState {
   cascadeMultiplier: number;
   perfectRun: boolean;
   chainCount: number;
+  frozenColumns: number[];
+  previewGrid: Grid | null;
+  boosterCounts: {
+    freezeColumn: number;
+    boardPreview: number;
+    shuffleFiller: number;
+  };
 }
 
 export type GameAction =

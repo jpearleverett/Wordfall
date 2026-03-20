@@ -101,7 +101,7 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, BoardConfig> = {
     cols: 7,
     wordCount: 8,
     minWordLength: 4,
-    maxWordLength: 7,
+    maxWordLength: 6,
     difficulty: 'expert',
   },
 };
