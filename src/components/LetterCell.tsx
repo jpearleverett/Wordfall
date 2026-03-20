@@ -43,13 +43,13 @@ export const LetterCell = React.memo(function LetterCell({
         Animated.timing(scaleAnim, {
           toValue: 0.9,
           duration: 80,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.spring(scaleAnim, {
           toValue: 1.05,
           friction: 4,
           tension: 200,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
 
@@ -62,7 +62,7 @@ export const LetterCell = React.memo(function LetterCell({
       Animated.spring(scaleAnim, {
         toValue: 1,
         friction: 6,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start();
 
       Animated.timing(glowAnim, {
