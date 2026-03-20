@@ -9,10 +9,23 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, GRADIENTS, SHADOWS } from '../constants';
-import { Difficulty, PlayerProgress } from '../types';
+import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { HomeHeroIllustration } from '../components/common/HeroIllustrations';
+
+interface DailyMissionDisplay {
+  id: string;
+  progress: number;
+  completed: boolean;
+}
+
+interface Recommendation {
+  icon: string;
+  title: string;
+  subtitle: string;
+  action: () => void;
+}
 
 interface HomeScreenProps {
   progress: PlayerProgress;
@@ -29,6 +42,10 @@ interface HomeScreenProps {
   };
   currentChapter?: number;
   loginCycleDay?: number;
+  playerStage?: 'new' | 'early' | 'established' | 'veteran';
+  weeklyGoals?: WeeklyGoalsState | null;
+  dailyMissions?: DailyMissionDisplay[];
+  recommendation?: Recommendation | null;
 }
 
 const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: string }> = {
@@ -36,6 +53,17 @@ const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: 
   medium: { label: 'Medium', accent: COLORS.accent, icon: '⚡' },
   hard: { label: 'Hard', accent: COLORS.orange, icon: '🔥' },
   expert: { label: 'Expert', accent: COLORS.purple, icon: '💎' },
+};
+
+const MISSION_LABELS: Record<string, { label: string; target: number }> = {
+  solve_3_puzzles: { label: 'Solve 3 puzzles', target: 3 },
+  earn_500_score: { label: 'Earn 500 score', target: 500 },
+  get_perfect_solve: { label: 'Get a perfect solve', target: 1 },
+  collect_rare_tile: { label: 'Collect a rare tile', target: 1 },
+  complete_daily: { label: 'Complete daily puzzle', target: 1 },
+  solve_without_hints: { label: 'Solve without hints', target: 1 },
+  earn_3_stars: { label: 'Earn 3 stars', target: 3 },
+  play_5_minutes: { label: 'Play for 5 minutes', target: 1 },
 };
 
 export function HomeScreen({
@@ -48,6 +76,10 @@ export function HomeScreen({
   currencies,
   currentChapter = 1,
   loginCycleDay = 1,
+  playerStage = 'new',
+  weeklyGoals = null,
+  dailyMissions = [],
+  recommendation = null,
 }: HomeScreenProps) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
@@ -89,6 +121,13 @@ export function HomeScreen({
   const nextMilestone = [7, 14, 30, 60, 100].find((milestone) => milestone > progress.currentStreak) || 100;
   const streakProgress = Math.min(100, (progress.currentStreak / nextMilestone) * 100);
   const currentRewardDay = ((loginCycleDay - 1) % 7) + 1;
+
+  // Progressive disclosure flags
+  const showStreak = playerStage !== 'new';
+  const showDailyRewards = playerStage !== 'new';
+  const showQuickPlay = playerStage !== 'new' && playerStage !== 'early';
+  const showWeeklyGoals = (playerStage === 'established' || playerStage === 'veteran') && weeklyGoals;
+  const showMissions = (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0;
 
   return (
     <View style={styles.container}>
@@ -194,117 +233,226 @@ export function HomeScreen({
             </LinearGradient>
           </Pressable>
 
-          <Pressable
-            style={({ pressed }) => [pressed && styles.buttonPressed]}
-            onPress={onDaily}
-          >
-            <LinearGradient
-              colors={dailyDone ? ['rgba(76,175,80,0.2)', 'rgba(76,175,80,0.08)'] : ['rgba(255,215,0,0.12)', 'rgba(255,159,67,0.06)']}
-              style={[styles.dailyCard, dailyDone && styles.dailyDone]}
+          {/* Daily challenge - show for all except brand new players */}
+          {playerStage !== 'new' && (
+            <Pressable
+              style={({ pressed }) => [pressed && styles.buttonPressed]}
+              onPress={onDaily}
             >
-              <View style={styles.dailyContent}>
-                <Text style={styles.dailyTitle}>{dailyDone ? 'Daily completed' : "Today's challenge"}</Text>
-                <Text style={styles.dailySubtitle}>
-                  {dailyDone ? 'Come back tomorrow!' : `+${ECONOMY.dailyCompleteCoins} coins`}
-                </Text>
-              </View>
-              <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>
-            </LinearGradient>
-          </Pressable>
+              <LinearGradient
+                colors={dailyDone ? ['rgba(76,175,80,0.2)', 'rgba(76,175,80,0.08)'] : ['rgba(255,215,0,0.12)', 'rgba(255,159,67,0.06)']}
+                style={[styles.dailyCard, dailyDone && styles.dailyDone]}
+              >
+                <View style={styles.dailyContent}>
+                  <Text style={styles.dailyTitle}>{dailyDone ? 'Daily completed' : "Today's challenge"}</Text>
+                  <Text style={styles.dailySubtitle}>
+                    {dailyDone ? 'Come back tomorrow!' : `+${ECONOMY.dailyCompleteCoins} coins`}
+                  </Text>
+                </View>
+                <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>
+              </LinearGradient>
+            </Pressable>
+          )}
         </LinearGradient>
       </Animated.View>
 
       <Animated.View
         style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
       >
-        <LinearGradient
-          colors={GRADIENTS.surfaceCard}
-          style={[styles.streakPanel, SHADOWS.medium]}
-        >
-          <View style={styles.panelHeaderRow}>
-            <Text style={styles.panelTitle}>🔥 Streak</Text>
-            <Text style={styles.panelMeta}>Next: {nextMilestone} days</Text>
-          </View>
-          <View style={styles.streakBarRow}>
-            <Text style={styles.streakCount}>{progress.currentStreak}</Text>
-            <View style={styles.streakTrack}>
-              <LinearGradient
-                colors={[COLORS.orange, '#ff6b35']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.streakFill, { width: `${Math.max(streakProgress, 2)}%` }]}
-              />
+        {/* Mission Progress - established+ */}
+        {showMissions && (
+          <LinearGradient
+            colors={GRADIENTS.surfaceCard}
+            style={[styles.missionPanel, SHADOWS.medium]}
+          >
+            <View style={styles.panelHeaderRow}>
+              <Text style={styles.panelTitle}>Daily Missions</Text>
+              <Text style={styles.panelMeta}>{dailyMissions.filter(m => m.completed).length}/{dailyMissions.length}</Text>
             </View>
-            <Text style={styles.streakTarget}>{nextMilestone}</Text>
-          </View>
-        </LinearGradient>
-
-        <LinearGradient
-          colors={GRADIENTS.surfaceCard}
-          style={[styles.rewardsPanel, SHADOWS.medium]}
-        >
-          <View style={styles.panelHeaderRow}>
-            <Text style={styles.panelTitle}>7-day rewards</Text>
-            <Text style={styles.panelMeta}>Day {currentRewardDay}</Text>
-          </View>
-          <View style={styles.loginRewardsRow}>
-            {ECONOMY.loginRewards.map((reward) => {
-              const isPast = reward.day < currentRewardDay;
-              const isToday = reward.day === currentRewardDay;
+            {dailyMissions.map((mission) => {
+              const meta = MISSION_LABELS[mission.id] || { label: mission.id, target: 1 };
+              const fillPct = Math.min(100, (mission.progress / meta.target) * 100);
               return (
-                <LinearGradient
-                  key={reward.day}
-                  colors={
-                    isToday
-                      ? ['rgba(255,215,0,0.22)', 'rgba(255,159,0,0.10)']
-                      : isPast
-                        ? ['rgba(76,175,80,0.18)', 'rgba(76,175,80,0.06)']
-                        : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)']
-                  }
-                  style={[
-                    styles.loginDay,
-                    isPast && styles.loginDayClaimed,
-                    isToday && styles.loginDayToday,
-                  ]}
-                >
-                  <Text style={[styles.loginDayNum, isToday && styles.loginDayNumToday]}>{reward.day}</Text>
-                  <Text style={styles.loginDayReward}>{isPast ? '✓' : `🪙${reward.coins}`}</Text>
-                  {'gems' in reward && reward.gems ? <Text style={styles.loginDayBonus}>💎{reward.gems}</Text> : null}
-                  {'rareTile' in reward && reward.rareTile ? <Text style={styles.loginDayBonus}>✨</Text> : null}
-                </LinearGradient>
+                <View key={mission.id} style={styles.missionRow}>
+                  <View style={styles.missionInfo}>
+                    <Text style={[styles.missionLabel, mission.completed && styles.missionLabelDone]}>
+                      {mission.completed ? '✓ ' : ''}{meta.label}
+                    </Text>
+                  </View>
+                  <View style={styles.missionBarTrack}>
+                    <View style={[styles.missionBarFill, { width: `${Math.max(fillPct, 2)}%` }, mission.completed && styles.missionBarDone]} />
+                  </View>
+                </View>
               );
             })}
-          </View>
-        </LinearGradient>
+          </LinearGradient>
+        )}
 
-        <LinearGradient
-          colors={GRADIENTS.surfaceCard}
-          style={[styles.quickPlayPanel, SHADOWS.medium]}
-        >
-          <Text style={styles.panelTitle}>Quick play</Text>
-          <View style={styles.quickPlayGrid}>
-            {(['easy', 'medium', 'hard', 'expert'] as Difficulty[]).map((difficulty) => (
-              <Pressable
-                key={difficulty}
-                style={({ pressed }) => [pressed && styles.buttonPressed]}
-                onPress={() => onPlay(difficulty)}
-              >
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']}
-                  style={[styles.quickPlayCard, SHADOWS.soft]}
-                >
-                  <View style={[styles.quickPlayIconBg, { backgroundColor: difficultyMeta[difficulty].accent + '22' }]}>
-                    <Text style={styles.quickPlayIcon}>{difficultyMeta[difficulty].icon}</Text>
+        {/* Weekly Goals - established+ */}
+        {showWeeklyGoals && weeklyGoals && (
+          <LinearGradient
+            colors={GRADIENTS.surfaceCard}
+            style={[styles.weeklyGoalsPanel, SHADOWS.medium]}
+          >
+            <View style={styles.panelHeaderRow}>
+              <Text style={styles.panelTitle}>Weekly Goals</Text>
+              <Text style={styles.panelMeta}>{weeklyGoals.goals.filter(g => g.completed).length}/{weeklyGoals.goals.length}</Text>
+            </View>
+            {weeklyGoals.goals.map((goal, idx) => {
+              const fillPct = Math.min(100, (goal.progress / goal.target) * 100);
+              return (
+                <View key={idx} style={styles.weeklyGoalRow}>
+                  <View style={styles.weeklyGoalInfo}>
+                    <Text style={[styles.weeklyGoalLabel, goal.completed && styles.weeklyGoalLabelDone]}>
+                      {goal.completed ? '✓ ' : ''}{goal.description}
+                    </Text>
+                    <Text style={styles.weeklyGoalProgress}>
+                      {goal.completed ? 'Complete!' : `${goal.progress}/${goal.target}`}
+                    </Text>
                   </View>
-                  <Text style={[styles.quickPlayTitle, { color: difficultyMeta[difficulty].accent }]}>
-                    {difficultyMeta[difficulty].label}
-                  </Text>
-                  <View style={[styles.quickPlayAccentBar, { backgroundColor: difficultyMeta[difficulty].accent }]} />
-                </LinearGradient>
-              </Pressable>
-            ))}
-          </View>
-        </LinearGradient>
+                  <View style={styles.weeklyGoalBarTrack}>
+                    <LinearGradient
+                      colors={goal.completed ? [COLORS.green, COLORS.teal] : [COLORS.accent, '#0099cc']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.weeklyGoalBarFill, { width: `${Math.max(fillPct, 2)}%` }]}
+                    />
+                  </View>
+                  {!goal.completed && (
+                    <Text style={styles.weeklyGoalReward}>🪙{goal.reward.coins}</Text>
+                  )}
+                </View>
+              );
+            })}
+            {weeklyGoals.goals.every(g => g.completed) && (
+              <LinearGradient
+                colors={['rgba(255,215,0,0.12)', 'rgba(255,159,0,0.06)']}
+                style={styles.weeklyBonusBanner}
+              >
+                <Text style={styles.weeklyBonusText}>All complete! 🪙{weeklyGoals.allCompleteBonus.coins} 💎{weeklyGoals.allCompleteBonus.gems}</Text>
+              </LinearGradient>
+            )}
+          </LinearGradient>
+        )}
+
+        {/* Streak panel - hidden for brand new players */}
+        {showStreak && (
+          <LinearGradient
+            colors={GRADIENTS.surfaceCard}
+            style={[styles.streakPanel, SHADOWS.medium]}
+          >
+            <View style={styles.panelHeaderRow}>
+              <Text style={styles.panelTitle}>🔥 Streak</Text>
+              <Text style={styles.panelMeta}>Next: {nextMilestone} days</Text>
+            </View>
+            <View style={styles.streakBarRow}>
+              <Text style={styles.streakCount}>{progress.currentStreak}</Text>
+              <View style={styles.streakTrack}>
+                <LinearGradient
+                  colors={[COLORS.orange, '#ff6b35']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.streakFill, { width: `${Math.max(streakProgress, 2)}%` }]}
+                />
+              </View>
+              <Text style={styles.streakTarget}>{nextMilestone}</Text>
+            </View>
+          </LinearGradient>
+        )}
+
+        {/* 7-day rewards - hidden for day 1 new players */}
+        {showDailyRewards && (
+          <LinearGradient
+            colors={GRADIENTS.surfaceCard}
+            style={[styles.rewardsPanel, SHADOWS.medium]}
+          >
+            <View style={styles.panelHeaderRow}>
+              <Text style={styles.panelTitle}>7-day rewards</Text>
+              <Text style={styles.panelMeta}>Day {currentRewardDay}</Text>
+            </View>
+            <View style={styles.loginRewardsRow}>
+              {ECONOMY.loginRewards.map((reward) => {
+                const isPast = reward.day < currentRewardDay;
+                const isToday = reward.day === currentRewardDay;
+                return (
+                  <LinearGradient
+                    key={reward.day}
+                    colors={
+                      isToday
+                        ? ['rgba(255,215,0,0.22)', 'rgba(255,159,0,0.10)']
+                        : isPast
+                          ? ['rgba(76,175,80,0.18)', 'rgba(76,175,80,0.06)']
+                          : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)']
+                    }
+                    style={[
+                      styles.loginDay,
+                      isPast && styles.loginDayClaimed,
+                      isToday && styles.loginDayToday,
+                    ]}
+                  >
+                    <Text style={[styles.loginDayNum, isToday && styles.loginDayNumToday]}>{reward.day}</Text>
+                    <Text style={styles.loginDayReward}>{isPast ? '✓' : `🪙${reward.coins}`}</Text>
+                    {'gems' in reward && reward.gems ? <Text style={styles.loginDayBonus}>💎{reward.gems}</Text> : null}
+                    {'rareTile' in reward && reward.rareTile ? <Text style={styles.loginDayBonus}>✨</Text> : null}
+                  </LinearGradient>
+                );
+              })}
+            </View>
+          </LinearGradient>
+        )}
+
+        {/* Recommended for You */}
+        {recommendation && playerStage !== 'new' && (
+          <Pressable
+            style={({ pressed }) => [pressed && styles.buttonPressed]}
+            onPress={recommendation.action}
+          >
+            <LinearGradient
+              colors={GRADIENTS.surfaceCard}
+              style={[styles.recommendCard, SHADOWS.medium]}
+            >
+              <Text style={styles.recommendIcon}>{recommendation.icon}</Text>
+              <View style={styles.recommendContent}>
+                <Text style={styles.recommendLabel}>RECOMMENDED FOR YOU</Text>
+                <Text style={styles.recommendTitle}>{recommendation.title}</Text>
+                <Text style={styles.recommendSubtitle}>{recommendation.subtitle}</Text>
+              </View>
+              <Text style={styles.recommendArrow}>→</Text>
+            </LinearGradient>
+          </Pressable>
+        )}
+
+        {/* Quick play - hidden for new and early players */}
+        {showQuickPlay && (
+          <LinearGradient
+            colors={GRADIENTS.surfaceCard}
+            style={[styles.quickPlayPanel, SHADOWS.medium]}
+          >
+            <Text style={styles.panelTitle}>Quick play</Text>
+            <View style={styles.quickPlayGrid}>
+              {(['easy', 'medium', 'hard', 'expert'] as Difficulty[]).map((difficulty) => (
+                <Pressable
+                  key={difficulty}
+                  style={({ pressed }) => [pressed && styles.buttonPressed]}
+                  onPress={() => onPlay(difficulty)}
+                >
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']}
+                    style={[styles.quickPlayCard, SHADOWS.soft]}
+                  >
+                    <View style={[styles.quickPlayIconBg, { backgroundColor: difficultyMeta[difficulty].accent + '22' }]}>
+                      <Text style={styles.quickPlayIcon}>{difficultyMeta[difficulty].icon}</Text>
+                    </View>
+                    <Text style={[styles.quickPlayTitle, { color: difficultyMeta[difficulty].accent }]}>
+                      {difficultyMeta[difficulty].label}
+                    </Text>
+                    <View style={[styles.quickPlayAccentBar, { backgroundColor: difficultyMeta[difficulty].accent }]} />
+                  </LinearGradient>
+                </Pressable>
+              ))}
+            </View>
+          </LinearGradient>
+        )}
       </Animated.View>
     </ScrollView>
     </View>
@@ -520,6 +668,104 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
   },
+  // Mission panel
+  missionPanel: {
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 14,
+  },
+  missionRow: {
+    marginBottom: 10,
+  },
+  missionInfo: {
+    marginBottom: 4,
+  },
+  missionLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  missionLabelDone: {
+    color: COLORS.green,
+  },
+  missionBarTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
+  },
+  missionBarFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: COLORS.accent,
+  },
+  missionBarDone: {
+    backgroundColor: COLORS.green,
+  },
+  // Weekly Goals
+  weeklyGoalsPanel: {
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 14,
+  },
+  weeklyGoalRow: {
+    marginBottom: 12,
+  },
+  weeklyGoalInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  weeklyGoalLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  weeklyGoalLabelDone: {
+    color: COLORS.green,
+  },
+  weeklyGoalProgress: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  weeklyGoalBarTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
+    marginBottom: 2,
+  },
+  weeklyGoalBarFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  weeklyGoalReward: {
+    color: COLORS.gold,
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  weeklyBonusBanner: {
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.2)',
+  },
+  weeklyBonusText: {
+    color: COLORS.gold,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  // Streak
   streakPanel: {
     borderRadius: 22,
     padding: 16,
@@ -624,6 +870,44 @@ const styles = StyleSheet.create({
   loginDayBonus: {
     color: COLORS.textSecondary,
     fontSize: 10,
+  },
+  recommendCard: {
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '25',
+  },
+  recommendIcon: {
+    fontSize: 32,
+  },
+  recommendContent: {
+    flex: 1,
+  },
+  recommendLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.accent,
+    letterSpacing: 1.5,
+    marginBottom: 3,
+  },
+  recommendTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  recommendSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  recommendArrow: {
+    fontSize: 20,
+    color: COLORS.accent,
+    fontWeight: '700',
   },
   quickPlayPanel: {
     borderRadius: 22,

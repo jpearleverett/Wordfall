@@ -28,8 +28,9 @@ import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
-import { Board, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION } from './src/constants';
+import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
+import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, FEATURE_UNLOCK_SCHEDULE } from './src/constants';
+import { getBreatherConfig } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
 import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
@@ -37,6 +38,13 @@ import { PlayerProvider, usePlayer } from './src/contexts/PlayerContext';
 import { soundManager } from './src/services/sound';
 import { setHapticsEnabled } from './src/services/haptics';
 import { ATLAS_PAGES } from './src/data/collections';
+import { generateShareText } from './src/utils/shareGenerator';
+import { FeatureUnlockCeremony } from './src/components/FeatureUnlockCeremony';
+import { ModeUnlockCeremony } from './src/components/ModeUnlockCeremony';
+import { AchievementCeremony } from './src/components/AchievementCeremony';
+import { StreakMilestoneCeremony } from './src/components/StreakMilestoneCeremony';
+import { CollectionCompleteCeremony } from './src/components/CollectionCompleteCeremony';
+import { SessionEndReminder } from './src/components/SessionEndReminder';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createStackNavigator();
@@ -127,9 +135,36 @@ function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
   );
 }
 
-// Main Tab Navigator
+// Helper: get difficulty name for a level
+function getDifficultyForLevel(level: number): string {
+  if (level <= 5) return 'Easy';
+  if (level <= 15) return 'Medium';
+  if (level <= 30) return 'Hard';
+  return 'Expert';
+}
+
+// Helper: detect difficulty transition between two levels
+function detectDifficultyTransition(oldLevel: number, newLevel: number): { from: string; to: string } | null {
+  const thresholds = [
+    { at: 6, from: 'Easy', to: 'Medium' },
+    { at: 16, from: 'Medium', to: 'Hard' },
+    { at: 31, from: 'Hard', to: 'Expert' },
+  ];
+  for (const t of thresholds) {
+    if (oldLevel < t.at && newLevel >= t.at) {
+      return { from: t.from, to: t.to };
+    }
+  }
+  return null;
+}
+
+// Main Tab Navigator with progressive tab unlocking
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const player = usePlayer();
+
+  const hasFeature = (id: string) => player.featuresUnlocked.includes(id);
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -170,20 +205,24 @@ function MainTabs() {
           tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="▶" focused={focused} />,
         }}
       />
-      <Tab.Screen
-        name="Collections"
-        component={CollectionsStackScreen}
-        options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="◆" focused={focused} />,
-        }}
-      />
-      <Tab.Screen
-        name="Library"
-        component={LibraryStackScreen}
-        options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="❏" focused={focused} />,
-        }}
-      />
+      {hasFeature('tab_collections') && (
+        <Tab.Screen
+          name="Collections"
+          component={CollectionsStackScreen}
+          options={{
+            tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="◆" focused={focused} />,
+          }}
+        />
+      )}
+      {hasFeature('tab_library') && (
+        <Tab.Screen
+          name="Library"
+          component={LibraryStackScreen}
+          options={{
+            tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="❏" focused={focused} />,
+          }}
+        />
+      )}
       <Tab.Screen
         name="Profile"
         component={ProfileStackScreen}
@@ -213,13 +252,11 @@ function ModesScreenWrapper({ navigation }: any) {
       }
 
       if (mode === 'weekly') {
-        // Weekly uses a harder config
         board = generateBoard(DIFFICULTY_CONFIGS.hard, Date.now());
         navigation.navigate('Game', { board, level: 0, mode: 'weekly' });
         return;
       }
 
-      // For other modes, use current level config
       const seed = Date.now() + player.currentLevel * 1337;
       board = generateBoard(config, seed);
 
@@ -250,12 +287,22 @@ function GameScreenWrapper({ route, navigation }: any) {
     const mode = (params.mode || 'classic') as GameMode;
     const isDaily = params.isDaily || false;
 
+    // Capture pre-complete state for level-up detection
+    const prevLevel = player.currentLevel;
+    const prevHighest = player.highestLevel;
+    const isFirstWin = player.puzzlesSolved === 0;
+
     // Record puzzle completion in PlayerContext
     const isPerfect = stars === 3;
     player.recordPuzzleComplete(level, score, stars, isPerfect);
 
     // Record mode play
     player.recordModePlay(mode, score, true);
+
+    // Reset consecutive failures on success
+    if (player.consecutiveFailures > 0) {
+      player.updateProgress({ consecutiveFailures: 0, lastLevelStars: stars });
+    }
 
     // Award coins based on difficulty
     const difficulty: Difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
@@ -300,10 +347,27 @@ function GameScreenWrapper({ route, navigation }: any) {
           }
         }
       });
+
+      // Check for collection completions
+      for (const page of ATLAS_PAGES) {
+        const collected = player.collections.atlasPages[page.id] || [];
+        if (collected.length === page.words.length && collected.length > 0) {
+          // Check if we just completed it (wasn't complete before this puzzle)
+          const wordsFromThisPuzzle = board.words.map((wp: any) => wp.word.toLowerCase());
+          const newlyCollected = wordsFromThisPuzzle.some(
+            (w: string) => page.words.includes(w) && !collected.includes(w)
+          );
+          if (newlyCollected) {
+            player.queueCeremony({
+              type: 'collection_complete',
+              data: { icon: page.icon, name: page.category, reward: page.reward },
+            });
+          }
+        }
+      }
     }
 
     // Update mission progress
-    const wordCount = params.board ? (params.board as Board).words.length : 0;
     player.missions.dailyMissions.forEach((mission) => {
       if (mission.completed) return;
       if (mission.id === 'solve_3_puzzles' || mission.id === 'earn_3_stars') {
@@ -323,26 +387,94 @@ function GameScreenWrapper({ route, navigation }: any) {
       }
     });
 
-    // Auto-unlock modes based on level progression
-    const newLevel = Math.max(level + 1, player.currentLevel);
+    // Update weekly goal progress
+    player.updateWeeklyGoalProgress('puzzles_solved', 1);
+    player.updateWeeklyGoalProgress('total_score', score);
+    player.updateWeeklyGoalProgress('stars_earned', stars);
+    if (isPerfect) player.updateWeeklyGoalProgress('perfect_solves', 1);
+    if (isDaily) player.updateWeeklyGoalProgress('daily_completed', 1);
+
+    // Detect level-up
+    const newLevel = Math.max(level + 1, prevLevel);
+    const leveledUp = newLevel > prevHighest;
+
+    // Detect difficulty transition
+    const difficultyTransition = leveledUp ? detectDifficultyTransition(prevHighest, newLevel) : null;
+    if (difficultyTransition) {
+      player.queueCeremony({
+        type: 'difficulty_transition',
+        data: { from: difficultyTransition.from, to: difficultyTransition.to },
+      });
+    }
+
+    // Check feature unlocks based on new level
+    const featureUnlocks = player.checkFeatureUnlocks(newLevel);
+    for (const ceremony of featureUnlocks) {
+      player.queueCeremony(ceremony);
+    }
+
+    // Check achievements
+    const board = params.board as Board | undefined;
+    const maxCombo = board ? board.words.length : 0; // Approximate; actual combo tracked in GameScreen
+    const achievementCeremonies = player.checkAchievements({ maxCombo });
+    for (const ceremony of achievementCeremonies) {
+      player.queueCeremony(ceremony);
+    }
+
+    // Auto-unlock modes based on level progression and queue ceremonies
     for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
       if (config.unlockLevel <= newLevel && !player.unlockedModes.includes(modeId)) {
         player.unlockMode(modeId);
+        player.queueCeremony({
+          type: 'mode_unlock',
+          data: {
+            modeId,
+            modeName: config.name,
+            modeIcon: config.icon,
+            modeDescription: config.description,
+            modeColor: config.color,
+          },
+        });
       }
     }
-  }, [params, player, economy]);
+
+    // Generate share text
+    const grid = params.board ? (params.board as Board).grid : null;
+    const shareText = grid
+      ? generateShareText(grid, level, stars, score, 0, isDaily)
+      : '';
+
+    // Store completion metadata in route params for GameScreen to pick up
+    navigation.setParams({
+      completionData: {
+        isFirstWin,
+        leveledUp,
+        newLevel,
+        difficultyTransition,
+        nextLevelPreview: !isDaily ? {
+          level: newLevel,
+          difficulty: getDifficultyForLevel(newLevel),
+        } : null,
+        shareText,
+        friendComparison: { beaten: Math.floor(Math.random() * 4) + 1, total: 5 },
+      },
+    });
+  }, [params, player, economy, navigation]);
 
   const handleNextLevel = useCallback(() => {
     try {
       const currentLevel = params.level || 0;
       const nextLevel = currentLevel + 1;
-      const config = getLevelConfig(nextLevel);
+
+      // Check if player needs a breather level
+      const useBreather = player.needsBreather();
+      const config = useBreather ? getBreatherConfig(nextLevel) : getLevelConfig(nextLevel);
+
       const seed = nextLevel * 1337 + Date.now();
       const board = generateBoard(config, seed);
       const mode = (params.mode || 'classic') as GameMode;
       const modeConfig = MODE_CONFIGS[mode];
 
-      // Navigate to new game with next level
       navigation.replace('Game', {
         board,
         level: nextLevel,
@@ -355,7 +487,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       Alert.alert('Error', 'Failed to generate next puzzle.');
       navigation.goBack();
     }
-  }, [params, navigation]);
+  }, [params, navigation, player]);
 
   if (!params.board) {
     return (
@@ -364,6 +496,9 @@ function GameScreenWrapper({ route, navigation }: any) {
       </View>
     );
   }
+
+  // Extract completion data from params (set by handleComplete)
+  const completionData = params.completionData || {};
 
   return (
     <GameScreen
@@ -376,6 +511,13 @@ function GameScreenWrapper({ route, navigation }: any) {
       onComplete={handleComplete}
       onNextLevel={handleNextLevel}
       onHome={() => navigation.goBack()}
+      isFirstWin={completionData.isFirstWin}
+      leveledUp={completionData.leveledUp}
+      newLevel={completionData.newLevel}
+      difficultyTransition={completionData.difficultyTransition}
+      nextLevelPreview={completionData.nextLevelPreview}
+      shareText={completionData.shareText}
+      friendComparison={completionData.friendComparison}
     />
   );
 }
@@ -390,12 +532,17 @@ function HomeMainScreen({ navigation }: any) {
   const [comebackHints, setComebackHints] = useState(0);
   const welcomeAnim = React.useRef(new Animated.Value(0)).current;
 
-  // Check for comeback rewards on mount
+  // Ceremony queue state
+  const [activeCeremony, setActiveCeremony] = useState<CeremonyItem | null>(null);
+
+  // Session end reminder
+  const [showSessionReminder, setShowSessionReminder] = useState(false);
+
+  // Check for comeback rewards and process ceremonies on mount
   useEffect(() => {
     if (player.loaded) {
       const rewards = player.checkComebackRewards();
       if (rewards.length > 0) {
-        // Determine reward tier based on absence duration
         const is7day = rewards.some(r => r.includes('7day'));
         const is14day = rewards.some(r => r.includes('14day'));
         const coins = is14day ? 500 : is7day ? 350 : 200;
@@ -414,8 +561,25 @@ function HomeMainScreen({ navigation }: any) {
       }
       player.updateStreak();
       player.generateDailyMissions();
+      player.initWeeklyGoals();
+
+      // Process pending ceremonies
+      if (!showWelcomeBack && player.pendingCeremonies.length > 0) {
+        const next = player.popCeremony();
+        if (next) setActiveCeremony(next);
+      }
     }
   }, [player.loaded]);
+
+  // Process next ceremony when current one is dismissed
+  const handleDismissCeremony = useCallback(() => {
+    setActiveCeremony(null);
+    // Check for more ceremonies after a short delay
+    setTimeout(() => {
+      const next = player.popCeremony();
+      if (next) setActiveCeremony(next);
+    }, 300);
+  }, [player]);
 
   // Convert PlayerContext data to PlayerProgress for HomeScreen
   const progress: PlayerProgress = {
@@ -431,14 +595,64 @@ function HomeMainScreen({ navigation }: any) {
     starsByLevel: player.starsByLevel,
   };
 
+  // Determine player stage for progressive disclosure
+  const playerStage = player.puzzlesSolved <= 2 ? 'new'
+    : player.puzzlesSolved <= 10 ? 'early'
+    : player.puzzlesSolved <= 30 ? 'established'
+    : 'veteran';
+
+  // Personalized recommendation
+  const recommendation = React.useMemo(() => {
+    if (playerStage === 'new') return null;
+
+    // Suggest untried modes
+    const untriedModes = player.unlockedModes.filter(
+      (m: string) => !player.modeStats[m] || player.modeStats[m].played === 0
+    );
+    if (untriedModes.length > 0) {
+      const modeId = untriedModes[0];
+      const config = MODE_CONFIGS[modeId as GameMode];
+      return {
+        icon: config?.icon || '🎮',
+        title: `Try ${config?.name || modeId} Mode`,
+        subtitle: 'You unlocked this mode — give it a go!',
+        action: () => navigation.navigate('Play'),
+      };
+    }
+
+    // Suggest daily if not done
+    const today = new Date().toISOString().split('T')[0];
+    if (!player.dailyCompleted.includes(today)) {
+      return {
+        icon: '☀️',
+        title: 'Daily Challenge',
+        subtitle: 'Same puzzle for everyone — compete globally!',
+        action: () => navigation.navigate('Play' as never),
+      };
+    }
+
+    // Default: suggest harder difficulty
+    return {
+      icon: '⚡',
+      title: 'Push Your Limits',
+      subtitle: 'Try a harder difficulty to earn more stars!',
+      action: () => navigation.navigate('Play' as never),
+    };
+  }, [playerStage, player.unlockedModes, player.modeStats, player.dailyCompleted, navigation]);
+
   const startGame = useCallback(
     (difficulty?: Difficulty) => {
       setLoading(true);
       setTimeout(() => {
         try {
-          const config = difficulty
-            ? DIFFICULTY_CONFIGS[difficulty]
-            : getLevelConfig(player.currentLevel);
+          let config;
+          if (difficulty) {
+            config = DIFFICULTY_CONFIGS[difficulty];
+          } else if (player.needsBreather()) {
+            config = getBreatherConfig(player.currentLevel);
+          } else {
+            config = getLevelConfig(player.currentLevel);
+          }
           const level = difficulty ? 0 : player.currentLevel;
           const board = generateBoard(config, level * 1337 + Date.now());
           setLoading(false);
@@ -449,7 +663,7 @@ function HomeMainScreen({ navigation }: any) {
         }
       }, 50);
     },
-    [player.currentLevel, navigation]
+    [player.currentLevel, navigation, player]
   );
 
   const startDaily = useCallback(() => {
@@ -522,6 +736,10 @@ function HomeMainScreen({ navigation }: any) {
         }}
         currentChapter={player.currentChapter}
         loginCycleDay={player.loginCycleDay}
+        playerStage={playerStage}
+        weeklyGoals={player.weeklyGoals}
+        dailyMissions={player.missions.dailyMissions}
+        recommendation={recommendation}
       />
       {/* Welcome Back Modal */}
       {showWelcomeBack && (
@@ -556,6 +774,9 @@ function HomeMainScreen({ navigation }: any) {
               onPress={() => {
                 Animated.timing(welcomeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
                   setShowWelcomeBack(false);
+                  // Process ceremonies after welcome-back
+                  const next = player.popCeremony();
+                  if (next) setActiveCeremony(next);
                 });
               }}
             >
@@ -563,6 +784,59 @@ function HomeMainScreen({ navigation }: any) {
             </Pressable>
           </Animated.View>
         </View>
+      )}
+
+      {/* Ceremony modals */}
+      {activeCeremony?.type === 'feature_unlock' && (
+        <FeatureUnlockCeremony
+          icon={activeCeremony.data.icon}
+          title={activeCeremony.data.title}
+          description={activeCeremony.data.description}
+          accentColor={activeCeremony.data.accentColor}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'mode_unlock' && (
+        <ModeUnlockCeremony
+          modeName={activeCeremony.data.modeName}
+          modeIcon={activeCeremony.data.modeIcon}
+          modeDescription={activeCeremony.data.modeDescription}
+          modeColor={activeCeremony.data.modeColor}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'achievement' && (
+        <AchievementCeremony
+          icon={activeCeremony.data.icon}
+          name={activeCeremony.data.name}
+          description={activeCeremony.data.description}
+          tier={activeCeremony.data.tier}
+          reward={activeCeremony.data.reward}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'streak_milestone' && (
+        <StreakMilestoneCeremony
+          milestone={activeCeremony.data.streakCount}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'collection_complete' && (
+        <CollectionCompleteCeremony
+          collectionIcon={activeCeremony.data.icon}
+          collectionName={activeCeremony.data.name}
+          reward={activeCeremony.data.reward}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+
+      {/* Session end reminder */}
+      {showSessionReminder && (
+        <SessionEndReminder
+          type="daily"
+          message="Don't forget your daily puzzle!"
+          onDismiss={() => setShowSessionReminder(false)}
+        />
       )}
     </View>
   );
@@ -625,6 +899,8 @@ function AppContent() {
                 {...props}
                 onComplete={() => {
                   player.updateProgress({ tutorialComplete: true });
+                  // Unlock default features for new players
+                  player.unlockFeature('tab_play');
                   setShowOnboarding(false);
                 }}
               />

@@ -14,6 +14,7 @@ import { CHAPTERS } from '../data/chapters';
 import { Chapter } from '../types';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LibraryHeroIllustration } from '../components/common/HeroIllustrations';
+import { Tooltip } from '../components/common/Tooltip';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +45,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const currentChapter = currentChapterProp ?? player.currentChapter;
   const decorations = decorationsProp ?? player.placedDecorations;
   const [selectedWing, setSelectedWing] = useState<string | null>(null);
+  const [showTooltip, setShowTooltip] = useState(
+    !player.tooltipsShown.includes('library_screen')
+  );
 
   const wings = useMemo(() => {
     const wingIds = Array.from(new Set(CHAPTERS.map((chapter) => chapter.wingId)));
@@ -77,6 +81,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   return (
     <View style={styles.container}>
       <AmbientBackdrop variant="library" />
+      <Tooltip
+        message="Restore library wings by completing chapters. Each wing has themed word puzzles and unique decorations!"
+        visible={showTooltip}
+        onDismiss={() => {
+          setShowTooltip(false);
+          player.markTooltipShown('library_screen');
+        }}
+        position="top"
+      />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}

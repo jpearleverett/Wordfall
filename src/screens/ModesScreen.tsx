@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
+import { Tooltip } from '../components/common/Tooltip';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -95,6 +96,10 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
     );
   };
 
+  const [showTooltip, setShowTooltip] = useState(
+    !player.tooltipsShown.includes('modes_screen')
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -103,6 +108,15 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
           {unlockedModes.length} of {MODES.length} unlocked
         </Text>
       </View>
+      <Tooltip
+        message="Each mode has unique rules! Unlock more modes by advancing through levels."
+        visible={showTooltip}
+        onDismiss={() => {
+          setShowTooltip(false);
+          player.markTooltipShown('modes_screen');
+        }}
+        position="top"
+      />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.grid}
