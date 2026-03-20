@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { COLORS } from '../constants';
+import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
 
