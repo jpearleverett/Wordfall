@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM } from '../constants';
 import { soundManager } from '../services/sound';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
+import { usePlayer } from '../contexts/PlayerContext';
 
 if (
   Platform.OS === 'android' &&
@@ -46,6 +47,7 @@ interface GameScreenProps {
   difficultyTransition?: { from: string; to: string } | null;
   nextLevelPreview?: { level: number; difficulty: string } | null;
   shareText?: string;
+  friendComparison?: { beaten: number; total: number } | null;
 }
 
 function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): CellPosition[] {
@@ -91,7 +93,13 @@ export function GameScreen({
   difficultyTransition = null,
   nextLevelPreview = null,
   shareText = '',
+  friendComparison = null,
 }: GameScreenProps) {
+  const player = usePlayer();
+  const failCount = player.failCountByLevel?.[level] ?? 0;
+  // Dynamic hint generosity: show hint sooner if player has failed this level before
+  const idleHintDelay = failCount >= 2 ? 10000 : failCount === 1 ? 15000 : 20000;
+
   const modeConfig = MODE_CONFIGS[mode];
   const effectiveTimeLimit = modeConfig.rules.hasTimer
     ? (modeConfig.rules.timerSeconds || timeLimit || 120)
@@ -206,9 +214,9 @@ export function GameScreen({
     if (state.status === 'playing' && state.hintsLeft > 0) {
       idleTimerRef.current = setTimeout(() => {
         setShowIdleHint(true);
-      }, 20000);
+      }, idleHintDelay);
     }
-  }, [state.status, state.hintsLeft]);
+  }, [state.status, state.hintsLeft, idleHintDelay]);
 
   useEffect(() => {
     resetIdleTimer();
@@ -759,6 +767,7 @@ export function GameScreen({
           difficultyTransition={difficultyTransition}
           nextLevelPreview={nextLevelPreview}
           shareText={shareText}
+          friendComparison={friendComparison}
           onNextLevel={handleNextLevel}
           onHome={onHome}
           onRetry={handleRetry}

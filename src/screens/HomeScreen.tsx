@@ -20,6 +20,13 @@ interface DailyMissionDisplay {
   completed: boolean;
 }
 
+interface Recommendation {
+  icon: string;
+  title: string;
+  subtitle: string;
+  action: () => void;
+}
+
 interface HomeScreenProps {
   progress: PlayerProgress;
   onPlay: (difficulty?: Difficulty) => void;
@@ -38,6 +45,7 @@ interface HomeScreenProps {
   playerStage?: 'new' | 'early' | 'established' | 'veteran';
   weeklyGoals?: WeeklyGoalsState | null;
   dailyMissions?: DailyMissionDisplay[];
+  recommendation?: Recommendation | null;
 }
 
 const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: string }> = {
@@ -71,6 +79,7 @@ export function HomeScreen({
   playerStage = 'new',
   weeklyGoals = null,
   dailyMissions = [],
+  recommendation = null,
 }: HomeScreenProps) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
@@ -390,6 +399,27 @@ export function HomeScreen({
               })}
             </View>
           </LinearGradient>
+        )}
+
+        {/* Recommended for You */}
+        {recommendation && playerStage !== 'new' && (
+          <Pressable
+            style={({ pressed }) => [pressed && styles.buttonPressed]}
+            onPress={recommendation.action}
+          >
+            <LinearGradient
+              colors={GRADIENTS.surfaceCard}
+              style={[styles.recommendCard, SHADOWS.medium]}
+            >
+              <Text style={styles.recommendIcon}>{recommendation.icon}</Text>
+              <View style={styles.recommendContent}>
+                <Text style={styles.recommendLabel}>RECOMMENDED FOR YOU</Text>
+                <Text style={styles.recommendTitle}>{recommendation.title}</Text>
+                <Text style={styles.recommendSubtitle}>{recommendation.subtitle}</Text>
+              </View>
+              <Text style={styles.recommendArrow}>→</Text>
+            </LinearGradient>
+          </Pressable>
         )}
 
         {/* Quick play - hidden for new and early players */}
@@ -840,6 +870,44 @@ const styles = StyleSheet.create({
   loginDayBonus: {
     color: COLORS.textSecondary,
     fontSize: 10,
+  },
+  recommendCard: {
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '25',
+  },
+  recommendIcon: {
+    fontSize: 32,
+  },
+  recommendContent: {
+    flex: 1,
+  },
+  recommendLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.accent,
+    letterSpacing: 1.5,
+    marginBottom: 3,
+  },
+  recommendTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  recommendSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  recommendArrow: {
+    fontSize: 20,
+    color: COLORS.accent,
+    fontWeight: '700',
   },
   quickPlayPanel: {
     borderRadius: 22,

@@ -555,10 +555,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
       const loginCycleDay = (newLoginDates.length - 1) % 7 + 1;
 
+      // Check if a streak milestone was just crossed
+      const prevStreak = streaks.currentStreak;
+      let pendingCeremonies = prev.pendingCeremonies;
+      for (const milestone of STREAK.milestones) {
+        if (newStreak >= milestone && prevStreak < milestone) {
+          const reward = STREAK.milestoneRewards[milestone as keyof typeof STREAK.milestoneRewards];
+          pendingCeremonies = [
+            ...pendingCeremonies,
+            {
+              type: 'streak_milestone' as const,
+              data: { streakCount: milestone, reward, badge: (reward as any).cosmetic },
+            },
+          ];
+        }
+      }
+
       return {
         ...prev,
         dailyLoginDates: newLoginDates,
         loginCycleDay,
+        pendingCeremonies,
         streaks: {
           ...streaks,
           currentStreak: newStreak,

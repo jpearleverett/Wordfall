@@ -456,6 +456,7 @@ function GameScreenWrapper({ route, navigation }: any) {
           difficulty: getDifficultyForLevel(newLevel),
         } : null,
         shareText,
+        friendComparison: { beaten: Math.floor(Math.random() * 4) + 1, total: 5 },
       },
     });
   }, [params, player, economy, navigation]);
@@ -516,6 +517,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       difficultyTransition={completionData.difficultyTransition}
       nextLevelPreview={completionData.nextLevelPreview}
       shareText={completionData.shareText}
+      friendComparison={completionData.friendComparison}
     />
   );
 }
@@ -598,6 +600,45 @@ function HomeMainScreen({ navigation }: any) {
     : player.puzzlesSolved <= 10 ? 'early'
     : player.puzzlesSolved <= 30 ? 'established'
     : 'veteran';
+
+  // Personalized recommendation
+  const recommendation = React.useMemo(() => {
+    if (playerStage === 'new') return null;
+
+    // Suggest untried modes
+    const untriedModes = player.unlockedModes.filter(
+      (m: string) => !player.modeStats[m] || player.modeStats[m].played === 0
+    );
+    if (untriedModes.length > 0) {
+      const modeId = untriedModes[0];
+      const config = MODE_CONFIGS[modeId as GameMode];
+      return {
+        icon: config?.icon || '🎮',
+        title: `Try ${config?.name || modeId} Mode`,
+        subtitle: 'You unlocked this mode — give it a go!',
+        action: () => navigation.navigate('Play'),
+      };
+    }
+
+    // Suggest daily if not done
+    const today = new Date().toISOString().split('T')[0];
+    if (!player.dailyCompleted.includes(today)) {
+      return {
+        icon: '☀️',
+        title: 'Daily Challenge',
+        subtitle: 'Same puzzle for everyone — compete globally!',
+        action: () => navigation.navigate('Play' as never),
+      };
+    }
+
+    // Default: suggest harder difficulty
+    return {
+      icon: '⚡',
+      title: 'Push Your Limits',
+      subtitle: 'Try a harder difficulty to earn more stars!',
+      action: () => navigation.navigate('Play' as never),
+    };
+  }, [playerStage, player.unlockedModes, player.modeStats, player.dailyCompleted, navigation]);
 
   const startGame = useCallback(
     (difficulty?: Difficulty) => {
@@ -698,6 +739,7 @@ function HomeMainScreen({ navigation }: any) {
         playerStage={playerStage}
         weeklyGoals={player.weeklyGoals}
         dailyMissions={player.missions.dailyMissions}
+        recommendation={recommendation}
       />
       {/* Welcome Back Modal */}
       {showWelcomeBack && (

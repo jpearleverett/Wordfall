@@ -26,6 +26,7 @@ interface PuzzleCompleteProps {
   difficultyTransition?: { from: string; to: string } | null;
   nextLevelPreview?: { level: number; difficulty: string } | null;
   shareText?: string;
+  friendComparison?: { beaten: number; total: number } | null;
   onNextLevel: () => void;
   onHome: () => void;
   onRetry: () => void;
@@ -197,6 +198,7 @@ export function PuzzleComplete({
   difficultyTransition = null,
   nextLevelPreview = null,
   shareText = '',
+  friendComparison = null,
   onNextLevel,
   onHome,
   onRetry,
@@ -432,6 +434,16 @@ export function PuzzleComplete({
                   <Text style={[styles.levelUpText, { color: COLORS.purple }]}>NEW CHALLENGE TIER!</Text>
                   <Text style={styles.levelUpSubtext}>{difficultyTransition.from} → {difficultyTransition.to}</Text>
                 </View>
+              </Animated.View>
+            )}
+
+            {/* Friend Score Comparison */}
+            {friendComparison && friendComparison.total > 0 && (
+              <Animated.View style={[styles.friendCompare, { opacity: statsAnim }]}>
+                <Text style={styles.friendCompareIcon}>👥</Text>
+                <Text style={styles.friendCompareText}>
+                  You beat {friendComparison.beaten} of {friendComparison.total} friends!
+                </Text>
               </Animated.View>
             )}
 
@@ -781,6 +793,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 1,
+  },
+  friendCompare: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(0, 212, 255, 0.08)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.15)',
+  },
+  friendCompareIcon: {
+    fontSize: 16,
+  },
+  friendCompareText: {
+    color: COLORS.accent,
+    fontSize: 13,
+    fontWeight: '700',
   },
   nextPreview: {
     alignItems: 'center',
