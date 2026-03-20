@@ -35,7 +35,7 @@ src/
 ├── components/       # UI components organized by domain
 │   ├── Grid.tsx, LetterCell.tsx, WordBank.tsx  # Core gameplay
 │   ├── GameHeader.tsx, PuzzleComplete.tsx      # Game UI
-│   ├── common/       # Button, Card, Modal, Badge, ProgressBar
+│   ├── common/       # Button, Card, Modal, Badge, ProgressBar, AmbientBackdrop, HeroIllustrations
 │   ├── economy/      # CurrencyDisplay, ShopItem
 │   ├── modes/        # TimerDisplay, MoveCounter
 │   └── events/       # EventBanner, EventProgress
@@ -43,8 +43,8 @@ src/
 ├── navigation/       # AppNavigator (not used directly - App.tsx handles nav)
 ├── config/           # firebase.ts
 ├── data/             # Static game data (chapters, collections, cosmetics, events, missions)
-├── types.ts          # All TypeScript interfaces and type unions (~520 lines)
-├── constants.ts      # Colors, configs, scoring, economy, animations (~446 lines)
+├── types.ts          # All TypeScript interfaces and type unions (~519 lines)
+├── constants.ts      # Colors, gradients, shadows, configs, scoring, economy, animations (~503 lines)
 └── words.ts          # Word dictionary (~2000 curated 3-6 letter words)
 ```
 
@@ -54,7 +54,9 @@ src/
 |------|---------|
 | `App.tsx` | Entry point. 5 bottom tabs (🏠🎮💎📚👤), nested stack navigators, provider wrappers, full reward/progression/mission wiring, welcome-back modal, auto mode-unlock |
 | `src/types.ts` | ALL type definitions. Edit here when adding new data structures |
-| `src/constants.ts` | Colors, difficulty configs, mode configs, scoring, economy, animations |
+| `src/constants.ts` | Colors, `GRADIENTS` (tile/button/surface/bg presets), `SHADOWS` (soft/medium/strong/glow), difficulty configs, mode configs, scoring, economy, animations |
+| `src/components/common/AmbientBackdrop.tsx` | Animated floating orb background layer used on Home and Library screens (placed as first child in screen container) |
+| `src/components/common/HeroIllustrations.tsx` | Decorative SVG-style hero illustrations for Home (mini board) and Library (book) screens, built with Views + LinearGradients |
 | `src/hooks/useGame.ts` | Core game state reducer - handles 15+ game actions including boosters. Timer tick for timePressure mode runs here |
 | `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG, freeform path placement (8-directional), and solvability validation |
 | `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
@@ -177,7 +179,7 @@ Sound manager calls are wired at every interaction point in `GameScreen.tsx` and
 - Hint/undo → `hintUsed`/`undoUsed` sound
 - Boosters → `buttonPress` sound
 
-**Audio assets not yet provided** - `SoundManager` (`src/services/sound.ts`) is a no-op placeholder. When `.mp3` files are added and loaded in the sound manager, all calls will work immediately.
+**Audio is synthesized at runtime** — `SoundManager` (`src/services/sound.ts`) generates tones and chords programmatically (sine waves via WAV data URIs loaded into expo-av). No `.mp3`/`.wav` asset files needed. Sound effects use `ToneSpec` definitions (frequency arrays + duration), background music uses `ProgressionSpec` (chord progressions looped with crossfade). All sounds are functional — replace with real assets by swapping `Audio.Sound.createAsync()` calls.
 
 ## Reward & Progression Wiring
 
@@ -204,12 +206,23 @@ Welcome-back modal in `HomeMainScreen` awards tiered comeback rewards (3-day/7-d
 - Rarity colors: common, rare, epic, legendary
 - All colors defined in `COLORS` object in `src/constants.ts`
 
+### Visual Design Language
+The UI uses a premium mobile game aesthetic with these patterns applied consistently across all screens:
+- **Gradient surfaces**: All cards and panels use `LinearGradient` with `GRADIENTS.surfaceCard` instead of flat `backgroundColor`. Import from `expo-linear-gradient`
+- **Shadow presets**: Use `SHADOWS.soft`, `SHADOWS.medium`, `SHADOWS.strong` from constants. `SHADOWS.glow(color)` for colored glow effects
+- **Glassmorphism cards**: Cards use gradient backgrounds + subtle inner glow overlays (`rgba` border + shadow) for depth
+- **Ambient backdrops**: Home and Library screens use `<AmbientBackdrop variant="home|library" />` for floating animated orb backgrounds
+- **Hero illustrations**: Home and Library screens have decorative `<HomeHeroIllustration />` / `<LibraryHeroIllustration />` components built from Views + gradients (no image assets)
+- **Screen top padding**: All screens use `paddingTop: 60` in their `content` style to clear the status bar / safe area consistently
+- **Section layout**: Screens follow a pattern of hero card → section panels, each with `borderRadius: 20-28`, gradient fill, and `SHADOWS.medium`
+- **Accent borders**: Highlighted/active items use thin accent-colored borders with matching glow shadow via `SHADOWS.glow(COLORS.accent)`
+
 ### Grid Layout
 - Flex-end columns for gravity visualization
 - Cell touch targets: 44pt minimum
 - Grid padding: 12px, cell gap: 4px
 - Cell size computed dynamically based on column count and screen width
-- Grid has surface background, 16px border radius, 8pt elevation shadow
+- Grid has gradient background (`GRADIENTS.grid`), 16px border radius, accent gradient border
 
 ### Animations & Visual Feedback
 - **Cell selection**: Scale down 0.9 → spring to 1.05 with animated glow border (150ms)
@@ -230,6 +243,7 @@ Welcome-back modal in `HomeMainScreen` awards tiered comeback rewards (3-day/7-d
 - All 10 game mode support with correct mode IDs and auto-unlock
 - 5-tab navigation with 12 screens (all fully functional, no stubs)
 - 4 context providers with AsyncStorage persistence
+- Synthesized audio engine with runtime tone generation (SFX + looping background music)
 - Sound manager wired at all interaction points (haptics fully functional)
 - 40 chapters across 8 library wings with themed words
 - 12 Word Atlas pages, 6 rare tile sets, 4 seasonal albums
@@ -252,11 +266,13 @@ Welcome-back modal in `HomeMainScreen` awards tiered comeback rewards (3-day/7-d
 - Perfect Solve undo recovery (undo from failed state)
 - App.tsx fully wired: onComplete awards rewards, mission progress, mode unlocks, atlas collection
 - 5-step onboarding with animated illustrations (mini grid, gravity demo, strategy bubbles)
+- AAA visual polish across all 12 screens: gradient surfaces, glassmorphism cards, ambient backdrops, hero illustrations, shadow depth
+- Shared visual components: AmbientBackdrop (animated floating orbs), HeroIllustrations (Home + Library)
 - TypeScript compiles with zero errors
 
 ### Scaffolded / Needs Work
-- Audio asset files (sound effects, music) - SoundManager is wired but no .mp3/.wav files exist
-- Image assets (app icon, illustrations) - using emoji placeholders throughout
+- Professional audio assets — current synthesized tones are functional but could be replaced with studio-quality .mp3/.wav files
+- Image assets (app icon, splash screen) — using emoji placeholders for icons; hero illustrations are code-generated Views
 - Firebase Cloud Functions (server-side scheduled tasks)
 - Actual Firestore sync (currently AsyncStorage only)
 - Real-time leaderboard computation
@@ -287,9 +303,8 @@ Welcome-back modal in `HomeMainScreen` awards tiered comeback rewards (3-day/7-d
 3. Wire into `PlayerContext` if it needs persistence
 
 ### Adding sound effects
-1. Place `.mp3` file in assets directory
-2. Load it in `SoundManager.init()` via `Audio.Sound.createAsync(require(...))`
-3. Map it to a `SoundName` key - calls are already wired throughout the game
+- **Synthesized (current approach):** Add a `ToneSpec` entry to `SOUND_DEFS` in `src/services/sound.ts` with frequency array + duration, then add the key to the `SoundName` type
+- **Asset-based (upgrade path):** Replace the WAV-generation logic in `SoundManager.init()` with `Audio.Sound.createAsync(require('./path.mp3'))` — all callsites use the same `SoundName` keys and will work immediately
 
 ## Important Notes
 
