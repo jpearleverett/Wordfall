@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Pressable,
   SafeAreaView,
   StatusBar,
   StyleSheet,
@@ -31,6 +33,7 @@ import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
 import { SettingsProvider } from './src/contexts/SettingsContext';
 import { PlayerProvider, usePlayer } from './src/contexts/PlayerContext';
 import { soundManager } from './src/services/sound';
+import { ATLAS_PAGES } from './src/data/collections';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createStackNavigator();
@@ -137,21 +140,21 @@ function MainTabs() {
         name="Home"
         component={HomeStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="⌂" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="🏠" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Play"
         component={PlayStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="▶" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="🎮" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Collections"
         component={CollectionsStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="◆" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="💎" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -165,7 +168,7 @@ function MainTabs() {
         name="Profile"
         component={ProfileStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="●" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="👤" focused={focused} />,
         }}
       />
     </Tab.Navigator>
@@ -266,14 +269,46 @@ function GameScreenWrapper({ route, navigation }: any) {
       player.addRareTile(randomLetter);
     }
 
-    // Check for atlas word collection from the words found
+    // Check for atlas word collection from the words found (all pages)
     if (params.board) {
       const board = params.board as Board;
       board.words.forEach((wp: any) => {
-        // Atlas words are checked against all pages
-        // This is a simplified version - in production, we'd check against ATLAS_PAGES
-        player.collectAtlasWord('animals', wp.word.toUpperCase());
+        const word = wp.word.toLowerCase();
+        for (const page of ATLAS_PAGES) {
+          if (page.words.includes(word)) {
+            player.collectAtlasWord(page.id, word);
+          }
+        }
       });
+    }
+
+    // Update mission progress
+    const wordCount = params.board ? (params.board as Board).words.length : 0;
+    player.missions.dailyMissions.forEach((mission) => {
+      if (mission.completed) return;
+      if (mission.id === 'solve_3_puzzles' || mission.id === 'earn_3_stars') {
+        player.updateMissionProgress(mission.id, mission.progress + 1);
+      }
+      if (mission.id === 'earn_500_score') {
+        player.updateMissionProgress(mission.id, mission.progress + score);
+      }
+      if (mission.id === 'solve_without_hints' && isPerfect) {
+        player.updateMissionProgress(mission.id, mission.progress + 1);
+      }
+      if (mission.id === 'get_perfect_solve' && isPerfect) {
+        player.updateMissionProgress(mission.id, mission.progress + 1);
+      }
+      if (mission.id === 'complete_daily' && isDaily) {
+        player.updateMissionProgress(mission.id, 1);
+      }
+    });
+
+    // Auto-unlock modes based on level progression
+    const newLevel = Math.max(level + 1, player.currentLevel);
+    for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
+      if (config.unlockLevel <= newLevel && !player.unlockedModes.includes(modeId)) {
+        player.unlockMode(modeId);
+      }
     }
   }, [params, player, economy]);
 
@@ -330,20 +365,34 @@ function HomeMainScreen({ navigation }: any) {
   const player = usePlayer();
   const economy = useEconomy();
   const [loading, setLoading] = useState(false);
+  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
+  const [comebackCoins, setComebackCoins] = useState(0);
+  const [comebackHints, setComebackHints] = useState(0);
+  const welcomeAnim = React.useRef(new Animated.Value(0)).current;
 
   // Check for comeback rewards on mount
   useEffect(() => {
     if (player.loaded) {
       const rewards = player.checkComebackRewards();
       if (rewards.length > 0) {
-        // Award comeback bonus
-        economy.addCoins(200);
-        economy.addHintTokens(5);
-        Alert.alert('Welcome Back!', 'We missed you! Here are some bonus coins and hints.');
+        // Determine reward tier based on absence duration
+        const is7day = rewards.some(r => r.includes('7day'));
+        const is14day = rewards.some(r => r.includes('14day'));
+        const coins = is14day ? 500 : is7day ? 350 : 200;
+        const hints = is14day ? 15 : is7day ? 10 : 5;
+        setComebackCoins(coins);
+        setComebackHints(hints);
+        economy.addCoins(coins);
+        economy.addHintTokens(hints);
+        setShowWelcomeBack(true);
+        Animated.spring(welcomeAnim, {
+          toValue: 1,
+          friction: 6,
+          tension: 80,
+          useNativeDriver: true,
+        }).start();
       }
-      // Update streak
       player.updateStreak();
-      // Generate daily missions if needed
       player.generateDailyMissions();
     }
   }, [player.loaded]);
@@ -446,6 +495,47 @@ function HomeMainScreen({ navigation }: any) {
         onOpenShop={() => navigation.navigate('Shop')}
         onOpenSettings={() => navigation.navigate('Settings')}
       />
+      {/* Welcome Back Modal */}
+      {showWelcomeBack && (
+        <View style={styles.welcomeOverlay}>
+          <Animated.View style={[
+            styles.welcomeCard,
+            {
+              transform: [
+                { scale: welcomeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
+                { translateY: welcomeAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) },
+              ],
+              opacity: welcomeAnim,
+            },
+          ]}>
+            <Text style={styles.welcomeEmoji}>👋</Text>
+            <Text style={styles.welcomeTitle}>WELCOME BACK!</Text>
+            <Text style={styles.welcomeSubtext}>We missed you! Here are some gifts:</Text>
+            <View style={styles.welcomeRewards}>
+              <View style={styles.welcomeRewardItem}>
+                <Text style={styles.welcomeRewardIcon}>🪙</Text>
+                <Text style={styles.welcomeRewardAmount}>+{comebackCoins}</Text>
+                <Text style={styles.welcomeRewardLabel}>Coins</Text>
+              </View>
+              <View style={styles.welcomeRewardItem}>
+                <Text style={styles.welcomeRewardIcon}>💡</Text>
+                <Text style={styles.welcomeRewardAmount}>+{comebackHints}</Text>
+                <Text style={styles.welcomeRewardLabel}>Hints</Text>
+              </View>
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.welcomeButton, pressed && { transform: [{ scale: 0.96 }] }]}
+              onPress={() => {
+                Animated.timing(welcomeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+                  setShowWelcomeBack(false);
+                });
+              }}
+            >
+              <Text style={styles.welcomeButtonText}>LET'S PLAY!</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
@@ -544,5 +634,85 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 50,
+  },
+  welcomeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5, 7, 20, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 100,
+  },
+  welcomeCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 32,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+  welcomeEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  welcomeTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: COLORS.accent,
+    letterSpacing: 3,
+    marginBottom: 8,
+  },
+  welcomeSubtext: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  welcomeRewards: {
+    flexDirection: 'row',
+    gap: 24,
+    marginBottom: 24,
+  },
+  welcomeRewardItem: {
+    alignItems: 'center',
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+  },
+  welcomeRewardIcon: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  welcomeRewardAmount: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.gold,
+  },
+  welcomeRewardLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  welcomeButton: {
+    backgroundColor: COLORS.accent,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 14,
+    elevation: 8,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  welcomeButtonText: {
+    color: COLORS.bg,
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 3,
   },
 });

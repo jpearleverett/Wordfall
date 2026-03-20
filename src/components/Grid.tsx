@@ -25,6 +25,7 @@ interface GridProps {
   onCellPress: (position: CellPosition) => void;
   frozenColumns?: number[];
   validWord?: boolean;
+  movedCells?: CellPosition[];
 }
 
 export function GameGrid({
@@ -34,6 +35,7 @@ export function GameGrid({
   onCellPress,
   frozenColumns = [],
   validWord = false,
+  movedCells = [],
 }: GridProps) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -56,6 +58,12 @@ export function GameGrid({
   }, [hintedCells]);
 
   const frozenSet = useMemo(() => new Set(frozenColumns), [frozenColumns]);
+
+  const movedSet = useMemo(() => {
+    const set = new Set<string>();
+    movedCells.forEach(c => set.add(`${c.row},${c.col}`));
+    return set;
+  }, [movedCells]);
 
   // Render columns for gravity-friendly layout
   const columns = useMemo(() => {
@@ -109,6 +117,7 @@ export function GameGrid({
                 onPress={() => onCellPress({ row, col })}
                 isFrozen={frozenSet.has(col)}
                 isValidWord={validWord && isSelected}
+                isMoved={movedSet.has(key)}
               />
             );
           })}
