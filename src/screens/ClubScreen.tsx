@@ -189,28 +189,45 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </View>
 
         {/* Weekly Score */}
-        <View style={styles.weeklyScoreCard}>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.weeklyScoreCard}
+        >
           <Text style={styles.weeklyScoreLabel}>Weekly Club Score</Text>
           <Text style={styles.weeklyScoreValue}>
             {data.weeklyScore.toLocaleString()}
           </Text>
-        </View>
+        </LinearGradient>
 
         {/* Club Puzzle */}
-        <TouchableOpacity style={styles.clubPuzzleBtn}>
-          <Text style={styles.clubPuzzleIcon}>🧩</Text>
-          <View style={styles.clubPuzzleInfo}>
-            <Text style={styles.clubPuzzleTitle}>Club Puzzle</Text>
-            <Text style={styles.clubPuzzleDesc}>
-              Solve today's club challenge
-            </Text>
-          </View>
-          <Text style={styles.chevron}>›</Text>
+        <TouchableOpacity activeOpacity={0.8}>
+          <LinearGradient
+            colors={[COLORS.accent + '18', COLORS.accent + '08'] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.clubPuzzleBtn}
+          >
+            <Text style={styles.clubPuzzleIcon}>🧩</Text>
+            <View style={styles.clubPuzzleInfo}>
+              <Text style={styles.clubPuzzleTitle}>Club Puzzle</Text>
+              <Text style={styles.clubPuzzleDesc}>
+                Solve today's club challenge
+              </Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </LinearGradient>
         </TouchableOpacity>
 
         {/* Members */}
         <Text style={styles.sectionTitle}>Members</Text>
-        <View style={styles.membersCard}>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.membersCard}
+        >
           {data.members.length > 0 ? (
             data.members.map((member, index) => (
               <View key={member.id}>
@@ -251,7 +268,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
               <Text style={styles.emptyMembersText}>No members yet</Text>
             </View>
           )}
-        </View>
+        </LinearGradient>
 
         {/* Emoji Reactions */}
         <Text style={styles.sectionTitle}>Quick Reactions</Text>
@@ -493,13 +510,14 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   weeklyScoreCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 20,
+    borderRadius: 18,
+    padding: 22,
     alignItems: 'center',
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+    ...SHADOWS.medium,
   },
   weeklyScoreLabel: {
     fontSize: 13,
@@ -513,16 +531,19 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '800',
     color: COLORS.gold,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   clubPuzzleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.accent + '15',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: COLORS.accent + '40',
+    borderColor: COLORS.accent + '30',
+    ...SHADOWS.glow(COLORS.accent),
   },
   clubPuzzleIcon: {
     fontSize: 28,
@@ -547,12 +568,12 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   membersCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
     marginBottom: 20,
+    ...SHADOWS.medium,
   },
   memberRow: {
     flexDirection: 'row',
