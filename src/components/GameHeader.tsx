@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
 import { GameMode } from '../types';
@@ -41,12 +42,13 @@ export function GameHeader({
   onUndo,
   onBack,
 }: GameHeaderProps) {
+  const insets = useSafeAreaInsets();
   const modeConfig = MODE_CONFIGS[mode];
   const modeLabel = isDaily ? 'Daily' : mode !== 'classic' ? modeConfig.name : `Lv ${level}`;
   const progress = totalWords > 0 ? (foundWords / totalWords) * 100 : 0;
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { paddingTop: Math.max(insets.top, 6) + 4 }]}>
       <View style={styles.chromeCard}>
         <LinearGradient
           colors={GRADIENTS.header as unknown as [string, string, ...string[]]}
