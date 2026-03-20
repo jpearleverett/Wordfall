@@ -31,9 +31,10 @@ import { Board, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
-import { SettingsProvider } from './src/contexts/SettingsContext';
+import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
 import { PlayerProvider, usePlayer } from './src/contexts/PlayerContext';
 import { soundManager } from './src/services/sound';
+import { setHapticsEnabled } from './src/services/haptics';
 import { ATLAS_PAGES } from './src/data/collections';
 
 const Tab = createBottomTabNavigator();
@@ -495,6 +496,14 @@ function HomeMainScreen({ navigation }: any) {
         onResetProgress={handleReset}
         onOpenShop={() => navigation.navigate('Shop')}
         onOpenSettings={() => navigation.navigate('Settings')}
+        currencies={{
+          coins: economy.coins,
+          gems: economy.gems,
+          hintTokens: economy.hintTokens,
+          libraryPoints: economy.libraryPoints,
+        }}
+        currentChapter={player.currentChapter}
+        loginCycleDay={player.loginCycleDay}
       />
       {/* Welcome Back Modal */}
       {showWelcomeBack && (
@@ -544,7 +553,16 @@ function HomeMainScreen({ navigation }: any) {
 // Root app with onboarding check
 function AppContent() {
   const player = usePlayer();
+  const settings = useSettings();
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (!settings.loaded) return;
+    soundManager.setSfxVolume(settings.sfxVolume);
+    soundManager.setMusicVolume(settings.musicVolume);
+    soundManager.setMuted(settings.sfxVolume <= 0 && settings.musicVolume <= 0);
+    setHapticsEnabled(settings.hapticsEnabled);
+  }, [settings.loaded, settings.sfxVolume, settings.musicVolume, settings.hapticsEnabled]);
 
   useEffect(() => {
     if (player.loaded && !player.tutorialComplete) {
