@@ -288,3 +288,234 @@ Hints should help the player *think better*, not *skip thinking*. Every assist s
 - **Purchased hints:** Bundles of 10/25/50 available. Priced at $0.99/$1.99/$2.99.
 - **Progression rewards:** Completing chapters and daily streaks awards hint tokens.
 - **Never forced:** The game never requires hints. All puzzles are solvable through skill alone.
+
+---
+
+## 7. Progression and Meta Layer
+
+### Meta Fantasy: "The Word Architect"
+
+The player is restoring a grand library — a vast, beautiful building whose shelves, rooms, and wings have been emptied. Each puzzle solved recovers lost words and restores a section of the library. Chapters are themed wings (Nature Wing, Science Wing, Mythology Wing, etc.), and completing a chapter visually restores that section with bookshelves, reading nooks, and decorative elements.
+
+This fantasy works because:
+- It thematically connects to words and language
+- It provides visible, accumulating progress (empty shelves → full shelves)
+- It creates a home-base the player feels ownership over
+- It supports cosmetic customization (furniture styles, lighting, decorations)
+
+### Level Structure
+
+- **Chapters:** Groups of 15–20 puzzles. Each chapter has a theme (word categories lean toward the theme). ~40 chapters at launch.
+- **Difficulty ramp:** Within each chapter, difficulty increases gradually. Chapters themselves get harder as the player progresses.
+- **Star system:** Each puzzle awards 1–3 stars based on performance (hints used, move efficiency). Stars unlock bonus content.
+- **Chapter gates:** To enter a new chapter, the player needs a minimum star count from previous chapters (not 100% — ~60% of maximum). This prevents frustration walls while encouraging replaying for more stars.
+
+### Short / Mid / Long-Term Goals
+
+| Timeframe | Goal | Emotional Driver |
+|-----------|------|-----------------|
+| Short (1 min) | Solve this puzzle | Completion, mastery |
+| Mid (1 week) | Finish this chapter, complete the Nature collection | Progress, theme completion |
+| Long (1+ month) | Restore all library wings, reach Level 100, complete seasonal album | Status, completion, identity |
+
+### Milestone Unlocks
+
+- **Every 5 levels:** New library decoration unlock
+- **Chapter completion:** New library wing restored + chapter badge + bonus puzzle
+- **Star milestones (50/100/250/500):** Special cosmetic frames, titles, and hint packs
+- **Perfect solve milestones (10/25/50):** Gold-tier profile badges
+
+### Side Objectives
+
+- **Par challenges:** Solve in N moves or fewer for a bonus star
+- **No-hint challenges:** Complete 5 puzzles in a row without hints
+- **Theme master:** Find all words in a themed vocabulary set across multiple puzzles
+- **Speed runs:** Complete a chapter under a cumulative time target
+
+---
+
+## 8. Collection Systems
+
+### Collection 1: Word Atlas Pages
+
+Players collect illustrated "atlas pages" — each represents a word category (Animals, Weather, Food, Space, Music, etc.). Each page has 8–12 word slots. When a player finds a word during any puzzle that matches a slot, it fills in.
+
+- **How earned:** Organically during gameplay. Any puzzle can contribute to any collection.
+- **Set completion:** Completing a page (all words found) awards a decorative item for the library + hint tokens + a special animated page illustration.
+- **Duplicates:** Finding a word you already have adds to a "mastery counter" for that word, contributing to a per-word XP bar. Max mastery unlocks a gold border.
+- **Why it works:** Creates ambient goals during regular play. Players notice "oh, EAGLE — that's in my Animals page!" and feel bonus satisfaction.
+
+### Collection 2: Rare Letter Tiles
+
+Special golden letter tiles randomly drop when completing puzzles (higher chance on harder difficulties and perfect solves). Each tile is a letter A–Z with a themed design. Collecting full sets (e.g., WORDFALL = W+O+R+D+F+A+L+L) unlocks exclusive cosmetic themes.
+
+- **How earned:** Random drops with pity timer (guaranteed within 10 puzzles).
+- **Set completion:** Spelling specific words with collected tiles (PUZZLE, GRAVITY, CASCADE, etc.) unlocks rewards.
+- **Duplicates:** Extra tiles can be "recycled" into a wildcard tile (5 duplicates = 1 wildcard).
+- **Social exchange:** Club members can gift duplicate tiles to each other (limit: 3 gifts per day).
+- **Why it works:** Creates collection excitement, trading social bonds, and a reason to keep playing even after level content is completed.
+
+### Collection 3: Seasonal Stamps
+
+Each season (quarterly) introduces a themed stamp album with 20 stamps. Stamps are earned through seasonal activities: events, daily challenges, special puzzles. The album is available for 90 days.
+
+- **How earned:** Seasonal events, daily challenges, milestone rewards during the season.
+- **Set completion:** Completing the album awards an exclusive seasonal badge + premium cosmetic.
+- **Partial completion:** Every 5 stamps awards a smaller reward. No penalty for incomplete albums.
+- **Why it works:** Creates time-bounded motivation and fresh content cadence.
+
+---
+
+## 9. Daily / Weekly / Seasonal Retention Systems
+
+### Design Principle
+
+Every return system should feel like "I want to come back" not "I'm punished if I miss a day." Rewards escalate for consistency but never punish absence. Comeback mechanics welcome returning players warmly.
+
+### Daily Systems
+
+**Daily Puzzle:** One puzzle per day, same for all players (seed = date). Medium difficulty. Completion awards daily currency + stamp progress. Always available for 24 hours — if missed, it's gone (but no penalty).
+
+**Daily Missions (3 per day):**
+- Find 10 words across any mode
+- Complete 2 puzzles without hints
+- Achieve a 3x combo
+Completing all 3 awards a bonus chest with random rewards (hints, tiles, currency).
+
+**Daily Login Gift:** A small reward for opening the app. Escalates over a 7-day cycle (Day 1: 50 coins, Day 7: rare tile + 200 coins). Cycle resets after Day 7 regardless of streaks.
+
+### Streak System (with Forgiveness)
+
+- **Streak counter:** Increments each day the player completes the daily puzzle.
+- **Streak rewards:** Every 7 days, a bonus reward tier unlocks. At 30 days, a special cosmetic.
+- **Forgiveness:** Missing one day doesn't break the streak — the player gets a "grace day" (1 per streak). Missing 2 consecutive days resets the streak.
+- **Streak recovery:** After a streak breaks, the player can purchase a "streak shield" (soft currency, not premium) to restore it. Limited to once per 30 days.
+
+### Weekly Systems
+
+**Weekly Challenge Ladder:** 5 escalating puzzles released on Monday. Each harder than the last. Completing all 5 awards a weekly chest. Leaderboard based on cumulative score.
+
+**Weekend Blitz:** Saturday–Sunday special event with double XP and increased rare tile drop rates.
+
+### Monthly / Seasonal
+
+**Monthly Mastery Track:** 30-tier reward track. Free tier and premium tier (premium pass required). Each daily puzzle completed advances 1 tier. Even without the pass, the free tier provides meaningful rewards.
+
+**Seasonal Album:** See Collection System 3. 90-day collection event with exclusive rewards.
+
+### Comeback Mechanics
+
+- **3-day absence:** Welcome-back gift (hint pack + bonus coins).
+- **7-day absence:** "We missed you" screen with a specially curated easy puzzle + welcome-back rewards.
+- **30-day absence:** Full reactivation package: free premium hints, a guided re-onboarding puzzle, and double rewards for 3 days.
+
+---
+
+## 10. Social Systems
+
+### Clubs (Teams)
+
+- **Size:** 10–30 members.
+- **Weekly club score:** Sum of all members' puzzle scores. Club leaderboard with tier rewards.
+- **Club puzzle:** One shared puzzle per day. All members contribute attempts. Best score counts.
+- **Chat:** Simple emoji-reaction chat (low-moderation approach). No free-text to minimize toxicity.
+- **Why players care:** Belonging, friendly competition, shared identity, reason to play daily even when personal motivation is low.
+- **Retention impact:** Club members retain 2–3x better than solo players (industry standard).
+- **Moderation:** Auto-kick inactive members after 14 days (configurable by club leaders).
+
+### Async Competition
+
+- **Friend challenges:** Send a puzzle to a friend. They try to beat your score. Turn-based, no time pressure.
+- **Weekly rival:** Auto-matched with a player of similar skill. Both play the same 5 puzzles. Higher total score wins.
+- **Why it works:** Competition without synchronous play. Fits casual lifestyles.
+
+### Sharing & Creator Systems
+
+- **Smart Solve Replay:** After completing a puzzle, a "share replay" button generates a short animated GIF/video of the solve sequence. Shareable to social media.
+- **Daily Streak Card:** Shareable image showing current streak, stars earned, and level reached.
+- **Collection Completion Card:** When a collection is completed, a shareable card celebrates it.
+- **Leaderboard Snapshots:** Weekly ranking shareable with club name and personal stats.
+
+### Gifting
+
+- **Hint gifts:** Send 1 hint token per day to a friend.
+- **Tile exchange:** Trade duplicate rare tiles with club members (3 per day max).
+- **Why it works:** Creates reciprocity bonds. Players feel both generous and grateful.
+
+---
+
+## 11. Economy Design
+
+### Currency Overview
+
+| Currency | Source | Sink | Scarcity | Emotional Meaning |
+|----------|--------|------|----------|-------------------|
+| **Coins** (soft) | Puzzle completion, daily rewards, missions | Hint refills, cosmetic decorations, streak shields | Low — flows freely | "Steady progress" |
+| **Gems** (premium) | Purchase, rare achievements, season pass | Premium boosters, exclusive cosmetics, event entries | High — scarce and valuable | "Special occasions" |
+| **Hint Tokens** | Free per puzzle, ads, coin purchase, gifts | Reveal Word, Strategic Hint, Undo | Medium — replenish each puzzle but run out on hard content | "Safety net" |
+| **Event Stars** | Event participation | Event reward tiers | Time-limited | "Seasonal excitement" |
+| **Library Points** | Puzzle completion, star milestones | Library decorations and upgrades | Medium | "Building my space" |
+
+### Pacing Model: Unlimited Play with Soft Gating
+
+**No energy/lives system.** Players can play unlimited puzzles. This is critical for a strategy game — artificial play limits would frustrate planning-oriented players and conflict with the "outsmart the board" fantasy.
+
+**Soft gating via chapter star requirements.** Players need ~60% of maximum stars to unlock the next chapter. This encourages replaying for better scores without hard-blocking.
+
+**Hint scarcity as monetization lever.** Hints are free each puzzle but limited. Hard puzzles may require more hints than the free allotment. This creates natural, non-manipulative purchase motivation.
+
+### Why No Energy System
+
+Energy systems work for games where the core loop is simple and fast (match-3). Wordfall's core loop involves strategic planning — players need time to think. Interrupting this with "you've run out of energy" would destroy the flow state and feel hostile. Instead, monetize through assists (hints/undos) and cosmetics.
+
+---
+
+## 12. Monetization Design
+
+### Offer Catalog
+
+**Starter Pack ($1.99)** — Available first 72 hours after install.
+- 500 coins + 50 gems + 10 hint tokens + 1 exclusive decoration
+- **Trigger:** After completing level 3 (player understands the game)
+- **Why it's fair:** Extreme value for the price. No pressure. Time limit is real but generous.
+- **Anti-predatory:** One-time purchase, no recurring pressure.
+
+**Hint Bundle ($0.99–$2.99)** — Always available in the shop.
+- 10/25/50 hint tokens at escalating discounts
+- **Trigger:** When player runs out of hints on a hard puzzle
+- **Why it's fair:** Hints help but don't solve. Player still needs to think.
+
+**Undo Bundle ($0.99–$2.99)** — Always available.
+- 10/25/50 undo charges
+- **Trigger:** After a dead-end state is detected
+- **Why it's fair:** Undo is fundamentally a learning tool. It recovers from mistakes.
+
+**Daily Value Pack ($0.99/day, auto-ends)** — Available after Day 3.
+- Daily drip of 100 coins + 5 gems + 3 hint tokens for 7 days
+- **Trigger:** At daily login
+- **Why it's fair:** Excellent value. Auto-expires — no forgotten subscriptions.
+
+**Chapter Completion Bundle ($2.99)** — Offered when entering a new chapter.
+- Theme-specific decoration + 20 gems + 10 hints + 1 Board Preview booster
+- **Trigger:** On chapter unlock screen
+- **Why it's fair:** Celebrates progress, provides tools for harder content ahead.
+
+**Premium Pass ($4.99/season)** — Available at season start.
+- Unlocks premium tier of the monthly mastery track (cosmetics, gems, exclusive decorations)
+- **Trigger:** Season start event screen
+- **Why it's fair:** All gameplay content is free. Pass only accelerates cosmetic/collectible progress.
+- **Anti-predatory:** Free tier is still rewarding. Pass is never required.
+
+**Ad Removal ($4.99, one-time)** — Available in settings.
+- Removes all interstitial and banner ads permanently
+- Rewarded ads (watch for hints) remain opt-in
+- **Why it's fair:** Respects player choice. Rewarded ads are voluntary.
+
+### Anti-Predatory Safeguards
+
+- **No impossible boards.** Every puzzle is verified solvable. Difficulty comes from strategy, not RNG.
+- **No forced frustration.** Difficulty ramp is gradual. Players are never artificially stuck.
+- **No opaque odds.** All random rewards show exact probabilities.
+- **No deceptive countdowns.** Timer-based offers show real end times. No fake urgency.
+- **Spending caps:** Optional parental controls and spending limit settings.
+- **No gacha mechanics.** Collections are earned through gameplay, not random purchases.
