@@ -27,19 +27,19 @@ export const COLORS = {
   textMuted: '#4a5280',
 
   accent: '#00d4ff',
-  accentGlow: 'rgba(0, 212, 255, 0.3)',
+  accentGlow: 'rgba(0, 212, 255, 0.45)',
   gold: '#ffd700',
-  goldGlow: 'rgba(255, 215, 0, 0.3)',
+  goldGlow: 'rgba(255, 215, 0, 0.45)',
   green: '#4caf50',
-  greenGlow: 'rgba(76, 175, 80, 0.3)',
+  greenGlow: 'rgba(76, 175, 80, 0.4)',
   coral: '#ff6b6b',
-  coralGlow: 'rgba(255, 107, 107, 0.3)',
+  coralGlow: 'rgba(255, 107, 107, 0.4)',
   purple: '#a855f7',
-  purpleGlow: 'rgba(168, 85, 247, 0.3)',
+  purpleGlow: 'rgba(168, 85, 247, 0.4)',
   orange: '#ff9f43',
-  orangeGlow: 'rgba(255, 159, 67, 0.3)',
+  orangeGlow: 'rgba(255, 159, 67, 0.4)',
   teal: '#2ed8a3',
-  tealGlow: 'rgba(46, 216, 163, 0.3)',
+  tealGlow: 'rgba(46, 216, 163, 0.4)',
 
   wordFound: '#4caf50',
   wordPending: '#8890b5',
@@ -68,6 +68,64 @@ export const COLORS = {
   // Tab bar
   tabActive: '#00d4ff',
   tabInactive: '#4a5280',
+};
+
+// Gradient presets for LinearGradient
+export const GRADIENTS = {
+  tile: {
+    default: ['#1e2460', '#2a3078'] as const,
+    selected: ['#00d4ff', '#0099cc'] as const,
+    valid: ['#2ecc71', '#27ae60'] as const,
+    hint: ['#ffd700', '#f0a500'] as const,
+    frozen: ['#1a3a5c', '#1e2d50'] as const,
+  },
+  button: {
+    primary: ['#00d4ff', '#0088cc'] as const,
+    gold: ['#ffd700', '#ff9f00'] as const,
+    danger: ['#ff6b6b', '#ee5a24'] as const,
+    green: ['#2ecc71', '#27ae60'] as const,
+  },
+  surface: ['#1c2150', '#161b3d'] as const,
+  surfaceCard: ['#1e2352', '#181d42'] as const,
+  header: ['#1e2352', '#141838'] as const,
+  bg: ['#080c22', '#0d1130', '#0a0e27'] as const,
+  grid: ['#151a42', '#1a1f4a'] as const,
+  gridBorder: ['rgba(0,212,255,0.15)', 'rgba(168,85,247,0.12)'] as const,
+  victoryCard: ['#1e2458', '#1a1f50', '#16193e'] as const,
+  scorePanel: ['#141838', '#1a1f4a'] as const,
+  tabBar: ['#1a1f45', '#161b3d'] as const,
+};
+
+// Shadow presets
+export const SHADOWS = {
+  soft: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  medium: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  strong: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 14,
+  },
+  glow: (color: string) => ({
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+  }),
 };
 
 // Difficulty configs

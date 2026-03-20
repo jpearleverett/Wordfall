@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS } from '../constants';
 import { useSettings } from '../contexts/SettingsContext';
 
 const { width } = Dimensions.get('window');
@@ -22,27 +23,27 @@ interface ShopItem {
 }
 
 const HINT_BUNDLES: ShopItem[] = [
-  { id: 'hints_10', name: '10 Hints', icon: '💡', price: '$0.99', quantity: 10 },
-  { id: 'hints_25', name: '25 Hints', icon: '💡', price: '$1.99', quantity: 25 },
-  { id: 'hints_50', name: '50 Hints', icon: '💡', price: '$2.99', quantity: 50, bestValue: true },
+  { id: 'hints_10', name: '10 Hints', icon: '\u{1F4A1}', price: '$0.99', quantity: 10 },
+  { id: 'hints_25', name: '25 Hints', icon: '\u{1F4A1}', price: '$1.99', quantity: 25 },
+  { id: 'hints_50', name: '50 Hints', icon: '\u{1F4A1}', price: '$2.99', quantity: 50, bestValue: true },
 ];
 
 const UNDO_BUNDLES: ShopItem[] = [
-  { id: 'undos_10', name: '10 Undos', icon: '↩️', price: '$0.99', quantity: 10 },
-  { id: 'undos_25', name: '25 Undos', icon: '↩️', price: '$1.99', quantity: 25 },
-  { id: 'undos_50', name: '50 Undos', icon: '↩️', price: '$2.99', quantity: 50, bestValue: true },
+  { id: 'undos_10', name: '10 Undos', icon: '\u21A9\uFE0F', price: '$0.99', quantity: 10 },
+  { id: 'undos_25', name: '25 Undos', icon: '\u21A9\uFE0F', price: '$1.99', quantity: 25 },
+  { id: 'undos_50', name: '50 Undos', icon: '\u21A9\uFE0F', price: '$2.99', quantity: 50, bestValue: true },
 ];
 
 const COIN_PACKS: ShopItem[] = [
-  { id: 'coins_500', name: '500 Coins', icon: '🪙', price: '$0.99', quantity: 500 },
-  { id: 'coins_1500', name: '1,500 Coins', icon: '🪙', price: '$2.99', quantity: 1500 },
-  { id: 'coins_5000', name: '5,000 Coins', icon: '🪙', price: '$7.99', quantity: 5000, bestValue: true },
+  { id: 'coins_500', name: '500 Coins', icon: '\u{1FA99}', price: '$0.99', quantity: 500 },
+  { id: 'coins_1500', name: '1,500 Coins', icon: '\u{1FA99}', price: '$2.99', quantity: 1500 },
+  { id: 'coins_5000', name: '5,000 Coins', icon: '\u{1FA99}', price: '$7.99', quantity: 5000, bestValue: true },
 ];
 
 const GEM_PACKS: ShopItem[] = [
-  { id: 'gems_50', name: '50 Gems', icon: '💎', price: '$1.99', quantity: 50 },
-  { id: 'gems_150', name: '150 Gems', icon: '💎', price: '$4.99', quantity: 150 },
-  { id: 'gems_500', name: '500 Gems', icon: '💎', price: '$14.99', quantity: 500, bestValue: true },
+  { id: 'gems_50', name: '50 Gems', icon: '\u{1F48E}', price: '$1.99', quantity: 50 },
+  { id: 'gems_150', name: '150 Gems', icon: '\u{1F48E}', price: '$4.99', quantity: 150 },
+  { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', price: '$14.99', quantity: 500, bestValue: true },
 ];
 
 interface ShopScreenProps {
@@ -88,14 +89,32 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       onPress={() => onPurchase(item.id)}
       activeOpacity={0.7}
     >
+      <LinearGradient
+        colors={[...GRADIENTS.surfaceCard]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+      />
       {item.bestValue && (
         <View style={styles.bestValueBadge}>
+          <LinearGradient
+            colors={[...GRADIENTS.button.gold]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
           <Text style={styles.bestValueText}>BEST VALUE</Text>
         </View>
       )}
       <Text style={styles.itemIcon}>{item.icon}</Text>
       <Text style={styles.itemName}>{item.name}</Text>
       <View style={styles.priceTag}>
+        <LinearGradient
+          colors={[...GRADIENTS.button.primary]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        />
         <Text style={styles.priceText}>{item.price}</Text>
       </View>
     </TouchableOpacity>
@@ -130,11 +149,17 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => onPurchase('starter_pack')}
             activeOpacity={0.7}
           >
+            <LinearGradient
+              colors={['#1e2352', '#181d42']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
             <View style={styles.featuredGlow} />
             <View style={styles.featuredBadge}>
               <Text style={styles.featuredBadgeText}>LIMITED TIME</Text>
             </View>
-            <Text style={styles.featuredIcon}>🎁</Text>
+            <Text style={styles.featuredIcon}>{'\u{1F381}'}</Text>
             <Text style={styles.featuredName}>Starter Pack</Text>
             <Text style={styles.featuredDesc}>
               50 Hints + 25 Undos + 1000 Coins
@@ -153,11 +178,17 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => onPurchase('weekend_special')}
             activeOpacity={0.7}
           >
+            <LinearGradient
+              colors={['#251e52', '#1e1842']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
             <View style={[styles.featuredGlow, { backgroundColor: COLORS.purpleGlow }]} />
             <View style={[styles.featuredBadge, { backgroundColor: COLORS.purple }]}>
               <Text style={styles.featuredBadgeText}>SPECIAL</Text>
             </View>
-            <Text style={styles.featuredIcon}>✨</Text>
+            <Text style={styles.featuredIcon}>{'\u2728'}</Text>
             <Text style={styles.featuredName}>Weekend Bundle</Text>
             <Text style={styles.featuredDesc}>
               100 Gems + 3000 Coins + Rare Frame
@@ -196,7 +227,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => onPurchase('daily_value')}
             activeOpacity={0.7}
           >
-            <Text style={styles.premiumIcon}>📦</Text>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <Text style={styles.premiumIcon}>{'\u{1F4E6}'}</Text>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>Daily Value Pack</Text>
               <Text style={styles.premiumDesc}>
@@ -204,6 +241,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               </Text>
             </View>
             <View style={styles.priceTag}>
+              <LinearGradient
+                colors={[...GRADIENTS.button.primary]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
               <Text style={styles.priceText}>$0.99</Text>
             </View>
           </TouchableOpacity>
@@ -216,7 +259,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => !premiumPass && onPurchase('premium_pass')}
             activeOpacity={premiumPass ? 1 : 0.7}
           >
-            <Text style={styles.premiumIcon}>👑</Text>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <Text style={styles.premiumIcon}>{'\u{1F451}'}</Text>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>Premium Pass</Text>
               <Text style={styles.premiumDesc}>
@@ -229,6 +278,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               </View>
             ) : (
               <View style={styles.priceTag}>
+                <LinearGradient
+                  colors={[...GRADIENTS.button.primary]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
                 <Text style={styles.priceText}>$4.99</Text>
               </View>
             )}
@@ -242,7 +297,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => !adsRemoved && onPurchase('ad_removal')}
             activeOpacity={adsRemoved ? 1 : 0.7}
           >
-            <Text style={styles.premiumIcon}>🚫</Text>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <Text style={styles.premiumIcon}>{'\u{1F6AB}'}</Text>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>Remove Ads</Text>
               <Text style={styles.premiumDesc}>
@@ -255,6 +316,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               </View>
             ) : (
               <View style={styles.priceTag}>
+                <LinearGradient
+                  colors={[...GRADIENTS.button.primary]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
                 <Text style={styles.priceText}>$4.99</Text>
               </View>
             )}
@@ -284,6 +351,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.accent,
     letterSpacing: 4,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   scrollView: {
     flex: 1,
@@ -297,6 +367,9 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginTop: 24,
     marginBottom: 12,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   featuredScroll: {
     marginTop: 8,
@@ -307,15 +380,20 @@ const styles = StyleSheet.create({
   },
   featuredCard: {
     width: width * 0.7,
-    backgroundColor: COLORS.surface,
     borderRadius: 18,
     padding: 20,
     borderWidth: 1,
     borderColor: COLORS.accent,
     overflow: 'hidden',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
   },
   featuredCardAlt: {
     borderColor: COLORS.purple,
+    shadowColor: COLORS.purple,
   },
   featuredGlow: {
     position: 'absolute',
@@ -348,6 +426,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.textPrimary,
     marginBottom: 4,
+    textShadowColor: 'rgba(255,255,255,0.15)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   featuredDesc: {
     fontSize: 13,
@@ -370,6 +451,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: COLORS.green,
+    textShadowColor: 'rgba(76,175,80,0.4)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   timerContainer: {
     backgroundColor: COLORS.accent + '20',
@@ -390,22 +474,26 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     width: ITEM_CARD_WIDTH,
-    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   bestValueBadge: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: COLORS.gold,
     paddingVertical: 3,
     alignItems: 'center',
+    overflow: 'hidden',
   },
   bestValueText: {
     fontSize: 9,
@@ -424,12 +512,15 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     textAlign: 'center',
     marginBottom: 8,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   priceTag: {
-    backgroundColor: COLORS.accent,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 6,
+    overflow: 'hidden',
   },
   priceText: {
     fontSize: 14,
@@ -442,11 +533,16 @@ const styles = StyleSheet.create({
   premiumCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   purchasedCard: {
     opacity: 0.6,
@@ -463,6 +559,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginBottom: 2,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   premiumDesc: {
     fontSize: 12,

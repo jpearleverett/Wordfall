@@ -10,11 +10,11 @@ import {
   GestureDetector,
   Gesture,
 } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Grid as GridType, CellPosition } from '../types';
 import { LetterCell } from './LetterCell';
-import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
+import { CELL_GAP, COLORS, GRADIENTS, MAX_GRID_WIDTH } from '../constants';
 
-// Enable LayoutAnimation on Android
 if (
   Platform.OS === 'android' &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -73,7 +73,6 @@ export function GameGrid({
     return set;
   }, [movedCells]);
 
-  // Render columns for gravity-friendly layout
   const columns = useMemo(() => {
     const cols_arr: { cell: NonNullable<GridType[0][0]>; row: number; col: number }[][] = [];
     for (let c = 0; c < cols; c++) {
@@ -92,22 +91,18 @@ export function GameGrid({
   const gridWidth = cols * (cellSize + CELL_GAP) + CELL_GAP;
   const gridHeight = rows * (cellSize + CELL_GAP) + CELL_GAP;
 
-  // Build a map of cell positions to their pixel bounds within the grid
-  // The grid uses column-based flex-end layout, so we compute positions accordingly
   const cellBounds = useMemo(() => {
     const bounds: { row: number; col: number; x: number; y: number; w: number; h: number }[] = [];
     const cellStride = cellSize + CELL_GAP;
     const padding = CELL_GAP / 2;
 
     for (let c = 0; c < cols; c++) {
-      // Column cells are flex-end aligned, so count non-null cells
       const colCells: { row: number }[] = [];
       for (let r = 0; r < rows; r++) {
         if (grid[r][c]) {
           colCells.push({ row: r });
         }
       }
-      // Cells are stacked from bottom, with flex spacer on top
       const colX = padding + c * cellStride;
       const totalCellHeight = colCells.length * cellStride;
       const startY = gridHeight - totalCellHeight;
@@ -126,7 +121,6 @@ export function GameGrid({
     return bounds;
   }, [grid, rows, cols, cellSize, gridHeight]);
 
-  // Track the grid container position for coordinate conversion
   const gridRef = useRef<View>(null);
   const gridLayoutRef = useRef({ x: 0, y: 0 });
   const lastDragCellRef = useRef<string | null>(null);
@@ -141,7 +135,6 @@ export function GameGrid({
     return null;
   }, [cellBounds]);
 
-  // Use react-native-gesture-handler for drag selection
   const panGesture = Gesture.Pan()
     .minDistance(0)
     .onBegin((e) => {
@@ -175,7 +168,6 @@ export function GameGrid({
       lastDragCellRef.current = null;
     });
 
-  // Tap gesture for single taps (fallback)
   const tapGesture = Gesture.Tap()
     .onEnd((e) => {
       const cell = hitTestCell(e.x, e.y);
@@ -184,93 +176,144 @@ export function GameGrid({
       }
     });
 
-  // Compose: pan takes priority, tap is fallback
   const composedGesture = Gesture.Race(panGesture, tapGesture);
 
-  return (
-    <GestureDetector gesture={composedGesture}>
-      <View
-        ref={gridRef}
-        style={[styles.gridContainer, { width: gridWidth, height: gridHeight }]}
-      >
-        <View pointerEvents="none" style={styles.boardAura} />
-        <View pointerEvents="none" style={styles.boardHighlight} />
-        {columns.map((column, colIndex) => (
-          <View
-            key={colIndex}
-            style={[
-              styles.column,
-              {
-                width: cellSize + CELL_GAP,
-                height: gridHeight,
-              },
-              frozenSet.has(colIndex) && styles.frozenColumn,
-            ]}
-          >
-            <View style={{ flex: 1 }} />
-            {column.map(({ cell, row, col }) => {
-              const key = `${row},${col}`;
-              const selIndex = selectedSet.get(key) ?? -1;
-              const isSelected = selIndex >= 0;
-              const isHinted = hintedSet.has(key);
+  // Outer wrapper dimensions include the gradient border padding
+  const borderWidth = 2;
+  const outerWidth = gridWidth + borderWidth * 2;
+  const outerHeight = gridHeight + borderWidth * 2;
 
-              return (
-                <LetterCell
-                  key={cell.id}
-                  letter={cell.letter}
-                  cellId={cell.id}
-                  size={cellSize}
-                  isSelected={isSelected}
-                  isHinted={isHinted}
-                  selectionIndex={selIndex}
-                  onPress={() => onCellPress({ row, col })}
-                  isFrozen={frozenSet.has(col)}
-                  isValidWord={validWord && isSelected}
-                  isMoved={movedSet.has(key)}
-                />
-              );
-            })}
-          </View>
-        ))}
-      </View>
-    </GestureDetector>
+  return (
+    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 22 }]}>
+      {/* Gradient border effect */}
+      <LinearGradient
+        colors={GRADIENTS.gridBorder as unknown as [string, string, ...string[]]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
+      />
+      {/* Ambient glow behind grid */}
+      <View style={styles.ambientGlow1} />
+      <View style={styles.ambientGlow2} />
+      <GestureDetector gesture={composedGesture}>
+        <View
+          ref={gridRef}
+          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 20 }]}
+        >
+          {/* Grid background gradient */}
+          <LinearGradient
+            colors={GRADIENTS.grid as unknown as [string, string, ...string[]]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.2, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, { borderRadius: 20 }]}
+          />
+          {/* Inner vignette corners */}
+          <View pointerEvents="none" style={styles.vignetteTop} />
+          <View pointerEvents="none" style={styles.vignetteBottom} />
+          {/* Board highlight shine */}
+          <View pointerEvents="none" style={styles.boardHighlight} />
+          {columns.map((column, colIndex) => (
+            <View
+              key={colIndex}
+              style={[
+                styles.column,
+                {
+                  width: cellSize + CELL_GAP,
+                  height: gridHeight,
+                },
+                frozenSet.has(colIndex) && styles.frozenColumn,
+              ]}
+            >
+              <View style={{ flex: 1 }} />
+              {column.map(({ cell, row, col }) => {
+                const key = `${row},${col}`;
+                const selIndex = selectedSet.get(key) ?? -1;
+                const isSelected = selIndex >= 0;
+                const isHinted = hintedSet.has(key);
+
+                return (
+                  <LetterCell
+                    key={cell.id}
+                    letter={cell.letter}
+                    cellId={cell.id}
+                    size={cellSize}
+                    isSelected={isSelected}
+                    isHinted={isHinted}
+                    selectionIndex={selIndex}
+                    onPress={() => onCellPress({ row, col })}
+                    isFrozen={frozenSet.has(col)}
+                    isValidWord={validWord && isSelected}
+                    isMoved={movedSet.has(key)}
+                  />
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      </GestureDetector>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  outerWrapper: {
+    alignSelf: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 14,
+  },
+  ambientGlow1: {
+    position: 'absolute',
+    top: -50,
+    right: -40,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: COLORS.accentGlow,
+    opacity: 0.35,
+  },
+  ambientGlow2: {
+    position: 'absolute',
+    bottom: -40,
+    left: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: COLORS.purpleGlow,
+    opacity: 0.3,
+  },
   gridContainer: {
     flexDirection: 'row',
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
     padding: CELL_GAP / 2,
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
     overflow: 'hidden',
   },
-  boardAura: {
+  vignetteTop: {
     position: 'absolute',
-    top: -40,
-    right: -30,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: COLORS.accentGlow,
-    opacity: 0.45,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 30,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  vignetteBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 20,
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   boardHighlight: {
     position: 'absolute',
-    left: 18,
-    right: 18,
-    top: 10,
-    height: 18,
+    left: 20,
+    right: 20,
+    top: 8,
+    height: 14,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   column: {
     flexDirection: 'column',
@@ -278,7 +321,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   frozenColumn: {
-    backgroundColor: 'rgba(0, 212, 255, 0.08)',
-    borderRadius: 8,
+    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+    borderRadius: 10,
   },
 });

@@ -10,18 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-
-const COLORS = {
-  bg: '#0a0e27',
-  bgLight: '#111638',
-  surface: '#1a1f45',
-  surfaceLight: '#252b5e',
-  textPrimary: '#ffffff',
-  textSecondary: '#8890b5',
-  textMuted: '#4a5280',
-  accent: '#00d4ff',
-  accentGlow: 'rgba(0, 212, 255, 0.3)',
-};
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS } from '../../constants';
 
 interface ModalProps {
   visible: boolean;
@@ -88,20 +78,43 @@ export default function Modal({ visible, onClose, title, children }: ModalProps)
         </Animated.View>
 
         <Animated.View
-          style={[styles.card, { transform: [{ translateY }] }]}
+          style={[styles.cardOuter, { transform: [{ translateY }] }]}
         >
-          <View style={styles.header}>
-            {title ? <Text style={styles.title}>{title}</Text> : <View />}
-            <TouchableOpacity
-              onPress={onClose}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={styles.closeButton}
+          {/* Gradient border wrapper */}
+          <LinearGradient
+            colors={['rgba(0,212,255,0.25)', 'rgba(168,85,247,0.15)', 'rgba(0,212,255,0.08)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.borderGradient}
+          >
+            {/* Card interior with gradient background */}
+            <LinearGradient
+              colors={['#1e2352', '#181d42']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={styles.card}
             >
-              <Text style={styles.closeText}>{'\u2715'}</Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.header}>
+                {title ? <Text style={styles.title}>{title}</Text> : <View />}
+                <TouchableOpacity
+                  onPress={onClose}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  style={styles.closeButtonOuter}
+                >
+                  <LinearGradient
+                    colors={['#2a3068', '#222755']}
+                    start={{ x: 0.5, y: 0 }}
+                    end={{ x: 0.5, y: 1 }}
+                    style={styles.closeButton}
+                  >
+                    <Text style={styles.closeText}>{'\u2715'}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
 
-          <View style={styles.body}>{children}</View>
+              <View style={styles.body}>{children}</View>
+            </LinearGradient>
+          </LinearGradient>
         </Animated.View>
       </KeyboardAvoidingView>
     </RNModal>
@@ -116,21 +129,24 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(4, 6, 18, 0.88)',
   },
-  card: {
+  cardOuter: {
     width: '88%',
     maxHeight: '80%',
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.6,
     shadowRadius: 24,
-    elevation: 24,
+    elevation: 16,
+  },
+  borderGradient: {
+    borderRadius: 22,
+    padding: 1.5,
+  },
+  card: {
+    borderRadius: 20.5,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -147,11 +163,14 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  closeButtonOuter: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.surfaceLight,
     alignItems: 'center',
     justifyContent: 'center',
   },

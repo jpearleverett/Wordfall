@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { COLORS } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
@@ -58,6 +59,21 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
         onPress={() => unlocked && onSelectMode(mode.id)}
         activeOpacity={unlocked ? 0.7 : 1}
       >
+        {unlocked ? (
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+        ) : (
+          <LinearGradient
+            colors={['#121636', '#0e1230']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+        )}
         {unlocked && <View style={styles.cardGlow} />}
         <View style={styles.cardContent}>
           <Text style={styles.cardIcon}>{unlocked ? mode.icon : '🔒'}</Text>
@@ -115,6 +131,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.accent,
     letterSpacing: 4,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   headerSubtitle: {
     fontSize: 14,
@@ -135,16 +154,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     minHeight: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
   },
   cardUnlocked: {
-    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   cardLocked: {
-    backgroundColor: COLORS.bgLight,
     borderWidth: 1,
-    borderColor: COLORS.cellDefault,
+    borderColor: 'rgba(255,255,255,0.05)',
     opacity: 0.6,
   },
   cardGlow: {
@@ -155,10 +177,10 @@ const styles = StyleSheet.create({
     height: 3,
     backgroundColor: COLORS.accent,
     shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 6,
   },
   cardContent: {
     padding: 16,
@@ -176,6 +198,9 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     textAlign: 'center',
     marginBottom: 6,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   textLocked: {
     color: COLORS.textMuted,
@@ -191,10 +216,18 @@ const styles = StyleSheet.create({
     color: COLORS.gold,
     textAlign: 'center',
     fontWeight: '600',
+    textShadowColor: 'rgba(255,215,0,0.3)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   cardAccent: {
     height: 3,
-    backgroundColor: COLORS.surfaceLight,
+    backgroundColor: COLORS.accent,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
   },
   bottomSpacer: {
     height: 40,

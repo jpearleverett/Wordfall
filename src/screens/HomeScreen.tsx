@@ -7,7 +7,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import { COLORS, ECONOMY } from '../constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, ECONOMY, GRADIENTS, SHADOWS } from '../constants';
 import { Difficulty, PlayerProgress } from '../types';
 import { soundManager } from '../services/sound';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -30,11 +31,11 @@ interface HomeScreenProps {
   loginCycleDay?: number;
 }
 
-const difficultyMeta: Record<Difficulty, { label: string; accent: string; blurb: string }> = {
-  easy: { label: 'Easy', accent: COLORS.green, blurb: 'Warm-up boards with flexible solutions.' },
-  medium: { label: 'Medium', accent: COLORS.accent, blurb: 'Balanced strategy with visible gravity pivots.' },
-  hard: { label: 'Hard', accent: COLORS.orange, blurb: 'Tighter routes and sharper consequences.' },
-  expert: { label: 'Expert', accent: COLORS.purple, blurb: 'Minimal margin for error and deeper planning.' },
+const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: string }> = {
+  easy: { label: 'Easy', accent: COLORS.green, icon: '🌱' },
+  medium: { label: 'Medium', accent: COLORS.accent, icon: '⚡' },
+  hard: { label: 'Hard', accent: COLORS.orange, icon: '🔥' },
+  expert: { label: 'Expert', accent: COLORS.purple, icon: '💎' },
 };
 
 export function HomeScreen({
@@ -102,20 +103,36 @@ export function HomeScreen({
         <View style={styles.topBarRight}>
           {currencies && (
             <>
-              <View style={styles.currencyChip}>
+              <LinearGradient
+                colors={GRADIENTS.surfaceCard}
+                style={styles.currencyChip}
+              >
                 <Text style={styles.currencyLabel}>🪙 {currencies.coins}</Text>
-              </View>
-              <View style={styles.currencyChip}>
+              </LinearGradient>
+              <LinearGradient
+                colors={GRADIENTS.surfaceCard}
+                style={styles.currencyChip}
+              >
                 <Text style={styles.currencyLabel}>💎 {currencies.gems}</Text>
-              </View>
-              <View style={styles.currencyChip}>
+              </LinearGradient>
+              <LinearGradient
+                colors={GRADIENTS.surfaceCard}
+                style={styles.currencyChip}
+              >
                 <Text style={styles.currencyLabel}>💡 {currencies.hintTokens}</Text>
-              </View>
+              </LinearGradient>
             </>
           )}
           {onOpenShop && (
-            <Pressable style={styles.shopButton} onPress={onOpenShop}>
-              <Text style={styles.shopButtonText}>Shop</Text>
+            <Pressable onPress={onOpenShop}>
+              <LinearGradient
+                colors={GRADIENTS.button.primary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.shopButton}
+              >
+                <Text style={styles.shopButtonText}>Shop</Text>
+              </LinearGradient>
             </Pressable>
           )}
         </View>
@@ -123,81 +140,111 @@ export function HomeScreen({
 
       <Animated.View
         style={[
-          styles.heroCard,
           {
             opacity: titleAnim,
             transform: [{ translateY: heroTranslate }, { scale: titleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }],
           },
         ]}
       >
-        <View style={styles.heroGlowPrimary} />
-        <View style={styles.heroGlowSecondary} />
-        <Text style={styles.heroEyebrow}>Premium strategy word puzzle</Text>
-        <Text style={styles.title}>WORD<Text style={styles.titleAccent}>FALL</Text></Text>
-        <Text style={styles.subtitle}>
-          Every word changes the board. Predict the collapse, sequence the clears, and restore Chapter {currentChapter} of the library.
-        </Text>
-        <HomeHeroIllustration />
-
-        <View style={styles.heroStatsRow}>
-          <View style={styles.heroStatCard}>
-            <Text style={styles.heroStatValue}>★ {totalStars}</Text>
-            <Text style={styles.heroStatLabel}>Stars</Text>
-          </View>
-          <View style={styles.heroStatCard}>
-            <Text style={styles.heroStatValue}>{progress.puzzlesSolved}</Text>
-            <Text style={styles.heroStatLabel}>Solved</Text>
-          </View>
-          <View style={styles.heroStatCard}>
-            <Text style={styles.heroStatValue}>🔥 {progress.currentStreak}</Text>
-            <Text style={styles.heroStatLabel}>Streak</Text>
-          </View>
-        </View>
-
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-          onPress={() => onPlay()}
+        <LinearGradient
+          colors={GRADIENTS.surfaceCard}
+          style={styles.heroCard}
         >
-          <View>
-            <Text style={styles.primaryButtonLabel}>Continue journey</Text>
-            <Text style={styles.primaryButtonSubLabel}>Play Level {progress.currentLevel}</Text>
-          </View>
-          <Text style={styles.primaryButtonArrow}>→</Text>
-        </Pressable>
+          <View style={styles.heroGlowPrimary} />
+          <View style={styles.heroGlowSecondary} />
+          <Text style={styles.heroEyebrow}>Premium strategy word puzzle</Text>
+          <Text style={styles.title}>WORD<Text style={styles.titleAccent}>FALL</Text></Text>
+          <Text style={styles.subtitle}>
+            Every word changes the board. Restore Chapter {currentChapter} of the library.
+          </Text>
+          <HomeHeroIllustration />
 
-        <Pressable
-          style={({ pressed }) => [styles.dailyCard, dailyDone && styles.dailyDone, pressed && styles.buttonPressed]}
-          onPress={onDaily}
-        >
-          <View>
-            <Text style={styles.dailyTitle}>{dailyDone ? 'Daily puzzle completed' : 'Today’s daily challenge'}</Text>
-            <Text style={styles.dailySubtitle}>
-              {dailyDone ? 'Come back tomorrow for a fresh shared board.' : `Shared puzzle • +${ECONOMY.dailyCompleteCoins} coins • same challenge for everyone`}
-            </Text>
+          <View style={styles.heroStatsRow}>
+            {[
+              { value: `★ ${totalStars}`, label: 'Stars' },
+              { value: `${progress.puzzlesSolved}`, label: 'Solved' },
+              { value: `🔥 ${progress.currentStreak}`, label: 'Streak' },
+            ].map((stat) => (
+              <LinearGradient
+                key={stat.label}
+                colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)']}
+                style={styles.heroStatCard}
+              >
+                <Text style={styles.heroStatValue}>{stat.value}</Text>
+                <Text style={styles.heroStatLabel}>{stat.label}</Text>
+              </LinearGradient>
+            ))}
           </View>
-          <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>
-        </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [pressed && styles.buttonPressed]}
+            onPress={() => onPlay()}
+          >
+            <LinearGradient
+              colors={GRADIENTS.button.primary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.primaryButton, SHADOWS.glow(COLORS.accent)]}
+            >
+              <View>
+                <Text style={styles.primaryButtonLabel}>Continue journey</Text>
+                <Text style={styles.primaryButtonSubLabel}>Play Level {progress.currentLevel}</Text>
+              </View>
+              <Text style={styles.primaryButtonArrow}>→</Text>
+            </LinearGradient>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [pressed && styles.buttonPressed]}
+            onPress={onDaily}
+          >
+            <LinearGradient
+              colors={dailyDone ? ['rgba(76,175,80,0.2)', 'rgba(76,175,80,0.08)'] : ['rgba(255,215,0,0.12)', 'rgba(255,159,67,0.06)']}
+              style={[styles.dailyCard, dailyDone && styles.dailyDone]}
+            >
+              <View style={styles.dailyContent}>
+                <Text style={styles.dailyTitle}>{dailyDone ? 'Daily completed' : "Today's challenge"}</Text>
+                <Text style={styles.dailySubtitle}>
+                  {dailyDone ? 'Come back tomorrow!' : `+${ECONOMY.dailyCompleteCoins} coins`}
+                </Text>
+              </View>
+              <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>
+            </LinearGradient>
+          </Pressable>
+        </LinearGradient>
       </Animated.View>
 
       <Animated.View
         style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
       >
-        <View style={styles.streakPanel}>
+        <LinearGradient
+          colors={GRADIENTS.surfaceCard}
+          style={[styles.streakPanel, SHADOWS.medium]}
+        >
           <View style={styles.panelHeaderRow}>
-            <Text style={styles.panelTitle}>Streak momentum</Text>
-            <Text style={styles.panelMeta}>Next milestone: {nextMilestone} days</Text>
+            <Text style={styles.panelTitle}>🔥 Streak</Text>
+            <Text style={styles.panelMeta}>Next: {nextMilestone} days</Text>
           </View>
-          <Text style={styles.streakText}>
-            Keep solving daily boards to earn richer rewards, comeback protection, and chapter pacing bonuses.
-          </Text>
-          <View style={styles.streakTrack}>
-            <View style={[styles.streakFill, { width: `${streakProgress}%` }]} />
+          <View style={styles.streakBarRow}>
+            <Text style={styles.streakCount}>{progress.currentStreak}</Text>
+            <View style={styles.streakTrack}>
+              <LinearGradient
+                colors={[COLORS.orange, '#ff6b35']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.streakFill, { width: `${Math.max(streakProgress, 2)}%` }]}
+              />
+            </View>
+            <Text style={styles.streakTarget}>{nextMilestone}</Text>
           </View>
-        </View>
+        </LinearGradient>
 
-        <View style={styles.rewardsPanel}>
+        <LinearGradient
+          colors={GRADIENTS.surfaceCard}
+          style={[styles.rewardsPanel, SHADOWS.medium]}
+        >
           <View style={styles.panelHeaderRow}>
-            <Text style={styles.panelTitle}>7-day reward cycle</Text>
+            <Text style={styles.panelTitle}>7-day rewards</Text>
             <Text style={styles.panelMeta}>Day {currentRewardDay}</Text>
           </View>
           <View style={styles.loginRewardsRow}>
@@ -205,61 +252,59 @@ export function HomeScreen({
               const isPast = reward.day < currentRewardDay;
               const isToday = reward.day === currentRewardDay;
               return (
-                <View
+                <LinearGradient
                   key={reward.day}
+                  colors={
+                    isToday
+                      ? ['rgba(255,215,0,0.22)', 'rgba(255,159,0,0.10)']
+                      : isPast
+                        ? ['rgba(76,175,80,0.18)', 'rgba(76,175,80,0.06)']
+                        : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)']
+                  }
                   style={[
                     styles.loginDay,
                     isPast && styles.loginDayClaimed,
                     isToday && styles.loginDayToday,
                   ]}
                 >
-                  <Text style={[styles.loginDayNum, isToday && styles.loginDayNumToday]}>D{reward.day}</Text>
+                  <Text style={[styles.loginDayNum, isToday && styles.loginDayNumToday]}>{reward.day}</Text>
                   <Text style={styles.loginDayReward}>{isPast ? '✓' : `🪙${reward.coins}`}</Text>
                   {'gems' in reward && reward.gems ? <Text style={styles.loginDayBonus}>💎{reward.gems}</Text> : null}
-                  {'rareTile' in reward && reward.rareTile ? <Text style={styles.loginDayBonus}>✨ Tile</Text> : null}
-                </View>
+                  {'rareTile' in reward && reward.rareTile ? <Text style={styles.loginDayBonus}>✨</Text> : null}
+                </LinearGradient>
               );
             })}
           </View>
-        </View>
+        </LinearGradient>
 
-        <View style={styles.quickPlayPanel}>
+        <LinearGradient
+          colors={GRADIENTS.surfaceCard}
+          style={[styles.quickPlayPanel, SHADOWS.medium]}
+        >
           <Text style={styles.panelTitle}>Quick play</Text>
-          {(['easy', 'medium', 'hard', 'expert'] as Difficulty[]).map((difficulty) => (
-            <Pressable
-              key={difficulty}
-              style={({ pressed }) => [styles.quickPlayCard, pressed && styles.buttonPressed]}
-              onPress={() => onPlay(difficulty)}
-            >
-              <View style={[styles.quickPlayAccent, { backgroundColor: difficultyMeta[difficulty].accent }]} />
-              <View style={styles.quickPlayBody}>
-                <Text style={styles.quickPlayTitle}>{difficultyMeta[difficulty].label}</Text>
-                <Text style={styles.quickPlayBlurb}>{difficultyMeta[difficulty].blurb}</Text>
-              </View>
-              <Text style={styles.quickPlayAction}>Play</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={styles.strategyPanel}>
-          <Text style={styles.panelTitle}>Master the board</Text>
-          <View style={styles.strategyStep}>
-            <Text style={styles.strategyNumber}>1</Text>
-            <Text style={styles.strategyText}>Find a target word, but do not rush — the best first move is the one that unlocks the most future paths.</Text>
+          <View style={styles.quickPlayGrid}>
+            {(['easy', 'medium', 'hard', 'expert'] as Difficulty[]).map((difficulty) => (
+              <Pressable
+                key={difficulty}
+                style={({ pressed }) => [pressed && styles.buttonPressed]}
+                onPress={() => onPlay(difficulty)}
+              >
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']}
+                  style={[styles.quickPlayCard, SHADOWS.soft]}
+                >
+                  <View style={[styles.quickPlayIconBg, { backgroundColor: difficultyMeta[difficulty].accent + '22' }]}>
+                    <Text style={styles.quickPlayIcon}>{difficultyMeta[difficulty].icon}</Text>
+                  </View>
+                  <Text style={[styles.quickPlayTitle, { color: difficultyMeta[difficulty].accent }]}>
+                    {difficultyMeta[difficulty].label}
+                  </Text>
+                  <View style={[styles.quickPlayAccentBar, { backgroundColor: difficultyMeta[difficulty].accent }]} />
+                </LinearGradient>
+              </Pressable>
+            ))}
           </View>
-          <View style={styles.strategyStep}>
-            <Text style={styles.strategyNumber}>2</Text>
-            <Text style={styles.strategyText}>Watch how gravity drops letters after every clear. Good solves create chains instead of chaos.</Text>
-          </View>
-          <View style={styles.strategyStep}>
-            <Text style={styles.strategyNumber}>3</Text>
-            <Text style={styles.strategyText}>Use hints and preview tools sparingly. The goal is to build your own board-reading intuition.</Text>
-          </View>
-        </View>
-
-        <Pressable style={styles.resetButton} onPress={onResetProgress}>
-          <Text style={styles.resetText}>Reset Progress</Text>
-        </Pressable>
+        </LinearGradient>
       </Animated.View>
     </ScrollView>
     </View>
@@ -301,17 +346,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.surfaceLight,
+    ...SHADOWS.soft,
   },
   iconButtonText: {
     fontSize: 20,
   },
   currencyChip: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   currencyLabel: {
     color: COLORS.textPrimary,
@@ -319,66 +364,76 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   shopButton: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: COLORS.accent,
+    ...SHADOWS.glow(COLORS.accent),
   },
   shopButtonText: {
-    color: COLORS.bg,
+    color: '#fff',
     fontWeight: '800',
+    fontSize: 13,
   },
   heroCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 30,
+    borderRadius: 28,
     padding: 22,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
+    ...SHADOWS.strong,
   },
   heroGlowPrimary: {
     position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: COLORS.accentGlow,
-    top: -80,
-    right: -30,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(0,212,255,0.08)',
+    top: -100,
+    right: -50,
   },
   heroGlowSecondary: {
     position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: COLORS.purpleGlow,
-    bottom: -70,
-    left: -30,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(168,85,247,0.06)',
+    bottom: -80,
+    left: -40,
   },
   heroEyebrow: {
     color: COLORS.gold,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 2,
+    letterSpacing: 2.5,
     textTransform: 'uppercase',
-    marginBottom: 10,
+    marginBottom: 8,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
   title: {
     color: COLORS.textPrimary,
-    fontSize: 40,
+    fontSize: 42,
     fontWeight: '900',
-    letterSpacing: 2,
-    marginBottom: 10,
+    letterSpacing: 3,
+    marginBottom: 8,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   titleAccent: {
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 16,
   },
   subtitle: {
     color: COLORS.textSecondary,
-    fontSize: 15,
-    lineHeight: 23,
-    marginBottom: 20,
-    maxWidth: '92%',
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 18,
+    maxWidth: '90%',
   },
   heroStatsRow: {
     flexDirection: 'row',
@@ -387,9 +442,8 @@ const styles = StyleSheet.create({
   },
   heroStatCard: {
     flex: 1,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    paddingVertical: 14,
+    borderRadius: 16,
+    paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
@@ -398,18 +452,17 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 20,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   heroStatLabel: {
     color: COLORS.textMuted,
-    fontSize: 11,
-    letterSpacing: 1,
+    fontSize: 10,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   primaryButton: {
-    backgroundColor: COLORS.accent,
     borderRadius: 22,
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingVertical: 18,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -417,72 +470,72 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   primaryButtonLabel: {
-    color: COLORS.bg,
-    fontSize: 12,
+    color: '#fff',
+    fontSize: 11,
     textTransform: 'uppercase',
     fontWeight: '800',
-    letterSpacing: 1.2,
-    marginBottom: 4,
+    letterSpacing: 1.5,
+    marginBottom: 3,
   },
   primaryButtonSubLabel: {
-    color: COLORS.bg,
+    color: '#fff',
     fontSize: 22,
     fontWeight: '900',
   },
   primaryButtonArrow: {
-    color: COLORS.bg,
-    fontSize: 26,
+    color: '#fff',
+    fontSize: 28,
     fontWeight: '900',
   },
   dailyCard: {
-    borderRadius: 20,
-    padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(255,215,0,0.15)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   dailyDone: {
-    borderColor: COLORS.green,
-    backgroundColor: 'rgba(76, 175, 80, 0.16)',
+    borderColor: 'rgba(76,175,80,0.3)',
+  },
+  dailyContent: {
+    flex: 1,
   },
   dailyTitle: {
     color: COLORS.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   dailySubtitle: {
     color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 20,
-    maxWidth: '88%',
+    fontSize: 12,
   },
   dailyBadge: {
     color: COLORS.gold,
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   streakPanel: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 22,
+    padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
-    marginBottom: 16,
+    borderColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 14,
   },
   panelHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    gap: 12,
+    marginBottom: 12,
   },
   panelTitle: {
     color: COLORS.textPrimary,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
   },
   panelMeta: {
@@ -491,158 +544,136 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  streakText: {
-    color: COLORS.textSecondary,
-    lineHeight: 21,
-    fontSize: 14,
-    marginBottom: 12,
+  streakBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  streakCount: {
+    color: COLORS.orange,
+    fontSize: 22,
+    fontWeight: '900',
+    minWidth: 28,
+    textAlign: 'center',
+    textShadowColor: COLORS.orangeGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
   streakTrack: {
-    height: 10,
+    flex: 1,
+    height: 8,
     borderRadius: 999,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
   },
   streakFill: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: COLORS.orange,
+  },
+  streakTarget: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    minWidth: 28,
+    textAlign: 'center',
   },
   rewardsPanel: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 22,
+    padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
-    marginBottom: 16,
+    borderColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 14,
   },
   loginRewardsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
+    justifyContent: 'center',
   },
   loginDay: {
-    width: '22%',
-    minWidth: 72,
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    backgroundColor: COLORS.bgLight,
+    width: 70,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
+    borderColor: 'rgba(255,255,255,0.05)',
     alignItems: 'center',
   },
   loginDayClaimed: {
-    borderColor: COLORS.green,
-    backgroundColor: 'rgba(76, 175, 80, 0.14)',
+    borderColor: 'rgba(76,175,80,0.3)',
   },
   loginDayToday: {
-    borderColor: COLORS.gold,
-    backgroundColor: 'rgba(255, 215, 0, 0.14)',
+    borderColor: 'rgba(255,215,0,0.35)',
+    ...SHADOWS.glow(COLORS.gold),
   },
   loginDayNum: {
-    color: COLORS.textPrimary,
+    color: COLORS.textSecondary,
     fontWeight: '800',
-    marginBottom: 8,
+    fontSize: 12,
+    marginBottom: 4,
   },
   loginDayNumToday: {
     color: COLORS.gold,
   },
   loginDayReward: {
     color: COLORS.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   loginDayBonus: {
     color: COLORS.textSecondary,
-    fontSize: 11,
+    fontSize: 10,
   },
   quickPlayPanel: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 22,
+    padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
-    marginBottom: 16,
+    borderColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 14,
   },
-  quickPlayCard: {
-    backgroundColor: COLORS.bgLight,
-    borderRadius: 20,
-    marginBottom: 10,
-    overflow: 'hidden',
+  quickPlayGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
-  },
-  quickPlayAccent: {
-    width: 5,
-    alignSelf: 'stretch',
-  },
-  quickPlayBody: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  quickPlayTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  quickPlayBlurb: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  quickPlayAction: {
-    color: COLORS.accent,
-    fontWeight: '800',
-    paddingHorizontal: 16,
-  },
-  strategyPanel: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 24,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
-    marginBottom: 20,
-  },
-  strategyStep: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 10,
     marginTop: 12,
   },
-  strategyNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.accentGlow,
-    color: COLORS.accent,
-    textAlign: 'center',
-    lineHeight: 28,
-    fontWeight: '800',
-    marginRight: 12,
-  },
-  strategyText: {
-    flex: 1,
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  resetButton: {
-    alignSelf: 'center',
-    paddingVertical: 10,
+  quickPlayCard: {
+    width: '100%',
+    borderRadius: 18,
+    paddingVertical: 16,
     paddingHorizontal: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    minWidth: 150,
+    flex: 1,
   },
-  resetText: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    textDecorationLine: 'underline',
+  quickPlayIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  quickPlayIcon: {
+    fontSize: 20,
+  },
+  quickPlayTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  quickPlayAccentBar: {
+    width: 24,
+    height: 3,
+    borderRadius: 999,
+    opacity: 0.6,
   },
   buttonPressed: {
-    transform: [{ scale: 0.97 }],
+    transform: [{ scale: 0.96 }],
     opacity: 0.88,
   },
 });
