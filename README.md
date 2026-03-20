@@ -20,7 +20,7 @@ Then scan the QR code with Expo Go on your phone.
 ## How to Play
 
 1. Find target words hidden in the letter grid
-2. Tap letters in sequence (horizontal or vertical) to spell a word
+2. Tap or drag across letters in any direction (horizontal, vertical, diagonal, or zigzag) to spell a word
 3. When you clear a word, those letters disappear and letters above **fall down**
 4. The order you solve words matters — plan your moves carefully!
 5. Clear all words to complete the puzzle

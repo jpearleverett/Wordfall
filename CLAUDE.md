@@ -56,13 +56,13 @@ src/
 | `src/types.ts` | ALL type definitions. Edit here when adding new data structures |
 | `src/constants.ts` | Colors, difficulty configs, mode configs, scoring, economy, animations |
 | `src/hooks/useGame.ts` | Core game state reducer - handles 15+ game actions including boosters. Timer tick for timePressure mode runs here |
-| `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG and solvability validation |
+| `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG, freeform path placement (8-directional), and solvability validation |
 | `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
-| `src/engine/solver.ts` | Recursive backtracking solver, dead-end detection, hint generation |
+| `src/engine/solver.ts` | 8-directional DFS word finder, recursive backtracking solver, dead-end detection, hint generation |
 | `src/contexts/PlayerContext.tsx` | Master player data hub (progress, collections, missions, streaks, cosmetics, library, modes, comebacks) |
 | `src/components/PuzzleComplete.tsx` | Victory screen with confetti particles, animated score counter, staggered reveals |
 | `src/components/WordBank.tsx` | Animated word chips with celebration scale, glow pulse, valid word state |
-| `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, frozen column styling, post-gravity moved-cell highlighting |
+| `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, drag-to-select via react-native-gesture-handler, frozen column styling, post-gravity moved-cell highlighting |
 | `src/components/LetterCell.tsx` | Individual cell with selection animation, glow, valid-word green, frozen indicator, moved-cell trail |
 | `src/screens/GameScreen.tsx` | Main gameplay screen with all visual feedback: green/red flash, chain popup, score popup, idle hint, mode intro, stuck UX, boosters |
 | `src/data/collections.ts` | 12 Word Atlas pages, 6 rare tile sets, 4 seasonal albums |
@@ -110,7 +110,7 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 
 ### Core Loop
 1. Player sees a grid of letters with target words listed in the WordBank
-2. Tap letters in sequence (horizontal or vertical adjacency only) to spell words
+2. Tap or drag across letters in any direction (horizontal, vertical, diagonal, or zigzag — all 8-directional adjacency) to spell words
 3. Non-adjacent taps trigger red flash + error haptic and clear selection
 4. When a valid word is selected, cells turn green with checkmarks and auto-submit after 400ms
 5. Cleared letters disappear; letters above fall due to gravity (with LayoutAnimation)
@@ -137,8 +137,9 @@ Three booster types available during gameplay:
 
 ### Board Generation
 - Uses Mulberry32 seeded PRNG for reproducible puzzles
-- Words placed via recursive backtracking with overlap at matching letters
-- All puzzles validated by solver to ensure solvability
+- Words placed along random adjacent paths (any direction: horizontal, vertical, diagonal, zigzag) via DFS with randomized neighbor order
+- Each letter in a word must be 8-directionally adjacent to the previous letter, but the path can change direction freely (e.g., right → diagonal-down-left → down → diagonal-up-right)
+- All puzzles validated by solver to ensure solvability (solver uses same 8-directional DFS to find words)
 - Filler letters use vowel-balanced distribution (35% vowels)
 - 3-tier fallback: standard → simplified → minimal generation on failure
 
@@ -304,5 +305,6 @@ Welcome-back modal in `HomeMainScreen` awards tiered comeback rewards (3-day/7-d
 - **Word database** in `src/words.ts` contains ~2000 curated English words (3-6 letters)
 - **Seeded PRNG** ensures daily puzzles are identical for all players on the same day
 - **Timer tick** for timePressure mode runs inside `useGame` hook, not in the screen
-- **Adjacency validation** happens in GameScreen's `handleCellPress` - non-adjacent taps trigger red flash and clear selection
+- **Adjacency validation** uses 8-directional adjacency (horizontal, vertical, diagonal) with no direction locking — paths can zigzag freely. Non-adjacent taps trigger red flash and clear selection
+- **Drag selection** is handled by `react-native-gesture-handler` PanGesture on the Grid — players can drag across tiles to select them. `GestureHandlerRootView` wraps the app in `App.tsx`
 - **Mode auto-unlock** happens in `App.tsx` `handleComplete` based on `MODE_CONFIGS[mode].unlockLevel`

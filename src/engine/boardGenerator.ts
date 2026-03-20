@@ -39,34 +39,61 @@ function createEmptyGrid(rows: number, cols: number): Grid {
   return Array.from({ length: rows }, () => Array(cols).fill(null));
 }
 
+// 8-directional deltas: right, left, down, up, and 4 diagonals
+const DIRS = [
+  [0, 1], [0, -1], [1, 0], [-1, 0],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+];
+
 /**
- * Try to place a word in the grid at the given position and direction.
- * Returns positions if successful, null if blocked.
+ * Try to place a word along a random adjacent path starting from (startRow, startCol).
+ * Each step picks a random 8-directional neighbor. Allows zigzag, diagonal, etc.
+ * Returns positions if successful, null if no valid path found.
  */
 function tryPlace(
   grid: Grid,
   word: string,
   startRow: number,
   startCol: number,
-  direction: 'horizontal' | 'vertical'
+  rng: () => number
 ): CellPosition[] | null {
-  const positions: CellPosition[] = [];
   const rows = grid.length;
   const cols = grid[0].length;
+  const visited = new Set<string>();
+  const path: CellPosition[] = [];
 
-  for (let i = 0; i < word.length; i++) {
-    const r = direction === 'vertical' ? startRow + i : startRow;
-    const c = direction === 'horizontal' ? startCol + i : startCol;
-
-    if (r < 0 || r >= rows || c < 0 || c >= cols) return null;
+  function dfs(r: number, c: number, idx: number): boolean {
+    if (idx === word.length) return true;
+    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
+    const key = `${r},${c}`;
+    if (visited.has(key)) return false;
 
     const existing = grid[r][c];
-    if (existing !== null && existing.letter !== word[i]) return null;
+    if (existing !== null && existing.letter !== word[idx]) return false;
 
-    positions.push({ row: r, col: c });
+    visited.add(key);
+    path.push({ row: r, col: c });
+
+    // Shuffle directions for randomness
+    const shuffledDirs = [...DIRS];
+    for (let i = shuffledDirs.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [shuffledDirs[i], shuffledDirs[j]] = [shuffledDirs[j], shuffledDirs[i]];
+    }
+
+    for (const [dr, dc] of shuffledDirs) {
+      if (dfs(r + dr, c + dc, idx + 1)) return true;
+    }
+
+    path.pop();
+    visited.delete(key);
+    return false;
   }
 
-  return positions;
+  if (dfs(startRow, startCol, 0)) {
+    return path;
+  }
+  return null;
 }
 
 /**
@@ -169,36 +196,22 @@ function attemptGenerate(
   const grid = createEmptyGrid(config.rows, config.cols);
   const placements: WordPlacement[] = [];
 
-  // Place words in the grid
+  // Place words in the grid along random adjacent paths
   for (const word of words) {
     let placed = false;
 
-    // Try many random positions
-    for (let attempt = 0; attempt < 80; attempt++) {
-      const direction: 'horizontal' | 'vertical' =
-        rng() < 0.5 ? 'horizontal' : 'vertical';
+    // Try many random starting positions
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const startRow = Math.floor(rng() * config.rows);
+      const startCol = Math.floor(rng() * config.cols);
 
-      let maxRow: number, maxCol: number;
-      if (direction === 'horizontal') {
-        maxRow = config.rows;
-        maxCol = config.cols - word.length + 1;
-      } else {
-        maxRow = config.rows - word.length + 1;
-        maxCol = config.cols;
-      }
-
-      if (maxRow <= 0 || maxCol <= 0) continue;
-
-      const startRow = Math.floor(rng() * maxRow);
-      const startCol = Math.floor(rng() * maxCol);
-
-      const positions = tryPlace(grid, word, startRow, startCol, direction);
+      const positions = tryPlace(grid, word, startRow, startCol, rng);
       if (positions) {
         placeWord(grid, word, positions);
         placements.push({
           word,
           positions,
-          direction,
+          direction: 'horizontal', // Legacy field, paths are now freeform
           found: false,
         });
         placed = true;

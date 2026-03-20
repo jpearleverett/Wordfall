@@ -313,7 +313,7 @@ export function GameScreen({
         const last = state.selectedCells[state.selectedCells.length - 1];
         const rowDiff = Math.abs(position.row - last.row);
         const colDiff = Math.abs(position.col - last.col);
-        const isAdjacent = (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
+        const isAdjacent = rowDiff <= 1 && colDiff <= 1 && (rowDiff + colDiff > 0);
         if (!isAdjacent) {
           showInvalidFlashAnim();
           clearSelection();

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useCallback } from 'react';
 import {
   LayoutAnimation,
   Platform,
@@ -6,6 +6,10 @@ import {
   UIManager,
   View,
 } from 'react-native';
+import {
+  GestureDetector,
+  Gesture,
+} from 'react-native-gesture-handler';
 import { Grid as GridType, CellPosition } from '../types';
 import { LetterCell } from './LetterCell';
 import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
@@ -23,6 +27,8 @@ interface GridProps {
   selectedCells: CellPosition[];
   hintedCells?: CellPosition[];
   onCellPress: (position: CellPosition) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
   frozenColumns?: number[];
   validWord?: boolean;
   movedCells?: CellPosition[];
@@ -33,6 +39,8 @@ export function GameGrid({
   selectedCells,
   hintedCells = [],
   onCellPress,
+  onDragStart,
+  onDragEnd,
   frozenColumns = [],
   validWord = false,
   movedCells = [],
@@ -84,46 +92,146 @@ export function GameGrid({
   const gridWidth = cols * (cellSize + CELL_GAP) + CELL_GAP;
   const gridHeight = rows * (cellSize + CELL_GAP) + CELL_GAP;
 
-  return (
-    <View style={[styles.gridContainer, { width: gridWidth, height: gridHeight }]}>
-      {columns.map((column, colIndex) => (
-        <View
-          key={colIndex}
-          style={[
-            styles.column,
-            {
-              width: cellSize + CELL_GAP,
-              height: gridHeight,
-            },
-            frozenSet.has(colIndex) && styles.frozenColumn,
-          ]}
-        >
-          <View style={{ flex: 1 }} />
-          {column.map(({ cell, row, col }) => {
-            const key = `${row},${col}`;
-            const selIndex = selectedSet.get(key) ?? -1;
-            const isSelected = selIndex >= 0;
-            const isHinted = hintedSet.has(key);
+  // Build a map of cell positions to their pixel bounds within the grid
+  // The grid uses column-based flex-end layout, so we compute positions accordingly
+  const cellBounds = useMemo(() => {
+    const bounds: { row: number; col: number; x: number; y: number; w: number; h: number }[] = [];
+    const cellStride = cellSize + CELL_GAP;
+    const padding = CELL_GAP / 2;
 
-            return (
-              <LetterCell
-                key={cell.id}
-                letter={cell.letter}
-                cellId={cell.id}
-                size={cellSize}
-                isSelected={isSelected}
-                isHinted={isHinted}
-                selectionIndex={selIndex}
-                onPress={() => onCellPress({ row, col })}
-                isFrozen={frozenSet.has(col)}
-                isValidWord={validWord && isSelected}
-                isMoved={movedSet.has(key)}
-              />
-            );
-          })}
-        </View>
-      ))}
-    </View>
+    for (let c = 0; c < cols; c++) {
+      // Column cells are flex-end aligned, so count non-null cells
+      const colCells: { row: number }[] = [];
+      for (let r = 0; r < rows; r++) {
+        if (grid[r][c]) {
+          colCells.push({ row: r });
+        }
+      }
+      // Cells are stacked from bottom, with flex spacer on top
+      const colX = padding + c * cellStride;
+      const totalCellHeight = colCells.length * cellStride;
+      const startY = gridHeight - totalCellHeight;
+
+      colCells.forEach((cell, i) => {
+        bounds.push({
+          row: cell.row,
+          col: c,
+          x: colX,
+          y: startY + i * cellStride,
+          w: cellSize + CELL_GAP,
+          h: cellSize + CELL_GAP,
+        });
+      });
+    }
+    return bounds;
+  }, [grid, rows, cols, cellSize, gridHeight]);
+
+  // Track the grid container position for coordinate conversion
+  const gridRef = useRef<View>(null);
+  const gridLayoutRef = useRef({ x: 0, y: 0 });
+  const lastDragCellRef = useRef<string | null>(null);
+  const isDraggingRef = useRef(false);
+
+  const hitTestCell = useCallback((absX: number, absY: number): CellPosition | null => {
+    for (const b of cellBounds) {
+      if (absX >= b.x && absX < b.x + b.w && absY >= b.y && absY < b.y + b.h) {
+        return { row: b.row, col: b.col };
+      }
+    }
+    return null;
+  }, [cellBounds]);
+
+  // Use react-native-gesture-handler for drag selection
+  const panGesture = Gesture.Pan()
+    .minDistance(0)
+    .onBegin((e) => {
+      isDraggingRef.current = true;
+      lastDragCellRef.current = null;
+      onDragStart?.();
+      const cell = hitTestCell(e.x, e.y);
+      if (cell) {
+        const key = `${cell.row},${cell.col}`;
+        lastDragCellRef.current = key;
+        onCellPress(cell);
+      }
+    })
+    .onUpdate((e) => {
+      const cell = hitTestCell(e.x, e.y);
+      if (cell) {
+        const key = `${cell.row},${cell.col}`;
+        if (key !== lastDragCellRef.current) {
+          lastDragCellRef.current = key;
+          onCellPress(cell);
+        }
+      }
+    })
+    .onEnd(() => {
+      isDraggingRef.current = false;
+      lastDragCellRef.current = null;
+      onDragEnd?.();
+    })
+    .onFinalize(() => {
+      isDraggingRef.current = false;
+      lastDragCellRef.current = null;
+    });
+
+  // Tap gesture for single taps (fallback)
+  const tapGesture = Gesture.Tap()
+    .onEnd((e) => {
+      const cell = hitTestCell(e.x, e.y);
+      if (cell) {
+        onCellPress(cell);
+      }
+    });
+
+  // Compose: pan takes priority, tap is fallback
+  const composedGesture = Gesture.Race(panGesture, tapGesture);
+
+  return (
+    <GestureDetector gesture={composedGesture}>
+      <View
+        ref={gridRef}
+        style={[styles.gridContainer, { width: gridWidth, height: gridHeight }]}
+      >
+        {columns.map((column, colIndex) => (
+          <View
+            key={colIndex}
+            style={[
+              styles.column,
+              {
+                width: cellSize + CELL_GAP,
+                height: gridHeight,
+              },
+              frozenSet.has(colIndex) && styles.frozenColumn,
+            ]}
+          >
+            <View style={{ flex: 1 }} />
+            {column.map(({ cell, row, col }) => {
+              const key = `${row},${col}`;
+              const selIndex = selectedSet.get(key) ?? -1;
+              const isSelected = selIndex >= 0;
+              const isHinted = hintedSet.has(key);
+
+              return (
+                <LetterCell
+                  key={cell.id}
+                  letter={cell.letter}
+                  cellId={cell.id}
+                  size={cellSize}
+                  isSelected={isSelected}
+                  isHinted={isHinted}
+                  selectionIndex={selIndex}
+                  onPress={() => onCellPress({ row, col })}
+                  isFrozen={frozenSet.has(col)}
+                  isValidWord={validWord && isSelected}
+                  isMoved={movedSet.has(key)}
+                />
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    </GestureDetector>
   );
 }
 
