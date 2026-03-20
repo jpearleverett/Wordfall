@@ -184,34 +184,49 @@ export function GameGrid({
   const outerHeight = gridHeight + borderWidth * 2;
 
   return (
-    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 22 }]}>
-      {/* Gradient border effect */}
+    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}>
+      {/* Multi-layered gradient border for premium glass edge */}
       <LinearGradient
         colors={GRADIENTS.gridBorder as unknown as [string, string, ...string[]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
       />
-      {/* Ambient glow behind grid */}
+      {/* Ambient glow orbs behind grid — larger, richer */}
       <View style={styles.ambientGlow1} />
       <View style={styles.ambientGlow2} />
+      <View style={styles.ambientGlow3} />
       <GestureDetector gesture={composedGesture}>
         <View
           ref={gridRef}
-          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 20 }]}
+          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 22 }]}
         >
-          {/* Grid background gradient */}
+          {/* Deep rich board background */}
           <LinearGradient
             colors={GRADIENTS.grid as unknown as [string, string, ...string[]]}
             start={{ x: 0, y: 0 }}
-            end={{ x: 0.2, y: 1 }}
-            style={[StyleSheet.absoluteFillObject, { borderRadius: 20 }]}
+            end={{ x: 0.3, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
           />
-          {/* Inner vignette corners */}
-          <View pointerEvents="none" style={styles.vignetteTop} />
-          <View pointerEvents="none" style={styles.vignetteBottom} />
-          {/* Board highlight shine */}
+          {/* Top edge glass reflection */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)', 'transparent'] as [string, string, string]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            locations={[0, 0.15, 0.4]}
+            style={[styles.vignetteTop, { borderTopLeftRadius: 22, borderTopRightRadius: 22 }]}
+          />
+          {/* Bottom depth shadow */}
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.18)'] as [string, string]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={[styles.vignetteBottom, { borderBottomLeftRadius: 22, borderBottomRightRadius: 22 }]}
+          />
+          {/* Top center highlight shine — premium glass feel */}
           <View pointerEvents="none" style={styles.boardHighlight} />
+          {/* Subtle inner border highlight */}
+          <View pointerEvents="none" style={[styles.innerBorderHighlight, { borderRadius: 21 }]} />
           {columns.map((column, colIndex) => (
             <View
               key={colIndex}
@@ -260,30 +275,40 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 14,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.6,
+    shadowRadius: 28,
+    elevation: 18,
   },
   ambientGlow1: {
     position: 'absolute',
-    top: -50,
-    right: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    top: -60,
+    right: -50,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
     backgroundColor: COLORS.accentGlow,
-    opacity: 0.35,
+    opacity: 0.4,
   },
   ambientGlow2: {
     position: 'absolute',
-    bottom: -40,
-    left: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    bottom: -50,
+    left: -40,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
     backgroundColor: COLORS.purpleGlow,
-    opacity: 0.3,
+    opacity: 0.35,
+  },
+  ambientGlow3: {
+    position: 'absolute',
+    top: '40%',
+    left: '50%',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: COLORS.goldGlow,
+    opacity: 0.12,
   },
   gridContainer: {
     flexDirection: 'row',
@@ -295,25 +320,32 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 30,
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    height: 50,
   },
   vignetteBottom: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 20,
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    height: 35,
   },
   boardHighlight: {
     position: 'absolute',
-    left: 20,
-    right: 20,
-    top: 8,
-    height: 14,
+    left: 24,
+    right: 24,
+    top: 6,
+    height: 3,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  innerBorderHighlight: {
+    position: 'absolute',
+    top: 1,
+    left: 1,
+    right: 1,
+    bottom: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
   },
   column: {
     flexDirection: 'column',
@@ -321,7 +353,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   frozenColumn: {
-    backgroundColor: 'rgba(0, 212, 255, 0.1)',
-    borderRadius: 10,
+    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.08)',
   },
 });

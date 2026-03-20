@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
@@ -46,6 +46,32 @@ export function GameHeader({
   const modeConfig = MODE_CONFIGS[mode];
   const modeLabel = isDaily ? 'Daily' : mode !== 'classic' ? modeConfig.name : `Lv ${level}`;
   const progress = totalWords > 0 ? (foundWords / totalWords) * 100 : 0;
+  const scoreAnim = useRef(new Animated.Value(1)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate score pop on change
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(scoreAnim, { toValue: 1.15, duration: 80, useNativeDriver: true }),
+      Animated.spring(scoreAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
+  }, [score]);
+
+  // Animate progress bar smoothly
+  useEffect(() => {
+    Animated.spring(progressAnim, {
+      toValue: progress,
+      friction: 8,
+      tension: 60,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+    extrapolate: 'clamp',
+  });
 
   return (
     <View style={[styles.wrapper, { paddingTop: Math.max(insets.top, 6) + 4 }]}>
@@ -54,34 +80,57 @@ export function GameHeader({
           colors={GRADIENTS.header as unknown as [string, string, ...string[]]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 20 }]}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
         />
-        {/* Subtle mode-colored glow */}
-        <View style={[styles.chromeGlow, { backgroundColor: `${modeConfig.color}18` }]} />
+        {/* Glass top edge highlight */}
+        <LinearGradient
+          colors={['rgba(255,255,255,0.08)', 'transparent'] as [string, string]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.glassEdge}
+        />
+        {/* Mode-colored ambient glow */}
+        <View style={[styles.chromeGlow, { backgroundColor: `${modeConfig.color}20` }]} />
 
         <View style={styles.topRow}>
-          {/* Back button */}
+          {/* Back button with glass effect */}
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
             onPress={onBack}
           >
+            <LinearGradient
+              colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'] as [string, string]}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
+            />
             <Text style={styles.backText}>←</Text>
           </Pressable>
 
-          {/* Center: mode + progress */}
+          {/* Center: mode badge + progress */}
           <View style={styles.centerBlock}>
-            <View style={[styles.modeBadge, { borderColor: `${modeConfig.color}44` }]}>
+            <View style={[styles.modeBadge, { borderColor: `${modeConfig.color}55` }]}>
               <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
               <Text style={styles.modeText}>{modeLabel}</Text>
-              <Text style={styles.progressCount}>{foundWords}/{totalWords}</Text>
+              <View style={styles.progressDivider} />
+              <Text style={[styles.progressCount, { color: modeConfig.color }]}>
+                {foundWords}/{totalWords}
+              </Text>
             </View>
           </View>
 
-          {/* Score */}
+          {/* Score with animated pop */}
           <View style={styles.scoreBlock}>
-            <Text style={styles.scoreValue}>{score.toLocaleString()}</Text>
+            <Animated.Text
+              style={[
+                styles.scoreValue,
+                { transform: [{ scale: scoreAnim }] },
+              ]}
+            >
+              {score.toLocaleString()}
+            </Animated.Text>
             {combo > 1 && (
-              <Text style={styles.comboTag}>{combo}x</Text>
+              <View style={styles.comboChip}>
+                <Text style={styles.comboTag}>{combo}x</Text>
+              </View>
             )}
           </View>
 
@@ -97,6 +146,10 @@ export function GameHeader({
                 onPress={onUndo}
                 disabled={undosLeft <= 0}
               >
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
+                />
                 <Text style={styles.actionIcon}>↩</Text>
                 {undosLeft > 0 && !modeConfig.rules.unlimitedUndo && (
                   <View style={styles.countBadge}>
@@ -117,6 +170,10 @@ export function GameHeader({
                 onPress={onHint}
                 disabled={hintsLeft <= 0}
               >
+                <LinearGradient
+                  colors={['rgba(255,215,0,0.12)', 'rgba(255,215,0,0.04)'] as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
+                />
                 <Text style={styles.actionIcon}>💡</Text>
                 {hintsLeft > 0 && (
                   <View style={[styles.countBadge, styles.hintCountBadge]}>
@@ -128,9 +185,23 @@ export function GameHeader({
           </View>
         </View>
 
-        {/* Thin progress bar at bottom */}
+        {/* Animated progress bar */}
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: modeConfig.color }]} />
+          <Animated.View style={[styles.progressFill, { width: progressWidth as any, backgroundColor: modeConfig.color }]}>
+            {/* Shimmer on progress fill */}
+            <View style={styles.progressShimmer} />
+          </Animated.View>
+          {/* Glow dot at progress tip */}
+          <Animated.View
+            style={[
+              styles.progressGlowDot,
+              {
+                left: progressWidth as any,
+                backgroundColor: modeConfig.color,
+                shadowColor: modeConfig.color,
+              },
+            ]}
+          />
         </View>
       </View>
     </View>
@@ -144,26 +215,35 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   chromeCard: {
-    borderRadius: 20,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.10)',
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 4,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 14,
+  },
+  glassEdge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 30,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
   },
   chromeGlow: {
     position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    right: -40,
-    top: -50,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    right: -50,
+    top: -60,
   },
   topRow: {
     flexDirection: 'row',
@@ -171,14 +251,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.10)',
+    overflow: 'hidden',
   },
   backText: {
     color: COLORS.textPrimary,
@@ -193,9 +273,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     alignSelf: 'flex-start',
   },
@@ -208,51 +288,62 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.6,
   },
+  progressDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginHorizontal: 2,
+  },
   progressCount: {
-    color: COLORS.textSecondary,
     fontSize: 12,
-    fontWeight: '700',
-    marginLeft: 2,
+    fontWeight: '800',
   },
   scoreBlock: {
     alignItems: 'flex-end',
     flexDirection: 'row',
-    gap: 4,
+    gap: 5,
     alignSelf: 'center',
   },
   scoreValue: {
     color: COLORS.gold,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '900',
     textShadowColor: COLORS.goldGlow,
-    textShadowRadius: 10,
+    textShadowRadius: 14,
+  },
+  comboChip: {
+    backgroundColor: 'rgba(255, 82, 82, 0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 82, 82, 0.3)',
+    marginBottom: 2,
   },
   comboTag: {
     color: COLORS.coral,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
-    marginBottom: 2,
   },
   actionsRow: {
     flexDirection: 'row',
     gap: 6,
   },
   actionButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.10)',
+    overflow: 'hidden',
   },
   hintButton: {
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    borderColor: 'rgba(255, 215, 0, 0.2)',
+    borderColor: 'rgba(255, 215, 0, 0.25)',
   },
   actionDisabled: {
-    opacity: 0.35,
+    opacity: 0.3,
   },
   actionIcon: {
     fontSize: 16,
@@ -262,15 +353,21 @@ const styles = StyleSheet.create({
     top: -4,
     right: -4,
     backgroundColor: COLORS.accent,
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 6,
   },
   hintCountBadge: {
     backgroundColor: COLORS.gold,
+    shadowColor: COLORS.gold,
   },
   countBadgeText: {
     color: COLORS.bg,
@@ -278,18 +375,41 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   progressTrack: {
-    height: 3,
+    height: 4,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    overflow: 'hidden',
+    overflow: 'visible',
     marginTop: 10,
+    position: 'relative',
   },
   progressFill: {
     height: '100%',
     borderRadius: 999,
+    overflow: 'hidden',
+  },
+  progressShimmer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 999,
+  },
+  progressGlowDot: {
+    position: 'absolute',
+    top: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: -4,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 6,
   },
   btnPressed: {
-    transform: [{ scale: 0.93 }],
+    transform: [{ scale: 0.92 }],
     opacity: 0.8,
   },
 });

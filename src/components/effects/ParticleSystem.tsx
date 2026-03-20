@@ -1,0 +1,311 @@
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, StyleSheet, View, DimensionValue } from 'react-native';
+import { COLORS } from '../../constants';
+
+// ─── Floating Diamond Sparkle ───────────────────────────────────────────
+interface SparkleProps {
+  size: number;
+  color: string;
+  top: DimensionValue;
+  left: DimensionValue;
+  delay: number;
+  duration: number;
+}
+
+function DiamondSparkle({ size, color, top, left, delay, duration }: SparkleProps) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: duration * 0.4, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: duration * 0.6, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [anim, delay, duration]);
+
+  const halfSize = size / 2;
+
+  return (
+    <View pointerEvents="none" style={[styles.sparkleWrap, { top, left }]}>
+      <Animated.View
+        style={{
+          width: size,
+          height: size,
+          opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 0] }),
+          transform: [
+            { rotate: '45deg' },
+            { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 1.2, 0.3] }) },
+          ],
+        }}
+      >
+        {/* 4-point star shape via overlapping views */}
+        <View
+          style={{
+            position: 'absolute',
+            top: halfSize - size * 0.08,
+            left: 0,
+            width: size,
+            height: size * 0.16,
+            backgroundColor: color,
+            borderRadius: size * 0.08,
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: halfSize - size * 0.08,
+            width: size * 0.16,
+            height: size,
+            backgroundColor: color,
+            borderRadius: size * 0.08,
+          }}
+        />
+        {/* Center glow dot */}
+        <View
+          style={{
+            position: 'absolute',
+            top: halfSize - size * 0.15,
+            left: halfSize - size * 0.15,
+            width: size * 0.3,
+            height: size * 0.3,
+            borderRadius: size * 0.15,
+            backgroundColor: '#fff',
+            opacity: 0.9,
+          }}
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
+// ─── Rising Particle (for celebrations) ─────────────────────────────────
+interface RisingParticleProps {
+  color: string;
+  startX: number;
+  startY: number;
+  size: number;
+  delay: number;
+  duration: number;
+}
+
+function RisingParticle({ color, startX, startY, size, delay, duration }: RisingParticleProps) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const sway = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.parallel([
+          Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
+          Animated.loop(
+            Animated.sequence([
+              Animated.timing(sway, { toValue: 1, duration: 600 + Math.random() * 400, useNativeDriver: true }),
+              Animated.timing(sway, { toValue: -1, duration: 600 + Math.random() * 400, useNativeDriver: true }),
+            ]),
+          ),
+        ]),
+      ]),
+    ).start();
+  }, [anim, delay, duration, sway]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: startX,
+        top: startY,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: color,
+        opacity: anim.interpolate({ inputRange: [0, 0.1, 0.7, 1], outputRange: [0, 0.8, 0.6, 0] }),
+        transform: [
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -200] }) },
+          { translateX: sway.interpolate({ inputRange: [-1, 1], outputRange: [-15, 15] }) },
+          { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.5, 1, 0.2] }) },
+        ],
+      }}
+    />
+  );
+}
+
+// ─── Shimmer Line (light sweep across surfaces) ─────────────────────────
+interface ShimmerProps {
+  width: number;
+  height: number;
+  color?: string;
+  duration?: number;
+  delay?: number;
+}
+
+export function ShimmerEffect({ width, height, color = 'rgba(255,255,255,0.08)', duration = 3000, delay = 0 }: ShimmerProps) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
+        Animated.delay(1000),
+      ]),
+    ).start();
+  }, [anim, delay, duration]);
+
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: 0,
+          width: width * 0.4,
+          height,
+          backgroundColor: color,
+          transform: [
+            { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.4, width * 1.4] }) },
+            { skewX: '-20deg' },
+          ],
+          opacity: 0.6,
+        }}
+      />
+    </View>
+  );
+}
+
+// ─── Ambient Sparkle Field ──────────────────────────────────────────────
+interface SparkleFieldProps {
+  count?: number;
+  colors?: string[];
+  intensity?: 'subtle' | 'medium' | 'intense';
+}
+
+const SPARKLE_COLORS = [
+  '#fff',
+  COLORS.accent,
+  COLORS.gold,
+  COLORS.purple,
+  'rgba(255,255,255,0.7)',
+  COLORS.teal,
+];
+
+export function SparkleField({
+  count = 20,
+  colors = SPARKLE_COLORS,
+  intensity = 'subtle',
+}: SparkleFieldProps) {
+  const sizeRange = intensity === 'intense' ? [4, 12] : intensity === 'medium' ? [3, 8] : [2, 6];
+
+  const sparkles = useMemo(
+    () =>
+      Array.from({ length: count }, (_, i) => ({
+        id: i,
+        size: sizeRange[0] + Math.random() * (sizeRange[1] - sizeRange[0]),
+        color: colors[i % colors.length],
+        top: `${5 + ((i * 17 + 7) % 85)}%` as DimensionValue,
+        left: `${3 + ((i * 23 + 11) % 92)}%` as DimensionValue,
+        delay: (i * 280) % 3200,
+        duration: 2000 + Math.random() * 2000,
+      })),
+    [count, colors, intensity],
+  );
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {sparkles.map((s) => (
+        <DiamondSparkle
+          key={s.id}
+          size={s.size}
+          color={s.color}
+          top={s.top}
+          left={s.left}
+          delay={s.delay}
+          duration={s.duration}
+        />
+      ))}
+    </View>
+  );
+}
+
+// ─── Celebration Burst ──────────────────────────────────────────────────
+interface CelebrationBurstProps {
+  centerX?: number;
+  centerY?: number;
+  particleCount?: number;
+  colors?: string[];
+}
+
+export function CelebrationBurst({
+  centerX = 180,
+  centerY = 300,
+  particleCount = 24,
+  colors = SPARKLE_COLORS,
+}: CelebrationBurstProps) {
+  const particles = useMemo(
+    () =>
+      Array.from({ length: particleCount }, (_, i) => ({
+        id: i,
+        color: colors[i % colors.length],
+        startX: centerX + (Math.random() - 0.5) * 120,
+        startY: centerY + (Math.random() - 0.5) * 40,
+        size: 3 + Math.random() * 6,
+        delay: Math.random() * 600,
+        duration: 1800 + Math.random() * 1200,
+      })),
+    [centerX, centerY, particleCount, colors],
+  );
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {particles.map((p) => (
+        <RisingParticle key={p.id} {...p} />
+      ))}
+    </View>
+  );
+}
+
+// ─── Pulsing Glow Ring ──────────────────────────────────────────────────
+interface GlowRingProps {
+  size: number;
+  color: string;
+  pulseScale?: number;
+}
+
+export function PulsingGlowRing({ size, color, pulseScale = 1.15 }: GlowRingProps) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 1400, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 1400, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [anim]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 2,
+        borderColor: color,
+        opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.2, 0.6, 0.2] }),
+        transform: [
+          { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, pulseScale, 1] }) },
+        ],
+      }}
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  sparkleWrap: {
+    position: 'absolute',
+  },
+});

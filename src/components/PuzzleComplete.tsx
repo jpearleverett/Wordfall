@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, GRADIENTS, SHADOWS } from '../constants';
 import { GameMode } from '../types';
+import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -282,6 +283,10 @@ export function PuzzleComplete({
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      {/* Premium sparkle field behind everything */}
+      <SparkleField count={28} intensity="intense" />
+      {/* Celebration particle burst from center */}
+      <CelebrationBurst centerX={190} centerY={200} particleCount={20} />
       {confetti.map((particle) => (
         <ConfettiParticle
           key={particle.id}
@@ -507,7 +512,7 @@ export function PuzzleComplete({
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(6, 9, 28, 0.92)',
+    backgroundColor: 'rgba(4, 6, 18, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -525,12 +530,12 @@ const styles = StyleSheet.create({
     shadowRadius: 30,
   },
   gradientBorder: {
-    borderRadius: 32,
-    padding: 1.5,
+    borderRadius: 34,
+    padding: 2,
   },
   card: {
-    borderRadius: 30.5,
-    padding: 24,
+    borderRadius: 32,
+    padding: 26,
     overflow: 'hidden',
   },
   heroGlow: {
@@ -608,7 +613,7 @@ const styles = StyleSheet.create({
   star: {
     color: COLORS.star,
     textShadowColor: COLORS.goldGlow,
-    textShadowRadius: 22,
+    textShadowRadius: 28,
   },
   scorePanel: {
     alignItems: 'center',

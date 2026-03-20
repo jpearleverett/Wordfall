@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { SparkleField } from './effects/ParticleSystem';
 
 interface ModeUnlockCeremonyProps {
   modeName: string;
@@ -40,6 +41,7 @@ export function ModeUnlockCeremony({
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      <SparkleField count={20} intensity="medium" colors={[modeColor, '#fff', COLORS.accent]} />
       <Animated.View style={[styles.cardOuter, { transform: [{ scale: scaleAnim }] }]}>
         <LinearGradient
           colors={GRADIENTS.surfaceCard}

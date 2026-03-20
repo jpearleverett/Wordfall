@@ -15,18 +15,31 @@ function WordChip({ wordPlacement, currentWord, isValidWord, index }: WordChipPr
   const foundAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
   const wasFound = useRef(false);
 
   const isActive = !wordPlacement.found && currentWord === wordPlacement.word;
+
+  // Shimmer animation for found chips
+  useEffect(() => {
+    if (wordPlacement.found) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, useNativeDriver: true }),
+          Animated.delay(2000),
+        ]),
+      ).start();
+    }
+  }, [wordPlacement.found, shimmerAnim]);
 
   useEffect(() => {
     if (wordPlacement.found && !wasFound.current) {
       wasFound.current = true;
       Animated.sequence([
         Animated.spring(scaleAnim, {
-          toValue: 1.18,
+          toValue: 1.22,
           friction: 3,
-          tension: 200,
+          tension: 220,
           useNativeDriver: true,
         }),
         Animated.parallel([
@@ -49,8 +62,8 @@ function WordChip({ wordPlacement, currentWord, isValidWord, index }: WordChipPr
     if (isActive && isValidWord) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(glowAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
-          Animated.timing(glowAnim, { toValue: 0.5, duration: 400, useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 0.5, duration: 350, useNativeDriver: true }),
         ])
       ).start();
     } else if (isActive) {
@@ -73,19 +86,29 @@ function WordChip({ wordPlacement, currentWord, isValidWord, index }: WordChipPr
       style={[
         styles.wordChip,
         getChipStyle(),
-        {
-          transform: [{ scale: scaleAnim }],
-        },
+        { transform: [{ scale: scaleAnim }] },
       ]}
     >
-      {wordPlacement.found && (
+      {/* Background gradient for different states */}
+      {wordPlacement.found ? (
         <LinearGradient
-          colors={['rgba(76, 175, 80, 0.2)', 'rgba(39, 174, 96, 0.12)'] as [string, string]}
+          colors={['rgba(0, 230, 118, 0.22)', 'rgba(0, 200, 83, 0.10)'] as [string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
+        />
+      ) : (
+        <LinearGradient
+          colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
         />
       )}
+
+      {/* Glass top edge on chip */}
+      <View style={styles.chipGlassEdge} />
+
       <Text
         style={[
           styles.wordText,
@@ -96,12 +119,20 @@ function WordChip({ wordPlacement, currentWord, isValidWord, index }: WordChipPr
       >
         {wordPlacement.word}
       </Text>
+
       {wordPlacement.found && (
         <Animated.View style={[styles.checkContainer, { opacity: foundAnim }]}>
+          <LinearGradient
+            colors={[COLORS.green, COLORS.teal] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}
+          />
           <Text style={styles.checkMark}>✓</Text>
         </Animated.View>
       )}
-      {/* Letter count indicator */}
+
+      {/* Letter count indicator with glass treatment */}
       {!wordPlacement.found && (
         <View style={styles.letterCount}>
           <Text style={styles.letterCountText}>{wordPlacement.word.length}</Text>
@@ -118,22 +149,53 @@ interface WordBankProps {
 }
 
 export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
+  const wordAnim = useRef(new Animated.Value(0)).current;
+  const prevWord = useRef('');
+
+  // Animate current word text on change
+  useEffect(() => {
+    if (currentWord !== prevWord.current) {
+      prevWord.current = currentWord;
+      if (currentWord.length > 0) {
+        wordAnim.setValue(0);
+        Animated.spring(wordAnim, {
+          toValue: 1,
+          friction: 5,
+          tension: 200,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  }, [currentWord]);
+
   return (
     <View style={styles.container}>
       {/* Current forming word */}
       <View style={styles.currentWordContainer}>
         {currentWord.length > 0 ? (
           <View style={styles.currentWordRow}>
-            <Text
+            <Animated.Text
               style={[
                 styles.currentWord,
                 isValidWord && styles.currentWordValid,
+                {
+                  transform: [
+                    { scale: wordAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.9, 1.05, 1] }) },
+                  ],
+                  opacity: wordAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }),
+                },
               ]}
             >
               {currentWord}
-            </Text>
+            </Animated.Text>
             {isValidWord && (
               <View style={styles.validIndicator}>
+                <LinearGradient
+                  colors={[COLORS.green, COLORS.teal] as [string, string]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+                />
                 <Text style={styles.validIndicatorText}>✓</Text>
               </View>
             )}
@@ -143,11 +205,15 @@ export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
             Tap letters to spell a word
           </Text>
         )}
-        {/* Subtle underline */}
+        {/* Elegant underline with gradient */}
         <View style={styles.underline}>
           {currentWord.length > 0 && (
             <LinearGradient
-              colors={isValidWord ? ['rgba(76,175,80,0.6)', 'rgba(76,175,80,0)'] as [string, string] : ['rgba(0,212,255,0.4)', 'rgba(0,212,255,0)'] as [string, string]}
+              colors={
+                isValidWord
+                  ? ['rgba(0,230,118,0.7)', 'rgba(0,230,118,0.2)', 'rgba(0,230,118,0)'] as [string, string, string]
+                  : ['rgba(0,212,255,0.5)', 'rgba(0,212,255,0.15)', 'rgba(0,212,255,0)'] as [string, string, string]
+              }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.underlineFill}
@@ -180,7 +246,7 @@ const styles = StyleSheet.create({
   currentWordContainer: {
     alignItems: 'center',
     marginBottom: 14,
-    minHeight: 44,
+    minHeight: 48,
     justifyContent: 'center',
   },
   currentWordRow: {
@@ -189,36 +255,36 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   currentWord: {
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: '900',
     color: COLORS.textPrimary,
-    letterSpacing: 5,
+    letterSpacing: 6,
     textTransform: 'uppercase',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowRadius: 4,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowRadius: 6,
   },
   currentWordValid: {
     color: COLORS.green,
     textShadowColor: COLORS.greenGlow,
-    textShadowRadius: 20,
+    textShadowRadius: 24,
   },
   validIndicator: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.green,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 8,
   },
   validIndicatorText: {
     color: '#fff',
     fontWeight: '900',
-    fontSize: 16,
+    fontSize: 17,
   },
   currentWordPlaceholder: {
     fontSize: 14,
@@ -228,7 +294,7 @@ const styles = StyleSheet.create({
   underline: {
     width: '60%',
     height: 2,
-    marginTop: 6,
+    marginTop: 8,
     borderRadius: 1,
     backgroundColor: 'rgba(255,255,255,0.04)',
     overflow: 'hidden',
@@ -247,83 +313,100 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 11,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.10)',
     overflow: 'hidden',
     gap: 6,
   },
+  chipGlassEdge: {
+    position: 'absolute',
+    top: 0,
+    left: '10%',
+    right: '10%',
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 999,
+  },
   wordChipFound: {
-    borderColor: 'rgba(76, 175, 80, 0.5)',
+    borderColor: 'rgba(0, 230, 118, 0.5)',
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
   },
   wordChipActive: {
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
-    borderColor: 'rgba(0, 212, 255, 0.5)',
+    borderColor: 'rgba(0, 212, 255, 0.55)',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
   wordChipValid: {
-    backgroundColor: 'rgba(76, 175, 80, 0.18)',
     borderColor: COLORS.green,
     borderWidth: 2,
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
   },
   wordText: {
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.wordPending,
-    letterSpacing: 2,
+    letterSpacing: 2.5,
     textTransform: 'uppercase',
   },
   wordTextFound: {
     color: COLORS.wordFound,
     textDecorationLine: 'line-through',
+    textShadowColor: COLORS.greenGlow,
+    textShadowRadius: 6,
   },
   wordTextActive: {
     color: COLORS.wordActive,
+    textShadowColor: COLORS.accentGlow,
+    textShadowRadius: 8,
   },
   wordTextValid: {
     color: COLORS.green,
     fontWeight: '900',
     textShadowColor: COLORS.greenGlow,
-    textShadowRadius: 8,
+    textShadowRadius: 12,
   },
   checkContainer: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: COLORS.green,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: COLORS.green,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 4,
   },
   checkMark: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '900',
   },
   letterCount: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
   },
   letterCountText: {
     color: COLORS.textMuted,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });
