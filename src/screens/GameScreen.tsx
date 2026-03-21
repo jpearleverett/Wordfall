@@ -18,7 +18,8 @@ import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS } from '../constants';
+import { Ionicons } from '@expo/vector-icons';
 import { soundManager } from '../services/sound';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -876,9 +877,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 107, 107, 0.4)',
   },
   timerText: {
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     fontSize: 16,
-    fontWeight: '900',
     letterSpacing: 3,
     textShadowColor: COLORS.accentGlow,
     textShadowRadius: 8,
@@ -903,9 +904,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 107, 107, 0.4)',
   },
   moveText: {
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
     fontSize: 13,
-    fontWeight: '700',
   },
   moveTextDanger: {
     color: COLORS.coral,
@@ -924,9 +925,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 107, 107, 0.3)',
   },
   cascadeText: {
+    fontFamily: FONTS.display,
     color: COLORS.coral,
     fontSize: 14,
-    fontWeight: '900',
     textShadowColor: COLORS.coralGlow,
     textShadowRadius: 6,
   },
@@ -944,7 +945,7 @@ const styles = StyleSheet.create({
   frozenText: {
     color: COLORS.accent,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   freezeModeBanner: {
     backgroundColor: 'rgba(0, 212, 255, 0.15)',
@@ -958,9 +959,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 212, 255, 0.5)',
   },
   freezeModeText: {
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     fontSize: 13,
-    fontWeight: '900',
     letterSpacing: 1,
     textShadowColor: COLORS.accentGlow,
     textShadowRadius: 8,
@@ -978,7 +979,7 @@ const styles = StyleSheet.create({
   stuckText: {
     color: COLORS.coral,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   chainPopup: {
     position: 'absolute',
@@ -998,9 +999,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
   },
   chainText: {
+    fontFamily: FONTS.display,
     color: '#fff',
     fontSize: 32,
-    fontWeight: '900',
     letterSpacing: 5,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
@@ -1030,7 +1031,7 @@ const styles = StyleSheet.create({
   idleHintText: {
     color: COLORS.accent,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   stuckUndoButton: {
     backgroundColor: COLORS.gold,
@@ -1045,9 +1046,9 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   stuckUndoText: {
+    fontFamily: FONTS.display,
     color: COLORS.bg,
     fontSize: 13,
-    fontWeight: '900',
     letterSpacing: 1,
   },
   modeIntroBanner: {
@@ -1061,15 +1062,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   modeIntroText: {
+    fontFamily: FONTS.display,
     fontSize: 15,
-    fontWeight: '900',
     letterSpacing: 2,
     marginBottom: 2,
   },
   modeIntroDesc: {
+    fontFamily: FONTS.bodyMedium,
     color: COLORS.textSecondary,
     fontSize: 12,
-    fontWeight: '500',
   },
   scorePopup: {
     position: 'absolute',
@@ -1089,9 +1090,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
   },
   scorePopupText: {
+    fontFamily: FONTS.display,
     color: '#fff',
     fontSize: 26,
-    fontWeight: '900',
     letterSpacing: 3,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
@@ -1108,7 +1109,7 @@ const styles = StyleSheet.create({
   previewLabel: {
     color: COLORS.gold,
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 3,
     marginBottom: 8,
     textShadowColor: COLORS.goldGlow,
@@ -1126,7 +1127,7 @@ const styles = StyleSheet.create({
   previewDismissText: {
     color: COLORS.textSecondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   boosterBar: {
     flexDirection: 'row',
@@ -1168,9 +1169,9 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   boosterLabel: {
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
     fontSize: 10,
-    fontWeight: '700',
     letterSpacing: 0.5,
   },
   boosterCount: {
@@ -1190,7 +1191,7 @@ const styles = StyleSheet.create({
   boosterCountText: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
   },
   failedOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1217,8 +1218,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   failedTitle: {
+    fontFamily: FONTS.display,
     fontSize: 26,
-    fontWeight: '900',
     color: COLORS.coral,
     letterSpacing: 2,
     marginBottom: 12,
@@ -1227,6 +1228,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 10,
   },
   failedSubtext: {
+    fontFamily: FONTS.bodyMedium,
     fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: 'center',
@@ -1253,7 +1255,7 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: 11,
     textAlign: 'center',
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   failedStats: {
     marginBottom: 20,
@@ -1280,9 +1282,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   retryButtonText: {
+    fontFamily: FONTS.display,
     color: '#fff',
     fontSize: 16,
-    fontWeight: '900',
     letterSpacing: 2,
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowRadius: 2,
@@ -1296,9 +1298,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 215, 0, 0.35)',
   },
   undoRecoverText: {
+    fontFamily: FONTS.display,
     color: COLORS.gold,
     fontSize: 14,
-    fontWeight: '800',
     letterSpacing: 1,
   },
   homeButton: {
@@ -1312,7 +1314,7 @@ const styles = StyleSheet.create({
   homeButtonText: {
     color: COLORS.textSecondary,
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     letterSpacing: 1,
   },
   buttonPressed: {

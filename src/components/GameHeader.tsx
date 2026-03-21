@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, FONTS } from '../constants';
+import { Ionicons } from '@expo/vector-icons';
 import { GameMode } from '../types';
 
 interface GameHeaderProps {
@@ -102,7 +103,7 @@ export function GameHeader({
               colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'] as [string, string]}
               style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
             />
-            <Text style={styles.backText}>←</Text>
+            <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
           </Pressable>
 
           {/* Center: mode badge + progress */}
@@ -150,7 +151,7 @@ export function GameHeader({
                   colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
                   style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
                 />
-                <Text style={styles.actionIcon}>↩</Text>
+                <Ionicons name="arrow-undo" size={18} color={COLORS.textPrimary} />
                 {undosLeft > 0 && !modeConfig.rules.unlimitedUndo && (
                   <View style={styles.countBadge}>
                     <Text style={styles.countBadgeText}>{undosLeft}</Text>
@@ -174,7 +175,7 @@ export function GameHeader({
                   colors={['rgba(255,215,0,0.12)', 'rgba(255,215,0,0.04)'] as [string, string]}
                   style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
                 />
-                <Text style={styles.actionIcon}>💡</Text>
+                <Ionicons name="bulb-outline" size={18} color={COLORS.gold} />
                 {hintsLeft > 0 && (
                   <View style={[styles.countBadge, styles.hintCountBadge]}>
                     <Text style={styles.countBadgeText}>{hintsLeft}</Text>
@@ -263,7 +264,7 @@ const styles = StyleSheet.create({
   backText: {
     color: COLORS.textPrimary,
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
   },
   centerBlock: {
     flex: 1,
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
   modeText: {
     color: COLORS.textPrimary,
     fontSize: 13,
-    fontWeight: '800',
+    fontFamily: 'Inter_700Bold',
     letterSpacing: 0.6,
   },
   progressDivider: {
@@ -296,7 +297,7 @@ const styles = StyleSheet.create({
   },
   progressCount: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
   scoreBlock: {
     alignItems: 'flex-end',
@@ -306,8 +307,8 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     color: COLORS.gold,
-    fontSize: 22,
-    fontWeight: '900',
+    fontSize: 24,
+    fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: COLORS.goldGlow,
     textShadowRadius: 14,
   },
@@ -323,7 +324,7 @@ const styles = StyleSheet.create({
   comboTag: {
     color: COLORS.coral,
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
   actionsRow: {
     flexDirection: 'row',
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
   countBadgeText: {
     color: COLORS.bg,
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
   progressTrack: {
     height: 4,

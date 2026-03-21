@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 4,
     textShadowColor: COLORS.accentGlow,
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textMuted,
   },
   tabTextActive: {
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   },
   scopeTabText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textMuted,
   },
   scopeTabTextActive: {
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginBottom: 6,
   },
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   },
   topAvatarText: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
   },
   topAvatarTextFirst: {
@@ -439,14 +439,14 @@ const styles = StyleSheet.create({
   },
   topName: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
     marginBottom: 4,
     textAlign: 'center',
   },
   topScore: {
     fontSize: 16,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
   },
   listCard: {
     borderRadius: 16,
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
   },
   rankText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textMuted,
   },
   rankTextHighlight: {
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
   },
   listAvatarText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
   },
   listInfo: {
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
   },
   listName: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
   },
   listNameHighlight: {
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
   },
   listScore: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textSecondary,
     marginLeft: 8,
   },
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   },
   currentUserRank: {
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     width: 40,
   },
@@ -553,18 +553,18 @@ const styles = StyleSheet.create({
   },
   currentUserAvatarText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.bg,
   },
   currentUserName: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.accent,
   },
   currentUserScore: {
     fontSize: 16,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     textShadowColor: COLORS.accentGlow,
     textShadowOffset: { width: 0, height: 0 },

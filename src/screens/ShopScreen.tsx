@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../constants';
+import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { useSettings } from '../contexts/SettingsContext';
 
 const { width } = Dimensions.get('window');
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 4,
     textShadowColor: COLORS.accentGlow,
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginTop: 24,
     marginBottom: 12,
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
   },
   featuredBadgeText: {
     fontSize: 10,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     letterSpacing: 1,
   },
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   },
   featuredName: {
     fontSize: 20,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     marginBottom: 4,
     textShadowColor: 'rgba(255,255,255,0.15)',
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
   featuredPrice: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.green,
     textShadowColor: 'rgba(76,175,80,0.4)',
     textShadowOffset: { width: 0, height: 0 },
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.accent,
     fontVariant: ['tabular-nums'],
   },
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
   },
   bestValueText: {
     fontSize: 9,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.bg,
     letterSpacing: 1,
   },
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     textAlign: 'center',
     marginBottom: 8,
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   },
   priceText: {
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.bg,
   },
   premiumSection: {
@@ -556,7 +556,7 @@ const styles = StyleSheet.create({
   },
   premiumName: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginBottom: 2,
     textShadowColor: 'rgba(255,255,255,0.1)',
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
   },
   ownedText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.green,
   },
   bottomSpacer: {

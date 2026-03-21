@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../../constants';
+import { COLORS, FONTS, GRADIENTS } from '../../constants';
 
 interface ButtonProps {
   title: string;
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   text: {
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     letterSpacing: 0.4,
   },
   icon: {

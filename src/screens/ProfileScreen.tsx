@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../constants';
+import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
 
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 4,
     textShadowColor: COLORS.accentGlow,
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   avatarLetter: {
     fontSize: 40,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     textShadowColor: COLORS.accentGlow,
     textShadowOffset: { width: 0, height: 0 },
@@ -387,12 +387,12 @@ const styles = StyleSheet.create({
   },
   levelText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.bg,
   },
   playerName: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     marginTop: 12,
     textShadowColor: 'rgba(255,255,255,0.15)',
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   },
   titleText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.gold,
     textShadowColor: 'rgba(255,215,0,0.3)',
     textShadowOffset: { width: 0, height: 0 },
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginTop: 24,
     marginBottom: 12,
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 20,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     marginBottom: 2,
     textShadowColor: 'rgba(255,255,255,0.15)',
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    fontWeight: '500',
+    fontFamily: FONTS.bodyMedium,
   },
   achievementsGrid: {
     flexDirection: 'row',
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.textPrimary,
     textAlign: 'center',
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     marginBottom: 6,
   },
   tierDots: {
@@ -521,12 +521,12 @@ const styles = StyleSheet.create({
   collectionLabel: {
     fontSize: 14,
     color: COLORS.textPrimary,
-    fontWeight: '500',
+    fontFamily: FONTS.bodyMedium,
   },
   collectionPercent: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   progressBarBg: {
     height: 8,
@@ -558,12 +558,12 @@ const styles = StyleSheet.create({
   cosmeticLabel: {
     fontSize: 14,
     color: COLORS.textSecondary,
-    fontWeight: '500',
+    fontFamily: FONTS.bodyMedium,
   },
   cosmeticValue: {
     fontSize: 14,
     color: COLORS.textPrimary,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   cosmeticDivider: {
     height: 1,
@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
   },
   editButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.bg,
   },
   bottomSpacer: {

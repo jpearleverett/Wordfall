@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../constants';
+import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 import { CHAPTERS } from '../data/chapters';
 import { Chapter } from '../types';
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 2,
     color: COLORS.gold,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     marginBottom: 12,
     textShadowColor: 'rgba(255,215,0,0.3)',
     textShadowOffset: { width: 0, height: 0 },
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     color: COLORS.textPrimary,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     marginBottom: 10,
     maxWidth: width - 96,
     textShadowColor: 'rgba(255,255,255,0.15)',
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   },
   heroStatValue: {
     fontSize: 22,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     marginBottom: 6,
     textShadowColor: 'rgba(255,255,255,0.15)',
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
   },
   nextGoalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginBottom: 6,
   },
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     color: COLORS.textPrimary,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     marginBottom: 12,
     textShadowColor: 'rgba(255,255,255,0.1)',
     textShadowOffset: { width: 0, height: 0 },
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
   overviewWingName: {
     fontSize: 12,
     color: COLORS.textPrimary,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     marginBottom: 4,
   },
   overviewWingProgress: {
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
   },
   featureTitle: {
     fontSize: 26,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     marginBottom: 4,
     textShadowColor: 'rgba(255,255,255,0.15)',
     textShadowOffset: { width: 0, height: 0 },
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   },
   infoCardValue: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
   },
   chapterCard: {
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
   chapterTitle: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
   },
   chapterPill: {
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
   chapterPillText: {
     fontSize: 10,
     letterSpacing: 1,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textMuted,
   },
   chapterPillTextComplete: {

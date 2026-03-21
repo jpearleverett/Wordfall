@@ -9,7 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 4,
     textShadowColor: COLORS.accentGlow,
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
   },
   noClubTitle: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     marginBottom: 8,
   },
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginBottom: 12,
     textShadowColor: 'rgba(255,255,255,0.08)',
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
   },
   joinButtonText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.bg,
   },
   createSection: {
@@ -421,11 +421,10 @@ const styles = StyleSheet.create({
   createButtonIcon: {
     fontSize: 24,
     color: COLORS.accent,
-    fontWeight: '300',
   },
   createButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.accent,
   },
   createForm: {
@@ -462,7 +461,7 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
   },
   confirmBtn: {
@@ -478,7 +477,7 @@ const styles = StyleSheet.create({
   },
   confirmBtnText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.bg,
   },
   clubContent: {
@@ -502,12 +501,12 @@ const styles = StyleSheet.create({
   },
   clubShieldText: {
     fontSize: 32,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
   },
   clubName: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     marginBottom: 4,
     textShadowColor: 'rgba(255,255,255,0.1)',
@@ -530,7 +529,7 @@ const styles = StyleSheet.create({
   },
   weeklyScoreLabel: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -538,7 +537,7 @@ const styles = StyleSheet.create({
   },
   weeklyScoreValue: {
     fontSize: 32,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.gold,
     textShadowColor: COLORS.goldGlow,
     textShadowOffset: { width: 0, height: 0 },
@@ -563,7 +562,7 @@ const styles = StyleSheet.create({
   },
   clubPuzzleTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginBottom: 2,
   },
@@ -574,7 +573,6 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: 24,
     color: COLORS.accent,
-    fontWeight: '300',
   },
   membersCard: {
     borderRadius: 16,
@@ -601,7 +599,7 @@ const styles = StyleSheet.create({
   },
   memberRankText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textMuted,
   },
   memberAvatar: {
@@ -622,7 +620,7 @@ const styles = StyleSheet.create({
   },
   memberAvatarText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
   },
   memberInfo: {
@@ -635,7 +633,7 @@ const styles = StyleSheet.create({
   },
   memberName: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
   },
   leaderBadge: {
@@ -716,7 +714,7 @@ const styles = StyleSheet.create({
   },
   leaveButtonText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.coral,
     textShadowColor: COLORS.coralGlow,
     textShadowOffset: { width: 0, height: 0 },

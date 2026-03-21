@@ -8,7 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 4,
     textShadowColor: COLORS.accentGlow,
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textSecondary,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 15,
     color: COLORS.textPrimary,
-    fontWeight: '500',
+    fontFamily: FONTS.bodyMedium,
   },
   settingValue: {
     fontSize: 15,
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
   },
   volumeBtnText: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
   },
   volumeBarContainer: {
@@ -509,7 +509,6 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: 22,
     color: COLORS.textMuted,
-    fontWeight: '300',
   },
   statusBadge: {
     borderRadius: 12,
@@ -529,7 +528,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   statusTextActive: {
     color: COLORS.green,
@@ -550,7 +549,7 @@ const styles = StyleSheet.create({
   },
   dangerButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.coral,
     marginBottom: 4,
     textShadowColor: 'rgba(255,107,107,0.6)',

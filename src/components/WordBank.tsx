@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WordPlacement } from '../types';
-import { COLORS, GRADIENTS } from '../constants';
+import { COLORS, GRADIENTS, FONTS } from '../constants';
 
 interface WordChipProps {
   wordPlacement: WordPlacement;
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   },
   currentWord: {
     fontSize: 32,
-    fontWeight: '900',
+    fontFamily: 'SpaceGrotesk_700Bold',
     color: COLORS.textPrimary,
     letterSpacing: 6,
     textTransform: 'uppercase',
@@ -270,13 +270,13 @@ const styles = StyleSheet.create({
   },
   validIndicatorText: {
     color: '#fff',
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     fontSize: 17,
   },
   currentWordPlaceholder: {
     fontSize: 14,
     color: COLORS.textMuted,
-    fontStyle: 'italic',
+    fontFamily: 'Inter_500Medium',
   },
   underline: {
     width: '60%',
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   },
   wordText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
     color: COLORS.wordPending,
     letterSpacing: 2.5,
     textTransform: 'uppercase',
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   },
   wordTextValid: {
     color: COLORS.green,
-    fontWeight: '900',
+    fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: COLORS.greenGlow,
     textShadowRadius: 12,
   },
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   checkMark: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
   letterCount: {
     paddingHorizontal: 7,
@@ -394,6 +394,6 @@ const styles = StyleSheet.create({
   letterCountText: {
     color: COLORS.textMuted,
     fontSize: 10,
-    fontWeight: '800',
+    fontFamily: 'Inter_600SemiBold',
   },
 });

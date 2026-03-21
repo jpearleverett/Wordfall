@@ -6,7 +6,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../constants';
+import { COLORS, FONTS, GRADIENTS } from '../constants';
 
 interface LetterCellProps {
   letter: string;
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   },
   letter: {
     color: COLORS.textPrimary,
-    fontWeight: '900',
+    fontFamily: 'SpaceGrotesk_700Bold',
     textAlign: 'center',
     letterSpacing: 0.8,
   },
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
   },
   indexText: {
     color: '#fff',
-    fontWeight: '900',
+    fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowRadius: 2,
   },
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
   },
   checkText: {
     color: '#fff',
-    fontWeight: '900',
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
   frozenIndicator: {
     position: 'absolute',

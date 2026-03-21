@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { TutorialGuideStep } from '../data/tutorialBoards';
 
 interface TutorialOverlayProps {
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   message: {
     color: COLORS.textPrimary,
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     lineHeight: 22,
     flex: 1,
   },

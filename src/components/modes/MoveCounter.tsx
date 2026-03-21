@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../../constants';
+import { COLORS, GRADIENTS, FONTS } from '../../constants';
 
 interface MoveCounterProps {
   current: number;
@@ -114,20 +114,20 @@ const styles = StyleSheet.create({
   label: {
     color: COLORS.textSecondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   count: {
     fontSize: 16,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     fontVariant: ['tabular-nums'],
   },
   separator: {
     color: COLORS.textSecondary,
-    fontWeight: '400',
+    fontFamily: FONTS.bodyRegular,
   },
   max: {
     color: COLORS.textSecondary,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   trackOuter: {
     borderRadius: TRACK_HEIGHT / 2,

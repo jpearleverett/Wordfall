@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 
 interface AchievementCeremonyProps {
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   },
   ribbon: {
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 2,
     marginBottom: 20,
   },
@@ -152,13 +152,13 @@ const styles = StyleSheet.create({
   tierText: {
     color: COLORS.bg,
     fontSize: 9,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
   },
   name: {
     color: COLORS.textPrimary,
     fontSize: 22,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     textAlign: 'center',
     marginBottom: 6,
   },
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   },
   rewardAmount: {
     color: COLORS.gold,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     fontSize: 14,
   },
   button: {
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: COLORS.bg,
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
   },
   buttonPressed: {

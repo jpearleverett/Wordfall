@@ -9,7 +9,7 @@ import {
   Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { generateTutorialBoard, TUTORIAL_STEPS } from '../data/tutorialBoards';
 import { GameGrid } from '../components/Grid';
 import { CellPosition } from '../types';
@@ -284,14 +284,14 @@ const styles = StyleSheet.create({
   welcomeTitle: {
     color: COLORS.textSecondary,
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
   welcomeTitleAccent: {
     color: COLORS.accent,
     fontSize: 48,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 5,
     marginBottom: 16,
     textShadowColor: COLORS.accentGlow,
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   startButtonText: {
     color: COLORS.bg,
     fontSize: 16,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 3,
   },
   skipLink: {
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   skipText: {
     color: COLORS.textMuted,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   pressed: {
     transform: [{ scale: 0.96 }],
@@ -340,14 +340,14 @@ const styles = StyleSheet.create({
   tutorialTitle: {
     color: COLORS.textPrimary,
     fontSize: 24,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 1,
     marginBottom: 8,
   },
   tutorialProgress: {
     color: COLORS.textSecondary,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     marginBottom: 24,
   },
   gridContainer: {
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   dismissText: {
     color: COLORS.textSecondary,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   // Celebrate phase
   celebrateEmoji: {
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
   celebrateTitle: {
     color: COLORS.green,
     fontSize: 42,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 4,
     marginBottom: 12,
     textShadowColor: COLORS.greenGlow,
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
   readyTitle: {
     color: COLORS.gold,
     fontSize: 42,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 4,
     marginBottom: 12,
     textShadowColor: COLORS.goldGlow,
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   tipText: {
     color: COLORS.textPrimary,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     flex: 1,
   },
 });

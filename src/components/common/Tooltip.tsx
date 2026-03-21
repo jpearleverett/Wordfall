@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../../constants';
+import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../../constants';
 
 interface TooltipProps {
   message: string;
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   message: {
     color: COLORS.textPrimary,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     lineHeight: 20,
     textAlign: 'center',
     marginBottom: 6,
@@ -97,6 +97,6 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: 11,
     textAlign: 'center',
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
 });

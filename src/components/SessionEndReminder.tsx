@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 
 interface SessionEndReminderProps {
   type: 'daily' | 'streak';
@@ -77,12 +77,12 @@ const styles = StyleSheet.create({
   message: {
     flex: 1,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     lineHeight: 18,
   },
   dismiss: {
     color: COLORS.textMuted,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
 });

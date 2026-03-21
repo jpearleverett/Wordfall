@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, STREAK } from '../constants';
+import { COLORS, FONTS, GRADIENTS, SHADOWS, STREAK } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 
 interface StreakMilestoneCeremonyProps {
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   ribbon: {
     color: COLORS.orange,
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 2,
     marginBottom: 16,
   },
@@ -117,14 +117,14 @@ const styles = StyleSheet.create({
   milestoneCount: {
     color: COLORS.orange,
     fontSize: 48,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     textShadowColor: COLORS.orangeGlow,
     textShadowRadius: 20,
   },
   milestoneLabel: {
     color: COLORS.textMuted,
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 3,
     marginBottom: 8,
   },
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   rewardAmount: {
     color: COLORS.gold,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     fontSize: 14,
   },
   cosmeticBadge: {
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
   cosmeticText: {
     color: COLORS.purple,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   button: {
     borderRadius: 14,
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: COLORS.bg,
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
   },
   buttonPressed: {

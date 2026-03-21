@@ -7,7 +7,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../../constants';
+import { COLORS, GRADIENTS, FONTS } from '../../constants';
 
 interface ShopItemProps {
   name: string;
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   bestValueText: {
     color: '#000',
     fontSize: 9,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 0.8,
   },
   iconContainer: {
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   name: {
     color: COLORS.textPrimary,
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     marginBottom: 3,
   },
   description: {
@@ -235,11 +235,11 @@ const styles = StyleSheet.create({
   priceText: {
     color: '#000',
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
   },
   purchasedText: {
     color: COLORS.green,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
 });

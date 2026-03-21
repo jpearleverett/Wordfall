@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../../constants';
 
 interface Reward {
   threshold: number;
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   progressLabel: {
     color: COLORS.textSecondary,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     letterSpacing: 0.5,
     textShadowColor: 'rgba(255,255,255,0.06)',
     textShadowOffset: { width: 0, height: 0 },
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   progressValue: {
     color: COLORS.textPrimary,
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   progressCurrent: {
     color: COLORS.accent,
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   milestoneCheck: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   milestoneIconReached: {
     color: '#000',
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
   },
   rewardLabels: {
     height: 36,
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   rewardName: {
     color: COLORS.textSecondary,
     fontSize: 9,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     textAlign: 'center',
   },
   rewardNameClaimed: {
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   rewardThreshold: {
     color: COLORS.textMuted,
     fontSize: 9,
-    fontWeight: '500',
+    fontFamily: FONTS.bodyMedium,
     marginTop: 1,
   },
 });

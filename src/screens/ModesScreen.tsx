@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../constants';
+import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
 
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 4,
     textShadowColor: COLORS.accentGlow,
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   cardName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     textAlign: 'center',
     marginBottom: 6,
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.gold,
     textAlign: 'center',
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     textShadowColor: 'rgba(255,215,0,0.3)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 6,

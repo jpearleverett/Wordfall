@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../../constants';
+import { COLORS, FONTS } from '../../constants';
 
 interface TimerDisplayProps {
   totalSeconds: number;
@@ -220,13 +220,13 @@ const styles = StyleSheet.create({
   },
   time: {
     fontSize: 20,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     fontVariant: ['tabular-nums'],
   },
   pausedLabel: {
     color: COLORS.textMuted,
     fontSize: 8,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     letterSpacing: 1,
     marginTop: 2,
   },

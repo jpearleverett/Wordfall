@@ -74,6 +74,14 @@ export const COLORS = {
   // Tab bar
   tabActive: '#00d4ff',
   tabInactive: '#525b8a',
+
+  // Extended tokens — Neon Intelligence design system
+  surface2: '#1e2558',
+  surfaceGlass: 'rgba(20, 25, 64, 0.85)',
+  borderSubtle: 'rgba(255,255,255,0.06)',
+  borderMedium: 'rgba(255,255,255,0.12)',
+  borderAccent: 'rgba(0,212,255,0.25)',
+  textTertiary: '#3d4570',
 };
 
 // Gradient presets for LinearGradient — premium multi-stop gradients
@@ -536,6 +544,53 @@ export const EVENT_SCHEDULE = {
   weekendBlitzStart: 6, // Saturday
   weekendBlitzEnd: 0, // Sunday
   dailyResetHourUTC: 0,
+};
+
+// Typography — Neon Intelligence design system
+// Fonts: SpaceGrotesk (display) + Inter (body)
+export const FONTS = {
+  display: 'SpaceGrotesk_700Bold',
+  bodyRegular: 'Inter_400Regular',
+  bodyMedium: 'Inter_500Medium',
+  bodySemiBold: 'Inter_600SemiBold',
+  bodyBold: 'Inter_700Bold',
+};
+
+export const TYPOGRAPHY = {
+  displayHero: { fontFamily: FONTS.display, fontSize: 48, letterSpacing: 2 },
+  displayLarge: { fontFamily: FONTS.display, fontSize: 36, letterSpacing: 1.5 },
+  screenTitle: { fontFamily: FONTS.display, fontSize: 28, letterSpacing: 1 },
+  sectionTitle: { fontFamily: FONTS.bodySemiBold, fontSize: 20, letterSpacing: 0.5 },
+  body: { fontFamily: FONTS.bodyRegular, fontSize: 15, letterSpacing: 0.2 },
+  bodyMedium: { fontFamily: FONTS.bodyMedium, fontSize: 15, letterSpacing: 0.2 },
+  bodySemiBold: { fontFamily: FONTS.bodySemiBold, fontSize: 15, letterSpacing: 0.2 },
+  bodyBold: { fontFamily: FONTS.bodyBold, fontSize: 15, letterSpacing: 0.2 },
+  label: { fontFamily: FONTS.bodySemiBold, fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase' as const },
+  caption: { fontFamily: FONTS.bodyMedium, fontSize: 11, letterSpacing: 0.3 },
+  score: { fontFamily: FONTS.display, fontSize: 22, letterSpacing: 0.5 },
+  comboText: { fontFamily: FONTS.display, fontSize: 28, letterSpacing: 1 },
+  tileLetter: { fontFamily: FONTS.display, letterSpacing: 0.8 },
+};
+
+// Spacing scale
+export const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 28,
+  xxxl: 40,
+};
+
+// Border radius scale
+export const RADIUS = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  full: 999,
 };
 
 export { SCREEN_WIDTH, SCREEN_HEIGHT };
