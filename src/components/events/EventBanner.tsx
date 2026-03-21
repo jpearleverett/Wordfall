@@ -6,7 +6,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../../constants';
 
 interface EventBannerProps {
   eventName: string;
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   liveText: {
     color: COLORS.coral,
     fontSize: 10,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 1.2,
     textShadowColor: COLORS.coralGlow,
     textShadowOffset: { width: 0, height: 0 },
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   eventName: {
     color: COLORS.textPrimary,
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     marginBottom: 4,
     textShadowColor: 'rgba(255,255,255,0.12)',
     textShadowOffset: { width: 0, height: 0 },
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   timerText: {
     color: COLORS.accent,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     textShadowColor: COLORS.accentGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 6,
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   playLabel: {
     color: COLORS.accent,
     fontSize: 10,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 1,
     textShadowColor: COLORS.accentGlow,
     textShadowOffset: { width: 0, height: 0 },

@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, ECONOMY, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, ECONOMY, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { GameMode } from '../types';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   ribbonText: {
     color: COLORS.gold,
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 1.4,
     textShadowColor: COLORS.goldGlow,
     textShadowRadius: 8,
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
   title: {
     color: COLORS.textPrimary,
     fontSize: 28,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     textAlign: 'center',
     marginBottom: 6,
     textShadowColor: 'rgba(255,255,255,0.15)',
@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
   scoreValue: {
     color: COLORS.gold,
     fontSize: 36,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     textShadowColor: COLORS.goldGlow,
     textShadowRadius: 14,
   },
@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
   statCardValue: {
     color: COLORS.textPrimary,
     fontSize: 17,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     textAlign: 'center',
     textShadowColor: 'rgba(255,255,255,0.1)',
     textShadowRadius: 6,
@@ -699,7 +699,7 @@ const styles = StyleSheet.create({
   rewardsTitle: {
     color: COLORS.textPrimary,
     fontSize: 15,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     marginBottom: 10,
     textShadowColor: 'rgba(255,255,255,0.08)',
     textShadowRadius: 4,
@@ -740,12 +740,12 @@ const styles = StyleSheet.create({
   },
   rewardText: {
     color: COLORS.textPrimary,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     fontSize: 13,
   },
   rewardTextGold: {
     color: COLORS.gold,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     fontSize: 13,
     textShadowColor: COLORS.goldGlow,
     textShadowRadius: 6,
@@ -765,7 +765,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: COLORS.bg,
     fontSize: 15,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 1,
   },
   secondaryRow: {
@@ -784,7 +784,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: COLORS.textPrimary,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
   },
   buttonPressed: {
     transform: [{ scale: 0.97 }],
@@ -807,13 +807,13 @@ const styles = StyleSheet.create({
   levelUpText: {
     color: COLORS.accent,
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 1,
   },
   levelUpSubtext: {
     color: COLORS.textSecondary,
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     marginTop: 1,
   },
   friendCompare: {
@@ -835,7 +835,7 @@ const styles = StyleSheet.create({
   friendCompareText: {
     color: COLORS.accent,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   nextPreview: {
     alignItems: 'center',
@@ -845,14 +845,14 @@ const styles = StyleSheet.create({
   nextPreviewLabel: {
     color: COLORS.textMuted,
     fontSize: 10,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
     marginBottom: 3,
   },
   nextPreviewText: {
     color: COLORS.textSecondary,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   shareButton: {
     borderColor: COLORS.accent + '30',
@@ -860,6 +860,6 @@ const styles = StyleSheet.create({
   },
   shareButtonText: {
     color: COLORS.accent,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
   },
 });

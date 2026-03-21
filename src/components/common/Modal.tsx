@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../../constants';
+import { COLORS, FONTS } from '../../constants';
 
 interface ModalProps {
   visible: boolean;
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   title: {
     color: COLORS.textPrimary,
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     flex: 1,
     marginRight: 12,
   },
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   closeText: {
     color: COLORS.textSecondary,
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   body: {
     paddingHorizontal: 20,

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { FONTS } from '../../constants';
 
 const COLORS = {
   accent: '#00d4ff',
@@ -89,7 +90,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   text: {
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     textAlign: 'center',
   },
   dot: {},

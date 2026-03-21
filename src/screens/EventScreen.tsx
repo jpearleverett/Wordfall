@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 
 const { width } = Dimensions.get('window');
 
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   },
   bannerName: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     marginBottom: 10,
     letterSpacing: 1.5,
     textShadowOffset: { width: 0, height: 0 },
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     fontVariant: ['tabular-nums'],
   },
   descCard: {
@@ -473,12 +473,12 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
   },
   progressValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
   },
   progressBarBg: {
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   },
   rewardMilestone: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textMuted,
     marginBottom: 2,
   },
@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
   },
   rewardNameReached: {
     color: COLORS.gold,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   puzzlesSection: {
     marginBottom: 14,
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     textShadowColor: 'rgba(255,255,255,0.08)',
     textShadowOffset: { width: 0, height: 1 },
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
   },
   playAllText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.bg,
   },
   puzzleRow: {
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
   },
   puzzleCheck: {
     fontSize: 13,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
   },
   puzzleInfo: {
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
   },
   puzzleName: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
     marginBottom: 2,
   },
@@ -620,12 +620,11 @@ const styles = StyleSheet.create({
   },
   puzzleDifficulty: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   puzzleChevron: {
     fontSize: 22,
     color: COLORS.textMuted,
-    fontWeight: '300',
   },
   shopButton: {
     flexDirection: 'row',
@@ -646,7 +645,7 @@ const styles = StyleSheet.create({
   },
   shopButtonTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.gold,
     marginBottom: 2,
     textShadowColor: COLORS.goldGlow,
@@ -660,7 +659,6 @@ const styles = StyleSheet.create({
   shopChevron: {
     fontSize: 24,
     color: COLORS.gold,
-    fontWeight: '300',
   },
   leaderboardSection: {
     marginBottom: 14,
@@ -685,7 +683,7 @@ const styles = StyleSheet.create({
   },
   leaderboardRank: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textMuted,
     width: 32,
     textAlign: 'center',
@@ -704,18 +702,18 @@ const styles = StyleSheet.create({
   },
   leaderboardAvatarText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
   },
   leaderboardName: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
   },
   leaderboardScore: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textSecondary,
   },
   bottomSpacer: {

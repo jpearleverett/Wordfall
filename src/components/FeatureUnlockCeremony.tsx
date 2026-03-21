@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 
 interface FeatureUnlockCeremonyProps {
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   ribbon: {
     color: COLORS.gold,
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 2,
     marginBottom: 20,
     textShadowColor: COLORS.goldGlow,
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     textAlign: 'center',
     marginBottom: 8,
     letterSpacing: 1,
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: COLORS.bg,
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
   },
   buttonPressed: {

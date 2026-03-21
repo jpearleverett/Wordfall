@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../constants';
+import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
 
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 4,
     textShadowColor: COLORS.accentGlow,
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textMuted,
   },
   tabTextActive: {
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginBottom: 4,
     textShadowColor: 'rgba(255,255,255,0.1)',
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   },
   atlasName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginBottom: 2,
   },
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   checkmark: {
     fontSize: 20,
     color: COLORS.green,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     marginLeft: 8,
   },
   progressBarBg: {
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   },
   tileSetsTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginBottom: 12,
   },
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   },
   tileSetName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
     letterSpacing: 2,
   },
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   },
   miniTileText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
   },
   miniTileTextOwned: {
     color: COLORS.bg,
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
   },
   allTilesTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     marginBottom: 12,
     textShadowColor: 'rgba(255,255,255,0.1)',
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
   },
   tileText: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
   },
   tileTextOwned: {
     color: COLORS.bg,
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
   },
   seasonName: {
     fontSize: 22,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.purple,
     marginBottom: 6,
     textShadowColor: 'rgba(168,85,247,0.4)',
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
   },
   stampName: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
     textAlign: 'center',
   },

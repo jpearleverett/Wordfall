@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../../constants';
+import { COLORS, FONTS, GRADIENTS } from '../../constants';
 
 export function HomeHeroIllustration() {
   return (
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   },
   tileLetter: {
     color: COLORS.textPrimary,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     fontSize: 18,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
   },
   comboText: {
     color: COLORS.coral,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
     fontSize: 13,
     textShadowColor: COLORS.coralGlow,
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
   heroBadgeText: {
     color: COLORS.textSecondary,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   libraryScene: {
     alignItems: 'center',

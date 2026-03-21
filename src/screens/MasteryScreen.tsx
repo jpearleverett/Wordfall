@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 import {
   MASTERY_REWARDS,
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 3,
     textShadowColor: COLORS.accentGlow,
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 4,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   progressCard: {
     marginHorizontal: 16,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   },
   progressTierLabel: {
     fontSize: 32,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     color: COLORS.gold,
     textShadowColor: COLORS.goldGlow,
     textShadowOffset: { width: 0, height: 0 },
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.textMuted,
     marginLeft: 6,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   progressBarContainer: {
     marginBottom: 8,
@@ -270,12 +270,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 6,
     textAlign: 'right',
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   progressHint: {
     fontSize: 13,
     color: COLORS.textMuted,
-    fontWeight: '500',
+    fontFamily: FONTS.bodyMedium,
   },
   scrollView: {
     flex: 1,
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   },
   tierNumber: {
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textMuted,
   },
   tierNumberUnlocked: {
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   unlockedCheck: {
     fontSize: 16,
     color: COLORS.green,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
   },
   currentIndicator: {
     backgroundColor: COLORS.accent + '20',
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   },
   currentText: {
     fontSize: 10,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 1,
   },
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   rewardLabel: {
     fontSize: 10,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.textSecondary,
     letterSpacing: 1,
     marginBottom: 6,
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   rewardItem: {
     fontSize: 12,
     color: COLORS.textPrimary,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     marginBottom: 2,
   },
   textLocked: {

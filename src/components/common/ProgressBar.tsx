@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../../constants';
+import { COLORS, FONTS } from '../../constants';
 
 interface ProgressBarProps {
   progress: number; // 0-1
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     color: COLORS.textSecondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     minWidth: 36,
     textAlign: 'right',
   },

@@ -15,6 +15,10 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+import { useFonts } from 'expo-font';
+import { SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import ModesScreen from './src/screens/ModesScreen';
@@ -29,7 +33,7 @@ import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, FEATURE_UNLOCK_SCHEDULE } from './src/constants';
+import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY } from './src/constants';
 import { getBreatherConfig } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
@@ -112,22 +116,31 @@ function ProfileStackScreen() {
   );
 }
 
-// Tab icon component
-function TabIcon({ icon, focused }: { icon: string; focused: boolean }) {
+// Tab icon component — Neon Intelligence design: vector icons with precision glow
+function TabIcon({ iconName, focused }: { iconName: keyof typeof Ionicons.glyphMap; focused: boolean }) {
   return (
     <View style={{ alignItems: 'center' }}>
-      <Text style={{ fontSize: 24, opacity: focused ? 1 : 0.4, color: focused ? COLORS.accent : COLORS.textMuted }}>{icon}</Text>
+      <Ionicons
+        name={iconName}
+        size={22}
+        color={focused ? COLORS.accent : COLORS.textMuted}
+        style={focused ? {
+          textShadowColor: COLORS.accentGlow,
+          textShadowOffset: { width: 0, height: 0 },
+          textShadowRadius: 10,
+        } : undefined}
+      />
       {focused && (
         <View style={{
-          width: 4,
-          height: 4,
-          borderRadius: 2,
+          width: 20,
+          height: 3,
+          borderRadius: 1.5,
           backgroundColor: COLORS.accent,
-          marginTop: 2,
+          marginTop: 4,
           shadowColor: COLORS.accent,
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.8,
-          shadowRadius: 4,
+          shadowOpacity: 0.9,
+          shadowRadius: 6,
           elevation: 4,
         }} />
       )}
@@ -187,8 +200,8 @@ function MainTabs() {
         tabBarActiveTintColor: COLORS.accent,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarLabelStyle: {
+          fontFamily: FONTS.bodySemiBold,
           fontSize: 10,
-          fontWeight: '800',
           letterSpacing: 0.6,
         },
       }}
@@ -197,14 +210,14 @@ function MainTabs() {
         name="Home"
         component={HomeStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="⌂" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon iconName={focused ? 'home' : 'home-outline'} focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Play"
         component={PlayStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="▶" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon iconName={focused ? 'game-controller' : 'game-controller-outline'} focused={focused} />,
         }}
       />
       {hasFeature('tab_collections') && (
@@ -212,7 +225,7 @@ function MainTabs() {
           name="Collections"
           component={CollectionsStackScreen}
           options={{
-            tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="◆" focused={focused} />,
+            tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon iconName={focused ? 'diamond' : 'diamond-outline'} focused={focused} />,
           }}
         />
       )}
@@ -221,7 +234,7 @@ function MainTabs() {
           name="Library"
           component={LibraryStackScreen}
           options={{
-            tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="❏" focused={focused} />,
+            tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon iconName={focused ? 'library' : 'library-outline'} focused={focused} />,
           }}
         />
       )}
@@ -229,7 +242,7 @@ function MainTabs() {
         name="Profile"
         component={ProfileStackScreen}
         options={{
-          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon icon="●" focused={focused} />,
+          tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon iconName={focused ? 'person' : 'person-outline'} focused={focused} />,
         }}
       />
     </Tab.Navigator>
@@ -885,10 +898,10 @@ function AppContent() {
           notification: COLORS.coral,
         },
         fonts: {
-          regular: { fontFamily: 'System', fontWeight: '400' },
-          medium: { fontFamily: 'System', fontWeight: '500' },
-          bold: { fontFamily: 'System', fontWeight: '700' },
-          heavy: { fontFamily: 'System', fontWeight: '900' },
+          regular: { fontFamily: FONTS.bodyRegular, fontWeight: '400' },
+          medium: { fontFamily: FONTS.bodyMedium, fontWeight: '500' },
+          bold: { fontFamily: FONTS.bodyBold, fontWeight: '700' },
+          heavy: { fontFamily: FONTS.display, fontWeight: '700' },
         },
       }}
     >
@@ -917,9 +930,25 @@ function AppContent() {
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    SpaceGrotesk_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
   useEffect(() => {
     soundManager.init();
   }, []);
+
+  if (!fontsLoaded) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={COLORS.accent} />
+      </View>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -977,13 +1006,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   welcomeTitle: {
+    fontFamily: FONTS.display,
     fontSize: 26,
-    fontWeight: '900',
     color: COLORS.accent,
     letterSpacing: 3,
     marginBottom: 8,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   welcomeSubtext: {
+    fontFamily: FONTS.bodyMedium,
     fontSize: 14,
     color: COLORS.textSecondary,
     marginBottom: 20,
@@ -1006,14 +1039,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   welcomeRewardAmount: {
+    fontFamily: FONTS.display,
     fontSize: 20,
-    fontWeight: '800',
     color: COLORS.gold,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   welcomeRewardLabel: {
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 11,
     color: COLORS.textMuted,
-    fontWeight: '600',
     letterSpacing: 1,
     marginTop: 2,
   },
@@ -1029,9 +1065,9 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
   },
   welcomeButtonText: {
+    fontFamily: FONTS.display,
     color: COLORS.bg,
     fontSize: 16,
-    fontWeight: '900',
     letterSpacing: 3,
   },
 });

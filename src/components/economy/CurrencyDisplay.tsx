@@ -6,6 +6,7 @@ import {
   Animated,
   StyleSheet,
 } from 'react-native';
+import { FONTS } from '../../constants';
 
 const COLORS = {
   bg: '#0a0e27',
@@ -225,12 +226,12 @@ const styles = StyleSheet.create({
   },
   amount: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   label: {
     fontSize: 11,
     color: COLORS.textSecondary,
-    fontWeight: '500',
+    fontFamily: FONTS.bodyMedium,
     marginLeft: -2,
   },
 });

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 
 interface CollectionCompleteCeremonyProps {
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   ribbon: {
     color: COLORS.gold,
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 2,
     marginBottom: 16,
     textShadowColor: COLORS.goldGlow,
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   name: {
     color: COLORS.textPrimary,
     fontSize: 20,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     textAlign: 'center',
     marginBottom: 6,
   },
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   rewardEmoji: { fontSize: 16 },
-  rewardAmount: { color: COLORS.gold, fontWeight: '800', fontSize: 14 },
+  rewardAmount: { color: COLORS.gold, fontFamily: FONTS.display, fontSize: 14 },
   button: {
     borderRadius: 14,
     paddingVertical: 14,
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: COLORS.bg,
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
   },
   buttonPressed: { transform: [{ scale: 0.96 }], opacity: 0.88 },

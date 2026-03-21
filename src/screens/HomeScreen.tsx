@@ -8,7 +8,8 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, ECONOMY, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, ECONOMY, FONTS, GRADIENTS, SHADOWS } from '../constants';
+import { Ionicons } from '@expo/vector-icons';
 import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -135,7 +136,7 @@ export function HomeScreen({
       <View style={styles.topBar}>
         {onOpenSettings && (
           <Pressable style={styles.iconButton} onPress={onOpenSettings}>
-            <Text style={styles.iconButtonText}>⚙</Text>
+            <Ionicons name="settings-outline" size={22} color={COLORS.textSecondary} />
           </Pressable>
         )}
         <View style={styles.topBarRight}>
@@ -169,7 +170,10 @@ export function HomeScreen({
                 end={{ x: 1, y: 0 }}
                 style={styles.shopButton}
               >
-                <Text style={styles.shopButtonText}>Shop</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="bag-outline" size={14} color="#fff" />
+                  <Text style={styles.shopButtonText}>Shop</Text>
+                </View>
               </LinearGradient>
             </Pressable>
           )}
@@ -508,7 +512,7 @@ const styles = StyleSheet.create({
   currencyLabel: {
     color: COLORS.textPrimary,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   shopButton: {
     paddingHorizontal: 16,
@@ -518,7 +522,7 @@ const styles = StyleSheet.create({
   },
   shopButtonText: {
     color: '#fff',
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     fontSize: 13,
   },
   heroCard: {
@@ -552,7 +556,7 @@ const styles = StyleSheet.create({
   title: {
     color: COLORS.textPrimary,
     fontSize: 46,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     letterSpacing: 4,
     marginBottom: 8,
     textShadowColor: 'rgba(255,255,255,0.12)',
@@ -588,7 +592,7 @@ const styles = StyleSheet.create({
   heroStatValue: {
     color: COLORS.textPrimary,
     fontSize: 22,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     marginBottom: 3,
     textShadowColor: 'rgba(255,255,255,0.08)',
     textShadowRadius: 4,
@@ -598,7 +602,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   primaryButton: {
     borderRadius: 24,
@@ -613,19 +617,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 11,
     textTransform: 'uppercase',
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
     marginBottom: 3,
   },
   primaryButtonSubLabel: {
     color: '#fff',
     fontSize: 22,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
   },
   primaryButtonArrow: {
     color: '#fff',
     fontSize: 28,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
   },
   dailyCard: {
     borderRadius: 18,
@@ -645,7 +649,7 @@ const styles = StyleSheet.create({
   dailyTitle: {
     color: COLORS.textPrimary,
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     marginBottom: 2,
   },
   dailySubtitle: {
@@ -655,7 +659,7 @@ const styles = StyleSheet.create({
   dailyBadge: {
     color: COLORS.gold,
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     textShadowColor: COLORS.goldGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
@@ -677,7 +681,7 @@ const styles = StyleSheet.create({
   missionLabel: {
     color: COLORS.textSecondary,
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   missionLabelDone: {
     color: COLORS.green,
@@ -716,7 +720,7 @@ const styles = StyleSheet.create({
   weeklyGoalLabel: {
     color: COLORS.textSecondary,
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     flex: 1,
   },
   weeklyGoalLabelDone: {
@@ -725,7 +729,7 @@ const styles = StyleSheet.create({
   weeklyGoalProgress: {
     color: COLORS.textMuted,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   weeklyGoalBarTrack: {
     height: 6,
@@ -741,7 +745,7 @@ const styles = StyleSheet.create({
   weeklyGoalReward: {
     color: COLORS.gold,
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     textAlign: 'right',
   },
   weeklyBonusBanner: {
@@ -755,7 +759,7 @@ const styles = StyleSheet.create({
   weeklyBonusText: {
     color: COLORS.gold,
     fontSize: 13,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
   },
   // Streak
   streakPanel: {
@@ -774,7 +778,7 @@ const styles = StyleSheet.create({
   panelTitle: {
     color: COLORS.textPrimary,
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
   },
   panelMeta: {
     color: COLORS.textMuted,
@@ -790,7 +794,7 @@ const styles = StyleSheet.create({
   streakCount: {
     color: COLORS.orange,
     fontSize: 22,
-    fontWeight: '900',
+    fontFamily: FONTS.display,
     minWidth: 28,
     textAlign: 'center',
     textShadowColor: COLORS.orangeGlow,
@@ -811,7 +815,7 @@ const styles = StyleSheet.create({
   streakTarget: {
     color: COLORS.textMuted,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     minWidth: 28,
     textAlign: 'center',
   },
@@ -846,7 +850,7 @@ const styles = StyleSheet.create({
   },
   loginDayNum: {
     color: COLORS.textSecondary,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     fontSize: 12,
     marginBottom: 4,
   },
@@ -856,7 +860,7 @@ const styles = StyleSheet.create({
   loginDayReward: {
     color: COLORS.textPrimary,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyBold,
     marginBottom: 2,
   },
   loginDayBonus: {
@@ -881,14 +885,14 @@ const styles = StyleSheet.create({
   },
   recommendLabel: {
     fontSize: 9,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 1.5,
     marginBottom: 3,
   },
   recommendTitle: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 15,
-    fontWeight: '700',
     color: COLORS.textPrimary,
     marginBottom: 2,
   },
@@ -897,9 +901,9 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   recommendArrow: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 20,
     color: COLORS.accent,
-    fontWeight: '700',
   },
   quickPlayPanel: {
     borderRadius: 22,
@@ -937,8 +941,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   quickPlayTitle: {
+    fontFamily: FONTS.display,
     fontSize: 14,
-    fontWeight: '800',
     letterSpacing: 0.5,
     marginBottom: 6,
   },
