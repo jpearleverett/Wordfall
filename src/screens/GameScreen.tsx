@@ -655,6 +655,15 @@ export function GameScreen({
         </Animated.View>
       )}
 
+      {/* Word bank - above grid */}
+      <View style={styles.wordArea}>
+        <WordBank
+          words={state.board.words}
+          currentWord={currentWord}
+          isValidWord={isValidWord}
+        />
+      </View>
+
       {/* Grid area */}
       <View style={styles.gridArea}>
         {/* Show preview grid if active */}
@@ -731,15 +740,6 @@ export function GameScreen({
           )}
         </View>
       )}
-
-      {/* Word bank */}
-      <View style={styles.wordArea}>
-        <WordBank
-          words={state.board.words}
-          currentWord={currentWord}
-          isValidWord={isValidWord}
-        />
-      </View>
 
       {/* Completion overlay */}
       {showComplete && (
@@ -857,7 +857,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   wordArea: {
-    paddingBottom: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
   timerBar: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1133,6 +1134,8 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 6,
+    marginTop: 8,
+    marginBottom: 8,
   },
   boosterButton: {
     alignItems: 'center',

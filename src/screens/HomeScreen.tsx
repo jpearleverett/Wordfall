@@ -12,7 +12,6 @@ import { COLORS, ECONOMY, GRADIENTS, SHADOWS } from '../constants';
 import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
-import { HomeHeroIllustration } from '../components/common/HeroIllustrations';
 
 interface DailyMissionDisplay {
   id: string;
@@ -191,12 +190,12 @@ export function HomeScreen({
         >
           <View style={styles.heroGlowPrimary} />
           <View style={styles.heroGlowSecondary} />
-          <Text style={styles.heroEyebrow}>Premium strategy word puzzle</Text>
           <Text style={styles.title}>WORD<Text style={styles.titleAccent}>FALL</Text></Text>
           <Text style={styles.subtitle}>
-            Every word changes the board. Restore Chapter {currentChapter} of the library.
+            {playerStage === 'new'
+              ? 'Find hidden words and watch letters fall!'
+              : `Every word changes the board. Restore Chapter ${currentChapter} of the library.`}
           </Text>
-          <HomeHeroIllustration />
 
           <View style={styles.heroStatsRow}>
             {[
@@ -226,7 +225,7 @@ export function HomeScreen({
               style={[styles.primaryButton, SHADOWS.glow(COLORS.accent)]}
             >
               <View>
-                <Text style={styles.primaryButtonLabel}>Continue journey</Text>
+                <Text style={styles.primaryButtonLabel}>{playerStage === 'new' ? 'Start playing' : 'Continue journey'}</Text>
                 <Text style={styles.primaryButtonSubLabel}>Play Level {progress.currentLevel}</Text>
               </View>
               <Text style={styles.primaryButtonArrow}>→</Text>
@@ -549,17 +548,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(179,102,255,0.08)',
     bottom: -90,
     left: -50,
-  },
-  heroEyebrow: {
-    color: COLORS.gold,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-    textShadowColor: COLORS.goldGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
   },
   title: {
     color: COLORS.textPrimary,
