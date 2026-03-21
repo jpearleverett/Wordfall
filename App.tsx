@@ -16,8 +16,6 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useFonts } from 'expo-font';
-import { SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { GameScreen } from './src/screens/GameScreen';
@@ -931,11 +929,11 @@ function AppContent() {
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    SpaceGrotesk_700Bold,
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    SpaceGrotesk_700Bold: require('@expo-google-fonts/space-grotesk/700Bold/SpaceGrotesk_700Bold.ttf'),
+    Inter_400Regular: require('@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'),
+    Inter_500Medium: require('@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf'),
+    Inter_600SemiBold: require('@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf'),
+    Inter_700Bold: require('@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf'),
   });
 
   useEffect(() => {
