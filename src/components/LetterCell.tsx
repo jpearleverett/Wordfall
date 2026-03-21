@@ -15,7 +15,6 @@ interface LetterCellProps {
   isSelected: boolean;
   isHinted: boolean;
   selectionIndex: number;
-  onPress: () => void;
   isFrozen?: boolean;
   isValidWord?: boolean;
   isMoved?: boolean;
@@ -28,7 +27,6 @@ export const LetterCell = React.memo(function LetterCell({
   isSelected,
   isHinted,
   selectionIndex,
-  onPress,
   isFrozen = false,
   isValidWord = false,
   isMoved = false,
@@ -36,84 +34,57 @@ export const LetterCell = React.memo(function LetterCell({
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const movedAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(0)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
-  // Continuous subtle shimmer on all tiles
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmerAnim, { toValue: 1, duration: 3000 + Math.random() * 2000, useNativeDriver: true }),
-        Animated.delay(500),
-      ]),
-    ).start();
-  }, [shimmerAnim]);
-
+  // Selection animation — scale bounce + glow
   useEffect(() => {
     if (isSelected) {
       Animated.sequence([
         Animated.timing(scaleAnim, {
           toValue: 0.86,
           duration: 60,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.spring(scaleAnim, {
           toValue: 1.08,
           friction: 3.5,
           tension: 260,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ]).start();
 
       Animated.timing(glowAnim, {
         toValue: 1,
         duration: 120,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
-
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: false,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: false,
-          }),
-        ])
-      ).start();
     } else {
       Animated.spring(scaleAnim, {
         toValue: 1,
         friction: 6,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
 
       Animated.timing(glowAnim, {
         toValue: 0,
         duration: 100,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
-      pulseAnim.stopAnimation();
-      pulseAnim.setValue(0);
     }
-  }, [isSelected, pulseAnim]);
+  }, [isSelected, scaleAnim, glowAnim]);
 
+  // Moved cell flash — simple opacity pulse
   useEffect(() => {
     if (isMoved) {
       movedAnim.setValue(1);
       Animated.timing(movedAnim, {
         toValue: 0,
         duration: 400,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
     }
-  }, [isMoved]);
+  }, [isMoved, movedAnim]);
 
-  // Rich gradient colors based on state - more stops for gem-like depth
+  // Rich gradient colors based on state
   const getGradientColors = (): readonly [string, string, ...string[]] => {
     if (isValidWord) return GRADIENTS.tile.valid;
     if (isSelected && isHinted) return GRADIENTS.tile.hint;
@@ -130,27 +101,11 @@ export const LetterCell = React.memo(function LetterCell({
     return 'rgba(255,255,255,0.10)';
   };
 
-  const movedBorderColor = movedAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(0,0,0,0)', 'rgba(0, 212, 255, 0.8)'],
-  });
-
-  const movedShadowOpacity = movedAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.7],
-  });
-
-  const topGlowOpacity = pulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.25, 0.55],
-  });
-
   const borderRadius = size * 0.22;
 
   const getShadowColor = () => {
     if (isValidWord) return COLORS.green;
     if (isSelected) return COLORS.accent;
-    if (isMoved) return COLORS.accent;
     return '#000';
   };
 
@@ -172,13 +127,32 @@ export const LetterCell = React.memo(function LetterCell({
             bottom: -4,
             borderRadius: borderRadius + 4,
             backgroundColor: outerGlowColor,
-            opacity: pulseAnim.interpolate({
+            opacity: glowAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0.3, 0.6],
+              outputRange: [0, 0.45],
             }),
           }}
         />
       )}
+
+      {/* Moved cell flash overlay */}
+      {isMoved && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: -2,
+            left: -2,
+            right: -2,
+            bottom: -2,
+            borderRadius: borderRadius + 2,
+            borderWidth: 1.5,
+            borderColor: 'rgba(0, 212, 255, 0.8)',
+            opacity: movedAnim,
+          }}
+        />
+      )}
+
       <Animated.View
         style={[
           styles.cell,
@@ -186,12 +160,12 @@ export const LetterCell = React.memo(function LetterCell({
             width: size,
             height: size,
             borderRadius,
-            borderColor: isMoved && !isSelected ? movedBorderColor : getBorderColor(),
+            borderColor: getBorderColor(),
             borderWidth: isSelected || isValidWord ? 2 : isFrozen ? 1.5 : 1,
             transform: [{ scale: scaleAnim }],
             shadowColor: getShadowColor(),
-            shadowOpacity: isMoved ? movedShadowOpacity : (isSelected || isValidWord) ? 0.7 : 0.5,
-            shadowRadius: (isSelected || isValidWord || isMoved) ? 14 : 8,
+            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.5,
+            shadowRadius: (isSelected || isValidWord) ? 14 : 8,
             shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 6 : 4 },
             elevation: (isSelected || isValidWord) ? 12 : 6,
           },
@@ -206,13 +180,13 @@ export const LetterCell = React.memo(function LetterCell({
         />
 
         {/* Inner luminosity layer - gives depth to the tile */}
-        <Animated.View
+        <View
           pointerEvents="none"
           style={[
             styles.innerGlow,
             {
               borderRadius,
-              opacity: isSelected ? topGlowOpacity : 0.15,
+              opacity: isSelected ? 0.35 : 0.15,
               backgroundColor: isValidWord
                 ? COLORS.greenGlow
                 : isHinted
@@ -258,23 +232,14 @@ export const LetterCell = React.memo(function LetterCell({
           style={[styles.bottomShadow, { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius }]}
         />
 
-        {/* Shimmer sweep animation */}
-        <Animated.View
+        {/* Static shimmer highlight — no animation */}
+        <View
           pointerEvents="none"
           style={[
             styles.shimmerSweep,
             {
               borderRadius,
-              opacity: isSelected ? 0.18 : 0.06,
-              transform: [
-                {
-                  translateX: shimmerAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-size * 0.5, size * 1.5],
-                  }),
-                },
-                { skewX: '-20deg' },
-              ],
+              opacity: isSelected ? 0.14 : 0.04,
             },
           ]}
         />
@@ -372,6 +337,7 @@ const styles = StyleSheet.create({
   shimmerSweep: {
     position: 'absolute',
     top: 0,
+    left: '35%',
     width: '30%',
     height: '100%',
     backgroundColor: 'rgba(255,255,255,0.3)',

@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Pressable,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, GRADIENTS, SHADOWS } from '../constants';
@@ -42,6 +44,9 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
 
   const shape = useMemo(() => CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)], []);
   const baseSize = useMemo(() => 6 + Math.random() * 12, []);
+  const rotEnd = useMemo(() => `${320 + Math.random() * 260}deg`, []);
+  const swayDur = useMemo(() => 380 + Math.random() * 260, []);
+  const fallDur = useMemo(() => 2200 + Math.random() * 900, []);
 
   useEffect(() => {
     Animated.sequence([
@@ -49,30 +54,30 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
       Animated.parallel([
         Animated.timing(anim, {
           toValue: 1,
-          duration: 2200 + Math.random() * 900,
+          duration: fallDur,
           useNativeDriver: true,
         }),
         Animated.loop(
           Animated.sequence([
             Animated.timing(swayAnim, {
               toValue: 1,
-              duration: 380 + Math.random() * 260,
+              duration: swayDur,
               useNativeDriver: true,
             }),
             Animated.timing(swayAnim, {
               toValue: -1,
-              duration: 380 + Math.random() * 260,
+              duration: swayDur,
               useNativeDriver: true,
             }),
           ]),
         ),
       ]),
     ]).start();
-  }, [anim, delay, swayAnim]);
+  }, [anim, delay, swayAnim, fallDur, swayDur]);
 
   const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [-80, 560] });
   const translateX = swayAnim.interpolate({ inputRange: [-1, 1], outputRange: [-22, 22] });
-  const rotate = anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${320 + Math.random() * 260}deg`] });
+  const rotate = anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', rotEnd] });
   const opacity = anim.interpolate({ inputRange: [0, 0.08, 0.75, 1], outputRange: [0, 1, 1, 0] });
 
   const width = shape === 'rect' ? baseSize * 0.5 : baseSize;
@@ -101,8 +106,8 @@ function AnimatedScore({ targetScore }: { targetScore: number }) {
   const [displayScore, setDisplayScore] = useState(0);
 
   useEffect(() => {
-    const duration = 1200;
-    const steps = 36;
+    const duration = 800;
+    const steps = 20;
     let step = 0;
     const interval = setInterval(() => {
       step += 1;
@@ -205,6 +210,7 @@ export function PuzzleComplete({
   onRetry,
   onShare,
 }: PuzzleCompleteProps) {
+  const { height: screenHeight } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(30)).current;
   const ribbonAnim = useRef(new Animated.Value(0)).current;
@@ -266,9 +272,10 @@ export function PuzzleComplete({
   const difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
   const coinReward = ECONOMY.puzzleCompleteCoins[difficulty] + stars * ECONOMY.starBonus;
 
+  // Reduced from 32 to 16 confetti particles
   const confetti = useMemo(
     () =>
-      Array.from({ length: 32 }, (_, index) => ({
+      Array.from({ length: 16 }, (_, index) => ({
         id: index,
         delay: Math.random() * 360,
         color: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
@@ -281,12 +288,14 @@ export function PuzzleComplete({
     ? [COLORS.gold, 'rgba(255,215,0,0.6)', COLORS.gold]
     : [COLORS.accent, 'rgba(0,212,255,0.5)', COLORS.accent];
 
+  // Constrain max height to fit screen
+  const maxCardHeight = screenHeight * 0.88;
+
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-      {/* Premium sparkle field behind everything */}
-      <SparkleField count={28} intensity="intense" />
-      {/* Celebration particle burst from center */}
-      <CelebrationBurst centerX={190} centerY={200} particleCount={20} />
+      {/* Reduced sparkle field and celebration burst */}
+      <SparkleField count={12} intensity="medium" />
+      <CelebrationBurst centerX={190} centerY={200} particleCount={10} />
       {confetti.map((particle) => (
         <ConfettiParticle
           key={particle.id}
@@ -296,7 +305,7 @@ export function PuzzleComplete({
         />
       ))}
 
-      <Animated.View style={[styles.cardOuter, { transform: [{ translateY: cardAnim }] }]}>
+      <Animated.View style={[styles.cardOuter, { transform: [{ translateY: cardAnim }], maxHeight: maxCardHeight }]}>
         {/* Gradient border wrapper */}
         <LinearGradient
           colors={borderColors as [string, string, ...string[]]}
@@ -310,198 +319,204 @@ export function PuzzleComplete({
             end={{ x: 0.5, y: 1 }}
             style={styles.card}
           >
-            <View style={styles.heroGlow} />
-            <View style={styles.heroGlowSecondary} />
-
-            <Animated.View
-              style={[
-                styles.ribbon,
-                {
-                  opacity: ribbonAnim,
-                  transform: [
-                    { scale: ribbonAnim.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) },
-                    { translateY: ribbonAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-                  ],
-                },
-              ]}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              contentContainerStyle={styles.cardContent}
             >
-              <Text style={styles.ribbonText}>{perfectRun ? '✨ PERFECT RUN' : isDaily ? '☀ DAILY WIN' : '🏆 STAGE COMPLETE'}</Text>
-            </Animated.View>
+              <View style={styles.heroGlow} />
+              <View style={styles.heroGlowSecondary} />
 
-            <Text style={[styles.title, perfectRun && styles.titlePerfect]}>{title}</Text>
-            <Text style={styles.subtitle}>{subtitle}</Text>
-
-            <View style={styles.starsRow}>
-              <Star filled={stars >= 1} delay={140} size={48} />
-              <Star filled={stars >= 2} delay={340} size={64} />
-              <Star filled={stars >= 3} delay={560} size={48} />
-            </View>
-
-            <LinearGradient
-              colors={GRADIENTS.scorePanel as unknown as [string, string, ...string[]]}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={styles.scorePanel}
-            >
-              <Text style={styles.scoreLabel}>Final Score</Text>
-              <AnimatedScore targetScore={score} />
-            </LinearGradient>
-
-            <Animated.View
-              style={[
-                styles.statsGrid,
-                {
-                  opacity: statsAnim,
-                  transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) }],
-                },
-              ]}
-            >
-              <LinearGradient
-                colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
-                style={styles.statCard}
+              <Animated.View
+                style={[
+                  styles.ribbon,
+                  {
+                    opacity: ribbonAnim,
+                    transform: [
+                      { scale: ribbonAnim.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) },
+                      { translateY: ribbonAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+                    ],
+                  },
+                ]}
               >
-                <Text style={styles.statCardLabel}>Moves</Text>
-                <Text style={styles.statCardValue}>{moves}</Text>
-              </LinearGradient>
-              <LinearGradient
-                colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
-                style={styles.statCard}
-              >
-                <Text style={styles.statCardLabel}>Best Combo</Text>
-                <Text style={styles.statCardValue}>{combo > 1 ? `${combo}x` : '—'}</Text>
-              </LinearGradient>
-              <LinearGradient
-                colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
-                style={styles.statCard}
-              >
-                <Text style={styles.statCardLabel}>Stars</Text>
-                <Text style={styles.statCardValue}>{stars}/3</Text>
-              </LinearGradient>
-            </Animated.View>
+                <Text style={styles.ribbonText}>{perfectRun ? '✨ PERFECT RUN' : isDaily ? '☀ DAILY WIN' : '🏆 STAGE COMPLETE'}</Text>
+              </Animated.View>
 
-            <Animated.View
-              style={[
-                styles.rewardsCard,
-                {
-                  opacity: statsAnim,
-                  transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
-                },
-              ]}
-            >
-              <Text style={styles.rewardsTitle}>Rewards</Text>
-              <View style={styles.rewardRow}>
+              <Text style={[styles.title, perfectRun && styles.titlePerfect]}>{title}</Text>
+              <Text style={styles.subtitle}>{subtitle}</Text>
+
+              <View style={styles.starsRow}>
+                <Star filled={stars >= 1} delay={140} size={44} />
+                <Star filled={stars >= 2} delay={340} size={56} />
+                <Star filled={stars >= 3} delay={560} size={44} />
+              </View>
+
+              <LinearGradient
+                colors={GRADIENTS.scorePanel as unknown as [string, string, ...string[]]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={styles.scorePanel}
+              >
+                <Text style={styles.scoreLabel}>Final Score</Text>
+                <AnimatedScore targetScore={score} />
+              </LinearGradient>
+
+              <Animated.View
+                style={[
+                  styles.statsGrid,
+                  {
+                    opacity: statsAnim,
+                    transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) }],
+                  },
+                ]}
+              >
                 <LinearGradient
-                  colors={['#1a2050', '#222860'] as [string, string, ...string[]]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.rewardChip}
+                  colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
+                  style={styles.statCard}
                 >
-                  <Text style={styles.rewardIcon}>🪙</Text>
-                  <Text style={styles.rewardText}>+{coinReward} coins</Text>
+                  <Text style={styles.statCardLabel}>Moves</Text>
+                  <Text style={styles.statCardValue}>{moves}</Text>
                 </LinearGradient>
-                {perfectRun && (
+                <LinearGradient
+                  colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
+                  style={styles.statCard}
+                >
+                  <Text style={styles.statCardLabel}>Best Combo</Text>
+                  <Text style={styles.statCardValue}>{combo > 1 ? `${combo}x` : '—'}</Text>
+                </LinearGradient>
+                <LinearGradient
+                  colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
+                  style={styles.statCard}
+                >
+                  <Text style={styles.statCardLabel}>Stars</Text>
+                  <Text style={styles.statCardValue}>{stars}/3</Text>
+                </LinearGradient>
+              </Animated.View>
+
+              <Animated.View
+                style={[
+                  styles.rewardsCard,
+                  {
+                    opacity: statsAnim,
+                    transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+                  },
+                ]}
+              >
+                <Text style={styles.rewardsTitle}>Rewards</Text>
+                <View style={styles.rewardRow}>
                   <LinearGradient
-                    colors={['rgba(255,215,0,0.18)', 'rgba(255,159,0,0.12)'] as [string, string, ...string[]]}
+                    colors={['#1a2050', '#222860'] as [string, string, ...string[]]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.rewardChipGold}
+                    style={styles.rewardChip}
                   >
-                    <Text style={styles.rewardIcon}>💎</Text>
-                    <Text style={styles.rewardTextGold}>+{ECONOMY.perfectClearGems} gems</Text>
+                    <Text style={styles.rewardIcon}>🪙</Text>
+                    <Text style={styles.rewardText}>+{coinReward} coins</Text>
                   </LinearGradient>
-                )}
-              </View>
-            </Animated.View>
-
-            {/* First Win / Level Up / Difficulty Transition */}
-            {isFirstWin && (
-              <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.gold + '20', borderColor: COLORS.gold + '40', opacity: statsAnim }]}>
-                <Text style={styles.levelUpEmoji}>🎉</Text>
-                <View>
-                  <Text style={[styles.levelUpText, { color: COLORS.gold }]}>WELCOME TO WORDFALL!</Text>
-                  <Text style={styles.levelUpSubtext}>Your adventure begins</Text>
+                  {perfectRun && (
+                    <LinearGradient
+                      colors={['rgba(255,215,0,0.18)', 'rgba(255,159,0,0.12)'] as [string, string, ...string[]]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.rewardChipGold}
+                    >
+                      <Text style={styles.rewardIcon}>💎</Text>
+                      <Text style={styles.rewardTextGold}>+{ECONOMY.perfectClearGems} gems</Text>
+                    </LinearGradient>
+                  )}
                 </View>
               </Animated.View>
-            )}
-            {!isFirstWin && leveledUp && newLevel > 0 && (
-              <Animated.View style={[styles.levelUpBadge, { opacity: statsAnim }]}>
-                <Text style={styles.levelUpEmoji}>⬆️</Text>
-                <View>
-                  <Text style={styles.levelUpText}>LEVEL UP!</Text>
-                  <Text style={styles.levelUpSubtext}>You reached Level {newLevel}</Text>
-                </View>
-              </Animated.View>
-            )}
-            {difficultyTransition && (
-              <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.purple + '20', borderColor: COLORS.purple + '40', opacity: statsAnim }]}>
-                <Text style={styles.levelUpEmoji}>🏆</Text>
-                <View>
-                  <Text style={[styles.levelUpText, { color: COLORS.purple }]}>NEW CHALLENGE TIER!</Text>
-                  <Text style={styles.levelUpSubtext}>{difficultyTransition.from} → {difficultyTransition.to}</Text>
-                </View>
-              </Animated.View>
-            )}
 
-            {/* Friend Score Comparison */}
-            {friendComparison && friendComparison.total > 0 && (
-              <Animated.View style={[styles.friendCompare, { opacity: statsAnim }]}>
-                <Text style={styles.friendCompareIcon}>👥</Text>
-                <Text style={styles.friendCompareText}>
-                  You beat {friendComparison.beaten} of {friendComparison.total} friends!
-                </Text>
-              </Animated.View>
-            )}
+              {/* First Win / Level Up / Difficulty Transition */}
+              {isFirstWin && (
+                <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.gold + '20', borderColor: COLORS.gold + '40', opacity: statsAnim }]}>
+                  <Text style={styles.levelUpEmoji}>🎉</Text>
+                  <View>
+                    <Text style={[styles.levelUpText, { color: COLORS.gold }]}>WELCOME TO WORDFALL!</Text>
+                    <Text style={styles.levelUpSubtext}>Your adventure begins</Text>
+                  </View>
+                </Animated.View>
+              )}
+              {!isFirstWin && leveledUp && newLevel > 0 && (
+                <Animated.View style={[styles.levelUpBadge, { opacity: statsAnim }]}>
+                  <Text style={styles.levelUpEmoji}>⬆️</Text>
+                  <View>
+                    <Text style={styles.levelUpText}>LEVEL UP!</Text>
+                    <Text style={styles.levelUpSubtext}>You reached Level {newLevel}</Text>
+                  </View>
+                </Animated.View>
+              )}
+              {difficultyTransition && (
+                <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.purple + '20', borderColor: COLORS.purple + '40', opacity: statsAnim }]}>
+                  <Text style={styles.levelUpEmoji}>🏆</Text>
+                  <View>
+                    <Text style={[styles.levelUpText, { color: COLORS.purple }]}>NEW CHALLENGE TIER!</Text>
+                    <Text style={styles.levelUpSubtext}>{difficultyTransition.from} → {difficultyTransition.to}</Text>
+                  </View>
+                </Animated.View>
+              )}
 
-            {/* Next Level Preview */}
-            {nextLevelPreview && !isDaily && (
-              <Animated.View style={[styles.nextPreview, { opacity: statsAnim }]}>
-                <Text style={styles.nextPreviewLabel}>COMING UP</Text>
-                <Text style={styles.nextPreviewText}>Level {nextLevelPreview.level} — {nextLevelPreview.difficulty}</Text>
-              </Animated.View>
-            )}
+              {/* Friend Score Comparison */}
+              {friendComparison && friendComparison.total > 0 && (
+                <Animated.View style={[styles.friendCompare, { opacity: statsAnim }]}>
+                  <Text style={styles.friendCompareIcon}>👥</Text>
+                  <Text style={styles.friendCompareText}>
+                    You beat {friendComparison.beaten} of {friendComparison.total} friends!
+                  </Text>
+                </Animated.View>
+              )}
 
-            <Animated.View
-              style={[
-                styles.actionsColumn,
-                {
-                  opacity: actionsAnim,
-                  transform: [{ translateY: actionsAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
-                },
-              ]}
-            >
-              <Pressable
-                style={({ pressed }) => [pressed && styles.buttonPressed]}
-                onPress={onNextLevel}
+              {/* Next Level Preview */}
+              {nextLevelPreview && !isDaily && (
+                <Animated.View style={[styles.nextPreview, { opacity: statsAnim }]}>
+                  <Text style={styles.nextPreviewLabel}>COMING UP</Text>
+                  <Text style={styles.nextPreviewText}>Level {nextLevelPreview.level} — {nextLevelPreview.difficulty}</Text>
+                </Animated.View>
+              )}
+
+              <Animated.View
+                style={[
+                  styles.actionsColumn,
+                  {
+                    opacity: actionsAnim,
+                    transform: [{ translateY: actionsAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+                  },
+                ]}
               >
-                <LinearGradient
-                  colors={GRADIENTS.button.primary as unknown as [string, string, ...string[]]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.primaryButton}
+                <Pressable
+                  style={({ pressed }) => [pressed && styles.buttonPressed]}
+                  onPress={onNextLevel}
                 >
-                  <Text style={styles.primaryButtonText}>{isDaily ? 'PLAY ANOTHER MODE' : 'NEXT LEVEL'}</Text>
-                </LinearGradient>
-              </Pressable>
-              <View style={styles.secondaryRow}>
-                <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onRetry}>
-                  <Text style={styles.secondaryButtonText}>Retry</Text>
-                </Pressable>
-                {shareText ? (
-                  <Pressable
-                    style={({ pressed }) => [styles.secondaryButton, styles.shareButton, pressed && styles.buttonPressed]}
-                    onPress={() => {
-                      Share.share({ message: shareText }).catch(() => {});
-                      onShare?.();
-                    }}
+                  <LinearGradient
+                    colors={GRADIENTS.button.primary as unknown as [string, string, ...string[]]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.primaryButton}
                   >
-                    <Text style={styles.shareButtonText}>Share</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
-                  <Text style={styles.secondaryButtonText}>Home</Text>
+                    <Text style={styles.primaryButtonText}>{isDaily ? 'PLAY ANOTHER MODE' : 'NEXT LEVEL'}</Text>
+                  </LinearGradient>
                 </Pressable>
-              </View>
-            </Animated.View>
+                <View style={styles.secondaryRow}>
+                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onRetry}>
+                    <Text style={styles.secondaryButtonText}>Retry</Text>
+                  </Pressable>
+                  {shareText ? (
+                    <Pressable
+                      style={({ pressed }) => [styles.secondaryButton, styles.shareButton, pressed && styles.buttonPressed]}
+                      onPress={() => {
+                        Share.share({ message: shareText }).catch(() => {});
+                        onShare?.();
+                      }}
+                    >
+                      <Text style={styles.shareButtonText}>Share</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
+                    <Text style={styles.secondaryButtonText}>Home</Text>
+                  </Pressable>
+                </View>
+              </Animated.View>
+            </ScrollView>
           </LinearGradient>
         </LinearGradient>
       </Animated.View>
@@ -515,7 +530,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(4, 6, 18, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
   },
   confettiParticle: {
     position: 'absolute',
@@ -535,8 +550,10 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 32,
-    padding: 26,
     overflow: 'hidden',
+  },
+  cardContent: {
+    padding: 18,
   },
   heroGlow: {
     position: 'absolute',
@@ -560,10 +577,10 @@ const styles = StyleSheet.create({
   },
   ribbon: {
     alignSelf: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
     borderRadius: 999,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 7,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
@@ -578,10 +595,10 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.textPrimary,
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '900',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
     textShadowColor: 'rgba(255,255,255,0.15)',
     textShadowRadius: 12,
   },
@@ -592,17 +609,17 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     color: COLORS.textSecondary,
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 20,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 14,
   },
   starsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 20,
+    gap: 4,
+    marginBottom: 14,
   },
   starGlowRing: {
     position: 'absolute',
@@ -617,9 +634,9 @@ const styles = StyleSheet.create({
   },
   scorePanel: {
     alignItems: 'center',
-    borderRadius: 24,
-    paddingVertical: 20,
-    marginBottom: 18,
+    borderRadius: 20,
+    paddingVertical: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     ...SHADOWS.medium,
@@ -631,25 +648,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   scoreValue: {
     color: COLORS.gold,
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: '900',
     textShadowColor: COLORS.goldGlow,
     textShadowRadius: 14,
   },
   statsGrid: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 18,
+    gap: 8,
+    marginBottom: 12,
   },
   statCard: {
     flex: 1,
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
     ...SHADOWS.soft,
@@ -659,12 +676,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 6,
+    marginBottom: 4,
     textAlign: 'center',
   },
   statCardValue: {
     color: COLORS.textPrimary,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     textAlign: 'center',
     textShadowColor: 'rgba(255,255,255,0.1)',
@@ -672,33 +689,33 @@ const styles = StyleSheet.create({
   },
   rewardsCard: {
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 20,
+    padding: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    marginBottom: 20,
+    marginBottom: 14,
     ...SHADOWS.soft,
   },
   rewardsTitle: {
     color: COLORS.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    marginBottom: 12,
+    marginBottom: 10,
     textShadowColor: 'rgba(255,255,255,0.08)',
     textShadowRadius: 4,
   },
   rewardRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   rewardChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     ...SHADOWS.soft,
@@ -710,8 +727,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,215,0,0.25)',
     ...SHADOWS.soft,
@@ -719,26 +736,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
   },
   rewardIcon: {
-    fontSize: 18,
+    fontSize: 16,
   },
   rewardText: {
     color: COLORS.textPrimary,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 13,
   },
   rewardTextGold: {
     color: COLORS.gold,
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: 13,
     textShadowColor: COLORS.goldGlow,
     textShadowRadius: 6,
   },
   actionsColumn: {
-    gap: 12,
+    gap: 10,
   },
   primaryButton: {
     borderRadius: 18,
-    paddingVertical: 17,
+    paddingVertical: 15,
     alignItems: 'center',
     ...SHADOWS.medium,
     shadowColor: COLORS.accent,
@@ -753,13 +770,13 @@ const styles = StyleSheet.create({
   },
   secondaryRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   secondaryButton: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 18,
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -776,26 +793,26 @@ const styles = StyleSheet.create({
   levelUpBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     backgroundColor: COLORS.accent + '18',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.accent + '30',
   },
   levelUpEmoji: {
-    fontSize: 24,
+    fontSize: 22,
   },
   levelUpText: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1,
   },
   levelUpSubtext: {
     color: COLORS.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     marginTop: 1,
   },
@@ -804,37 +821,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    marginBottom: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     backgroundColor: 'rgba(0, 212, 255, 0.08)',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(0, 212, 255, 0.15)',
   },
   friendCompareIcon: {
-    fontSize: 16,
+    fontSize: 14,
   },
   friendCompareText: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   nextPreview: {
     alignItems: 'center',
-    marginBottom: 12,
-    paddingVertical: 8,
+    marginBottom: 10,
+    paddingVertical: 6,
   },
   nextPreviewLabel: {
     color: COLORS.textMuted,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.5,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   nextPreviewText: {
     color: COLORS.textSecondary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   shareButton: {

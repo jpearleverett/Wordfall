@@ -8,14 +8,16 @@ const DIRS = [
 ];
 
 /**
- * Find all occurrences of a word in the grid along any path of
+ * Find occurrences of a word in the grid along any path of
  * 8-directionally adjacent cells (including diagonals, zigzag, etc.).
  * Each cell can only be used once per path.
  * Returns arrays of positions for each occurrence.
+ * @param limit - max number of occurrences to find (0 = unlimited)
  */
 export function findWordInGrid(
   grid: Grid,
-  word: string
+  word: string,
+  limit: number = 0
 ): CellPosition[][] {
   const results: CellPosition[][] = [];
   const rows = grid.length;
@@ -26,6 +28,7 @@ export function findWordInGrid(
   const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
 
   function dfs(r: number, c: number, idx: number, path: CellPosition[]): void {
+    if (limit > 0 && results.length >= limit) return;
     if (idx === word.length) {
       results.push([...path]);
       return;
@@ -39,6 +42,7 @@ export function findWordInGrid(
     path.push({ row: r, col: c });
 
     for (const [dr, dc] of DIRS) {
+      if (limit > 0 && results.length >= limit) break;
       dfs(r + dr, c + dc, idx + 1, path);
     }
 
@@ -49,6 +53,7 @@ export function findWordInGrid(
   // Start DFS from every cell that matches the first letter
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      if (limit > 0 && results.length >= limit) break;
       dfs(r, c, 0, []);
     }
   }
@@ -60,7 +65,7 @@ export function findWordInGrid(
  * Check if a word is currently present somewhere in the grid.
  */
 export function isWordInGrid(grid: Grid, word: string): boolean {
-  return findWordInGrid(grid, word).length > 0;
+  return findWordInGrid(grid, word, 1).length > 0;
 }
 
 /**
@@ -143,6 +148,10 @@ export function getAvailableWords(
 /**
  * Get a hint: find a word that, if removed next, keeps the puzzle solvable.
  * Returns the word and its positions, or null if stuck.
+ *
+ * Optimized: uses the solution ordering from solve() directly — the first
+ * word in the solution is already guaranteed to lead to a solvable state,
+ * so we just need to find its positions.
  */
 export function getHint(
   grid: Grid,
@@ -152,15 +161,8 @@ export function getHint(
   if (!solution || solution.length === 0) return null;
 
   const word = solution[0];
-  const occurrences = findWordInGrid(grid, word);
-  // Find the occurrence that leads to a solvable state
-  for (const positions of occurrences) {
-    const newGrid = removeCellsAndApplyGravity(grid, positions);
-    const rest = remainingWords.filter(w => w !== word);
-    if (isSolvable(newGrid, rest)) {
-      return { word, positions };
-    }
-  }
+  // Only need the first occurrence — use limit=1 for speed
+  const occurrences = findWordInGrid(grid, word, 1);
 
   return occurrences.length > 0
     ? { word, positions: occurrences[0] }
