@@ -70,12 +70,14 @@ function TwinklingStar({
   color,
   size,
   delay,
+  duration,
 }: {
   top: DimensionValue;
   left: DimensionValue;
   color: string;
   size: number;
   delay: number;
+  duration: number;
 }) {
   const anim = useRef(new Animated.Value(0)).current;
 
@@ -83,12 +85,12 @@ function TwinklingStar({
     Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
-        Animated.timing(anim, { toValue: 1, duration: 800 + Math.random() * 1200, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration: 800 + Math.random() * 1200, useNativeDriver: true }),
-        Animated.delay(Math.random() * 2000),
+        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration, useNativeDriver: true }),
+        Animated.delay(1500),
       ]),
     ).start();
-  }, [anim, delay]);
+  }, [anim, delay, duration]);
 
   return (
     <View pointerEvents="none" style={[styles.sparkle, { top, left }]}>
@@ -109,53 +111,6 @@ function TwinklingStar({
         }}
       />
     </View>
-  );
-}
-
-// ─── Aurora Wave ────────────────────────────────────────────────────────
-function AuroraWave({
-  color,
-  top,
-  duration,
-  height = 120,
-}: {
-  color: string;
-  top: DimensionValue;
-  duration: number;
-  height?: number;
-}) {
-  const anim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [anim, duration]);
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={{
-        position: 'absolute',
-        top,
-        left: '-20%',
-        right: '-20%',
-        height,
-        backgroundColor: color,
-        borderRadius: height / 2,
-        opacity: anim.interpolate({
-          inputRange: [0, 0.5, 1],
-          outputRange: [0.03, 0.08, 0.03],
-        }),
-        transform: [
-          { translateX: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [-30, 30, -30] }) },
-          { scaleY: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.8, 1.2, 0.8] }) },
-        ],
-      }}
-    />
   );
 }
 
@@ -181,9 +136,10 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
   const isGame = variant === 'game';
   const bgUri = getBackgroundUri(variant);
 
+  // Reduced from 32 to 10 stars for performance
   const stars = useMemo(
     () =>
-      Array.from({ length: 32 }, (_, index) => ({
+      Array.from({ length: 10 }, (_, index) => ({
         id: index,
         top: `${4 + ((index * 17) % 88)}%` as DimensionValue,
         left: `${2 + ((index * 23) % 94)}%` as DimensionValue,
@@ -199,6 +155,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
             : 'rgba(255,255,255,0.6)',
         size: 1.5 + (index % 5) * 0.7,
         delay: (index * 320) % 3000,
+        duration: 1200 + (index % 4) * 500,
       })),
     [],
   );
@@ -223,12 +180,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         />
       )}
 
-      {/* Aurora wave layers */}
-      <AuroraWave color={COLORS.accent} top="15%" duration={8000} height={140} />
-      <AuroraWave color={COLORS.purple} top="45%" duration={10000} height={100} />
-      <AuroraWave color={COLORS.teal} top="70%" duration={12000} height={80} />
-
-      {/* Nebula orbs — rich, deep color blobs */}
+      {/* Nebula orbs — reduced from 5 to 2 for performance */}
       <NebulaOrb
         color={isGame ? COLORS.accentGlow : COLORS.purpleGlow}
         size={280}
@@ -249,38 +201,8 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         yOffset={20}
         opacity={0.35}
       />
-      <NebulaOrb
-        color={COLORS.goldGlow}
-        size={180}
-        top="65%"
-        left="68%"
-        duration={9400}
-        xOffset={16}
-        yOffset={18}
-        opacity={0.25}
-      />
-      <NebulaOrb
-        color={COLORS.tealGlow}
-        size={140}
-        top="50%"
-        left="78%"
-        duration={10000}
-        xOffset={12}
-        yOffset={14}
-        opacity={0.2}
-      />
-      <NebulaOrb
-        color={COLORS.pinkGlow}
-        size={120}
-        top="80%"
-        left="-5%"
-        duration={11000}
-        xOffset={10}
-        yOffset={12}
-        opacity={0.18}
-      />
 
-      {/* Twinkling stars */}
+      {/* Twinkling stars — reduced from 32 to 10 */}
       {stars.map((star) => (
         <TwinklingStar
           key={star.id}
@@ -289,6 +211,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
           color={star.color}
           size={star.size}
           delay={star.delay}
+          duration={star.duration}
         />
       ))}
 

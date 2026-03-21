@@ -11,26 +11,13 @@ interface WordChipProps {
   index: number;
 }
 
-function WordChip({ wordPlacement, currentWord, isValidWord, index }: WordChipProps) {
+const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isValidWord, index }: WordChipProps) {
   const foundAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
   const wasFound = useRef(false);
 
   const isActive = !wordPlacement.found && currentWord === wordPlacement.word;
-
-  // Shimmer animation for found chips
-  useEffect(() => {
-    if (wordPlacement.found) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, useNativeDriver: true }),
-          Animated.delay(2000),
-        ]),
-      ).start();
-    }
-  }, [wordPlacement.found, shimmerAnim]);
 
   useEffect(() => {
     if (wordPlacement.found && !wasFound.current) {
@@ -140,7 +127,7 @@ function WordChip({ wordPlacement, currentWord, isValidWord, index }: WordChipPr
       )}
     </Animated.View>
   );
-}
+});
 
 interface WordBankProps {
   words: WordPlacement[];

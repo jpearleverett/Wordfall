@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useEffect } from 'react';
+import { useReducer, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   GameState,
   GameAction,
@@ -202,7 +202,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       );
 
       if (!adjacent) {
-        // Start new selection
+        // Non-adjacent tap — signal rejection via special marker
         return {
           ...state,
           selectedCells: [position],
@@ -514,16 +514,22 @@ export function useGame(
     createInitialState(initialBoard, level, mode, maxMoves, timeLimit)
   );
 
-  // Timer for timed modes
+  // Timer for timed modes — use ref for status to avoid recreating interval
+  const statusRef = useRef(state.status);
+  statusRef.current = state.status;
+
   useEffect(() => {
     if (mode !== 'timePressure' || state.status !== 'playing' || state.timeRemaining <= 0) return;
 
     const interval = setInterval(() => {
-      dispatch({ type: 'TICK_TIMER' });
+      if (statusRef.current === 'playing') {
+        dispatch({ type: 'TICK_TIMER' });
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [mode, state.status, state.timeRemaining]);
+  // Only recreate when mode or status changes, not on every tick
+  }, [mode, state.status]);
 
   const selectCell = useCallback((position: CellPosition) => {
     dispatch({ type: 'SELECT_CELL', position });
@@ -570,23 +576,42 @@ export function useGame(
   }, []);
 
   // Get the currently forming word
-  const currentWord = getSelectedWord(state.board.grid, state.selectedCells);
+  const currentWord = useMemo(
+    () => getSelectedWord(state.board.grid, state.selectedCells),
+    [state.board.grid, state.selectedCells]
+  );
+
+  // Cache remaining words — only recompute when words change
+  const remainingWords = useMemo(
+    () => state.board.words.filter(w => !w.found).map(w => w.word),
+    [state.board.words]
+  );
 
   // Check if current selection matches a target word
-  const remainingWords = state.board.words
-    .filter(w => !w.found)
-    .map(w => w.word);
-  const isValidWord = remainingWords.includes(currentWord);
+  const isValidWord = useMemo(
+    () => remainingWords.includes(currentWord),
+    [remainingWords, currentWord]
+  );
 
-  // Check if we're in a dead-end state
-  const isStuck =
-    state.status === 'playing' &&
-    state.board.words.some(w => !w.found) &&
-    isDeadEnd(state.board.grid, remainingWords);
+  // Compute isStuck lazily — only after word found, not on every render
+  const [isStuck, setIsStuck] = useState(false);
+  const foundWords = state.board.words.filter(w => w.found).length;
+
+  useEffect(() => {
+    if (state.status !== 'playing' || remainingWords.length === 0) {
+      setIsStuck(false);
+      return;
+    }
+    // Defer expensive computation to avoid blocking animations
+    const timer = setTimeout(() => {
+      const stuck = isDeadEnd(state.board.grid, remainingWords);
+      setIsStuck(stuck);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [foundWords, state.status, state.board.grid, remainingWords]);
 
   // Calculate stars
   const totalWords = state.board.words.length;
-  const foundWords = state.board.words.filter(w => w.found).length;
   const stars =
     state.status === 'won'
       ? state.perfectRun && state.moves <= totalWords

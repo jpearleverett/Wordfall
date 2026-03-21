@@ -135,48 +135,58 @@ export function GameGrid({
     return null;
   }, [cellBounds]);
 
-  const panGesture = Gesture.Pan()
-    .minDistance(0)
-    .onBegin((e) => {
-      isDraggingRef.current = true;
-      lastDragCellRef.current = null;
-      onDragStart?.();
-      const cell = hitTestCell(e.x, e.y);
-      if (cell) {
-        const key = `${cell.row},${cell.col}`;
-        lastDragCellRef.current = key;
-        onCellPress(cell);
-      }
-    })
-    .onUpdate((e) => {
-      const cell = hitTestCell(e.x, e.y);
-      if (cell) {
-        const key = `${cell.row},${cell.col}`;
-        if (key !== lastDragCellRef.current) {
+  // Memoize gesture objects to avoid reattaching on every render
+  const onCellPressRef = useRef(onCellPress);
+  onCellPressRef.current = onCellPress;
+  const onDragStartRef = useRef(onDragStart);
+  onDragStartRef.current = onDragStart;
+  const onDragEndRef = useRef(onDragEnd);
+  onDragEndRef.current = onDragEnd;
+
+  const composedGesture = useMemo(() => {
+    const panGesture = Gesture.Pan()
+      .minDistance(0)
+      .onBegin((e) => {
+        isDraggingRef.current = true;
+        lastDragCellRef.current = null;
+        onDragStartRef.current?.();
+        const cell = hitTestCell(e.x, e.y);
+        if (cell) {
+          const key = `${cell.row},${cell.col}`;
           lastDragCellRef.current = key;
-          onCellPress(cell);
+          onCellPressRef.current(cell);
         }
-      }
-    })
-    .onEnd(() => {
-      isDraggingRef.current = false;
-      lastDragCellRef.current = null;
-      onDragEnd?.();
-    })
-    .onFinalize(() => {
-      isDraggingRef.current = false;
-      lastDragCellRef.current = null;
-    });
+      })
+      .onUpdate((e) => {
+        const cell = hitTestCell(e.x, e.y);
+        if (cell) {
+          const key = `${cell.row},${cell.col}`;
+          if (key !== lastDragCellRef.current) {
+            lastDragCellRef.current = key;
+            onCellPressRef.current(cell);
+          }
+        }
+      })
+      .onEnd(() => {
+        isDraggingRef.current = false;
+        lastDragCellRef.current = null;
+        onDragEndRef.current?.();
+      })
+      .onFinalize(() => {
+        isDraggingRef.current = false;
+        lastDragCellRef.current = null;
+      });
 
-  const tapGesture = Gesture.Tap()
-    .onEnd((e) => {
-      const cell = hitTestCell(e.x, e.y);
-      if (cell) {
-        onCellPress(cell);
-      }
-    });
+    const tapGesture = Gesture.Tap()
+      .onEnd((e) => {
+        const cell = hitTestCell(e.x, e.y);
+        if (cell) {
+          onCellPressRef.current(cell);
+        }
+      });
 
-  const composedGesture = Gesture.Race(panGesture, tapGesture);
+    return Gesture.Race(panGesture, tapGesture);
+  }, [hitTestCell]);
 
   // Outer wrapper dimensions include the gradient border padding
   const borderWidth = 2;
@@ -255,7 +265,6 @@ export function GameGrid({
                     isSelected={isSelected}
                     isHinted={isHinted}
                     selectionIndex={selIndex}
-                    onPress={() => onCellPress({ row, col })}
                     isFrozen={frozenSet.has(col)}
                     isValidWord={validWord && isSelected}
                     isMoved={movedSet.has(key)}

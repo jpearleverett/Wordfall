@@ -207,16 +207,21 @@ export function GameScreen({
     ]).start(() => setShowInvalidFlash(false));
   }, [invalidFlashAnim]);
 
-  // Idle hint prompt (20 seconds of inactivity)
+  // Idle hint prompt — use refs to avoid recreating on every state change
+  const statusRef = useRef(state.status);
+  const hintsLeftRef = useRef(state.hintsLeft);
+  statusRef.current = state.status;
+  hintsLeftRef.current = state.hintsLeft;
+
   const resetIdleTimer = useCallback(() => {
     setShowIdleHint(false);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    if (state.status === 'playing' && state.hintsLeft > 0) {
+    if (statusRef.current === 'playing' && hintsLeftRef.current > 0) {
       idleTimerRef.current = setTimeout(() => {
         setShowIdleHint(true);
       }, idleHintDelay);
     }
-  }, [state.status, state.hintsLeft, idleHintDelay]);
+  }, [idleHintDelay]);
 
   useEffect(() => {
     resetIdleTimer();
@@ -307,7 +312,7 @@ export function GameScreen({
         );
         submitWord();
         setShowValidFlash(false);
-      }, 400);
+      }, 250);
       return () => clearTimeout(timer);
     } else {
       setShowValidFlash(false);
@@ -322,7 +327,7 @@ export function GameScreen({
       const timer = setTimeout(() => {
         setShowComplete(true);
         onComplete(stars, state.score);
-      }, 600);
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [state.status]);
@@ -330,7 +335,7 @@ export function GameScreen({
   // Show failed modal
   useEffect(() => {
     if ((state.status === 'failed' || state.status === 'timeout') && !showFailed) {
-      const timer = setTimeout(() => setShowFailed(true), 800);
+      const timer = setTimeout(() => setShowFailed(true), 400);
       return () => clearTimeout(timer);
     }
   }, [state.status]);
@@ -355,24 +360,10 @@ export function GameScreen({
         setFreezeMode(false);
         return;
       }
-      // Check if this tap is on an already-selected cell (deselection) or invalid adjacency
-      const isAlreadySelected = state.selectedCells.some(
-        c => c.row === position.row && c.col === position.col
-      );
-      if (!isAlreadySelected && state.selectedCells.length > 0) {
-        const last = state.selectedCells[state.selectedCells.length - 1];
-        const rowDiff = Math.abs(position.row - last.row);
-        const colDiff = Math.abs(position.col - last.col);
-        const isAdjacent = rowDiff <= 1 && colDiff <= 1 && (rowDiff + colDiff > 0);
-        if (!isAdjacent) {
-          showInvalidFlashAnim();
-          clearSelection();
-          return;
-        }
-      }
+      // Adjacency is handled by the reducer — non-adjacent taps start a new selection
       selectCell(position);
     },
-    [selectCell, freezeMode, freezeColumn, clearSelection, state.selectedCells, resetIdleTimer, showInvalidFlashAnim]
+    [selectCell, freezeMode, freezeColumn, resetIdleTimer]
   );
 
   const handleHint = useCallback(() => {
