@@ -70,13 +70,13 @@ src/
 | `src/types.ts` | ALL type definitions including `FeatureUnlockId`, `WeeklyGoal`, `WeeklyGoalsState`, `CeremonyItem`. Edit here when adding new data structures |
 | `src/constants.ts` | Colors, `GRADIENTS`, `SHADOWS`, difficulty configs, mode configs, scoring, economy, `FEATURE_UNLOCK_SCHEDULE`, `getBreatherConfig()`, `STREAK` milestones |
 | `src/contexts/PlayerContext.tsx` | Master player data hub: progress, collections, missions, streaks, cosmetics, library, modes, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `wordsFoundTotal`, `modesPlayedThisWeek`. Methods: `unlockFeature`, `checkFeatureUnlocks`, `markTooltipShown`, `initWeeklyGoals`, `updateWeeklyGoalProgress`, `queueCeremony`, `popCeremony`, `recordFailure`, `needsBreather`, `checkAchievements` |
-| `src/hooks/useGame.ts` | Core game state reducer - handles 15+ game actions including boosters. Timer tick for timePressure mode runs here |
+| `src/hooks/useGame.ts` | Core game state reducer - handles 15+ game actions including boosters. Timer tick for timePressure mode runs here. Computed values (`currentWord`, `remainingWords`, `isValidWord`) cached with `useMemo`. `isDeadEnd` computed via deferred `useEffect` (not in render path) to avoid blocking the UI thread with the expensive solver |
 | `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG, freeform path placement (8-directional), and solvability validation |
 | `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
-| `src/engine/solver.ts` | 8-directional DFS word finder, recursive backtracking solver, dead-end detection, hint generation |
-| `src/components/PuzzleComplete.tsx` | Victory screen with confetti, animated score, staggered reveals, **plus**: `isFirstWin` welcome, `leveledUp` badge, `difficultyTransition` ceremony, `nextLevelPreview`, `shareText` with Share API, `friendComparison` mock display |
-| `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, drag-to-select via react-native-gesture-handler, frozen column styling, post-gravity moved-cell highlighting |
-| `src/screens/GameScreen.tsx` | Main gameplay screen: green/red flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro, stuck UX, boosters, near-miss encouragement on failure with progress bar |
+| `src/engine/solver.ts` | 8-directional DFS word finder, recursive backtracking solver, dead-end detection, hint generation. `findWordInGrid` supports optional `limit` parameter for early termination. `getHint` uses solution ordering directly without redundant re-solve |
+| `src/components/PuzzleComplete.tsx` | Victory screen with confetti (16 particles), animated score counter, staggered reveals inside a `ScrollView` with `maxHeight` constraint. **Plus**: `isFirstWin` welcome, `leveledUp` badge, `difficultyTransition` ceremony, `nextLevelPreview`, `shareText` with Share API, `friendComparison` mock display |
+| `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, drag-to-select via react-native-gesture-handler (gesture objects memoized with `useMemo`, callbacks via refs), frozen column styling, post-gravity moved-cell highlighting. LetterCell receives no `onPress` — all input handled by grid-level gesture detector |
+| `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro, stuck UX, boosters, near-miss encouragement on failure with progress bar. `handleCellPress` delegates adjacency checks to the reducer |
 | `src/screens/HomeScreen.tsx` | Dynamic home screen with progressive section visibility based on `playerStage` (new/early/established/veteran). Sections: hero card, streak, daily rewards, weekly goals, mission progress, personalized recommendations, quick play |
 | `src/screens/OnboardingScreen.tsx` | 4-phase interactive tutorial: welcome → guided tutorial puzzle (real GameGrid + TutorialOverlay) → celebration → ready screen with tips |
 | `src/screens/ProfileScreen.tsx` | Player profile with stats grid, achievements grid (15 achievements × 3 tiers with colored dots), collection progress, cosmetics |
@@ -133,8 +133,8 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 ### Core Loop
 1. Player sees a grid of letters with target words listed in the WordBank
 2. Tap or drag across letters in any direction (horizontal, vertical, diagonal, or zigzag — all 8-directional adjacency) to spell words
-3. Non-adjacent taps trigger red flash + error haptic and clear selection
-4. When a valid word is selected, cells turn green with checkmarks and auto-submit after 400ms
+3. Non-adjacent taps start a new selection from the tapped cell (adjacency validated in the reducer)
+4. When a valid word is selected, cells turn green with checkmarks and auto-submit after 250ms
 5. Cleared letters disappear; letters above fall due to gravity (with LayoutAnimation)
 6. Post-gravity: cells that shifted position glow briefly with cyan trail (400ms fade)
 7. Score popup floats up showing points earned (with combo multiplier display)
@@ -142,11 +142,10 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 9. Find all words to trigger victory screen with confetti, animated score counter, and star reveals
 
 ### Visual Feedback System
-- **Green flash overlay**: 200ms on valid word match, before auto-submit
-- **Red flash overlay**: 100ms→200ms fade on invalid adjacency tap
+- **Green flash overlay**: 200ms on valid word match, before auto-submit (250ms delay)
 - **Chain popup**: Spring-scaled "Nx CHAIN!" with screen shake (3px oscillation)
 - **Score popup**: "+150 (2x!)" springs in, holds 600ms, floats up and fades out
-- **Post-gravity highlight**: Moved cells get cyan border glow that fades over 400ms
+- **Post-gravity highlight**: Moved cells get a cyan border overlay that fades via opacity over 400ms (uses `useNativeDriver: true`)
 - **Idle hint prompt**: Dynamic timer based on fail count (20s default → 15s after 1 failure → 10s after 2+), tappable banner suggesting a hint
 - **Mode intro banner**: 2.5-second banner on game start for non-classic modes (e.g. "No mistakes allowed!")
 - **Stuck detection**: After 1.5 seconds in dead-end state, shows banner with inline undo button
@@ -250,7 +249,7 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - **Gradient surfaces**: All cards and panels use `LinearGradient` with `GRADIENTS.surfaceCard` instead of flat `backgroundColor`. Import from `expo-linear-gradient`
 - **Shadow presets**: Use `SHADOWS.soft`, `SHADOWS.medium`, `SHADOWS.strong` from constants. `SHADOWS.glow(color)` for colored glow effects
 - **Glassmorphism cards**: Cards use gradient backgrounds + subtle inner glow overlays (`rgba` border + shadow) for depth
-- **Ambient backdrops**: Home and Library screens use `<AmbientBackdrop variant="home|library" />` for floating animated orb backgrounds
+- **Ambient backdrops**: All screens use `<AmbientBackdrop variant="home|library|game|..." />` for floating animated orb backgrounds (10 twinkling stars + 2 nebula orbs, all `useNativeDriver: true`)
 - **Hero illustrations**: Home and Library screens have decorative `<HomeHeroIllustration />` / `<LibraryHeroIllustration />` components built from Views + gradients (no image assets)
 - **Screen top padding**: All screens use `paddingTop: 60` in their `content` style to clear the status bar / safe area consistently
 - **Section layout**: Screens follow a pattern of hero card → section panels, each with `borderRadius: 20-28`, gradient fill, and `SHADOWS.medium`
@@ -264,15 +263,16 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - Grid has gradient background (`GRADIENTS.grid`), 16px border radius, accent gradient border
 
 ### Animations & Visual Feedback
-- **Cell selection**: Scale down 0.9 → spring to 1.05 with animated glow border (150ms)
+All tile animations use `useNativeDriver: true` for native-thread execution. No continuous animation loops run on idle tiles (shimmer and pulse loops removed for performance).
+- **Cell selection**: Scale down 0.86 → spring to 1.08 with animated glow border (60ms down, spring up). All native driver
 - **Valid word detection**: Cells turn green with checkmarks, green flash overlay (200ms)
-- **Invalid tap**: Red flash overlay (100ms in, 200ms out), error haptic
-- **Post-gravity cells**: Cyan border glow + elevated shadow fading over 400ms
+- **Post-gravity cells**: Cyan border overlay fading via opacity over 400ms (native driver)
 - **Score popup**: Springs in, holds 600ms, floats up and fades out. Shows combo multiplier
 - **Chain celebration**: "Nx CHAIN!" popup with spring scale + screen shake (3px, 200ms)
-- **WordBank chips**: Found words scale up 1.15x with spring then settle; active words have pulsing glow
-- **Puzzle complete**: Confetti particles (24 particles, 8 colors), stars pop in with staggered delays and rotation, score counts up from 0 over 1200ms, rewards and buttons slide in sequentially
-- **Button press**: All Pressable buttons scale to 0.92-0.96x on press with opacity change
+- **WordBank chips**: Found words scale up 1.22x with spring then settle; `WordChip` wrapped in `React.memo`. No shimmer loop on found chips
+- **Puzzle complete**: 16 confetti particles (8 colors), 12 sparkles, 10 celebration burst particles. Stars pop in with staggered springs. Score counts up from 0 over 800ms (20 steps). Card content in `ScrollView` with `maxHeight: 88%` screen constraint
+- **AmbientBackdrop**: 10 twinkling stars + 2 nebula orbs (all `useNativeDriver: true`). No aurora wave animations
+- **Button press**: All Pressable buttons scale to 0.92-0.97x on press with opacity change
 - **Screen transitions**: Title springs in, buttons slide up with spring physics
 
 ## Implementation Status
@@ -300,11 +300,12 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - Mode intro banner for non-classic modes
 - Stuck detection with inline undo button
 - Animated WordBank with celebration, glow, and valid-word states
-- Valid word green flash + auto-submit (400ms)
+- Valid word green flash + auto-submit (250ms)
 - Daily login reward UI (7-day cycle on HomeScreen)
 - Welcome-back animated modal with tiered comeback rewards
 - Perfect Solve undo recovery (undo from failed state)
-- TypeScript compiles with zero errors
+- Performance-optimized: all tile animations use native driver, no continuous animation loops on idle tiles, expensive solver computations deferred out of render path, gesture objects memoized, computed game values cached with `useMemo`
+- TypeScript compiles cleanly (7 pre-existing type-narrowing warnings in Button.tsx, ClubScreen.tsx, EventScreen.tsx, OnboardingScreen.tsx — all gradient color tuple length mismatches, not functional issues)
 
 #### Player Experience Systems (all complete)
 - **Interactive tutorial**: 4-phase onboarding (welcome → guided puzzle with TutorialOverlay → celebration → ready). Players tap highlighted cells on a real GameGrid to find CAT, DOG, SUN
@@ -400,8 +401,9 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - **Word database** in `src/words.ts` contains ~2000 curated English words (3-6 letters)
 - **Seeded PRNG** ensures daily puzzles are identical for all players on the same day
 - **Timer tick** for timePressure mode runs inside `useGame` hook, not in the screen
-- **Adjacency validation** uses 8-directional adjacency (horizontal, vertical, diagonal) with no direction locking — paths can zigzag freely. Non-adjacent taps trigger red flash and clear selection
-- **Drag selection** is handled by `react-native-gesture-handler` PanGesture on the Grid — players can drag across tiles to select them. `GestureHandlerRootView` wraps the app in `App.tsx`
+- **Adjacency validation** uses 8-directional adjacency (horizontal, vertical, diagonal) with no direction locking — paths can zigzag freely. Adjacency is checked in the `SELECT_CELL` reducer action; non-adjacent taps start a new selection from the tapped cell
+- **Drag selection** is handled by `react-native-gesture-handler` PanGesture on the Grid — players can drag across tiles to select them. Gesture objects are memoized with `useMemo` and use refs for callbacks to avoid reattachment on re-renders. `GestureHandlerRootView` wraps the app in `App.tsx`
+- **LetterCell has no `onPress` prop** — all touch input is handled by the grid-level gesture detector via hit testing. LetterCell is purely presentational (wrapped in `React.memo`)
 - **Mode auto-unlock** happens in `App.tsx` `handleComplete` based on `MODE_CONFIGS[mode].unlockLevel`, with `ModeUnlockCeremony` modal
 - **Progressive tab unlocking** is controlled by `FEATURE_UNLOCK_SCHEDULE` in constants.ts and `player.featuresUnlocked` array — Collections at level 5, Library at level 8
 - **Ceremony queue** (`player.pendingCeremonies`) is processed in `HomeMainScreen` — ceremonies fire one at a time with 300ms delay between dismissals
@@ -411,3 +413,13 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - **Weekly goals** reset on Monday — `isNewWeek()` in weeklyGoals.ts detects week boundaries, `initWeeklyGoals()` generates 3 new goals
 - **Friend comparison** on PuzzleComplete uses mock random data — the `{ beaten: number; total: number }` structure is ready for Firestore integration
 - **Mastery track** uses `puzzlesSolved * 100` as XP proxy — replace with real XP tracking when needed
+
+### Performance Architecture
+- **All tile animations use `useNativeDriver: true`** — animations run on the native thread, not blocking JS. Only animate `transform` and `opacity` (no `borderColor`, `shadowOpacity`, or layout-affecting styles via Animated)
+- **No continuous animation loops on idle tiles** — shimmer and pulse loops were removed. Only selected/moved tiles run short one-shot animations
+- **`isDeadEnd` solver is deferred** — runs via `setTimeout` in a `useEffect` after words are found, not synchronously in the render path. The solver's recursive DFS is too expensive for per-render execution
+- **`findWordInGrid` supports a `limit` parameter** — pass `limit=1` when only existence matters (hint, dead-end check) to avoid finding all occurrences
+- **Gesture objects memoized** — Grid.tsx wraps gesture creation in `useMemo` with callback refs, per React Native Gesture Handler best practices
+- **Computed game values cached** — `currentWord`, `remainingWords`, `isValidWord` all use `useMemo` in `useGame` hook
+- **Timer interval stable** — timePressure timer `useEffect` only depends on `mode` and `state.status`, not `state.timeRemaining`, using a ref to check status inside the interval
+- **When adding new animations**: always use `useNativeDriver: true`, avoid `Animated.loop` on per-tile components, prefer one-shot animations that complete and settle
