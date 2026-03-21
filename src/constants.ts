@@ -1,9 +1,10 @@
-import { Dimensions } from 'react-native';
+import { Dimensions, Platform } from 'react-native';
 import { BoardConfig, Difficulty, GameMode, ModeConfig } from './types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Layout
+export { SCREEN_WIDTH, SCREEN_HEIGHT };
 export const GRID_PADDING = 12;
 export const CELL_GAP = 4;
 export const MAX_GRID_WIDTH = SCREEN_WIDTH - GRID_PADDING * 2;
@@ -12,62 +13,132 @@ export const CELL_SIZE = (col: number) =>
 
 // Colors
 export const COLORS = {
-  bg: '#0a0e27',
-  bgLight: '#111638',
-  surface: '#1a1f45',
-  surfaceLight: '#252b5e',
+  bg: '#070b1d',
+  bgLight: '#0d1431',
+  bgElevated: '#121b40',
+  surface: '#151d43',
+  surfaceLight: '#1d2758',
+  surfaceBright: '#24326d',
+  surfaceGlass: 'rgba(26, 37, 82, 0.72)',
+  surfaceGlassStrong: 'rgba(31, 44, 97, 0.86)',
+  border: 'rgba(120, 145, 255, 0.18)',
+  borderStrong: 'rgba(120, 224, 255, 0.42)',
 
-  cellDefault: '#2a3060',
+  cellDefault: '#223061',
   cellSelected: '#00d4ff',
-  cellHint: '#ffd700',
-  cellFound: '#1a3a2a',
+  cellHint: '#ffd166',
+  cellFound: '#173929',
+  cellShadow: '#040712',
 
-  textPrimary: '#ffffff',
-  textSecondary: '#8890b5',
-  textMuted: '#4a5280',
+  textPrimary: '#f6f8ff',
+  textSecondary: '#b7c3f2',
+  textMuted: '#7180b9',
+  textDim: '#4f5b8f',
+  textOnAccent: '#04101f',
 
-  accent: '#00d4ff',
-  accentGlow: 'rgba(0, 212, 255, 0.3)',
-  gold: '#ffd700',
-  goldGlow: 'rgba(255, 215, 0, 0.3)',
-  green: '#4caf50',
-  greenGlow: 'rgba(76, 175, 80, 0.3)',
-  coral: '#ff6b6b',
-  coralGlow: 'rgba(255, 107, 107, 0.3)',
-  purple: '#a855f7',
-  purpleGlow: 'rgba(168, 85, 247, 0.3)',
-  orange: '#ff9f43',
-  orangeGlow: 'rgba(255, 159, 67, 0.3)',
-  teal: '#2ed8a3',
-  tealGlow: 'rgba(46, 216, 163, 0.3)',
+  accent: '#20d8ff',
+  accentStrong: '#68ebff',
+  accentGlow: 'rgba(32, 216, 255, 0.34)',
+  accentGlowStrong: 'rgba(32, 216, 255, 0.5)',
+  gold: '#ffcf5a',
+  goldDeep: '#ffb938',
+  goldGlow: 'rgba(255, 207, 90, 0.38)',
+  green: '#52d67b',
+  greenGlow: 'rgba(82, 214, 123, 0.32)',
+  coral: '#ff7c72',
+  coralGlow: 'rgba(255, 124, 114, 0.32)',
+  purple: '#a874ff',
+  purpleGlow: 'rgba(168, 116, 255, 0.32)',
+  orange: '#ff9b54',
+  orangeGlow: 'rgba(255, 155, 84, 0.32)',
+  teal: '#32d8c0',
+  tealGlow: 'rgba(50, 216, 192, 0.32)',
 
-  wordFound: '#4caf50',
-  wordPending: '#8890b5',
-  wordActive: '#00d4ff',
+  wordFound: '#69e293',
+  wordPending: '#9dacdd',
+  wordActive: '#6ce8ff',
 
-  star: '#ffd700',
-  starEmpty: '#2a3060',
+  star: '#ffd76a',
+  starEmpty: '#293863',
 
-  buttonPrimary: '#00d4ff',
-  buttonSecondary: '#252b5e',
-  buttonDanger: '#ff6b6b',
-  buttonGold: '#ffd700',
+  buttonPrimary: '#20d8ff',
+  buttonSecondary: '#24326d',
+  buttonDanger: '#ff7c72',
+  buttonGold: '#ffcf5a',
 
-  // Rarity colors
   rarityCommon: '#8890b5',
-  rarityRare: '#00d4ff',
-  rarityEpic: '#a855f7',
-  rarityLegendary: '#ffd700',
+  rarityRare: '#20d8ff',
+  rarityEpic: '#a874ff',
+  rarityLegendary: '#ffcf5a',
 
-  // Club tier colors
   tierBronze: '#cd7f32',
   tierSilver: '#c0c0c0',
   tierGold: '#ffd700',
   tierDiamond: '#b9f2ff',
 
-  // Tab bar
-  tabActive: '#00d4ff',
+  tabActive: '#20d8ff',
   tabInactive: '#4a5280',
+};
+
+export const GRADIENTS = {
+  background: ['#060914', '#0a1030', '#11173c'],
+  atmospheric: ['rgba(32,216,255,0.14)', 'rgba(168,116,255,0.1)', 'rgba(0,0,0,0)'],
+  panel: ['rgba(35,47,102,0.96)', 'rgba(18,26,60,0.96)'],
+  panelSoft: ['rgba(24,34,78,0.85)', 'rgba(12,18,44,0.78)'],
+  accent: ['#6ef1ff', '#20d8ff', '#0a8cff'],
+  gold: ['#ffe39a', '#ffcf5a', '#ffad33'],
+  success: ['#7af0a0', '#52d67b', '#1d9b53'],
+  tile: ['#33468b', '#24366f', '#182758'],
+  tileSelected: ['#8bf4ff', '#2fe0ff', '#0786d0'],
+  tileHint: ['#ffe7a4', '#ffd166', '#ffab3f'],
+};
+
+export const TYPOGRAPHY = {
+  display: Platform.select({ ios: 'AvenirNext-Heavy', android: 'sans-serif-condensed', default: 'System' }),
+  ui: Platform.select({ ios: 'AvenirNext-Medium', android: 'sans-serif-medium', default: 'System' }),
+  mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+};
+
+export const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
+};
+
+export const RADII = {
+  sm: 12,
+  md: 18,
+  lg: 24,
+  xl: 30,
+  pill: 999,
+};
+
+export const SHADOWS = {
+  glow: {
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  card: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 18,
+  },
+  soft: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 8,
+  },
 };
 
 // Difficulty configs
@@ -263,10 +334,10 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
-      allowHints: false,
-      allowUndo: false,
+      allowHints: true,
+      allowUndo: true,
       unlimitedUndo: false,
-      scoreMultiplier: 2,
+      scoreMultiplier: 1.75,
       comboMode: false,
     },
   },
@@ -283,163 +354,35 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       allowHints: true,
       allowUndo: true,
       unlimitedUndo: true,
-      scoreMultiplier: 0.5,
+      scoreMultiplier: 0.75,
       comboMode: false,
     },
   },
 };
 
-// Scoring
-export const SCORE = {
-  wordFound: 100,
-  bonusPerLetter: 20,
-  comboMultiplier: 0.5,
-  perfectClear: 500,
-  noHints: 200,
-  starThresholds: [0.5, 0.75, 1.0],
-  timeBonus: 10, // points per second remaining
-  chainBonus: 150, // bonus for gravity-revealed chain
-};
-
-// Hints & Undos
-export const INITIAL_HINTS = 3;
-export const INITIAL_UNDOS = 3;
-export const HINTS_PER_AD = 1;
-
-// Animation
+// Animation timings
 export const ANIM = {
-  gravityDuration: 300,
-  gravityBounce: 50,
-  gravityStagger: 30,
   cellSelectDuration: 150,
-  wordFoundDuration: 500,
-  celebrationDuration: 1200,
+  gravityDuration: 300,
+  wordClearDuration: 400,
   chainPopupDuration: 800,
-  starAnimDelay: [200, 500, 800],
 };
 
 // Economy
 export const ECONOMY = {
+  startingCoins: 100,
+  startingGems: 10,
   puzzleCompleteCoins: {
-    easy: 50,
-    medium: 100,
-    hard: 200,
-    expert: 400,
+    easy: 10,
+    medium: 15,
+    hard: 25,
+    expert: 40,
   },
-  starBonus: 25,
-  comboBonus: 10,
-  perfectClearGems: 5,
-  dailyCompleteCoins: 150,
-  dailyCompleteGems: 2,
-  streakBonusMultiplier: 0.1, // +10% per streak day
-  loginRewards: [
-    { day: 1, coins: 50 },
-    { day: 2, coins: 75 },
-    { day: 3, coins: 100, hints: 2 },
-    { day: 4, coins: 125 },
-    { day: 5, coins: 150, gems: 5 },
-    { day: 6, coins: 175, hints: 3 },
-    { day: 7, coins: 200, gems: 10, rareTile: true },
-  ],
-  hintCost: 50, // coins per hint refill
-  undoCost: 50,
-  streakShieldCost: 200, // coins
+  dailyCompleteCoins: 30,
+  weeklyCompleteCoins: 100,
+  starBonus: 5,
+  perfectClearGems: 1,
+  hintCost: 25,
+  undoCost: 15,
+  shuffleCost: 20,
 };
-
-// Streak
-export const STREAK = {
-  graceDays: 1,
-  shieldCooldownDays: 30,
-  milestones: [7, 14, 30, 60, 100],
-  milestoneRewards: {
-    7: { coins: 500, gems: 10 },
-    14: { coins: 1000, gems: 25 },
-    30: { coins: 2500, gems: 50, cosmetic: 'streak_30_frame' },
-    60: { coins: 5000, gems: 100, cosmetic: 'streak_60_title' },
-    100: { coins: 10000, gems: 200, cosmetic: 'streak_100_badge' },
-  },
-};
-
-// Collection
-export const COLLECTION = {
-  rareTilePityTimer: 10, // guaranteed within 10 puzzles
-  rareTileBaseChance: 0.15,
-  rareTileHardBonus: 0.1,
-  rareTilePerfectBonus: 0.15,
-  duplicatesForWildcard: 5,
-  giftTilesPerDay: 3,
-};
-
-// Comeback rewards
-export const COMEBACK = {
-  day3: { coins: 200, hints: 5 },
-  day7: { coins: 500, gems: 10, hints: 10 },
-  day30: { coins: 1000, gems: 25, hints: 20, premiumHintDays: 3, doubleRewardDays: 3 },
-};
-
-// Mastery track
-export const MASTERY = {
-  tiersPerSeason: 30,
-  premiumPassPrice: '$4.99',
-};
-
-// Library
-export const LIBRARY = {
-  wingsCount: 8,
-  shelvesPerWing: 5,
-  decorationSlots: 3,
-  wingNames: ['Nature', 'Science', 'Mythology', 'Ocean', 'Arts', 'Space', 'History', 'Elements'],
-  wingIcons: ['🌿', '🔬', '⚡', '🌊', '🎨', '🚀', '📜', '🔥'],
-  wingChapters: [
-    [1, 5],
-    [6, 10],
-    [11, 15],
-    [16, 20],
-    [21, 25],
-    [26, 30],
-    [31, 35],
-    [36, 40],
-  ],
-};
-
-// Shop
-export const SHOP_ITEMS = {
-  starterPack: {
-    id: 'starter_pack',
-    price: '$1.99',
-    coins: 500,
-    gems: 50,
-    hints: 10,
-    expiresHours: 72,
-  },
-  hintBundles: [
-    { id: 'hint_10', count: 10, price: '$0.99' },
-    { id: 'hint_25', count: 25, price: '$1.99', bestValue: true },
-    { id: 'hint_50', count: 50, price: '$2.99' },
-  ],
-  undoBundles: [
-    { id: 'undo_10', count: 10, price: '$0.99' },
-    { id: 'undo_25', count: 25, price: '$1.99', bestValue: true },
-    { id: 'undo_50', count: 50, price: '$2.99' },
-  ],
-  dailyValuePack: {
-    id: 'daily_value',
-    price: '$0.99/day',
-    duration: 7,
-    dailyCoins: 100,
-    dailyGems: 5,
-    dailyHints: 3,
-  },
-  premiumPass: { id: 'premium_pass', price: '$4.99/season' },
-  adRemoval: { id: 'ad_removal', price: '$4.99' },
-};
-
-// Events
-export const EVENT_SCHEDULE = {
-  weeklyResetDay: 1, // Monday
-  weekendBlitzStart: 6, // Saturday
-  weekendBlitzEnd: 0, // Sunday
-  dailyResetHourUTC: 0,
-};
-
-export { SCREEN_WIDTH, SCREEN_HEIGHT };
