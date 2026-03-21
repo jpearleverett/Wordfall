@@ -1,12 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import {
-  Animated,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { COLORS } from '../constants';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, GRADIENTS, TYPOGRAPHY } from '../constants';
 
 interface LetterCellProps {
   letter: string;
@@ -29,126 +24,202 @@ export const LetterCell = React.memo(function LetterCell({
 }: LetterCellProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const settleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (isSelected) {
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 0.9,
-          duration: 80,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1.05,
-          friction: 4,
-          tension: 200,
-          useNativeDriver: true,
+    Animated.sequence([
+      Animated.timing(settleAnim, {
+        toValue: 0.96,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+      Animated.spring(settleAnim, {
+        toValue: 1,
+        friction: 5,
+        tension: 120,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [cellId, settleAnim]);
+
+  useEffect(() => {
+    if (isSelected || isHinted) {
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(scaleAnim, {
+            toValue: 0.94,
+            duration: 80,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleAnim, {
+            toValue: isSelected ? 1.06 : 1.03,
+            friction: 4,
+            tension: 190,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 160,
+          useNativeDriver: false,
         }),
       ]).start();
-
-      Animated.timing(glowAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: false,
-      }).start();
     } else {
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 6,
-        useNativeDriver: true,
-      }).start();
-
-      Animated.timing(glowAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: false,
-      }).start();
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 6,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 130,
+          useNativeDriver: false,
+        }),
+      ]).start();
     }
-  }, [isSelected]);
+  }, [glowAnim, isHinted, isSelected, scaleAnim]);
 
-  const bgColor = glowAnim.interpolate({
+  const backgroundColor = glowAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.cellDefault, isHinted ? COLORS.cellHint : COLORS.cellSelected],
+    outputRange: [COLORS.cellDefault, isHinted && !isSelected ? COLORS.cellHint : COLORS.cellSelected],
   });
 
   const borderColor = glowAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['transparent', isHinted ? COLORS.gold : COLORS.accent],
+    outputRange: [COLORS.border, isHinted && !isSelected ? COLORS.gold : COLORS.accentStrong],
   });
 
+  const glowOpacity = glowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.1, 0.4],
+  });
+
+  const gradientColors = isSelected
+    ? GRADIENTS.tileSelected
+    : isHinted
+      ? GRADIENTS.tileHint
+      : GRADIENTS.tile;
+
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={onPress} hitSlop={4}>
       <Animated.View
         style={[
-          styles.cell,
+          styles.cellShell,
           {
             width: size,
             height: size,
-            borderRadius: size * 0.18,
-            backgroundColor: bgColor,
-            borderColor: borderColor,
-            borderWidth: 2,
-            transform: [{ scale: scaleAnim }],
+            transform: [{ scale: Animated.multiply(scaleAnim, settleAnim) }],
           },
         ]}
       >
-        <Text
+        <Animated.View
           style={[
-            styles.letter,
-            { fontSize: size * 0.48 },
-            isSelected && styles.letterSelected,
+            styles.cellGlow,
+            {
+              borderRadius: size * 0.26,
+              opacity: glowOpacity,
+              shadowColor: isHinted && !isSelected ? COLORS.gold : COLORS.accent,
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.cell,
+            {
+              borderRadius: size * 0.24,
+              backgroundColor,
+              borderColor,
+            },
           ]}
         >
-          {letter}
-        </Text>
-        {isSelected && selectionIndex >= 0 && (
-          <View
-            style={[
-              styles.indexBadge,
-              { width: size * 0.3, height: size * 0.3, borderRadius: size * 0.15 },
-            ]}
-          >
-            <Text style={[styles.indexText, { fontSize: size * 0.18 }]}>
-              {selectionIndex + 1}
+          <LinearGradient colors={gradientColors} style={styles.gradientFill}>
+            <View style={styles.cellInnerGlow} />
+            <Text
+              style={[
+                styles.letter,
+                {
+                  fontSize: size * 0.44,
+                  textShadowColor: isSelected ? COLORS.accentGlowStrong : 'rgba(0,0,0,0.3)',
+                },
+              ]}
+            >
+              {letter}
             </Text>
-          </View>
-        )}
+            {isSelected && selectionIndex >= 0 && (
+              <View
+                style={[
+                  styles.indexBadge,
+                  {
+                    width: size * 0.28,
+                    height: size * 0.28,
+                    borderRadius: size * 0.14,
+                  },
+                ]}
+              >
+                <Text style={[styles.indexText, { fontSize: size * 0.16 }]}>{selectionIndex + 1}</Text>
+              </View>
+            )}
+          </LinearGradient>
+        </Animated.View>
       </Animated.View>
     </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
-  cell: {
-    justifyContent: 'center',
-    alignItems: 'center',
+  cellShell: {
     margin: 2,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
+  },
+  cellGlow: {
+    ...StyleSheet.absoluteFillObject,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  cell: {
+    flex: 1,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: COLORS.cellShadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  gradientFill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cellInnerGlow: {
+    position: 'absolute',
+    top: 4,
+    left: '20%',
+    right: '20%',
+    height: '24%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   letter: {
     color: COLORS.textPrimary,
-    fontWeight: '700',
+    fontFamily: TYPOGRAPHY.display,
     textAlign: 'center',
-  },
-  letterSelected: {
-    color: '#fff',
-    textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 8,
+    textShadowRadius: 12,
   },
   indexBadge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: COLORS.accent,
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(6, 11, 29, 0.88)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   indexText: {
-    color: COLORS.bg,
-    fontWeight: '800',
+    color: COLORS.accentStrong,
+    fontFamily: TYPOGRAPHY.ui,
   },
 });
