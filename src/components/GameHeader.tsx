@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 4,
-    overflow: 'hidden',
+    overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.45,
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   hintButton: {
     borderColor: 'rgba(255, 215, 0, 0.25)',

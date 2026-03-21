@@ -202,10 +202,6 @@ export function GameGrid({
         end={{ x: 1, y: 1 }}
         style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
       />
-      {/* Ambient glow orbs behind grid — larger, richer */}
-      <View style={styles.ambientGlow1} />
-      <View style={styles.ambientGlow2} />
-      <View style={styles.ambientGlow3} />
       <GestureDetector gesture={composedGesture}>
         <View
           ref={gridRef}
@@ -288,36 +284,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 28,
     elevation: 18,
-  },
-  ambientGlow1: {
-    position: 'absolute',
-    top: -60,
-    right: -50,
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: COLORS.accentGlow,
-    opacity: 0.4,
-  },
-  ambientGlow2: {
-    position: 'absolute',
-    bottom: -50,
-    left: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: COLORS.purpleGlow,
-    opacity: 0.35,
-  },
-  ambientGlow3: {
-    position: 'absolute',
-    top: '40%',
-    left: '50%',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.goldGlow,
-    opacity: 0.12,
   },
   gridContainer: {
     flexDirection: 'row',
