@@ -20,11 +20,11 @@ const { width } = Dimensions.get('window');
 
 const WING_META: Record<string, { name: string; icon: string; color: string; aura: string }> = {
   nature: { name: 'Nature', icon: '\u{1F33F}', color: '#4caf50', aura: 'rgba(76, 175, 80, 0.16)' },
-  science: { name: 'Science', icon: '\u{1F52C}', color: '#00d4ff', aura: 'rgba(0, 212, 255, 0.16)' },
+  science: { name: 'Science', icon: '\u{1F52C}', color: '#ff2d95', aura: 'rgba(255, 45, 149, 0.16)' },
   mythology: { name: 'Mythology', icon: '\u26A1', color: '#ffd700', aura: 'rgba(255, 215, 0, 0.16)' },
   ocean: { name: 'Ocean', icon: '\u{1F30A}', color: '#2196f3', aura: 'rgba(33, 150, 243, 0.16)' },
   arts: { name: 'Arts', icon: '\u{1F3A8}', color: '#e91e63', aura: 'rgba(233, 30, 99, 0.16)' },
-  space: { name: 'Space', icon: '\u{1F680}', color: '#a855f7', aura: 'rgba(168, 85, 247, 0.16)' },
+  space: { name: 'Space', icon: '\u{1F680}', color: '#c77dff', aura: 'rgba(199, 125, 255, 0.16)' },
   history: { name: 'History', icon: '\u{1F4DC}', color: '#ff9800', aura: 'rgba(255, 152, 0, 0.16)' },
   elements: { name: 'Elements', icon: '\u2728', color: '#ff6b6b', aura: 'rgba(255, 107, 107, 0.16)' },
 };

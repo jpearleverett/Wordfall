@@ -25,21 +25,21 @@ export default function EventBanner({
     <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={styles.wrapper}>
       {/* Rich multi-layer gradient background */}
       <LinearGradient
-        colors={['#0d1235', '#151a48', '#0d1235']}
+        colors={['#120024', '#1a0038', '#120024']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
       {/* Purple accent layer */}
       <LinearGradient
-        colors={['rgba(168, 85, 247, 0.2)', 'rgba(168, 85, 247, 0.05)', 'transparent']}
+        colors={['rgba(199, 125, 255, 0.2)', 'rgba(199, 125, 255, 0.05)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
       {/* Cyan accent sweep on right */}
       <LinearGradient
-        colors={['transparent', 'rgba(0, 212, 255, 0.12)', 'rgba(0, 212, 255, 0.06)']}
+        colors={['transparent', 'rgba(255, 45, 149, 0.12)', 'rgba(255, 45, 149, 0.06)']}
         start={{ x: 0.3, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.cyanSweep}
@@ -78,7 +78,7 @@ export default function EventBanner({
         <View style={styles.right}>
           <View style={styles.playCircleOuter}>
             <LinearGradient
-              colors={['#00e5ff', '#00bbdd', '#0099cc']}
+              colors={['#ff6eb4', '#ff2d95', '#cc0066']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.playCircle}
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     minHeight: 120,
     borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.2)',
+    borderColor: 'rgba(199, 125, 255, 0.2)',
     ...SHADOWS.strong,
     shadowColor: COLORS.purple,
     shadowOpacity: 0.3,
