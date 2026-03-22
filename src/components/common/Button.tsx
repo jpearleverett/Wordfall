@@ -32,7 +32,7 @@ const VARIANT_STYLES: Record<
   gold: { bg: COLORS.gold, text: '#000000' },
 };
 
-const GRADIENT_VARIANTS: Record<string, readonly [string, string]> = {
+const GRADIENT_VARIANTS: Record<string, readonly [string, string, ...string[]]> = {
   primary: GRADIENTS.button.primary,
   gold: GRADIENTS.button.gold,
   danger: GRADIENTS.button.danger,
