@@ -136,6 +136,7 @@ export function GameScreen({
   const [showFailed, setShowFailed] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [freezeMode, setFreezeMode] = useState(false);
+  const [gridAreaHeight, setGridAreaHeight] = useState(0);
   const chainAnim = useRef(new Animated.Value(0)).current;
   const [chainVisible, setChainVisible] = useState(false);
   const validFlashAnim = useRef(new Animated.Value(0)).current;
@@ -666,7 +667,7 @@ export function GameScreen({
       </View>
 
       {/* Grid area */}
-      <View style={styles.gridArea}>
+      <View style={styles.gridArea} onLayout={(e) => setGridAreaHeight(e.nativeEvent.layout.height)}>
         {/* Show preview grid if active */}
         {showPreview && state.previewGrid ? (
           <View style={styles.previewContainer}>
@@ -675,6 +676,7 @@ export function GameScreen({
               grid={state.previewGrid}
               selectedCells={[]}
               onCellPress={() => {}}
+              maxHeight={gridAreaHeight}
             />
             <Pressable
               style={styles.previewDismiss}
@@ -692,6 +694,7 @@ export function GameScreen({
             frozenColumns={state.frozenColumns}
             validWord={showValidFlash}
             movedCells={movedCells}
+            maxHeight={gridAreaHeight}
           />
         )}
       </View>

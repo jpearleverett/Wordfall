@@ -163,6 +163,10 @@ function Star({ filled, delay, size }: { filled: boolean; delay: number; size: n
           styles.star,
           {
             fontSize: size,
+            lineHeight: size,
+            width: size + 28,
+            height: size,
+            textAlign: 'center',
             opacity: filled ? 1 : 0.25,
             position: 'absolute',
             transform: [
@@ -289,7 +293,7 @@ export function PuzzleComplete({
     : [COLORS.accent, 'rgba(0,212,255,0.5)', COLORS.accent];
 
   // Constrain max height to fit screen
-  const maxCardHeight = screenHeight * 0.88;
+  const maxCardHeight = screenHeight * 0.85;
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
@@ -528,9 +532,10 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(4, 6, 18, 0.94)',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     padding: 16,
+    paddingBottom: 20,
   },
   confettiParticle: {
     position: 'absolute',
