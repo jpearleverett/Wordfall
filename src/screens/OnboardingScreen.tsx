@@ -117,7 +117,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
             onPress={() => transitionTo('tutorial')}
           >
             <LinearGradient
-              colors={GRADIENTS.button.primary as [string, string]}
+              colors={[...GRADIENTS.button.primary]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={[styles.startButton, SHADOWS.glow(COLORS.accent)]}
@@ -232,7 +232,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
           onPress={onComplete}
         >
           <LinearGradient
-            colors={GRADIENTS.button.gold as [string, string]}
+            colors={[...GRADIENTS.button.gold]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.startButton, SHADOWS.glow(COLORS.gold)]}

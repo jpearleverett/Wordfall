@@ -32,6 +32,7 @@ interface GridProps {
   frozenColumns?: number[];
   validWord?: boolean;
   movedCells?: CellPosition[];
+  maxHeight?: number;
 }
 
 export function GameGrid({
@@ -44,14 +45,22 @@ export function GameGrid({
   frozenColumns = [],
   validWord = false,
   movedCells = [],
+  maxHeight,
 }: GridProps) {
   const rows = grid.length;
   const cols = grid[0].length;
 
   const cellSize = useMemo(() => {
     const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-    return Math.floor(availableWidth / cols);
-  }, [cols]);
+    const widthBased = Math.floor(availableWidth / cols);
+    if (maxHeight && maxHeight > 0) {
+      const borderAllowance = 6;
+      const heightAvail = maxHeight - borderAllowance - CELL_GAP;
+      const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
+      return Math.min(widthBased, heightBased);
+    }
+    return widthBased;
+  }, [cols, rows, maxHeight]);
 
   const selectedSet = useMemo(() => {
     const set = new Map<string, number>();

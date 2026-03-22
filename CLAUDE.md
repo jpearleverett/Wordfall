@@ -75,8 +75,8 @@ src/
 | `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
 | `src/engine/solver.ts` | 8-directional DFS word finder, recursive backtracking solver, dead-end detection, hint generation. `findWordInGrid` supports optional `limit` parameter for early termination. `getHint` uses solution ordering directly without redundant re-solve |
 | `src/components/PuzzleComplete.tsx` | Victory screen with confetti (16 particles), animated score counter, staggered reveals inside a `ScrollView` with `maxHeight` constraint. **Plus**: `isFirstWin` welcome, `leveledUp` badge, `difficultyTransition` ceremony, `nextLevelPreview`, `shareText` with Share API, `friendComparison` mock display |
-| `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, drag-to-select via react-native-gesture-handler (gesture objects memoized with `useMemo`, callbacks via refs), frozen column styling, post-gravity moved-cell highlighting. LetterCell receives no `onPress` — all input handled by grid-level gesture detector |
-| `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro, stuck UX, boosters, near-miss encouragement on failure with progress bar. `handleCellPress` delegates adjacency checks to the reducer |
+| `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, responsive sizing via `maxHeight` prop (cell size constrained by both width and available height), drag-to-select via react-native-gesture-handler (gesture objects memoized with `useMemo`, callbacks via refs), frozen column styling, post-gravity moved-cell highlighting. LetterCell receives no `onPress` — all input handled by grid-level gesture detector |
+| `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro, stuck UX, boosters, near-miss encouragement on failure with progress bar. Measures grid area via `onLayout` and passes `maxHeight` to GameGrid for responsive sizing. `handleCellPress` delegates adjacency checks to the reducer |
 | `src/screens/HomeScreen.tsx` | Dynamic home screen with progressive section visibility based on `playerStage` (new/early/established/veteran). Sections: hero card, streak, daily rewards, weekly goals, mission progress, personalized recommendations, quick play |
 | `src/screens/OnboardingScreen.tsx` | 4-phase interactive tutorial: welcome → guided tutorial puzzle (real GameGrid + TutorialOverlay) → celebration → ready screen with tips |
 | `src/screens/ProfileScreen.tsx` | Player profile with stats grid, achievements grid (15 achievements × 3 tiers with colored dots), collection progress, cosmetics |
@@ -259,7 +259,7 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - Flex-end columns for gravity visualization
 - Cell touch targets: 44pt minimum
 - Grid padding: 12px, cell gap: 4px
-- Cell size computed dynamically based on column count and screen width
+- Cell size computed dynamically based on column count, screen width, and available height (`Math.min(widthBased, heightBased)` when `maxHeight` prop is provided via `onLayout` measurement)
 - Grid has gradient background (`GRADIENTS.grid`), 16px border radius, accent gradient border
 
 ### Animations & Visual Feedback
@@ -270,7 +270,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Score popup**: Springs in, holds 600ms, floats up and fades out. Shows combo multiplier
 - **Chain celebration**: "Nx CHAIN!" popup with spring scale + screen shake (3px, 200ms)
 - **WordBank chips**: Found words scale up 1.22x with spring then settle; `WordChip` wrapped in `React.memo`. No shimmer loop on found chips
-- **Puzzle complete**: 16 confetti particles (8 colors), 12 sparkles, 10 celebration burst particles. Stars pop in with staggered springs. Score counts up from 0 over 800ms (20 steps). Card content in `ScrollView` with `maxHeight: 88%` screen constraint
+- **Puzzle complete**: 16 confetti particles (8 colors), 12 sparkles, 10 celebration burst particles. Stars pop in with staggered springs, centered via explicit `lineHeight`/`width`/`height` styling. Score counts up from 0 over 800ms (20 steps). Card anchored to bottom of screen (`justifyContent: 'flex-end'`) with `maxHeight: 85%` screen constraint and `ScrollView` for overflow
 - **AmbientBackdrop**: 10 twinkling stars + 2 nebula orbs (all `useNativeDriver: true`). No aurora wave animations
 - **Button press**: All Pressable buttons scale to 0.92-0.97x on press with opacity change
 - **Screen transitions**: Title springs in, buttons slide up with spring physics
@@ -305,7 +305,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - Welcome-back animated modal with tiered comeback rewards
 - Perfect Solve undo recovery (undo from failed state)
 - Performance-optimized: all tile animations use native driver, no continuous animation loops on idle tiles, expensive solver computations deferred out of render path, gesture objects memoized, computed game values cached with `useMemo`
-- TypeScript compiles cleanly (7 pre-existing type-narrowing warnings in Button.tsx, ClubScreen.tsx, EventScreen.tsx, OnboardingScreen.tsx — all gradient color tuple length mismatches, not functional issues)
+- TypeScript compiles with zero errors (gradient color tuple types corrected across Button.tsx, ClubScreen.tsx, EventScreen.tsx, OnboardingScreen.tsx)
 
 #### Player Experience Systems (all complete)
 - **Interactive tutorial**: 4-phase onboarding (welcome → guided puzzle with TutorialOverlay → celebration → ready). Players tap highlighted cells on a real GameGrid to find CAT, DOG, SUN
@@ -422,4 +422,5 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Gesture objects memoized** — Grid.tsx wraps gesture creation in `useMemo` with callback refs, per React Native Gesture Handler best practices
 - **Computed game values cached** — `currentWord`, `remainingWords`, `isValidWord` all use `useMemo` in `useGame` hook
 - **Timer interval stable** — timePressure timer `useEffect` only depends on `mode` and `state.status`, not `state.timeRemaining`, using a ref to check status inside the interval
+- **Grid sizing is dual-dimension** — `cellSize` uses `Math.min(widthBased, heightBased)` via `maxHeight` prop measured by `onLayout` in GameScreen, preventing grid overflow behind booster buttons on tall boards
 - **When adding new animations**: always use `useNativeDriver: true`, avoid `Animated.loop` on per-tile components, prefer one-shot animations that complete and settle

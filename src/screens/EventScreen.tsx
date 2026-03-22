@@ -245,7 +245,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
             <Text style={styles.sectionTitle}>Event Puzzles</Text>
             <TouchableOpacity onPress={onPlayEventPuzzle} activeOpacity={0.8}>
               <LinearGradient
-                colors={[...GRADIENTS.button.primary] as [string, string]}
+                colors={[...GRADIENTS.button.primary] as [string, string, ...string[]]}
                 style={styles.playAllBtn}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
