@@ -82,14 +82,14 @@ export default function Modal({ visible, onClose, title, children }: ModalProps)
         >
           {/* Gradient border wrapper */}
           <LinearGradient
-            colors={['rgba(0,212,255,0.25)', 'rgba(168,85,247,0.15)', 'rgba(0,212,255,0.08)']}
+            colors={['rgba(255,45,149,0.25)', 'rgba(199,125,255,0.15)', 'rgba(255,45,149,0.08)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.borderGradient}
           >
             {/* Card interior with gradient background */}
             <LinearGradient
-              colors={['#1e2352', '#181d42']}
+              colors={['#220044', '#1a0033']}
               start={{ x: 0.5, y: 0 }}
               end={{ x: 0.5, y: 1 }}
               style={styles.card}
@@ -102,7 +102,7 @@ export default function Modal({ visible, onClose, title, children }: ModalProps)
                   style={styles.closeButtonOuter}
                 >
                   <LinearGradient
-                    colors={['#2a3068', '#222755']}
+                    colors={['#3a1060', '#2d0050']}
                     start={{ x: 0.5, y: 0 }}
                     end={{ x: 0.5, y: 1 }}
                     style={styles.closeButton}
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(4, 6, 18, 0.88)',
+    backgroundColor: 'rgba(8, 0, 14, 0.88)',
   },
   cardOuter: {
     width: '88%',

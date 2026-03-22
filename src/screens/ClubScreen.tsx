@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 20,
     borderWidth: 2,
-    borderColor: 'rgba(0, 212, 255, 0.15)',
+    borderColor: 'rgba(255, 45, 149, 0.15)',
     borderStyle: 'dashed',
     gap: 10,
     ...SHADOWS.soft,

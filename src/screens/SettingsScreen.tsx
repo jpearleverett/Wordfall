@@ -13,8 +13,8 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 
 const THEMES = [
-  { id: 'dark', name: 'Dark', color: '#0a0e27' },
-  { id: 'midnight', name: 'Midnight', color: '#0d1117' },
+  { id: 'dark', name: 'Synthwave', color: '#0a0012' },
+  { id: 'midnight', name: 'Midnight', color: '#0d0018' },
   { id: 'ocean', name: 'Ocean', color: '#0a1628' },
   { id: 'forest', name: 'Forest', color: '#0a1a0f' },
   { id: 'sunset', name: 'Sunset', color: '#1a0a0a' },
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
   toggleOn: {
     backgroundColor: COLORS.accent,
-    borderColor: 'rgba(0,212,255,0.3)',
+    borderColor: 'rgba(255,45,149,0.3)',
     ...SHADOWS.glow(COLORS.accent),
   },
   toggleThumb: {

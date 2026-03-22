@@ -315,7 +315,7 @@ export function HomeScreen({
                   </View>
                   <View style={styles.weeklyGoalBarTrack}>
                     <LinearGradient
-                      colors={goal.completed ? [COLORS.green, COLORS.teal] : [COLORS.accent, '#0099cc']}
+                      colors={goal.completed ? [COLORS.green, COLORS.teal] : [COLORS.accent, '#cc0066']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={[styles.weeklyGoalBarFill, { width: `${Math.max(fillPct, 2)}%` }]}
@@ -540,7 +540,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: 'rgba(0,212,255,0.10)',
+    backgroundColor: 'rgba(255,45,149,0.10)',
     top: -120,
     right: -60,
   },

@@ -9,20 +9,20 @@ import {
 import { FONTS } from '../../constants';
 
 const COLORS = {
-  bg: '#0a0e27',
-  surface: '#1a1f45',
-  surfaceLight: '#252b5e',
+  bg: '#0a0012',
+  surface: '#1a0033',
+  surfaceLight: '#2d0060',
   textPrimary: '#ffffff',
   textSecondary: '#8890b5',
   gold: '#ffd700',
-  purple: '#a855f7',
-  accent: '#00d4ff',
+  purple: '#c77dff',
+  accent: '#ff2d95',
 };
 
 const GLOW_COLORS: Record<string, string> = {
   [COLORS.gold]: 'rgba(255, 215, 0, 0.5)',
-  [COLORS.purple]: 'rgba(168, 85, 247, 0.5)',
-  [COLORS.accent]: 'rgba(0, 212, 255, 0.5)',
+  [COLORS.purple]: 'rgba(199, 125, 255, 0.5)',
+  [COLORS.accent]: 'rgba(255, 45, 149, 0.5)',
 };
 
 interface CurrencyDisplayProps {
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: 'rgba(0, 212, 255, 0.15)',
+    shadowColor: 'rgba(255, 45, 149, 0.15)',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 12,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     left: '20%',
     width: '60%',
     height: 40,
-    backgroundColor: 'rgba(0, 212, 255, 0.04)',
+    backgroundColor: 'rgba(255, 45, 149, 0.04)',
     borderRadius: 40,
   },
   item: {

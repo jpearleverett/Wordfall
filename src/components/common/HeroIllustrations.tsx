@@ -10,14 +10,14 @@ export function HomeHeroIllustration() {
       <View style={styles.ambientGlow} />
 
       <LinearGradient
-        colors={['rgba(8, 12, 35, 0.92)', 'rgba(14, 18, 52, 0.78)', 'rgba(8, 12, 35, 0.88)']}
+        colors={['rgba(20, 0, 50, 0.92)', 'rgba(30, 0, 70, 0.78)', 'rgba(20, 0, 50, 0.88)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.boardCard}
       >
         {/* Top edge highlight */}
         <LinearGradient
-          colors={['rgba(0, 212, 255, 0.12)', 'rgba(0, 212, 255, 0)']}
+          colors={['rgba(255, 45, 149, 0.12)', 'rgba(255, 45, 149, 0)']}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={styles.boardCardTopHighlight}
@@ -31,10 +31,10 @@ export function HomeHeroIllustration() {
             const isAccent = index === 1;
             const isGold = index === 2;
             const gradientColors: [string, string, string] = isAccent
-              ? ['#00e5ff', '#00bbdd', '#0099cc']
+              ? ['#ff6eb4', '#ff2d95', '#cc0066']
               : isGold
               ? ['#ffe066', '#ffd700', '#f0a500']
-              : ['#1e2460', '#252d72', '#2a3078'];
+              : ['#1e0a35', '#2a1248', '#301550'];
             return (
               <View
                 key={letter}
@@ -73,8 +73,8 @@ export function HomeHeroIllustration() {
           {['F', 'A', 'L', 'L'].map((letter, index) => {
             const isAccent = index === 3;
             const gradientColors: [string, string, string] = isAccent
-              ? ['#00e5ff', '#00bbdd', '#0099cc']
-              : ['#1e2460', '#252d72', '#2a3078'];
+              ? ['#ff6eb4', '#ff2d95', '#cc0066']
+              : ['#1e0a35', '#2a1248', '#301550'];
             return (
               <View
                 key={`${letter}-${index}`}
@@ -120,7 +120,7 @@ export function HomeHeroIllustration() {
 
       <View style={styles.heroBadge}>
         <Text style={styles.heroBadgeIcon}>{'\u2605'}</Text>
-        <Text style={styles.heroBadgeText}>Premium puzzle flow</Text>
+        <Text style={styles.heroBadgeText}>Neon puzzle flow</Text>
       </View>
     </View>
   );
@@ -133,7 +133,7 @@ export function LibraryHeroIllustration() {
       <View style={styles.libraryAmbientGlow} />
 
       <LinearGradient
-        colors={['rgba(14, 18, 50, 0.82)', 'rgba(12, 16, 44, 0.72)', 'rgba(9, 13, 34, 0.68)']}
+        colors={['rgba(20, 0, 50, 0.82)', 'rgba(26, 0, 60, 0.72)', 'rgba(15, 0, 40, 0.68)']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.archFrame}
@@ -152,13 +152,13 @@ export function LibraryHeroIllustration() {
             style={styles.shelf}
           />
           <View style={styles.bookRow}>
-            <LinearGradient colors={['#00f0ff', '#00bbdd', '#0088aa']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <LinearGradient colors={['#ff6eb4', '#ff2d95', '#cc0066']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.bookSpineHighlight} />
             </LinearGradient>
             <LinearGradient colors={['#ffe066', '#ffd700', '#e6a800']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.bookSpineHighlight} />
             </LinearGradient>
-            <LinearGradient colors={['#d8a5ff', '#a855f7', '#7c3aed']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <LinearGradient colors={['#e0b0ff', '#c77dff', '#8b00ff']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.bookSpineHighlight} />
             </LinearGradient>
             <LinearGradient colors={['#ffcc70', '#ff9f43', '#e67e22']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
@@ -172,13 +172,13 @@ export function LibraryHeroIllustration() {
             style={styles.shelf}
           />
           <View style={styles.bookRow}>
-            <LinearGradient colors={['#66ff99', '#4caf50', '#2e7d32']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <LinearGradient colors={['#66ffcc', '#00ffaa', '#00cc88']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.bookSpineHighlight} />
             </LinearGradient>
-            <LinearGradient colors={['#00f0ff', '#00bbdd', '#0088aa']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <LinearGradient colors={['#ff6eb4', '#ff2d95', '#cc0066']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.bookSpineHighlight} />
             </LinearGradient>
-            <LinearGradient colors={['#d8a5ff', '#a855f7', '#7c3aed']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <LinearGradient colors={['#e0b0ff', '#c77dff', '#8b00ff']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.bookSpineHighlight} />
             </LinearGradient>
             <LinearGradient colors={['#ffe066', '#ffd700', '#e6a800']} style={styles.book} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
@@ -208,17 +208,17 @@ const styles = StyleSheet.create({
     left: '10%',
     width: '80%',
     height: 120,
-    backgroundColor: 'rgba(0, 212, 255, 0.06)',
+    backgroundColor: 'rgba(255, 45, 149, 0.06)',
     borderRadius: 80,
   },
   boardCard: {
     alignSelf: 'stretch',
     borderRadius: 26,
     borderWidth: 1.5,
-    borderColor: 'rgba(0, 212, 255, 0.22)',
+    borderColor: 'rgba(255, 45, 149, 0.22)',
     padding: 18,
     overflow: 'hidden',
-    shadowColor: '#00d4ff',
+    shadowColor: '#ff2d95',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.35,
     shadowRadius: 32,
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
     left: '15%',
     width: '70%',
     height: 100,
-    backgroundColor: 'rgba(0, 212, 255, 0.08)',
+    backgroundColor: 'rgba(255, 45, 149, 0.08)',
     borderRadius: 60,
   },
   boardCardGlowSecondary: {
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     right: '10%',
     width: '50%',
     height: 60,
-    backgroundColor: 'rgba(168, 85, 247, 0.05)',
+    backgroundColor: 'rgba(199, 125, 255, 0.06)',
     borderRadius: 40,
   },
   boardRow: {
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   tileLetterAccent: {
-    textShadowColor: 'rgba(0, 212, 255, 0.5)',
+    textShadowColor: 'rgba(255, 45, 149, 0.5)',
     textShadowRadius: 8,
   },
   tileLetterGold: {
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: 'rgba(255, 215, 0, 0.04)',
+    backgroundColor: 'rgba(255, 45, 149, 0.04)',
   },
   archFrame: {
     width: 180,
@@ -399,11 +399,11 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.15)',
+    borderColor: 'rgba(255, 45, 149, 0.15)',
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'hidden',
-    shadowColor: COLORS.gold,
+    shadowColor: '#ff2d95',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 24,
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    backgroundColor: 'rgba(255, 45, 149, 0.08)',
   },
   windowGlow: {
     position: 'absolute',
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(255, 215, 0, 0.18)',
+    backgroundColor: 'rgba(255, 45, 149, 0.18)',
   },
   windowGlowInner: {
     position: 'absolute',
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 215, 0, 0.3)',
+    backgroundColor: 'rgba(255, 45, 149, 0.3)',
   },
   windowGlowCore: {
     position: 'absolute',
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 215, 0, 0.4)',
+    backgroundColor: 'rgba(255, 45, 149, 0.4)',
   },
   bookshelf: {
     width: 130,
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 36,
     borderRadius: 999,
-    backgroundColor: 'rgba(0, 212, 255, 0.03)',
+    backgroundColor: 'rgba(255, 45, 149, 0.03)',
     alignSelf: 'center',
   },
   floorGlowOuter: {
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 30,
     borderRadius: 999,
-    backgroundColor: 'rgba(0, 212, 255, 0.06)',
+    backgroundColor: 'rgba(255, 45, 149, 0.06)',
     alignSelf: 'center',
   },
   floorGlow: {
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     width: 130,
     height: 20,
     borderRadius: 999,
-    backgroundColor: 'rgba(0, 212, 255, 0.16)',
+    backgroundColor: 'rgba(255, 45, 149, 0.16)',
     alignSelf: 'center',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },

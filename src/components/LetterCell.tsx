@@ -97,7 +97,7 @@ export const LetterCell = React.memo(function LetterCell({
     if (isValidWord) return COLORS.green;
     if (isSelected && isHinted) return COLORS.gold;
     if (isSelected) return COLORS.accent;
-    if (isFrozen) return 'rgba(0, 212, 255, 0.5)';
+    if (isFrozen) return 'rgba(0, 255, 245, 0.5)';
     return 'rgba(255,255,255,0.10)';
   };
 
@@ -147,7 +147,7 @@ export const LetterCell = React.memo(function LetterCell({
             bottom: -2,
             borderRadius: borderRadius + 2,
             borderWidth: 1.5,
-            borderColor: 'rgba(0, 212, 255, 0.8)',
+            borderColor: 'rgba(255, 45, 149, 0.8)',
             opacity: movedAnim,
           }}
         />
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     right: 2,
-    backgroundColor: 'rgba(0, 212, 255, 0.95)',
+    backgroundColor: 'rgba(255, 45, 149, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: COLORS.accent,

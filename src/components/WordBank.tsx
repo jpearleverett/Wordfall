@@ -80,7 +80,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isVa
       <View style={styles.chipBackground}>
         {wordPlacement.found ? (
           <LinearGradient
-            colors={['rgba(0, 230, 118, 0.22)', 'rgba(0, 200, 83, 0.10)'] as [string, string]}
+            colors={['rgba(0, 255, 170, 0.22)', 'rgba(0, 204, 136, 0.10)'] as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
@@ -198,8 +198,8 @@ export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
             <LinearGradient
               colors={
                 isValidWord
-                  ? ['rgba(0,230,118,0.7)', 'rgba(0,230,118,0.2)', 'rgba(0,230,118,0)'] as [string, string, string]
-                  : ['rgba(0,212,255,0.5)', 'rgba(0,212,255,0.15)', 'rgba(0,212,255,0)'] as [string, string, string]
+                  ? ['rgba(0,255,170,0.7)', 'rgba(0,255,170,0.2)', 'rgba(0,255,170,0)'] as [string, string, string]
+                  : ['rgba(255,45,149,0.5)', 'rgba(255,45,149,0.15)', 'rgba(255,45,149,0)'] as [string, string, string]
               }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   wordChipFound: {
-    borderColor: 'rgba(0, 230, 118, 0.5)',
+    borderColor: 'rgba(0, 255, 170, 0.5)',
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   wordChipActive: {
-    borderColor: 'rgba(0, 212, 255, 0.55)',
+    borderColor: 'rgba(255, 45, 149, 0.55)',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,

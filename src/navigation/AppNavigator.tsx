@@ -5,23 +5,23 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { NavigationContainer } from '@react-navigation/native';
 
 const COLORS = {
-  bg: '#060918',
-  bgLight: '#0d1230',
-  surface: '#141940',
-  surfaceLight: '#1e2558',
-  textPrimary: '#f0f2ff',
-  textSecondary: '#9099cc',
-  textMuted: '#525b8a',
-  accent: '#00d4ff',
-  accentGlow: 'rgba(0, 212, 255, 0.5)',
+  bg: '#0a0012',
+  bgLight: '#160028',
+  surface: '#1a0033',
+  surfaceLight: '#2d0060',
+  textPrimary: '#fff0f5',
+  textSecondary: '#b899cc',
+  textMuted: '#6b4f80',
+  accent: '#ff2d95',
+  accentGlow: 'rgba(255, 45, 149, 0.55)',
   gold: '#ffd700',
-  green: '#00e676',
-  coral: '#ff5252',
-  purple: '#b366ff',
+  green: '#00ffaa',
+  coral: '#ff6b2b',
+  purple: '#c77dff',
   star: '#ffd700',
-  buttonPrimary: '#00d4ff',
-  buttonSecondary: '#1e2558',
-  buttonDanger: '#ff5252',
+  buttonPrimary: '#ff2d95',
+  buttonSecondary: '#2d0060',
+  buttonDanger: '#ff6b2b',
 };
 
 // ---------------------------------------------------------------------------
