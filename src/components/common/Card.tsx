@@ -25,26 +25,27 @@ export default function Card({
 }: CardProps) {
   const variantStyle = VARIANT_MAP[variant] ?? VARIANT_MAP.default;
 
-  const outerStyle: ViewStyle[] = [
-    styles.base,
-    variantStyle,
-    style as ViewStyle,
-  ].filter(Boolean) as ViewStyle[];
+  const outerStyle: ViewStyle[] = [styles.base, variantStyle, style as ViewStyle].filter(Boolean) as ViewStyle[];
 
   const innerContent = (
     <LinearGradient
-      colors={[GRADIENTS.surfaceCard[0], GRADIENTS.surfaceCard[1]]}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
+      colors={['rgba(31, 0, 56, 0.96)', 'rgba(9, 10, 26, 0.96)']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={[styles.gradient, { padding }]}
     >
-      {/* Subtle inner highlight for depth */}
       <LinearGradient
-        colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.0)']}
+        colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.0)']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.innerHighlight}
         locations={[0, 0.3]}
+      />
+      <LinearGradient
+        colors={[GRADIENTS.boardGlow[0], 'transparent']}
+        start={{ x: 0.1, y: 0.2 }}
+        end={{ x: 0.8, y: 1 }}
+        style={styles.aura}
       />
       {children}
     </LinearGradient>
@@ -52,11 +53,7 @@ export default function Card({
 
   if (onPress) {
     return (
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={onPress}
-        style={outerStyle}
-      >
+      <TouchableOpacity activeOpacity={0.86} onPress={onPress} style={outerStyle}>
         {innerContent}
       </TouchableOpacity>
     );
@@ -72,12 +69,12 @@ const VARIANT_MAP: Record<string, ViewStyle> = {
   },
   elevated: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.12)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
-    elevation: 14,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 22,
+    elevation: 16,
   },
   outlined: {
     backgroundColor: 'transparent',
@@ -89,22 +86,28 @@ const VARIANT_MAP: Record<string, ViewStyle> = {
     borderColor: COLORS.accent,
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
+    elevation: 14,
   },
 };
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   gradient: {
-    borderRadius: 15,
+    borderRadius: 17,
+    overflow: 'hidden',
   },
   innerHighlight: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 15,
+    borderRadius: 17,
+  },
+  aura: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 17,
+    opacity: 0.8,
   },
 });
