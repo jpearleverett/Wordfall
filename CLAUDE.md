@@ -76,7 +76,7 @@ src/
 | `src/engine/solver.ts` | 8-directional DFS word finder, recursive backtracking solver, dead-end detection, hint generation. `findWordInGrid` supports optional `limit` parameter for early termination. `getHint` uses solution ordering directly without redundant re-solve |
 | `src/components/PuzzleComplete.tsx` | Victory screen with confetti (16 particles), animated score counter, staggered reveals inside a `ScrollView` with `maxHeight` constraint. **Plus**: `isFirstWin` welcome, `leveledUp` badge, `difficultyTransition` ceremony, `nextLevelPreview`, `shareText` with Share API, `friendComparison` mock display |
 | `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, responsive sizing via `maxHeight` prop (cell size constrained by both width and available height), drag-to-select via react-native-gesture-handler (gesture objects memoized with `useMemo`, callbacks via refs), frozen column styling, post-gravity moved-cell highlighting. LetterCell receives no `onPress` — all input handled by grid-level gesture detector |
-| `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro, stuck UX, boosters, near-miss encouragement on failure with progress bar. Measures grid area via `onLayout` and passes `maxHeight` to GameGrid for responsive sizing. `handleCellPress` delegates adjacency checks to the reducer |
+| `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro overlay, boosters, near-miss encouragement on failure with progress bar. Stable layout: banners float as absolute overlays on grid, wordArea has fixed height, boosterBar always reserves space. Measures grid area via `onLayout` (debounced 2px threshold) and passes `maxHeight` to GameGrid. `handleCellPress` delegates adjacency checks to the reducer |
 | `src/screens/HomeScreen.tsx` | Dynamic home screen with progressive section visibility based on `playerStage` (new/early/established/veteran). Sections: hero card, streak, daily rewards, weekly goals, mission progress, personalized recommendations, quick play |
 | `src/screens/OnboardingScreen.tsx` | 4-phase interactive tutorial: welcome → guided tutorial puzzle (real GameGrid + TutorialOverlay) → celebration → ready screen with tips |
 | `src/screens/ProfileScreen.tsx` | Player profile with stats grid, achievements grid (15 achievements × 3 tiers with colored dots), collection progress, cosmetics |
@@ -146,8 +146,8 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 - **Chain popup**: Spring-scaled "Nx CHAIN!" with screen shake (3px oscillation)
 - **Score popup**: "+150 (2x!)" springs in, holds 600ms, floats up and fades out
 - **Post-gravity highlight**: Moved cells get a cyan border overlay that fades via opacity over 400ms (uses `useNativeDriver: true`)
-- **Idle hint prompt**: Dynamic timer based on fail count (20s default → 15s after 1 failure → 10s after 2+), tappable banner suggesting a hint
-- **Mode intro banner**: 2.5-second banner on game start for non-classic modes (e.g. "No mistakes allowed!")
+- **Idle hint prompt**: Dynamic timer based on fail count (20s default → 15s after 1 failure → 10s after 2+), floats as absolute overlay on grid
+- **Mode intro banner**: 2.5-second absolute overlay on game start for non-classic modes (e.g. "No mistakes allowed!")
 - **Near-miss encouragement**: On failure, shows "SO CLOSE!" (1 word away) or "KEEP GOING!" with progress bar and word count, plus prominent retry button
 
 ### Boosters
@@ -421,4 +421,5 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Computed game values cached** — `currentWord`, `remainingWords`, `isValidWord` all use `useMemo` in `useGame` hook
 - **Timer interval stable** — timePressure timer `useEffect` only depends on `mode` and `state.status`, not `state.timeRemaining`, using a ref to check status inside the interval
 - **Grid sizing is dual-dimension** — `cellSize` uses `Math.min(widthBased, heightBased)` via `maxHeight` prop measured by `onLayout` in GameScreen, preventing grid overflow behind booster buttons on tall boards
+- **Stable layout architecture** — GameScreen uses absolute-positioned overlays for banners (cascade, freeze, idle hint, mode intro) so they never shift the grid. WordArea has fixed height (90px), boosterBar always reserves space. `gridAreaHeight` updates are debounced (2px threshold) to prevent cascading re-renders from sub-pixel layout shifts
 - **When adding new animations**: always use `useNativeDriver: true`, avoid `Animated.loop` on per-tile components, prefer one-shot animations that complete and settle
