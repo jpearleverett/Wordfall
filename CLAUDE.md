@@ -148,7 +148,6 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 - **Post-gravity highlight**: Moved cells get a cyan border overlay that fades via opacity over 400ms (uses `useNativeDriver: true`)
 - **Idle hint prompt**: Dynamic timer based on fail count (20s default → 15s after 1 failure → 10s after 2+), tappable banner suggesting a hint
 - **Mode intro banner**: 2.5-second banner on game start for non-classic modes (e.g. "No mistakes allowed!")
-- **Stuck detection**: After 1.5 seconds in dead-end state, shows banner with inline undo button
 - **Near-miss encouragement**: On failure, shows "SO CLOSE!" (1 word away) or "KEEP GOING!" with progress bar and word count, plus prominent retry button
 
 ### Boosters
@@ -298,7 +297,6 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - Post-gravity cell highlight (cyan trail on shifted cells)
 - Dynamic idle hint prompt (10-20s based on fail count for current level)
 - Mode intro banner for non-classic modes
-- Stuck detection with inline undo button
 - Animated WordBank with celebration, glow, and valid-word states
 - Valid word green flash + auto-submit (250ms)
 - Daily login reward UI (7-day cycle on HomeScreen)

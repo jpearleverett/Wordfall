@@ -132,7 +132,6 @@ export function GameScreen({
   } = useGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
 
   const [showComplete, setShowComplete] = useState(false);
-  const [showStuck, setShowStuck] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [freezeMode, setFreezeMode] = useState(false);
@@ -342,16 +341,6 @@ export function GameScreen({
     }
   }, [state.status]);
 
-  // Detect stuck state
-  useEffect(() => {
-    if (isStuck && !showStuck && state.status === 'playing') {
-      const timer = setTimeout(() => setShowStuck(true), 1500);
-      return () => clearTimeout(timer);
-    } else if (!isStuck) {
-      setShowStuck(false);
-    }
-  }, [isStuck, state.status]);
-
   const handleCellPress = useCallback(
     (position: CellPosition) => {
       resetIdleTimer();
@@ -383,7 +372,7 @@ export function GameScreen({
       )
     );
     undoMove();
-    setShowStuck(false);
+
     setShowFailed(false);
     setShowIdleHint(false);
   }, [undoMove]);
@@ -398,7 +387,7 @@ export function GameScreen({
     );
     newGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
     setShowComplete(false);
-    setShowStuck(false);
+
     setShowFailed(false);
     setFreezeMode(false);
     setShowPreview(false);
@@ -572,22 +561,6 @@ export function GameScreen({
         </Pressable>
       )}
 
-      {/* Stuck warning with inline undo */}
-      {showStuck && (
-        <View style={styles.stuckBanner}>
-          <Text style={styles.stuckText}>
-            Stuck! {state.undosLeft > 0 ? 'Undo your last move to try a different approach.' : 'Try retrying the puzzle.'}
-          </Text>
-          {state.undosLeft > 0 && state.history.length > 0 && (
-            <Pressable
-              style={({ pressed }) => [styles.stuckUndoButton, pressed && styles.buttonPressed]}
-              onPress={handleUndo}
-            >
-              <Text style={styles.stuckUndoText}>↩ UNDO</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
 
       {/* Chain celebration */}
       {chainVisible && (
@@ -969,21 +942,6 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.accentGlow,
     textShadowRadius: 8,
   },
-  stuckBanner: {
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    marginHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
-    alignItems: 'center',
-  },
-  stuckText: {
-    color: COLORS.coral,
-    fontSize: 12,
-    fontFamily: FONTS.bodySemiBold,
-  },
   chainPopup: {
     position: 'absolute',
     top: '36%',
@@ -1035,24 +993,6 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
-  },
-  stuckUndoButton: {
-    backgroundColor: COLORS.gold,
-    paddingVertical: 8,
-    paddingHorizontal: 22,
-    borderRadius: 12,
-    marginTop: 8,
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  stuckUndoText: {
-    fontFamily: FONTS.display,
-    color: COLORS.bg,
-    fontSize: 13,
-    letterSpacing: 1,
   },
   modeIntroBanner: {
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
@@ -1135,21 +1075,21 @@ const styles = StyleSheet.create({
   boosterBar: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    marginTop: 8,
-    marginBottom: 8,
+    paddingVertical: 4,
+    marginTop: 4,
+    marginBottom: 4,
   },
   boosterButton: {
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    minWidth: 72,
+    minWidth: 56,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -1168,32 +1108,32 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   boosterIcon: {
-    fontSize: 22,
-    marginBottom: 3,
+    fontSize: 16,
+    marginBottom: 2,
   },
   boosterLabel: {
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
-    fontSize: 10,
-    letterSpacing: 0.5,
+    fontSize: 9,
+    letterSpacing: 0.3,
   },
   boosterCount: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: -4,
+    right: -4,
     backgroundColor: COLORS.accent,
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
+    borderRadius: 7,
+    minWidth: 14,
+    height: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 1.5,
+    paddingHorizontal: 3,
+    borderWidth: 1,
     borderColor: COLORS.bg,
   },
   boosterCountText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 8,
     fontFamily: FONTS.display,
   },
   failedOverlay: {
