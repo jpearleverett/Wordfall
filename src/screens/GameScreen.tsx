@@ -455,21 +455,23 @@ export function GameScreen({
     <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
     <SafeAreaView style={styles.container}>
       <AmbientBackdrop variant="game" />
-      {/* Mode intro banner */}
+      {/* Mode intro banner - absolute overlay so it doesn't shift layout */}
       {showModeIntro && mode !== 'classic' && (
-        <View style={[styles.modeIntroBanner, { borderColor: modeConfig.color }]}>
-          <Text style={[styles.modeIntroText, { color: modeConfig.color }]}>
-            {modeConfig.icon} {modeConfig.name.toUpperCase()}
-          </Text>
-          <Text style={styles.modeIntroDesc}>
-            {mode === 'perfectSolve' ? 'No mistakes allowed!' :
-             mode === 'limitedMoves' ? `Complete in ${effectiveMaxMoves} moves!` :
-             mode === 'timePressure' ? `Beat the clock! ${formatTime(effectiveTimeLimit)}` :
-             mode === 'cascade' ? 'Build combos for bonus multipliers!' :
-             mode === 'expert' ? 'No hints. No mercy.' :
-             mode === 'relax' ? 'Take your time. Enjoy the words.' :
-             modeConfig.description}
-          </Text>
+        <View style={styles.modeIntroOverlay} pointerEvents="none">
+          <View style={[styles.modeIntroBanner, { borderColor: modeConfig.color }]}>
+            <Text style={[styles.modeIntroText, { color: modeConfig.color }]}>
+              {modeConfig.icon} {modeConfig.name.toUpperCase()}
+            </Text>
+            <Text style={styles.modeIntroDesc}>
+              {mode === 'perfectSolve' ? 'No mistakes allowed!' :
+               mode === 'limitedMoves' ? `Complete in ${effectiveMaxMoves} moves!` :
+               mode === 'timePressure' ? `Beat the clock! ${formatTime(effectiveTimeLimit)}` :
+               mode === 'cascade' ? 'Build combos for bonus multipliers!' :
+               mode === 'expert' ? 'No hints. No mercy.' :
+               mode === 'relax' ? 'Take your time. Enjoy the words.' :
+               modeConfig.description}
+            </Text>
+          </View>
         </View>
       )}
 
@@ -492,11 +494,12 @@ export function GameScreen({
         onBack={onHome}
       />
 
-      {/* Timer display for timed mode */}
-      {modeConfig.rules.hasTimer && state.timeRemaining > 0 && (
+      {/* Timer/move bars - reserved space so they don't shift layout */}
+      {modeConfig.rules.hasTimer && (
         <View style={[
           styles.timerBar,
-          state.timeRemaining <= 30 && styles.timerBarDanger,
+          state.timeRemaining <= 30 && state.timeRemaining > 0 && styles.timerBarDanger,
+          state.timeRemaining <= 0 && styles.barHidden,
         ]}>
           <Text style={[
             styles.timerText,
@@ -506,8 +509,6 @@ export function GameScreen({
           </Text>
         </View>
       )}
-
-      {/* Move counter for limited moves */}
       {modeConfig.rules.hasMoveLimit && effectiveMaxMoves > 0 && (
         <View style={[
           styles.moveBar,
@@ -520,45 +521,6 @@ export function GameScreen({
             Moves: {state.moves}/{effectiveMaxMoves}
           </Text>
         </View>
-      )}
-
-      {/* Cascade multiplier */}
-      {mode === 'cascade' && state.cascadeMultiplier > 1 && (
-        <View style={styles.cascadeBar}>
-          <Text style={styles.cascadeText}>
-            🔥 {state.cascadeMultiplier.toFixed(2)}x Multiplier
-          </Text>
-        </View>
-      )}
-
-      {/* Frozen columns indicator */}
-      {state.frozenColumns.length > 0 && (
-        <View style={styles.frozenBanner}>
-          <Text style={styles.frozenText}>
-            ❄️ Column {state.frozenColumns.map(c => c + 1).join(', ')} frozen
-          </Text>
-        </View>
-      )}
-
-      {/* Freeze mode indicator */}
-      {freezeMode && (
-        <View style={styles.freezeModeBanner}>
-          <Text style={styles.freezeModeText}>
-            ❄️ Tap a column to freeze it
-          </Text>
-        </View>
-      )}
-
-      {/* Idle hint prompt */}
-      {showIdleHint && state.hintsLeft > 0 && state.status === 'playing' && (
-        <Pressable
-          style={styles.idleHintBanner}
-          onPress={() => { setShowIdleHint(false); handleHint(); }}
-        >
-          <Text style={styles.idleHintText}>
-            Need help? Tap here or press 💡 for a hint
-          </Text>
-        </Pressable>
       )}
 
 
@@ -640,7 +602,45 @@ export function GameScreen({
       </View>
 
       {/* Grid area */}
-      <View style={styles.gridArea} onLayout={(e) => setGridAreaHeight(e.nativeEvent.layout.height)}>
+      <View style={styles.gridArea} onLayout={(e) => {
+        const h = e.nativeEvent.layout.height;
+        setGridAreaHeight((prev: number) => Math.abs(prev - h) > 2 ? h : prev);
+      }}>
+        {/* Floating banners - absolute overlay, don't affect grid sizing */}
+        <View style={styles.bannerOverlay} pointerEvents="box-none">
+          {mode === 'cascade' && state.cascadeMultiplier > 1 && (
+            <View style={styles.cascadeBar}>
+              <Text style={styles.cascadeText}>
+                🔥 {state.cascadeMultiplier.toFixed(2)}x Multiplier
+              </Text>
+            </View>
+          )}
+          {state.frozenColumns.length > 0 && (
+            <View style={styles.frozenBanner}>
+              <Text style={styles.frozenText}>
+                ❄️ Column {state.frozenColumns.map(c => c + 1).join(', ')} frozen
+              </Text>
+            </View>
+          )}
+          {freezeMode && (
+            <View style={styles.freezeModeBanner}>
+              <Text style={styles.freezeModeText}>
+                ❄️ Tap a column to freeze it
+              </Text>
+            </View>
+          )}
+          {showIdleHint && state.hintsLeft > 0 && state.status === 'playing' && (
+            <Pressable
+              style={styles.idleHintBanner}
+              onPress={() => { setShowIdleHint(false); handleHint(); }}
+            >
+              <Text style={styles.idleHintText}>
+                Need help? Tap here or press 💡 for a hint
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
         {/* Show preview grid if active */}
         {showPreview && state.previewGrid ? (
           <View style={styles.previewContainer}>
@@ -672,9 +672,11 @@ export function GameScreen({
         )}
       </View>
 
-      {/* Booster bar */}
-      {hasAnyBoosters && state.status === 'playing' && (
-        <View style={styles.boosterBar}>
+      {/* Booster bar - always rendered to reserve space, hidden when empty */}
+      <View style={[
+        styles.boosterBar,
+        !(hasAnyBoosters && state.status === 'playing') && styles.boosterBarHidden,
+      ]}>
           {state.boosterCounts.shuffleFiller > 0 && (
             <Pressable
               style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
@@ -715,8 +717,7 @@ export function GameScreen({
               </View>
             </Pressable>
           )}
-        </View>
-      )}
+      </View>
 
       {/* Completion overlay */}
       {showComplete && (
@@ -833,9 +834,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
   },
+  bannerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    paddingTop: 4,
+    gap: 3,
+  },
+  modeIntroOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  barHidden: {
+    opacity: 0,
+  },
   wordArea: {
     paddingTop: 4,
-    paddingBottom: 8,
+    paddingBottom: 4,
+    height: 90,
+    overflow: 'hidden',
   },
   timerBar: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -893,10 +917,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 107, 107, 0.1)',
     paddingVertical: 5,
     paddingHorizontal: 14,
-    marginHorizontal: 20,
+    marginHorizontal: 12,
     borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 3,
     borderWidth: 1,
     borderColor: 'rgba(255, 107, 107, 0.3)',
   },
@@ -911,10 +934,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 212, 255, 0.08)',
     paddingVertical: 5,
     paddingHorizontal: 14,
-    marginHorizontal: 20,
+    marginHorizontal: 12,
     borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 3,
     borderWidth: 1,
     borderColor: 'rgba(0, 212, 255, 0.25)',
   },
@@ -927,10 +949,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 212, 255, 0.15)',
     paddingVertical: 6,
     paddingHorizontal: 14,
-    marginHorizontal: 20,
+    marginHorizontal: 12,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 3,
     borderWidth: 1.5,
     borderColor: 'rgba(0, 212, 255, 0.5)',
   },
@@ -982,10 +1003,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 212, 255, 0.08)',
     paddingVertical: 8,
     paddingHorizontal: 14,
-    marginHorizontal: 20,
+    marginHorizontal: 12,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 3,
     borderWidth: 1,
     borderColor: 'rgba(0, 212, 255, 0.2)',
   },
@@ -995,13 +1015,11 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
   },
   modeIntroBanner: {
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    marginHorizontal: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
     borderRadius: 14,
     alignItems: 'center',
-    marginBottom: 3,
     borderWidth: 1,
   },
   modeIntroText: {
@@ -1080,6 +1098,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginTop: 4,
     marginBottom: 4,
+    height: 44,
+  },
+  boosterBarHidden: {
+    opacity: 0,
   },
   boosterButton: {
     alignItems: 'center',
