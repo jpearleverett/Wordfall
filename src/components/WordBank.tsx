@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WordPlacement } from '../types';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
@@ -76,25 +76,25 @@ const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isVa
         { transform: [{ scale: scaleAnim }] },
       ]}
     >
-      {/* Background gradient for different states */}
-      {wordPlacement.found ? (
-        <LinearGradient
-          colors={['rgba(0, 230, 118, 0.22)', 'rgba(0, 200, 83, 0.10)'] as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
-        />
-      ) : (
-        <LinearGradient
-          colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
-        />
-      )}
-
-      {/* Glass top edge on chip */}
-      <View style={styles.chipGlassEdge} />
+      {/* Background gradient + glass edge clipped to chip shape */}
+      <View style={styles.chipBackground}>
+        {wordPlacement.found ? (
+          <LinearGradient
+            colors={['rgba(0, 230, 118, 0.22)', 'rgba(0, 200, 83, 0.10)'] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+        ) : (
+          <LinearGradient
+            colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+        )}
+        <View style={styles.chipGlassEdge} />
+      </View>
 
       <Text
         style={[
@@ -209,8 +209,13 @@ export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
         </View>
       </View>
 
-      {/* Target words */}
-      <View style={styles.wordList}>
+      {/* Target words - horizontally scrollable */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.wordList}
+        style={styles.wordListScroll}
+      >
         {words.map((wordPlacement, index) => (
           <WordChip
             key={`${wordPlacement.word}-${index}`}
@@ -220,7 +225,7 @@ export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
             index={index}
           />
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -232,8 +237,8 @@ const styles = StyleSheet.create({
   },
   currentWordContainer: {
     alignItems: 'center',
-    marginBottom: 8,
-    minHeight: 40,
+    marginBottom: 6,
+    height: 40,
     justifyContent: 'center',
   },
   currentWordRow: {
@@ -290,11 +295,15 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 1,
   },
+  wordListScroll: {
+    flexGrow: 0,
+  },
   wordList: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    alignItems: 'center',
     gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
   },
   wordChip: {
     flexDirection: 'row',
@@ -304,8 +313,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
-    overflow: 'hidden',
+    overflow: 'visible',
     gap: 4,
+  },
+  chipBackground: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   chipGlassEdge: {
     position: 'absolute',
