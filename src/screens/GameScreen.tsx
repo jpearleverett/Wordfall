@@ -136,6 +136,7 @@ export function GameScreen({
   const [showPreview, setShowPreview] = useState(false);
   const [freezeMode, setFreezeMode] = useState(false);
   const [gridAreaHeight, setGridAreaHeight] = useState(0);
+  const gridHeightLocked = useRef(false);
   const chainAnim = useRef(new Animated.Value(0)).current;
   const [chainVisible, setChainVisible] = useState(false);
   const validFlashAnim = useRef(new Animated.Value(0)).current;
@@ -332,6 +333,12 @@ export function GameScreen({
       return () => clearTimeout(timer);
     }
   }, [state.status]);
+
+  // Reset grid height lock when board changes (new puzzle/level)
+  useEffect(() => {
+    gridHeightLocked.current = false;
+    setGridAreaHeight(0);
+  }, [board]);
 
   // Show failed modal
   useEffect(() => {
@@ -604,7 +611,10 @@ export function GameScreen({
       {/* Grid area */}
       <View style={styles.gridArea} onLayout={(e) => {
         const h = e.nativeEvent.layout.height;
-        setGridAreaHeight((prev: number) => Math.abs(prev - h) > 2 ? h : prev);
+        if (!gridHeightLocked.current && h > 0) {
+          gridHeightLocked.current = true;
+          setGridAreaHeight(h);
+        }
       }}>
         {/* Floating banners - absolute overlay, don't affect grid sizing */}
         <View style={styles.bannerOverlay} pointerEvents="box-none">
@@ -856,10 +866,9 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   wordArea: {
-    paddingTop: 4,
-    paddingBottom: 4,
-    height: 90,
-    overflow: 'hidden',
+    paddingTop: 2,
+    paddingBottom: 2,
+    height: 86,
   },
   timerBar: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1096,22 +1105,22 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 4,
-    marginTop: 4,
-    marginBottom: 4,
-    height: 44,
+    marginTop: 2,
+    marginBottom: 2,
+    height: 52,
   },
   boosterBarHidden: {
     opacity: 0,
   },
   boosterButton: {
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    minWidth: 56,
+    minWidth: 64,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -1130,23 +1139,23 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   boosterIcon: {
-    fontSize: 16,
+    fontSize: 20,
     marginBottom: 2,
   },
   boosterLabel: {
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
-    fontSize: 9,
-    letterSpacing: 0.3,
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
   boosterCount: {
     position: 'absolute',
     top: -4,
     right: -4,
     backgroundColor: COLORS.accent,
-    borderRadius: 7,
-    minWidth: 14,
-    height: 14,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 3,
@@ -1155,7 +1164,7 @@ const styles = StyleSheet.create({
   },
   boosterCountText: {
     color: '#fff',
-    fontSize: 8,
+    fontSize: 9,
     fontFamily: FONTS.display,
   },
   failedOverlay: {
