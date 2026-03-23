@@ -1,6 +1,5 @@
 import React, { useMemo, useRef, useCallback } from 'react';
 import {
-  LayoutAnimation,
   Platform,
   StyleSheet,
   UIManager,
@@ -196,17 +195,18 @@ export function GameGrid({
     return Gesture.Race(panGesture, tapGesture);
   }, [hitTestCell]);
 
-  // Outer wrapper dimensions include the gradient border padding
-  const borderWidth = 2;
-  const outerWidth = gridWidth + borderWidth * 2;
-  const outerHeight = gridHeight + borderWidth * 2;
+  const frameInset = 14;
+  const outerWidth = gridWidth + frameInset * 2;
+  const outerHeight = gridHeight + frameInset * 2;
 
   return (
-    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}>
+    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 36 }]}>
+      <View style={styles.outerGlow} />
+      <View style={styles.outerFrame} />
       <GestureDetector gesture={composedGesture}>
         <View
           ref={gridRef}
-          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 22 }]}
+          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 24 }]}
         >
           {columns.map((column, colIndex) => (
             <View
@@ -253,14 +253,39 @@ export function GameGrid({
 const styles = StyleSheet.create({
   outerWrapper: {
     alignSelf: 'center',
-    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'visible',
     backgroundColor: 'transparent',
+  },
+  outerGlow: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    bottom: 10,
+    left: 10,
+    borderRadius: 34,
+    backgroundColor: 'rgba(104, 55, 183, 0.16)',
+    shadowColor: '#9b63ff',
+    shadowOpacity: 0.35,
+    shadowRadius: 26,
+  },
+  outerFrame: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 36,
+    borderWidth: 1.25,
+    borderColor: 'rgba(193, 171, 255, 0.16)',
+    backgroundColor: 'rgba(77, 32, 114, 0.22)',
   },
   gridContainer: {
     flexDirection: 'row',
     padding: CELL_GAP / 2,
     overflow: 'hidden',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(40, 18, 68, 0.18)',
   },
   column: {
     flexDirection: 'column',
