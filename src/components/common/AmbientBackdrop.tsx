@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../../constants';
 import { CachedImage } from './CachedImage';
 import { BACKGROUND_ASSETS } from '../../utils/assetUrls';
+import { SynthwaveBackdrop } from './SynthwaveBackdrop';
 
 interface AmbientBackdropProps {
   variant?: 'home' | 'library' | 'game' | 'collections' | 'profile';
@@ -133,7 +134,11 @@ function getBackgroundUri(variant: string): string | null {
 }
 
 export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
-  const isGame = variant === 'game';
+  // Game variant uses the dedicated synthwave backdrop
+  if (variant === 'game') {
+    return <SynthwaveBackdrop />;
+  }
+
   const bgUri = getBackgroundUri(variant);
 
   // Reduced from 32 to 10 stars for performance
@@ -182,7 +187,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
 
       {/* Nebula orbs — reduced from 5 to 2 for performance */}
       <NebulaOrb
-        color={isGame ? COLORS.accentGlow : COLORS.purpleGlow}
+        color={COLORS.purpleGlow}
         size={280}
         top="-8%"
         left="58%"
@@ -192,7 +197,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         opacity={0.4}
       />
       <NebulaOrb
-        color={isGame ? COLORS.purpleGlow : COLORS.accentGlow}
+        color={COLORS.accentGlow}
         size={240}
         top="18%"
         left="-14%"
