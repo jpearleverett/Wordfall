@@ -109,6 +109,15 @@ export const GRADIENTS = {
   scorePanel: ['#101535', '#161c48'] as const,
   tabBar: ['#141940', '#0f1430'] as const,
 
+  // Synthwave scene gradients
+  synthwave: {
+    sky: ['#0a0020', '#1a0533', '#3d1055', '#2a0845', '#150030'] as const,
+    sun: ['#00e5ff', '#00d4ff', '#c850c0', '#ff6ec7', '#ff4081'] as const,
+    sunInner: ['rgba(0,228,255,0.9)', 'rgba(0,212,255,0.6)', 'rgba(200,80,192,0.4)', 'rgba(255,110,199,0.2)'] as const,
+    ground: ['#1a0533', '#0d0020', '#060010'] as const,
+    gridLine: ['rgba(0,212,255,0.5)', 'rgba(200,80,192,0.3)', 'rgba(255,64,129,0.1)'] as const,
+  },
+
   // New premium gradients
   tileSurface: ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.02)'] as const,
   glassOverlay: ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.0)'] as const,

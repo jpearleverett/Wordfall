@@ -682,17 +682,24 @@ export function GameScreen({
         )}
       </View>
 
-      {/* Booster bar - always rendered to reserve space, hidden when empty */}
+      {/* Booster bar - shelf with styled icon cards */}
       <View style={[
         styles.boosterBar,
         !(hasAnyBoosters && state.status === 'playing') && styles.boosterBarHidden,
       ]}>
+        <View style={styles.boosterShelf}>
           {state.boosterCounts.shuffleFiller > 0 && (
             <Pressable
               style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
               onPress={handleShuffle}
             >
-              <Text style={styles.boosterIcon}>🔀</Text>
+              <LinearGradient
+                colors={['rgba(168, 85, 247, 0.25)', 'rgba(168, 85, 247, 0.08)'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+              />
+              <View style={styles.boosterIconWrap}>
+                <Ionicons name="shuffle" size={24} color={COLORS.purple} />
+              </View>
               <Text style={styles.boosterLabel}>Shuffle</Text>
               <View style={styles.boosterCount}>
                 <Text style={styles.boosterCountText}>{state.boosterCounts.shuffleFiller}</Text>
@@ -708,7 +715,13 @@ export function GameScreen({
               ]}
               onPress={handleFreezeToggle}
             >
-              <Text style={styles.boosterIcon}>❄️</Text>
+              <LinearGradient
+                colors={['rgba(0, 212, 255, 0.25)', 'rgba(0, 212, 255, 0.08)'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+              />
+              <View style={styles.boosterIconWrap}>
+                <Ionicons name="snow" size={24} color={COLORS.accent} />
+              </View>
               <Text style={styles.boosterLabel}>Freeze</Text>
               <View style={styles.boosterCount}>
                 <Text style={styles.boosterCountText}>{state.boosterCounts.freezeColumn}</Text>
@@ -720,13 +733,20 @@ export function GameScreen({
               style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
               onPress={handlePreviewToggle}
             >
-              <Text style={styles.boosterIcon}>👁️</Text>
+              <LinearGradient
+                colors={['rgba(0, 212, 255, 0.25)', 'rgba(0, 212, 255, 0.08)'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+              />
+              <View style={styles.boosterIconWrap}>
+                <Ionicons name="eye" size={24} color={COLORS.accent} />
+              </View>
               <Text style={styles.boosterLabel}>Preview</Text>
               <View style={styles.boosterCount}>
                 <Text style={styles.boosterCountText}>{state.boosterCounts.boardPreview}</Text>
               </View>
             </Pressable>
           )}
+        </View>
       </View>
 
       {/* Completion overlay */}
@@ -1100,47 +1120,59 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
   },
   boosterBar: {
-    flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     marginTop: 2,
     marginBottom: 2,
-    height: 52,
+    height: 80,
   },
   boosterBarHidden: {
     opacity: 0,
   },
+  boosterShelf: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(10, 0, 30, 0.6)',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
   boosterButton: {
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    minWidth: 64,
+    borderColor: 'rgba(255,255,255,0.12)',
+    minWidth: 80,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   boosterActive: {
     borderColor: 'rgba(0, 212, 255, 0.5)',
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
     shadowColor: COLORS.accent,
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
   },
   boosterPressed: {
-    transform: [{ scale: 0.9 }],
-    opacity: 0.75,
+    transform: [{ scale: 0.92 }],
+    opacity: 0.8,
   },
-  boosterIcon: {
-    fontSize: 20,
-    marginBottom: 2,
+  boosterIconWrap: {
+    marginBottom: 4,
   },
   boosterLabel: {
     fontFamily: FONTS.bodySemiBold,
@@ -1153,14 +1185,14 @@ const styles = StyleSheet.create({
     top: -4,
     right: -4,
     backgroundColor: COLORS.accent,
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 3,
-    borderWidth: 1,
-    borderColor: COLORS.bg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(10, 0, 30, 0.8)',
   },
   boosterCountText: {
     color: '#fff',
