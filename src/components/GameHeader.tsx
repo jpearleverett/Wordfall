@@ -286,22 +286,22 @@ const styles = StyleSheet.create({
   },
   batteryContainer: {
     position: 'relative',
-    width: 140,
-    height: 42,
+    width: 180,
+    height: 50,
     alignSelf: 'flex-start',
   },
   batteryShell: {
     position: 'absolute',
-    width: 140,
-    height: 42,
+    width: 180,
+    height: 50,
   },
   batteryFillContainer: {
     position: 'absolute',
-    top: 7,
-    left: 8,
-    width: 108,
-    height: 28,
-    borderRadius: 5,
+    top: 8,
+    left: 10,
+    width: 140,
+    height: 34,
+    borderRadius: 6,
     overflow: 'hidden',
   },
   batteryFill: {
@@ -324,9 +324,9 @@ const styles = StyleSheet.create({
   },
   batteryText: {
     color: COLORS.textPrimary,
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
   },
   modeIcon: {
     fontSize: 12,
