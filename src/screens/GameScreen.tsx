@@ -693,7 +693,7 @@ export function GameScreen({
         <Image
           source={LOCAL_IMAGES.shelfBooster}
           style={styles.boosterShelfImage}
-          resizeMode="contain"
+          resizeMode="stretch"
         />
         <View style={styles.boosterShelf}>
           {state.boosterCounts.shuffleFiller > 0 && (
@@ -1153,8 +1153,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     left: 0,
-    right: 0,
-    height: 60,
+    width: '100%',
+    height: 50,
     opacity: 0.85,
   },
   boosterShelf: {

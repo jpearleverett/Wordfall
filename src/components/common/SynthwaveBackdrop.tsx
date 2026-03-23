@@ -107,7 +107,7 @@ export function SynthwaveBackdrop() {
       {/* Synthwave background image — local asset */}
       <Image
         source={LOCAL_IMAGES.bgGameplay}
-        style={StyleSheet.absoluteFill}
+        style={styles.bgImage}
         resizeMode="cover"
       />
 
@@ -172,6 +172,13 @@ const styles = StyleSheet.create({
     borderRadius: SCREEN_WIDTH * 0.4,
     backgroundColor: 'rgba(0, 200, 255, 0.25)',
     left: (SCREEN_WIDTH - SCREEN_WIDTH * 1.2) / 2,
+  },
+  bgImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
   },
   bottomFade: {
     position: 'absolute',
