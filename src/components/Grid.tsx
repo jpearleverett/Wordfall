@@ -6,6 +6,7 @@ import {
   UIManager,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   GestureDetector,
   Gesture,
@@ -203,6 +204,14 @@ export function GameGrid({
 
   return (
     <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}>
+      <LinearGradient
+        colors={['rgba(124, 242, 255, 0.42)', 'rgba(197, 117, 255, 0.26)', 'rgba(110, 242, 255, 0.18)'] as [string, string, string]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
+      />
+      <View style={styles.outerInset} />
+      <View style={styles.gridAura} />
       <GestureDetector gesture={composedGesture}>
         <View
           ref={gridRef}
@@ -254,13 +263,36 @@ const styles = StyleSheet.create({
   outerWrapper: {
     alignSelf: 'center',
     overflow: 'hidden',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(33, 18, 73, 0.18)',
+    shadowColor: '#58efff',
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  outerInset: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    right: 2,
+    bottom: 2,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  gridAura: {
+    position: 'absolute',
+    left: '12%',
+    right: '12%',
+    top: '8%',
+    height: '22%',
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 120, 226, 0.12)',
   },
   gridContainer: {
     flexDirection: 'row',
     padding: CELL_GAP / 2,
     overflow: 'hidden',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(10, 8, 38, 0.24)',
   },
   column: {
     flexDirection: 'column',

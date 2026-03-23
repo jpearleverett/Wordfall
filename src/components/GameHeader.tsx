@@ -78,37 +78,42 @@ export function GameHeader({
     <View style={[styles.wrapper, { paddingTop: Math.max(insets.top, 6) + 4 }]}>
       <View style={styles.chromeCard}>
         <LinearGradient
-          colors={GRADIENTS.header as unknown as [string, string, ...string[]]}
+          colors={['rgba(31, 23, 83, 0.92)', 'rgba(18, 12, 54, 0.96)', 'rgba(11, 9, 35, 0.98)'] as [string, string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
         />
-        {/* Glass top edge highlight */}
         <LinearGradient
-          colors={['rgba(255,255,255,0.08)', 'transparent'] as [string, string]}
+          colors={['rgba(255,255,255,0.16)', 'rgba(255,255,255,0.02)', 'transparent'] as [string, string, string]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={styles.glassEdge}
         />
-        {/* Mode-colored ambient glow */}
+        <View style={styles.outerChrome} />
         <View style={[styles.chromeGlow, { backgroundColor: `${modeConfig.color}20` }]} />
 
         <View style={styles.topRow}>
-          {/* Back button with glass effect */}
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
             onPress={onBack}
           >
             <LinearGradient
-              colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'] as [string, string]}
+              colors={['rgba(116, 146, 255, 0.28)', 'rgba(34, 30, 88, 0.94)', 'rgba(14, 13, 48, 0.98)'] as [string, string, string]}
               style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
             />
+            <View style={styles.buttonInnerStroke} />
             <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
           </Pressable>
 
-          {/* Center: mode badge + progress */}
           <View style={styles.centerBlock}>
             <View style={[styles.modeBadge, { borderColor: `${modeConfig.color}55` }]}>
+              <LinearGradient
+                colors={['rgba(137, 255, 255, 0.88)', 'rgba(41, 211, 255, 0.65)', 'rgba(20, 118, 198, 0.35)'] as [string, string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modeBatteryCapLeft}
+              />
+              <View style={styles.modeBatteryCapRight} />
               <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
               <Text style={styles.modeText}>{modeLabel}</Text>
               <View style={styles.progressDivider} />
@@ -120,6 +125,7 @@ export function GameHeader({
 
           {/* Score with animated pop */}
           <View style={styles.scoreBlock}>
+            <View style={styles.scoreBeam} />
             <Animated.Text
               style={[
                 styles.scoreValue,
@@ -148,9 +154,10 @@ export function GameHeader({
                 disabled={undosLeft <= 0}
               >
                 <LinearGradient
-                  colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
+                  colors={['rgba(113, 139, 252, 0.24)', 'rgba(35, 30, 89, 0.94)', 'rgba(11, 10, 38, 0.98)'] as [string, string, string]}
                   style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
                 />
+                <View style={styles.buttonInnerStroke} />
                 <Ionicons name="arrow-undo" size={18} color={COLORS.textPrimary} />
                 {undosLeft > 0 && !modeConfig.rules.unlimitedUndo && (
                   <View style={styles.countBadge}>
@@ -172,10 +179,10 @@ export function GameHeader({
                 disabled={hintsLeft <= 0}
               >
                 <LinearGradient
-                  colors={['rgba(255,215,0,0.18)', 'rgba(255,215,0,0.06)'] as [string, string]}
+                  colors={['rgba(75, 41, 103, 0.96)', 'rgba(30, 24, 72, 0.98)', 'rgba(11, 10, 38, 0.98)'] as [string, string, string]}
                   style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
                 />
-                {/* Glow beam from bulb */}
+                <View style={[styles.buttonInnerStroke, styles.hintInnerStroke]} />
                 {hintsLeft > 0 && (
                   <View style={styles.hintGlow} />
                 )}
@@ -192,11 +199,10 @@ export function GameHeader({
 
         {/* Animated progress bar */}
         <View style={styles.progressTrack}>
+          <View style={styles.progressTrackInner} />
           <Animated.View style={[styles.progressFill, { width: progressWidth as any, backgroundColor: modeConfig.color }]}>
-            {/* Shimmer on progress fill */}
             <View style={styles.progressShimmer} />
           </Animated.View>
-          {/* Glow dot at progress tip */}
           <Animated.View
             style={[
               styles.progressGlowDot,
@@ -221,8 +227,8 @@ const styles = StyleSheet.create({
   },
   chromeCard: {
     borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(149, 173, 255, 0.22)',
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 4,
@@ -232,6 +238,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 16,
     elevation: 14,
+  },
+  outerChrome: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    right: 2,
+    bottom: 2,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   glassEdge: {
     position: 'absolute',
@@ -262,8 +278,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(180, 220, 255, 0.22)',
     overflow: 'hidden',
+    shadowColor: 'rgba(105, 157, 255, 0.55)',
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  buttonInnerStroke: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    right: 2,
+    bottom: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  hintInnerStroke: {
+    borderColor: 'rgba(255, 112, 255, 0.28)',
   },
   backText: {
     color: COLORS.textPrimary,
@@ -278,12 +311,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: 999,
-    paddingHorizontal: 10,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
+    backgroundColor: 'rgba(22, 18, 74, 0.62)',
+    borderWidth: 1.1,
     alignSelf: 'flex-start',
+    overflow: 'hidden',
+    shadowColor: '#75edff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+  },
+  modeBatteryCapLeft: {
+    position: 'absolute',
+    left: 5,
+    top: 4,
+    bottom: 4,
+    width: 22,
+    borderRadius: 6,
+  },
+  modeBatteryCapRight: {
+    position: 'absolute',
+    right: -4,
+    top: 11,
+    width: 6,
+    height: 14,
+    borderRadius: 4,
+    backgroundColor: 'rgba(175, 200, 255, 0.45)',
   },
   modeIcon: {
     fontSize: 12,
@@ -297,7 +352,7 @@ const styles = StyleSheet.create({
   progressDivider: {
     width: 1,
     height: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     marginHorizontal: 2,
   },
   progressCount: {
@@ -310,13 +365,30 @@ const styles = StyleSheet.create({
     gap: 4,
     alignSelf: 'center',
     flexShrink: 0,
+    position: 'relative',
+    minWidth: 34,
+    justifyContent: 'center',
+  },
+  scoreBeam: {
+    position: 'absolute',
+    bottom: -7,
+    left: '50%',
+    marginLeft: -16,
+    width: 32,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(120, 245, 255, 0.28)',
+    shadowColor: '#7cf3ff',
+    shadowOpacity: 0.85,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
   },
   scoreValue: {
-    color: COLORS.gold,
-    fontSize: 18,
+    color: '#79f0ff',
+    fontSize: 26,
     fontFamily: 'SpaceGrotesk_700Bold',
-    textShadowColor: COLORS.goldGlow,
-    textShadowRadius: 14,
+    textShadowColor: 'rgba(121, 240, 255, 0.85)',
+    textShadowRadius: 16,
   },
   comboChip: {
     backgroundColor: 'rgba(255, 82, 82, 0.2)',
@@ -344,23 +416,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(180, 220, 255, 0.18)',
     overflow: 'visible',
   },
   hintButton: {
-    borderColor: 'rgba(255, 215, 0, 0.35)',
-    shadowColor: COLORS.gold,
+    borderColor: 'rgba(255, 132, 249, 0.45)',
+    shadowColor: 'rgba(255, 95, 238, 0.9)',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
+    shadowOpacity: 0.7,
+    shadowRadius: 10,
   },
   hintGlow: {
     position: 'absolute',
-    top: -8,
-    left: '20%' as unknown as number,
-    right: '20%' as unknown as number,
-    height: 16,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    top: -4,
+    left: 6,
+    right: 6,
+    height: 14,
+    backgroundColor: 'rgba(255, 112, 240, 0.22)',
     borderRadius: 8,
   },
   actionDisabled: {
@@ -373,7 +445,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -4,
-    backgroundColor: COLORS.accent,
+    backgroundColor: '#43f1ff',
     borderRadius: 9,
     minWidth: 18,
     height: 18,
@@ -391,22 +463,32 @@ const styles = StyleSheet.create({
     shadowColor: COLORS.gold,
   },
   countBadgeText: {
-    color: COLORS.bg,
+    color: '#16203d',
     fontSize: 10,
     fontFamily: 'SpaceGrotesk_700Bold',
   },
   progressTrack: {
     height: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(112, 110, 180, 0.2)',
     overflow: 'visible',
     marginTop: 10,
     position: 'relative',
+  },
+  progressTrackInner: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
   },
   progressFill: {
     height: '100%',
     borderRadius: 999,
     overflow: 'hidden',
+    shadowColor: '#62f5ff',
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
   },
   progressShimmer: {
     position: 'absolute',
@@ -414,7 +496,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.45)',
     borderRadius: 999,
   },
   progressGlowDot: {
