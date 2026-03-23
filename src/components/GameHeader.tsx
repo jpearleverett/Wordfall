@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, FONTS } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { GameMode } from '../types';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface GameHeaderProps {
   level: number;
@@ -103,18 +104,27 @@ export function GameHeader({
               colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'] as [string, string]}
               style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
             />
-            <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
+            <Image source={LOCAL_IMAGES.iconBack} style={{ width: 20, height: 20 }} resizeMode="contain" />
           </Pressable>
 
-          {/* Center: mode badge + progress */}
+          {/* Center: battery progress indicator */}
           <View style={styles.centerBlock}>
-            <View style={[styles.modeBadge, { borderColor: `${modeConfig.color}55` }]}>
-              <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
-              <Text style={styles.modeText}>{modeLabel}</Text>
-              <View style={styles.progressDivider} />
-              <Text style={[styles.progressCount, { color: modeConfig.color }]}>
-                {foundWords}/{totalWords}
-              </Text>
+            <View style={styles.batteryContainer}>
+              {/* Battery shell */}
+              <Image source={LOCAL_IMAGES.iconBattery} style={styles.batteryShell} resizeMode="contain" />
+              {/* Battery fill (width proportional to progress) */}
+              <View style={styles.batteryFillContainer}>
+                <View style={[styles.batteryFill, { width: `${Math.max(progress, 4)}%` }]} />
+              </View>
+              {/* Label overlay */}
+              <View style={styles.batteryLabelOverlay}>
+                <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
+                <Text style={styles.batteryText}>{modeLabel}</Text>
+                <View style={styles.progressDivider} />
+                <Text style={[styles.progressCount, { color: modeConfig.color }]}>
+                  {foundWords}/{totalWords}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -151,7 +161,7 @@ export function GameHeader({
                   colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
                   style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
                 />
-                <Ionicons name="arrow-undo" size={18} color={COLORS.textPrimary} />
+                <Image source={LOCAL_IMAGES.iconUndo} style={{ width: 18, height: 18 }} resizeMode="contain" />
                 {undosLeft > 0 && !modeConfig.rules.unlimitedUndo && (
                   <View style={styles.countBadge}>
                     <Text style={styles.countBadgeText}>{undosLeft}</Text>
@@ -179,7 +189,7 @@ export function GameHeader({
                 {hintsLeft > 0 && (
                   <View style={styles.hintGlow} />
                 )}
-                <Ionicons name="bulb" size={18} color={COLORS.gold} />
+                <Image source={LOCAL_IMAGES.iconHint} style={{ width: 22, height: 22 }} resizeMode="contain" />
                 {hintsLeft > 0 && (
                   <View style={[styles.countBadge, styles.hintCountBadge]}>
                     <Text style={styles.countBadgeText}>{hintsLeft}</Text>
@@ -274,16 +284,49 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  modeBadge: {
+  batteryContainer: {
+    position: 'relative',
+    width: 140,
+    height: 42,
+    alignSelf: 'flex-start',
+  },
+  batteryShell: {
+    position: 'absolute',
+    width: 140,
+    height: 42,
+  },
+  batteryFillContainer: {
+    position: 'absolute',
+    top: 7,
+    left: 8,
+    width: 108,
+    height: 28,
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  batteryFill: {
+    height: '100%',
+    backgroundColor: COLORS.accent,
+    borderRadius: 5,
+    opacity: 0.75,
+  },
+  batteryLabelOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    alignSelf: 'flex-start',
+    paddingRight: 12,
+  },
+  batteryText: {
+    color: COLORS.textPrimary,
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.4,
   },
   modeIcon: {
     fontSize: 12,
