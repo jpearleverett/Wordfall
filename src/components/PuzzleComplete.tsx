@@ -290,7 +290,7 @@ export function PuzzleComplete({
 
   const borderColors = perfectRun
     ? [COLORS.gold, 'rgba(255,215,0,0.6)', COLORS.gold]
-    : [COLORS.accent, 'rgba(255,45,149,0.5)', COLORS.accent];
+    : [COLORS.accent, 'rgba(0,212,255,0.5)', COLORS.accent];
 
   // Constrain max height to fit screen
   const maxCardHeight = screenHeight * 0.85;
@@ -409,7 +409,7 @@ export function PuzzleComplete({
                 <Text style={styles.rewardsTitle}>Rewards</Text>
                 <View style={styles.rewardRow}>
                   <LinearGradient
-                    colors={['#220044', '#2d0060'] as [string, string, ...string[]]}
+                    colors={['#1a2050', '#222860'] as [string, string, ...string[]]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.rewardChip}
@@ -829,10 +829,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 45, 149, 0.08)',
+    backgroundColor: 'rgba(0, 212, 255, 0.08)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 45, 149, 0.15)',
+    borderColor: 'rgba(0, 212, 255, 0.15)',
   },
   friendCompareIcon: {
     fontSize: 14,

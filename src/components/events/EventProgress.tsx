@@ -65,7 +65,7 @@ export default function EventProgress({
             ]}
           >
             <LinearGradient
-              colors={['#ff6eb4', '#ff2d95', '#cc0066']}
+              colors={['#00e5ff', '#00bbdd', '#0099cc']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.fill}

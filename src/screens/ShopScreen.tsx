@@ -150,7 +150,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={['#220044', '#1a0033']}
+              colors={['#1e2352', '#181d42']}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}

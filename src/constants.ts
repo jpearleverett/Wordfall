@@ -10,137 +10,111 @@ export const MAX_GRID_WIDTH = SCREEN_WIDTH - GRID_PADDING * 2;
 export const CELL_SIZE = (col: number) =>
   Math.floor((MAX_GRID_WIDTH - CELL_GAP * (col - 1)) / col);
 
-// Colors — Miami synthwave neon palette
+// Colors — premium palette with rich jewel tones and luminous accents
 export const COLORS = {
-  // Backgrounds — deep purple-black
-  bg: '#0a0012',
-  bgLight: '#160028',
-  surface: '#1a0033',
-  surfaceLight: '#2d0060',
+  bg: '#060918',
+  bgLight: '#0d1230',
+  surface: '#141940',
+  surfaceLight: '#1e2558',
 
-  // Tiles
-  cellDefault: '#2a1045',
-  cellSelected: '#ff2d95',
+  cellDefault: '#232a5e',
+  cellSelected: '#00d4ff',
   cellHint: '#ffd700',
-  cellFound: '#0a2a1a',
+  cellFound: '#1a3a2a',
 
-  // Text — warm white with pink tint
-  textPrimary: '#fff0f5',
-  textSecondary: '#b899cc',
-  textMuted: '#6b4f80',
+  textPrimary: '#f0f2ff',
+  textSecondary: '#9099cc',
+  textMuted: '#525b8a',
 
-  // Primary accent — hot pink / magenta (THE synthwave signature)
-  accent: '#ff2d95',
-  accentLight: '#ff6eb4',
-  accentDark: '#cc0066',
-  accentGlow: 'rgba(255, 45, 149, 0.55)',
-
-  // Gold — stays (synthwave-compatible)
+  accent: '#00d4ff',
+  accentLight: '#66e8ff',
+  accentDark: '#0088aa',
+  accentGlow: 'rgba(0, 212, 255, 0.50)',
   gold: '#ffd700',
   goldLight: '#ffe566',
   goldGlow: 'rgba(255, 215, 0, 0.50)',
-
-  // Green — neon mint
-  green: '#00ffaa',
-  greenGlow: 'rgba(0, 255, 170, 0.45)',
-
-  // Coral — warm neon orange
-  coral: '#ff6b2b',
-  coralGlow: 'rgba(255, 107, 43, 0.45)',
-
-  // Purple — electric violet
-  purple: '#c77dff',
-  purpleLight: '#e0b0ff',
-  purpleGlow: 'rgba(199, 125, 255, 0.50)',
-
-  // Orange — neon
+  green: '#00e676',
+  greenGlow: 'rgba(0, 230, 118, 0.45)',
+  coral: '#ff5252',
+  coralGlow: 'rgba(255, 82, 82, 0.45)',
+  purple: '#b366ff',
+  purpleLight: '#d9a3ff',
+  purpleGlow: 'rgba(179, 102, 255, 0.45)',
   orange: '#ff9100',
   orangeGlow: 'rgba(255, 145, 0, 0.45)',
+  teal: '#1de9b6',
+  tealGlow: 'rgba(29, 233, 182, 0.45)',
+  pink: '#ff4081',
+  pinkGlow: 'rgba(255, 64, 129, 0.40)',
 
-  // Teal — electric cyan (secondary synthwave accent)
-  teal: '#00fff5',
-  tealGlow: 'rgba(0, 255, 245, 0.50)',
+  wordFound: '#00e676',
+  wordPending: '#9099cc',
+  wordActive: '#00d4ff',
 
-  // Pink — full magenta
-  pink: '#ff00ff',
-  pinkGlow: 'rgba(255, 0, 255, 0.55)',
-
-  // Word states
-  wordFound: '#00ffaa',
-  wordPending: '#b899cc',
-  wordActive: '#ff2d95',
-
-  // Stars
   star: '#ffd700',
-  starEmpty: '#2a1045',
+  starEmpty: '#232a5e',
 
-  // Buttons
-  buttonPrimary: '#ff2d95',
-  buttonSecondary: '#2d0060',
-  buttonDanger: '#ff6b2b',
+  buttonPrimary: '#00d4ff',
+  buttonSecondary: '#1e2558',
+  buttonDanger: '#ff5252',
   buttonGold: '#ffd700',
 
-  // Rarity colors
-  rarityCommon: '#b899cc',
-  rarityRare: '#00fff5',
-  rarityEpic: '#c77dff',
+  // Rarity colors — richer saturation
+  rarityCommon: '#9099cc',
+  rarityRare: '#00d4ff',
+  rarityEpic: '#b366ff',
   rarityLegendary: '#ffd700',
 
   // Club tier colors
   tierBronze: '#d4893a',
   tierSilver: '#d0d8e8',
   tierGold: '#ffd700',
-  tierDiamond: '#00fff5',
+  tierDiamond: '#a0f0ff',
 
   // Tab bar
-  tabActive: '#ff2d95',
-  tabInactive: '#6b4f80',
+  tabActive: '#00d4ff',
+  tabInactive: '#525b8a',
 
-  // Extended tokens — Synthwave Neon design system
-  surface2: '#2d0060',
-  surfaceGlass: 'rgba(26, 0, 51, 0.85)',
+  // Extended tokens — Neon Intelligence design system
+  surface2: '#1e2558',
+  surfaceGlass: 'rgba(20, 25, 64, 0.85)',
   borderSubtle: 'rgba(255,255,255,0.06)',
   borderMedium: 'rgba(255,255,255,0.12)',
-  borderAccent: 'rgba(255,45,149,0.25)',
-  textTertiary: '#4a2d6b',
+  borderAccent: 'rgba(0,212,255,0.25)',
+  textTertiary: '#3d4570',
 };
 
-// Gradient presets for LinearGradient — synthwave neon multi-stop gradients
+// Gradient presets for LinearGradient — premium multi-stop gradients
 export const GRADIENTS = {
   tile: {
-    default: ['#1e0a35', '#2a1248', '#220e3d'] as const,
-    selected: ['#ff2d95', '#e6006e', '#cc0066'] as const,
-    valid: ['#00ffaa', '#00cc88', '#009966'] as const,
+    default: ['#1a2058', '#252d70', '#1e2460'] as const,
+    selected: ['#00e5ff', '#00b4d8', '#0088aa'] as const,
+    valid: ['#00e676', '#00c853', '#009e42'] as const,
     hint: ['#ffe066', '#ffd700', '#f0a500'] as const,
-    frozen: ['#0a1a3a', '#0e2245', '#081a35'] as const,
+    frozen: ['#1a3a6c', '#1e3560', '#162d50'] as const,
   },
   button: {
-    primary: ['#ff6eb4', '#ff2d95', '#cc0066'] as const,
+    primary: ['#00e5ff', '#00b4d8', '#0088cc'] as const,
     gold: ['#ffe066', '#ffd700', '#f0a500'] as const,
-    danger: ['#ff8855', '#ff6b2b', '#ee4400'] as const,
-    green: ['#66ffcc', '#00ffaa', '#00cc88'] as const,
+    danger: ['#ff6b6b', '#ff5252', '#ee3a3a'] as const,
+    green: ['#69f0ae', '#00e676', '#00c853'] as const,
   },
-  surface: ['#180030', '#100020'] as const,
-  surfaceCard: ['#220044', '#180030'] as const,
-  header: ['#220044', '#120024'] as const,
-  bg: ['#050008', '#0a0018', '#0a0012'] as const,
-  grid: ['#120028', '#1a0038', '#150030'] as const,
-  gridBorder: ['rgba(255,45,149,0.30)', 'rgba(199,125,255,0.22)', 'rgba(255,45,149,0.15)'] as const,
-  victoryCard: ['#2d0060', '#220050', '#1a0040'] as const,
-  scorePanel: ['#140028', '#1a0035'] as const,
-  tabBar: ['#1a0033', '#120024'] as const,
+  surface: ['#161c48', '#101538'] as const,
+  surfaceCard: ['#1a2050', '#141a3e'] as const,
+  header: ['#1a2050', '#0f1430'] as const,
+  bg: ['#040714', '#080d22', '#060918'] as const,
+  grid: ['#0e1335', '#141a42', '#10153a'] as const,
+  gridBorder: ['rgba(0,212,255,0.22)', 'rgba(179,102,255,0.18)', 'rgba(0,212,255,0.12)'] as const,
+  victoryCard: ['#1a2058', '#161d4e', '#121840'] as const,
+  scorePanel: ['#101535', '#161c48'] as const,
+  tabBar: ['#141940', '#0f1430'] as const,
 
-  // Premium overlays
+  // New premium gradients
   tileSurface: ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.02)'] as const,
   glassOverlay: ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.0)'] as const,
-  boardGlow: ['rgba(255,45,149,0.08)', 'rgba(199,125,255,0.05)', 'transparent'] as const,
+  boardGlow: ['rgba(0,212,255,0.08)', 'rgba(179,102,255,0.05)', 'transparent'] as const,
   goldShine: ['rgba(255,230,102,0.3)', 'rgba(255,215,0,0.1)', 'transparent'] as const,
-  celebrationOverlay: ['rgba(255,45,149,0.10)', 'transparent', 'rgba(199,125,255,0.08)'] as const,
-
-  // Synthwave-specific gradients
-  synthwaveSun: ['#ffd700', '#ff9100', '#ff2d95', '#cc0066', '#6b0080'] as const,
-  synthwaveSky: ['#0a0012', '#120024', '#2d0060', '#6b0080'] as const,
-  neonGridLine: ['rgba(255,45,149,0.0)', 'rgba(255,45,149,0.3)', 'rgba(255,45,149,0.0)'] as const,
+  celebrationOverlay: ['rgba(0,212,255,0.08)', 'transparent', 'rgba(179,102,255,0.06)'] as const,
 };
 
 // Shadow presets
@@ -169,9 +143,9 @@ export const SHADOWS = {
   glow: (color: string) => ({
     shadowColor: color,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.7,
-    shadowRadius: 20,
-    elevation: 14,
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
   }),
 };
 
@@ -572,7 +546,7 @@ export const EVENT_SCHEDULE = {
   dailyResetHourUTC: 0,
 };
 
-// Typography — Synthwave Neon design system
+// Typography — Neon Intelligence design system
 // Fonts: SpaceGrotesk (display) + Inter (body)
 export const FONTS = {
   display: 'SpaceGrotesk_700Bold',

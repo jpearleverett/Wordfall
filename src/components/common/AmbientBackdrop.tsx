@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, DimensionValue, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { GRADIENTS, SCREEN_WIDTH } from '../../constants';
+import { COLORS, GRADIENTS } from '../../constants';
 import { CachedImage } from './CachedImage';
 import { BACKGROUND_ASSETS } from '../../utils/assetUrls';
 
@@ -114,135 +114,6 @@ function TwinklingStar({
   );
 }
 
-// ─── Synthwave Sun ──────────────────────────────────────────────────────
-// The iconic retrowave setting sun with horizontal stripe cutouts
-function SynthwaveSun() {
-  const sunSize = 180;
-  const stripeCount = 6;
-  const stripeGap = 3;
-
-  return (
-    <View style={styles.sunContainer} pointerEvents="none">
-      {/* Outer glow ring */}
-      <View style={[styles.sunGlow, { width: sunSize + 80, height: (sunSize + 80) / 2 }]}>
-        <LinearGradient
-          colors={['rgba(255,145,0,0.15)', 'rgba(255,45,149,0.12)', 'rgba(107,0,128,0.05)', 'transparent']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={{ width: sunSize + 80, height: sunSize + 80, borderRadius: (sunSize + 80) / 2 }}
-        />
-      </View>
-
-      {/* Sun body — clipped to top half */}
-      <View style={[styles.sunBody, { width: sunSize, height: sunSize / 2 }]}>
-        <View style={{ width: sunSize, height: sunSize, borderRadius: sunSize / 2, overflow: 'hidden' }}>
-          <LinearGradient
-            colors={GRADIENTS.synthwaveSun as unknown as [string, string, ...string[]]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={{ width: sunSize, height: sunSize }}
-          />
-
-          {/* Horizontal stripe cutouts — classic retrowave look */}
-          {Array.from({ length: stripeCount }, (_, i) => {
-            const yPos = sunSize * 0.35 + i * (sunSize * 0.11);
-            const stripeHeight = stripeGap + i * 0.8;
-            return (
-              <View
-                key={i}
-                style={{
-                  position: 'absolute',
-                  top: yPos,
-                  left: 0,
-                  right: 0,
-                  height: stripeHeight,
-                  backgroundColor: '#0a0012',
-                }}
-              />
-            );
-          })}
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// ─── Perspective Grid Floor ─────────────────────────────────────────────
-// The classic synthwave receding grid — all static Views, zero perf cost
-function PerspectiveGrid() {
-  const gridColor = 'rgba(255, 45, 149, 0.18)';
-  const gridColorBright = 'rgba(255, 45, 149, 0.30)';
-
-  // Horizontal lines with exponentially increasing spacing
-  const hLines = useMemo(() => {
-    const lines = [];
-    let y = 0;
-    for (let i = 0; i < 10; i++) {
-      const spacing = 6 + i * i * 1.8;
-      y += spacing;
-      const opacity = 0.12 + (i / 10) * 0.22;
-      lines.push({ y, opacity, key: i });
-    }
-    return lines;
-  }, []);
-
-  // Vertical lines fanning out from center vanishing point
-  const vLines = useMemo(() => {
-    const angles = [-32, -22, -14, -7, 0, 7, 14, 22, 32];
-    return angles.map((angle, i) => ({ angle, key: i }));
-  }, []);
-
-  return (
-    <View style={styles.gridFloor} pointerEvents="none">
-      {/* Horizon glow line */}
-      <View style={styles.horizonGlow}>
-        <LinearGradient
-          colors={['transparent', gridColorBright, 'transparent'] as [string, string, string]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={{ width: '100%', height: 2 }}
-        />
-      </View>
-
-      {/* Horizontal receding lines */}
-      {hLines.map((line) => (
-        <View
-          key={line.key}
-          style={{
-            position: 'absolute',
-            top: line.y,
-            left: 0,
-            right: 0,
-            height: 1,
-            backgroundColor: gridColor,
-            opacity: line.opacity,
-          }}
-        />
-      ))}
-
-      {/* Vertical converging lines */}
-      {vLines.map((line) => (
-        <View
-          key={line.key}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: SCREEN_WIDTH / 2 - 0.5,
-            width: 1,
-            height: 220,
-            backgroundColor: gridColor,
-            opacity: 0.22,
-            transform: [
-              { rotate: `${line.angle}deg` },
-            ],
-            transformOrigin: 'top center',
-          }}
-        />
-      ))}
-    </View>
-  );
-}
-
 // ─── Background image for variant ───────────────────────────────────────
 function getBackgroundUri(variant: string): string | null {
   switch (variant) {
@@ -265,7 +136,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
   const isGame = variant === 'game';
   const bgUri = getBackgroundUri(variant);
 
-  // 10 stars with synthwave neon colors
+  // Reduced from 32 to 10 stars for performance
   const stars = useMemo(
     () =>
       Array.from({ length: 10 }, (_, index) => ({
@@ -274,14 +145,14 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         left: `${2 + ((index * 23) % 94)}%` as DimensionValue,
         color:
           index % 5 === 0
-            ? '#ff6eb4'                      // hot pink
+            ? COLORS.goldLight
             : index % 4 === 0
-            ? '#e0b0ff'                      // lavender
+            ? COLORS.purpleLight
             : index % 3 === 0
-            ? '#00fff5'                      // electric cyan
+            ? COLORS.accentLight
             : index % 2 === 0
-            ? 'rgba(255,240,245,0.9)'        // warm white
-            : 'rgba(255,200,230,0.6)',       // soft pink
+            ? 'rgba(255,255,255,0.9)'
+            : 'rgba(255,255,255,0.6)',
         size: 1.5 + (index % 5) * 0.7,
         delay: (index * 320) % 3000,
         duration: 1200 + (index % 4) * 500,
@@ -291,7 +162,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
 
   return (
     <View pointerEvents="none" style={styles.container}>
-      {/* Deep synthwave background gradient */}
+      {/* Deep space background gradient */}
       <LinearGradient
         colors={GRADIENTS.bg as unknown as [string, string, ...string[]]}
         start={{ x: 0.5, y: 0 }}
@@ -299,27 +170,19 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Background image with purple-tinted overlay */}
+      {/* Background image with overlay */}
       {bgUri && (
         <CachedImage
           uri={bgUri}
-          overlayColor="rgba(10, 0, 18, 0.80)"
-          overlayOpacity={0.80}
+          overlayColor="rgba(6, 9, 24, 0.82)"
+          overlayOpacity={0.82}
           blurRadius={2}
         />
       )}
 
-      {/* Synthwave sky gradient — adds the purple horizon glow */}
-      <LinearGradient
-        colors={['transparent', 'rgba(107,0,128,0.08)', 'rgba(45,0,96,0.15)', 'rgba(107,0,128,0.06)']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Nebula orbs — hot pink and violet glow */}
+      {/* Nebula orbs — reduced from 5 to 2 for performance */}
       <NebulaOrb
-        color={isGame ? 'rgba(255,45,149,0.50)' : 'rgba(199,125,255,0.45)'}
+        color={isGame ? COLORS.accentGlow : COLORS.purpleGlow}
         size={280}
         top="-8%"
         left="58%"
@@ -329,7 +192,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         opacity={0.4}
       />
       <NebulaOrb
-        color={isGame ? 'rgba(199,125,255,0.45)' : 'rgba(255,45,149,0.50)'}
+        color={isGame ? COLORS.purpleGlow : COLORS.accentGlow}
         size={240}
         top="18%"
         left="-14%"
@@ -339,13 +202,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         opacity={0.35}
       />
 
-      {/* THE iconic synthwave sun — half-circle with horizontal stripes */}
-      <SynthwaveSun />
-
-      {/* Perspective grid floor — the classic receding neon grid lines */}
-      <PerspectiveGrid />
-
-      {/* Twinkling stars — neon pink, cyan, lavender */}
+      {/* Twinkling stars — reduced from 32 to 10 */}
       {stars.map((star) => (
         <TwinklingStar
           key={star.id}
@@ -358,9 +215,9 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         />
       ))}
 
-      {/* Bottom gradient fade — deep purple */}
+      {/* Bottom gradient fade for content readability */}
       <LinearGradient
-        colors={['transparent', 'rgba(10,0,18,0.5)'] as [string, string]}
+        colors={['transparent', 'rgba(6,9,24,0.4)'] as [string, string]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.bottomFade}
@@ -386,36 +243,5 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 200,
-  },
-  // Synthwave sun
-  sunContainer: {
-    position: 'absolute',
-    top: '48%',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  sunGlow: {
-    position: 'absolute',
-    overflow: 'hidden',
-    top: -20,
-  },
-  sunBody: {
-    overflow: 'hidden',
-  },
-  // Perspective grid floor
-  gridFloor: {
-    position: 'absolute',
-    top: '55%',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    overflow: 'hidden',
-  },
-  horizonGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
   },
 });

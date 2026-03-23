@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { FONTS } from '../../constants';
 
 const COLORS = {
-  accent: '#ff2d95',
+  accent: '#00d4ff',
   textPrimary: '#ffffff',
 };
 
