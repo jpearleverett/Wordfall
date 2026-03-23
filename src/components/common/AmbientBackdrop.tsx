@@ -120,6 +120,8 @@ function getBackgroundUri(variant: string): string | null {
   switch (variant) {
     case 'home':
       return BACKGROUND_ASSETS.homeBg;
+    case 'game':
+      return BACKGROUND_ASSETS.gameplayBg;
     case 'library':
       return BACKGROUND_ASSETS.libraryBg;
     case 'collections':
