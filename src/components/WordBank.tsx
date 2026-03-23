@@ -2,128 +2,80 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WordPlacement } from '../types';
-import { COLORS, GRADIENTS, FONTS } from '../constants';
+import { COLORS, FONTS } from '../constants';
 
 interface WordChipProps {
   wordPlacement: WordPlacement;
   currentWord: string;
   isValidWord: boolean;
-  index: number;
 }
 
-const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isValidWord, index }: WordChipProps) {
-  const foundAnim = useRef(new Animated.Value(0)).current;
+const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isValidWord }: WordChipProps) {
+  const foundAnim = useRef(new Animated.Value(wordPlacement.found ? 1 : 0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-  const wasFound = useRef(false);
-
   const isActive = !wordPlacement.found && currentWord === wordPlacement.word;
 
   useEffect(() => {
-    if (wordPlacement.found && !wasFound.current) {
-      wasFound.current = true;
-      Animated.sequence([
+    if (wordPlacement.found) {
+      Animated.parallel([
         Animated.spring(scaleAnim, {
-          toValue: 1.22,
-          friction: 3,
-          tension: 220,
+          toValue: 1.03,
+          friction: 5,
+          tension: 160,
           useNativeDriver: true,
         }),
-        Animated.parallel([
-          Animated.timing(foundAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.spring(scaleAnim, {
-            toValue: 1,
-            friction: 5,
-            useNativeDriver: true,
-          }),
-        ]),
+        Animated.timing(foundAnim, {
+          toValue: 1,
+          duration: 260,
+          useNativeDriver: true,
+        }),
       ]).start();
-    }
-  }, [wordPlacement.found]);
-
-  useEffect(() => {
-    if (isActive && isValidWord) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-          Animated.timing(glowAnim, { toValue: 0.5, duration: 350, useNativeDriver: true }),
-        ])
-      ).start();
-    } else if (isActive) {
-      Animated.timing(glowAnim, { toValue: 0.7, duration: 150, useNativeDriver: true }).start();
     } else {
-      glowAnim.stopAnimation();
-      Animated.timing(glowAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start();
+      Animated.spring(scaleAnim, {
+        toValue: isActive ? 1.05 : 1,
+        friction: 6,
+        useNativeDriver: true,
+      }).start();
     }
-  }, [isActive, isValidWord]);
-
-  const getChipStyle = () => {
-    if (wordPlacement.found) return styles.wordChipFound;
-    if (isActive && isValidWord) return styles.wordChipValid;
-    if (isActive) return styles.wordChipActive;
-    return null;
-  };
+  }, [foundAnim, isActive, scaleAnim, wordPlacement.found]);
 
   return (
     <Animated.View
       style={[
         styles.wordChip,
-        getChipStyle(),
+        wordPlacement.found && styles.wordChipFound,
+        isActive && !wordPlacement.found && (isValidWord ? styles.wordChipValid : styles.wordChipActive),
         { transform: [{ scale: scaleAnim }] },
       ]}
     >
-      {/* Background gradient + glass edge clipped to chip shape */}
-      <View style={styles.chipBackground}>
-        {wordPlacement.found ? (
-          <LinearGradient
-            colors={['rgba(0, 230, 118, 0.22)', 'rgba(0, 200, 83, 0.10)'] as [string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-        ) : (
-          <LinearGradient
-            colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-        )}
-        <View style={styles.chipGlassEdge} />
-      </View>
-
+      <LinearGradient
+        colors={
+          wordPlacement.found
+            ? ['rgba(59, 230, 255, 0.18)', 'rgba(255, 96, 224, 0.18)']
+            : ['rgba(90, 60, 150, 0.22)', 'rgba(45, 18, 88, 0.26)']
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View style={styles.chipGlassEdge} />
       <Text
         style={[
           styles.wordText,
           wordPlacement.found && styles.wordTextFound,
-          isActive && !isValidWord && styles.wordTextActive,
+          isActive && !wordPlacement.found && styles.wordTextActive,
           isActive && isValidWord && styles.wordTextValid,
         ]}
       >
         {wordPlacement.word}
       </Text>
-
-      {wordPlacement.found && (
-        <Animated.View style={[styles.checkContainer, { opacity: foundAnim }]}>
-          <LinearGradient
-            colors={[COLORS.green, COLORS.teal] as [string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}
-          />
-          <Text style={styles.checkMark}>✓</Text>
-        </Animated.View>
-      )}
-
-      {/* Letter count indicator with glass treatment */}
       {!wordPlacement.found && (
         <View style={styles.letterCount}>
           <Text style={styles.letterCountText}>{wordPlacement.word.length}</Text>
         </View>
+      )}
+      {wordPlacement.found && (
+        <Animated.View style={[styles.foundGlow, { opacity: foundAnim }]} />
       )}
     </Animated.View>
   );
@@ -136,80 +88,51 @@ interface WordBankProps {
 }
 
 export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
-  const wordAnim = useRef(new Animated.Value(0)).current;
-  const prevWord = useRef('');
+  const wordAnim = useRef(new Animated.Value(currentWord.length > 0 ? 1 : 0)).current;
 
-  // Animate current word text on change
   useEffect(() => {
-    if (currentWord !== prevWord.current) {
-      prevWord.current = currentWord;
-      if (currentWord.length > 0) {
-        wordAnim.setValue(0);
-        Animated.spring(wordAnim, {
-          toValue: 1,
-          friction: 5,
-          tension: 200,
-          useNativeDriver: true,
-        }).start();
-      }
-    }
-  }, [currentWord]);
+    Animated.spring(wordAnim, {
+      toValue: currentWord.length > 0 ? 1 : 0,
+      friction: 6,
+      tension: 170,
+      useNativeDriver: true,
+    }).start();
+  }, [currentWord, wordAnim]);
 
   return (
     <View style={styles.container}>
-      {/* Current forming word */}
       <View style={styles.currentWordContainer}>
         {currentWord.length > 0 ? (
-          <View style={styles.currentWordRow}>
-            <Animated.Text
-              style={[
-                styles.currentWord,
-                isValidWord && styles.currentWordValid,
-                {
-                  transform: [
-                    { scale: wordAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.9, 1.05, 1] }) },
-                  ],
-                  opacity: wordAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }),
-                },
-              ]}
-            >
-              {currentWord}
-            </Animated.Text>
-            {isValidWord && (
-              <View style={styles.validIndicator}>
-                <LinearGradient
-                  colors={[COLORS.green, COLORS.teal] as [string, string]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-                />
-                <Text style={styles.validIndicatorText}>✓</Text>
-              </View>
-            )}
-          </View>
+          <Animated.Text
+            style={[
+              styles.currentWord,
+              isValidWord && styles.currentWordValid,
+              {
+                opacity: wordAnim,
+                transform: [
+                  {
+                    scale: wordAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {currentWord}
+          </Animated.Text>
         ) : (
-          <Text style={styles.currentWordPlaceholder}>
-            Tap letters to spell a word
-          </Text>
+          <Text style={styles.currentWordPlaceholder}>Tap letters to spell a word</Text>
         )}
-        {/* Elegant underline with gradient */}
-        <View style={styles.underline}>
-          {currentWord.length > 0 && (
-            <LinearGradient
-              colors={
-                isValidWord
-                  ? ['rgba(0,230,118,0.7)', 'rgba(0,230,118,0.2)', 'rgba(0,230,118,0)'] as [string, string, string]
-                  : ['rgba(0,212,255,0.5)', 'rgba(0,212,255,0.15)', 'rgba(0,212,255,0)'] as [string, string, string]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.underlineFill}
-            />
-          )}
-        </View>
       </View>
 
-      {/* Target words - horizontally scrollable */}
+      <View style={styles.underlineWrap}>
+        <LinearGradient
+          colors={['rgba(0, 241, 255, 0)', 'rgba(0, 241, 255, 0.8)', 'rgba(255, 115, 225, 0.25)', 'rgba(255, 115, 225, 0)'] as [string, string, string, string]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.underline}
+        />
+      </View>
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -222,7 +145,6 @@ export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
             wordPlacement={wordPlacement}
             currentWord={currentWord}
             isValidWord={isValidWord}
-            index={index}
           />
         ))}
       </ScrollView>
@@ -232,68 +154,43 @@ export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingHorizontal: 18,
+    paddingTop: 6,
+    paddingBottom: 2,
   },
   currentWordContainer: {
+    minHeight: 82,
     alignItems: 'center',
-    marginBottom: 6,
-    height: 40,
     justifyContent: 'center',
-  },
-  currentWordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
   },
   currentWord: {
-    fontSize: 24,
-    fontFamily: 'SpaceGrotesk_700Bold',
-    color: COLORS.textPrimary,
-    letterSpacing: 5,
+    fontSize: 62,
+    lineHeight: 68,
+    fontFamily: FONTS.display,
+    color: '#edf1ff',
+    letterSpacing: 4,
     textTransform: 'uppercase',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowRadius: 6,
+    textShadowColor: 'rgba(154, 226, 255, 0.36)',
+    textShadowRadius: 18,
   },
   currentWordValid: {
-    color: COLORS.green,
-    textShadowColor: COLORS.greenGlow,
+    color: '#78ffec',
+    textShadowColor: 'rgba(120,255,236,0.5)',
     textShadowRadius: 24,
   },
-  validIndicator: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    shadowColor: COLORS.green,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  validIndicatorText: {
-    color: '#fff',
-    fontFamily: FONTS.display,
-    fontSize: 17,
-  },
   currentWordPlaceholder: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    fontFamily: 'Inter_500Medium',
+    fontSize: 18,
+    color: 'rgba(79, 164, 214, 0.68)',
+    fontFamily: FONTS.bodyMedium,
+  },
+  underlineWrap: {
+    alignItems: 'center',
+    marginBottom: 14,
   },
   underline: {
-    width: '60%',
-    height: 2,
-    marginTop: 8,
-    borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    overflow: 'hidden',
-  },
-  underlineFill: {
-    flex: 1,
-    borderRadius: 1,
+    width: '66%',
+    height: 3,
+    borderRadius: 999,
   },
   wordListScroll: {
     flexGrow: 0,
@@ -301,113 +198,90 @@ const styles = StyleSheet.create({
   wordList: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
   },
   wordChip: {
+    minWidth: 112,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    overflow: 'visible',
-    gap: 4,
-  },
-  chipBackground: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 16,
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: 'rgba(155, 194, 255, 0.22)',
     overflow: 'hidden',
+    backgroundColor: 'rgba(35, 18, 74, 0.34)',
+    shadowColor: '#5beeff',
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
   },
   chipGlassEdge: {
     position: 'absolute',
-    top: 0,
-    left: '10%',
-    right: '10%',
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    top: 3,
+    left: 16,
+    right: 16,
+    height: 2,
     borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   wordChipFound: {
-    borderColor: 'rgba(0, 230, 118, 0.5)',
-    shadowColor: COLORS.green,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
+    borderColor: 'rgba(94, 242, 255, 0.52)',
   },
   wordChipActive: {
-    borderColor: 'rgba(0, 212, 255, 0.55)',
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    borderColor: 'rgba(95, 236, 255, 0.72)',
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
   },
   wordChipValid: {
-    borderColor: COLORS.green,
-    borderWidth: 2,
-    shadowColor: COLORS.green,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
+    borderColor: 'rgba(121, 255, 236, 0.95)',
+    shadowColor: '#78ffec',
+    shadowOpacity: 0.36,
+    shadowRadius: 16,
   },
   wordText: {
-    fontSize: 12,
-    fontFamily: 'Inter_600SemiBold',
-    color: COLORS.wordPending,
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    color: '#89d8ff',
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
   wordTextFound: {
-    color: COLORS.wordFound,
-    textDecorationLine: 'line-through',
-    textShadowColor: COLORS.greenGlow,
-    textShadowRadius: 6,
+    color: '#d3b0ff',
   },
   wordTextActive: {
-    color: COLORS.wordActive,
-    textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 8,
+    color: '#a2f6ff',
+    textShadowColor: 'rgba(91,238,255,0.48)',
+    textShadowRadius: 10,
   },
   wordTextValid: {
-    color: COLORS.green,
-    fontFamily: 'SpaceGrotesk_700Bold',
-    textShadowColor: COLORS.greenGlow,
-    textShadowRadius: 12,
-  },
-  checkContainer: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    shadowColor: COLORS.green,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  checkMark: {
-    color: '#fff',
-    fontSize: 10,
-    fontFamily: 'SpaceGrotesk_700Bold',
+    color: '#78ffec',
   },
   letterCount: {
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    minWidth: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(85, 53, 160, 0.45)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(114, 219, 255, 0.26)',
   },
   letterCountText: {
-    color: COLORS.textMuted,
-    fontSize: 9,
-    fontFamily: 'Inter_600SemiBold',
+    color: '#66ddff',
+    fontSize: 16,
+    fontFamily: FONTS.display,
+  },
+  foundGlow: {
+    position: 'absolute',
+    left: -18,
+    right: -18,
+    top: -8,
+    bottom: -8,
+    borderRadius: 30,
+    backgroundColor: 'rgba(95, 236, 255, 0.08)',
   },
 });
