@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Dimensions, DimensionValue, StyleSheet, View } from 'react-native';
+import { Animated, Dimensions, DimensionValue, Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../../constants';
 import { CachedImage } from './CachedImage';
 import { BACKGROUND_ASSETS } from '../../utils/assetUrls';
+import { LOCAL_IMAGES } from '../../utils/localAssets';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -103,12 +104,11 @@ export function SynthwaveBackdrop() {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Synthwave background image — the main visual */}
-      <CachedImage
-        uri={BACKGROUND_ASSETS.gameplayBg}
-        overlayColor="rgba(20, 0, 50, 0.20)"
-        overlayOpacity={0.20}
-        blurRadius={0}
+      {/* Synthwave background image — local asset */}
+      <Image
+        source={LOCAL_IMAGES.bgGameplay}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
       />
 
       {/* Subtle purple/magenta tint to unify colors */}

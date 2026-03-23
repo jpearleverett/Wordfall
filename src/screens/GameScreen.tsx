@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Animated,
+  Image,
   LayoutAnimation,
   Platform,
   Pressable,
@@ -21,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { soundManager } from '../services/sound';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 import { usePlayer } from '../contexts/PlayerContext';
 
@@ -682,17 +684,16 @@ export function GameScreen({
         )}
       </View>
 
-      {/* Booster bar - illustrated icons on metallic shelf */}
+      {/* Booster bar - custom icon assets on metallic shelf */}
       <View style={[
         styles.boosterBar,
         !(hasAnyBoosters && state.status === 'playing') && styles.boosterBarHidden,
       ]}>
-        {/* Metallic shelf base */}
-        <LinearGradient
-          colors={['rgba(0, 212, 255, 0.12)', 'rgba(0, 180, 220, 0.06)', 'rgba(0, 100, 140, 0.10)'] as [string, string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.boosterShelfBar}
+        {/* Metallic shelf asset */}
+        <Image
+          source={LOCAL_IMAGES.shelfBooster}
+          style={styles.boosterShelfImage}
+          resizeMode="contain"
         />
         <View style={styles.boosterShelf}>
           {state.boosterCounts.shuffleFiller > 0 && (
@@ -708,7 +709,7 @@ export function GameScreen({
               {/* Icon glow background */}
               <View style={[styles.boosterGlow, { backgroundColor: 'rgba(168, 85, 247, 0.20)' }]} />
               <View style={styles.boosterIconWrap}>
-                <Ionicons name="shuffle" size={28} color={COLORS.purple} />
+                <Image source={LOCAL_IMAGES.iconShuffle} style={styles.boosterIconImage} resizeMode="contain" />
               </View>
               <Text style={styles.boosterLabel}>Shuffle</Text>
               {state.boosterCounts.shuffleFiller > 0 && (
@@ -733,7 +734,7 @@ export function GameScreen({
               />
               <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
               <View style={styles.boosterIconWrap}>
-                <Ionicons name="snow" size={28} color={COLORS.accent} />
+                <Image source={LOCAL_IMAGES.iconFreeze} style={styles.boosterIconImage} resizeMode="contain" />
               </View>
               <Text style={styles.boosterLabel}>Freeze</Text>
               {state.boosterCounts.freezeColumn > 0 && (
@@ -754,7 +755,7 @@ export function GameScreen({
               />
               <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
               <View style={styles.boosterIconWrap}>
-                <Ionicons name="eye" size={28} color={COLORS.accent} />
+                <Image source={LOCAL_IMAGES.iconPreview} style={styles.boosterIconImage} resizeMode="contain" />
               </View>
               <Text style={styles.boosterLabel}>Preview</Text>
               {state.boosterCounts.boardPreview > 0 && (
@@ -1148,13 +1149,13 @@ const styles = StyleSheet.create({
   boosterBarHidden: {
     opacity: 0,
   },
-  boosterShelfBar: {
+  boosterShelfImage: {
     position: 'absolute',
-    bottom: 8,
-    left: 20,
-    right: 20,
-    height: 3,
-    borderRadius: 2,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    opacity: 0.85,
   },
   boosterShelf: {
     flexDirection: 'row',
@@ -1197,6 +1198,10 @@ const styles = StyleSheet.create({
   },
   boosterIconWrap: {
     marginBottom: 6,
+  },
+  boosterIconImage: {
+    width: 32,
+    height: 32,
   },
   boosterLabel: {
     fontFamily: FONTS.bodySemiBold,
