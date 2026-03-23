@@ -1,9 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  StyleProp,
   StyleSheet,
   Text,
   View,
+  ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS } from '../constants';
@@ -113,9 +115,22 @@ export const LetterCell = React.memo(function LetterCell({
   const showOuterGlow = isSelected || isValidWord;
   const outerGlowColor = isValidWord ? COLORS.greenGlow : isSelected ? COLORS.accentGlow : 'transparent';
 
+  const cellStyle: StyleProp<ViewStyle> = {
+    width: size,
+    height: size,
+    borderRadius,
+    borderColor: getBorderColor(),
+    borderWidth: isSelected || isValidWord ? 2 : isFrozen ? 1.5 : 1,
+    transform: [{ scale: scaleAnim }],
+    shadowColor: getShadowColor(),
+    shadowOpacity: (isSelected || isValidWord) ? 0.85 : 0.35,
+    shadowRadius: (isSelected || isValidWord) ? 20 : 10,
+    shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 8 : 4 },
+    elevation: (isSelected || isValidWord) ? 16 : 5,
+  };
+
   return (
     <View pointerEvents="none">
-      {/* Outer ambient glow ring */}
       {showOuterGlow && (
         <Animated.View
           pointerEvents="none"
@@ -154,32 +169,15 @@ export const LetterCell = React.memo(function LetterCell({
       )}
 
       <Animated.View
-        style={[
-          styles.cell,
-          {
-            width: size,
-            height: size,
-            borderRadius,
-            borderColor: getBorderColor(),
-            borderWidth: isSelected || isValidWord ? 2 : isFrozen ? 1.5 : 1,
-            transform: [{ scale: scaleAnim }],
-            shadowColor: getShadowColor(),
-            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.25,
-            shadowRadius: (isSelected || isValidWord) ? 14 : 4,
-            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 6 : 2 },
-            elevation: (isSelected || isValidWord) ? 12 : 3,
-          },
-        ]}
+        style={[styles.cell, cellStyle]}
       >
-        {/* Base gradient - the gem body */}
         <LinearGradient
           colors={getGradientColors() as [string, string, ...string[]]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
+          start={{ x: 0.14, y: 0.05 }}
+          end={{ x: 0.84, y: 1 }}
           style={[StyleSheet.absoluteFillObject, { borderRadius }]}
         />
 
-        {/* Inner luminosity layer - gives depth to the tile */}
         <View
           pointerEvents="none"
           style={[
@@ -198,7 +196,6 @@ export const LetterCell = React.memo(function LetterCell({
           ]}
         />
 
-        {/* Top specular highlight — glass-like reflection */}
         <LinearGradient
           colors={
             isSelected || isValidWord
@@ -211,7 +208,6 @@ export const LetterCell = React.memo(function LetterCell({
           style={[styles.specularHighlight, { borderTopLeftRadius: borderRadius * 0.85, borderTopRightRadius: borderRadius * 0.85 }]}
         />
 
-        {/* Side edge highlight — left edge catch light */}
         <View
           pointerEvents="none"
           style={[
@@ -224,7 +220,6 @@ export const LetterCell = React.memo(function LetterCell({
           ]}
         />
 
-        {/* Bottom edge shadow for 3D depth */}
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.15)'] as [string, string]}
           start={{ x: 0.5, y: 0 }}
@@ -232,7 +227,8 @@ export const LetterCell = React.memo(function LetterCell({
           style={[styles.bottomShadow, { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius }]}
         />
 
-        {/* Static shimmer highlight — no animation */}
+        <View style={[styles.innerStroke, { borderRadius: borderRadius - 3 }]} />
+
         <View
           pointerEvents="none"
           style={[
@@ -244,7 +240,6 @@ export const LetterCell = React.memo(function LetterCell({
           ]}
         />
 
-        {/* Letter with premium text rendering */}
         <Text
           style={[
             styles.letter,
@@ -257,7 +252,6 @@ export const LetterCell = React.memo(function LetterCell({
           {letter}
         </Text>
 
-        {/* Selection index badge */}
         {isSelected && selectionIndex >= 0 && !isValidWord && (
           <View
             style={[
@@ -275,7 +269,6 @@ export const LetterCell = React.memo(function LetterCell({
           </View>
         )}
 
-        {/* Valid word checkmark */}
         {isValidWord && (
           <View
             style={[
@@ -291,7 +284,6 @@ export const LetterCell = React.memo(function LetterCell({
           </View>
         )}
 
-        {/* Frozen snowflake indicator */}
         {isFrozen && !isSelected && (
           <View style={styles.frozenIndicator}>
             <Text style={styles.frozenIcon}>❄</Text>
@@ -308,9 +300,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     margin: 2,
     overflow: 'hidden',
+    backgroundColor: 'rgba(14, 16, 45, 0.78)',
   },
   innerGlow: {
     ...StyleSheet.absoluteFillObject,
+  },
+  innerStroke: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    right: 4,
+    bottom: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   specularHighlight: {
     position: 'absolute',
@@ -349,9 +351,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   letterDefault: {
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowRadius: 6,
-    textShadowOffset: { width: 0, height: 2 },
+    color: '#f5f2ff',
+    textShadowColor: 'rgba(255,255,255,0.16)',
+    textShadowRadius: 12,
+    textShadowOffset: { width: 0, height: 0 },
   },
   letterSelected: {
     color: '#fff',
@@ -369,20 +372,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     right: 2,
-    backgroundColor: 'rgba(0, 212, 255, 0.95)',
+    backgroundColor: 'rgba(69, 238, 255, 0.96)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 18, 55, 0.88)',
+    shadowColor: '#5ef3ff',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
+    shadowOpacity: 0.85,
+    shadowRadius: 8,
     elevation: 4,
   },
   indexText: {
-    color: '#fff',
+    color: '#112147',
     fontFamily: 'SpaceGrotesk_700Bold',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowRadius: 2,
   },
   checkBadge: {
     position: 'absolute',
