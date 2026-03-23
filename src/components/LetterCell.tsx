@@ -6,8 +6,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../constants';
-import { puzzleReferenceTheme } from '../theme/puzzleReferenceTheme';
+import { COLORS, FONTS, GRADIENTS } from '../constants';
 
 interface LetterCellProps {
   letter: string;
@@ -36,7 +35,6 @@ export const LetterCell = React.memo(function LetterCell({
   isMoved = false,
 }: LetterCellProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const cellTheme = puzzleReferenceTheme.letterCell;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const movedAnim = useRef(new Animated.Value(0)).current;
 
@@ -89,20 +87,20 @@ export const LetterCell = React.memo(function LetterCell({
   }, [isMoved, movedAnim]);
 
   const getGradientColors = (): readonly [string, string, ...string[]] => {
-    if (isValidWord) return cellTheme.gradientByState.valid;
-    if (isSelected && isHinted) return cellTheme.gradientByState.hint;
-    if (isSelected) return cellTheme.gradientByState.selected;
-    if (isFrozen) return cellTheme.gradientByState.frozen;
-    return cellTheme.gradientByState.default;
+    if (isValidWord) return GRADIENTS.tile.valid;
+    if (isSelected && isHinted) return ['#74ecff', '#14d4ff', '#0486ba', '#035b81'] as const;
+    if (isSelected) return ['#8bf4ff', '#1ce2ff', '#059fca', '#03506b'] as const;
+    if (isFrozen) return GRADIENTS.tile.frozen;
+    return DEFAULT_TILE_GRADIENT;
   };
 
-  const getBorderColor = () => {
-    if (isValidWord) return cellTheme.borderColors.valid;
-    if (isSelected && isHinted) return cellTheme.borderColors.selectedHint;
-    if (isSelected) return cellTheme.borderColors.selected;
-    if (isFrozen) return cellTheme.borderColors.frozen;
-    return cellTheme.borderColors.default;
-  };
+  const outerBorderColors = isValidWord
+    ? ['rgba(206,255,227,0.88)', 'rgba(28,196,107,0.82)', 'rgba(4,90,46,0.92)']
+    : isSelected
+    ? ['rgba(224, 252, 255, 0.95)', 'rgba(88, 237, 255, 0.92)', 'rgba(9, 103, 135, 0.98)']
+    : isFrozen
+    ? ['rgba(176, 232, 255, 0.72)', 'rgba(81, 161, 214, 0.66)', 'rgba(19, 52, 93, 0.88)']
+    : ['rgba(202, 210, 224, 0.72)', 'rgba(86, 98, 118, 0.76)', 'rgba(22, 28, 40, 0.9)'];
 
   const innerBorderColor = isValidWord
     ? 'rgba(206,255,227,0.32)'
@@ -112,34 +110,71 @@ export const LetterCell = React.memo(function LetterCell({
     ? 'rgba(152, 214, 255, 0.22)'
     : 'rgba(255,255,255,0.1)';
 
-  const getShadowColor = () => {
-    if (isValidWord) return cellTheme.borderColors.valid;
-    if (isSelected) return cellTheme.borderColors.selected;
-    return cellTheme.shadow.defaultColor;
-  };
+  const coreGlowColor = isValidWord
+    ? 'rgba(51, 255, 153, 0.24)'
+    : isSelected
+    ? 'rgba(72, 237, 255, 0.42)'
+    : isHinted
+    ? COLORS.goldGlow
+    : DEFAULT_CENTER_GLOW;
+
+  const borderRadius = Math.round(size * 0.24);
+  const outerRadius = borderRadius + 2;
+  const centerBadgeSize = size * 0.32;
+  const badgeRadius = centerBadgeSize / 2;
 
   const showOuterGlow = isSelected || isValidWord;
-  const outerGlowColor = isValidWord ? cellTheme.glow.valid : isSelected ? cellTheme.glow.selected : 'transparent';
+  const outerGlowColor = isValidWord ? COLORS.greenGlow : 'rgba(0, 228, 255, 0.85)';
 
   return (
     <View pointerEvents="none" style={{ width: size + 4, height: size + 4 }}>
       {showOuterGlow && (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: -cellTheme.glow.outerInset,
-            left: -cellTheme.glow.outerInset,
-            right: -cellTheme.glow.outerInset,
-            bottom: -cellTheme.glow.outerInset,
-            borderRadius: borderRadius + cellTheme.glow.outerInset,
-            backgroundColor: outerGlowColor,
-            opacity: glowAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, cellTheme.glow.outerOpacity],
-            }),
-          }}
-        />
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.selectionBloom,
+              {
+                top: -11,
+                left: -11,
+                width: size + 26,
+                height: size + 26,
+                borderRadius: outerRadius + 13,
+                backgroundColor: outerGlowColor,
+                opacity: glowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, isValidWord ? 0.3 : 0.48],
+                }),
+                transform: [
+                  {
+                    scale: glowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.92, 1.08],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.selectionBloom,
+              {
+                top: -6,
+                left: -6,
+                width: size + 16,
+                height: size + 16,
+                borderRadius: outerRadius + 8,
+                backgroundColor: isValidWord ? 'rgba(92,255,184,0.42)' : 'rgba(119, 246, 255, 0.7)',
+                opacity: glowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, isValidWord ? 0.24 : 0.32],
+                }),
+              },
+            ]}
+          />
+        </>
       )}
 
       {isMoved && (
@@ -147,13 +182,13 @@ export const LetterCell = React.memo(function LetterCell({
           pointerEvents="none"
           style={{
             position: 'absolute',
-            top: -cellTheme.glow.movedInset,
-            left: -cellTheme.glow.movedInset,
-            right: -cellTheme.glow.movedInset,
-            bottom: -cellTheme.glow.movedInset,
-            borderRadius: borderRadius + cellTheme.glow.movedInset,
-            borderWidth: cellTheme.glow.movedBorderWidth,
-            borderColor: cellTheme.borderColors.moved,
+            top: -2,
+            left: -2,
+            right: -2,
+            bottom: -2,
+            borderRadius: outerRadius + 2,
+            borderWidth: 1.5,
+            borderColor: 'rgba(0, 212, 255, 0.8)',
             opacity: movedAnim,
           }}
         />
@@ -167,85 +202,77 @@ export const LetterCell = React.memo(function LetterCell({
             height: size,
             borderRadius: outerRadius,
             transform: [{ scale: scaleAnim }],
-            shadowColor: getShadowColor(),
-            shadowOpacity: (isSelected || isValidWord) ? cellTheme.shadow.selectedOpacity : cellTheme.shadow.defaultOpacity,
-            shadowRadius: (isSelected || isValidWord) ? cellTheme.shadow.selectedRadius : cellTheme.shadow.defaultRadius,
-            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? cellTheme.shadow.selectedOffsetY : cellTheme.shadow.defaultOffsetY },
-            elevation: (isSelected || isValidWord) ? cellTheme.shadow.selectedElevation : cellTheme.shadow.defaultElevation,
+            shadowColor: isSelected || isValidWord ? COLORS.accent : '#000',
+            shadowOpacity: isSelected || isValidWord ? 0.5 : 0.3,
+            shadowRadius: isSelected || isValidWord ? 18 : 8,
+            shadowOffset: { width: 0, height: isSelected || isValidWord ? 8 : 3 },
+            elevation: isSelected || isValidWord ? 14 : 6,
           },
         ]}
       >
         <LinearGradient
-          colors={getGradientColors() as [string, string, ...string[]]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius }]}
+          colors={outerBorderColors as [string, string, string]}
+          start={{ x: 0.06, y: 0 }}
+          end={{ x: 0.94, y: 1 }}
+          style={[styles.outerMetalFrame, { borderRadius: outerRadius }]}
         />
 
-        {/* Inner luminosity layer - gives depth to the tile */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.innerGlow,
-            {
-              borderRadius,
-              opacity: isSelected ? cellTheme.glow.opacitySelected : cellTheme.glow.opacityDefault,
-              backgroundColor: isValidWord
-                ? cellTheme.glow.valid
-                : isHinted
-                ? cellTheme.glow.hinted
-                : isSelected
-                ? cellTheme.glow.selected
-                : cellTheme.glow.default,
-            },
-          ]}
-        />
+        <View style={[styles.innerTileShell, { top: 2, left: 2, right: 2, bottom: 2, borderRadius, borderColor: innerBorderColor }]}>
+          <LinearGradient
+            colors={getGradientColors() as [string, string, ...string[]]}
+            start={{ x: 0.08, y: 0 }}
+            end={{ x: 0.92, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, { borderRadius }]}
+          />
 
-        {/* Top specular highlight — glass-like reflection */}
-        <LinearGradient
-          colors={
-            isSelected || isValidWord
-              ? cellTheme.highlight.selectedSpecular as [string, string, string]
-              : cellTheme.highlight.defaultSpecular as [string, string, string]
-          }
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          locations={[0, 0.3, 0.6]}
-          style={[styles.specularHighlight, { borderTopLeftRadius: borderRadius * 0.85, borderTopRightRadius: borderRadius * 0.85 }]}
-        />
+          <View
+            pointerEvents="none"
+            style={[
+              styles.centerGlow,
+              {
+                top: '22%',
+                left: '19%',
+                right: '19%',
+                bottom: '18%',
+                borderRadius: borderRadius,
+                backgroundColor: coreGlowColor,
+                opacity: isSelected ? 0.95 : isValidWord ? 0.8 : 0.52,
+              },
+            ]}
+          />
 
-        {/* Side edge highlight — left edge catch light */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.leftEdgeHighlight,
-            {
-              borderTopLeftRadius: borderRadius,
-              borderBottomLeftRadius: borderRadius,
-              opacity: isSelected || isValidWord ? cellTheme.highlight.leftEdgeSelectedOpacity : cellTheme.highlight.leftEdgeDefaultOpacity,
-            },
-          ]}
-        />
+          <View
+            pointerEvents="none"
+            style={[
+              styles.innerInsetBorder,
+              {
+                top: 4,
+                left: 4,
+                right: 4,
+                bottom: 4,
+                borderRadius: Math.max(8, borderRadius - 3),
+                borderColor: isSelected || isValidWord ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.08)',
+              },
+            ]}
+          />
 
-        {/* Bottom edge shadow for 3D depth */}
-        <LinearGradient
-          colors={cellTheme.highlight.bottomShadow as [string, string]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={[styles.bottomShadow, { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius }]}
-        />
-
-        {/* Static shimmer highlight — no animation */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.shimmerSweep,
-            {
-              borderRadius,
-              opacity: isSelected ? cellTheme.highlight.shimmerSelectedOpacity : cellTheme.highlight.shimmerDefaultOpacity,
-            },
-          ]}
-        />
+          <LinearGradient
+            colors={
+              isSelected || isValidWord
+                ? ['rgba(255,255,255,0.4)', 'rgba(255,255,255,0.12)', 'transparent']
+                : ['rgba(255,255,255,0.16)', 'rgba(255,255,255,0.05)', 'transparent']
+            }
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            locations={[0, 0.38, 0.82]}
+            style={[
+              styles.specularHighlight,
+              {
+                borderTopLeftRadius: borderRadius,
+                borderTopRightRadius: borderRadius,
+              },
+            ]}
+          />
 
           <LinearGradient
             colors={['rgba(255,255,255,0.15)', 'transparent']}
@@ -392,24 +419,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '8%',
     left: 0,
-    width: '8%',
-    height: '80%',
-    backgroundColor: puzzleReferenceTheme.letterCell.highlight.leftEdgeColor,
+    width: '12%',
+    height: '76%',
   },
   bottomShadow: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: '30%',
-  },
-  shimmerSweep: {
-    position: 'absolute',
-    top: 0,
-    left: '35%',
-    width: '30%',
-    height: '100%',
-    backgroundColor: puzzleReferenceTheme.letterCell.highlight.shimmerColor,
+    height: '34%',
   },
   letter: {
     color: COLORS.textPrimary,
@@ -441,16 +459,24 @@ const styles = StyleSheet.create({
   },
   indexBadge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: puzzleReferenceTheme.letterCell.badge.selectedBackgroundColor,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: puzzleReferenceTheme.letterCell.badge.selectedShadowColor,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 252, 255, 0.85)',
+    overflow: 'hidden',
+    zIndex: 3,
+  },
+  indexBadgeInner: {
+    ...StyleSheet.absoluteFillObject,
+    margin: 2,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   indexText: {
     color: '#fff',
@@ -463,12 +489,10 @@ const styles = StyleSheet.create({
   },
   checkBadge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: puzzleReferenceTheme.letterCell.badge.validBackgroundColor,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: puzzleReferenceTheme.letterCell.badge.validShadowColor,
+    backgroundColor: COLORS.green,
+    shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.6,
     shadowRadius: 4,

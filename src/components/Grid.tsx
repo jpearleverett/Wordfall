@@ -13,8 +13,7 @@ import {
 } from 'react-native-gesture-handler';
 import { Grid as GridType, CellPosition } from '../types';
 import { LetterCell } from './LetterCell';
-import { CELL_GAP, MAX_GRID_WIDTH } from '../constants';
-import { puzzleReferenceTheme } from '../theme/puzzleReferenceTheme';
+import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 
 if (
   Platform.OS === 'android' &&
@@ -199,17 +198,32 @@ export function GameGrid({
     return Gesture.Race(panGesture, tapGesture);
   }, [hitTestCell]);
 
-  // Outer wrapper dimensions include the gradient border padding
-  const borderWidth = puzzleReferenceTheme.grid.outerBorderWidth;
-  const outerWidth = gridWidth + borderWidth * 2;
-  const outerHeight = gridHeight + borderWidth * 2;
+  const outerWidth = gridWidth + BOARD_FRAME * 2 + PLAYFIELD_INSET * 2;
+  const outerHeight = gridHeight + BOARD_FRAME * 2 + PLAYFIELD_INSET * 2;
 
   return (
-    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: puzzleReferenceTheme.grid.outerRadius }]}>
-      <GestureDetector gesture={composedGesture}>
-        <View
-          ref={gridRef}
-          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: puzzleReferenceTheme.grid.innerRadius }]}
+    <View style={[styles.boardShell, { width: outerWidth, height: outerHeight }]}>
+      <LinearGradient
+        colors={['#7f8aa0', '#465267', '#1a2232', '#5f6b82']}
+        start={{ x: 0.02, y: 0 }}
+        end={{ x: 0.98, y: 1 }}
+        style={[styles.boardFrame, { borderRadius: OUTER_RADIUS }]}
+      >
+        <View style={[styles.boardFrameEdge, { borderRadius: OUTER_RADIUS - 2 }]} />
+        <LinearGradient
+          colors={['rgba(255,255,255,0.24)', 'rgba(255,255,255,0.04)', 'rgba(0,0,0,0.18)']}
+          start={{ x: 0.12, y: 0 }}
+          end={{ x: 0.88, y: 1 }}
+          style={[styles.boardFrameGloss, { borderRadius: OUTER_RADIUS - 4 }]}
+        />
+        <View style={styles.boardGlowTop} />
+        <View style={styles.boardGlowBottom} />
+
+        <LinearGradient
+          colors={['rgba(10, 14, 32, 0.96)', 'rgba(17, 23, 48, 0.96)', 'rgba(9, 13, 30, 0.98)']}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 0.85, y: 1 }}
+          style={[styles.playfieldWell, { top: BOARD_FRAME, left: BOARD_FRAME, right: BOARD_FRAME, bottom: BOARD_FRAME, borderRadius: OUTER_RADIUS - 8 }]}
         >
           <View style={styles.playfieldInsetShadow} />
           <LinearGradient
@@ -375,9 +389,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   frozenColumn: {
-    backgroundColor: puzzleReferenceTheme.grid.frozenColumn.backgroundColor,
-    borderRadius: puzzleReferenceTheme.grid.frozenColumn.borderRadius,
-    borderWidth: puzzleReferenceTheme.grid.frozenColumn.borderWidth,
-    borderColor: puzzleReferenceTheme.grid.frozenColumn.borderColor,
+    backgroundColor: 'rgba(0, 212, 255, 0.08)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(117, 232, 255, 0.16)',
   },
 });
