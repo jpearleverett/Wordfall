@@ -12,7 +12,7 @@ import {
 } from 'react-native-gesture-handler';
 import { Grid as GridType, CellPosition } from '../types';
 import { LetterCell } from './LetterCell';
-import { CELL_GAP, MAX_GRID_WIDTH } from '../constants';
+import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 
 if (
   Platform.OS === 'android' &&
@@ -197,18 +197,17 @@ export function GameGrid({
   }, [hitTestCell]);
 
   // Outer wrapper dimensions include the gradient border padding
-  const framePadding = 12;
-  const outerWidth = gridWidth + framePadding * 2;
-  const outerHeight = gridHeight + framePadding * 2;
+  const borderWidth = 2;
+  const outerWidth = gridWidth + borderWidth * 2;
+  const outerHeight = gridHeight + borderWidth * 2;
 
   return (
-    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 34 }]}>
+    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}>
       <GestureDetector gesture={composedGesture}>
         <View
           ref={gridRef}
-          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 26 }]}
+          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 22 }]}
         >
-          <View style={styles.gridGlass} />
           {columns.map((column, colIndex) => (
             <View
               key={colIndex}
@@ -255,27 +254,13 @@ const styles = StyleSheet.create({
   outerWrapper: {
     alignSelf: 'center',
     overflow: 'hidden',
-    backgroundColor: 'rgba(16, 12, 48, 0.22)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(202, 221, 255, 0.18)',
-    padding: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.38,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 14,
+    backgroundColor: 'transparent',
   },
   gridContainer: {
     flexDirection: 'row',
-    padding: CELL_GAP / 2 + 2,
+    padding: CELL_GAP / 2,
     overflow: 'hidden',
-    backgroundColor: 'rgba(21, 18, 60, 0.28)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  gridGlass: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'transparent',
   },
   column: {
     flexDirection: 'column',
@@ -283,7 +268,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   frozenColumn: {
-    backgroundColor: 'rgba(91,244,255,0.08)',
-    borderRadius: 18,
+    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.08)',
   },
 });
