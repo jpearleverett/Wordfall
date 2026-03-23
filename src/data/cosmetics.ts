@@ -5,9 +5,9 @@ import { CosmeticTheme, ProfileFrame, ProfileTitle, LibraryDecoration, CurrencyT
 export const COSMETIC_THEMES: CosmeticTheme[] = [
   {
     id: 'default',
-    name: 'Synthwave Neon',
-    description: 'The signature Wordfall neon synthwave theme.',
-    colors: { bg: '#0a0012', surface: '#1a0033', accent: '#ff2d95', cellDefault: '#2a1045', cellSelected: '#ff2d95' },
+    name: 'Deep Space',
+    description: 'The classic Wordfall dark theme.',
+    colors: { bg: '#0a0e27', surface: '#1a1f45', accent: '#00d4ff', cellDefault: '#2a3060', cellSelected: '#00d4ff' },
     owned: true,
     equipped: true,
   },

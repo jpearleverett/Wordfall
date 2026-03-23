@@ -337,9 +337,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   frozenColumn: {
-    backgroundColor: 'rgba(0, 255, 245, 0.12)',
+    backgroundColor: 'rgba(0, 212, 255, 0.12)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(0, 255, 245, 0.08)',
+    borderColor: 'rgba(0, 212, 255, 0.08)',
   },
 });
