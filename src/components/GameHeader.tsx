@@ -172,10 +172,14 @@ export function GameHeader({
                 disabled={hintsLeft <= 0}
               >
                 <LinearGradient
-                  colors={['rgba(255,215,0,0.12)', 'rgba(255,215,0,0.04)'] as [string, string]}
+                  colors={['rgba(255,215,0,0.18)', 'rgba(255,215,0,0.06)'] as [string, string]}
                   style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
                 />
-                <Ionicons name="bulb-outline" size={18} color={COLORS.gold} />
+                {/* Glow beam from bulb */}
+                {hintsLeft > 0 && (
+                  <View style={styles.hintGlow} />
+                )}
+                <Ionicons name="bulb" size={18} color={COLORS.gold} />
                 {hintsLeft > 0 && (
                   <View style={[styles.countBadge, styles.hintCountBadge]}>
                     <Text style={styles.countBadgeText}>{hintsLeft}</Text>
@@ -344,7 +348,20 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   hintButton: {
-    borderColor: 'rgba(255, 215, 0, 0.25)',
+    borderColor: 'rgba(255, 215, 0, 0.35)',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+  },
+  hintGlow: {
+    position: 'absolute',
+    top: -8,
+    left: '20%' as unknown as number,
+    right: '20%' as unknown as number,
+    height: 16,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderRadius: 8,
   },
   actionDisabled: {
     opacity: 0.3,

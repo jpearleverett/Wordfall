@@ -10,10 +10,9 @@ import {
   GestureDetector,
   Gesture,
 } from 'react-native-gesture-handler';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Grid as GridType, CellPosition } from '../types';
 import { LetterCell } from './LetterCell';
-import { CELL_GAP, COLORS, GRADIENTS, MAX_GRID_WIDTH } from '../constants';
+import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 
 if (
   Platform.OS === 'android' &&
@@ -204,44 +203,11 @@ export function GameGrid({
 
   return (
     <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}>
-      {/* Multi-layered gradient border for premium glass edge */}
-      <LinearGradient
-        colors={GRADIENTS.gridBorder as unknown as [string, string, ...string[]]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
-      />
       <GestureDetector gesture={composedGesture}>
         <View
           ref={gridRef}
           style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 22 }]}
         >
-          {/* Deep rich board background */}
-          <LinearGradient
-            colors={GRADIENTS.grid as unknown as [string, string, ...string[]]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0.3, y: 1 }}
-            style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
-          />
-          {/* Top edge glass reflection */}
-          <LinearGradient
-            colors={['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)', 'transparent'] as [string, string, string]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            locations={[0, 0.15, 0.4]}
-            style={[styles.vignetteTop, { borderTopLeftRadius: 22, borderTopRightRadius: 22 }]}
-          />
-          {/* Bottom depth shadow */}
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.10)'] as [string, string]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={[styles.vignetteBottom, { borderBottomLeftRadius: 22, borderBottomRightRadius: 22 }]}
-          />
-          {/* Top center highlight shine — premium glass feel */}
-          <View pointerEvents="none" style={styles.boardHighlight} />
-          {/* Subtle inner border highlight */}
-          <View pointerEvents="none" style={[styles.innerBorderHighlight, { borderRadius: 21 }]} />
           {columns.map((column, colIndex) => (
             <View
               key={colIndex}
@@ -288,48 +254,13 @@ const styles = StyleSheet.create({
   outerWrapper: {
     alignSelf: 'center',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.6,
-    shadowRadius: 28,
-    elevation: 18,
+    backgroundColor: 'transparent',
   },
   gridContainer: {
     flexDirection: 'row',
     padding: CELL_GAP / 2,
     overflow: 'hidden',
-  },
-  vignetteTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 50,
-  },
-  vignetteBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 35,
-  },
-  boardHighlight: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    top: 6,
-    height: 3,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  innerBorderHighlight: {
-    position: 'absolute',
-    top: 1,
-    left: 1,
-    right: 1,
-    bottom: 1,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'transparent',
   },
   column: {
     flexDirection: 'column',

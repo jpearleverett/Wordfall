@@ -101,7 +101,7 @@ export const GRADIENTS = {
   },
   surface: ['#161c48', '#101538'] as const,
   surfaceCard: ['#1a2050', '#141a3e'] as const,
-  header: ['#1a2050', '#0f1430'] as const,
+  header: ['rgba(22,28,70,0.75)', 'rgba(12,16,42,0.80)'] as const,
   bg: ['#040714', '#080d22', '#060918'] as const,
   grid: ['rgba(12,16,46,0.55)', 'rgba(18,22,58,0.50)', 'rgba(14,18,50,0.52)'] as const,
   gridBorder: ['rgba(0,212,255,0.22)', 'rgba(179,102,255,0.18)', 'rgba(0,212,255,0.12)'] as const,
