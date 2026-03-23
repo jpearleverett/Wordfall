@@ -6,7 +6,6 @@ import {
   UIManager,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import {
   GestureDetector,
   Gesture,
@@ -35,11 +34,6 @@ interface GridProps {
   maxHeight?: number;
 }
 
-const BOARD_FRAME = 14;
-const PLAYFIELD_INSET = 10;
-const OUTER_RADIUS = 30;
-const PLAYFIELD_RADIUS = 22;
-
 export function GameGrid({
   grid,
   selectedCells,
@@ -56,10 +50,11 @@ export function GameGrid({
   const cols = grid[0].length;
 
   const cellSize = useMemo(() => {
-    const availableWidth = MAX_GRID_WIDTH - BOARD_FRAME * 2 - PLAYFIELD_INSET * 2 - CELL_GAP * (cols + 1);
+    const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
     const widthBased = Math.floor(availableWidth / cols);
     if (maxHeight && maxHeight > 0) {
-      const heightAvail = maxHeight - BOARD_FRAME * 2 - PLAYFIELD_INSET * 2 - CELL_GAP;
+      const borderAllowance = 6;
+      const heightAvail = maxHeight - borderAllowance - CELL_GAP;
       const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
       return Math.min(widthBased, heightBased);
     }
@@ -87,7 +82,7 @@ export function GameGrid({
   }, [movedCells]);
 
   const columns = useMemo(() => {
-    const colsArr: { cell: NonNullable<GridType[0][0]>; row: number; col: number }[][] = [];
+    const cols_arr: { cell: NonNullable<GridType[0][0]>; row: number; col: number }[][] = [];
     for (let c = 0; c < cols; c++) {
       const column: { cell: NonNullable<GridType[0][0]>; row: number; col: number }[] = [];
       for (let r = 0; r < rows; r++) {
@@ -96,9 +91,9 @@ export function GameGrid({
           column.push({ cell, row: r, col: c });
         }
       }
-      colsArr.push(column);
+      cols_arr.push(column);
     }
-    return colsArr;
+    return cols_arr;
   }, [grid, rows, cols]);
 
   const gridWidth = cols * (cellSize + CELL_GAP) + CELL_GAP;
@@ -134,6 +129,8 @@ export function GameGrid({
     return bounds;
   }, [grid, rows, cols, cellSize, gridHeight]);
 
+  const gridRef = useRef<View>(null);
+  const gridLayoutRef = useRef({ x: 0, y: 0 });
   const lastDragCellRef = useRef<string | null>(null);
   const isDraggingRef = useRef(false);
 
@@ -146,6 +143,7 @@ export function GameGrid({
     return null;
   }, [cellBounds]);
 
+  // Memoize gesture objects to avoid reattaching on every render
   const onCellPressRef = useRef(onCellPress);
   onCellPressRef.current = onCellPress;
   const onDragStartRef = useRef(onDragStart);
@@ -198,190 +196,71 @@ export function GameGrid({
     return Gesture.Race(panGesture, tapGesture);
   }, [hitTestCell]);
 
-  const outerWidth = gridWidth + BOARD_FRAME * 2 + PLAYFIELD_INSET * 2;
-  const outerHeight = gridHeight + BOARD_FRAME * 2 + PLAYFIELD_INSET * 2;
+  // Outer wrapper dimensions include the gradient border padding
+  const borderWidth = 2;
+  const outerWidth = gridWidth + borderWidth * 2;
+  const outerHeight = gridHeight + borderWidth * 2;
 
   return (
-    <View style={[styles.boardShell, { width: outerWidth, height: outerHeight }]}>
-      <LinearGradient
-        colors={['#7f8aa0', '#465267', '#1a2232', '#5f6b82']}
-        start={{ x: 0.02, y: 0 }}
-        end={{ x: 0.98, y: 1 }}
-        style={[styles.boardFrame, { borderRadius: OUTER_RADIUS }]}
-      >
-        <View style={[styles.boardFrameEdge, { borderRadius: OUTER_RADIUS - 2 }]} />
-        <LinearGradient
-          colors={['rgba(255,255,255,0.24)', 'rgba(255,255,255,0.04)', 'rgba(0,0,0,0.18)']}
-          start={{ x: 0.12, y: 0 }}
-          end={{ x: 0.88, y: 1 }}
-          style={[styles.boardFrameGloss, { borderRadius: OUTER_RADIUS - 4 }]}
-        />
-        <View style={styles.boardGlowTop} />
-        <View style={styles.boardGlowBottom} />
-
-        <LinearGradient
-          colors={['rgba(10, 14, 32, 0.96)', 'rgba(17, 23, 48, 0.96)', 'rgba(9, 13, 30, 0.98)']}
-          start={{ x: 0.15, y: 0 }}
-          end={{ x: 0.85, y: 1 }}
-          style={[styles.playfieldWell, { top: BOARD_FRAME, left: BOARD_FRAME, right: BOARD_FRAME, bottom: BOARD_FRAME, borderRadius: OUTER_RADIUS - 8 }]}
+    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}>
+      <GestureDetector gesture={composedGesture}>
+        <View
+          ref={gridRef}
+          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 22 }]}
         >
-          <View style={styles.playfieldInsetShadow} />
-          <LinearGradient
-            colors={['rgba(0, 212, 255, 0.12)', 'rgba(179, 102, 255, 0.05)', 'rgba(255,255,255,0.02)']}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={styles.playfieldAura}
-          />
-
-          <GestureDetector gesture={composedGesture}>
+          {columns.map((column, colIndex) => (
             <View
+              key={colIndex}
               style={[
-                styles.gridContainer,
+                styles.column,
                 {
-                  width: gridWidth,
+                  width: cellSize + CELL_GAP,
                   height: gridHeight,
-                  margin: PLAYFIELD_INSET,
-                  borderRadius: PLAYFIELD_RADIUS,
                 },
+                frozenSet.has(colIndex) && styles.frozenColumn,
               ]}
             >
-              <View style={[styles.playfieldBackplate, { borderRadius: PLAYFIELD_RADIUS }]} />
-              <LinearGradient
-                colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)', 'rgba(0,0,0,0.14)']}
-                start={{ x: 0.1, y: 0 }}
-                end={{ x: 0.9, y: 1 }}
-                style={[styles.playfieldBevel, { borderRadius: PLAYFIELD_RADIUS }]}
-              />
-              <View style={[styles.gridSlotMatrix, { borderRadius: PLAYFIELD_RADIUS - 1 }]} />
+              <View style={{ flex: 1 }} />
+              {column.map(({ cell, row, col }) => {
+                const key = `${row},${col}`;
+                const selIndex = selectedSet.get(key) ?? -1;
+                const isSelected = selIndex >= 0;
+                const isHinted = hintedSet.has(key);
 
-              {columns.map((column, colIndex) => (
-                <View
-                  key={colIndex}
-                  style={[
-                    styles.column,
-                    {
-                      width: cellSize + CELL_GAP,
-                      height: gridHeight,
-                    },
-                    frozenSet.has(colIndex) && styles.frozenColumn,
-                  ]}
-                >
-                  <View style={{ flex: 1 }} />
-                  {column.map(({ cell, row, col }) => {
-                    const key = `${row},${col}`;
-                    const selIndex = selectedSet.get(key) ?? -1;
-                    const isSelected = selIndex >= 0;
-                    const isHinted = hintedSet.has(key);
-
-                    return (
-                      <LetterCell
-                        key={cell.id}
-                        letter={cell.letter}
-                        cellId={cell.id}
-                        size={cellSize}
-                        isSelected={isSelected}
-                        isHinted={isHinted}
-                        selectionIndex={selIndex}
-                        isFrozen={frozenSet.has(col)}
-                        isValidWord={validWord && isSelected}
-                        isMoved={movedSet.has(key)}
-                      />
-                    );
-                  })}
-                </View>
-              ))}
+                return (
+                  <LetterCell
+                    key={cell.id}
+                    letter={cell.letter}
+                    cellId={cell.id}
+                    size={cellSize}
+                    isSelected={isSelected}
+                    isHinted={isHinted}
+                    selectionIndex={selIndex}
+                    isFrozen={frozenSet.has(col)}
+                    isValidWord={validWord && isSelected}
+                    isMoved={movedSet.has(key)}
+                  />
+                );
+              })}
             </View>
-          </GestureDetector>
-        </LinearGradient>
-      </LinearGradient>
+          ))}
+        </View>
+      </GestureDetector>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  boardShell: {
+  outerWrapper: {
     alignSelf: 'center',
-    overflow: 'visible',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.45,
-    shadowRadius: 26,
-    elevation: 18,
-  },
-  boardFrame: {
-    flex: 1,
     overflow: 'hidden',
-    padding: BOARD_FRAME,
-  },
-  boardFrameEdge: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  boardFrameGloss: {
-    ...StyleSheet.absoluteFillObject,
-    margin: 3,
-  },
-  boardGlowTop: {
-    position: 'absolute',
-    top: -16,
-    left: '12%',
-    width: '76%',
-    height: 36,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    opacity: 0.4,
-  },
-  boardGlowBottom: {
-    position: 'absolute',
-    bottom: -14,
-    left: '18%',
-    width: '64%',
-    height: 30,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.26)',
-    opacity: 0.7,
-  },
-  playfieldWell: {
-    position: 'absolute',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  playfieldInsetShadow: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.32)',
-    borderRadius: OUTER_RADIUS - 8,
-  },
-  playfieldAura: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.8,
+    backgroundColor: 'transparent',
   },
   gridContainer: {
     flexDirection: 'row',
-    padding: CELL_GAP / 2 + 2,
+    padding: CELL_GAP / 2,
     overflow: 'hidden',
-    backgroundColor: 'rgba(8, 12, 28, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(181, 195, 220, 0.16)',
-  },
-  playfieldBackplate: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(5, 8, 20, 0.76)',
-  },
-  playfieldBevel: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  gridSlotMatrix: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(11, 16, 34, 0.52)',
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
+    backgroundColor: 'transparent',
   },
   column: {
     flexDirection: 'column',
@@ -389,9 +268,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   frozenColumn: {
-    backgroundColor: 'rgba(0, 212, 255, 0.08)',
-    borderRadius: 16,
+    backgroundColor: 'rgba(0, 212, 255, 0.12)',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(117, 232, 255, 0.16)',
+    borderColor: 'rgba(0, 212, 255, 0.08)',
   },
 });
