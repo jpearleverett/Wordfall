@@ -186,14 +186,14 @@ export const LetterCell = React.memo(function LetterCell({
             styles.innerGlow,
             {
               borderRadius,
-              opacity: isSelected ? 0.35 : 0.15,
+              opacity: isSelected ? 0.30 : 0.06,
               backgroundColor: isValidWord
                 ? COLORS.greenGlow
                 : isHinted
                 ? COLORS.goldGlow
                 : isSelected
                 ? COLORS.accentGlow
-                : 'rgba(255,255,255,0.05)',
+                : 'rgba(255,255,255,0.03)',
             },
           ]}
         />
@@ -202,8 +202,8 @@ export const LetterCell = React.memo(function LetterCell({
         <LinearGradient
           colors={
             isSelected || isValidWord
-              ? ['rgba(255,255,255,0.40)', 'rgba(255,255,255,0.08)', 'transparent'] as [string, string, string]
-              : ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.04)', 'transparent'] as [string, string, string]
+              ? ['rgba(255,255,255,0.30)', 'rgba(255,255,255,0.06)', 'transparent'] as [string, string, string]
+              : ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.02)', 'transparent'] as [string, string, string]
           }
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -219,14 +219,14 @@ export const LetterCell = React.memo(function LetterCell({
             {
               borderTopLeftRadius: borderRadius,
               borderBottomLeftRadius: borderRadius,
-              opacity: isSelected || isValidWord ? 0.2 : 0.08,
+              opacity: isSelected || isValidWord ? 0.15 : 0.04,
             },
           ]}
         />
 
         {/* Bottom edge shadow for 3D depth */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.25)'] as [string, string]}
+          colors={['transparent', 'rgba(0,0,0,0.15)'] as [string, string]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={[styles.bottomShadow, { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius }]}
@@ -239,7 +239,7 @@ export const LetterCell = React.memo(function LetterCell({
             styles.shimmerSweep,
             {
               borderRadius,
-              opacity: isSelected ? 0.14 : 0.04,
+              opacity: isSelected ? 0.10 : 0.02,
             },
           ]}
         />
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     left: 0,
     width: '8%',
     height: '80%',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   bottomShadow: {
     position: 'absolute',
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     left: '35%',
     width: '30%',
     height: '100%',
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   letter: {
     color: COLORS.textPrimary,

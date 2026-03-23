@@ -225,7 +225,7 @@ export function GameGrid({
           />
           {/* Top edge glass reflection */}
           <LinearGradient
-            colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)', 'transparent'] as [string, string, string]}
+            colors={['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)', 'transparent'] as [string, string, string]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             locations={[0, 0.15, 0.4]}
@@ -233,7 +233,7 @@ export function GameGrid({
           />
           {/* Bottom depth shadow */}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.18)'] as [string, string]}
+            colors={['transparent', 'rgba(0,0,0,0.10)'] as [string, string]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={[styles.vignetteBottom, { borderBottomLeftRadius: 22, borderBottomRightRadius: 22 }]}
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     top: 6,
     height: 3,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
   innerBorderHighlight: {
     position: 'absolute',
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     right: 1,
     bottom: 1,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(255,255,255,0.03)',
   },
   column: {
     flexDirection: 'column',

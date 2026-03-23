@@ -87,11 +87,11 @@ export const COLORS = {
 // Gradient presets for LinearGradient — premium multi-stop gradients
 export const GRADIENTS = {
   tile: {
-    default: ['#1a2058', '#252d70', '#1e2460'] as const,
+    default: ['rgba(18,20,52,0.78)', 'rgba(28,32,72,0.72)', 'rgba(20,24,58,0.78)'] as const,
     selected: ['#00e5ff', '#00b4d8', '#0088aa'] as const,
     valid: ['#00e676', '#00c853', '#009e42'] as const,
     hint: ['#ffe066', '#ffd700', '#f0a500'] as const,
-    frozen: ['#1a3a6c', '#1e3560', '#162d50'] as const,
+    frozen: ['rgba(20,48,90,0.75)', 'rgba(24,44,80,0.70)', 'rgba(18,38,68,0.75)'] as const,
   },
   button: {
     primary: ['#00e5ff', '#00b4d8', '#0088cc'] as const,
@@ -103,7 +103,7 @@ export const GRADIENTS = {
   surfaceCard: ['#1a2050', '#141a3e'] as const,
   header: ['#1a2050', '#0f1430'] as const,
   bg: ['#040714', '#080d22', '#060918'] as const,
-  grid: ['#0e1335', '#141a42', '#10153a'] as const,
+  grid: ['rgba(12,16,46,0.55)', 'rgba(18,22,58,0.50)', 'rgba(14,18,50,0.52)'] as const,
   gridBorder: ['rgba(0,212,255,0.22)', 'rgba(179,102,255,0.18)', 'rgba(0,212,255,0.12)'] as const,
   victoryCard: ['#1a2058', '#161d4e', '#121840'] as const,
   scorePanel: ['#101535', '#161c48'] as const,
