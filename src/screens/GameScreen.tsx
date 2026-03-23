@@ -695,75 +695,75 @@ export function GameScreen({
           style={styles.boosterShelfBar}
         />
         <View style={styles.boosterShelf}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.boosterButton,
-              state.boosterCounts.shuffleFiller <= 0 && styles.boosterDisabled,
-              pressed && styles.boosterPressed,
-            ]}
-            onPress={handleShuffle}
-            disabled={state.boosterCounts.shuffleFiller <= 0}
-          >
-            <LinearGradient
-              colors={['rgba(52, 18, 82, 0.92)', 'rgba(20, 10, 44, 0.96)'] as [string, string]}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 16 }]}
-            />
-            <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 88, 236, 0.18)' }]} />
-            <View style={styles.boosterIconWrap}>
-              <Ionicons name="shuffle" size={32} color="#ff68fb" />
-            </View>
-            <Text style={styles.boosterLabel}>Shuffle</Text>
-            <View style={styles.boosterCount}>
-              <Text style={styles.boosterCountText}>{state.boosterCounts.shuffleFiller}</Text>
-            </View>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.boosterButton,
-              freezeMode && styles.boosterActive,
-              state.boosterCounts.freezeColumn <= 0 && styles.boosterDisabled,
-              pressed && styles.boosterPressed,
-            ]}
-            onPress={handleFreezeToggle}
-            disabled={state.boosterCounts.freezeColumn <= 0}
-          >
-            <LinearGradient
-              colors={['rgba(24, 38, 88, 0.92)', 'rgba(12, 18, 46, 0.96)'] as [string, string]}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 16 }]}
-            />
-            <View style={[styles.boosterGlow, { backgroundColor: 'rgba(106, 234, 255, 0.22)' }]} />
-            <View style={styles.boosterIconWrap}>
-              <Ionicons name="snow" size={34} color="#7df5ff" />
-            </View>
-            <Text style={styles.boosterLabel}>Freeze</Text>
-            <View style={styles.boosterCount}>
-              <Text style={styles.boosterCountText}>{state.boosterCounts.freezeColumn}</Text>
-            </View>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.boosterButton,
-              (state.boosterCounts.boardPreview <= 0 || state.selectedCells.length === 0) && styles.boosterDisabled,
-              pressed && styles.boosterPressed,
-            ]}
-            onPress={handlePreviewToggle}
-            disabled={state.boosterCounts.boardPreview <= 0 || state.selectedCells.length === 0}
-          >
-            <LinearGradient
-              colors={['rgba(26, 44, 88, 0.92)', 'rgba(10, 18, 42, 0.96)'] as [string, string]}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 16 }]}
-            />
-            <View style={[styles.boosterGlow, { backgroundColor: 'rgba(121, 244, 255, 0.18)' }]} />
-            <View style={styles.boosterIconWrap}>
-              <Ionicons name="eye-outline" size={34} color="#b8fdff" />
-            </View>
-            <Text style={styles.boosterLabel}>Preview</Text>
-            <View style={styles.boosterCount}>
-              <Text style={styles.boosterCountText}>{state.boosterCounts.boardPreview}</Text>
-            </View>
-          </Pressable>
+          {state.boosterCounts.shuffleFiller > 0 && (
+            <Pressable
+              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
+              onPress={handleShuffle}
+            >
+              {/* Pedestal card */}
+              <LinearGradient
+                colors={['rgba(25, 15, 50, 0.85)', 'rgba(15, 8, 35, 0.90)'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+              />
+              {/* Icon glow background */}
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(168, 85, 247, 0.20)' }]} />
+              <View style={styles.boosterIconWrap}>
+                <Ionicons name="shuffle" size={28} color={COLORS.purple} />
+              </View>
+              <Text style={styles.boosterLabel}>Shuffle</Text>
+              {state.boosterCounts.shuffleFiller > 0 && (
+                <View style={styles.boosterCount}>
+                  <Text style={styles.boosterCountText}>{state.boosterCounts.shuffleFiller}</Text>
+                </View>
+              )}
+            </Pressable>
+          )}
+          {state.boosterCounts.freezeColumn > 0 && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.boosterButton,
+                freezeMode && styles.boosterActive,
+                pressed && styles.boosterPressed,
+              ]}
+              onPress={handleFreezeToggle}
+            >
+              <LinearGradient
+                colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+              />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
+              <View style={styles.boosterIconWrap}>
+                <Ionicons name="snow" size={28} color={COLORS.accent} />
+              </View>
+              <Text style={styles.boosterLabel}>Freeze</Text>
+              {state.boosterCounts.freezeColumn > 0 && (
+                <View style={styles.boosterCount}>
+                  <Text style={styles.boosterCountText}>{state.boosterCounts.freezeColumn}</Text>
+                </View>
+              )}
+            </Pressable>
+          )}
+          {state.boosterCounts.boardPreview > 0 && state.selectedCells.length > 0 && (
+            <Pressable
+              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
+              onPress={handlePreviewToggle}
+            >
+              <LinearGradient
+                colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+              />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
+              <View style={styles.boosterIconWrap}>
+                <Ionicons name="eye" size={28} color={COLORS.accent} />
+              </View>
+              <Text style={styles.boosterLabel}>Preview</Text>
+              {state.boosterCounts.boardPreview > 0 && (
+                <View style={styles.boosterCount}>
+                  <Text style={styles.boosterCountText}>{state.boosterCounts.boardPreview}</Text>
+                </View>
+              )}
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -880,8 +880,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingTop: 6,
+    paddingHorizontal: 8,
   },
   bannerOverlay: {
     position: 'absolute',
@@ -905,9 +904,9 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   wordArea: {
-    paddingTop: 0,
-    paddingBottom: 0,
-    height: 126,
+    paddingTop: 2,
+    paddingBottom: 2,
+    height: 86,
   },
   timerBar: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1139,104 +1138,93 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
   },
   boosterBar: {
-    justifyContent: 'flex-end',
-    paddingHorizontal: 18,
-    paddingVertical: 0,
-    marginTop: 8,
-    marginBottom: 6,
-    height: 132,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginTop: 4,
+    marginBottom: 2,
+    height: 100,
   },
   boosterBarHidden: {
     opacity: 0,
   },
   boosterShelfBar: {
     position: 'absolute',
-    left: 30,
-    right: 30,
-    bottom: 16,
-    height: 44,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(136, 227, 255, 0.24)',
+    bottom: 8,
+    left: 20,
+    right: 20,
+    height: 3,
+    borderRadius: 2,
   },
   boosterShelf: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 14,
-    paddingHorizontal: 12,
-    paddingBottom: 26,
+    justifyContent: 'center',
+    gap: 16,
+    paddingBottom: 4,
   },
   boosterButton: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 14,
-    paddingBottom: 26,
-    borderRadius: 16,
-    borderWidth: 1.2,
-    borderColor: 'rgba(183, 225, 255, 0.28)',
-    minHeight: 86,
-    overflow: 'visible',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.20)',
+    minWidth: 90,
+    overflow: 'hidden',
     shadowColor: 'rgba(0, 212, 255, 0.3)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 6,
   },
   boosterActive: {
-    borderColor: 'rgba(110, 245, 255, 0.85)',
+    borderColor: 'rgba(0, 212, 255, 0.6)',
     shadowColor: COLORS.accent,
-    shadowOpacity: 0.8,
-    shadowRadius: 16,
+    shadowOpacity: 0.7,
+    shadowRadius: 14,
   },
   boosterPressed: {
-    transform: [{ scale: 0.96 }],
-    opacity: 0.92,
-  },
-  boosterDisabled: {
-    opacity: 0.42,
+    transform: [{ scale: 0.92 }],
+    opacity: 0.8,
   },
   boosterGlow: {
     position: 'absolute',
-    top: 10,
-    left: 16,
-    right: 16,
-    height: 34,
-    borderRadius: 18,
+    top: 4,
+    left: '15%' as unknown as number,
+    right: '15%' as unknown as number,
+    height: 40,
+    borderRadius: 20,
   },
   boosterIconWrap: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   boosterLabel: {
-    position: 'absolute',
-    bottom: -2,
-    fontFamily: FONTS.bodyBold,
-    color: '#c8d5fb',
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textSecondary,
     fontSize: 11,
-    letterSpacing: 0.2,
+    letterSpacing: 0.5,
   },
   boosterCount: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: '#4de9ff',
-    borderRadius: 15,
-    minWidth: 30,
-    height: 30,
+    top: -5,
+    right: -5,
+    backgroundColor: COLORS.accent,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: 'rgba(14, 10, 40, 0.98)',
-    shadowColor: '#4de9ff',
+    borderWidth: 1.5,
+    borderColor: 'rgba(10, 0, 30, 0.9)',
+    shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
   },
   boosterCountText: {
-    color: '#112944',
-    fontSize: 14,
+    color: '#fff',
+    fontSize: 10,
     fontFamily: FONTS.display,
   },
   failedOverlay: {
