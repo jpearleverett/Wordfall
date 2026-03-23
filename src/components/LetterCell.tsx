@@ -96,9 +96,9 @@ export const LetterCell = React.memo(function LetterCell({
   const getBorderColor = () => {
     if (isValidWord) return COLORS.green;
     if (isSelected && isHinted) return COLORS.gold;
-    if (isSelected) return '#7ff5ff';
-    if (isFrozen) return 'rgba(114, 237, 255, 0.5)';
-    return 'rgba(222,230,255,0.36)';
+    if (isSelected) return COLORS.accent;
+    if (isFrozen) return 'rgba(0, 212, 255, 0.5)';
+    return 'rgba(255,255,255,0.18)';
   };
 
   const borderRadius = size * 0.22;
@@ -106,7 +106,7 @@ export const LetterCell = React.memo(function LetterCell({
   const getShadowColor = () => {
     if (isValidWord) return COLORS.green;
     if (isSelected) return COLORS.accent;
-    return 'rgba(0,0,0,0.55)';
+    return '#000';
   };
 
   // Outer glow ring for selected/valid states
@@ -121,15 +121,15 @@ export const LetterCell = React.memo(function LetterCell({
           pointerEvents="none"
           style={{
             position: 'absolute',
-            top: -8,
-            left: -8,
-            right: -8,
-            bottom: -8,
+            top: -4,
+            left: -4,
+            right: -4,
+            bottom: -4,
             borderRadius: borderRadius + 4,
             backgroundColor: outerGlowColor,
             opacity: glowAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0, 0.72],
+              outputRange: [0, 0.45],
             }),
           }}
         />
@@ -145,9 +145,9 @@ export const LetterCell = React.memo(function LetterCell({
             left: -2,
             right: -2,
             bottom: -2,
-            borderRadius: borderRadius + 4,
-            borderWidth: 2,
-            borderColor: 'rgba(96, 247, 255, 0.95)',
+            borderRadius: borderRadius + 2,
+            borderWidth: 1.5,
+            borderColor: 'rgba(0, 212, 255, 0.8)',
             opacity: movedAnim,
           }}
         />
@@ -161,13 +161,13 @@ export const LetterCell = React.memo(function LetterCell({
             height: size,
             borderRadius,
             borderColor: getBorderColor(),
-            borderWidth: isSelected || isValidWord ? 2.4 : isFrozen ? 1.6 : 1.4,
+            borderWidth: isSelected || isValidWord ? 2 : isFrozen ? 1.5 : 1,
             transform: [{ scale: scaleAnim }],
             shadowColor: getShadowColor(),
-            shadowOpacity: (isSelected || isValidWord) ? 0.85 : 0.42,
-            shadowRadius: (isSelected || isValidWord) ? 18 : 6,
-            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 8 : 3 },
-            elevation: (isSelected || isValidWord) ? 14 : 4,
+            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.25,
+            shadowRadius: (isSelected || isValidWord) ? 14 : 4,
+            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 6 : 2 },
+            elevation: (isSelected || isValidWord) ? 12 : 3,
           },
         ]}
       >
@@ -186,7 +186,7 @@ export const LetterCell = React.memo(function LetterCell({
             styles.innerGlow,
             {
               borderRadius,
-              opacity: isSelected ? 0.42 : 0.1,
+              opacity: isSelected ? 0.30 : 0.06,
               backgroundColor: isValidWord
                 ? COLORS.greenGlow
                 : isHinted
@@ -202,8 +202,8 @@ export const LetterCell = React.memo(function LetterCell({
         <LinearGradient
           colors={
             isSelected || isValidWord
-              ? ['rgba(255,255,255,0.42)', 'rgba(255,255,255,0.12)', 'transparent'] as [string, string, string]
-              : ['rgba(255,255,255,0.20)', 'rgba(255,255,255,0.05)', 'transparent'] as [string, string, string]
+              ? ['rgba(255,255,255,0.30)', 'rgba(255,255,255,0.06)', 'transparent'] as [string, string, string]
+              : ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.02)', 'transparent'] as [string, string, string]
           }
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -219,7 +219,7 @@ export const LetterCell = React.memo(function LetterCell({
             {
               borderTopLeftRadius: borderRadius,
               borderBottomLeftRadius: borderRadius,
-              opacity: isSelected || isValidWord ? 0.18 : 0.08,
+              opacity: isSelected || isValidWord ? 0.15 : 0.04,
             },
           ]}
         />
@@ -239,7 +239,7 @@ export const LetterCell = React.memo(function LetterCell({
             styles.shimmerSweep,
             {
               borderRadius,
-              opacity: isSelected ? 0.14 : 0.05,
+              opacity: isSelected ? 0.10 : 0.02,
             },
           ]}
         />
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   cell: {
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 4,
+    margin: 2,
     overflow: 'hidden',
   },
   innerGlow: {
@@ -350,17 +350,17 @@ const styles = StyleSheet.create({
   },
   letterDefault: {
     textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowRadius: 10,
+    textShadowRadius: 6,
     textShadowOffset: { width: 0, height: 2 },
   },
   letterSelected: {
-    color: '#f8ffff',
-    textShadowColor: 'rgba(113, 248, 255, 0.95)',
-    textShadowRadius: 18,
+    color: '#fff',
+    textShadowColor: COLORS.accentGlow,
+    textShadowRadius: 16,
     textShadowOffset: { width: 0, height: 0 },
   },
   letterValid: {
-    color: '#f8ffff',
+    color: '#fff',
     textShadowColor: COLORS.greenGlow,
     textShadowRadius: 20,
     textShadowOffset: { width: 0, height: 0 },
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     right: 2,
-    backgroundColor: 'rgba(80, 244, 255, 0.98)',
+    backgroundColor: 'rgba(0, 212, 255, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: COLORS.accent,
