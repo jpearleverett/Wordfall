@@ -8,25 +8,24 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, FONTS, SHADOWS } from '../constants';
+import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
 
 const MODES = [
-  { id: 'classic', name: 'Classic', icon: '📖', desc: 'Solve all listed words', unlockLevel: 1, accent: '#ff6eb4' },
-  { id: 'limitedMoves', name: 'Limited Moves', icon: '🎯', desc: 'Complete in exactly N moves', unlockLevel: 5, accent: '#ffd700' },
-  { id: 'timePressure', name: 'Time Pressure', icon: '⏱️', desc: 'Beat the clock', unlockLevel: 8, accent: '#ff9100' },
-  { id: 'perfectSolve', name: 'Perfect Solve', icon: '💎', desc: 'Zero mistakes, no assists', unlockLevel: 12, accent: '#00fff5' },
-  { id: 'cascade', name: 'Cascade', icon: '🔥', desc: 'Build combo multipliers', unlockLevel: 6, accent: '#ff6b2b' },
-  { id: 'daily', name: 'Daily Challenge', icon: '☀️', desc: 'Same puzzle for everyone', unlockLevel: 1, accent: '#ffe066' },
-  { id: 'weekly', name: 'Weekly Special', icon: '🏆', desc: 'Curated hard puzzle', unlockLevel: 10, accent: '#c77dff' },
-  { id: 'endless', name: 'Endless', icon: '♾️', desc: 'Never-ending puzzles', unlockLevel: 15, accent: '#00ffaa' },
-  { id: 'expert', name: 'Expert', icon: '🧠', desc: 'Minimal hints, harder boards', unlockLevel: 20, accent: '#8ef9ff' },
-  { id: 'relax', name: 'Relax', icon: '🌿', desc: 'No pressure, unlimited undos', unlockLevel: 3, accent: '#66ffcc' },
+  { id: 'classic', name: 'Classic', icon: '📖', desc: 'Solve all listed words', unlockLevel: 1 },
+  { id: 'limitedMoves', name: 'Limited Moves', icon: '🎯', desc: 'Complete in exactly N moves', unlockLevel: 5 },
+  { id: 'timePressure', name: 'Time Pressure', icon: '⏱️', desc: 'Beat the clock', unlockLevel: 8 },
+  { id: 'perfectSolve', name: 'Perfect Solve', icon: '💎', desc: 'Zero mistakes, no assists', unlockLevel: 12 },
+  { id: 'cascade', name: 'Cascade', icon: '🔥', desc: 'Build combo multipliers', unlockLevel: 6 },
+  { id: 'daily', name: 'Daily Challenge', icon: '☀️', desc: 'Same puzzle for everyone', unlockLevel: 1 },
+  { id: 'weekly', name: 'Weekly Special', icon: '🏆', desc: 'Curated hard puzzle', unlockLevel: 10 },
+  { id: 'endless', name: 'Endless', icon: '♾️', desc: 'Never-ending puzzles', unlockLevel: 15 },
+  { id: 'expert', name: 'Expert', icon: '🧠', desc: 'Minimal hints, harder boards', unlockLevel: 20 },
+  { id: 'relax', name: 'Relax', icon: '🌿', desc: 'No pressure, unlimited undos', unlockLevel: 3 },
 ];
 
 interface ModesScreenProps {
@@ -44,8 +43,6 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
   const onSelectMode = onSelectModeProp ?? ((_mode: string) => {});
   const unlockedModes = unlockedModesProp ?? player.unlockedModes;
   const playerLevel = playerLevelProp ?? player.currentLevel;
-  const [showTooltip, setShowTooltip] = useState(!player.tooltipsShown.includes('modes_screen'));
-
   const isUnlocked = (mode: typeof MODES[number]): boolean => {
     return unlockedModes.includes(mode.id) || playerLevel >= mode.unlockLevel;
   };
@@ -56,46 +53,63 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
     return (
       <TouchableOpacity
         key={mode.id}
-        style={[styles.card, unlocked ? styles.cardUnlocked : styles.cardLocked]}
+        style={[
+          styles.card,
+          unlocked ? styles.cardUnlocked : styles.cardLocked,
+        ]}
         onPress={() => unlocked && onSelectMode(mode.id)}
-        activeOpacity={unlocked ? 0.82 : 1}
+        activeOpacity={unlocked ? 0.7 : 1}
       >
-        <LinearGradient
-          colors={unlocked ? ['rgba(24, 0, 48, 0.96)', 'rgba(8, 10, 28, 0.96)'] : ['rgba(12, 14, 32, 0.92)', 'rgba(8, 10, 26, 0.96)']}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-        <View style={[styles.cardAura, { backgroundColor: unlocked ? `${mode.accent}26` : 'rgba(255,255,255,0.04)' }]} />
-        <View style={[styles.cardRail, { backgroundColor: unlocked ? mode.accent : 'rgba(255,255,255,0.14)' }]} />
-
-        <View style={styles.cardContent}>
+        {unlocked ? (
           <LinearGradient
-            colors={unlocked ? [`${mode.accent}30`, 'rgba(255,255,255,0.05)'] : ['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)']}
-            style={[styles.iconHalo, unlocked && { borderColor: `${mode.accent}66` }]}
-          >
-            <Text style={styles.cardIcon}>{unlocked ? mode.icon : '🔒'}</Text>
-          </LinearGradient>
-          <Text style={[styles.cardName, !unlocked && styles.textLocked, unlocked && { color: mode.accent }]}>{mode.name}</Text>
-          {unlocked ? <Text style={styles.cardDesc}>{mode.desc}</Text> : <Text style={styles.lockText}>Unlocks at Level {mode.unlockLevel}</Text>}
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+        ) : (
+          <LinearGradient
+            colors={['#121636', '#0e1230']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+        )}
+        {unlocked && <View style={styles.cardGlow} />}
+        <View style={styles.cardContent}>
+          <Text style={styles.cardIcon}>{unlocked ? mode.icon : '🔒'}</Text>
+          <Text style={[styles.cardName, !unlocked && styles.textLocked]}>
+            {mode.name}
+          </Text>
+          {unlocked ? (
+            <Text style={styles.cardDesc}>{mode.desc}</Text>
+          ) : (
+            <Text style={styles.lockText}>
+              Unlocks at Level {mode.unlockLevel}
+            </Text>
+          )}
         </View>
-        <View style={styles.cardFooter}>
-          <Text style={styles.cardFooterText}>{unlocked ? 'ENTER MODE' : 'LOCKED'}</Text>
-        </View>
+        {unlocked && (
+          <View style={styles.cardAccent} />
+        )}
       </TouchableOpacity>
     );
   };
 
+  const [showTooltip, setShowTooltip] = useState(
+    !player.tooltipsShown.includes('modes_screen')
+  );
+
   return (
     <View style={styles.container}>
-      <AmbientBackdrop variant="game" />
       <View style={styles.header}>
-        <Text style={styles.headerEyebrow}>SELECT YOUR FREQUENCY</Text>
         <Text style={styles.headerTitle}>GAME MODES</Text>
-        <Text style={styles.headerSubtitle}>{unlockedModes.length} of {MODES.length} modes unlocked</Text>
+        <Text style={styles.headerSubtitle}>
+          {unlockedModes.length} of {MODES.length} unlocked
+        </Text>
       </View>
       <Tooltip
-        message="Each mode remixes the board rules. Unlock more frequencies by climbing levels."
+        message="Each mode has unique rules! Unlock more modes by advancing through levels."
         visible={showTooltip}
         onDismiss={() => {
           setShowTooltip(false);
@@ -103,7 +117,11 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
         }}
         position="top"
       />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.grid}
+        showsVerticalScrollIndicator={false}
+      >
         {MODES.map(renderModeCard)}
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -118,27 +136,18 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 60,
-    paddingBottom: 18,
+    paddingBottom: 20,
     paddingHorizontal: 16,
     alignItems: 'center',
   },
-  headerEyebrow: {
-    fontSize: 10,
-    fontFamily: FONTS.display,
-    color: COLORS.teal,
-    letterSpacing: 2.8,
-    marginBottom: 8,
-    textShadowColor: COLORS.tealGlow,
-    textShadowRadius: 10,
-  },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 4,
     textShadowColor: COLORS.accentGlow,
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
+    textShadowRadius: 8,
   },
   headerSubtitle: {
     fontSize: 14,
@@ -156,60 +165,56 @@ const styles = StyleSheet.create({
   },
   card: {
     width: CARD_WIDTH,
-    borderRadius: 24,
+    borderRadius: 20,
     overflow: 'hidden',
-    minHeight: 188,
-    borderWidth: 1,
+    minHeight: 165,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
   },
   cardUnlocked: {
-    borderColor: 'rgba(255,255,255,0.14)',
-    ...SHADOWS.strong,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   cardLocked: {
-    borderColor: 'rgba(255,255,255,0.05)',
-    opacity: 0.72,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+    opacity: 0.55,
   },
-  cardAura: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
-    height: 74,
-    borderRadius: 20,
-  },
-  cardRail: {
+  cardGlow: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 3,
+    backgroundColor: COLORS.accent,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.7,
+    shadowRadius: 16,
+    elevation: 8,
   },
   cardContent: {
-    padding: 18,
+    padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
   },
-  iconHalo: {
-    width: 62,
-    height: 62,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
   cardIcon: {
-    fontSize: 34,
+    fontSize: 36,
+    marginBottom: 10,
   },
   cardName: {
     fontSize: 16,
-    fontFamily: FONTS.display,
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: 0.5,
+    marginBottom: 6,
+    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
   textLocked: {
     color: COLORS.textMuted,
@@ -218,7 +223,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 16,
   },
   lockText: {
     fontSize: 11,
@@ -229,22 +234,17 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 6,
   },
-  cardFooter: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  cardFooterText: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontFamily: FONTS.display,
-    textAlign: 'center',
-    letterSpacing: 1.5,
+  cardAccent: {
+    height: 3,
+    backgroundColor: COLORS.accent,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
   },
   bottomSpacer: {
-    height: 120,
+    height: 40,
     width: '100%',
   },
 });
