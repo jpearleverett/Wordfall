@@ -98,7 +98,7 @@ export const LetterCell = React.memo(function LetterCell({
     if (isSelected && isHinted) return COLORS.gold;
     if (isSelected) return COLORS.accent;
     if (isFrozen) return 'rgba(0, 212, 255, 0.5)';
-    return 'rgba(255,255,255,0.10)';
+    return 'rgba(255,255,255,0.18)';
   };
 
   const borderRadius = size * 0.22;
@@ -164,10 +164,10 @@ export const LetterCell = React.memo(function LetterCell({
             borderWidth: isSelected || isValidWord ? 2 : isFrozen ? 1.5 : 1,
             transform: [{ scale: scaleAnim }],
             shadowColor: getShadowColor(),
-            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.5,
-            shadowRadius: (isSelected || isValidWord) ? 14 : 8,
-            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 6 : 4 },
-            elevation: (isSelected || isValidWord) ? 12 : 6,
+            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.25,
+            shadowRadius: (isSelected || isValidWord) ? 14 : 4,
+            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 6 : 2 },
+            elevation: (isSelected || isValidWord) ? 12 : 3,
           },
         ]}
       >
