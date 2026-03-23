@@ -687,9 +687,15 @@ export function GameScreen({
         styles.boosterBar,
         !(hasAnyBoosters && state.status === 'playing') && styles.boosterBarHidden,
       ]}>
-        {/* Metallic shelf base */}
         <LinearGradient
-          colors={['rgba(0, 212, 255, 0.12)', 'rgba(0, 180, 220, 0.06)', 'rgba(0, 100, 140, 0.10)'] as [string, string, string]}
+          colors={['rgba(84, 91, 150, 0.36)', 'rgba(28, 22, 74, 0.72)', 'rgba(11, 11, 45, 0.96)'] as [string, string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.boosterPlatform}
+        />
+        <View style={styles.boosterPlatformLip} />
+        <LinearGradient
+          colors={['rgba(0, 212, 255, 0.18)', 'rgba(0, 180, 220, 0.08)', 'rgba(0, 100, 140, 0.12)'] as [string, string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.boosterShelfBar}
@@ -700,15 +706,14 @@ export function GameScreen({
               style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
               onPress={handleShuffle}
             >
-              {/* Pedestal card */}
               <LinearGradient
-                colors={['rgba(25, 15, 50, 0.85)', 'rgba(15, 8, 35, 0.90)'] as [string, string]}
+                colors={['rgba(85, 34, 110, 0.92)', 'rgba(44, 18, 82, 0.94)', 'rgba(14, 12, 42, 0.98)'] as [string, string, string]}
                 style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
               />
-              {/* Icon glow background */}
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(168, 85, 247, 0.20)' }]} />
+              <View style={styles.boosterInnerFrame} />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 77, 241, 0.22)' }]} />
               <View style={styles.boosterIconWrap}>
-                <Ionicons name="shuffle" size={28} color={COLORS.purple} />
+                <Ionicons name="shuffle" size={28} color="#ff6ceb" />
               </View>
               <Text style={styles.boosterLabel}>Shuffle</Text>
               {state.boosterCounts.shuffleFiller > 0 && (
@@ -728,12 +733,13 @@ export function GameScreen({
               onPress={handleFreezeToggle}
             >
               <LinearGradient
-                colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
+                colors={['rgba(42, 88, 135, 0.92)', 'rgba(20, 51, 106, 0.94)', 'rgba(8, 20, 57, 0.98)'] as [string, string, string]}
                 style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
               />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
+              <View style={styles.boosterInnerFrame} />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.20)' }]} />
               <View style={styles.boosterIconWrap}>
-                <Ionicons name="snow" size={28} color={COLORS.accent} />
+                <Ionicons name="snow" size={28} color="#75f4ff" />
               </View>
               <Text style={styles.boosterLabel}>Freeze</Text>
               {state.boosterCounts.freezeColumn > 0 && (
@@ -749,12 +755,13 @@ export function GameScreen({
               onPress={handlePreviewToggle}
             >
               <LinearGradient
-                colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
+                colors={['rgba(49, 73, 122, 0.92)', 'rgba(28, 43, 88, 0.94)', 'rgba(11, 18, 52, 0.98)'] as [string, string, string]}
                 style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
               />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
+              <View style={styles.boosterInnerFrame} />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.20)' }]} />
               <View style={styles.boosterIconWrap}>
-                <Ionicons name="eye" size={28} color={COLORS.accent} />
+                <Ionicons name="eye" size={28} color="#96f8ff" />
               </View>
               <Text style={styles.boosterLabel}>Preview</Text>
               {state.boosterCounts.boardPreview > 0 && (
@@ -1145,6 +1152,29 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     height: 100,
   },
+  boosterPlatform: {
+    position: 'absolute',
+    left: 28,
+    right: 28,
+    bottom: 10,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(170, 198, 255, 0.18)',
+  },
+  boosterPlatformLip: {
+    position: 'absolute',
+    left: 34,
+    right: 34,
+    bottom: 40,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(116, 246, 255, 0.38)',
+    shadowColor: '#77f7ff',
+    shadowOpacity: 0.85,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
   boosterBarHidden: {
     opacity: 0,
   },
@@ -1168,20 +1198,30 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.20)',
+    borderColor: 'rgba(161, 202, 255, 0.32)',
     minWidth: 90,
     overflow: 'hidden',
-    shadowColor: 'rgba(0, 212, 255, 0.3)',
+    shadowColor: 'rgba(0, 212, 255, 0.38)',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
     elevation: 6,
   },
+  boosterInnerFrame: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
   boosterActive: {
-    borderColor: 'rgba(0, 212, 255, 0.6)',
-    shadowColor: COLORS.accent,
-    shadowOpacity: 0.7,
-    shadowRadius: 14,
+    borderColor: 'rgba(108, 245, 255, 0.76)',
+    shadowColor: '#76f5ff',
+    shadowOpacity: 0.9,
+    shadowRadius: 16,
   },
   boosterPressed: {
     transform: [{ scale: 0.92 }],
@@ -1200,7 +1240,7 @@ const styles = StyleSheet.create({
   },
   boosterLabel: {
     fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textSecondary,
+    color: '#c8d9ff',
     fontSize: 11,
     letterSpacing: 0.5,
   },
@@ -1208,7 +1248,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -5,
     right: -5,
-    backgroundColor: COLORS.accent,
+    backgroundColor: '#43f0ff',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -1223,7 +1263,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   boosterCountText: {
-    color: '#fff',
+    color: '#14213a',
     fontSize: 10,
     fontFamily: FONTS.display,
   },

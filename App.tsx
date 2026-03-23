@@ -181,8 +181,8 @@ function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#0a0f28',
-          borderTopColor: 'rgba(255,255,255,0.08)',
+          backgroundColor: 'rgba(9, 11, 42, 0.98)',
+          borderTopColor: 'rgba(150,180,255,0.14)',
           borderTopWidth: 1,
           borderTopLeftRadius: 22,
           borderTopRightRadius: 22,
@@ -192,11 +192,11 @@ function MainTabs() {
           elevation: 24,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -6 },
-          shadowOpacity: 0.4,
-          shadowRadius: 12,
+          shadowOpacity: 0.55,
+          shadowRadius: 16,
         },
         tabBarActiveTintColor: COLORS.accent,
-        tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarInactiveTintColor: '#707bb4',
         tabBarLabelStyle: {
           fontFamily: FONTS.bodySemiBold,
           fontSize: 10,
