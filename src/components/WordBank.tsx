@@ -80,14 +80,14 @@ const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isVa
       <View style={styles.chipBackground}>
         {wordPlacement.found ? (
           <LinearGradient
-            colors={['rgba(63, 242, 255, 0.18)', 'rgba(60, 126, 255, 0.12)'] as [string, string]}
+            colors={['rgba(0, 230, 118, 0.22)', 'rgba(0, 200, 83, 0.10)'] as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
         ) : (
           <LinearGradient
-            colors={['rgba(118, 96, 214, 0.22)', 'rgba(46, 36, 97, 0.16)'] as [string, string]}
+            colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
@@ -101,7 +101,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isVa
           styles.wordText,
           wordPlacement.found && styles.wordTextFound,
           isActive && !isValidWord && styles.wordTextActive,
-          (isActive && isValidWord) || wordPlacement.found ? styles.wordTextValid : null,
+          isActive && isValidWord && styles.wordTextValid,
         ]}
       >
         {wordPlacement.word}
@@ -249,15 +249,15 @@ const styles = StyleSheet.create({
   currentWord: {
     fontSize: 24,
     fontFamily: 'SpaceGrotesk_700Bold',
-    color: '#d8eeff',
-    letterSpacing: 4,
+    color: COLORS.textPrimary,
+    letterSpacing: 5,
     textTransform: 'uppercase',
-    textShadowColor: 'rgba(116, 240, 255, 0.4)',
-    textShadowRadius: 12,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowRadius: 6,
   },
   currentWordValid: {
-    color: '#a7f7ff',
-    textShadowColor: 'rgba(113, 246, 255, 0.92)',
+    color: COLORS.green,
+    textShadowColor: COLORS.greenGlow,
     textShadowRadius: 24,
   },
   validIndicator: {
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   },
   currentWordPlaceholder: {
     fontSize: 14,
-    color: 'rgba(123, 211, 244, 0.56)',
+    color: COLORS.textMuted,
     fontFamily: 'Inter_500Medium',
   },
   underline: {
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     height: 2,
     marginTop: 8,
     borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     overflow: 'hidden',
   },
   underlineFill: {
@@ -308,11 +308,11 @@ const styles = StyleSheet.create({
   wordChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(99, 236, 255, 0.26)',
+    borderColor: 'rgba(255,255,255,0.10)',
     overflow: 'visible',
     gap: 4,
   },
@@ -326,30 +326,30 @@ const styles = StyleSheet.create({
     top: 0,
     left: '10%',
     right: '10%',
-    height: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 999,
   },
   wordChipFound: {
-    borderColor: 'rgba(103, 245, 255, 0.55)',
-    shadowColor: '#5df2ff',
+    borderColor: 'rgba(0, 230, 118, 0.5)',
+    shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 6,
   },
   wordChipActive: {
-    borderColor: 'rgba(87, 245, 255, 0.72)',
-    shadowColor: '#66f2ff',
+    borderColor: 'rgba(0, 212, 255, 0.55)',
+    shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.55,
-    shadowRadius: 12,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
     elevation: 6,
   },
   wordChipValid: {
-    borderColor: 'rgba(103, 245, 255, 0.78)',
+    borderColor: COLORS.green,
     borderWidth: 2,
-    shadowColor: '#65f4ff',
+    shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
@@ -358,24 +358,25 @@ const styles = StyleSheet.create({
   wordText: {
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
-    color: 'rgba(123, 211, 244, 0.9)',
-    letterSpacing: 1.2,
+    color: COLORS.wordPending,
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   wordTextFound: {
-    color: '#aef8ff',
-    textShadowColor: 'rgba(96, 244, 255, 0.45)',
+    color: COLORS.wordFound,
+    textDecorationLine: 'line-through',
+    textShadowColor: COLORS.greenGlow,
     textShadowRadius: 6,
   },
   wordTextActive: {
-    color: '#92f6ff',
-    textShadowColor: 'rgba(98, 244, 255, 0.7)',
+    color: COLORS.wordActive,
+    textShadowColor: COLORS.accentGlow,
     textShadowRadius: 8,
   },
   wordTextValid: {
-    color: '#bdf8ff',
+    color: COLORS.green,
     fontFamily: 'SpaceGrotesk_700Bold',
-    textShadowColor: 'rgba(98, 244, 255, 0.86)',
+    textShadowColor: COLORS.greenGlow,
     textShadowRadius: 12,
   },
   checkContainer: {
@@ -400,12 +401,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 8,
-    backgroundColor: 'rgba(84, 73, 160, 0.32)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(116, 236, 255, 0.18)',
+    borderColor: 'rgba(255,255,255,0.04)',
   },
   letterCountText: {
-    color: 'rgba(132, 215, 255, 0.9)',
+    color: COLORS.textMuted,
     fontSize: 9,
     fontFamily: 'Inter_600SemiBold',
   },

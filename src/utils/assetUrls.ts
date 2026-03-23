@@ -10,7 +10,7 @@
 export const BACKGROUND_ASSETS = {
   // Synthwave retrowave scenery - palm trees, neon sun, grid floor
   gameplayBg:
-    'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1400&q=80&auto=format&fit=crop',
+    'https://picjumbo.com/wp-content/uploads/retro-synthwave-retrowave-scenery-free-photo.jpg',
   // Dark cosmic aurora for home screen
   homeBg:
     'https://images.unsplash.com/photo-1539721972319-f0e80a00d424?w=1080&q=80&auto=format',
@@ -46,7 +46,4 @@ export const UI_ASSETS = {
   // Abstract gradient smoke
   abstractSmoke:
     'https://images.unsplash.com/photo-1558470598-a5dda9640f68?w=800&q=80&auto=format',
-  // Thin scanline texture to help sell the retro-futuristic treatment
-  scanlines:
-    'https://images.unsplash.com/photo-1519608487953-e999c86e7455?w=1200&q=40&auto=format&fit=crop',
 } as const;
