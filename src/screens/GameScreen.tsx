@@ -453,8 +453,6 @@ export function GameScreen({
     state.boosterCounts.freezeColumn > 0 ||
     state.boosterCounts.boardPreview > 0;
 
-  const canUsePreview = state.boosterCounts.boardPreview > 0 && state.selectedCells.length > 0;
-
   const invalidFlashOpacity = invalidFlashAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 0.25],
@@ -689,13 +687,13 @@ export function GameScreen({
         styles.boosterBar,
         !(hasAnyBoosters && state.status === 'playing') && styles.boosterBarHidden,
       ]}>
+        {/* Metallic shelf base */}
         <LinearGradient
-          colors={['rgba(86, 96, 152, 0.92)', 'rgba(52, 47, 92, 0.96)', 'rgba(26, 19, 56, 0.98)'] as [string, string, string]}
-          start={{ x: 0, y: 0.1 }}
+          colors={['rgba(0, 212, 255, 0.12)', 'rgba(0, 180, 220, 0.06)', 'rgba(0, 100, 140, 0.10)'] as [string, string, string]}
+          start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.boosterShelfBar}
         />
-        <View style={styles.boosterShelfLip} />
         <View style={styles.boosterShelf}>
           {state.boosterCounts.shuffleFiller > 0 && (
             <Pressable
@@ -745,15 +743,10 @@ export function GameScreen({
               )}
             </Pressable>
           )}
-          {state.boosterCounts.boardPreview > 0 && (
+          {state.boosterCounts.boardPreview > 0 && state.selectedCells.length > 0 && (
             <Pressable
-              style={({ pressed }) => [
-                styles.boosterButton,
-                !canUsePreview && styles.boosterDisabled,
-                pressed && styles.boosterPressed,
-              ]}
+              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
               onPress={handlePreviewToggle}
-              disabled={!canUsePreview}
             >
               <LinearGradient
                 colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
@@ -885,10 +878,9 @@ const styles = StyleSheet.create({
   },
   gridArea: {
     flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingTop: 10,
   },
   bannerOverlay: {
     position: 'absolute',
@@ -912,9 +904,9 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   wordArea: {
-    paddingTop: 0,
+    paddingTop: 2,
     paddingBottom: 2,
-    height: 160,
+    height: 86,
   },
   timerBar: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1147,69 +1139,49 @@ const styles = StyleSheet.create({
   },
   boosterBar: {
     justifyContent: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 0,
-    marginTop: 2,
-    marginBottom: 4,
-    height: 124,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginTop: 4,
+    marginBottom: 2,
+    height: 100,
   },
   boosterBarHidden: {
     opacity: 0,
   },
   boosterShelfBar: {
     position: 'absolute',
-    bottom: 12,
-    left: 34,
-    right: 34,
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(174, 196, 255, 0.24)',
-    shadowColor: '#61f0ff',
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-  },
-  boosterShelfLip: {
-    position: 'absolute',
-    bottom: 18,
-    left: 48,
-    right: 48,
-    height: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(92, 235, 255, 0.58)',
-    shadowColor: '#61f0ff',
-    shadowOpacity: 0.85,
-    shadowRadius: 10,
+    bottom: 8,
+    left: 20,
+    right: 20,
+    height: 3,
+    borderRadius: 2,
   },
   boosterShelf: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 18,
-    paddingBottom: 28,
+    gap: 16,
+    paddingBottom: 4,
   },
   boosterButton: {
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(158, 190, 255, 0.30)',
-    minWidth: 104,
+    borderColor: 'rgba(0, 212, 255, 0.20)',
+    minWidth: 90,
     overflow: 'hidden',
-    shadowColor: 'rgba(0, 212, 255, 0.4)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.55,
-    shadowRadius: 14,
-    elevation: 10,
+    shadowColor: 'rgba(0, 212, 255, 0.3)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 6,
   },
   boosterActive: {
-    borderColor: 'rgba(90, 242, 255, 0.88)',
-    shadowColor: '#63efff',
-    shadowOpacity: 0.88,
-    shadowRadius: 20,
-  },
-  boosterDisabled: {
-    opacity: 0.55,
+    borderColor: 'rgba(0, 212, 255, 0.6)',
+    shadowColor: COLORS.accent,
+    shadowOpacity: 0.7,
+    shadowRadius: 14,
   },
   boosterPressed: {
     transform: [{ scale: 0.92 }],
@@ -1228,9 +1200,9 @@ const styles = StyleSheet.create({
   },
   boosterLabel: {
     fontFamily: FONTS.bodySemiBold,
-    color: '#dde7ff',
-    fontSize: 14,
-    letterSpacing: 0.4,
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    letterSpacing: 0.5,
   },
   boosterCount: {
     position: 'absolute',
