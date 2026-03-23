@@ -98,7 +98,7 @@ export const LetterCell = React.memo(function LetterCell({
     if (isSelected && isHinted) return COLORS.gold;
     if (isSelected) return COLORS.accent;
     if (isFrozen) return 'rgba(0, 212, 255, 0.5)';
-    return 'rgba(255,255,255,0.18)';
+    return 'rgba(255,255,255,0.22)';
   };
 
   const borderRadius = size * 0.22;
@@ -161,13 +161,13 @@ export const LetterCell = React.memo(function LetterCell({
             height: size,
             borderRadius,
             borderColor: getBorderColor(),
-            borderWidth: isSelected || isValidWord ? 2 : isFrozen ? 1.5 : 1,
+            borderWidth: isSelected || isValidWord ? 2.5 : isFrozen ? 2 : 1.5,
             transform: [{ scale: scaleAnim }],
             shadowColor: getShadowColor(),
-            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.25,
-            shadowRadius: (isSelected || isValidWord) ? 14 : 4,
-            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 6 : 2 },
-            elevation: (isSelected || isValidWord) ? 12 : 3,
+            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.4,
+            shadowRadius: (isSelected || isValidWord) ? 14 : 6,
+            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 6 : 3 },
+            elevation: (isSelected || isValidWord) ? 12 : 5,
           },
         ]}
       >
@@ -203,7 +203,7 @@ export const LetterCell = React.memo(function LetterCell({
           colors={
             isSelected || isValidWord
               ? ['rgba(255,255,255,0.30)', 'rgba(255,255,255,0.06)', 'transparent'] as [string, string, string]
-              : ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.02)', 'transparent'] as [string, string, string]
+              : ['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.04)', 'transparent'] as [string, string, string]
           }
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -226,7 +226,7 @@ export const LetterCell = React.memo(function LetterCell({
 
         {/* Bottom edge shadow for 3D depth */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.15)'] as [string, string]}
+          colors={['transparent', 'rgba(0,0,0,0.25)'] as [string, string]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={[styles.bottomShadow, { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius }]}

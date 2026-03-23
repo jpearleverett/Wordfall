@@ -744,7 +744,7 @@ export function GameScreen({
               )}
             </Pressable>
           )}
-          {state.boosterCounts.boardPreview > 0 && state.selectedCells.length > 0 && (
+          {state.boosterCounts.boardPreview > 0 && (
             <Pressable
               style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
               onPress={handlePreviewToggle}
@@ -1154,14 +1154,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     width: '100%',
-    height: 50,
-    opacity: 0.85,
+    height: 60,
+    opacity: 0.9,
   },
   boosterShelf: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 16,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   boosterButton: {
     alignItems: 'center',

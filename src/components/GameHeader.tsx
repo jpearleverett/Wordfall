@@ -355,10 +355,10 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   scoreValue: {
-    color: COLORS.gold,
+    color: COLORS.accent,
     fontSize: 18,
     fontFamily: 'SpaceGrotesk_700Bold',
-    textShadowColor: COLORS.goldGlow,
+    textShadowColor: COLORS.accentGlow,
     textShadowRadius: 14,
   },
   comboChip: {
@@ -381,14 +381,15 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 40,
+    height: 44,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(255,255,255,0.12)',
     overflow: 'visible',
+    backgroundColor: 'rgba(10, 14, 39, 0.6)',
   },
   hintButton: {
     borderColor: 'rgba(255, 215, 0, 0.35)',
