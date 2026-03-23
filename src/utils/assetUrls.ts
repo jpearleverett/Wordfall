@@ -8,9 +8,9 @@
 
 // Background textures and environments
 export const BACKGROUND_ASSETS = {
-  // Deep space nebula for game background - rich purples and blues
+  // Synthwave retrowave scenery - palm trees, neon sun, grid floor
   gameplayBg:
-    'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=1080&q=80&auto=format',
+    'https://picjumbo.com/wp-content/uploads/retro-synthwave-retrowave-scenery-free-photo.jpg',
   // Dark cosmic aurora for home screen
   homeBg:
     'https://images.unsplash.com/photo-1539721972319-f0e80a00d424?w=1080&q=80&auto=format',
