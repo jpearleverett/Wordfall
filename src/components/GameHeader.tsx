@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, FONTS } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
+import { puzzleReferenceTheme } from '../theme/puzzleReferenceTheme';
 import { Ionicons } from '@expo/vector-icons';
 import { GameMode } from '../types';
 
@@ -24,6 +25,8 @@ interface GameHeaderProps {
   onUndo: () => void;
   onBack: () => void;
 }
+
+const headerTheme = puzzleReferenceTheme.header;
 
 export function GameHeader({
   level,
@@ -50,15 +53,13 @@ export function GameHeader({
   const scoreAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  // Animate score pop on change
   useEffect(() => {
     Animated.sequence([
       Animated.timing(scoreAnim, { toValue: 1.15, duration: 80, useNativeDriver: true }),
       Animated.spring(scoreAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
     ]).start();
-  }, [score]);
+  }, [score, scoreAnim]);
 
-  // Animate progress bar smoothly
   useEffect(() => {
     Animated.spring(progressAnim, {
       toValue: progress,
@@ -66,7 +67,7 @@ export function GameHeader({
       tension: 60,
       useNativeDriver: false,
     }).start();
-  }, [progress]);
+  }, [progress, progressAnim]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 100],
@@ -81,32 +82,33 @@ export function GameHeader({
           colors={GRADIENTS.header as unknown as [string, string, ...string[]]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: headerTheme.cardRadius }]}
         />
-        {/* Glass top edge highlight */}
         <LinearGradient
           colors={['rgba(255,255,255,0.08)', 'transparent'] as [string, string]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={styles.glassEdge}
         />
-        {/* Mode-colored ambient glow */}
-        <View style={[styles.chromeGlow, { backgroundColor: `${modeConfig.color}20` }]} />
+        <View
+          style={[
+            styles.chromeGlow,
+            { backgroundColor: `${modeConfig.color}${headerTheme.chromeGlow.opacitySuffix}` },
+          ]}
+        />
 
         <View style={styles.topRow}>
-          {/* Back button with glass effect */}
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
             onPress={onBack}
           >
             <LinearGradient
-              colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'] as [string, string]}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
+              colors={headerTheme.buttonGradient as [string, string]}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: headerTheme.buttonRadius + 2 }]}
             />
             <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
           </Pressable>
 
-          {/* Center: mode badge + progress */}
           <View style={styles.centerBlock}>
             <View style={[styles.modeBadge, { borderColor: `${modeConfig.color}55` }]}>
               <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
@@ -118,14 +120,8 @@ export function GameHeader({
             </View>
           </View>
 
-          {/* Score with animated pop */}
           <View style={styles.scoreBlock}>
-            <Animated.Text
-              style={[
-                styles.scoreValue,
-                { transform: [{ scale: scoreAnim }] },
-              ]}
-            >
+            <Animated.Text style={[styles.scoreValue, { transform: [{ scale: scoreAnim }] }]}>
               {score.toLocaleString()}
             </Animated.Text>
             {combo > 1 && (
@@ -135,7 +131,6 @@ export function GameHeader({
             )}
           </View>
 
-          {/* Action buttons */}
           <View style={styles.actionsRow}>
             {modeConfig.rules.allowUndo && (
               <Pressable
@@ -148,8 +143,8 @@ export function GameHeader({
                 disabled={undosLeft <= 0}
               >
                 <LinearGradient
-                  colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
-                  style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
+                  colors={headerTheme.actionGradient as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: headerTheme.buttonRadius + 2 }]}
                 />
                 <Ionicons name="arrow-undo" size={18} color={COLORS.textPrimary} />
                 {undosLeft > 0 && !modeConfig.rules.unlimitedUndo && (
@@ -172,13 +167,10 @@ export function GameHeader({
                 disabled={hintsLeft <= 0}
               >
                 <LinearGradient
-                  colors={['rgba(255,215,0,0.18)', 'rgba(255,215,0,0.06)'] as [string, string]}
-                  style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
+                  colors={headerTheme.hintGradient as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: headerTheme.buttonRadius + 2 }]}
                 />
-                {/* Glow beam from bulb */}
-                {hintsLeft > 0 && (
-                  <View style={styles.hintGlow} />
-                )}
+                {hintsLeft > 0 && <View style={styles.hintGlow} />}
                 <Ionicons name="bulb" size={18} color={COLORS.gold} />
                 {hintsLeft > 0 && (
                   <View style={[styles.countBadge, styles.hintCountBadge]}>
@@ -190,13 +182,12 @@ export function GameHeader({
           </View>
         </View>
 
-        {/* Animated progress bar */}
         <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: progressWidth as any, backgroundColor: modeConfig.color }]}>
-            {/* Shimmer on progress fill */}
+          <Animated.View
+            style={[styles.progressFill, { width: progressWidth as any, backgroundColor: modeConfig.color }]}
+          >
             <View style={styles.progressShimmer} />
           </Animated.View>
-          {/* Glow dot at progress tip */}
           <Animated.View
             style={[
               styles.progressGlowDot,
@@ -220,12 +211,12 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   chromeCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 4,
+    borderRadius: headerTheme.cardRadius,
+    borderWidth: headerTheme.cardBorderWidth,
+    borderColor: headerTheme.cardBorderColor,
+    paddingHorizontal: headerTheme.paddingHorizontal,
+    paddingTop: headerTheme.paddingTop,
+    paddingBottom: headerTheme.paddingBottom,
     overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -238,17 +229,17 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 30,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    height: headerTheme.glassEdgeHeight,
+    borderTopLeftRadius: headerTheme.cardRadius,
+    borderTopRightRadius: headerTheme.cardRadius,
   },
   chromeGlow: {
     position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    right: -50,
-    top: -60,
+    width: headerTheme.chromeGlow.size,
+    height: headerTheme.chromeGlow.size,
+    borderRadius: headerTheme.chromeGlow.radius,
+    right: headerTheme.chromeGlow.right,
+    top: headerTheme.chromeGlow.top,
   },
   topRow: {
     flexDirection: 'row',
@@ -256,19 +247,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: headerTheme.buttonSize,
+    height: headerTheme.buttonSize,
+    borderRadius: headerTheme.buttonRadius,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: headerTheme.buttonBorderColor,
     overflow: 'hidden',
-  },
-  backText: {
-    color: COLORS.textPrimary,
-    fontSize: 20,
-    fontFamily: 'Inter_700Bold',
   },
   centerBlock: {
     flex: 1,
@@ -277,11 +263,11 @@ const styles = StyleSheet.create({
   modeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    gap: headerTheme.modeBadge.gap,
+    borderRadius: headerTheme.modeBadge.borderRadius,
+    paddingHorizontal: headerTheme.modeBadge.paddingHorizontal,
+    paddingVertical: headerTheme.modeBadge.paddingVertical,
+    backgroundColor: headerTheme.modeBadge.backgroundColor,
     borderWidth: 1,
     alignSelf: 'flex-start',
   },
@@ -297,7 +283,7 @@ const styles = StyleSheet.create({
   progressDivider: {
     width: 1,
     height: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: headerTheme.modeBadge.dividerColor,
     marginHorizontal: 2,
   },
   progressCount: {
@@ -312,20 +298,20 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   scoreValue: {
-    color: COLORS.gold,
+    color: headerTheme.score.color,
     fontSize: 18,
     fontFamily: 'SpaceGrotesk_700Bold',
-    textShadowColor: COLORS.goldGlow,
+    textShadowColor: headerTheme.score.glowColor,
     textShadowRadius: 14,
   },
   comboChip: {
-    backgroundColor: 'rgba(255, 82, 82, 0.2)',
-    borderRadius: 6,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    backgroundColor: headerTheme.comboChip.backgroundColor,
+    borderRadius: headerTheme.comboChip.borderRadius,
+    paddingHorizontal: headerTheme.comboChip.paddingHorizontal,
+    paddingVertical: headerTheme.comboChip.paddingVertical,
     borderWidth: 1,
-    borderColor: 'rgba(255, 82, 82, 0.3)',
-    marginBottom: 2,
+    borderColor: headerTheme.comboChip.borderColor,
+    marginBottom: headerTheme.comboChip.marginBottom,
   },
   comboTag: {
     color: COLORS.coral,
@@ -338,17 +324,17 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: headerTheme.buttonSize,
+    height: headerTheme.buttonSize,
+    borderRadius: headerTheme.buttonRadius,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: headerTheme.buttonBorderColor,
     overflow: 'visible',
   },
   hintButton: {
-    borderColor: 'rgba(255, 215, 0, 0.35)',
+    borderColor: headerTheme.hintBorderColor,
     shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
@@ -356,39 +342,36 @@ const styles = StyleSheet.create({
   },
   hintGlow: {
     position: 'absolute',
-    top: -8,
-    left: '20%' as unknown as number,
-    right: '20%' as unknown as number,
-    height: 16,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    borderRadius: 8,
+    top: headerTheme.hintGlow.top,
+    left: headerTheme.hintGlow.horizontalInset as unknown as number,
+    right: headerTheme.hintGlow.horizontalInset as unknown as number,
+    height: headerTheme.hintGlow.height,
+    backgroundColor: headerTheme.hintGlow.backgroundColor,
+    borderRadius: headerTheme.hintGlow.radius,
   },
   actionDisabled: {
     opacity: 0.3,
   },
-  actionIcon: {
-    fontSize: 16,
-  },
   countBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: COLORS.accent,
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
+    top: headerTheme.countBadge.top,
+    right: headerTheme.countBadge.right,
+    backgroundColor: headerTheme.countBadge.backgroundColor,
+    borderRadius: headerTheme.countBadge.radius,
+    minWidth: headerTheme.countBadge.minWidth,
+    height: headerTheme.countBadge.height,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    shadowColor: COLORS.accent,
+    paddingHorizontal: headerTheme.countBadge.paddingHorizontal,
+    shadowColor: headerTheme.countBadge.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.6,
     shadowRadius: 4,
     elevation: 6,
   },
   hintCountBadge: {
-    backgroundColor: COLORS.gold,
-    shadowColor: COLORS.gold,
+    backgroundColor: headerTheme.hintCountBadge.backgroundColor,
+    shadowColor: headerTheme.hintCountBadge.shadowColor,
   },
   countBadgeText: {
     color: COLORS.bg,
@@ -396,11 +379,11 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceGrotesk_700Bold',
   },
   progressTrack: {
-    height: 4,
+    height: headerTheme.progress.trackHeight,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: headerTheme.progress.trackColor,
     overflow: 'visible',
-    marginTop: 10,
+    marginTop: headerTheme.progress.marginTop,
     position: 'relative',
   },
   progressFill: {
@@ -413,17 +396,17 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    height: headerTheme.progress.shimmerHeight,
+    backgroundColor: headerTheme.progress.shimmerColor,
     borderRadius: 999,
   },
   progressGlowDot: {
     position: 'absolute',
-    top: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginLeft: -4,
+    top: headerTheme.progress.glowDotOffset,
+    width: headerTheme.progress.glowDotSize,
+    height: headerTheme.progress.glowDotSize,
+    borderRadius: headerTheme.progress.glowDotSize / 2,
+    marginLeft: headerTheme.progress.glowDotMarginLeft,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 6,

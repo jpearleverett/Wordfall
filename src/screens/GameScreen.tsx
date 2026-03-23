@@ -19,6 +19,7 @@ import { PuzzleComplete } from '../components/PuzzleComplete';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS } from '../constants';
+import { puzzleBoosterReferenceItems, puzzleReferenceTheme, PuzzleBoosterKey } from '../theme/puzzleReferenceTheme';
 import { Ionicons } from '@expo/vector-icons';
 import { soundManager } from '../services/sound';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
@@ -458,6 +459,25 @@ export function GameScreen({
     outputRange: [0, 0.25],
   });
 
+  const boosterActions: Record<PuzzleBoosterKey, () => void> = {
+    shuffleFiller: handleShuffle,
+    freezeColumn: handleFreezeToggle,
+    boardPreview: handlePreviewToggle,
+  };
+
+  const boosterCounts: Record<PuzzleBoosterKey, number> = {
+    shuffleFiller: state.boosterCounts.shuffleFiller,
+    freezeColumn: state.boosterCounts.freezeColumn,
+    boardPreview: state.boosterCounts.boardPreview,
+  };
+
+  const activeBoosterKey: PuzzleBoosterKey | null = freezeMode ? 'freezeColumn' : null;
+  const visibleBoosterItems = puzzleBoosterReferenceItems.filter(({ key }) => {
+    if (boosterCounts[key] <= 0) return false;
+    if (key === 'boardPreview') return state.selectedCells.length > 0;
+    return true;
+  });
+
   return (
     <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
     <SafeAreaView style={styles.container}>
@@ -682,88 +702,42 @@ export function GameScreen({
         )}
       </View>
 
-      {/* Booster bar - illustrated icons on metallic shelf */}
+      {/* Booster bar - logic stays here, presentation is reference-token driven */}
       <View style={[
         styles.boosterBar,
         !(hasAnyBoosters && state.status === 'playing') && styles.boosterBarHidden,
       ]}>
-        {/* Metallic shelf base */}
         <LinearGradient
-          colors={['rgba(0, 212, 255, 0.12)', 'rgba(0, 180, 220, 0.06)', 'rgba(0, 100, 140, 0.10)'] as [string, string, string]}
+          colors={puzzleReferenceTheme.boosterTray.shelfRail.colors as [string, string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.boosterShelfBar}
         />
         <View style={styles.boosterShelf}>
-          {state.boosterCounts.shuffleFiller > 0 && (
+          {visibleBoosterItems.map((item) => (
             <Pressable
-              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
-              onPress={handleShuffle}
-            >
-              {/* Pedestal card */}
-              <LinearGradient
-                colors={['rgba(25, 15, 50, 0.85)', 'rgba(15, 8, 35, 0.90)'] as [string, string]}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-              />
-              {/* Icon glow background */}
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(168, 85, 247, 0.20)' }]} />
-              <View style={styles.boosterIconWrap}>
-                <Ionicons name="shuffle" size={28} color={COLORS.purple} />
-              </View>
-              <Text style={styles.boosterLabel}>Shuffle</Text>
-              {state.boosterCounts.shuffleFiller > 0 && (
-                <View style={styles.boosterCount}>
-                  <Text style={styles.boosterCountText}>{state.boosterCounts.shuffleFiller}</Text>
-                </View>
-              )}
-            </Pressable>
-          )}
-          {state.boosterCounts.freezeColumn > 0 && (
-            <Pressable
+              key={item.key}
               style={({ pressed }) => [
                 styles.boosterButton,
-                freezeMode && styles.boosterActive,
+                activeBoosterKey === item.key && styles.boosterActive,
                 pressed && styles.boosterPressed,
               ]}
-              onPress={handleFreezeToggle}
+              onPress={boosterActions[item.key]}
             >
               <LinearGradient
-                colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+                colors={item.cardGradient as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: puzzleReferenceTheme.boosterTray.button.borderRadius }]}
               />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
+              <View style={[styles.boosterGlow, { backgroundColor: item.glowColor }]} />
               <View style={styles.boosterIconWrap}>
-                <Ionicons name="snow" size={28} color={COLORS.accent} />
+                <Ionicons name={item.iconName as any} size={28} color={item.iconColor} />
               </View>
-              <Text style={styles.boosterLabel}>Freeze</Text>
-              {state.boosterCounts.freezeColumn > 0 && (
-                <View style={styles.boosterCount}>
-                  <Text style={styles.boosterCountText}>{state.boosterCounts.freezeColumn}</Text>
-                </View>
-              )}
-            </Pressable>
-          )}
-          {state.boosterCounts.boardPreview > 0 && state.selectedCells.length > 0 && (
-            <Pressable
-              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
-              onPress={handlePreviewToggle}
-            >
-              <LinearGradient
-                colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-              />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
-              <View style={styles.boosterIconWrap}>
-                <Ionicons name="eye" size={28} color={COLORS.accent} />
+              <Text style={styles.boosterLabel}>{item.label}</Text>
+              <View style={styles.boosterCount}>
+                <Text style={styles.boosterCountText}>{boosterCounts[item.key]}</Text>
               </View>
-              <Text style={styles.boosterLabel}>Preview</Text>
-              {state.boosterCounts.boardPreview > 0 && (
-                <View style={styles.boosterCount}>
-                  <Text style={styles.boosterCountText}>{state.boosterCounts.boardPreview}</Text>
-                </View>
-              )}
             </Pressable>
-          )}
+          ))}
         </View>
       </View>
 
@@ -1139,49 +1113,49 @@ const styles = StyleSheet.create({
   },
   boosterBar: {
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    marginTop: 4,
-    marginBottom: 2,
-    height: 100,
+    paddingHorizontal: puzzleReferenceTheme.boosterTray.bar.paddingHorizontal,
+    paddingVertical: puzzleReferenceTheme.boosterTray.bar.paddingVertical,
+    marginTop: puzzleReferenceTheme.boosterTray.bar.marginTop,
+    marginBottom: puzzleReferenceTheme.boosterTray.bar.marginBottom,
+    height: puzzleReferenceTheme.boosterTray.bar.height,
   },
   boosterBarHidden: {
     opacity: 0,
   },
   boosterShelfBar: {
     position: 'absolute',
-    bottom: 8,
-    left: 20,
-    right: 20,
-    height: 3,
-    borderRadius: 2,
+    bottom: puzzleReferenceTheme.boosterTray.shelfRail.bottom,
+    left: puzzleReferenceTheme.boosterTray.shelfRail.horizontalInset,
+    right: puzzleReferenceTheme.boosterTray.shelfRail.horizontalInset,
+    height: puzzleReferenceTheme.boosterTray.shelfRail.height,
+    borderRadius: puzzleReferenceTheme.boosterTray.shelfRail.borderRadius,
   },
   boosterShelf: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
-    paddingBottom: 4,
+    gap: puzzleReferenceTheme.boosterTray.shelf.gap,
+    paddingBottom: puzzleReferenceTheme.boosterTray.shelf.paddingBottom,
   },
   boosterButton: {
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.20)',
-    minWidth: 90,
+    paddingHorizontal: puzzleReferenceTheme.boosterTray.button.paddingHorizontal,
+    paddingVertical: puzzleReferenceTheme.boosterTray.button.paddingVertical,
+    borderRadius: puzzleReferenceTheme.boosterTray.button.borderRadius,
+    borderWidth: puzzleReferenceTheme.boosterTray.button.borderWidth,
+    borderColor: puzzleReferenceTheme.boosterTray.button.borderColor,
+    minWidth: puzzleReferenceTheme.boosterTray.button.minWidth,
     overflow: 'hidden',
-    shadowColor: 'rgba(0, 212, 255, 0.3)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: puzzleReferenceTheme.boosterTray.button.shadowColor,
+    shadowOffset: puzzleReferenceTheme.boosterTray.button.shadowOffset,
+    shadowOpacity: puzzleReferenceTheme.boosterTray.button.shadowOpacity,
+    shadowRadius: puzzleReferenceTheme.boosterTray.button.shadowRadius,
+    elevation: puzzleReferenceTheme.boosterTray.button.elevation,
   },
   boosterActive: {
-    borderColor: 'rgba(0, 212, 255, 0.6)',
-    shadowColor: COLORS.accent,
-    shadowOpacity: 0.7,
-    shadowRadius: 14,
+    borderColor: puzzleReferenceTheme.boosterTray.button.activeBorderColor,
+    shadowColor: puzzleReferenceTheme.boosterTray.button.activeShadowColor,
+    shadowOpacity: puzzleReferenceTheme.boosterTray.button.activeShadowOpacity,
+    shadowRadius: puzzleReferenceTheme.boosterTray.button.activeShadowRadius,
   },
   boosterPressed: {
     transform: [{ scale: 0.92 }],
@@ -1189,35 +1163,35 @@ const styles = StyleSheet.create({
   },
   boosterGlow: {
     position: 'absolute',
-    top: 4,
-    left: '15%' as unknown as number,
-    right: '15%' as unknown as number,
-    height: 40,
-    borderRadius: 20,
+    top: puzzleReferenceTheme.boosterTray.iconGlow.top,
+    left: puzzleReferenceTheme.boosterTray.iconGlow.horizontalInset as unknown as number,
+    right: puzzleReferenceTheme.boosterTray.iconGlow.horizontalInset as unknown as number,
+    height: puzzleReferenceTheme.boosterTray.iconGlow.height,
+    borderRadius: puzzleReferenceTheme.boosterTray.iconGlow.radius,
   },
   boosterIconWrap: {
     marginBottom: 6,
   },
   boosterLabel: {
     fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    letterSpacing: 0.5,
+    color: puzzleReferenceTheme.boosterTray.label.color,
+    fontSize: puzzleReferenceTheme.boosterTray.label.fontSize,
+    letterSpacing: puzzleReferenceTheme.boosterTray.label.letterSpacing,
   },
   boosterCount: {
     position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: COLORS.accent,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    top: puzzleReferenceTheme.boosterTray.countBadge.top,
+    right: puzzleReferenceTheme.boosterTray.countBadge.right,
+    backgroundColor: puzzleReferenceTheme.boosterTray.countBadge.backgroundColor,
+    borderRadius: puzzleReferenceTheme.boosterTray.countBadge.radius,
+    minWidth: puzzleReferenceTheme.boosterTray.countBadge.minWidth,
+    height: puzzleReferenceTheme.boosterTray.countBadge.height,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 1.5,
-    borderColor: 'rgba(10, 0, 30, 0.9)',
-    shadowColor: COLORS.accent,
+    paddingHorizontal: puzzleReferenceTheme.boosterTray.countBadge.paddingHorizontal,
+    borderWidth: puzzleReferenceTheme.boosterTray.countBadge.borderWidth,
+    borderColor: puzzleReferenceTheme.boosterTray.countBadge.borderColor,
+    shadowColor: puzzleReferenceTheme.boosterTray.countBadge.shadowColor,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 4,

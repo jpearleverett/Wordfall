@@ -12,7 +12,8 @@ import {
 } from 'react-native-gesture-handler';
 import { Grid as GridType, CellPosition } from '../types';
 import { LetterCell } from './LetterCell';
-import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
+import { CELL_GAP, MAX_GRID_WIDTH } from '../constants';
+import { puzzleReferenceTheme } from '../theme/puzzleReferenceTheme';
 
 if (
   Platform.OS === 'android' &&
@@ -197,16 +198,16 @@ export function GameGrid({
   }, [hitTestCell]);
 
   // Outer wrapper dimensions include the gradient border padding
-  const borderWidth = 2;
+  const borderWidth = puzzleReferenceTheme.grid.outerBorderWidth;
   const outerWidth = gridWidth + borderWidth * 2;
   const outerHeight = gridHeight + borderWidth * 2;
 
   return (
-    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}>
+    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: puzzleReferenceTheme.grid.outerRadius }]}>
       <GestureDetector gesture={composedGesture}>
         <View
           ref={gridRef}
-          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 22 }]}
+          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: puzzleReferenceTheme.grid.innerRadius }]}
         >
           {columns.map((column, colIndex) => (
             <View
@@ -268,9 +269,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   frozenColumn: {
-    backgroundColor: 'rgba(0, 212, 255, 0.12)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.08)',
+    backgroundColor: puzzleReferenceTheme.grid.frozenColumn.backgroundColor,
+    borderRadius: puzzleReferenceTheme.grid.frozenColumn.borderRadius,
+    borderWidth: puzzleReferenceTheme.grid.frozenColumn.borderWidth,
+    borderColor: puzzleReferenceTheme.grid.frozenColumn.borderColor,
   },
 });
