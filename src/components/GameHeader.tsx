@@ -2,7 +2,9 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, MODE_CONFIGS } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
+import { puzzleReferenceTheme } from '../theme/puzzleReferenceTheme';
+import { Ionicons } from '@expo/vector-icons';
 import { GameMode } from '../types';
 
 interface GameHeaderProps {
@@ -24,84 +26,7 @@ interface GameHeaderProps {
   onBack: () => void;
 }
 
-function BookGlyph() {
-  return (
-    <View style={styles.bookGlyph}>
-      <LinearGradient
-        colors={['#9bdfff', '#42bfff', '#1273ce'] as [string, string, string]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View style={styles.bookSpine} />
-      <View style={styles.bookPageHighlight} />
-      <View style={styles.bookPageShadow} />
-    </View>
-  );
-}
-
-function BackChevron() {
-  return (
-    <View style={styles.chevronWrap}>
-      <View style={[styles.chevronStroke, styles.chevronTop]} />
-      <View style={[styles.chevronStroke, styles.chevronBottom]} />
-    </View>
-  );
-}
-
-function HintGlyph() {
-  return (
-    <View style={styles.hintGlyph}>
-      <View style={styles.hintCore} />
-      <View style={styles.hintStem} />
-      <View style={styles.hintSparkLeft} />
-      <View style={styles.hintSparkRight} />
-      <View style={styles.hintSparkTop} />
-    </View>
-  );
-}
-
-function UndoGlyph() {
-  return (
-    <View style={styles.undoGlyph}>
-      <View style={styles.undoArrowHead} />
-      <View style={styles.undoArc} />
-      <View style={styles.undoTail} />
-    </View>
-  );
-}
-
-interface ActionModuleProps {
-  disabled: boolean;
-  countLabel: string;
-  onPress: () => void;
-  children: React.ReactNode;
-}
-
-function ActionModule({ disabled, countLabel, onPress, children }: ActionModuleProps) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.actionModule, disabled && styles.actionDisabled, pressed && styles.btnPressed]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <LinearGradient
-        colors={['rgba(88,116,164,0.95)', 'rgba(24,34,72,0.98)'] as [string, string]}
-        start={{ x: 0.2, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
-        style={[StyleSheet.absoluteFillObject, styles.actionModuleFill]}
-      />
-      <LinearGradient
-        colors={['rgba(255,255,255,0.22)', 'transparent'] as [string, string]}
-        style={styles.actionModuleSheen}
-      />
-      {children}
-      <View style={styles.cyanBadge}>
-        <Text style={styles.cyanBadgeText}>{countLabel}</Text>
-      </View>
-    </Pressable>
-  );
-}
+const headerTheme = puzzleReferenceTheme.header;
 
 export function GameHeader({
   level,
@@ -151,16 +76,6 @@ export function GameHeader({
     }).start();
   }, [progress, progressAnim]);
 
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(scanlineAnim, {
-        toValue: 1,
-        duration: 1800,
-        useNativeDriver: true,
-      }),
-    ).start();
-  }, [scanlineAnim]);
-
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
@@ -174,102 +89,119 @@ export function GameHeader({
 
   return (
     <View style={[styles.wrapper, { paddingTop: Math.max(insets.top, 6) + 4 }]}>
-      <View style={styles.topRow}>
-        <Pressable style={({ pressed }) => [styles.backModule, pressed && styles.btnPressed]} onPress={onBack}>
-          <LinearGradient
-            colors={['#95a3b9', '#55637d', '#222c43'] as [string, string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[StyleSheet.absoluteFillObject, styles.backBezel]}
-          />
-          <LinearGradient
-            colors={['rgba(255,255,255,0.35)', 'rgba(255,255,255,0.04)'] as [string, string]}
-            start={{ x: 0.15, y: 0 }}
-            end={{ x: 0.85, y: 1 }}
-            style={styles.backInnerGlow}
-          />
-          <View style={styles.backCore}>
+      <View style={styles.chromeCard}>
+        <LinearGradient
+          colors={GRADIENTS.header as unknown as [string, string, ...string[]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: headerTheme.cardRadius }]}
+        />
+        <LinearGradient
+          colors={['rgba(255,255,255,0.08)', 'transparent'] as [string, string]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.glassEdge}
+        />
+        <View
+          style={[
+            styles.chromeGlow,
+            { backgroundColor: `${modeConfig.color}${headerTheme.chromeGlow.opacitySuffix}` },
+          ]}
+        />
+
+        <View style={styles.topRow}>
+          <Pressable
+            style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
+            onPress={onBack}
+          >
             <LinearGradient
-              colors={['#1d2740', '#0a1226'] as [string, string]}
-              style={[StyleSheet.absoluteFillObject, styles.backCoreFill]}
+              colors={headerTheme.buttonGradient as [string, string]}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: headerTheme.buttonRadius + 2 }]}
             />
-            <BackChevron />
+            <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
+          </Pressable>
+
+          <View style={styles.centerBlock}>
+            <View style={[styles.modeBadge, { borderColor: `${modeConfig.color}55` }]}>
+              <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
+              <Text style={styles.modeText}>{modeLabel}</Text>
+              <View style={styles.progressDivider} />
+              <Text style={[styles.progressCount, { color: modeConfig.color }]}>
+                {foundWords}/{totalWords}
+              </Text>
+            </View>
           </View>
         </Pressable>
 
-        <View style={styles.levelModule}>
-          <LinearGradient
-            colors={['rgba(66, 88, 138, 0.98)', 'rgba(17, 25, 58, 0.98)'] as [string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[StyleSheet.absoluteFillObject, styles.levelModuleFill]}
-          />
-          <View style={[styles.levelGlow, { backgroundColor: `${modeConfig.color}26` }]} />
-          <View style={styles.levelIconWell}>
-            <BookGlyph />
-          </View>
-          <View style={styles.levelCopy}>
-            <Text style={styles.levelLabel}>Lv {level}</Text>
-            <Text style={[styles.levelModeText, { color: modeConfig.color }]}>{modeConfig.name}</Text>
-          </View>
-          <View style={styles.levelDivider} />
-          <View style={styles.levelProgressCopy}>
-            <Text style={styles.levelProgressLabel}>FOUND</Text>
-            <Text style={styles.levelProgressValue}>{foundWords}/{totalWords}</Text>
+          <View style={styles.scoreBlock}>
+            <Animated.Text style={[styles.scoreValue, { transform: [{ scale: scoreAnim }] }]}>
+              {score.toLocaleString()}
+            </Animated.Text>
+            {combo > 1 && (
+              <View style={styles.comboChip}>
+                <Text style={styles.comboTag}>{combo}x</Text>
+              </View>
+            )}
           </View>
         </View>
 
-        <View style={styles.scoreModule}>
-          <LinearGradient
-            colors={['rgba(44, 63, 106, 0.94)', 'rgba(17, 26, 52, 0.98)'] as [string, string]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={[StyleSheet.absoluteFillObject, styles.scoreModuleFill]}
-          />
-          <View style={styles.scorePedestal} />
-          <View style={[styles.scoreHologram, { shadowColor: COLORS.gold, borderColor: 'rgba(255,215,0,0.3)' }]} />
-          <Text style={styles.scoreCaption}>SCORE</Text>
-          <Animated.Text style={[styles.scoreValue, { transform: [{ scale: scoreAnim }] }]}>{score.toLocaleString()}</Animated.Text>
-        </View>
+          <View style={styles.actionsRow}>
+            {modeConfig.rules.allowUndo && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  undosLeft <= 0 && styles.actionDisabled,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={onUndo}
+                disabled={undosLeft <= 0}
+              >
+                <LinearGradient
+                  colors={headerTheme.actionGradient as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: headerTheme.buttonRadius + 2 }]}
+                />
+                <Ionicons name="arrow-undo" size={18} color={COLORS.textPrimary} />
+                {undosLeft > 0 && !modeConfig.rules.unlimitedUndo && (
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countBadgeText}>{undosLeft}</Text>
+                  </View>
+                )}
+              </Pressable>
+            )}
 
-        <View style={styles.actionsStack}>
-          {modeConfig.rules.allowHints && (
-            <ActionModule disabled={hintsLeft <= 0} countLabel={String(Math.max(hintsLeft, 0))} onPress={onHint}>
-              <HintGlyph />
-            </ActionModule>
-          )}
-
-          {modeConfig.rules.allowUndo && (
-            <ActionModule
-              disabled={undosLeft <= 0 && !modeConfig.rules.unlimitedUndo}
-              countLabel={modeConfig.rules.unlimitedUndo ? '∞' : String(Math.max(undosLeft, 0))}
-              onPress={onUndo}
-            >
-              <UndoGlyph />
-            </ActionModule>
-          )}
+            {modeConfig.rules.allowHints && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.hintButton,
+                  hintsLeft <= 0 && styles.actionDisabled,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={onHint}
+                disabled={hintsLeft <= 0}
+              >
+                <LinearGradient
+                  colors={headerTheme.hintGradient as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: headerTheme.buttonRadius + 2 }]}
+                />
+                {hintsLeft > 0 && <View style={styles.hintGlow} />}
+                <Ionicons name="bulb" size={18} color={COLORS.gold} />
+                {hintsLeft > 0 && (
+                  <View style={[styles.countBadge, styles.hintCountBadge]}>
+                    <Text style={styles.countBadgeText}>{hintsLeft}</Text>
+                  </View>
+                )}
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
 
-      <View style={styles.scanlineWrap}>
-        <View style={styles.scanlineTrack}>
-          <View style={styles.scanlineRail} />
-          <Animated.View style={[styles.scanlineFill, { width: progressWidth as any, backgroundColor: modeConfig.color }]} />
+        <View style={styles.progressTrack}>
           <Animated.View
-            style={[
-              styles.scanlinePulse,
-              {
-                transform: [{ translateX: scanlineTranslate }],
-                opacity: progress > 0 ? 0.95 : 0.35,
-              },
-            ]}
+            style={[styles.progressFill, { width: progressWidth as any, backgroundColor: modeConfig.color }]}
           >
-            <LinearGradient
-              colors={['transparent', `${modeConfig.color}bb`, '#ffffff', `${modeConfig.color}bb`, 'transparent'] as [string, string, string, string, string]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={StyleSheet.absoluteFillObject}
-            />
+            <View style={styles.progressShimmer} />
           </Animated.View>
           <Animated.View
             style={[
@@ -293,16 +225,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 8,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 8,
-  },
-  backModule: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    padding: 3,
+  chromeCard: {
+    borderRadius: headerTheme.cardRadius,
+    borderWidth: headerTheme.cardBorderWidth,
+    borderColor: headerTheme.cardBorderColor,
+    paddingHorizontal: headerTheme.paddingHorizontal,
+    paddingTop: headerTheme.paddingTop,
+    paddingBottom: headerTheme.paddingBottom,
+    overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -314,12 +244,12 @@ const styles = StyleSheet.create({
   },
   backInnerGlow: {
     position: 'absolute',
-    top: 2,
-    left: 2,
-    right: 2,
-    height: 18,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: headerTheme.glassEdgeHeight,
+    borderTopLeftRadius: headerTheme.cardRadius,
+    borderTopRightRadius: headerTheme.cardRadius,
   },
   backCore: {
     flex: 1,
@@ -342,13 +272,11 @@ const styles = StyleSheet.create({
   },
   chevronStroke: {
     position: 'absolute',
-    width: 12,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: COLORS.textPrimary,
-    shadowColor: COLORS.accentLight,
-    shadowOpacity: 0.45,
-    shadowRadius: 4,
+    width: headerTheme.chromeGlow.size,
+    height: headerTheme.chromeGlow.size,
+    borderRadius: headerTheme.chromeGlow.radius,
+    right: headerTheme.chromeGlow.right,
+    top: headerTheme.chromeGlow.top,
   },
   chevronTop: {
     transform: [{ rotate: '-45deg' }, { translateX: -2 }, { translateY: -4 }],
@@ -375,56 +303,29 @@ const styles = StyleSheet.create({
   levelModuleFill: {
     borderRadius: 28,
   },
-  levelGlow: {
-    position: 'absolute',
-    width: 120,
-    height: 80,
-    borderRadius: 40,
-    left: -18,
-    top: -8,
-  },
-  levelIconWell: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(5,14,34,0.88)',
-    borderWidth: 1,
-    borderColor: 'rgba(155,223,255,0.28)',
+  backButton: {
+    width: headerTheme.buttonSize,
+    height: headerTheme.buttonSize,
+    borderRadius: headerTheme.buttonRadius,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
-  },
-  bookGlyph: {
-    width: 20,
-    height: 16,
-    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: headerTheme.buttonBorderColor,
     overflow: 'hidden',
     transform: [{ skewY: '-8deg' }],
   },
-  bookSpine: {
-    position: 'absolute',
-    left: 3,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    backgroundColor: 'rgba(10,25,60,0.55)',
+  centerBlock: {
+    flex: 1,
+    overflow: 'hidden',
   },
-  bookPageHighlight: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 7,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 2,
-  },
-  bookPageShadow: {
-    position: 'absolute',
-    right: 3,
-    bottom: 2,
-    width: 9,
-    height: 7,
-    borderRadius: 2,
+  modeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: headerTheme.modeBadge.gap,
+    borderRadius: headerTheme.modeBadge.borderRadius,
+    paddingHorizontal: headerTheme.modeBadge.paddingHorizontal,
+    paddingVertical: headerTheme.modeBadge.paddingVertical,
+    backgroundColor: headerTheme.modeBadge.backgroundColor,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
   },
@@ -446,9 +347,9 @@ const styles = StyleSheet.create({
   },
   levelDivider: {
     width: 1,
-    alignSelf: 'stretch',
-    marginHorizontal: 10,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    height: 12,
+    backgroundColor: headerTheme.modeBadge.dividerColor,
+    marginHorizontal: 2,
   },
   levelProgressCopy: {
     justifyContent: 'center',
@@ -511,25 +412,39 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   scoreValue: {
-    color: COLORS.gold,
+    color: headerTheme.score.color,
     fontSize: 18,
-    fontFamily: FONTS.display,
-    textShadowColor: COLORS.goldGlow,
+    fontFamily: 'SpaceGrotesk_700Bold',
+    textShadowColor: headerTheme.score.glowColor,
     textShadowRadius: 14,
     marginTop: 1,
   },
-  actionsStack: {
+  comboChip: {
+    backgroundColor: headerTheme.comboChip.backgroundColor,
+    borderRadius: headerTheme.comboChip.borderRadius,
+    paddingHorizontal: headerTheme.comboChip.paddingHorizontal,
+    paddingVertical: headerTheme.comboChip.paddingVertical,
+    borderWidth: 1,
+    borderColor: headerTheme.comboChip.borderColor,
+    marginBottom: headerTheme.comboChip.marginBottom,
+  },
+  comboTag: {
+    color: COLORS.coral,
+    fontSize: 10,
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+  actionsRow: {
     flexDirection: 'row',
     gap: 8,
   },
-  actionModule: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(123,168,224,0.32)',
-    justifyContent: 'center',
+  actionButton: {
+    width: headerTheme.buttonSize,
+    height: headerTheme.buttonSize,
+    borderRadius: headerTheme.buttonRadius,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: headerTheme.buttonBorderColor,
     overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -537,49 +452,58 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 10,
   },
-  actionModuleFill: {
-    borderRadius: 18,
+  hintButton: {
+    borderColor: headerTheme.hintBorderColor,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
   },
   actionModuleSheen: {
     position: 'absolute',
-    top: 1,
-    left: 1,
-    right: 1,
-    height: 18,
-    borderTopLeftRadius: 17,
-    borderTopRightRadius: 17,
+    top: headerTheme.hintGlow.top,
+    left: headerTheme.hintGlow.horizontalInset as unknown as number,
+    right: headerTheme.hintGlow.horizontalInset as unknown as number,
+    height: headerTheme.hintGlow.height,
+    backgroundColor: headerTheme.hintGlow.backgroundColor,
+    borderRadius: headerTheme.hintGlow.radius,
   },
   actionDisabled: {
     opacity: 0.35,
   },
-  cyanBadge: {
+  countBadge: {
     position: 'absolute',
-    top: -5,
-    right: -3,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: COLORS.accent,
-    borderWidth: 2,
-    borderColor: '#d9fbff',
+    top: headerTheme.countBadge.top,
+    right: headerTheme.countBadge.right,
+    backgroundColor: headerTheme.countBadge.backgroundColor,
+    borderRadius: headerTheme.countBadge.radius,
+    minWidth: headerTheme.countBadge.minWidth,
+    height: headerTheme.countBadge.height,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.accent,
+    paddingHorizontal: headerTheme.countBadge.paddingHorizontal,
+    shadowColor: headerTheme.countBadge.shadowColor,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.75,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  hintCountBadge: {
+    backgroundColor: headerTheme.hintCountBadge.backgroundColor,
+    shadowColor: headerTheme.hintCountBadge.shadowColor,
   },
   cyanBadgeText: {
     color: COLORS.bg,
     fontSize: 10,
     fontFamily: FONTS.display,
   },
-  hintGlyph: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
+  progressTrack: {
+    height: headerTheme.progress.trackHeight,
+    borderRadius: 999,
+    backgroundColor: headerTheme.progress.trackColor,
+    overflow: 'visible',
+    marginTop: headerTheme.progress.marginTop,
+    position: 'relative',
   },
   hintCore: {
     width: 12,
@@ -681,15 +605,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 2,
+    height: headerTheme.progress.shimmerHeight,
+    backgroundColor: headerTheme.progress.shimmerColor,
     borderRadius: 999,
     backgroundColor: 'rgba(110,140,190,0.18)',
   },
   scanlineFill: {
     position: 'absolute',
-    left: 0,
-    height: 2,
-    borderRadius: 999,
+    top: headerTheme.progress.glowDotOffset,
+    width: headerTheme.progress.glowDotSize,
+    height: headerTheme.progress.glowDotSize,
+    borderRadius: headerTheme.progress.glowDotSize / 2,
+    marginLeft: headerTheme.progress.glowDotMarginLeft,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.7,
     shadowRadius: 8,
