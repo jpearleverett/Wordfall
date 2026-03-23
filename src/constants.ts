@@ -87,7 +87,7 @@ export const COLORS = {
 // Gradient presets for LinearGradient — premium multi-stop gradients
 export const GRADIENTS = {
   tile: {
-    default: ['rgba(18,20,52,0.78)', 'rgba(28,32,72,0.72)', 'rgba(20,24,58,0.78)'] as const,
+    default: ['rgba(18,20,52,0.52)', 'rgba(28,32,72,0.46)', 'rgba(20,24,58,0.52)'] as const,
     selected: ['#00e5ff', '#00b4d8', '#0088aa'] as const,
     valid: ['#00e676', '#00c853', '#009e42'] as const,
     hint: ['#ffe066', '#ffd700', '#f0a500'] as const,
