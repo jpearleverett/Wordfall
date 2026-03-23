@@ -75,59 +75,43 @@ export function GameHeader({
   });
 
   return (
-    <View style={[styles.wrapper, { paddingTop: Math.max(insets.top, 6) + 4 }]}>
-      <View style={styles.chromeCard}>
-        <LinearGradient
-          colors={GRADIENTS.header as unknown as [string, string, ...string[]]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
-        />
-        {/* Glass top edge highlight */}
-        <LinearGradient
-          colors={['rgba(255,255,255,0.08)', 'transparent'] as [string, string]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={styles.glassEdge}
-        />
-        {/* Mode-colored ambient glow */}
-        <View style={[styles.chromeGlow, { backgroundColor: `${modeConfig.color}20` }]} />
+    <View style={[styles.wrapper, { paddingTop: Math.max(insets.top, 8) + 4 }]}>
+      <View style={styles.topRow}>
+        <Pressable
+          style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
+          onPress={onBack}
+        >
+          <LinearGradient
+            colors={['rgba(93,108,183,0.38)', 'rgba(31,35,78,0.92)'] as [string, string]}
+            style={[StyleSheet.absoluteFillObject, { borderRadius: 17 }]}
+          />
+          <View style={styles.chromeOutline} />
+          <Ionicons name="chevron-back" size={34} color={COLORS.textPrimary} />
+        </Pressable>
 
-        <View style={styles.topRow}>
-          {/* Back button with glass effect */}
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
-            onPress={onBack}
-          >
+        <View style={styles.centerCluster}>
+          <View style={styles.modeCapsule}>
             <LinearGradient
-              colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'] as [string, string]}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
+              colors={['rgba(108,121,212,0.86)', 'rgba(41, 26, 95, 0.96)', 'rgba(21, 16, 57, 0.98)'] as [string, string, string]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: 20 }]}
             />
-            <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
-          </Pressable>
-
-          {/* Center: mode badge + progress */}
-          <View style={styles.centerBlock}>
-            <View style={[styles.modeBadge, { borderColor: `${modeConfig.color}55` }]}>
-              <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
-              <Text style={styles.modeText}>{modeLabel}</Text>
-              <View style={styles.progressDivider} />
-              <Text style={[styles.progressCount, { color: modeConfig.color }]}>
-                {foundWords}/{totalWords}
-              </Text>
-            </View>
+            <View style={styles.modeTubeCapLeft} />
+            <View style={styles.modeTubeCapRight} />
+            <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
+            <Text style={styles.modeText}>{modeLabel}</Text>
+            <View style={styles.progressDivider} />
+            <Text style={[styles.progressCount, { color: '#4be9ff' }]}>
+              {foundWords}/{totalWords}
+            </Text>
           </View>
 
-          {/* Score with animated pop */}
-          <View style={styles.scoreBlock}>
-            <Animated.Text
-              style={[
-                styles.scoreValue,
-                { transform: [{ scale: scoreAnim }] },
-              ]}
-            >
+          <View style={styles.scorePod}>
+            <Animated.Text style={[styles.scoreValue, { transform: [{ scale: scoreAnim }] }]}>
               {score.toLocaleString()}
             </Animated.Text>
+            <View style={styles.scoreBase} />
             {combo > 1 && (
               <View style={styles.comboChip}>
                 <Text style={styles.comboTag}>{combo}x</Text>
@@ -135,8 +119,31 @@ export function GameHeader({
             )}
           </View>
 
-          {/* Action buttons */}
           <View style={styles.actionsRow}>
+            {modeConfig.rules.allowHints && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  styles.purpleButton,
+                  hintsLeft <= 0 && styles.actionDisabled,
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={onHint}
+                disabled={hintsLeft <= 0}
+              >
+                <LinearGradient
+                  colors={['rgba(242,96,255,0.20)', 'rgba(44,29,79,0.88)'] as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 15 }]}
+                />
+                <Ionicons name="bulb-outline" size={24} color="#ff6ef7" />
+                {hintsLeft > 0 && (
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countBadgeText}>{hintsLeft}</Text>
+                  </View>
+                )}
+              </Pressable>
+            )}
+
             {modeConfig.rules.allowUndo && (
               <Pressable
                 style={({ pressed }) => [
@@ -148,10 +155,10 @@ export function GameHeader({
                 disabled={undosLeft <= 0}
               >
                 <LinearGradient
-                  colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
-                  style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
+                  colors={['rgba(116,129,214,0.24)', 'rgba(36,34,80,0.90)'] as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 15 }]}
                 />
-                <Ionicons name="arrow-undo" size={18} color={COLORS.textPrimary} />
+                <Ionicons name="arrow-undo" size={24} color="#ff6ef7" style={styles.undoIcon} />
                 {undosLeft > 0 && !modeConfig.rules.unlimitedUndo && (
                   <View style={styles.countBadge}>
                     <Text style={styles.countBadgeText}>{undosLeft}</Text>
@@ -159,55 +166,24 @@ export function GameHeader({
                 )}
               </Pressable>
             )}
-
-            {modeConfig.rules.allowHints && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  styles.hintButton,
-                  hintsLeft <= 0 && styles.actionDisabled,
-                  pressed && styles.btnPressed,
-                ]}
-                onPress={onHint}
-                disabled={hintsLeft <= 0}
-              >
-                <LinearGradient
-                  colors={['rgba(255,215,0,0.18)', 'rgba(255,215,0,0.06)'] as [string, string]}
-                  style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
-                />
-                {/* Glow beam from bulb */}
-                {hintsLeft > 0 && (
-                  <View style={styles.hintGlow} />
-                )}
-                <Ionicons name="bulb" size={18} color={COLORS.gold} />
-                {hintsLeft > 0 && (
-                  <View style={[styles.countBadge, styles.hintCountBadge]}>
-                    <Text style={styles.countBadgeText}>{hintsLeft}</Text>
-                  </View>
-                )}
-              </Pressable>
-            )}
           </View>
         </View>
+      </View>
 
-        {/* Animated progress bar */}
-        <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: progressWidth as any, backgroundColor: modeConfig.color }]}>
-            {/* Shimmer on progress fill */}
-            <View style={styles.progressShimmer} />
-          </Animated.View>
-          {/* Glow dot at progress tip */}
-          <Animated.View
-            style={[
-              styles.progressGlowDot,
-              {
-                left: progressWidth as any,
-                backgroundColor: modeConfig.color,
-                shadowColor: modeConfig.color,
-              },
-            ]}
-          />
-        </View>
+      <View style={styles.progressTrack}>
+        <Animated.View style={[styles.progressFill, { width: progressWidth as any, backgroundColor: '#50efff' }]}>
+          <View style={styles.progressShimmer} />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.progressGlowDot,
+            {
+              left: progressWidth as any,
+              backgroundColor: '#50efff',
+              shadowColor: '#50efff',
+            },
+          ]}
+        />
       </View>
     </View>
   );
@@ -215,111 +191,132 @@ export function GameHeader({
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: 14,
-    paddingTop: 6,
-    paddingBottom: 4,
-  },
-  chromeCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 4,
-    overflow: 'visible',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 14,
-  },
-  glassEdge: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 30,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-  },
-  chromeGlow: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    right: -50,
-    top: -60,
+    paddingHorizontal: 18,
+    paddingBottom: 6,
   },
   topRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-start',
+    gap: 14,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 62,
+    height: 62,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1.4,
+    borderColor: 'rgba(231, 240, 255, 0.46)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  chromeOutline: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    overflow: 'hidden',
+    borderColor: 'rgba(255,255,255,0.20)',
   },
-  backText: {
-    color: COLORS.textPrimary,
-    fontSize: 20,
-    fontFamily: 'Inter_700Bold',
-  },
-  centerBlock: {
+  centerCluster: {
     flex: 1,
-    overflow: 'hidden',
-  },
-  modeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    gap: 12,
+    paddingTop: 2,
+  },
+  modeCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 50,
+    borderRadius: 20,
+    paddingLeft: 24,
+    paddingRight: 20,
     borderWidth: 1,
-    alignSelf: 'flex-start',
+    borderColor: 'rgba(227, 239, 255, 0.35)',
+    overflow: 'hidden',
+    shadowColor: '#41ecff',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 8,
   },
   modeIcon: {
-    fontSize: 12,
+    fontSize: 20,
+    marginRight: 8,
   },
   modeText: {
     color: COLORS.textPrimary,
-    fontSize: 12,
+    fontSize: 18,
     fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.4,
+    letterSpacing: 0.2,
+  },
+  modeTubeCapLeft: {
+    position: 'absolute',
+    left: 6,
+    width: 12,
+    top: 4,
+    bottom: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(62, 238, 255, 0.84)',
+    shadowColor: '#5af2ff',
+    shadowOpacity: 0.7,
+    shadowRadius: 10,
+  },
+  modeTubeCapRight: {
+    position: 'absolute',
+    right: 5,
+    width: 6,
+    top: 10,
+    bottom: 10,
+    borderRadius: 4,
+    backgroundColor: 'rgba(129, 129, 216, 0.9)',
   },
   progressDivider: {
     width: 1,
-    height: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    marginHorizontal: 2,
+    height: 24,
+    backgroundColor: 'rgba(223,231,255,0.22)',
+    marginHorizontal: 10,
   },
   progressCount: {
-    fontSize: 12,
-    fontFamily: 'SpaceGrotesk_700Bold',
-  },
-  scoreBlock: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    gap: 4,
-    alignSelf: 'center',
-    flexShrink: 0,
-  },
-  scoreValue: {
-    color: COLORS.gold,
     fontSize: 18,
     fontFamily: 'SpaceGrotesk_700Bold',
-    textShadowColor: COLORS.goldGlow,
-    textShadowRadius: 14,
+  },
+  scorePod: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 62,
+    marginLeft: 'auto',
+  },
+  scoreValue: {
+    color: '#57f2ff',
+    fontSize: 52,
+    fontFamily: 'SpaceGrotesk_700Bold',
+    lineHeight: 58,
+    textShadowColor: 'rgba(98, 242, 255, 0.7)',
+    textShadowRadius: 24,
+  },
+  scoreBase: {
+    width: 54,
+    height: 10,
+    borderRadius: 10,
+    marginTop: -8,
+    backgroundColor: 'rgba(95, 245, 255, 0.20)',
+    shadowColor: '#5ff4ff',
+    shadowOpacity: 0.65,
+    shadowRadius: 12,
   },
   comboChip: {
-    backgroundColor: 'rgba(255, 82, 82, 0.2)',
+    position: 'absolute',
+    top: 2,
+    right: -4,
+    backgroundColor: 'rgba(255, 82, 82, 0.26)',
     borderRadius: 6,
     paddingHorizontal: 4,
     paddingVertical: 1,
@@ -334,73 +331,66 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 10,
+    marginLeft: 6,
     flexShrink: 0,
   },
   actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 58,
+    height: 58,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(227, 239, 255, 0.30)',
     overflow: 'visible',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  hintButton: {
-    borderColor: 'rgba(255, 215, 0, 0.35)',
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
+  purpleButton: {
+    shadowColor: '#ff72f4',
+    shadowOpacity: 0.35,
   },
-  hintGlow: {
-    position: 'absolute',
-    top: -8,
-    left: '20%' as unknown as number,
-    right: '20%' as unknown as number,
-    height: 16,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    borderRadius: 8,
+  undoIcon: {
+    transform: [{ scaleX: -1 }],
   },
   actionDisabled: {
     opacity: 0.3,
   },
-  actionIcon: {
-    fontSize: 16,
-  },
   countBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: COLORS.accent,
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
+    top: -7,
+    right: -5,
+    backgroundColor: '#34f0ff',
+    borderRadius: 16,
+    minWidth: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    shadowColor: COLORS.accent,
+    paddingHorizontal: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(18, 23, 66, 0.9)',
+    shadowColor: '#45f3ff',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
     elevation: 6,
-  },
-  hintCountBadge: {
-    backgroundColor: COLORS.gold,
-    shadowColor: COLORS.gold,
   },
   countBadgeText: {
     color: COLORS.bg,
-    fontSize: 10,
+    fontSize: 18,
     fontFamily: 'SpaceGrotesk_700Bold',
   },
   progressTrack: {
-    height: 4,
+    height: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(146, 178, 255, 0.16)',
     overflow: 'visible',
-    marginTop: 10,
+    marginTop: 14,
+    marginHorizontal: 10,
     position: 'relative',
   },
   progressFill: {
@@ -413,20 +403,20 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.45)',
     borderRadius: 999,
   },
   progressGlowDot: {
     position: 'absolute',
-    top: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginLeft: -4,
+    top: -4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginLeft: -7,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
+    shadowOpacity: 1,
+    shadowRadius: 10,
     elevation: 6,
   },
   btnPressed: {
