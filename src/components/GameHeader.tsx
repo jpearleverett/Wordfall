@@ -48,14 +48,21 @@ export function GameHeader({
 }: GameHeaderProps) {
   const insets = useSafeAreaInsets();
   const modeConfig = MODE_CONFIGS[mode];
-  const modeLabel = isDaily ? 'Daily' : mode !== 'classic' ? modeConfig.name : `Lv ${level}`;
-  const progress = totalWords > 0 ? (foundWords / totalWords) * 100 : 0;
+  const progress = totalWords > 0 ? foundWords / totalWords : 0;
   const scoreAnim = useRef(new Animated.Value(1)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const progressAnim = useRef(new Animated.Value(progress)).current;
+  const scanlineAnim = useRef(new Animated.Value(0)).current;
+
+  void combo;
+  void moves;
+  void isDaily;
+  void maxMoves;
+  void timeRemaining;
+  void cascadeMultiplier;
 
   useEffect(() => {
     Animated.sequence([
-      Animated.timing(scoreAnim, { toValue: 1.15, duration: 80, useNativeDriver: true }),
+      Animated.timing(scoreAnim, { toValue: 1.12, duration: 90, useNativeDriver: true }),
       Animated.spring(scoreAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
     ]).start();
   }, [score, scoreAnim]);
@@ -70,9 +77,14 @@ export function GameHeader({
   }, [progress, progressAnim]);
 
   const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 100],
+    inputRange: [0, 1],
     outputRange: ['0%', '100%'],
     extrapolate: 'clamp',
+  });
+
+  const scanlineTranslate = scanlineAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-140, 320],
   });
 
   return (
@@ -119,6 +131,7 @@ export function GameHeader({
               </Text>
             </View>
           </View>
+        </Pressable>
 
           <View style={styles.scoreBlock}>
             <Animated.Text style={[styles.scoreValue, { transform: [{ scale: scoreAnim }] }]}>
@@ -130,6 +143,7 @@ export function GameHeader({
               </View>
             )}
           </View>
+        </View>
 
           <View style={styles.actionsRow}>
             {modeConfig.rules.allowUndo && (
@@ -181,6 +195,7 @@ export function GameHeader({
             )}
           </View>
         </View>
+      </View>
 
         <View style={styles.progressTrack}>
           <Animated.View
@@ -190,11 +205,12 @@ export function GameHeader({
           </Animated.View>
           <Animated.View
             style={[
-              styles.progressGlowDot,
+              styles.scanlineNode,
               {
                 left: progressWidth as any,
                 backgroundColor: modeConfig.color,
                 shadowColor: modeConfig.color,
+                opacity: progress > 0 ? 1 : 0.45,
               },
             ]}
           />
@@ -207,8 +223,7 @@ export function GameHeader({
 const styles = StyleSheet.create({
   wrapper: {
     paddingHorizontal: 14,
-    paddingTop: 6,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   chromeCard: {
     borderRadius: headerTheme.cardRadius,
@@ -220,11 +235,14 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 14,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  glassEdge: {
+  backBezel: {
+    borderRadius: 18,
+  },
+  backInnerGlow: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -233,7 +251,26 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: headerTheme.cardRadius,
     borderTopRightRadius: headerTheme.cardRadius,
   },
-  chromeGlow: {
+  backCore: {
+    flex: 1,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  backCoreFill: {
+    borderRadius: 15,
+  },
+  chevronWrap: {
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: -2,
+  },
+  chevronStroke: {
     position: 'absolute',
     width: headerTheme.chromeGlow.size,
     height: headerTheme.chromeGlow.size,
@@ -241,10 +278,30 @@ const styles = StyleSheet.create({
     right: headerTheme.chromeGlow.right,
     top: headerTheme.chromeGlow.top,
   },
-  topRow: {
+  chevronTop: {
+    transform: [{ rotate: '-45deg' }, { translateX: -2 }, { translateY: -4 }],
+  },
+  chevronBottom: {
+    transform: [{ rotate: '45deg' }, { translateX: -2 }, { translateY: 4 }],
+  },
+  levelModule: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(126, 160, 212, 0.35)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    paddingHorizontal: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  levelModuleFill: {
+    borderRadius: 28,
   },
   backButton: {
     width: headerTheme.buttonSize,
@@ -255,6 +312,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: headerTheme.buttonBorderColor,
     overflow: 'hidden',
+    transform: [{ skewY: '-8deg' }],
   },
   centerBlock: {
     flex: 1,
@@ -269,33 +327,89 @@ const styles = StyleSheet.create({
     paddingVertical: headerTheme.modeBadge.paddingVertical,
     backgroundColor: headerTheme.modeBadge.backgroundColor,
     borderWidth: 1,
-    alignSelf: 'flex-start',
+    borderColor: 'rgba(255,255,255,0.25)',
   },
-  modeIcon: {
-    fontSize: 12,
+  levelCopy: {
+    justifyContent: 'center',
+    gap: 2,
   },
-  modeText: {
+  levelLabel: {
     color: COLORS.textPrimary,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.4,
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.3,
   },
-  progressDivider: {
+  levelModeText: {
+    fontSize: 10,
+    fontFamily: FONTS.bodyBold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  levelDivider: {
     width: 1,
     height: 12,
     backgroundColor: headerTheme.modeBadge.dividerColor,
     marginHorizontal: 2,
   },
-  progressCount: {
-    fontSize: 12,
-    fontFamily: 'SpaceGrotesk_700Bold',
+  levelProgressCopy: {
+    justifyContent: 'center',
+    flexShrink: 1,
   },
-  scoreBlock: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    gap: 4,
-    alignSelf: 'center',
-    flexShrink: 0,
+  levelProgressLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 9,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+  },
+  levelProgressValue: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontFamily: FONTS.display,
+  },
+  scoreModule: {
+    width: 108,
+    minHeight: 56,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  scoreModuleFill: {
+    borderRadius: 18,
+  },
+  scorePedestal: {
+    position: 'absolute',
+    bottom: 6,
+    width: 72,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(17, 203, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(17, 203, 255, 0.22)',
+  },
+  scoreHologram: {
+    position: 'absolute',
+    top: 10,
+    width: 64,
+    height: 26,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 215, 0, 0.06)',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  scoreCaption: {
+    color: COLORS.textSecondary,
+    fontSize: 9,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1.4,
+    marginTop: 2,
   },
   scoreValue: {
     color: headerTheme.score.color,
@@ -303,6 +417,7 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: headerTheme.score.glowColor,
     textShadowRadius: 14,
+    marginTop: 1,
   },
   comboChip: {
     backgroundColor: headerTheme.comboChip.backgroundColor,
@@ -320,8 +435,7 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 6,
-    flexShrink: 0,
+    gap: 8,
   },
   actionButton: {
     width: headerTheme.buttonSize,
@@ -332,6 +446,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: headerTheme.buttonBorderColor,
     overflow: 'visible',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 10,
   },
   hintButton: {
     borderColor: headerTheme.hintBorderColor,
@@ -340,7 +459,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 8,
   },
-  hintGlow: {
+  actionModuleSheen: {
     position: 'absolute',
     top: headerTheme.hintGlow.top,
     left: headerTheme.hintGlow.horizontalInset as unknown as number,
@@ -350,7 +469,7 @@ const styles = StyleSheet.create({
     borderRadius: headerTheme.hintGlow.radius,
   },
   actionDisabled: {
-    opacity: 0.3,
+    opacity: 0.35,
   },
   countBadge: {
     position: 'absolute',
@@ -373,10 +492,10 @@ const styles = StyleSheet.create({
     backgroundColor: headerTheme.hintCountBadge.backgroundColor,
     shadowColor: headerTheme.hintCountBadge.shadowColor,
   },
-  countBadgeText: {
+  cyanBadgeText: {
     color: COLORS.bg,
     fontSize: 10,
-    fontFamily: 'SpaceGrotesk_700Bold',
+    fontFamily: FONTS.display,
   },
   progressTrack: {
     height: headerTheme.progress.trackHeight,
@@ -386,21 +505,112 @@ const styles = StyleSheet.create({
     marginTop: headerTheme.progress.marginTop,
     position: 'relative',
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
+  hintCore: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ffe673',
+    borderWidth: 1,
+    borderColor: '#fff6b4',
+    shadowColor: '#ffe673',
+    shadowOpacity: 0.7,
+    shadowRadius: 8,
+  },
+  hintStem: {
+    position: 'absolute',
+    bottom: 3,
+    width: 8,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#ffc84a',
+  },
+  hintSparkLeft: {
+    position: 'absolute',
+    left: 3,
+    top: 7,
+    width: 5,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: '#fff6b4',
+    transform: [{ rotate: '-34deg' }],
+  },
+  hintSparkRight: {
+    position: 'absolute',
+    right: 3,
+    top: 7,
+    width: 5,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: '#fff6b4',
+    transform: [{ rotate: '34deg' }],
+  },
+  hintSparkTop: {
+    position: 'absolute',
+    top: 1,
+    width: 2,
+    height: 6,
+    borderRadius: 2,
+    backgroundColor: '#fff6b4',
+  },
+  undoGlyph: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  undoArrowHead: {
+    position: 'absolute',
+    left: 3,
+    top: 8,
+    width: 9,
+    height: 9,
+    borderLeftWidth: 3,
+    borderBottomWidth: 3,
+    borderColor: '#a6f0ff',
+    transform: [{ rotate: '45deg' }],
+  },
+  undoArc: {
+    position: 'absolute',
+    right: 3,
+    top: 5,
+    width: 14,
+    height: 14,
+    borderWidth: 3,
+    borderColor: '#a6f0ff',
+    borderLeftColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderRadius: 10,
+    transform: [{ rotate: '-20deg' }],
+  },
+  undoTail: {
+    position: 'absolute',
+    left: 8,
+    top: 7,
+    width: 9,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#a6f0ff',
+  },
+  scanlineWrap: {
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  scanlineTrack: {
+    height: 14,
+    justifyContent: 'center',
+    position: 'relative',
     overflow: 'hidden',
   },
-  progressShimmer: {
+  scanlineRail: {
     position: 'absolute',
-    top: 0,
     left: 0,
     right: 0,
     height: headerTheme.progress.shimmerHeight,
     backgroundColor: headerTheme.progress.shimmerColor,
     borderRadius: 999,
+    backgroundColor: 'rgba(110,140,190,0.18)',
   },
-  progressGlowDot: {
+  scanlineFill: {
     position: 'absolute',
     top: headerTheme.progress.glowDotOffset,
     width: headerTheme.progress.glowDotSize,
@@ -408,12 +618,29 @@ const styles = StyleSheet.create({
     borderRadius: headerTheme.progress.glowDotSize / 2,
     marginLeft: headerTheme.progress.glowDotMarginLeft,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
+    shadowOpacity: 0.7,
+    shadowRadius: 8,
     elevation: 6,
   },
+  scanlinePulse: {
+    position: 'absolute',
+    width: 110,
+    height: 10,
+    borderRadius: 999,
+  },
+  scanlineNode: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginLeft: -5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.85,
+    shadowRadius: 8,
+    elevation: 8,
+  },
   btnPressed: {
-    transform: [{ scale: 0.92 }],
-    opacity: 0.8,
+    transform: [{ scale: 0.95 }],
+    opacity: 0.9,
   },
 });

@@ -52,6 +52,77 @@ interface GameScreenProps {
   friendComparison?: { beaten: number; total: number } | null;
 }
 
+type BoosterCardTone = {
+  panel: [string, string, string];
+  frame: string;
+  glow: string;
+  badge: string;
+};
+
+function ShuffleBoosterArt() {
+  return (
+    <View style={styles.boosterArtFrame}>
+      <View style={[styles.shuffleCardBack, styles.shuffleCardBackLeft]} />
+      <View style={[styles.shuffleCardBack, styles.shuffleCardBackRight]} />
+      <LinearGradient
+        colors={['#faf7ff', '#d7d0ff', '#a9a4ff'] as [string, string, string]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.shuffleCardFace}
+      >
+        <View style={styles.shuffleGlyphWrap}>
+          <Text style={styles.shuffleGlyph}>S</Text>
+        </View>
+      </LinearGradient>
+      <View style={styles.shuffleArrowWrap}>
+        <Text style={[styles.shuffleArrow, styles.shuffleArrowTop]}>↗</Text>
+        <Text style={[styles.shuffleArrow, styles.shuffleArrowBottom]}>↙</Text>
+      </View>
+    </View>
+  );
+}
+
+function FreezeBoosterArt() {
+  return (
+    <View style={styles.boosterArtFrame}>
+      <LinearGradient
+        colors={['rgba(206, 244, 255, 0.98)', 'rgba(92, 196, 255, 0.92)', 'rgba(34, 103, 212, 0.92)'] as [string, string, string]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={styles.freezeCrystal}
+      >
+        <View style={styles.freezeInnerGlow} />
+      </LinearGradient>
+      <View style={styles.freezeSparkVertical} />
+      <View style={styles.freezeSparkHorizontal} />
+      <View style={[styles.freezeSparkDiagonal, styles.freezeSparkDiagonalLeft]} />
+      <View style={[styles.freezeSparkDiagonal, styles.freezeSparkDiagonalRight]} />
+    </View>
+  );
+}
+
+function PreviewBoosterArt() {
+  return (
+    <View style={styles.boosterArtFrame}>
+      <LinearGradient
+        colors={['rgba(185, 255, 255, 0.95)', 'rgba(31, 219, 231, 0.95)', 'rgba(3, 128, 150, 0.95)'] as [string, string, string]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.previewEyeOuter}
+      >
+        <View style={styles.previewEyeInner}>
+          <View style={styles.previewPupil} />
+          <View style={styles.previewPupilHighlight} />
+        </View>
+      </LinearGradient>
+      <View style={styles.previewRayWrap}>
+        <View style={[styles.previewRay, styles.previewRayLeft]} />
+        <View style={[styles.previewRay, styles.previewRayRight]} />
+      </View>
+    </View>
+  );
+}
+
 function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): CellPosition[] {
   const previousPositions = new Map<string, CellPosition>();
 
@@ -453,6 +524,29 @@ export function GameScreen({
     state.boosterCounts.shuffleFiller > 0 ||
     state.boosterCounts.freezeColumn > 0 ||
     state.boosterCounts.boardPreview > 0;
+
+  const canUsePreview = state.boosterCounts.boardPreview > 0 && state.selectedCells.length > 0;
+
+  const boosterTones: Record<'shuffle' | 'freeze' | 'preview', BoosterCardTone> = {
+    shuffle: {
+      panel: ['#4f2378', '#25123e', '#140a24'],
+      frame: 'rgba(234, 195, 255, 0.45)',
+      glow: 'rgba(174, 91, 255, 0.28)',
+      badge: '#66ecff',
+    },
+    freeze: {
+      panel: ['#124d7c', '#092740', '#07172b'],
+      frame: 'rgba(168, 246, 255, 0.46)',
+      glow: 'rgba(0, 212, 255, 0.26)',
+      badge: '#66ecff',
+    },
+    preview: {
+      panel: ['#0d5a66', '#082d35', '#05161e'],
+      frame: 'rgba(153, 255, 253, 0.42)',
+      glow: 'rgba(33, 226, 236, 0.24)',
+      badge: '#66ecff',
+    },
+  };
 
   const invalidFlashOpacity = invalidFlashAnim.interpolate({
     inputRange: [0, 1],
@@ -1122,6 +1216,11 @@ const styles = StyleSheet.create({
   boosterBarHidden: {
     opacity: 0,
   },
+  boosterShelfPedestal: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
   boosterShelfBar: {
     position: 'absolute',
     bottom: puzzleReferenceTheme.boosterTray.shelfRail.bottom,
@@ -1156,6 +1255,11 @@ const styles = StyleSheet.create({
     shadowColor: puzzleReferenceTheme.boosterTray.button.activeShadowColor,
     shadowOpacity: puzzleReferenceTheme.boosterTray.button.activeShadowOpacity,
     shadowRadius: puzzleReferenceTheme.boosterTray.button.activeShadowRadius,
+  },
+  boosterDisabled: {
+    opacity: 0.6,
+    borderColor: 'rgba(153, 193, 212, 0.18)',
+    shadowOpacity: 0.18,
   },
   boosterPressed: {
     transform: [{ scale: 0.92 }],
@@ -1197,9 +1301,170 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   boosterCountText: {
-    color: '#fff',
-    fontSize: 10,
+    color: '#03283a',
+    fontSize: 11,
     fontFamily: FONTS.display,
+    lineHeight: 12,
+  },
+  boosterArtFrame: {
+    width: 52,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shuffleCardBack: {
+    position: 'absolute',
+    width: 20,
+    height: 26,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(108, 66, 170, 0.65)',
+  },
+  shuffleCardBackLeft: {
+    transform: [{ rotate: '-18deg' }, { translateX: -10 }, { translateY: 2 }],
+  },
+  shuffleCardBackRight: {
+    transform: [{ rotate: '18deg' }, { translateX: 10 }, { translateY: 2 }],
+  },
+  shuffleCardFace: {
+    width: 24,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '-3deg' }],
+  },
+  shuffleGlyphWrap: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(78, 38, 136, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shuffleGlyph: {
+    color: '#f8f5ff',
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    lineHeight: 12,
+  },
+  shuffleArrowWrap: {
+    position: 'absolute',
+    width: 48,
+    height: 40,
+  },
+  shuffleArrow: {
+    position: 'absolute',
+    color: '#f4d3ff',
+    fontSize: 14,
+    fontFamily: FONTS.display,
+  },
+  shuffleArrowTop: {
+    right: 0,
+    top: 2,
+  },
+  shuffleArrowBottom: {
+    left: 0,
+    bottom: 0,
+  },
+  freezeCrystal: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    transform: [{ rotate: '45deg' }],
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  freezeInnerGlow: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  freezeSparkVertical: {
+    position: 'absolute',
+    width: 4,
+    height: 34,
+    borderRadius: 2,
+    backgroundColor: 'rgba(191, 248, 255, 0.85)',
+  },
+  freezeSparkHorizontal: {
+    position: 'absolute',
+    width: 34,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(191, 248, 255, 0.85)',
+  },
+  freezeSparkDiagonal: {
+    position: 'absolute',
+    width: 4,
+    height: 28,
+    borderRadius: 2,
+    backgroundColor: 'rgba(191, 248, 255, 0.65)',
+  },
+  freezeSparkDiagonalLeft: {
+    transform: [{ rotate: '45deg' }],
+  },
+  freezeSparkDiagonalRight: {
+    transform: [{ rotate: '-45deg' }],
+  },
+  previewEyeOuter: {
+    width: 42,
+    height: 28,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(231, 255, 255, 0.6)',
+  },
+  previewEyeInner: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(7, 47, 58, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewPupil: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#d8ffff',
+  },
+  previewPupilHighlight: {
+    position: 'absolute',
+    top: 4,
+    right: 5,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#ffffff',
+  },
+  previewRayWrap: {
+    position: 'absolute',
+    width: 52,
+    height: 40,
+  },
+  previewRay: {
+    position: 'absolute',
+    top: 4,
+    width: 4,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: 'rgba(174, 254, 255, 0.82)',
+  },
+  previewRayLeft: {
+    left: 5,
+    transform: [{ rotate: '-28deg' }],
+  },
+  previewRayRight: {
+    right: 5,
+    transform: [{ rotate: '28deg' }],
   },
   failedOverlay: {
     ...StyleSheet.absoluteFillObject,
