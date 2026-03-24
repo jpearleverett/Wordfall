@@ -237,7 +237,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>Chapter Bundle</Text>
               <Text style={styles.premiumDesc}>
-                Theme decoration + 20 gems + 10 hints
+                Theme decoration + 20 gems + 10 hints + 1 Board Preview
               </Text>
             </View>
             <View style={styles.priceTag}>

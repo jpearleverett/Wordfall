@@ -555,6 +555,7 @@ export const SHOP_ITEMS = {
     gems: 20,
     hints: 10,
     decoration: true,
+    boardPreview: 1,
   },
 };
 
