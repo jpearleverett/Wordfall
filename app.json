@@ -11,9 +11,11 @@
       "backgroundColor": "#060918"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.wordfall.app"
     },
     "android": {
+      "package": "com.wordfall.app",
       "adaptiveIcon": {
         "backgroundColor": "#060918"
       }
