@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, FONTS } from '../constants';
+import { Ionicons } from '@expo/vector-icons';
 import { GameMode } from '../types';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
@@ -45,7 +46,7 @@ export function GameHeader({
 }: GameHeaderProps) {
   const insets = useSafeAreaInsets();
   const modeConfig = MODE_CONFIGS[mode];
-  const modeLabel = isDaily ? 'Daily' : `Lv ${level}`;
+  const modeLabel = isDaily ? 'Daily' : mode !== 'classic' ? modeConfig.name : `Lv ${level}`;
   const progress = totalWords > 0 ? (foundWords / totalWords) * 100 : 0;
   const scoreAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -94,6 +95,19 @@ export function GameHeader({
         <View style={[styles.chromeGlow, { backgroundColor: `${modeConfig.color}20` }]} />
 
         <View style={styles.topRow}>
+          {/* Back button with glass effect */}
+          <Pressable
+            style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
+            onPress={onBack}
+          >
+            <LinearGradient
+              colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'] as [string, string]}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
+            />
+            <Image source={LOCAL_IMAGES.iconBack} style={{ width: 20, height: 20 }} resizeMode="contain" />
+          </Pressable>
+
+          {/* Center: battery progress indicator */}
           <View style={styles.centerBlock}>
             <View style={styles.batteryContainer}>
               {/* Battery shell */}
@@ -106,13 +120,31 @@ export function GameHeader({
               </View>
               {/* Label overlay */}
               <View style={styles.batteryLabelOverlay}>
+                <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
                 <Text style={styles.batteryText}>{modeLabel}</Text>
                 <View style={styles.progressDivider} />
-                <Text style={styles.progressCount}>
+                <Text style={[styles.progressCount, { color: modeConfig.color }]}>
                   {foundWords}/{totalWords}
                 </Text>
               </View>
             </View>
+          </View>
+
+          {/* Score with animated pop */}
+          <View style={styles.scoreBlock}>
+            <Animated.Text
+              style={[
+                styles.scoreValue,
+                { transform: [{ scale: scoreAnim }] },
+              ]}
+            >
+              {score.toLocaleString()}
+            </Animated.Text>
+            {combo > 1 && (
+              <View style={styles.comboChip}>
+                <Text style={styles.comboTag}>{combo}x</Text>
+              </View>
+            )}
           </View>
 
           {/* Action buttons */}
@@ -128,8 +160,8 @@ export function GameHeader({
                 disabled={undosLeft <= 0}
               >
                 <LinearGradient
-                  colors={['rgba(20, 42, 70, 0.84)', 'rgba(10, 22, 44, 0.9)'] as [string, string]}
-                  style={[StyleSheet.absoluteFillObject, { borderRadius: 28 }]}
+                  colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
                 />
                 <Image source={LOCAL_IMAGES.iconUndo} style={{ width: 18, height: 18 }} resizeMode="contain" />
                 {undosLeft > 0 && !modeConfig.rules.unlimitedUndo && (
@@ -152,8 +184,8 @@ export function GameHeader({
                 disabled={hintsLeft <= 0}
               >
                 <LinearGradient
-                  colors={['rgba(20, 42, 70, 0.84)', 'rgba(10, 22, 44, 0.9)'] as [string, string]}
-                  style={[StyleSheet.absoluteFillObject, { borderRadius: 28 }]}
+                  colors={['rgba(255,215,0,0.18)', 'rgba(255,215,0,0.06)'] as [string, string]}
+                  style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
                 />
                 {/* Glow beam from bulb */}
                 {hintsLeft > 0 && (
@@ -197,23 +229,23 @@ export function GameHeader({
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingTop: 6,
-    paddingBottom: 2,
+    paddingBottom: 4,
   },
   chromeCard: {
-    borderRadius: 18,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(140, 220, 255, 0.34)',
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 8,
+    borderColor: 'rgba(255,255,255,0.10)',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 4,
     overflow: 'visible',
-    shadowColor: '#6be8ff',
-    shadowOffset: { width: 0, height: 0 },
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.45,
-    shadowRadius: 14,
-    elevation: 10,
+    shadowRadius: 16,
+    elevation: 14,
   },
   glassEdge: {
     position: 'absolute',
@@ -221,8 +253,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 30,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
   },
   chromeGlow: {
     position: 'absolute',
@@ -235,30 +267,44 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    justifyContent: 'space-between',
+    gap: 4,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    overflow: 'hidden',
+  },
+  backText: {
+    color: COLORS.textPrimary,
+    fontSize: 20,
+    fontFamily: 'Inter_700Bold',
   },
   centerBlock: {
     flex: 1,
   },
   batteryContainer: {
     position: 'relative',
-    width: 210,
-    height: 64,
+    width: 180,
+    height: 50,
     marginLeft: -2,
   },
   batteryShell: {
     position: 'absolute',
-    width: 210,
-    height: 64,
+    width: 180,
+    height: 50,
   },
   batteryFillContainer: {
     position: 'absolute',
-    top: 16,
-    left: 12,
-    width: 178,
+    top: 8,
+    left: 10,
+    width: 140,
     height: 34,
-    borderRadius: 12,
+    borderRadius: 6,
     overflow: 'hidden',
   },
   batteryFill: {
@@ -276,49 +322,84 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    gap: 4,
+    paddingRight: 12,
   },
   batteryText: {
     color: COLORS.textPrimary,
-    fontSize: 22,
-    fontFamily: 'SpaceGrotesk_700Bold',
-    letterSpacing: 0.8,
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
+  },
+  modeIcon: {
+    fontSize: 12,
+  },
+  modeText: {
+    color: COLORS.textPrimary,
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.4,
   },
   progressDivider: {
     width: 1,
     height: 12,
-    backgroundColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     marginHorizontal: 2,
   },
   progressCount: {
-    fontSize: 22,
+    fontSize: 12,
     fontFamily: 'SpaceGrotesk_700Bold',
-    color: '#f4f5ff',
+  },
+  scoreBlock: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 4,
+    alignSelf: 'center',
+    flexShrink: 0,
+  },
+  scoreValue: {
+    color: COLORS.accent,
+    fontSize: 18,
+    fontFamily: 'SpaceGrotesk_700Bold',
+    textShadowColor: COLORS.accentGlow,
+    textShadowRadius: 14,
+  },
+  comboChip: {
+    backgroundColor: 'rgba(255, 82, 82, 0.2)',
+    borderRadius: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 82, 82, 0.3)',
+    marginBottom: 2,
+  },
+  comboTag: {
+    color: COLORS.coral,
+    fontSize: 10,
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 6,
     flexShrink: 0,
   },
   actionButton: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 40,
+    height: 44,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(102, 238, 255, 0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     overflow: 'visible',
-    backgroundColor: 'rgba(5, 24, 48, 0.65)',
+    backgroundColor: 'rgba(10, 14, 39, 0.6)',
   },
   hintButton: {
-    borderColor: 'rgba(102, 238, 255, 0.7)',
-    shadowColor: '#5be7ff',
+    borderColor: 'rgba(255, 215, 0, 0.35)',
+    shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
-    shadowRadius: 10,
+    shadowRadius: 8,
   },
   hintGlow: {
     position: 'absolute',
@@ -339,16 +420,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -4,
-    backgroundColor: '#190a2f',
-    borderRadius: 14,
-    minWidth: 28,
-    height: 28,
+    backgroundColor: COLORS.accent,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 7,
-    borderWidth: 2,
-    borderColor: '#f344ff',
-    shadowColor: '#f344ff',
+    paddingHorizontal: 4,
+    shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.6,
     shadowRadius: 4,
@@ -359,18 +438,16 @@ const styles = StyleSheet.create({
     shadowColor: COLORS.gold,
   },
   countBadgeText: {
-    color: '#fff',
-    fontSize: 17,
+    color: COLORS.bg,
+    fontSize: 10,
     fontFamily: 'SpaceGrotesk_700Bold',
   },
   progressTrack: {
-    height: 16,
+    height: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(57, 20, 90, 0.7)',
-    borderWidth: 1.4,
-    borderColor: 'rgba(245, 92, 255, 0.9)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     overflow: 'visible',
-    marginTop: 8,
+    marginTop: 10,
     position: 'relative',
   },
   progressFill: {
@@ -383,8 +460,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 5,
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     borderRadius: 999,
   },
   progressGlowDot: {
