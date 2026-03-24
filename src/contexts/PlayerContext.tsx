@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { db } from '../config/firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { useAuth } from './AuthContext';
 import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { CeremonyItem, WeeklyGoalsState } from '../types';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
@@ -120,10 +123,16 @@ interface PlayerData {
   hintGiftsSentToday: number;
   lastGiftDate: string;
   tileGiftsSentToday: number;
+
+  // Cloud sync
+  lastModified: number;
 }
+
+type CloudSyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
 
 interface PlayerContextType extends PlayerData {
   loaded: boolean;
+  cloudSyncStatus: CloudSyncStatus;
 
   // Progress
   updateProgress: (updates: Partial<PlayerData>) => void;
@@ -292,6 +301,9 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   hintGiftsSentToday: 0,
   lastGiftDate: '',
   tileGiftsSentToday: 0,
+
+  // Cloud sync
+  lastModified: 0,
 };
 
 // ─── Context ────────────────────────────────────────────────────────────────
@@ -299,6 +311,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
 const PlayerContext = createContext<PlayerContextType>({
   ...DEFAULT_PLAYER_DATA,
   loaded: false,
+  cloudSyncStatus: 'offline',
   updateProgress: () => {},
   recordPuzzleComplete: () => {},
   recordDailyComplete: () => {},
@@ -336,11 +349,16 @@ const PlayerContext = createContext<PlayerContextType>({
 // ─── Provider ───────────────────────────────────────────────────────────────
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [data, setData] = useState<PlayerData>(DEFAULT_PLAYER_DATA);
   const [loaded, setLoaded] = useState(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('offline');
+  const firestoreSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialLoadDone = useRef(false);
 
   // ── Persistence ─────────────────────────────────────────────────────────
 
+  // Step 1: Load from AsyncStorage
   useEffect(() => {
     const load = async () => {
       try {
@@ -357,17 +375,81 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     load();
   }, []);
 
+  // Step 2: Once AsyncStorage is loaded AND user is available, try Firestore
+  useEffect(() => {
+    if (!loaded || !user || isInitialLoadDone.current) return;
+    isInitialLoadDone.current = true;
+
+    const syncFromFirestore = async () => {
+      setCloudSyncStatus('syncing');
+      try {
+        const docRef = doc(db, 'users', user.uid, 'data', 'player');
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists()) {
+          const cloudData = snapshot.data() as Partial<PlayerData>;
+          setData((prev) => {
+            // Use whichever data is more recent
+            const localModified = prev.lastModified || 0;
+            const cloudModified = cloudData.lastModified || 0;
+            if (cloudModified > localModified) {
+              return { ...DEFAULT_PLAYER_DATA, ...cloudData } as PlayerData;
+            }
+            return prev;
+          });
+        }
+        setCloudSyncStatus('synced');
+      } catch (e) {
+        console.warn('Firestore player sync failed, using local data:', e);
+        setCloudSyncStatus('offline');
+      }
+    };
+
+    syncFromFirestore();
+  }, [loaded, user]);
+
+  // Step 3: Persist to AsyncStorage immediately on every change,
+  //         and debounce Firestore saves to every 5 seconds
   useEffect(() => {
     if (!loaded) return;
-    const persist = async () => {
+
+    // Always stamp lastModified
+    const now = Date.now();
+    const dataWithTimestamp = { ...data, lastModified: now };
+
+    // Save to AsyncStorage immediately
+    const persistLocal = async () => {
       try {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(dataWithTimestamp));
       } catch (e) {
         console.warn('Failed to save player data to AsyncStorage:', e);
       }
     };
-    persist();
-  }, [data, loaded]);
+    persistLocal();
+
+    // Debounced Firestore save (5 seconds)
+    if (user) {
+      if (firestoreSaveTimer.current) {
+        clearTimeout(firestoreSaveTimer.current);
+      }
+      firestoreSaveTimer.current = setTimeout(async () => {
+        setCloudSyncStatus('syncing');
+        try {
+          const docRef = doc(db, 'users', user.uid, 'data', 'player');
+          await setDoc(docRef, dataWithTimestamp, { merge: true });
+          setCloudSyncStatus('synced');
+        } catch (e) {
+          console.warn('Failed to sync player data to Firestore:', e);
+          setCloudSyncStatus('error');
+        }
+      }, 5000);
+    }
+
+    return () => {
+      if (firestoreSaveTimer.current) {
+        clearTimeout(firestoreSaveTimer.current);
+      }
+    };
+  }, [data, loaded, user]);
 
   // Reconcile unlock state with current level (helps old saves / balance updates).
   useEffect(() => {
@@ -1052,6 +1134,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       value={{
         ...data,
         loaded,
+        cloudSyncStatus,
         updateProgress,
         recordPuzzleComplete,
         recordDailyComplete,

@@ -14,13 +14,29 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.wordfall.app"
+      "bundleIdentifier": "com.wordfall.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.wordfall.app",
+      "versionCode": 1,
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#060918"
+      },
+      "permissions": []
+    },
+    "plugins": [
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
       }
-    }
+    },
+    "owner": "wordfall"
   }
 }

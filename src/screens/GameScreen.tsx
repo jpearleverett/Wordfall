@@ -162,13 +162,28 @@ export function GameScreen({
     chainAnim.setValue(0);
     void comboHaptic();
     void soundManager.playSound('combo');
-    // Screen shake for chain
-    Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 3, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -3, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 2, duration: 40, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 40, useNativeDriver: true }),
-    ]).start();
+    // Screen shake for chain — escalates with combo count
+    const isLongShake = state.combo >= 6;
+    const shakeSequence = isLongShake
+      ? Animated.sequence([
+          Animated.timing(shakeAnim, { toValue: 12, duration: 40, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -10, duration: 40, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 8, duration: 35, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -6, duration: 35, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 5, duration: 30, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -3, duration: 30, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 2, duration: 25, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 0, duration: 25, useNativeDriver: true }),
+        ])
+      : Animated.sequence([
+          Animated.timing(shakeAnim, { toValue: 8, duration: 40, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -6, duration: 40, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 5, duration: 35, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -3, duration: 35, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 2, duration: 30, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 0, duration: 30, useNativeDriver: true }),
+        ]);
+    shakeSequence.start();
     Animated.sequence([
       Animated.spring(chainAnim, {
         toValue: 1,
@@ -183,7 +198,7 @@ export function GameScreen({
         useNativeDriver: true,
       }),
     ]).start(() => setChainVisible(false));
-  }, [chainAnim, shakeAnim]);
+  }, [chainAnim, shakeAnim, state.combo]);
 
   // Show chain celebration on combo > 1
   useEffect(() => {
@@ -343,7 +358,7 @@ export function GameScreen({
       validFlashAnim.setValue(0);
       Animated.timing(validFlashAnim, {
         toValue: 1,
-        duration: 200,
+        duration: 300,
         useNativeDriver: true,
       }).start();
 
@@ -486,10 +501,31 @@ export function GameScreen({
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Escalating chain scale based on combo count
+  const chainTargetScale = state.combo >= 6 ? 1.5 : state.combo >= 4 ? 1.2 : 1;
   const chainScale = chainAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.5, 1],
+    outputRange: [0.5, chainTargetScale],
   });
+
+  // Escalating chain color and style
+  const chainBgColor = state.combo >= 6
+    ? 'rgba(168, 85, 247, 0.95)'   // Purple for 6+
+    : state.combo >= 4
+    ? 'rgba(255, 215, 0, 0.95)'    // Gold for 4-5
+    : 'rgba(0, 212, 255, 0.95)';   // Cyan for 2-3
+
+  const chainShadowColor = state.combo >= 6
+    ? COLORS.purple
+    : state.combo >= 4
+    ? COLORS.gold
+    : COLORS.accent;
+
+  const chainBorderColor = state.combo >= 6
+    ? 'rgba(200, 140, 255, 0.5)'
+    : state.combo >= 4
+    ? 'rgba(255, 230, 100, 0.5)'
+    : 'rgba(255,255,255,0.3)';
 
   const validFlashOpacity = validFlashAnim.interpolate({
     inputRange: [0, 1],
@@ -584,11 +620,18 @@ export function GameScreen({
         <Animated.View style={[
           styles.chainPopup,
           {
+            backgroundColor: chainBgColor,
+            shadowColor: chainShadowColor,
+            borderColor: chainBorderColor,
             opacity: chainAnim,
             transform: [{ scale: chainScale }],
           },
         ]}>
-          <Text style={styles.chainText}>
+          <Text style={[
+            styles.chainText,
+            state.combo >= 6 && { fontSize: 40, letterSpacing: 6 },
+            state.combo >= 4 && state.combo < 6 && { fontSize: 36, letterSpacing: 5.5 },
+          ]}>
             {state.combo}x CHAIN!
           </Text>
         </Animated.View>

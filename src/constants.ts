@@ -236,6 +236,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.25,
       comboMode: false,
+      skillGate: { perfectSolves: 3 },
     },
   },
   timePressure: {
@@ -254,6 +255,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.5,
       comboMode: false,
+      skillGate: { perfectSolves: 5 },
     },
   },
   perfectSolve: {
@@ -271,6 +273,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 2,
       comboMode: false,
+      skillGate: { perfectSolves: 10, minStars: 30 },
     },
   },
   cascade: {
@@ -288,6 +291,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1,
       comboMode: true,
+      skillGate: { minStars: 50 },
     },
   },
   daily: {
@@ -322,6 +326,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.5,
       comboMode: false,
+      skillGate: { puzzlesSolved: 20 },
     },
   },
   endless: {
@@ -356,6 +361,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 2,
       comboMode: false,
+      skillGate: { perfectSolves: 25, minStars: 100 },
     },
   },
   relax: {
@@ -421,6 +427,7 @@ export const ECONOMY = {
   dailyCompleteGems: 2,
   streakBonusMultiplier: 0.1, // +10% per streak day
   loginRewards: [
+    // Week 1
     { day: 1, coins: 50 },
     { day: 2, coins: 75 },
     { day: 3, coins: 100, hints: 2 },
@@ -428,10 +435,45 @@ export const ECONOMY = {
     { day: 5, coins: 150, gems: 5 },
     { day: 6, coins: 175, hints: 3 },
     { day: 7, coins: 200, gems: 10, rareTile: true },
-  ],
+    // Week 2
+    { day: 8, coins: 100, gems: 3 },
+    { day: 9, coins: 125 },
+    { day: 10, coins: 150, hints: 2 },
+    { day: 11, coins: 175, gems: 5 },
+    { day: 12, coins: 200 },
+    { day: 13, coins: 250, hints: 3 },
+    { day: 14, coins: 400, gems: 25 },
+    // Week 3
+    { day: 15, coins: 150, gems: 5 },
+    { day: 16, coins: 200, hints: 2 },
+    { day: 17, coins: 250, gems: 8 },
+    { day: 18, coins: 300, hints: 3 },
+    { day: 19, coins: 350, gems: 10 },
+    { day: 20, coins: 400, hints: 5 },
+    { day: 21, coins: 600, gems: 50, cosmetic: 'login_21_frame' },
+    // Week 4+
+    { day: 22, coins: 200, gems: 8 },
+    { day: 23, coins: 250, hints: 3 },
+    { day: 24, coins: 300, gems: 10 },
+    { day: 25, coins: 350, hints: 5 },
+    { day: 26, coins: 400, gems: 15 },
+    { day: 27, coins: 450, hints: 5 },
+    { day: 28, coins: 500, gems: 20 },
+    { day: 29, coins: 500, gems: 25 },
+    { day: 30, coins: 1000, gems: 100, cosmetic: 'login_30_exclusive', rareTile: true },
+  ] as { day: number; coins: number; gems?: number; hints?: number; rareTile?: boolean; cosmetic?: string }[],
+  loginRewardCycleLength: 30,
+  loginRewardRepeatMultiplier: 1.5,
   hintCost: 50, // coins per hint refill
   undoCost: 50,
-  streakShieldCost: 200, // coins
+  streakShieldCost: 500, // coins
+};
+
+// Lives / Energy
+export const LIVES = {
+  max: 5,
+  refillMinutes: 30,
+  gemRefillCost: 10,
 };
 
 // Streak
@@ -648,6 +690,32 @@ export const RADIUS = {
   xl: 20,
   xxl: 24,
   full: 999,
+};
+
+// Economy Tuning — central knobs for balancing the free-to-play economy
+export const ECONOMY_TUNING = {
+  // Coins earned vs spent ratio target: 1.5:1 (earn 50% more than spend)
+  targetEarnSpendRatio: 1.5,
+  // Hint scarcity threshold: player should run out of free hints by level 8-10
+  freeHintRunoutLevel: 9,
+  // First purchase pressure point: level 12-15 (player hits real difficulty)
+  firstPurchasePressureLevel: 13,
+  // Gem drip rate: ~2-5 gems per day for active free player
+  dailyGemDripTarget: 3,
+  // Days until free player hits gem gate: 14-21 days
+  freePlayerGemGateDays: 17,
+  // Coins awarded per difficulty tier
+  coinsPerDifficulty: {
+    easy: 50,
+    medium: 100,
+    hard: 200,
+    expert: 400,
+  } as Record<string, number>,
+  // Gem awards
+  gemsPerPerfectClear: 5,
+  gemsPerDailyCompletion: 2,
+  // Rare tile pity timer (matches COLLECTION.rareTilePityTimer)
+  rareTilePityTimer: 10,
 };
 
 export { SCREEN_WIDTH, SCREEN_HEIGHT };

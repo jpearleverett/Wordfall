@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   View,
   Text,
   ScrollView,
@@ -8,7 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, FONTS } from '../constants';
+import { COLORS, GRADIENTS, FONTS, SHADOWS, LIBRARY } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 import { CHAPTERS } from '../data/chapters';
 import { Chapter } from '../types';
@@ -57,6 +58,24 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
       chapters: CHAPTERS.filter((chapter) => chapter.wingId === wingId),
     }));
   }, []);
+
+  // Staggered entry animation for wings
+  const wingAnims = useRef(wings.map(() => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    const animations = wingAnims.map((anim, index) =>
+      Animated.sequence([
+        Animated.delay(index * 80),
+        Animated.spring(anim, {
+          toValue: 1,
+          friction: 7,
+          tension: 80,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    Animated.parallel(animations).start();
+  }, [wingAnims]);
 
   const totalLibraryStars = Object.values(player.starsByLevel).reduce((sum, value) => sum + value, 0);
   const selectedWingData = wings.find((wing) => wing.id === selectedWing) ?? wings[0];
@@ -148,24 +167,76 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <Text style={styles.sectionMeta}>{wings.length * 5} total chapters</Text>
           </View>
           <View style={styles.overviewGrid}>
-            {wings.map((wing) => {
+            {wings.map((wing, wingIndex) => {
               const progress = getWingProgress(wing.chapters);
               const isRestored = restoredWings.includes(wing.id);
               const isSelected = selectedWingData.id === wing.id;
+              const isLocked = progress === 0 && !isRestored;
+              const shelvesRestored = Math.round((progress / 100) * LIBRARY.shelvesPerWing);
+              const anim = wingAnims[wingIndex];
+
               return (
-                <TouchableOpacity
+                <Animated.View
                   key={wing.id}
-                  style={[
-                    styles.overviewWing,
-                    { borderColor: isSelected ? wing.color : 'rgba(255,255,255,0.1)', backgroundColor: isSelected ? wing.aura : 'rgba(255,255,255,0.05)' },
-                  ]}
-                  activeOpacity={0.85}
-                  onPress={() => setSelectedWing(wing.id)}
+                  style={{
+                    opacity: anim,
+                    transform: [
+                      { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) },
+                      { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+                    ],
+                  }}
                 >
-                  <Text style={styles.overviewWingIcon}>{wing.icon}</Text>
-                  <Text style={[styles.overviewWingName, isSelected && { color: wing.color }]}>{wing.name}</Text>
-                  <Text style={styles.overviewWingProgress}>{isRestored ? 'Restored' : `${progress}%`}</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.overviewWing,
+                      {
+                        borderColor: isRestored ? wing.color : isSelected ? wing.color : 'rgba(255,255,255,0.1)',
+                        backgroundColor: isSelected ? wing.aura : 'rgba(255,255,255,0.05)',
+                        opacity: isLocked ? 0.4 : 1,
+                      },
+                      isRestored && {
+                        ...SHADOWS.glow(wing.color),
+                        borderColor: wing.color,
+                        borderWidth: 1.5,
+                      },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() => setSelectedWing(wing.id)}
+                  >
+                    <Text style={styles.overviewWingIcon}>{wing.icon}</Text>
+                    <Text style={[styles.overviewWingName, isSelected && { color: wing.color }, isRestored && { color: COLORS.gold }]}>{wing.name}</Text>
+
+                    {/* Book shelves visualization */}
+                    <View style={styles.shelvesContainer}>
+                      {Array.from({ length: LIBRARY.shelvesPerWing }, (_, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.shelfSlot,
+                            i < shelvesRestored && { backgroundColor: wing.color + '80' },
+                            i < shelvesRestored && styles.shelfFilled,
+                          ]}
+                        />
+                      ))}
+                    </View>
+
+                    {/* Progress bar */}
+                    <View style={styles.wingProgressTrack}>
+                      <View
+                        style={[
+                          styles.wingProgressFill,
+                          {
+                            width: `${Math.max(progress, 2)}%`,
+                            backgroundColor: isRestored ? COLORS.gold : wing.color,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={[styles.overviewWingProgress, isRestored && { color: COLORS.gold }]}>
+                      {isRestored ? 'Restored' : isLocked ? 'Locked' : `${shelvesRestored}/${LIBRARY.shelvesPerWing} shelves`}
+                    </Text>
+                  </TouchableOpacity>
+                </Animated.View>
               );
             })}
           </View>
@@ -431,22 +502,54 @@ const styles = StyleSheet.create({
     minWidth: 72,
     borderRadius: 18,
     paddingVertical: 14,
+    paddingHorizontal: 6,
     alignItems: 'center',
     borderWidth: 1,
   },
   overviewWingIcon: {
     fontSize: 24,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   overviewWingName: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textPrimary,
     fontFamily: FONTS.bodyBold,
     marginBottom: 4,
+    textAlign: 'center',
+  },
+  shelvesContainer: {
+    flexDirection: 'row',
+    gap: 2,
+    marginBottom: 6,
+    alignItems: 'flex-end',
+    height: 16,
+  },
+  shelfSlot: {
+    width: 8,
+    height: 4,
+    borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  shelfFilled: {
+    height: 12,
+    borderRadius: 2,
+  },
+  wingProgressTrack: {
+    width: '90%',
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  wingProgressFill: {
+    height: '100%',
+    borderRadius: 999,
   },
   overviewWingProgress: {
-    fontSize: 11,
+    fontSize: 9,
     color: COLORS.textMuted,
+    textAlign: 'center',
   },
   featurePanel: {
     borderRadius: 28,

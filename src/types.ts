@@ -72,6 +72,7 @@ export interface GameState {
     boardPreview: number;
     shuffleFiller: number;
   };
+  lastInvalidTap: CellPosition | null;
 }
 
 export type GameAction =
@@ -170,6 +171,12 @@ export interface ModeConfig {
   rules: ModeRules;
 }
 
+export interface SkillGate {
+  perfectSolves?: number;
+  minStars?: number;
+  puzzlesSolved?: number;
+}
+
 export interface ModeRules {
   hasTimer: boolean;
   timerSeconds?: number;
@@ -180,6 +187,7 @@ export interface ModeRules {
   unlimitedUndo: boolean;
   scoreMultiplier: number;
   comboMode: boolean;
+  skillGate?: SkillGate;
 }
 
 // ============ COLLECTIONS ============
@@ -532,6 +540,19 @@ export interface CeremonyItem {
   type: 'feature_unlock' | 'mode_unlock' | 'achievement' | 'streak_milestone' | 'collection_complete' | 'level_up' | 'difficulty_transition';
   data: Record<string, any>;
 }
+
+// ============ LIVES / ENERGY ============
+export interface LivesState {
+  current: number;
+  max: number;
+  lastRefillTime: number;
+}
+
+export const DEFAULT_LIVES: LivesState = {
+  current: 5,
+  max: 5,
+  lastRefillTime: Date.now(),
+};
 
 // ============ ANALYTICS ============
 export type AnalyticsEvent =
