@@ -1152,9 +1152,9 @@ const styles = StyleSheet.create({
   boosterShelfImage: {
     position: 'absolute',
     bottom: 0,
-    left: 16,
-    right: 16,
-    height: 60,
+    alignSelf: 'center',
+    width: '85%',
+    height: 55,
     opacity: 0.9,
   },
   boosterShelf: {

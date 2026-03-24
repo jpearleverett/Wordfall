@@ -198,20 +198,20 @@ export const LetterCell = React.memo(function LetterCell({
           ]}
         />
 
-        {/* Top specular highlight — glass-like reflection */}
+        {/* Top specular highlight — subtle glass-like reflection */}
         <LinearGradient
           colors={
             isSelected || isValidWord
-              ? ['rgba(255,255,255,0.30)', 'rgba(255,255,255,0.06)', 'transparent'] as [string, string, string]
-              : ['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.04)', 'transparent'] as [string, string, string]
+              ? ['rgba(255,255,255,0.20)', 'rgba(255,255,255,0.03)', 'transparent'] as [string, string, string]
+              : ['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.01)', 'transparent'] as [string, string, string]
           }
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
-          locations={[0, 0.3, 0.6]}
+          locations={[0, 0.4, 0.7]}
           style={[styles.specularHighlight, { borderTopLeftRadius: borderRadius * 0.85, borderTopRightRadius: borderRadius * 0.85 }]}
         />
 
-        {/* Side edge highlight — left edge catch light */}
+        {/* Side edge highlight — left edge catch light (subtle) */}
         <View
           pointerEvents="none"
           style={[
@@ -219,7 +219,7 @@ export const LetterCell = React.memo(function LetterCell({
             {
               borderTopLeftRadius: borderRadius,
               borderBottomLeftRadius: borderRadius,
-              opacity: isSelected || isValidWord ? 0.15 : 0.04,
+              opacity: isSelected || isValidWord ? 0.10 : 0.02,
             },
           ]}
         />
@@ -303,9 +303,9 @@ const styles = StyleSheet.create({
   specularHighlight: {
     position: 'absolute',
     top: 0,
-    left: '8%',
-    right: '8%',
-    height: '40%',
+    left: 0,
+    right: 0,
+    height: '45%',
   },
   leftEdgeHighlight: {
     position: 'absolute',
