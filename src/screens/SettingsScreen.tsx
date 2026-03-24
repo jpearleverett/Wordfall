@@ -271,6 +271,41 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </View>
         </View>
 
+        {/* Parental Controls */}
+        <Text style={styles.sectionTitle}>Parental Controls</Text>
+        <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          {renderToggle('Spending Limit', settings?.spendingLimitEnabled ?? false, 'spendingLimitEnabled')}
+          <View style={styles.divider} />
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Monthly Limit</Text>
+            <View style={styles.volumeControl}>
+              <TouchableOpacity
+                style={styles.volumeBtn}
+                onPress={() => onUpdateSetting('monthlySpendingLimit', Math.max(0, (settings?.monthlySpendingLimit ?? 25) - 5))}
+              >
+                <Text style={styles.volumeBtnText}>-</Text>
+              </TouchableOpacity>
+              <Text style={[styles.settingValue, { minWidth: 50, textAlign: 'center' }]}>
+                ${settings?.monthlySpendingLimit ?? 25}
+              </Text>
+              <TouchableOpacity
+                style={styles.volumeBtn}
+                onPress={() => onUpdateSetting('monthlySpendingLimit', Math.min(500, (settings?.monthlySpendingLimit ?? 25) + 5))}
+              >
+                <Text style={styles.volumeBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.divider} />
+          {renderToggle('Require PIN for Purchases', settings?.requirePurchasePin ?? false, 'requirePurchasePin')}
+        </View>
+
         {/* About Section */}
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>

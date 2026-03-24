@@ -270,9 +270,21 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const newGrid = applyGravityWithFrozen(gridAfterRemoval, state.frozenColumns);
 
       // Update word status
+      const matchingWord = board.words[wordIndex];
       const newWords = board.words.map((w, i) =>
         i === wordIndex ? { ...w, found: true } : { ...w }
       );
+
+      // Chain detection: check if gravity made new words findable
+      const remainingAfter = board.words.filter(w => !w.found && w.word !== matchingWord.word);
+      let newChainCount = state.chainCount;
+      if (remainingAfter.length > 0) {
+        const findableBefore = remainingAfter.filter(w => findWordInGrid(gridAfterRemoval, w.word, 1).length > 0);
+        const findableAfter = remainingAfter.filter(w => findWordInGrid(newGrid, w.word, 1).length > 0);
+        if (findableAfter.length > findableBefore.length) {
+          newChainCount = state.chainCount + 1;
+        }
+      }
 
       // Calculate score
       const comboLevel = state.combo + 1;
@@ -301,6 +313,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         combo: comboLevel,
         maxCombo: Math.max(state.maxCombo, comboLevel),
         cascadeMultiplier: newCascadeMultiplier,
+        chainCount: newChainCount,
         history: [...state.history, historyEntry],
         status: newStatus,
         frozenColumns: [], // Reset frozen columns after each move
@@ -610,13 +623,14 @@ export function useGame(
     return () => clearTimeout(timer);
   }, [foundWords, state.status, state.board.grid, remainingWords]);
 
-  // Calculate stars
+  // Calculate stars — based on hints used + move efficiency per GDD
   const totalWords = state.board.words.length;
+  const hintsUsed = (getHintsForMode(state.mode) === 0 ? 0 : getHintsForMode(state.mode) - state.hintsLeft);
   const stars =
     state.status === 'won'
-      ? state.perfectRun && state.moves <= totalWords
+      ? hintsUsed === 0 && state.moves <= totalWords
         ? 3
-        : state.moves <= totalWords + 1
+        : hintsUsed <= 1 && state.moves <= totalWords + 1
         ? 2
         : 1
       : 0;

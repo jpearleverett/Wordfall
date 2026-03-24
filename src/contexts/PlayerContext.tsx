@@ -114,6 +114,11 @@ interface PlayerData {
   // Tracking
   wordsFoundTotal: number;
   modesPlayedThisWeek: string[];
+
+  // Gifting
+  hintGiftsSentToday: number;
+  lastGiftDate: string;
+  tileGiftsSentToday: number;
 }
 
 interface PlayerContextType extends PlayerData {
@@ -178,6 +183,10 @@ interface PlayerContextType extends PlayerData {
 
   // Achievements checking
   checkAchievements: (extraData?: { maxCombo?: number }) => CeremonyItem[];
+
+  // Gifting
+  sendHintGift: (friendId: string) => boolean;
+  sendTileGift: (friendId: string, tileLetter: string) => boolean;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -276,6 +285,11 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Tracking
   wordsFoundTotal: 0,
   modesPlayedThisWeek: [],
+
+  // Gifting
+  hintGiftsSentToday: 0,
+  lastGiftDate: '',
+  tileGiftsSentToday: 0,
 };
 
 // ─── Context ────────────────────────────────────────────────────────────────
@@ -313,6 +327,8 @@ const PlayerContext = createContext<PlayerContextType>({
   recordFailure: () => {},
   needsBreather: () => false,
   checkAchievements: () => [],
+  sendHintGift: () => false,
+  sendTileGift: () => false,
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -591,7 +607,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     let success = false;
     setData((prev) => {
       const { streaks } = prev;
-      if (streaks.graceDaysUsed >= 3) return prev;
+      if (streaks.graceDaysUsed >= 1) return prev;
       success = true;
       return {
         ...prev,
@@ -653,6 +669,40 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         unlockedCosmetics: [...prev.unlockedCosmetics, id],
       };
     });
+  }, []);
+
+  // ── Gifting ────────────────────────────────────────────────────────────
+
+  const sendHintGift = useCallback((friendId: string): boolean => {
+    const today = getToday();
+    let success = false;
+    setData((prev) => {
+      const resetCount = prev.lastGiftDate !== today ? 0 : prev.hintGiftsSentToday;
+      if (resetCount >= 1) return prev; // Max 1 hint gift per day per GDD
+      success = true;
+      return {
+        ...prev,
+        hintGiftsSentToday: resetCount + 1,
+        lastGiftDate: today,
+      };
+    });
+    return success;
+  }, []);
+
+  const sendTileGift = useCallback((friendId: string, tileLetter: string): boolean => {
+    const today = getToday();
+    let success = false;
+    setData((prev) => {
+      const resetCount = prev.lastGiftDate !== today ? 0 : prev.tileGiftsSentToday;
+      if (resetCount >= 3) return prev; // Max 3 tile gifts per day per GDD
+      success = true;
+      return {
+        ...prev,
+        tileGiftsSentToday: resetCount + 1,
+        lastGiftDate: today,
+      };
+    });
+    return success;
   }, []);
 
   // ── Library ─────────────────────────────────────────────────────────────
@@ -926,13 +976,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!data.comebackRewardsClaimed.includes(rewardId)) {
         rewards.push(rewardId);
       }
-    } else if (daysSinceActive >= 7 && daysSinceActive < 14) {
+    } else if (daysSinceActive >= 7 && daysSinceActive < 30) {
       const rewardId = `comeback_7day_${today}`;
       if (!data.comebackRewardsClaimed.includes(rewardId)) {
         rewards.push(rewardId);
       }
-    } else if (daysSinceActive >= 14) {
-      const rewardId = `comeback_14day_${today}`;
+    } else if (daysSinceActive >= 30) {
+      const rewardId = `comeback_30day_${today}`;
       if (!data.comebackRewardsClaimed.includes(rewardId)) {
         rewards.push(rewardId);
       }
@@ -985,6 +1035,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         recordFailure,
         needsBreather,
         checkAchievements,
+        sendHintGift,
+        sendTileGift,
       }}
     >
       {children}

@@ -651,6 +651,16 @@ export function GameScreen({
               </Text>
             </Pressable>
           )}
+          {isStuck && state.status === 'playing' && state.undosLeft > 0 && (
+            <Pressable
+              style={styles.stuckBanner}
+              onPress={handleUndo}
+            >
+              <Text style={styles.stuckText}>
+                Stuck? Tap here to undo your last move
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Show preview grid if active */}
@@ -1061,6 +1071,20 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
+  },
+  stuckBanner: {
+    backgroundColor: 'rgba(255, 82, 82, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginHorizontal: 8,
+    marginTop: 4,
+  },
+  stuckText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   modeIntroBanner: {
     backgroundColor: 'rgba(0, 0, 0, 0.75)',

@@ -224,6 +224,35 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         <View style={styles.premiumSection}>
           <TouchableOpacity
             style={styles.premiumCard}
+            onPress={() => onPurchase('chapter_bundle')}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <Text style={styles.premiumIcon}>{'\u{1F4D6}'}</Text>
+            <View style={styles.premiumInfo}>
+              <Text style={styles.premiumName}>Chapter Bundle</Text>
+              <Text style={styles.premiumDesc}>
+                Theme decoration + 20 gems + 10 hints
+              </Text>
+            </View>
+            <View style={styles.priceTag}>
+              <LinearGradient
+                colors={[...GRADIENTS.button.primary]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+              <Text style={styles.priceText}>$2.99</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.premiumCard}
             onPress={() => onPurchase('daily_value')}
             activeOpacity={0.7}
           >

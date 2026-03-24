@@ -33,3 +33,41 @@ export function generateShareText(
 
   return `${header}\n${gridEmojis}\n${stats.join(' | ')}`;
 }
+
+/**
+ * Generate a shareable streak card text.
+ */
+export function generateStreakCard(
+  currentStreak: number,
+  bestStreak: number,
+  totalStars: number,
+  level: number,
+): string {
+  const flames = '🔥'.repeat(Math.min(currentStreak, 10));
+  return [
+    `WORDFALL ${flames}`,
+    `${currentStreak}-Day Streak!`,
+    `Best: ${bestStreak} | Level ${level} | ⭐ ${totalStars}`,
+    '',
+    '#Wordfall #WordPuzzle',
+  ].join('\n');
+}
+
+/**
+ * Generate a shareable collection completion card text.
+ */
+export function generateCollectionCard(
+  collectionName: string,
+  wordsFound: number,
+  totalWords: number,
+): string {
+  const progress = '🟩'.repeat(wordsFound) + '⬜'.repeat(totalWords - wordsFound);
+  const complete = wordsFound >= totalWords;
+  return [
+    `WORDFALL ${complete ? '🏆' : '📖'} ${collectionName}`,
+    progress,
+    `${wordsFound}/${totalWords} words ${complete ? 'COMPLETE!' : 'found'}`,
+    '',
+    '#Wordfall #WordPuzzle',
+  ].join('\n');
+}
