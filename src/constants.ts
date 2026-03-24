@@ -5,7 +5,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Layout
 export const GRID_PADDING = 12;
-export const CELL_GAP = 4;
+export const CELL_GAP = 2;
 export const MAX_GRID_WIDTH = SCREEN_WIDTH - GRID_PADDING * 2;
 export const CELL_SIZE = (col: number) =>
   Math.floor((MAX_GRID_WIDTH - CELL_GAP * (col - 1)) / col);
