@@ -203,6 +203,7 @@ export function GameGrid({
 
   return (
     <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}>
+      <View style={styles.frameGlow} />
       <GestureDetector gesture={composedGesture}>
         <View
           ref={gridRef}
@@ -254,7 +255,21 @@ const styles = StyleSheet.create({
   outerWrapper: {
     alignSelf: 'center',
     overflow: 'hidden',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(18, 3, 38, 0.28)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 95, 247, 0.85)',
+    shadowColor: '#ff5ef7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 14,
+    elevation: 12,
+  },
+  frameGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: 'rgba(116, 241, 255, 0.55)',
+    opacity: 0.7,
   },
   gridContainer: {
     flexDirection: 'row',
