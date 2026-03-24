@@ -279,7 +279,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Build combo multipliers',
     icon: '🔥',
     color: COLORS.coral,
-    unlockLevel: 6,
+    unlockLevel: 10,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -330,7 +330,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Never-ending puzzles',
     icon: '♾️',
     color: COLORS.teal,
-    unlockLevel: 15,
+    unlockLevel: 3,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -347,7 +347,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Minimal hints, harder boards',
     icon: '🧠',
     color: COLORS.purple,
-    unlockLevel: 20,
+    unlockLevel: 30,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -456,6 +456,14 @@ export const COLLECTION = {
   rareTilePerfectBonus: 0.15,
   duplicatesForWildcard: 5,
   giftTilesPerDay: 3,
+  atlasMasteryMax: 5, // max mastery level per word (unlocks gold border at max)
+};
+
+// Club settings
+export const CLUB = {
+  minMembers: 10,
+  maxMembers: 30,
+  autoKickInactiveDays: 14, // auto-kick after 14 days of inactivity
 };
 
 // Comeback rewards
@@ -490,6 +498,35 @@ export const LIBRARY = {
   ],
 };
 
+// Milestone decoration unlocks (every 5 levels per GDD)
+export const MILESTONE_DECORATIONS: { level: number; decoration: string; name: string; icon: string }[] = [
+  { level: 5, decoration: 'bookend_oak', name: 'Oak Bookend', icon: '📚' },
+  { level: 10, decoration: 'lamp_brass', name: 'Brass Lamp', icon: '💡' },
+  { level: 15, decoration: 'globe_antique', name: 'Antique Globe', icon: '🌍' },
+  { level: 20, decoration: 'clock_pendulum', name: 'Pendulum Clock', icon: '🕰️' },
+  { level: 25, decoration: 'telescope_mini', name: 'Mini Telescope', icon: '🔭' },
+  { level: 30, decoration: 'statue_thinker', name: 'The Thinker', icon: '🤔' },
+  { level: 35, decoration: 'plant_fern', name: 'Library Fern', icon: '🌿' },
+  { level: 40, decoration: 'painting_sunset', name: 'Sunset Painting', icon: '🖼️' },
+  { level: 45, decoration: 'crystal_ball', name: 'Crystal Ball', icon: '🔮' },
+  { level: 50, decoration: 'crown_wisdom', name: 'Crown of Wisdom', icon: '👑' },
+];
+
+// Star milestone cosmetic rewards (per GDD: 50/100/250/500)
+export const STAR_MILESTONES: { stars: number; reward: string; name: string; type: 'frame' | 'title' }[] = [
+  { stars: 50, reward: 'frame_bronze_star', name: 'Bronze Star Frame', type: 'frame' },
+  { stars: 100, reward: 'frame_silver_star', name: 'Silver Star Frame', type: 'frame' },
+  { stars: 250, reward: 'title_star_collector', name: 'Star Collector', type: 'title' },
+  { stars: 500, reward: 'frame_gold_star', name: 'Gold Star Frame', type: 'frame' },
+];
+
+// Perfect solve milestone badges (per GDD: 10/25/50)
+export const PERFECT_MILESTONES: { count: number; badge: string; name: string }[] = [
+  { count: 10, badge: 'badge_perfect_10', name: 'Perfect Bronze' },
+  { count: 25, badge: 'badge_perfect_25', name: 'Perfect Silver' },
+  { count: 50, badge: 'badge_perfect_50', name: 'Perfect Gold' },
+];
+
 // Shop
 export const SHOP_ITEMS = {
   starterPack: {
@@ -498,6 +535,7 @@ export const SHOP_ITEMS = {
     coins: 500,
     gems: 50,
     hints: 10,
+    decoration: 'starter_bookend',
     expiresHours: 72,
   },
   hintBundles: [
@@ -517,9 +555,19 @@ export const SHOP_ITEMS = {
     dailyCoins: 100,
     dailyGems: 5,
     dailyHints: 3,
+    availableAfterDay: 3,
+    autoEnds: true,
   },
   premiumPass: { id: 'premium_pass', price: '$4.99/season' },
   adRemoval: { id: 'ad_removal', price: '$4.99' },
+  chapterBundle: {
+    id: 'chapter_bundle',
+    price: '$2.99',
+    gems: 20,
+    hints: 10,
+    decoration: true,
+    boardPreview: 1,
+  },
 };
 
 // Feature unlock schedule (progressive disclosure)

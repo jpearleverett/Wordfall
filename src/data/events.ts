@@ -128,6 +128,18 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     ],
   },
   {
+    type: 'weekendBlitz',
+    name: 'Weekend Blitz',
+    description: 'Saturday and Sunday only! Double XP and increased rare tile drop rates.',
+    rules: { doubleXP: true, rareTileDropBoost: 2, durationDays: 2 },
+    rewards: [
+      { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
+      { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
+      { tier: 'gold', threshold: 3000, rewards: { coins: 1500, gems: 30, hintTokens: 10, badge: 'blitz_warrior' } },
+      { tier: 'diamond', threshold: 5000, rewards: { coins: 3000, gems: 50, hintTokens: 20, decoration: 'blitz_trophy' } },
+    ],
+  },
+  {
     type: 'themeWeek',
     name: 'Science Week',
     description: 'All puzzles feature science-themed words. Perfect for the curious mind.',

@@ -306,7 +306,8 @@ export type EventType =
   | 'themeWeek'
   | 'expertGauntlet'
   | 'communityMilestone'
-  | 'seasonFinale';
+  | 'seasonFinale'
+  | 'weekendBlitz';
 
 export interface GameEvent {
   id: string;

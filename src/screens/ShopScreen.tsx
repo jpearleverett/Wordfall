@@ -162,11 +162,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             <Text style={styles.featuredIcon}>{'\u{1F381}'}</Text>
             <Text style={styles.featuredName}>Starter Pack</Text>
             <Text style={styles.featuredDesc}>
-              50 Hints + 25 Undos + 1000 Coins
+              500 Coins + 50 Gems + 10 Hints + Exclusive Decoration
             </Text>
             <View style={styles.featuredPriceRow}>
-              <Text style={styles.featuredOldPrice}>$9.99</Text>
-              <Text style={styles.featuredPrice}>$2.99</Text>
+              <Text style={styles.featuredOldPrice}>$4.99</Text>
+              <Text style={styles.featuredPrice}>$1.99</Text>
             </View>
             <View style={styles.timerContainer}>
               <Text style={styles.timerText}>{countdown}</Text>
@@ -222,6 +222,35 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         {/* Premium */}
         <Text style={styles.sectionTitle}>Premium</Text>
         <View style={styles.premiumSection}>
+          <TouchableOpacity
+            style={styles.premiumCard}
+            onPress={() => onPurchase('chapter_bundle')}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <Text style={styles.premiumIcon}>{'\u{1F4D6}'}</Text>
+            <View style={styles.premiumInfo}>
+              <Text style={styles.premiumName}>Chapter Bundle</Text>
+              <Text style={styles.premiumDesc}>
+                Theme decoration + 20 gems + 10 hints + 1 Board Preview
+              </Text>
+            </View>
+            <View style={styles.priceTag}>
+              <LinearGradient
+                colors={[...GRADIENTS.button.primary]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+              <Text style={styles.priceText}>$2.99</Text>
+            </View>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.premiumCard}
             onPress={() => onPurchase('daily_value')}
