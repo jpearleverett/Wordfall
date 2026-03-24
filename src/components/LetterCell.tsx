@@ -1,7 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../constants';
+import { COLORS, FONTS, GRADIENTS } from '../constants';
 
 interface LetterCellProps {
   letter: string;
@@ -17,46 +22,137 @@ interface LetterCellProps {
 
 export const LetterCell = React.memo(function LetterCell({
   letter,
+  cellId,
   size,
   isSelected,
+  isHinted,
+  selectionIndex,
   isFrozen = false,
   isValidWord = false,
   isMoved = false,
 }: LetterCellProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
   const movedAnim = useRef(new Animated.Value(0)).current;
 
+  // Selection animation — scale bounce + glow
   useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: isSelected ? 1.04 : 1,
-      friction: 7,
-      tension: 240,
-      useNativeDriver: true,
-    }).start();
-  }, [isSelected, scaleAnim]);
+    if (isSelected) {
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 0.86,
+          duration: 60,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1.08,
+          friction: 3.5,
+          tension: 260,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 120,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 6,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.timing(glowAnim, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isSelected, scaleAnim, glowAnim]);
+
+  // Moved cell flash — simple opacity pulse
   useEffect(() => {
     if (isMoved) {
       movedAnim.setValue(1);
       Animated.timing(movedAnim, {
         toValue: 0,
-        duration: 300,
+        duration: 400,
         useNativeDriver: true,
       }).start();
     }
   }, [isMoved, movedAnim]);
 
-  const borderRadius = size * 0.2;
-  const borderColor = isSelected || isValidWord ? '#ff59f6' : 'rgba(110, 230, 255, 0.75)';
+  // Rich gradient colors based on state
+  const getGradientColors = (): readonly [string, string, ...string[]] => {
+    if (isValidWord) return GRADIENTS.tile.valid;
+    if (isSelected && isHinted) return GRADIENTS.tile.hint;
+    if (isSelected) return GRADIENTS.tile.selected;
+    if (isFrozen) return GRADIENTS.tile.frozen;
+    return GRADIENTS.tile.default;
+  };
 
-  const gradientColors = isSelected || isValidWord
-    ? (['rgba(87, 27, 120, 0.97)', 'rgba(46, 18, 84, 0.98)'] as [string, string])
-    : isFrozen
-      ? (GRADIENTS.tile.frozen as [string, string])
-      : (['rgba(58, 23, 104, 0.92)', 'rgba(32, 14, 70, 0.96)'] as [string, string]);
+  const getBorderColor = () => {
+    if (isValidWord) return COLORS.green;
+    if (isSelected && isHinted) return COLORS.gold;
+    if (isSelected) return COLORS.accent;
+    if (isFrozen) return 'rgba(0, 212, 255, 0.5)';
+    return 'rgba(255,255,255,0.22)';
+  };
+
+  const borderRadius = size * 0.22;
+
+  const getShadowColor = () => {
+    if (isValidWord) return COLORS.green;
+    if (isSelected) return COLORS.accent;
+    return '#000';
+  };
+
+  // Outer glow ring for selected/valid states
+  const showOuterGlow = isSelected || isValidWord;
+  const outerGlowColor = isValidWord ? COLORS.greenGlow : isSelected ? COLORS.accentGlow : 'transparent';
 
   return (
-    <View pointerEvents="none" style={{ margin: 2 }}>
+    <View pointerEvents="none">
+      {/* Outer ambient glow ring */}
+      {showOuterGlow && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: -4,
+            left: -4,
+            right: -4,
+            bottom: -4,
+            borderRadius: borderRadius + 4,
+            backgroundColor: outerGlowColor,
+            opacity: glowAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.45],
+            }),
+          }}
+        />
+      )}
+
+      {/* Moved cell flash overlay */}
+      {isMoved && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: -2,
+            left: -2,
+            right: -2,
+            bottom: -2,
+            borderRadius: borderRadius + 2,
+            borderWidth: 1.5,
+            borderColor: 'rgba(0, 212, 255, 0.8)',
+            opacity: movedAnim,
+          }}
+        />
+      )}
+
       <Animated.View
         style={[
           styles.cell,
@@ -64,39 +160,86 @@ export const LetterCell = React.memo(function LetterCell({
             width: size,
             height: size,
             borderRadius,
-            borderWidth: 2,
-            borderColor,
+            borderColor: getBorderColor(),
+            borderWidth: isSelected || isValidWord ? 2.5 : isFrozen ? 2 : 1.5,
             transform: [{ scale: scaleAnim }],
-            shadowColor: isSelected ? '#ff5bf7' : '#63e7ff',
-            shadowOpacity: 0.58,
-            shadowRadius: isSelected ? 12 : 7,
-            shadowOffset: { width: 0, height: 0 },
-            elevation: 10,
+            shadowColor: getShadowColor(),
+            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.4,
+            shadowRadius: (isSelected || isValidWord) ? 14 : 6,
+            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 6 : 3 },
+            elevation: (isSelected || isValidWord) ? 12 : 5,
           },
         ]}
       >
+        {/* Base gradient - the gem body */}
         <LinearGradient
-          colors={gradientColors}
-          start={{ x: 0.15, y: 0 }}
-          end={{ x: 0.85, y: 1 }}
+          colors={getGradientColors() as [string, string, ...string[]]}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
           style={[StyleSheet.absoluteFillObject, { borderRadius }]}
         />
 
-        <View style={[styles.topGloss, { borderTopLeftRadius: borderRadius, borderTopRightRadius: borderRadius }]} />
+        {/* Bottom edge shadow for 3D depth */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.25)'] as [string, string]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[styles.bottomShadow, { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius }]}
+        />
 
-        {isMoved && (
-          <Animated.View
+        {/* Letter with premium text rendering */}
+        <Text
+          style={[
+            styles.letter,
+            { fontSize: size * 0.48 },
+            isSelected && styles.letterSelected,
+            isValidWord && styles.letterValid,
+            !isSelected && !isValidWord && styles.letterDefault,
+          ]}
+        >
+          {letter}
+        </Text>
+
+        {/* Selection index badge */}
+        {isSelected && selectionIndex >= 0 && !isValidWord && (
+          <View
             style={[
-              styles.moveFlash,
+              styles.indexBadge,
               {
-                borderRadius,
-                opacity: movedAnim,
+                width: size * 0.30,
+                height: size * 0.30,
+                borderRadius: size * 0.15,
               },
             ]}
-          />
+          >
+            <Text style={[styles.indexText, { fontSize: size * 0.16 }]}>
+              {selectionIndex + 1}
+            </Text>
+          </View>
         )}
 
-        <Text style={[styles.letter, { fontSize: size * 0.52 }]}>{letter}</Text>
+        {/* Valid word checkmark */}
+        {isValidWord && (
+          <View
+            style={[
+              styles.checkBadge,
+              {
+                borderRadius: size * 0.15,
+                width: size * 0.28,
+                height: size * 0.28,
+              },
+            ]}
+          >
+            <Text style={[styles.checkText, { fontSize: size * 0.15 }]}>✓</Text>
+          </View>
+        )}
+
+        {/* Frozen snowflake indicator */}
+        {isFrozen && !isSelected && (
+          <View style={styles.frozenIndicator}>
+            <Text style={styles.frozenIcon}>❄</Text>
+          </View>
+        )}
       </Animated.View>
     </View>
   );
@@ -106,28 +249,82 @@ const styles = StyleSheet.create({
   cell: {
     justifyContent: 'center',
     alignItems: 'center',
+    margin: 2,
     overflow: 'hidden',
   },
-  topGloss: {
+  bottomShadow: {
     position: 'absolute',
-    top: 2,
-    left: 6,
-    right: 6,
-    height: '24%',
-    backgroundColor: 'rgba(206, 248, 255, 0.22)',
-  },
-  moveFlash: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: 2,
-    borderColor: 'rgba(114, 237, 255, 0.95)',
-    backgroundColor: 'rgba(126, 238, 255, 0.2)',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '30%',
   },
   letter: {
-    color: '#f7f4ff',
+    color: COLORS.textPrimary,
     fontFamily: 'SpaceGrotesk_700Bold',
-    letterSpacing: 1.2,
-    textShadowColor: 'rgba(255,255,255,0.32)',
-    textShadowRadius: 8,
+    textAlign: 'center',
+    letterSpacing: 0.8,
+  },
+  letterDefault: {
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 6,
+    textShadowOffset: { width: 0, height: 2 },
+  },
+  letterSelected: {
+    color: '#fff',
+    textShadowColor: COLORS.accentGlow,
+    textShadowRadius: 16,
     textShadowOffset: { width: 0, height: 0 },
+  },
+  letterValid: {
+    color: '#fff',
+    textShadowColor: COLORS.greenGlow,
+    textShadowRadius: 20,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  indexBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: 'rgba(0, 212, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  indexText: {
+    color: '#fff',
+    fontFamily: 'SpaceGrotesk_700Bold',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowRadius: 2,
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: COLORS.green,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.green,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  checkText: {
+    color: '#fff',
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+  frozenIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+  },
+  frozenIcon: {
+    fontSize: 10,
+    opacity: 0.8,
   },
 });
