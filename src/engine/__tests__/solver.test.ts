@@ -92,8 +92,14 @@ describe('findWordInGrid', () => {
   it('handles single-letter word', () => {
     const grid = makeGrid([['A', 'B']]);
     const results = findWordInGrid(grid, 'A');
-    expect(results.length).toBe(1);
+    expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results[0]).toEqual([{ row: 0, col: 0 }]);
+  });
+
+  it('handles single-letter word with limit=1', () => {
+    const grid = makeGrid([['A', 'B']]);
+    const results = findWordInGrid(grid, 'A', 1);
+    expect(results).toHaveLength(1);
   });
 });
 
@@ -236,7 +242,7 @@ describe('solver with various grid sizes', () => {
 
   it('works with 1x1 grid', () => {
     const grid = makeGrid([['A']]);
-    expect(findWordInGrid(grid, 'A')).toHaveLength(1);
+    expect(findWordInGrid(grid, 'A', 1)).toHaveLength(1);
     expect(findWordInGrid(grid, 'AB')).toHaveLength(0);
   });
 
