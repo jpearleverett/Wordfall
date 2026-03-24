@@ -59,7 +59,7 @@ src/
 │   └── shareGenerator.ts    # Wordle-style shareable emoji grid + streak card + collection card
 ├── types.ts          # All TypeScript interfaces and type unions
 ├── constants.ts      # Colors, gradients, shadows, configs, scoring, economy, feature unlock schedule
-└── words.ts          # Word dictionary (~2000 curated 3-6 letter words)
+└── words.ts          # Word dictionary (~4900 curated 3-6 letter words)
 ```
 
 ### Key Files
@@ -71,7 +71,7 @@ src/
 | `src/constants.ts` | Colors, `GRADIENTS`, `SHADOWS`, difficulty configs, mode configs, scoring, economy, `FEATURE_UNLOCK_SCHEDULE`, `getBreatherConfig()`, `STREAK` milestones, `MILESTONE_DECORATIONS`, `STAR_MILESTONES`, `PERFECT_MILESTONES`, `COLLECTION`, `CLUB`, `COMEBACK`, `ANIM` timing |
 | `src/contexts/PlayerContext.tsx` | Master player data hub: progress, collections (with atlas word mastery), missions, streaks, cosmetics, library, modes, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `wordsFoundTotal`, `modesPlayedThisWeek`, gifting (`hintGiftsSentToday`, `tileGiftsSentToday`). Methods: `unlockFeature`, `checkFeatureUnlocks`, `markTooltipShown`, `initWeeklyGoals`, `updateWeeklyGoalProgress`, `queueCeremony`, `popCeremony`, `recordFailure`, `needsBreather`, `checkAchievements`, `sendHintGift`, `sendTileGift` |
 | `src/hooks/useGame.ts` | Core game state reducer - handles 15+ game actions including boosters. Timer tick for timePressure mode runs here. Computed values (`currentWord`, `remainingWords`, `isValidWord`) cached with `useMemo`. `isDeadEnd` computed via deferred `useEffect` (not in render path) to avoid blocking the UI thread with the expensive solver |
-| `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG, freeform path placement (8-directional), and solvability validation |
+| `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG, freeform path placement (8-directional), and heuristic-first solvability validation (avoids exponential solver calls) |
 | `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
 | `src/engine/solver.ts` | 8-directional DFS word finder, recursive backtracking solver, dead-end detection, hint generation. `findWordInGrid` supports optional `limit` parameter for early termination. `getHint` uses solution ordering directly without redundant re-solve |
 | `src/components/PuzzleComplete.tsx` | Victory screen with confetti (16 particles), animated score counter, staggered reveals inside a `ScrollView` with `maxHeight` constraint. **Plus**: `isFirstWin` welcome, `leveledUp` badge, `difficultyTransition` ceremony, `nextLevelPreview`, `shareText` with Share API, `friendComparison` mock display |
@@ -162,9 +162,10 @@ Three booster types available during gameplay:
 - Uses Mulberry32 seeded PRNG for reproducible puzzles
 - Words placed along random adjacent paths (any direction: horizontal, vertical, diagonal, zigzag) via DFS with randomized neighbor order
 - Each letter in a word must be 8-directionally adjacent to the previous letter, but the path can change direction freely (e.g., right → diagonal-down-left → down → diagonal-up-right)
-- All puzzles validated by solver to ensure solvability (solver uses same 8-directional DFS to find words)
+- Solvability validated using heuristic-first approach: checks each word is individually findable in the grid (fast DFS) before running the expensive full recursive solver only when needed
 - Filler letters use vowel-balanced distribution (35% vowels)
 - 3-tier fallback: standard → simplified → minimal generation on failure
+- Board generation timeout protection prevents UI hangs on difficult configurations
 
 ### 10 Game Modes
 | Mode | Key Rule | Unlock Level |
@@ -409,7 +410,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Screens use default exports**, not named exports
 - **`AppNavigator.tsx`** was removed — `App.tsx` handles all navigation directly
 - **Firebase env vars** must be set as `EXPO_PUBLIC_FIREBASE_*` for the app to connect (currently placeholders)
-- **Word database** in `src/words.ts` contains 2,650 curated English words (3-6 letters)
+- **Word database** in `src/words.ts` contains ~4,891 curated English words (3-6 letters)
 - **Seeded PRNG** ensures daily puzzles are identical for all players on the same day
 - **Timer tick** for timePressure mode runs inside `useGame` hook, not in the screen
 - **Adjacency validation** uses 8-directional adjacency (horizontal, vertical, diagonal) with no direction locking — paths can zigzag freely. Adjacency is checked in the `SELECT_CELL` reducer action; non-adjacent taps start a new selection from the tapped cell
@@ -453,5 +454,6 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Timer interval stable** — timePressure timer `useEffect` only depends on `mode` and `state.status`, not `state.timeRemaining`, using a ref to check status inside the interval
 - **Grid sizing is dual-dimension** — `cellSize` uses `Math.min(widthBased, heightBased)` via `maxHeight` prop measured by `onLayout` in GameScreen, preventing grid overflow behind booster buttons on tall boards
 - **Stable layout architecture** — GameScreen uses absolute-positioned overlays for banners (cascade, freeze, idle hint, mode intro) so they never shift the grid. WordArea has fixed height (90px), boosterBar always reserves space. `gridAreaHeight` updates are debounced (2px threshold) to prevent cascading re-renders from sub-pixel layout shifts
+- **Board generation uses heuristic-first validation** — `boardGenerator.ts` checks each word is individually findable via fast DFS before invoking the expensive recursive backtracking solver. This avoids exponential blowup on larger boards (was causing 10+ second hangs on 6×6+ grids)
 - **When adding new animations**: always use `useNativeDriver: true`, avoid `Animated.loop` on per-tile components, prefer one-shot animations that complete and settle
 - **When modifying tiles**: do NOT add semi-transparent overlay Views or LinearGradients on top of the base tile gradient — these create visible lighter rectangles. Keep tile rendering minimal: base gradient + bottom shadow + letter text
