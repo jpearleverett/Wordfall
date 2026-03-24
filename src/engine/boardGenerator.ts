@@ -1,6 +1,6 @@
 import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition } from '../types';
 import { applyGravity } from './gravity';
-import { isSolvable, solve, countSolutions } from './solver';
+import { isSolvable, trySolveWithOrder, countSolutions } from './solver';
 import { getWordsByLength } from '../words';
 
 // Simple seeded PRNG (mulberry32)
@@ -21,10 +21,6 @@ function shuffleArray<T>(arr: T[], rng: () => number): T[] {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
-}
-
-function randomChoice<T>(arr: T[], rng: () => number): T {
-  return arr[Math.floor(rng() * arr.length)];
 }
 
 let cellIdCounter = 0;
@@ -49,6 +45,8 @@ const DIRS = [
  * Try to place a word along a random adjacent path starting from (startRow, startCol).
  * Each step picks a random 8-directional neighbor. Allows zigzag, diagonal, etc.
  * Returns positions if successful, null if no valid path found.
+ *
+ * Uses a step budget to prevent exponential exploration on crowded grids.
  */
 function tryPlace(
   grid: Grid,
@@ -61,9 +59,12 @@ function tryPlace(
   const cols = grid[0].length;
   const visited = new Set<string>();
   const path: CellPosition[] = [];
+  let steps = 0;
+  const maxSteps = word.length * 50; // budget to prevent deep backtracking
 
   function dfs(r: number, c: number, idx: number): boolean {
     if (idx === word.length) return true;
+    if (++steps > maxSteps) return false;
     if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
     const key = `${r},${c}`;
     if (visited.has(key)) return false;
@@ -114,22 +115,29 @@ function placeWord(
 
 /**
  * Fill all null cells in the grid with random letters.
- * Avoids accidentally creating target words in unused spaces.
+ * Uses uncommon consonant clusters to minimize accidental word formation.
  */
 function fillEmptyCells(grid: Grid, rng: () => number): void {
-  // Use a mix of vowels and consonants
+  // Weighted letter pool: heavy on uncommon consonants to reduce accidental words
   const vowels = 'AEIOU';
-  const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
-  const all = vowels + consonants;
+  const commonConsonants = 'BCDFGHLMNPRST';
+  const uncommonConsonants = 'JKQVWXYZ';
 
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[0].length; c++) {
       if (grid[r][c] === null) {
-        // Bias toward consonants slightly to reduce accidental words
-        const useVowel = rng() < 0.35;
-        const letter = useVowel
-          ? vowels[Math.floor(rng() * vowels.length)]
-          : consonants[Math.floor(rng() * consonants.length)];
+        const roll = rng();
+        let letter: string;
+        if (roll < 0.25) {
+          // 25% vowels (reduced from 35%)
+          letter = vowels[Math.floor(rng() * vowels.length)];
+        } else if (roll < 0.55) {
+          // 30% common consonants
+          letter = commonConsonants[Math.floor(rng() * commonConsonants.length)];
+        } else {
+          // 45% uncommon consonants — makes accidental words very unlikely
+          letter = uncommonConsonants[Math.floor(rng() * uncommonConsonants.length)];
+        }
         grid[r][c] = { letter, id: newCellId() };
       }
     }
@@ -138,6 +146,7 @@ function fillEmptyCells(grid: Grid, rng: () => number): void {
 
 /**
  * Select words for a puzzle, ensuring variety in length and starting letters.
+ * Prefers shorter words for faster placement and solvability.
  */
 function selectWords(
   config: BoardConfig,
@@ -162,6 +171,14 @@ function selectWords(
     );
     if (isSubstring) continue;
 
+    // Avoid words sharing too many letters (reduces placement conflicts)
+    const letterSet = new Set(word.split(''));
+    const tooMuchOverlap = selected.some(w => {
+      const shared = w.split('').filter(l => letterSet.has(l)).length;
+      return shared > Math.min(w.length, word.length) * 0.5;
+    });
+    if (tooMuchOverlap && selected.length < config.wordCount - 2) continue;
+
     selected.push(word);
     usedLetters.add(word[0]);
   }
@@ -183,6 +200,70 @@ function selectWords(
 }
 
 /**
+ * Compute ordering heuristics for solvability checking.
+ * Returns multiple orderings to try, from most likely to work to least.
+ */
+function getOrderingHeuristics(
+  words: string[],
+  wordPositions: Map<string, CellPosition[]>,
+  rng: () => number
+): string[][] {
+  // Compute average row for each word
+  const wordRows = words.map(w => {
+    const positions = wordPositions.get(w);
+    if (!positions) return { word: w, avgRow: 0, minRow: 0 };
+    const avgRow = positions.reduce((sum: number, p: CellPosition) => sum + p.row, 0) / positions.length;
+    const minRow = Math.min(...positions.map((p: CellPosition) => p.row));
+    return { word: w, avgRow, minRow };
+  });
+
+  const orderings: string[][] = [];
+
+  // Top-to-bottom: remove top words first (less gravity disruption below)
+  orderings.push([...wordRows].sort((a, b) => a.avgRow - b.avgRow).map(w => w.word));
+
+  // Bottom-to-top: remove bottom words first (they don't support anything)
+  orderings.push([...wordRows].sort((a, b) => b.avgRow - a.avgRow).map(w => w.word));
+
+  // By min row (topmost cell first)
+  orderings.push([...wordRows].sort((a, b) => a.minRow - b.minRow).map(w => w.word));
+
+  // Shortest first (less grid disruption per removal)
+  orderings.push([...words].sort((a, b) => a.length - b.length));
+
+  // Longest first
+  orderings.push([...words].sort((a, b) => b.length - a.length));
+
+  // A few random shuffles
+  for (let i = 0; i < 5; i++) {
+    orderings.push(shuffleArray(words, rng));
+  }
+
+  return orderings;
+}
+
+/**
+ * Fast solvability check using heuristic orderings before budgeted full solve.
+ */
+function checkSolvability(
+  grid: Grid,
+  words: string[],
+  wordPositions: Map<string, CellPosition[]>,
+  rng: () => number
+): boolean {
+  // Try heuristic orderings first — each is O(n) word lookups
+  const orderings = getOrderingHeuristics(words, wordPositions, rng);
+  for (const ordering of orderings) {
+    if (trySolveWithOrder(grid, ordering) !== null) {
+      return true;
+    }
+  }
+
+  // Fall back to budgeted full backtracking solver
+  return isSolvable(grid, words, wordPositions);
+}
+
+/**
  * Attempt to generate a board with the given config.
  * Returns null if generation fails.
  */
@@ -195,16 +276,26 @@ function attemptGenerate(
 
   const grid = createEmptyGrid(config.rows, config.cols);
   const placements: WordPlacement[] = [];
+  const wordPositions = new Map<string, CellPosition[]>();
+
+  // Sort words longest-first for placement (longer words are harder to fit)
+  const sortedWords = [...words].sort((a, b) => b.length - a.length);
 
   // Place words in the grid along random adjacent paths
-  for (const word of words) {
+  for (const word of sortedWords) {
     let placed = false;
 
-    // Try many random starting positions
-    for (let attempt = 0; attempt < 100; attempt++) {
-      const startRow = Math.floor(rng() * config.rows);
-      const startCol = Math.floor(rng() * config.cols);
+    // Try random starting positions, preferring positions that spread
+    // words across the grid
+    const startPositions: [number, number][] = [];
+    for (let i = 0; i < 60; i++) {
+      startPositions.push([
+        Math.floor(rng() * config.rows),
+        Math.floor(rng() * config.cols),
+      ]);
+    }
 
+    for (const [startRow, startCol] of startPositions) {
       const positions = tryPlace(grid, word, startRow, startCol, rng);
       if (positions) {
         placeWord(grid, word, positions);
@@ -214,6 +305,7 @@ function attemptGenerate(
           direction: 'horizontal', // Legacy field, paths are now freeform
           found: false,
         });
+        wordPositions.set(word, positions);
         placed = true;
         break;
       }
@@ -225,9 +317,9 @@ function attemptGenerate(
   // Fill empty cells
   fillEmptyCells(grid, rng);
 
-  // Verify solvability
+  // Verify solvability using fast heuristics + budgeted fallback
   const wordStrings = placements.map(p => p.word);
-  if (!isSolvable(grid, wordStrings)) return null;
+  if (!checkSolvability(grid, wordStrings, wordPositions, rng)) return null;
 
   return { grid, words: placements, config };
 }
@@ -242,22 +334,36 @@ export function generateBoard(
 ): Board {
   const baseSeed = seed ?? Date.now();
 
-  for (let attempt = 0; attempt < 50; attempt++) {
+  // Primary attempts with full config
+  for (let attempt = 0; attempt < 80; attempt++) {
     const rng = createRng(baseSeed + attempt * 7919);
     const board = attemptGenerate(config, rng);
     if (board) return board;
   }
 
-  // Fallback: generate a simpler board
+  // Fallback: slightly simpler board (1 fewer word, cap word length)
   const fallbackConfig: BoardConfig = {
     ...config,
     wordCount: Math.max(2, config.wordCount - 1),
+    maxWordLength: Math.min(config.maxWordLength, 5),
+  };
+
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const rng = createRng(baseSeed + 1000 + attempt * 7919);
+    const board = attemptGenerate(fallbackConfig, rng);
+    if (board) return board;
+  }
+
+  // Second fallback: even simpler
+  const fallback2Config: BoardConfig = {
+    ...config,
+    wordCount: Math.max(2, config.wordCount - 2),
     maxWordLength: Math.min(config.maxWordLength, 4),
   };
 
-  for (let attempt = 0; attempt < 50; attempt++) {
-    const rng = createRng(baseSeed + 1000 + attempt * 7919);
-    const board = attemptGenerate(fallbackConfig, rng);
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const rng = createRng(baseSeed + 2000 + attempt * 7919);
+    const board = attemptGenerate(fallback2Config, rng);
     if (board) return board;
   }
 
@@ -272,7 +378,7 @@ export function generateBoard(
   };
 
   for (let attempt = 0; attempt < 100; attempt++) {
-    const rng = createRng(baseSeed + 2000 + attempt * 7919);
+    const rng = createRng(baseSeed + 3000 + attempt * 7919);
     const board = attemptGenerate(minimalConfig, rng);
     if (board) return board;
   }
