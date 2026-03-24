@@ -515,7 +515,17 @@ export function getNextChapter(currentId: number): Chapter | undefined {
 }
 
 export function getChapterForLevel(level: number): Chapter | undefined {
-  // Each chapter has 5 puzzles, so chapter = ceil(level / 5)
-  const chapterIndex = Math.ceil(level / 5);
-  return CHAPTERS.find((ch) => ch.id === chapterIndex);
+  if (level <= 0) return CHAPTERS[0];
+
+  // Chapters define their own puzzle counts; map level to chapter by cumulative total.
+  let cumulativeLevels = 0;
+  for (const chapter of CHAPTERS) {
+    cumulativeLevels += chapter.puzzleCount;
+    if (level <= cumulativeLevels) {
+      return chapter;
+    }
+  }
+
+  // Past authored content: clamp to final chapter.
+  return CHAPTERS[CHAPTERS.length - 1];
 }
