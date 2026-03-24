@@ -114,7 +114,9 @@ export function GameHeader({
               <Image source={LOCAL_IMAGES.iconBattery} style={styles.batteryShell} resizeMode="contain" />
               {/* Battery fill (width proportional to progress) */}
               <View style={styles.batteryFillContainer}>
-                <View style={[styles.batteryFill, { width: `${Math.max(progress, 4)}%` }]} />
+                {progress > 0 && (
+                  <View style={[styles.batteryFill, { width: `${progress}%` }]} />
+                )}
               </View>
               {/* Label overlay */}
               <View style={styles.batteryLabelOverlay}>
