@@ -179,51 +179,6 @@ export const LetterCell = React.memo(function LetterCell({
           style={[StyleSheet.absoluteFillObject, { borderRadius }]}
         />
 
-        {/* Inner luminosity layer - gives depth to the tile */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.innerGlow,
-            {
-              borderRadius,
-              opacity: isSelected ? 0.30 : 0.06,
-              backgroundColor: isValidWord
-                ? COLORS.greenGlow
-                : isHinted
-                ? COLORS.goldGlow
-                : isSelected
-                ? COLORS.accentGlow
-                : 'rgba(255,255,255,0.03)',
-            },
-          ]}
-        />
-
-        {/* Top specular highlight — subtle glass-like reflection */}
-        <LinearGradient
-          colors={
-            isSelected || isValidWord
-              ? ['rgba(255,255,255,0.20)', 'rgba(255,255,255,0.03)', 'transparent'] as [string, string, string]
-              : ['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.01)', 'transparent'] as [string, string, string]
-          }
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          locations={[0, 0.4, 0.7]}
-          style={[styles.specularHighlight, { borderTopLeftRadius: borderRadius * 0.85, borderTopRightRadius: borderRadius * 0.85 }]}
-        />
-
-        {/* Side edge highlight — left edge catch light (subtle) */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.leftEdgeHighlight,
-            {
-              borderTopLeftRadius: borderRadius,
-              borderBottomLeftRadius: borderRadius,
-              opacity: isSelected || isValidWord ? 0.10 : 0.02,
-            },
-          ]}
-        />
-
         {/* Bottom edge shadow for 3D depth */}
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.25)'] as [string, string]}
@@ -296,24 +251,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     margin: 2,
     overflow: 'hidden',
-  },
-  innerGlow: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  specularHighlight: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '45%',
-  },
-  leftEdgeHighlight: {
-    position: 'absolute',
-    top: '10%',
-    left: 0,
-    width: '8%',
-    height: '80%',
-    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   bottomShadow: {
     position: 'absolute',

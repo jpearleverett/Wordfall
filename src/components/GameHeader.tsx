@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   backButton: {
     width: 36,
@@ -286,13 +286,12 @@ const styles = StyleSheet.create({
   },
   centerBlock: {
     flex: 1,
-    overflow: 'hidden',
   },
   batteryContainer: {
     position: 'relative',
     width: 180,
     height: 50,
-    alignSelf: 'flex-start',
+    marginLeft: -2,
   },
   batteryShell: {
     position: 'absolute',
