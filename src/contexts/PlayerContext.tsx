@@ -10,6 +10,7 @@ import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
 
 interface CollectionProgress {
   atlasPages: Record<string, string[]>;
+  atlasWordMastery: Record<string, number>; // per-word mastery counter (max 5 = gold border)
   rareTiles: Record<string, number>;
   wildcardTiles: number;
   seasonalStamps: Record<string, number[]>;
@@ -224,6 +225,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Collections
   collections: {
     atlasPages: {},
+    atlasWordMastery: {},
     rareTiles: {},
     wildcardTiles: 0,
     seasonalStamps: {},
@@ -428,7 +430,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const collectAtlasWord = useCallback((pageId: string, word: string) => {
     setData((prev) => {
       const existingWords = prev.collections.atlasPages[pageId] ?? [];
-      if (existingWords.includes(word)) return prev;
+      if (existingWords.includes(word)) {
+        // Duplicate: increment mastery counter (max 5 = gold border)
+        const currentMastery = prev.collections.atlasWordMastery[word] ?? 1;
+        if (currentMastery >= 5) return prev;
+        return {
+          ...prev,
+          collections: {
+            ...prev.collections,
+            atlasWordMastery: {
+              ...prev.collections.atlasWordMastery,
+              [word]: currentMastery + 1,
+            },
+          },
+        };
+      }
       return {
         ...prev,
         collections: {
@@ -436,6 +452,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           atlasPages: {
             ...prev.collections.atlasPages,
             [pageId]: [...existingWords, word],
+          },
+          atlasWordMastery: {
+            ...prev.collections.atlasWordMastery,
+            [word]: 1,
           },
         },
       };

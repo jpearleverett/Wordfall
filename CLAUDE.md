@@ -47,16 +47,16 @@ src/
 │   ├── modes/        # TimerDisplay, MoveCounter
 │   └── events/       # EventBanner, EventProgress
 ├── screens/          # 13 screens (Home, Game, Modes, Collections, Library, Profile, Settings, Shop, Club, Leaderboard, Event, Onboarding, Mastery)
-├── navigation/       # AppNavigator (not used directly - App.tsx handles nav)
 ├── config/           # firebase.ts
 ├── data/             # Static game data
 │   ├── chapters.ts, collections.ts, cosmetics.ts, events.ts, missions.ts  # Original data
-│   ├── tutorialBoards.ts    # Fixed tutorial board layout + guided steps
+│   ├── tutorialBoards.ts    # 3 progressive tutorial boards (A/B/C) + guided steps
 │   ├── achievements.ts      # 15 achievements with bronze/silver/gold tiers
 │   ├── weeklyGoals.ts       # Weekly goal templates + generation logic
-│   └── masteryRewards.ts    # 30-tier season pass reward definitions
+│   ├── masteryRewards.ts    # 30-tier season pass reward definitions
+│   └── sideObjectives.ts    # Par challenges, no-hint streaks, speed runs, theme master
 ├── utils/
-│   └── shareGenerator.ts    # Wordle-style shareable emoji grid generator
+│   └── shareGenerator.ts    # Wordle-style shareable emoji grid + streak card + collection card
 ├── types.ts          # All TypeScript interfaces and type unions
 ├── constants.ts      # Colors, gradients, shadows, configs, scoring, economy, feature unlock schedule
 └── words.ts          # Word dictionary (~2000 curated 3-6 letter words)
@@ -68,8 +68,8 @@ src/
 |------|---------|
 | `App.tsx` | Entry point. Progressive tab unlocking, nested stack navigators, provider wrappers, full reward/progression/mission wiring, ceremony queue processing, welcome-back modal, feature unlock detection, achievement/weekly goal progress, breather level support, personalized recommendations |
 | `src/types.ts` | ALL type definitions including `FeatureUnlockId`, `WeeklyGoal`, `WeeklyGoalsState`, `CeremonyItem`. Edit here when adding new data structures |
-| `src/constants.ts` | Colors, `GRADIENTS`, `SHADOWS`, difficulty configs, mode configs, scoring, economy, `FEATURE_UNLOCK_SCHEDULE`, `getBreatherConfig()`, `STREAK` milestones |
-| `src/contexts/PlayerContext.tsx` | Master player data hub: progress, collections, missions, streaks, cosmetics, library, modes, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `wordsFoundTotal`, `modesPlayedThisWeek`. Methods: `unlockFeature`, `checkFeatureUnlocks`, `markTooltipShown`, `initWeeklyGoals`, `updateWeeklyGoalProgress`, `queueCeremony`, `popCeremony`, `recordFailure`, `needsBreather`, `checkAchievements` |
+| `src/constants.ts` | Colors, `GRADIENTS`, `SHADOWS`, difficulty configs, mode configs, scoring, economy, `FEATURE_UNLOCK_SCHEDULE`, `getBreatherConfig()`, `STREAK` milestones, `MILESTONE_DECORATIONS`, `STAR_MILESTONES`, `PERFECT_MILESTONES`, `COLLECTION`, `CLUB`, `COMEBACK`, `ANIM` timing |
+| `src/contexts/PlayerContext.tsx` | Master player data hub: progress, collections (with atlas word mastery), missions, streaks, cosmetics, library, modes, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `wordsFoundTotal`, `modesPlayedThisWeek`, gifting (`hintGiftsSentToday`, `tileGiftsSentToday`). Methods: `unlockFeature`, `checkFeatureUnlocks`, `markTooltipShown`, `initWeeklyGoals`, `updateWeeklyGoalProgress`, `queueCeremony`, `popCeremony`, `recordFailure`, `needsBreather`, `checkAchievements`, `sendHintGift`, `sendTileGift` |
 | `src/hooks/useGame.ts` | Core game state reducer - handles 15+ game actions including boosters. Timer tick for timePressure mode runs here. Computed values (`currentWord`, `remainingWords`, `isValidWord`) cached with `useMemo`. `isDeadEnd` computed via deferred `useEffect` (not in render path) to avoid blocking the UI thread with the expensive solver |
 | `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG, freeform path placement (8-directional), and solvability validation |
 | `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
@@ -85,11 +85,12 @@ src/
 | `src/screens/ModesScreen.tsx` | Game mode grid with first-visit tooltip via `Tooltip` component |
 | `src/screens/CollectionsScreen.tsx` | Atlas/Tiles/Stamps tabs with first-visit tooltip |
 | `src/screens/LibraryScreen.tsx` | Library wings with first-visit tooltip |
-| `src/data/tutorialBoards.ts` | Fixed 5×4 tutorial board (CAT, DOG, SUN) + `TUTORIAL_STEPS` with highlight positions and guided actions |
+| `src/data/tutorialBoards.ts` | 3 progressive tutorial boards: A (4×4, GO/HI), B (5×4, CAT/DOG + gravity), C (5×5, SUN/RED/ANT + gravity dependency). `TUTORIAL_STEPS` with highlight positions and guided actions per board |
+| `src/data/sideObjectives.ts` | Par challenges (3 tiers), no-hint streaks (5/10/25), speed runs, theme master objectives with rewards |
 | `src/data/achievements.ts` | 15 `AchievementDef` entries across 5 categories (puzzle, collection, streak, mode, mastery), each with bronze/silver/gold tiers |
 | `src/data/weeklyGoals.ts` | 8 goal templates, `generateWeeklyGoals()` picks 3 per week, `isNewWeek()` utility |
 | `src/data/masteryRewards.ts` | 30 `MasteryReward` tiers with free/premium lanes, `getMasteryTierForXP()`, `getXPProgressInTier()` |
-| `src/utils/shareGenerator.ts` | `generateShareText()` converts grid + score into Wordle-style emoji grid for sharing |
+| `src/utils/shareGenerator.ts` | `generateShareText()` for Wordle-style emoji grid, `generateStreakCard()` for shareable streak display, `generateCollectionCard()` for collection progress sharing |
 | `src/components/common/Tooltip.tsx` | Reusable contextual tooltip with glassmorphism styling, arrow, auto-dismiss persistence via `player.markTooltipShown()` |
 | `GAME_DESIGN_DOCUMENT.md` | Full 48KB GDD with 17 sections - the source of truth for features |
 
@@ -171,13 +172,13 @@ Three booster types available during gameplay:
 | `classic` | Standard play | 1 |
 | `limitedMoves` | N moves only | 5 |
 | `timePressure` | Countdown timer (auto-tick in useGame) | 8 |
-| `perfectSolve` | Zero mistakes, no hints/undos | 10 |
-| `cascade` | Score multiplier +0.25x per word | 12 |
+| `perfectSolve` | Zero mistakes, no hints/undos | 12 |
+| `cascade` | Score multiplier +0.25x per word | 10 |
 | `daily` | Same puzzle for all players (date-seeded) | 1 |
-| `weekly` | Harder curated puzzle, 7-day window | 15 |
+| `weekly` | Harder curated puzzle, 7-day window | 10 |
 | `endless` | Procedural, no level gating | 3 |
-| `expert` | No hints, no undo, harder boards | 20 |
-| `relax` | Unlimited undos, gentle puzzles | 1 |
+| `expert` | No hints, no undo, harder boards | 30 |
+| `relax` | Unlimited undos, gentle puzzles | 3 |
 
 Modes auto-unlock in `App.tsx` `handleComplete` based on player level.
 
@@ -231,7 +232,7 @@ Ceremonies (modals) are queued via `player.queueCeremony()` and processed sequen
 
 After 2+ consecutive failures or a 1-star clear, `player.needsBreather()` returns true. `App.tsx` `startGame()` and `handleNextLevel()` check this and use `getBreatherConfig(level)` to serve an easier board (fewer words, smaller grid, lower difficulty).
 
-Welcome-back modal in `HomeMainScreen` awards tiered comeback rewards (3-day/7-day/14-day absence) with animated card UI instead of basic alert.
+Welcome-back modal in `HomeMainScreen` awards tiered comeback rewards (3-day/7-day/30-day absence) with animated card UI instead of basic alert.
 
 ## Design System
 
@@ -288,11 +289,12 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - Sound manager wired at all interaction points (haptics fully functional)
 - 40 chapters across 8 library wings with themed words
 - 12 Word Atlas pages, 6 rare tile sets, 4 seasonal albums
-- 12-week rotating event calendar (10 event types)
+- 12-week rotating event calendar (10 event types + Weekend Blitz)
 - 22 daily mission templates with progress tracking wired
+- Side objectives: par challenges, no-hint streaks, speed runs, theme master
 - 50+ cosmetic items (12 themes, 15 frames, 18 titles, 24 decorations)
 - Economy system with full reward wiring (coins, gems, library points, rare tiles on puzzle complete)
-- Atlas word collection against all 12 pages
+- Atlas word collection against all 12 pages (10 words each) with per-word mastery counter (duplicates increment mastery, max 5 = gold border)
 - Booster system (Freeze Column, Board Preview, Shuffle Filler) with UI and reducer support
 - Visual polish: score popups, confetti, chain celebration with screen shake, button press feedback
 - Invalid word red flash + error haptic on non-adjacent taps
@@ -309,7 +311,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - TypeScript compiles with zero errors
 
 #### Player Experience Systems (all complete)
-- **Interactive tutorial**: 4-phase onboarding (welcome → guided puzzle with TutorialOverlay → celebration → ready). Players tap highlighted cells on a real GameGrid to find CAT, DOG, SUN
+- **Interactive tutorial**: 4-phase onboarding with 3 progressive tutorial boards: A (4×4, tap to find GO/HI), B (5×4, gravity intro with CAT/DOG), C (5×5, order matters with SUN/RED/ANT gravity dependency). Players learn through guided puzzle play on real GameGrid + TutorialOverlay
 - **Progressive disclosure**: Dynamic HomeScreen sections based on `playerStage` (new/early/established/veteran). Streak hidden until 3 puzzles, quick play until established, weekly goals/missions for established+
 - **Ceremony queue**: Sequential modal system for level-ups, mode unlocks, feature unlocks, achievements, streak milestones, collection completions. Queued in PlayerContext, processed in HomeMainScreen
 - **First-win celebration**: Special "WELCOME TO WORDFALL!" badge on PuzzleComplete for `puzzlesSolved === 0`
@@ -321,7 +323,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Weekly goals**: 3 goals per week from 8 templates, progress tracking, reward tiers, panel on HomeScreen
 - **Streak milestone ceremonies**: Fires at 7/14/30/60/100 day milestones with rewards from `STREAK.milestoneRewards`
 - **Collection completion ceremonies**: Modal when Atlas page or rare tile set completed
-- **Shareable results**: Wordle-style emoji grid via `Share` API on PuzzleComplete
+- **Shareable results**: Wordle-style emoji grid via `Share` API on PuzzleComplete, plus shareable streak cards and collection completion cards
 - **Friend score comparison**: "You beat X of Y friends!" display on PuzzleComplete (mock data, Firestore-ready)
 - **Post-puzzle next level preview**: "COMING UP" section showing next level number + difficulty
 - **Near-miss encouragement**: On failure, "SO CLOSE!" or "KEEP GOING!" with progress bar and prominent retry
@@ -331,21 +333,29 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Contextual tooltips**: First-visit tooltips on Modes, Collections, Library screens via `Tooltip` component + `tooltipsShown` tracking
 - **Session end reminders**: Auto-dismissing banner when navigating home with incomplete daily
 - **Mastery track**: 30-tier season pass with free/premium reward lanes, XP-based progression
+- **Gifting system**: Send 1 hint gift/day + 3 tile gifts/day to friends, tracked via `sendHintGift`/`sendTileGift`
+- **Milestone rewards**: Library decoration every 5 levels (10 decorations), star milestones (50/100/250/500), perfect solve badges (10/25/50)
+- **Parental controls**: Spending limit toggle, monthly cap ($0-500), purchase PIN requirement on SettingsScreen
+- **Weekend Blitz event**: Saturday-Sunday with double XP and increased rare tile drop rates
+- **Stuck detection**: Red banner prompting undo when dead-end state detected during gameplay
+- **Star rating system**: 3 stars (no hints + efficient moves), 2 stars (≤1 hint), 1 star (any other win)
+- **Club auto-kick config**: `CLUB.autoKickInactiveDays = 14` for removing inactive members
 
 ### Scaffolded / Needs Work
 - Professional audio assets — current synthesized tones are functional but could be replaced with studio-quality .mp3/.wav files
-- Image assets (app icon, splash screen) — using emoji placeholders for icons; hero illustrations are code-generated Views
+- Image assets — app icon and splash screen are placeholder PNGs; hero illustrations are code-generated Views
 - Firebase Cloud Functions (server-side scheduled tasks)
 - Actual Firestore sync (currently AsyncStorage only) — friend comparison data is mock, ready for Firestore
 - Real-time leaderboard computation
-- IAP integration (expo-in-app-purchases) — Shop UI is complete, Mastery premium track is UI-only
+- IAP integration (expo-in-app-purchases) — Shop UI is complete with all GDD offers (starter pack, hint/undo bundles, daily value pack, chapter bundle, premium pass, ad removal), Mastery premium track is UI-only
 - Ad integration (rewarded ads for hints)
 - Push notifications
 - Friend challenge matchmaking
-- Club chat real-time messaging
+- Club chat real-time messaging + auto-kick enforcement (config defined, server-side logic needed)
 - Analytics service (wired but no-op - no actual tracking)
 - End-to-end testing
 - Deep linking
+- Smart Solve Replay (animated GIF/video of solve sequence for sharing)
 
 ## Common Patterns
 
@@ -397,9 +407,9 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Dark mode only** - no light theme (5 dark theme variants in cosmetics)
 - **`--legacy-peer-deps` required** for npm install due to React Navigation peer dep conflicts
 - **Screens use default exports**, not named exports
-- **`AppNavigator.tsx`** in `src/navigation/` is NOT used - `App.tsx` handles all navigation directly
+- **`AppNavigator.tsx`** was removed — `App.tsx` handles all navigation directly
 - **Firebase env vars** must be set as `EXPO_PUBLIC_FIREBASE_*` for the app to connect (currently placeholders)
-- **Word database** in `src/words.ts` contains ~2000 curated English words (3-6 letters)
+- **Word database** in `src/words.ts` contains 2,650 curated English words (3-6 letters)
 - **Seeded PRNG** ensures daily puzzles are identical for all players on the same day
 - **Timer tick** for timePressure mode runs inside `useGame` hook, not in the screen
 - **Adjacency validation** uses 8-directional adjacency (horizontal, vertical, diagonal) with no direction locking — paths can zigzag freely. Adjacency is checked in the `SELECT_CELL` reducer action; non-adjacent taps start a new selection from the tapped cell
@@ -408,7 +418,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Tile gradients must be fully opaque** — `GRADIENTS.tile.*` uses hex colors, not `rgba()`. Semi-transparent tile gradients cause the AmbientBackdrop to bleed through unevenly, creating visible artifacts
 - **GameHeader battery auto-sizes** — the battery container width is driven by its text content (mode label + word count), not a fixed pixel width. The battery shell image stretches to fit via `resizeMode="stretch"`
 - **Booster buttons use `overflow: 'visible'`** — the count badges are positioned at `top: -5, right: -5` outside the button bounds; `overflow: 'hidden'` would clip them
-- **Mode auto-unlock** happens in `App.tsx` `handleComplete` based on `MODE_CONFIGS[mode].unlockLevel`, with `ModeUnlockCeremony` modal
+- **Mode auto-unlock** happens in `App.tsx` `handleComplete` based on `MODE_CONFIGS[mode].unlockLevel`, with `ModeUnlockCeremony` modal. Key unlock levels per GDD: Cascade=10, Expert=30
 - **Progressive tab unlocking** is controlled by `FEATURE_UNLOCK_SCHEDULE` in constants.ts and `player.featuresUnlocked` array — Collections at level 5, Library at level 8
 - **Ceremony queue** (`player.pendingCeremonies`) is processed in `HomeMainScreen` — ceremonies fire one at a time with 300ms delay between dismissals
 - **Player stage** (`new`/`early`/`established`/`veteran`) is computed from `puzzlesSolved` (0-2/3-10/11-30/31+) and controls HomeScreen section visibility
@@ -417,6 +427,21 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Weekly goals** reset on Monday — `isNewWeek()` in weeklyGoals.ts detects week boundaries, `initWeeklyGoals()` generates 3 new goals
 - **Friend comparison** on PuzzleComplete uses mock random data — the `{ beaten: number; total: number }` structure is ready for Firestore integration
 - **Mastery track** uses `puzzlesSolved * 100` as XP proxy — replace with real XP tracking when needed
+- **Chapters have 15 puzzles each** — 40 chapters × 15 puzzles = 600 total puzzles per GDD
+- **Atlas pages have 10 words each** — within GDD's 8-12 range; duplicates increment per-word mastery counter (max 5 = gold border)
+- **Seasonal stamp albums have 20 stamps each** — 4 seasons per GDD
+- **Rare tile pity timer** guarantees a tile drop within 10 puzzles (`COLLECTION.rareTilePityTimer`)
+- **Rare tile recycling** — 5 duplicate tiles = 1 wildcard tile (`COLLECTION.duplicatesForWildcard`)
+- **Grace days** limited to 1 per streak (GDD: "Missing one day doesn't break streak, missing 2 consecutive days resets")
+- **Comeback rewards** at 3/7/30 day absence thresholds (was 3/7/14, fixed to match GDD)
+- **Club settings** — `CLUB.autoKickInactiveDays = 14`, `CLUB.maxMembers = 30`
+- **Gifting limits** — 1 hint gift/day, 3 tile gifts/day, tracked with daily reset
+- **Daily Value Pack** gated to `availableAfterDay: 3` per GDD; `autoEnds: true`
+- **Starter Pack** includes exclusive decoration (`starter_bookend`) per GDD
+- **Chapter Bundle** includes 1 Board Preview booster per GDD
+- **Star rating** uses hints + move efficiency: 3★ = no hints + moves ≤ wordCount, 2★ = ≤1 hint + moves ≤ wordCount+1, 1★ = otherwise
+- **`.env.example`** documents all required Firebase env vars; `.env` files are gitignored
+- **`eas.json`** provides development/preview/production build profiles
 
 ### Performance Architecture
 - **All tile animations use `useNativeDriver: true`** — animations run on the native thread, not blocking JS. Only animate `transform` and `opacity` (no `borderColor`, `shadowOpacity`, or layout-affecting styles via Animated)

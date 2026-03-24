@@ -162,11 +162,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             <Text style={styles.featuredIcon}>{'\u{1F381}'}</Text>
             <Text style={styles.featuredName}>Starter Pack</Text>
             <Text style={styles.featuredDesc}>
-              50 Hints + 25 Undos + 1000 Coins
+              500 Coins + 50 Gems + 10 Hints + Exclusive Decoration
             </Text>
             <View style={styles.featuredPriceRow}>
-              <Text style={styles.featuredOldPrice}>$9.99</Text>
-              <Text style={styles.featuredPrice}>$2.99</Text>
+              <Text style={styles.featuredOldPrice}>$4.99</Text>
+              <Text style={styles.featuredPrice}>$1.99</Text>
             </View>
             <View style={styles.timerContainer}>
               <Text style={styles.timerText}>{countdown}</Text>

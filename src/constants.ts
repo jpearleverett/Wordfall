@@ -456,6 +456,14 @@ export const COLLECTION = {
   rareTilePerfectBonus: 0.15,
   duplicatesForWildcard: 5,
   giftTilesPerDay: 3,
+  atlasMasteryMax: 5, // max mastery level per word (unlocks gold border at max)
+};
+
+// Club settings
+export const CLUB = {
+  minMembers: 10,
+  maxMembers: 30,
+  autoKickInactiveDays: 14, // auto-kick after 14 days of inactivity
 };
 
 // Comeback rewards
@@ -527,6 +535,7 @@ export const SHOP_ITEMS = {
     coins: 500,
     gems: 50,
     hints: 10,
+    decoration: 'starter_bookend',
     expiresHours: 72,
   },
   hintBundles: [
@@ -546,6 +555,8 @@ export const SHOP_ITEMS = {
     dailyCoins: 100,
     dailyGems: 5,
     dailyHints: 3,
+    availableAfterDay: 3,
+    autoEnds: true,
   },
   premiumPass: { id: 'premium_pass', price: '$4.99/season' },
   adRemoval: { id: 'ad_removal', price: '$4.99' },
