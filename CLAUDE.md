@@ -76,7 +76,8 @@ src/
 | `src/engine/solver.ts` | 8-directional DFS word finder, recursive backtracking solver, dead-end detection, hint generation. `findWordInGrid` supports optional `limit` parameter for early termination. `getHint` uses solution ordering directly without redundant re-solve |
 | `src/components/PuzzleComplete.tsx` | Victory screen with confetti (16 particles), animated score counter, staggered reveals inside a `ScrollView` with `maxHeight` constraint. **Plus**: `isFirstWin` welcome, `leveledUp` badge, `difficultyTransition` ceremony, `nextLevelPreview`, `shareText` with Share API, `friendComparison` mock display |
 | `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, responsive sizing via `maxHeight` prop (cell size constrained by both width and available height), drag-to-select via react-native-gesture-handler (gesture objects memoized with `useMemo`, callbacks via refs), frozen column styling, post-gravity moved-cell highlighting. LetterCell receives no `onPress` — all input handled by grid-level gesture detector |
-| `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro overlay, boosters, near-miss encouragement on failure with progress bar. Stable layout: banners float as absolute overlays on grid, wordArea has fixed height, boosterBar always reserves space. Measures grid area via `onLayout` (debounced 2px threshold) and passes `maxHeight` to GameGrid. `handleCellPress` delegates adjacency checks to the reducer |
+| `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro overlay, boosters (all 3 always visible when counts > 0), near-miss encouragement on failure with progress bar. Stable layout: banners float as absolute overlays on grid, wordArea has fixed height, boosterBar always reserves space. Measures grid area via `onLayout` (debounced 2px threshold) and passes `maxHeight` to GameGrid. `handleCellPress` delegates adjacency checks to the reducer |
+| `src/components/GameHeader.tsx` | Chrome card header with back button, battery-style progress indicator (auto-sizes to content), cyan score display with animated pop, undo/hint glass buttons with count badges. Progress bar at bottom with glow dot (hidden at 0%). Battery shell is an image asset that stretches to fit the label text |
 | `src/screens/HomeScreen.tsx` | Dynamic home screen with progressive section visibility based on `playerStage` (new/early/established/veteran). Sections: hero card, streak, daily rewards, weekly goals, mission progress, personalized recommendations, quick play |
 | `src/screens/OnboardingScreen.tsx` | 4-phase interactive tutorial: welcome → guided tutorial puzzle (real GameGrid + TutorialOverlay) → celebration → ready screen with tips |
 | `src/screens/ProfileScreen.tsx` | Player profile with stats grid, achievements grid (15 achievements × 3 tiers with colored dots), collection progress, cosmetics |
@@ -247,7 +248,8 @@ Welcome-back modal in `HomeMainScreen` awards tiered comeback rewards (3-day/7-d
 The UI uses a premium mobile game aesthetic with these patterns applied consistently across all screens:
 - **Gradient surfaces**: All cards and panels use `LinearGradient` with `GRADIENTS.surfaceCard` instead of flat `backgroundColor`. Import from `expo-linear-gradient`
 - **Shadow presets**: Use `SHADOWS.soft`, `SHADOWS.medium`, `SHADOWS.strong` from constants. `SHADOWS.glow(color)` for colored glow effects
-- **Glassmorphism cards**: Cards use gradient backgrounds + subtle inner glow overlays (`rgba` border + shadow) for depth
+- **Glassmorphism cards**: Cards use gradient backgrounds + subtle border + shadow for depth
+- **Letter tiles**: Clean architecture — opaque base gradient (`GRADIENTS.tile.default/selected/valid/hint/frozen`) + bottom shadow gradient for 3D depth. No inner glow, specular highlight, or shimmer overlays (these were removed for visual clarity). Tile gradients must be **fully opaque** hex colors (not rgba) to prevent background bleed-through artifacts
 - **Ambient backdrops**: All screens use `<AmbientBackdrop variant="home|library|game|..." />` for floating animated orb backgrounds (10 twinkling stars + 2 nebula orbs, all `useNativeDriver: true`)
 - **Hero illustrations**: Home and Library screens have decorative `<HomeHeroIllustration />` / `<LibraryHeroIllustration />` components built from Views + gradients (no image assets)
 - **Screen top padding**: All screens use `paddingTop: 60` in their `content` style to clear the status bar / safe area consistently
@@ -262,7 +264,7 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - Grid has gradient background (`GRADIENTS.grid`), 16px border radius, accent gradient border
 
 ### Animations & Visual Feedback
-All tile animations use `useNativeDriver: true` for native-thread execution. No continuous animation loops run on idle tiles (shimmer and pulse loops removed for performance).
+All tile animations use `useNativeDriver: true` for native-thread execution. No continuous animation loops run on idle tiles.
 - **Cell selection**: Scale down 0.86 → spring to 1.08 with animated glow border (60ms down, spring up). All native driver
 - **Valid word detection**: Cells turn green with checkmarks, green flash overlay (200ms)
 - **Post-gravity cells**: Cyan border overlay fading via opacity over 400ms (native driver)
@@ -303,7 +305,8 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - Welcome-back animated modal with tiered comeback rewards
 - Perfect Solve undo recovery (undo from failed state)
 - Performance-optimized: all tile animations use native driver, no continuous animation loops on idle tiles, expensive solver computations deferred out of render path, gesture objects memoized, computed game values cached with `useMemo`
-- TypeScript compiles with zero errors (gradient color tuple types corrected across Button.tsx, ClubScreen.tsx, EventScreen.tsx, OnboardingScreen.tsx)
+- Visual polish pass: clean tile rendering (opaque gradients, no overlay artifacts), auto-sizing battery header, centered booster shelf, booster count badges visible (not clipped)
+- TypeScript compiles with zero errors
 
 #### Player Experience Systems (all complete)
 - **Interactive tutorial**: 4-phase onboarding (welcome → guided puzzle with TutorialOverlay → celebration → ready). Players tap highlighted cells on a real GameGrid to find CAT, DOG, SUN
@@ -401,7 +404,10 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Timer tick** for timePressure mode runs inside `useGame` hook, not in the screen
 - **Adjacency validation** uses 8-directional adjacency (horizontal, vertical, diagonal) with no direction locking — paths can zigzag freely. Adjacency is checked in the `SELECT_CELL` reducer action; non-adjacent taps start a new selection from the tapped cell
 - **Drag selection** is handled by `react-native-gesture-handler` PanGesture on the Grid — players can drag across tiles to select them. Gesture objects are memoized with `useMemo` and use refs for callbacks to avoid reattachment on re-renders. `GestureHandlerRootView` wraps the app in `App.tsx`
-- **LetterCell has no `onPress` prop** — all touch input is handled by the grid-level gesture detector via hit testing. LetterCell is purely presentational (wrapped in `React.memo`)
+- **LetterCell has no `onPress` prop** — all touch input is handled by the grid-level gesture detector via hit testing. LetterCell is purely presentational (wrapped in `React.memo`). Tile rendering is intentionally minimal: base gradient + bottom shadow only. Do NOT add semi-transparent overlay layers (innerGlow, specular, shimmer) as these create visible lighter rectangles
+- **Tile gradients must be fully opaque** — `GRADIENTS.tile.*` uses hex colors, not `rgba()`. Semi-transparent tile gradients cause the AmbientBackdrop to bleed through unevenly, creating visible artifacts
+- **GameHeader battery auto-sizes** — the battery container width is driven by its text content (mode label + word count), not a fixed pixel width. The battery shell image stretches to fit via `resizeMode="stretch"`
+- **Booster buttons use `overflow: 'visible'`** — the count badges are positioned at `top: -5, right: -5` outside the button bounds; `overflow: 'hidden'` would clip them
 - **Mode auto-unlock** happens in `App.tsx` `handleComplete` based on `MODE_CONFIGS[mode].unlockLevel`, with `ModeUnlockCeremony` modal
 - **Progressive tab unlocking** is controlled by `FEATURE_UNLOCK_SCHEDULE` in constants.ts and `player.featuresUnlocked` array — Collections at level 5, Library at level 8
 - **Ceremony queue** (`player.pendingCeremonies`) is processed in `HomeMainScreen` — ceremonies fire one at a time with 300ms delay between dismissals
@@ -414,7 +420,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 
 ### Performance Architecture
 - **All tile animations use `useNativeDriver: true`** — animations run on the native thread, not blocking JS. Only animate `transform` and `opacity` (no `borderColor`, `shadowOpacity`, or layout-affecting styles via Animated)
-- **No continuous animation loops on idle tiles** — shimmer and pulse loops were removed. Only selected/moved tiles run short one-shot animations
+- **No continuous animation loops on idle tiles** — only selected/moved tiles run short one-shot animations. Idle tiles have zero overlay layers (no innerGlow, specular, shimmer)
 - **`isDeadEnd` solver is deferred** — runs via `setTimeout` in a `useEffect` after words are found, not synchronously in the render path. The solver's recursive DFS is too expensive for per-render execution
 - **`findWordInGrid` supports a `limit` parameter** — pass `limit=1` when only existence matters (hint, dead-end check) to avoid finding all occurrences
 - **Gesture objects memoized** — Grid.tsx wraps gesture creation in `useMemo` with callback refs, per React Native Gesture Handler best practices
@@ -423,3 +429,4 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Grid sizing is dual-dimension** — `cellSize` uses `Math.min(widthBased, heightBased)` via `maxHeight` prop measured by `onLayout` in GameScreen, preventing grid overflow behind booster buttons on tall boards
 - **Stable layout architecture** — GameScreen uses absolute-positioned overlays for banners (cascade, freeze, idle hint, mode intro) so they never shift the grid. WordArea has fixed height (90px), boosterBar always reserves space. `gridAreaHeight` updates are debounced (2px threshold) to prevent cascading re-renders from sub-pixel layout shifts
 - **When adding new animations**: always use `useNativeDriver: true`, avoid `Animated.loop` on per-tile components, prefer one-shot animations that complete and settle
+- **When modifying tiles**: do NOT add semi-transparent overlay Views or LinearGradients on top of the base tile gradient — these create visible lighter rectangles. Keep tile rendering minimal: base gradient + bottom shadow + letter text
