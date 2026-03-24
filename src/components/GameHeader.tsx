@@ -110,15 +110,15 @@ export function GameHeader({
           {/* Center: battery progress indicator */}
           <View style={styles.centerBlock}>
             <View style={styles.batteryContainer}>
-              {/* Battery shell */}
-              <Image source={LOCAL_IMAGES.iconBattery} style={styles.batteryShell} resizeMode="contain" />
+              {/* Battery shell stretches to fit content */}
+              <Image source={LOCAL_IMAGES.iconBattery} style={styles.batteryShell} resizeMode="stretch" />
               {/* Battery fill (width proportional to progress) */}
               <View style={styles.batteryFillContainer}>
                 {progress > 0 && (
                   <View style={[styles.batteryFill, { width: `${progress}%` }]} />
                 )}
               </View>
-              {/* Label overlay */}
+              {/* Label — drives the container size */}
               <View style={styles.batteryLabelOverlay}>
                 <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
                 <Text style={styles.batteryText}>{modeLabel}</Text>
@@ -289,21 +289,23 @@ const styles = StyleSheet.create({
   },
   batteryContainer: {
     position: 'relative',
-    width: 180,
-    height: 50,
-    marginLeft: -2,
+    alignSelf: 'flex-start',
+    height: 40,
   },
   batteryShell: {
     position: 'absolute',
-    width: 180,
-    height: 50,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 10,
   },
   batteryFillContainer: {
     position: 'absolute',
-    top: 8,
-    left: 10,
-    width: 140,
-    height: 34,
+    top: 6,
+    left: 8,
+    right: 18,
+    bottom: 6,
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -314,16 +316,13 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   batteryLabelOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingRight: 12,
+    paddingHorizontal: 14,
+    paddingRight: 20,
+    height: '100%',
   },
   batteryText: {
     color: COLORS.textPrimary,
