@@ -1140,7 +1140,7 @@ const styles = StyleSheet.create({
   },
   boosterBar: {
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    alignItems: 'center',
     paddingVertical: 4,
     marginTop: 4,
     marginBottom: 2,
@@ -1152,8 +1152,8 @@ const styles = StyleSheet.create({
   boosterShelfImage: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    width: '100%',
+    left: 16,
+    right: 16,
     height: 60,
     opacity: 0.9,
   },

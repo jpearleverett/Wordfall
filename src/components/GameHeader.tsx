@@ -206,17 +206,19 @@ export function GameHeader({
             {/* Shimmer on progress fill */}
             <View style={styles.progressShimmer} />
           </Animated.View>
-          {/* Glow dot at progress tip */}
-          <Animated.View
-            style={[
-              styles.progressGlowDot,
-              {
-                left: progressWidth as any,
-                backgroundColor: modeConfig.color,
-                shadowColor: modeConfig.color,
-              },
-            ]}
-          />
+          {/* Glow dot at progress tip — hidden when no progress */}
+          {progress > 0 && (
+            <Animated.View
+              style={[
+                styles.progressGlowDot,
+                {
+                  left: progressWidth as any,
+                  backgroundColor: modeConfig.color,
+                  shadowColor: modeConfig.color,
+                },
+              ]}
+            />
+          )}
         </View>
       </View>
     </View>

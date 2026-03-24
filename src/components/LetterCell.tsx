@@ -232,18 +232,6 @@ export const LetterCell = React.memo(function LetterCell({
           style={[styles.bottomShadow, { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius }]}
         />
 
-        {/* Static shimmer highlight — no animation */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.shimmerSweep,
-            {
-              borderRadius,
-              opacity: isSelected ? 0.10 : 0.02,
-            },
-          ]}
-        />
-
         {/* Letter with premium text rendering */}
         <Text
           style={[
@@ -333,14 +321,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '30%',
-  },
-  shimmerSweep: {
-    position: 'absolute',
-    top: 0,
-    left: '35%',
-    width: '30%',
-    height: '100%',
-    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   letter: {
     color: COLORS.textPrimary,
