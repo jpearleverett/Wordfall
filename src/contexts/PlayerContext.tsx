@@ -4,7 +4,7 @@ import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { CeremonyItem, WeeklyGoalsState } from '../types';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
-import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
+import { FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -368,6 +368,33 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
     persist();
   }, [data, loaded]);
+
+  // Reconcile unlock state with current level (helps old saves / balance updates).
+  useEffect(() => {
+    if (!loaded) return;
+
+    setData((prev) => {
+      const levelUnlockedModes = Object.values(MODE_CONFIGS)
+        .filter((mode) => mode.unlockLevel <= prev.currentLevel)
+        .map((mode) => mode.id);
+
+      const mergedModes = Array.from(new Set([...prev.unlockedModes, ...levelUnlockedModes]));
+      if (mergedModes.length === prev.unlockedModes.length) return prev;
+
+      const mergedStats = { ...prev.modeStats };
+      for (const modeId of mergedModes) {
+        if (!mergedStats[modeId]) {
+          mergedStats[modeId] = { played: 0, bestScore: 0, wins: 0 };
+        }
+      }
+
+      return {
+        ...prev,
+        unlockedModes: mergedModes,
+        modeStats: mergedStats,
+      };
+    });
+  }, [loaded, data.currentLevel]);
 
   // ── Progress ────────────────────────────────────────────────────────────
 

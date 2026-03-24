@@ -8,25 +8,22 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, FONTS } from '../constants';
+import { COLORS, GRADIENTS, FONTS, MODE_CONFIGS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
 
-const MODES = [
-  { id: 'classic', name: 'Classic', icon: '📖', desc: 'Solve all listed words', unlockLevel: 1 },
-  { id: 'limitedMoves', name: 'Limited Moves', icon: '🎯', desc: 'Complete in exactly N moves', unlockLevel: 5 },
-  { id: 'timePressure', name: 'Time Pressure', icon: '⏱️', desc: 'Beat the clock', unlockLevel: 8 },
-  { id: 'perfectSolve', name: 'Perfect Solve', icon: '💎', desc: 'Zero mistakes, no assists', unlockLevel: 12 },
-  { id: 'cascade', name: 'Cascade', icon: '🔥', desc: 'Build combo multipliers', unlockLevel: 6 },
-  { id: 'daily', name: 'Daily Challenge', icon: '☀️', desc: 'Same puzzle for everyone', unlockLevel: 1 },
-  { id: 'weekly', name: 'Weekly Special', icon: '🏆', desc: 'Curated hard puzzle', unlockLevel: 10 },
-  { id: 'endless', name: 'Endless', icon: '♾️', desc: 'Never-ending puzzles', unlockLevel: 15 },
-  { id: 'expert', name: 'Expert', icon: '🧠', desc: 'Minimal hints, harder boards', unlockLevel: 20 },
-  { id: 'relax', name: 'Relax', icon: '🌿', desc: 'No pressure, unlimited undos', unlockLevel: 3 },
-];
+const MODES = Object.values(MODE_CONFIGS)
+  .map((mode) => ({
+    id: mode.id,
+    name: mode.name,
+    icon: mode.icon,
+    desc: mode.description,
+    unlockLevel: mode.unlockLevel,
+  }))
+  .sort((a, b) => a.unlockLevel - b.unlockLevel);
 
 interface ModesScreenProps {
   onSelectMode?: (mode: string) => void;

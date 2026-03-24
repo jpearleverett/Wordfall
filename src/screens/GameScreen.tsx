@@ -25,6 +25,7 @@ import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 import { usePlayer } from '../contexts/PlayerContext';
+import { analytics } from '../services/analytics';
 
 if (
   Platform.OS === 'android' &&
@@ -188,8 +189,13 @@ export function GameScreen({
   useEffect(() => {
     if (state.combo > 1 && state.status === 'playing') {
       showChainCelebration();
+      void analytics.logEvent('chain_count', {
+        level,
+        mode,
+        combo: state.combo,
+      });
     }
-  }, [state.combo]);
+  }, [state.combo, state.status, showChainCelebration, level, mode]);
 
   // Invalid word flash animation
   const showInvalidFlashAnim = useCallback(() => {
@@ -246,11 +252,28 @@ export function GameScreen({
 
   useEffect(() => {
     void soundManager.playMusic(mode === 'timePressure' ? 'tense' : 'gameplay');
+    void analytics.logEvent('puzzle_start', {
+      level,
+      mode,
+      isDaily,
+      wordCount: board.words.length,
+      boardRows: board.config.rows,
+      boardCols: board.config.cols,
+    });
 
     return () => {
       void soundManager.playMusic('menu');
+      if (state.status === 'playing') {
+        void analytics.logEvent('puzzle_abandon', {
+          level,
+          mode,
+          foundWords,
+          totalWords,
+          score: state.score,
+        });
+      }
     };
-  }, [mode]);
+  }, [mode, level, isDaily, board.words.length, board.config.rows, board.config.cols, state.status, foundWords, totalWords, state.score]);
 
   // Track post-gravity moved cells
   useEffect(() => {
@@ -260,12 +283,30 @@ export function GameScreen({
         ? getMovedCellPositions(previousGrid, state.board.grid)
         : [];
       void soundManager.playSound('gravity');
+      void analytics.logEvent('gravity_interaction', {
+        level,
+        mode,
+        movedCells: moved.length,
+      });
       setMovedCells(moved);
       const timer = setTimeout(() => setMovedCells([]), 400);
       return () => clearTimeout(timer);
     }
     prevFoundWordsRef.current = foundWords;
   }, [foundWords, state.status]);
+
+  useEffect(() => {
+    if ((state.status === 'failed' || state.status === 'timeout') && showFailed) {
+      void analytics.logEvent('puzzle_fail', {
+        level,
+        mode,
+        reason: state.status,
+        foundWords,
+        totalWords,
+        score: state.score,
+      });
+    }
+  }, [state.status, showFailed, level, mode, foundWords, totalWords, state.score]);
 
   // Score popup when score changes (word found)
   useEffect(() => {
@@ -368,11 +409,13 @@ export function GameScreen({
 
   const handleHint = useCallback(() => {
     void soundManager.playSound('hintUsed');
+    void analytics.logEvent('hint_used', { level, mode, hintsLeft: state.hintsLeft });
     useHint();
-  }, [useHint]);
+  }, [useHint, level, mode, state.hintsLeft]);
 
   const handleUndo = useCallback(() => {
     void soundManager.playSound('undoUsed');
+    void analytics.logEvent('undo_used', { level, mode, undosLeft: state.undosLeft });
     LayoutAnimation.configureNext(
       LayoutAnimation.create(
         300,
@@ -384,7 +427,7 @@ export function GameScreen({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove]);
+  }, [undoMove, level, mode, state.undosLeft]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
@@ -411,16 +454,18 @@ export function GameScreen({
   const handleShuffle = useCallback(() => {
     if (state.boosterCounts.shuffleFiller > 0) {
       void soundManager.playSound('buttonPress');
+      void analytics.logEvent('booster_used', { level, mode, booster: 'shuffleFiller' });
       useBooster('shuffleFiller');
     }
-  }, [useBooster, state.boosterCounts.shuffleFiller]);
+  }, [useBooster, state.boosterCounts.shuffleFiller, level, mode]);
 
   const handleFreezeToggle = useCallback(() => {
     if (state.boosterCounts.freezeColumn > 0) {
       void soundManager.playSound('buttonPress');
+      void analytics.logEvent('booster_used', { level, mode, booster: 'freezeColumn_toggle' });
       setFreezeMode(prev => !prev);
     }
-  }, [state.boosterCounts.freezeColumn]);
+  }, [state.boosterCounts.freezeColumn, level, mode]);
 
   const handlePreviewToggle = useCallback(() => {
     if (showPreview) {
@@ -428,10 +473,11 @@ export function GameScreen({
       setShowPreview(false);
     } else if (state.boosterCounts.boardPreview > 0 && state.selectedCells.length > 0) {
       previewMove(state.selectedCells);
+      void analytics.logEvent('booster_used', { level, mode, booster: 'boardPreview' });
       useBooster('boardPreview');
       setShowPreview(true);
     }
-  }, [showPreview, clearPreview, previewMove, useBooster, state.boosterCounts.boardPreview, state.selectedCells]);
+  }, [showPreview, clearPreview, previewMove, useBooster, state.boosterCounts.boardPreview, state.selectedCells, level, mode]);
 
   // Format timer
   const formatTime = (seconds: number) => {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Animated,
   Pressable,
   SafeAreaView,
@@ -47,6 +48,7 @@ import { AchievementCeremony } from './src/components/AchievementCeremony';
 import { StreakMilestoneCeremony } from './src/components/StreakMilestoneCeremony';
 import { CollectionCompleteCeremony } from './src/components/CollectionCompleteCeremony';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
+import { analytics } from './src/services/analytics';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createStackNavigator();
@@ -254,6 +256,10 @@ function ModesScreenWrapper({ navigation }: any) {
   const handleSelectMode = useCallback((modeId: string) => {
     const mode = modeId as GameMode;
     try {
+      void analytics.logEvent('mode_started', {
+        modeId,
+        playerLevel: player.currentLevel,
+      });
       let board: Board;
       const config = getLevelConfig(player.currentLevel);
 
@@ -307,6 +313,14 @@ function GameScreenWrapper({ route, navigation }: any) {
 
     // Record puzzle completion in PlayerContext
     const isPerfect = stars === 3;
+    void analytics.logEvent('puzzle_complete', {
+      level,
+      mode,
+      score,
+      stars,
+      isPerfect,
+      isDaily,
+    });
     player.recordPuzzleComplete(level, score, stars, isPerfect);
 
     // Record mode play
@@ -337,6 +351,10 @@ function GameScreenWrapper({ route, navigation }: any) {
       economy.addCoins(ECONOMY.dailyCompleteCoins);
       economy.addGems(ECONOMY.dailyCompleteGems);
       player.updateStreak();
+      void analytics.logEvent('daily_login', {
+        date: today,
+        streak: player.streaks.currentStreak + 1,
+      });
     }
 
     // Check for rare tile drop
@@ -347,6 +365,11 @@ function GameScreenWrapper({ route, navigation }: any) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       const randomLetter = letters[Math.floor(Math.random() * letters.length)];
       player.addRareTile(randomLetter);
+      void analytics.logEvent('rare_tile_earned', {
+        letter: randomLetter,
+        difficulty,
+        isPerfect,
+      });
     }
 
     // Check for atlas word collection from the words found (all pages)
@@ -554,6 +577,12 @@ function HomeMainScreen({ navigation }: any) {
   // Check for comeback rewards and process ceremonies on mount
   useEffect(() => {
     if (player.loaded) {
+      void analytics.startSession('app_launch');
+      void analytics.setUserProperty('player_stage', playerStageFromPuzzles(player.puzzlesSolved));
+      void analytics.logEvent('streak_count', {
+        currentStreak: player.streaks.currentStreak,
+        bestStreak: player.streaks.bestStreak,
+      });
       const rewards = player.checkComebackRewards();
       if (rewards.length > 0) {
         const is7day = rewards.some(r => r.includes('7day'));
@@ -583,6 +612,17 @@ function HomeMainScreen({ navigation }: any) {
       }
     }
   }, [player.loaded]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void analytics.startSession('foreground');
+      } else if (state === 'background') {
+        void analytics.endSession('background');
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   // Process next ceremony when current one is dismissed
   const handleDismissCeremony = useCallback(() => {
@@ -853,6 +893,13 @@ function HomeMainScreen({ navigation }: any) {
       )}
     </View>
   );
+}
+
+function playerStageFromPuzzles(puzzlesSolved: number): 'new' | 'early' | 'established' | 'veteran' {
+  if (puzzlesSolved <= 2) return 'new';
+  if (puzzlesSolved <= 10) return 'early';
+  if (puzzlesSolved <= 30) return 'established';
+  return 'veteran';
 }
 
 // Root app with onboarding check
