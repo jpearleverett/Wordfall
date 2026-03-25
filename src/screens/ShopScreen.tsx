@@ -21,6 +21,7 @@ import {
   getRarityColor,
   RotatingItem,
 } from '../data/rotatingShop';
+import { funnelTracker } from '../services/funnelTracker';
 
 const { width } = Dimensions.get('window');
 
@@ -149,6 +150,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     iapManager.init().catch(() => {});
     adManager.init().catch(() => {});
     if (adsRemoved) adManager.setAdsRemoved(true);
+    void funnelTracker.trackStep('shop_view');
   }, [adsRemoved]);
 
   // Countdown timer
@@ -183,6 +185,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     async (productId: string) => {
       if (purchasingId) return; // already in flight
       setPurchasingId(productId);
+      void funnelTracker.trackStep('iap_initiated');
 
       try {
         const result: PurchaseResult = await iapManager.purchase(productId);

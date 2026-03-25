@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 
 interface DailyMissionDisplay {
   id: string;
@@ -34,6 +35,7 @@ interface HomeScreenProps {
   onResetProgress: () => void;
   onOpenShop?: () => void;
   onOpenSettings?: () => void;
+  onBuyDeal?: (deal: DailyDeal) => void;
   currencies?: {
     coins: number;
     gems: number;
@@ -73,6 +75,7 @@ export function HomeScreen({
   onResetProgress,
   onOpenShop,
   onOpenSettings,
+  onBuyDeal,
   currencies,
   currentChapter = 1,
   loginCycleDay = 1,
@@ -118,6 +121,8 @@ export function HomeScreen({
   const today = new Date().toISOString().split('T')[0];
   const dailyDone = progress.dailyCompleted.includes(today);
   const totalStars = Object.values(progress.starsByLevel).reduce((a, b) => a + b, 0);
+  const dailyDeal = getDailyDeal(today);
+  const dealHoursLeft = dailyDeal.availableHours;
   const nextMilestone = [7, 14, 30, 60, 100].find((milestone) => milestone > progress.currentStreak) || 100;
   const streakProgress = Math.min(100, (progress.currentStreak / nextMilestone) * 100);
   const currentRewardDay = ((loginCycleDay - 1) % 7) + 1;
@@ -359,6 +364,46 @@ export function HomeScreen({
                 />
               </View>
               <Text style={styles.streakTarget}>{nextMilestone}</Text>
+            </View>
+          </LinearGradient>
+        )}
+
+        {/* Today's Deal - visible for non-new players */}
+        {playerStage !== 'new' && (
+          <LinearGradient
+            colors={GRADIENTS.surfaceCard}
+            style={[styles.dealPanel, SHADOWS.medium]}
+          >
+            <View style={styles.panelHeaderRow}>
+              <Text style={styles.panelTitle}>{dailyDeal.icon} Today's Deal</Text>
+              <Text style={styles.panelMeta}>Ends in {dealHoursLeft}h</Text>
+            </View>
+            <View style={styles.dealContent}>
+              <View style={styles.dealInfo}>
+                <Text style={styles.dealName}>{dailyDeal.name}</Text>
+                <Text style={styles.dealDesc}>{dailyDeal.description}</Text>
+                <View style={styles.dealPriceRow}>
+                  <Text style={styles.dealOriginalPrice}>
+                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.originalPrice}
+                  </Text>
+                  <Text style={styles.dealSalePrice}>
+                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.salePrice}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                style={({ pressed }) => [pressed && styles.buttonPressed]}
+                onPress={() => onBuyDeal?.(dailyDeal)}
+              >
+                <LinearGradient
+                  colors={GRADIENTS.button.gold}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.dealBuyButton}
+                >
+                  <Text style={styles.dealBuyText}>BUY</Text>
+                </LinearGradient>
+              </Pressable>
             </View>
           </LinearGradient>
         )}
@@ -951,6 +996,65 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 999,
     opacity: 0.6,
+  },
+  // Daily Deal
+  dealPanel: {
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.15)',
+    marginBottom: 14,
+  },
+  dealContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dealInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  dealName: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontFamily: FONTS.bodyBold,
+    marginBottom: 2,
+  },
+  dealDesc: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  dealPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dealOriginalPrice: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    textDecorationLine: 'line-through' as const,
+  },
+  dealSalePrice: {
+    color: COLORS.gold,
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  dealBuyButton: {
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  dealBuyText: {
+    color: COLORS.bg,
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    letterSpacing: 2,
   },
   buttonPressed: {
     transform: [{ scale: 0.96 }],

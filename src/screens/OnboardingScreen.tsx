@@ -14,6 +14,7 @@ import { generateTutorialBoard, TUTORIAL_STEPS } from '../data/tutorialBoards';
 import { GameGrid } from '../components/Grid';
 import { CellPosition } from '../types';
 import { TutorialOverlay } from '../components/TutorialOverlay';
+import { funnelTracker } from '../services/funnelTracker';
 
 const { width, height } = Dimensions.get('window');
 
@@ -34,6 +35,17 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
   const [selectedCells, setSelectedCells] = useState<CellPosition[]>([]);
   const [tutorialBoard, setTutorialBoard] = useState(generateTutorialBoard);
   const [wordsFound, setWordsFound] = useState(0);
+
+  // Track onboarding phase changes
+  useEffect(() => {
+    if (phase === 'welcome') {
+      void funnelTracker.trackOnboarding('start');
+    } else if (phase === 'tutorial') {
+      void funnelTracker.trackOnboarding('board_a');
+    } else if (phase === 'celebrate') {
+      void funnelTracker.trackOnboarding('complete');
+    }
+  }, [phase]);
 
   // Entrance animation
   useEffect(() => {

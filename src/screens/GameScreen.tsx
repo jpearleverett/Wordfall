@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Image,
   LayoutAnimation,
@@ -19,7 +20,7 @@ import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
@@ -79,6 +80,42 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
   });
 
   return moved;
+}
+
+// --- Word-Clear Particle Pop ---
+const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', '#ff9100'];
+
+function WordClearParticle({ delay, startX, startY }: { delay: number; startX: number; startY: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const angle = useRef(Math.random() * Math.PI * 2).current;
+  const distance = useRef(40 + Math.random() * 60).current;
+  const size = useRef(4 + Math.random() * 6).current;
+  const color = useRef(PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)]).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{
+      position: 'absolute',
+      left: startX,
+      top: startY,
+      width: size,
+      height: size,
+      borderRadius: size / 2,
+      backgroundColor: color,
+      opacity: anim.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
+      transform: [
+        { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * distance] }) },
+        { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * distance] }) },
+        { scale: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.3, 1.2, 0.2] }) },
+      ],
+    }} />
+  );
 }
 
 export function GameScreen({
@@ -155,13 +192,37 @@ export function GameScreen({
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const prevFoundWordsRef = useRef(foundWords);
   const [movedCells, setMovedCells] = useState<CellPosition[]>([]);
+  const [clearParticles, setClearParticles] = useState<{ x: number; y: number } | null>(null);
+  const gridScaleAnim = useRef(new Animated.Value(1)).current;
+  const undoFlashAnim = useRef(new Animated.Value(0)).current;
+  const [showUndoFlash, setShowUndoFlash] = useState(false);
+  const undoPulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Chain celebration animation with screen shake
+  // #5 reduceMotion support
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => sub.remove();
+  }, []);
+
+  // Chain celebration animation with screen shake (skips animation when reduceMotion)
   const showChainCelebration = useCallback(() => {
     setChainVisible(true);
     chainAnim.setValue(0);
     void comboHaptic();
     void soundManager.playSound('combo');
+
+    if (reduceMotion) {
+      // Skip animation, just show briefly then hide
+      chainAnim.setValue(1);
+      setTimeout(() => {
+        chainAnim.setValue(0);
+        setChainVisible(false);
+      }, ANIM.chainPopupDuration);
+      return;
+    }
+
     // Screen shake for chain — escalates with combo count
     const isLongShake = state.combo >= 6;
     const shakeSequence = isLongShake
@@ -198,7 +259,7 @@ export function GameScreen({
         useNativeDriver: true,
       }),
     ]).start(() => setChainVisible(false));
-  }, [chainAnim, shakeAnim, state.combo]);
+  }, [chainAnim, shakeAnim, state.combo, reduceMotion]);
 
   // Show chain celebration on combo > 1
   useEffect(() => {
@@ -323,7 +384,7 @@ export function GameScreen({
     }
   }, [state.status, showFailed, level, mode, foundWords, totalWords, state.score]);
 
-  // Score popup when score changes (word found)
+  // Score popup when score changes (word found) + particle burst (#1)
   useEffect(() => {
     const diff = state.score - prevScoreRef.current;
     prevScoreRef.current = state.score;
@@ -332,6 +393,20 @@ export function GameScreen({
       setScorePopup({ points: diff, label });
       void wordFoundHaptic();
       void soundManager.playSound('wordFound');
+
+      // #1 Word-clear particle burst
+      if (!reduceMotion) {
+        setClearParticles({ x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 });
+        setTimeout(() => setClearParticles(null), 500);
+      }
+
+      if (reduceMotion) {
+        // Skip score popup animation, just show briefly
+        scorePopupAnim.setValue(1);
+        setTimeout(() => { scorePopupAnim.setValue(0); setScorePopup(null); }, 800);
+        return;
+      }
+
       scorePopupAnim.setValue(0);
       Animated.sequence([
         Animated.spring(scorePopupAnim, {
@@ -351,25 +426,43 @@ export function GameScreen({
   }, [state.score]);
 
   // Green flash + auto-submit when a valid word is selected
+  // #3 letter pop (grid scale pulse) + #2 gravity bounce + #5 reduceMotion
   useEffect(() => {
     if (isValidWord && currentWord.length >= 3) {
-      // Show green flash
+      // Show green flash (skip animation if reduceMotion)
       setShowValidFlash(true);
-      validFlashAnim.setValue(0);
-      Animated.timing(validFlashAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+      if (!reduceMotion) {
+        validFlashAnim.setValue(0);
+        Animated.timing(validFlashAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
 
       const timer = setTimeout(() => {
-        LayoutAnimation.configureNext(
-          LayoutAnimation.create(
-            ANIM.gravityDuration,
-            LayoutAnimation.Types.easeInEaseOut,
-            LayoutAnimation.Properties.opacity
-          )
-        );
+        // #3 Grid scale pop: 1.0 -> 0.97 -> 1.0 around submit
+        if (!reduceMotion) {
+          gridScaleAnim.setValue(1);
+          Animated.sequence([
+            Animated.timing(gridScaleAnim, { toValue: 0.97, duration: 80, useNativeDriver: true }),
+            Animated.timing(gridScaleAnim, { toValue: 1.0, duration: 120, useNativeDriver: true }),
+          ]).start();
+        }
+
+        // #2 Gravity bounce — spring animation for settling tiles
+        LayoutAnimation.configureNext({
+          duration: ANIM.gravityDuration,
+          update: {
+            type: LayoutAnimation.Types.spring,
+            springDamping: 0.7,
+            property: LayoutAnimation.Properties.opacity,
+          },
+          delete: {
+            type: LayoutAnimation.Types.easeOut,
+            property: LayoutAnimation.Properties.opacity,
+          },
+        });
         submitWord();
         setShowValidFlash(false);
       }, 250);
@@ -431,6 +524,27 @@ export function GameScreen({
   const handleUndo = useCallback(() => {
     void soundManager.playSound('undoUsed');
     void analytics.logEvent('undo_used', { level, mode, undosLeft: state.undosLeft });
+
+    // #4 Undo rewind effect — cyan tint flash + scale pulse
+    if (!reduceMotion) {
+      setShowUndoFlash(true);
+      undoFlashAnim.setValue(0);
+      Animated.timing(undoFlashAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowUndoFlash(false);
+        undoFlashAnim.setValue(0);
+      });
+
+      undoPulseAnim.setValue(1);
+      Animated.sequence([
+        Animated.timing(undoPulseAnim, { toValue: 1.02, duration: 80, useNativeDriver: true }),
+        Animated.timing(undoPulseAnim, { toValue: 1.0, duration: 100, useNativeDriver: true }),
+      ]).start();
+    }
+
     LayoutAnimation.configureNext(
       LayoutAnimation.create(
         300,
@@ -442,7 +556,7 @@ export function GameScreen({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, level, mode, state.undosLeft]);
+  }, [undoMove, level, mode, state.undosLeft, reduceMotion, undoFlashAnim, undoPulseAnim]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
@@ -752,33 +866,66 @@ export function GameScreen({
           )}
         </View>
 
-        {/* Show preview grid if active */}
-        {showPreview && state.previewGrid ? (
-          <View style={styles.previewContainer}>
-            <Text style={styles.previewLabel}>PREVIEW</Text>
+        {/* Grid wrapper with scale animations (#3 letter pop, #4 undo pulse) */}
+        <Animated.View style={{ transform: [{ scale: Animated.multiply(gridScaleAnim, undoPulseAnim) }] }}>
+          {/* Show preview grid if active */}
+          {showPreview && state.previewGrid ? (
+            <View style={styles.previewContainer}>
+              <Text style={styles.previewLabel}>PREVIEW</Text>
+              <GameGrid
+                grid={state.previewGrid}
+                selectedCells={[]}
+                onCellPress={() => {}}
+                maxHeight={gridAreaHeight}
+              />
+              <Pressable
+                style={styles.previewDismiss}
+                onPress={() => { clearPreview(); setShowPreview(false); }}
+              >
+                <Text style={styles.previewDismissText}>Dismiss Preview</Text>
+              </Pressable>
+            </View>
+          ) : (
             <GameGrid
-              grid={state.previewGrid}
-              selectedCells={[]}
-              onCellPress={() => {}}
+              grid={state.board.grid}
+              selectedCells={state.selectedCells}
+              hintedCells={isValidWord ? state.selectedCells : []}
+              onCellPress={handleCellPress}
+              frozenColumns={state.frozenColumns}
+              validWord={showValidFlash}
+              movedCells={movedCells}
               maxHeight={gridAreaHeight}
             />
-            <Pressable
-              style={styles.previewDismiss}
-              onPress={() => { clearPreview(); setShowPreview(false); }}
-            >
-              <Text style={styles.previewDismissText}>Dismiss Preview</Text>
-            </Pressable>
+          )}
+        </Animated.View>
+
+        {/* #1 Word-clear particles */}
+        {clearParticles && (
+          <View style={styles.particleContainer} pointerEvents="none">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <WordClearParticle
+                key={`particle-${i}-${clearParticles.x}`}
+                delay={i * 20}
+                startX={clearParticles.x}
+                startY={clearParticles.y}
+              />
+            ))}
           </View>
-        ) : (
-          <GameGrid
-            grid={state.board.grid}
-            selectedCells={state.selectedCells}
-            hintedCells={isValidWord ? state.selectedCells : []}
-            onCellPress={handleCellPress}
-            frozenColumns={state.frozenColumns}
-            validWord={showValidFlash}
-            movedCells={movedCells}
-            maxHeight={gridAreaHeight}
+        )}
+
+        {/* #4 Undo cyan tint flash overlay */}
+        {showUndoFlash && (
+          <Animated.View
+            style={[
+              styles.undoFlashOverlay,
+              {
+                opacity: undoFlashAnim.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [0, 0.2, 0],
+                }),
+              },
+            ]}
+            pointerEvents="none"
           />
         )}
       </View>
@@ -1472,5 +1619,14 @@ const styles = StyleSheet.create({
   buttonPressed: {
     transform: [{ scale: 0.94 }],
     opacity: 0.85,
+  },
+  particleContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 60,
+  },
+  undoFlashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.accent,
+    zIndex: 55,
   },
 });
