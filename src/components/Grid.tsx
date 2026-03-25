@@ -62,7 +62,7 @@ export function GameGrid({
     const widthBased = Math.floor(availableWidth / cols);
     if (maxHeight && maxHeight > 0) {
       // Account for neon frame (framePad*2=6), gradient border (3*2=6), outer glow padding (12)
-      const frameAllowance = 28;
+      const frameAllowance = 58;
       const heightAvail = maxHeight - frameAllowance;
       const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
       return Math.min(widthBased, heightBased);
