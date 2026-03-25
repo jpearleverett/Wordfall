@@ -41,6 +41,8 @@ export const LOCAL_IMAGES = {
   iconPreview: require('../../assets/images/icon-preview.png'),
 
   shelfBooster: require('../../assets/images/shelf-booster.png'),
+
+  wordfallLogo: require('../../assets/wordfalllogo.png'),
 };
 
 export const LOCAL_VIDEOS = {
