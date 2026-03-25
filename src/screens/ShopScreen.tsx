@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { useSettings } from '../contexts/SettingsContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { iapManager, PurchaseResult } from '../services/iap';
@@ -334,6 +335,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      <AmbientBackdrop variant="shop" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>SHOP</Text>
       </View>

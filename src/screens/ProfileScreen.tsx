@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
 import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
 
@@ -103,6 +104,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      <AmbientBackdrop variant="profile" />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useSettings } from '../contexts/SettingsContext';
 import {
@@ -164,6 +165,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
 
   return (
     <View style={styles.container}>
+      <AmbientBackdrop variant="mastery" />
       {/* Header */}
       <View style={styles.header}>
         {onBack && (

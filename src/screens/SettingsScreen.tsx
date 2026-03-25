@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -120,6 +121,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      <AmbientBackdrop variant="settings" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>SETTINGS</Text>
       </View>

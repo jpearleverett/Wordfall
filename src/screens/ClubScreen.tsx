@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
@@ -303,6 +304,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      <AmbientBackdrop variant="club" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>CLUB</Text>
       </View>

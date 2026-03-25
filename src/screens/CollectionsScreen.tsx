@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
 
@@ -288,6 +289,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
 
   return (
     <View style={styles.container}>
+      <AmbientBackdrop variant="collections" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>COLLECTIONS</Text>
       </View>

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS, MODE_CONFIGS } from '../constants';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { ModeConfig } from '../types';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
@@ -120,6 +121,7 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      <AmbientBackdrop variant="modes" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>GAME MODES</Text>
         <Text style={styles.headerSubtitle}>

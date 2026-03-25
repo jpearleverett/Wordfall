@@ -19,6 +19,17 @@ export const LOCAL_IMAGES = {
   tileHolographic: require('../../assets/images/tile-holographic-texture.png'),
   energyRing: require('../../assets/images/energy-ring-element.png'),
 
+  bgEvent: require('../../assets/images/bg-event-neon.png'),
+  bgMastery: require('../../assets/images/bg-mastery-cosmic.png'),
+  bgModes: require('../../assets/images/bg-modes-arcade.png'),
+  bgSettings: require('../../assets/images/bg-settings-control.png'),
+  bgClub: require('../../assets/images/bg-club-arena.png'),
+  bgLibrary: require('../../assets/images/bg-library-archive.png'),
+  iconCoinGold: require('../../assets/images/icon-coin-gold.png'),
+  iconGemDiamond: require('../../assets/images/icon-gem-diamond.png'),
+  achievementBadge: require('../../assets/images/achievement-badge-frame.png'),
+  sparkleSprites: require('../../assets/images/sparkle-sprites.png'),
+
   iconBattery: require('../../assets/images/icon-battery.png'),
   iconBatteryFill: require('../../assets/images/icon-battery-fill.png'),
   iconHint: require('../../assets/images/icon-hint.png'),
@@ -30,4 +41,10 @@ export const LOCAL_IMAGES = {
   iconPreview: require('../../assets/images/icon-preview.png'),
 
   shelfBooster: require('../../assets/images/shelf-booster.png'),
+};
+
+export const LOCAL_VIDEOS = {
+  synthwaveGridFlow: require('../../attached_assets/generated_videos/synthwave_grid_flow.mp4'),
+  victoryCelebration: require('../../attached_assets/generated_videos/victory_celebration_burst.mp4'),
+  neonAuroraAmbient: require('../../attached_assets/generated_videos/neon_aurora_ambient.mp4'),
 };

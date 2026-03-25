@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 
 const { width } = Dimensions.get('window');
 
@@ -119,6 +120,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      <AmbientBackdrop variant="event" />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}

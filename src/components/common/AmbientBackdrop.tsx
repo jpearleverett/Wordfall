@@ -2,13 +2,11 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, DimensionValue, Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../constants';
-import { CachedImage } from './CachedImage';
 import { SynthwaveBackdrop } from './SynthwaveBackdrop';
 import { LOCAL_IMAGES } from '../../utils/localAssets';
-import { BACKGROUND_ASSETS } from '../../utils/assetUrls';
 
 interface AmbientBackdropProps {
-  variant?: 'home' | 'library' | 'game' | 'collections' | 'profile';
+  variant?: 'home' | 'library' | 'game' | 'collections' | 'profile' | 'shop' | 'leaderboard' | 'event' | 'mastery' | 'modes' | 'settings' | 'club';
 }
 
 function NebulaOrb({
@@ -115,20 +113,19 @@ function TwinklingStar({
 }
 
 function getLocalBg(variant: string) {
-  if (variant === 'home') return LOCAL_IMAGES.bgHome;
-  return null;
-}
-
-function getCdnBg(variant: string): string | null {
   switch (variant) {
-    case 'library':
-      return BACKGROUND_ASSETS.libraryBg;
-    case 'collections':
-      return BACKGROUND_ASSETS.collectionBg;
-    case 'profile':
-      return BACKGROUND_ASSETS.profileBg;
-    default:
-      return null;
+    case 'home': return LOCAL_IMAGES.bgHome;
+    case 'library': return LOCAL_IMAGES.bgLibrary;
+    case 'collections': return LOCAL_IMAGES.bgCollections;
+    case 'profile': return LOCAL_IMAGES.bgProfile;
+    case 'shop': return LOCAL_IMAGES.bgShop;
+    case 'leaderboard': return LOCAL_IMAGES.bgLeaderboard;
+    case 'event': return LOCAL_IMAGES.bgEvent;
+    case 'mastery': return LOCAL_IMAGES.bgMastery;
+    case 'modes': return LOCAL_IMAGES.bgModes;
+    case 'settings': return LOCAL_IMAGES.bgSettings;
+    case 'club': return LOCAL_IMAGES.bgClub;
+    default: return null;
   }
 }
 
@@ -138,7 +135,6 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
   }
 
   const localBg = getLocalBg(variant);
-  const cdnBg = getCdnBg(variant);
 
   const stars = useMemo(
     () =>
@@ -182,15 +178,6 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
             opacity: 0.35,
           }}
           resizeMode="cover"
-        />
-      )}
-
-      {!localBg && cdnBg && (
-        <CachedImage
-          uri={cdnBg}
-          overlayColor="rgba(10, 0, 21, 0.82)"
-          overlayOpacity={0.82}
-          blurRadius={2}
         />
       )}
 

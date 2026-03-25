@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
+import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlayer } from '../contexts/PlayerContext';
 
@@ -232,6 +233,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      <AmbientBackdrop variant="leaderboard" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>LEADERBOARD</Text>
       </View>

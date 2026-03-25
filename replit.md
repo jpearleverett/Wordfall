@@ -49,6 +49,25 @@ All key screens now use custom AI-generated synthwave imagery:
 - `trophy-crown-element.png` — Neon wireframe crown/trophy overlay element
 - `tile-holographic-texture.png` — Holographic iridescent texture for special tile states
 - `energy-ring-element.png` — Glowing plasma energy ring halo for victory/power-up effects
+- `bg-event-neon.png` — Event screen: neon cherry blossom tree, aurora sky, festival atmosphere
+- `bg-mastery-cosmic.png` — Mastery track: golden pyramid in space, orbiting energy rings, constellations
+- `bg-modes-arcade.png` — Modes screen: retro arcade cabinets in perspective, neon trim, pixel LED ceiling
+- `bg-settings-control.png` — Settings screen: cockpit control room, holographic dials, neon gauges
+- `bg-club-arena.png` — Club screen: neon colosseum arena, holographic shield, spotlight beams
+- `bg-library-archive.png` — Library screen: glowing holographic bookshelves, crystal reading lamps
+- `icon-coin-gold.png` — 3D golden coin with neon rim light, star emblem
+- `icon-gem-diamond.png` — Brilliant cut diamond with prismatic refraction and neon caustics
+- `achievement-badge-frame.png` — Art Deco chrome badge frame with neon inner ring
+- `sparkle-sprites.png` — 2x2 grid of sparkle star sprites (pink, cyan, purple, gold)
+
+### AI-Generated Video Assets (attached_assets/generated_videos/)
+- `synthwave_grid_flow.mp4` — 8s forward-gliding synthwave grid with pulsing neon sun, palm trees
+- `victory_celebration_burst.mp4` — 6s crystal gems and coins erupting upward in celebration
+- `neon_aurora_ambient.mp4` — 8s ambient neon aurora waves flowing across night sky
+
+### AmbientBackdrop Coverage
+Every screen now uses `<AmbientBackdrop variant="...">` with a unique local AI-generated background:
+- home, library, game, collections, profile, shop, leaderboard, event, mastery, modes, settings, club
 
 ## Architecture
 
