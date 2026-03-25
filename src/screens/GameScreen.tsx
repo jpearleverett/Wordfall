@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -33,6 +33,9 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+// Stable no-op callback for preview grid to avoid new function creation on every render
+const noOpCellPress = () => {};
 
 interface GameScreenProps {
   board: Board;
@@ -138,7 +141,11 @@ export function GameScreen({
   const player = usePlayer();
   const failCount = player.failCountByLevel?.[level] ?? 0;
   // Dynamic hint generosity: show hint sooner if player has failed this level before
-  const idleHintDelay = failCount >= 2 ? 10000 : failCount === 1 ? 15000 : 20000;
+  // Memoized to keep resetIdleTimer callback stable across renders
+  const idleHintDelay = useMemo(
+    () => failCount >= 2 ? 10000 : failCount === 1 ? 15000 : 20000,
+    [failCount]
+  );
 
   const modeConfig = MODE_CONFIGS[mode];
   const effectiveTimeLimit = modeConfig.rules.hasTimer
@@ -196,6 +203,20 @@ export function GameScreen({
   const undoFlashAnim = useRef(new Animated.Value(0)).current;
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Memoize the composed grid scale to avoid creating a new style object each render
+  const gridScaleStyle = useMemo(() => ({
+    transform: [{ scale: Animated.multiply(gridScaleAnim, undoPulseAnim) }],
+  }), [gridScaleAnim, undoPulseAnim]);
+
+  // Stable onLayout callback — uses ref to lock on first measurement and prevent re-renders
+  const handleGridLayout = useCallback((e: { nativeEvent: { layout: { height: number } } }) => {
+    const h = e.nativeEvent.layout.height;
+    if (!gridHeightLocked.current && h > 0) {
+      gridHeightLocked.current = true;
+      setGridAreaHeight(h);
+    }
+  }, []);
 
   // #5 reduceMotion support
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -607,12 +628,12 @@ export function GameScreen({
     }
   }, [showPreview, clearPreview, previewMove, useBooster, state.boosterCounts.boardPreview, state.selectedCells, level, mode]);
 
-  // Format timer
-  const formatTime = (seconds: number) => {
+  // Format timer — extracted as useCallback to avoid recreation on every render
+  const formatTime = useCallback((seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
-  };
+  }, []);
 
   // Escalating chain scale based on combo count
   const chainTargetScale = state.combo >= 6 ? 1.5 : state.combo >= 4 ? 1.2 : 1;
@@ -813,13 +834,7 @@ export function GameScreen({
       </View>
 
       {/* Grid area */}
-      <View style={styles.gridArea} onLayout={(e) => {
-        const h = e.nativeEvent.layout.height;
-        if (!gridHeightLocked.current && h > 0) {
-          gridHeightLocked.current = true;
-          setGridAreaHeight(h);
-        }
-      }}>
+      <View style={styles.gridArea} onLayout={handleGridLayout}>
         {/* Floating banners - absolute overlay, don't affect grid sizing */}
         <View style={styles.bannerOverlay} pointerEvents="box-none">
           {mode === 'cascade' && state.cascadeMultiplier > 1 && (
@@ -866,7 +881,7 @@ export function GameScreen({
         </View>
 
         {/* Grid wrapper with scale animations (#3 letter pop, #4 undo pulse) */}
-        <Animated.View style={{ transform: [{ scale: Animated.multiply(gridScaleAnim, undoPulseAnim) }] }}>
+        <Animated.View style={gridScaleStyle}>
           {/* Show preview grid if active */}
           {showPreview && state.previewGrid ? (
             <View style={styles.previewContainer}>
@@ -874,7 +889,7 @@ export function GameScreen({
               <GameGrid
                 grid={state.previewGrid}
                 selectedCells={[]}
-                onCellPress={() => {}}
+                onCellPress={noOpCellPress}
                 maxHeight={gridAreaHeight}
               />
               <Pressable

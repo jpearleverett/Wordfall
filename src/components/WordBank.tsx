@@ -56,17 +56,23 @@ const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isVa
   }, [wordPlacement.found]);
 
   useEffect(() => {
+    // Stop any running animation before starting a new one
+    glowAnim.stopAnimation();
+
     if (isActive && isValidWord) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-          Animated.timing(glowAnim, { toValue: 0.5, duration: 350, useNativeDriver: true }),
-        ])
-      ).start();
+      // Finite pulse (3 cycles) instead of infinite Animated.loop
+      // to avoid continuous animation overhead on the native thread
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.5, duration: 350, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.5, duration: 350, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.8, duration: 250, useNativeDriver: true }),
+      ]).start();
     } else if (isActive) {
       Animated.timing(glowAnim, { toValue: 0.7, duration: 150, useNativeDriver: true }).start();
     } else {
-      glowAnim.stopAnimation();
       Animated.timing(glowAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start();
     }
   }, [isActive, isValidWord]);
@@ -145,7 +151,7 @@ interface WordBankProps {
   isValidWord: boolean;
 }
 
-export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
+export const WordBank = React.memo(function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
   const wordAnim = useRef(new Animated.Value(0)).current;
   const prevWord = useRef('');
 
@@ -238,7 +244,7 @@ export function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
       </ScrollView>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
