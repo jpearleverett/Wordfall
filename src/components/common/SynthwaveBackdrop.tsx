@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Dimensions, DimensionValue, Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../constants';
-import { LOCAL_IMAGES } from '../../utils/localAssets';
+import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../../utils/localAssets';
+import { VideoBackground } from './VideoBackground';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
@@ -275,6 +276,12 @@ export function SynthwaveBackdrop() {
         resizeMode="cover"
       />
 
+      <VideoBackground
+        source={LOCAL_VIDEOS.synthwaveGridFlow}
+        opacity={0.35}
+        overlayColor="rgba(26,5,51,0.3)"
+      />
+
       <View style={styles.colorTint} />
 
       <NeonSun />
@@ -323,7 +330,7 @@ const styles = StyleSheet.create({
     left: 0,
     width: SW,
     height: SH,
-    opacity: 0.3,
+    opacity: 0.55,
   },
   bottomFade: {
     position: 'absolute',

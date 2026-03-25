@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface DailyMissionDisplay {
   id: string;
@@ -151,13 +153,15 @@ export function HomeScreen({
                 colors={GRADIENTS.surfaceCard}
                 style={styles.currencyChip}
               >
-                <Text style={styles.currencyLabel}>🪙 {currencies.coins}</Text>
+                <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.currencyIcon} resizeMode="contain" />
+                <Text style={styles.currencyLabel}>{currencies.coins}</Text>
               </LinearGradient>
               <LinearGradient
                 colors={GRADIENTS.surfaceCard}
                 style={styles.currencyChip}
               >
-                <Text style={styles.currencyLabel}>💎 {currencies.gems}</Text>
+                <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.currencyIcon} resizeMode="contain" />
+                <Text style={styles.currencyLabel}>{currencies.gems}</Text>
               </LinearGradient>
               <LinearGradient
                 colors={GRADIENTS.surfaceCard}
@@ -548,11 +552,18 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   currencyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+  },
+  currencyIcon: {
+    width: 16,
+    height: 16,
   },
   currencyLabel: {
     color: COLORS.textPrimary,

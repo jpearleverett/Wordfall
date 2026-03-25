@@ -119,33 +119,38 @@ function ProfileStackScreen() {
 }
 
 // Tab icon component — Neon Intelligence design: vector icons with precision glow
+// Styles extracted to avoid creating new objects on every render
+const tabIconFocusedText = {
+  textShadowColor: COLORS.accentGlow,
+  textShadowOffset: { width: 0, height: 0 },
+  textShadowRadius: 10,
+} as const;
+
+const tabIconIndicator = {
+  width: 20,
+  height: 3,
+  borderRadius: 1.5,
+  backgroundColor: COLORS.accent,
+  marginTop: 4,
+  shadowColor: COLORS.accent,
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0.9,
+  shadowRadius: 6,
+  elevation: 4,
+} as const;
+
+const tabIconContainer = { alignItems: 'center' as const };
+
 function TabIcon({ iconName, focused }: { iconName: keyof typeof Ionicons.glyphMap; focused: boolean }) {
   return (
-    <View style={{ alignItems: 'center' }}>
+    <View style={tabIconContainer}>
       <Ionicons
         name={iconName}
         size={22}
         color={focused ? COLORS.accent : COLORS.textMuted}
-        style={focused ? {
-          textShadowColor: COLORS.accentGlow,
-          textShadowOffset: { width: 0, height: 0 },
-          textShadowRadius: 10,
-        } : undefined}
+        style={focused ? tabIconFocusedText : undefined}
       />
-      {focused && (
-        <View style={{
-          width: 20,
-          height: 3,
-          borderRadius: 1.5,
-          backgroundColor: COLORS.accent,
-          marginTop: 4,
-          shadowColor: COLORS.accent,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.9,
-          shadowRadius: 6,
-          elevation: 4,
-        }} />
-      )}
+      {focused && <View style={tabIconIndicator} />}
     </View>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, View, DimensionValue } from 'react-native';
+import { Animated, Image, StyleSheet, View, DimensionValue } from 'react-native';
 import { COLORS } from '../../constants';
+import { LOCAL_IMAGES } from '../../utils/localAssets';
 
 // ─── Floating Diamond Sparkle ───────────────────────────────────────────
 interface SparkleProps {
@@ -176,6 +177,55 @@ export function ShimmerEffect({ width, height, color = 'rgba(255,255,255,0.08)',
   );
 }
 
+// ─── Image-based Sparkle (uses sparkle-sprites asset) ───────────────────
+function ImageSparkle({
+  top,
+  left,
+  size,
+  delay,
+  duration,
+}: {
+  top: DimensionValue;
+  left: DimensionValue;
+  size: number;
+  delay: number;
+  duration: number;
+}) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: duration * 0.4, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: duration * 0.6, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [anim, delay, duration]);
+
+  return (
+    <View pointerEvents="none" style={[styles.sparkleWrap, { top, left }]}>
+      <Animated.View
+        style={{
+          width: size,
+          height: size,
+          opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.9, 0] }),
+          transform: [
+            { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 1.3, 0.4] }) },
+            { rotate: anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] }) },
+          ],
+        }}
+      >
+        <Image
+          source={LOCAL_IMAGES.sparkleSprites}
+          style={{ width: size, height: size }}
+          resizeMode="contain"
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
 // ─── Ambient Sparkle Field ──────────────────────────────────────────────
 interface SparkleFieldProps {
   count?: number;
@@ -213,6 +263,22 @@ export function SparkleField({
     [count, colors, intensity],
   );
 
+  // Add some image-based sparkles for intense fields
+  const imageSparkles = useMemo(
+    () =>
+      intensity === 'intense'
+        ? Array.from({ length: Math.max(3, Math.floor(count / 6)) }, (_, i) => ({
+            id: `img_${i}`,
+            size: sizeRange[1] + 4 + Math.random() * 6,
+            top: `${10 + ((i * 29 + 3) % 75)}%` as DimensionValue,
+            left: `${8 + ((i * 37 + 5) % 80)}%` as DimensionValue,
+            delay: (i * 500) % 4000,
+            duration: 2500 + Math.random() * 2000,
+          }))
+        : [],
+    [count, intensity, sizeRange],
+  );
+
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {sparkles.map((s) => (
@@ -220,6 +286,16 @@ export function SparkleField({
           key={s.id}
           size={s.size}
           color={s.color}
+          top={s.top}
+          left={s.left}
+          delay={s.delay}
+          duration={s.duration}
+        />
+      ))}
+      {imageSparkles.map((s) => (
+        <ImageSparkle
+          key={s.id}
+          size={s.size}
           top={s.top}
           left={s.left}
           delay={s.delay}

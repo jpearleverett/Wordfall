@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface FeatureUnlockCeremonyProps {
   icon: string;
@@ -105,6 +106,7 @@ export function FeatureUnlockCeremony({
             ]}
           >
             <View style={[styles.iconBg, { backgroundColor: accentColor + '25', borderColor: accentColor + '40' }]}>
+              <Image source={LOCAL_IMAGES.energyRing} style={styles.energyRingDecor} resizeMode="contain" />
               <Text style={styles.icon}>{icon}</Text>
             </View>
           </Animated.View>
@@ -179,6 +181,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
+    overflow: 'hidden',
+  },
+  energyRingDecor: {
+    ...StyleSheet.absoluteFillObject,
+    width: 80,
+    height: 80,
+    opacity: 0.3,
   },
   icon: {
     fontSize: 40,

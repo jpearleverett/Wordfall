@@ -2,6 +2,7 @@ import React from 'react';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -12,6 +13,7 @@ import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
 import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 
 const { width } = Dimensions.get('window');
 
@@ -198,7 +200,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
                 />
-                <Text style={styles.achievementIcon}>{achievement.icon}</Text>
+                <View style={styles.achievementIconWrap}>
+                  <Image source={LOCAL_IMAGES.achievementBadge} style={styles.achievementBadgeFrame} resizeMode="contain" />
+                  <Text style={styles.achievementIcon}>{achievement.icon}</Text>
+                </View>
                 <Text style={styles.achievementName} numberOfLines={1}>{achievement.name}</Text>
                 <View style={styles.tierDots}>
                   {achievement.tiers.map(t => {
@@ -482,6 +487,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  achievementIconWrap: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  achievementBadgeFrame: {
+    ...StyleSheet.absoluteFillObject,
+    width: 36,
+    height: 36,
+    opacity: 0.35,
   },
   achievementIcon: {
     fontSize: 24,

@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES } from '../constants';
-import { LOCAL_IMAGES } from '../utils/localAssets';
+import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { GameMode } from '../types';
 import { usePlayer } from '../contexts/PlayerContext';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
+import { VideoBackground } from './common/VideoBackground';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -380,12 +381,23 @@ export function PuzzleComplete({
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
       <Image
         source={LOCAL_IMAGES.bgVictory}
-        style={[StyleSheet.absoluteFill, { opacity: 0.25 }]}
+        style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
         resizeMode="cover"
       />
+      <VideoBackground
+        source={LOCAL_VIDEOS.victoryCelebration}
+        opacity={0.45}
+        overlayColor="rgba(4,6,18,0.45)"
+      />
       <LinearGradient
-        colors={['rgba(4,6,18,0.3)', 'rgba(4,6,18,0.85)'] as [string, string]}
+        colors={['rgba(4,6,18,0.15)', 'rgba(4,6,18,0.75)'] as [string, string]}
         style={StyleSheet.absoluteFill}
+      />
+      {/* Trophy crown decorative element */}
+      <Image
+        source={LOCAL_IMAGES.trophyCrown}
+        style={styles.trophyCrownDecor}
+        resizeMode="contain"
       />
       <SparkleField count={12} intensity="medium" />
       <CelebrationBurst centerX={190} centerY={200} particleCount={10} />
@@ -503,7 +515,7 @@ export function PuzzleComplete({
                     end={{ x: 1, y: 1 }}
                     style={styles.rewardChip}
                   >
-                    <Text style={styles.rewardIcon}>🪙</Text>
+                    <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.rewardIconImage} resizeMode="contain" />
                     <Text style={styles.rewardText}>+{coinReward} coins</Text>
                   </LinearGradient>
                   {perfectRun && (
@@ -513,7 +525,7 @@ export function PuzzleComplete({
                       end={{ x: 1, y: 1 }}
                       style={styles.rewardChipGold}
                     >
-                      <Text style={styles.rewardIcon}>💎</Text>
+                      <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImage} resizeMode="contain" />
                       <Text style={styles.rewardTextGold}>+{ECONOMY.perfectClearGems} gems</Text>
                     </LinearGradient>
                   )}
@@ -855,8 +867,22 @@ const styles = StyleSheet.create({
     shadowColor: COLORS.gold,
     shadowOpacity: 0.25,
   },
+  trophyCrownDecor: {
+    position: 'absolute',
+    top: 20,
+    alignSelf: 'center',
+    width: 80,
+    height: 80,
+    opacity: 0.35,
+    left: '50%',
+    marginLeft: -40,
+  },
   rewardIcon: {
     fontSize: 16,
+  },
+  rewardIconImage: {
+    width: 20,
+    height: 20,
   },
   rewardText: {
     color: COLORS.textPrimary,

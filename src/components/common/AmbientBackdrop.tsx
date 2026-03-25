@@ -3,7 +3,8 @@ import { Animated, DimensionValue, Image, StyleSheet, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../constants';
 import { SynthwaveBackdrop } from './SynthwaveBackdrop';
-import { LOCAL_IMAGES } from '../../utils/localAssets';
+import { VideoBackground } from './VideoBackground';
+import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../../utils/localAssets';
 
 interface AmbientBackdropProps {
   variant?: 'home' | 'library' | 'game' | 'collections' | 'profile' | 'shop' | 'leaderboard' | 'event' | 'mastery' | 'modes' | 'settings' | 'club';
@@ -175,9 +176,17 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
             ...StyleSheet.absoluteFillObject,
             width: '100%',
             height: '100%',
-            opacity: 0.35,
+            opacity: 0.65,
           }}
           resizeMode="cover"
+        />
+      )}
+
+      {variant === 'home' && (
+        <VideoBackground
+          source={LOCAL_VIDEOS.neonAuroraAmbient}
+          opacity={0.3}
+          overlayColor="rgba(10,0,21,0.35)"
         />
       )}
 

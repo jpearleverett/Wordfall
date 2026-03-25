@@ -16,6 +16,12 @@ import { LetterCell } from './LetterCell';
 import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
+// Extracted constants to avoid creating new objects on every render
+const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]];
+const GRADIENT_START = { x: 0, y: 0 };
+const GRADIENT_END = { x: 1, y: 1 };
+const EMPTY_FLEX = { flex: 1 } as const;
+
 if (
   Platform.OS === 'android' &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -98,8 +104,8 @@ export function GameGrid({
     return cols_arr;
   }, [grid, rows, cols]);
 
-  const gridWidth = cols * (cellSize + CELL_GAP) + CELL_GAP;
-  const gridHeight = rows * (cellSize + CELL_GAP) + CELL_GAP;
+  const gridWidth = useMemo(() => cols * (cellSize + CELL_GAP) + CELL_GAP, [cols, cellSize]);
+  const gridHeight = useMemo(() => rows * (cellSize + CELL_GAP) + CELL_GAP, [rows, cellSize]);
 
   const cellBounds = useMemo(() => {
     const bounds: { row: number; col: number; x: number; y: number; w: number; h: number }[] = [];
@@ -201,29 +207,50 @@ export function GameGrid({
   const outerWidth = gridWidth + framePad * 2;
   const outerHeight = gridHeight + framePad * 2;
 
+  // Memoize computed style objects to avoid creating new objects on every render
+  const outerGlowStyle = useMemo(() => [
+    styles.outerGlow, { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28 }
+  ], [outerWidth, outerHeight]);
+
+  const neonFrameWrapStyle = useMemo(() => [
+    styles.neonFrameWrap, { width: outerWidth + 16, height: outerHeight + 16, borderRadius: 28 }
+  ], [outerWidth, outerHeight]);
+
+  const neonFrameStyle = useMemo(() => [
+    styles.neonFrame, { width: outerWidth, height: outerHeight, borderRadius: 24 }
+  ], [outerWidth, outerHeight]);
+
+  const frameInnerStyle = useMemo(() => [
+    styles.frameInner, { width: gridWidth + 2, height: gridHeight + 2, borderRadius: 22 }
+  ], [gridWidth, gridHeight]);
+
+  const gridContainerStyle = useMemo(() => [
+    styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 21 }
+  ], [gridWidth, gridHeight]);
+
   return (
     <View style={styles.shadowWrap}>
-      <View style={[styles.outerGlow, { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28 }]} />
+      <View style={outerGlowStyle} />
 
-      <View style={[styles.neonFrameWrap, { width: outerWidth + 16, height: outerHeight + 16, borderRadius: 28 }]}>
+      <View style={neonFrameWrapStyle}>
         <Image
           source={LOCAL_IMAGES.neonFrame}
-          style={[StyleSheet.absoluteFill, { borderRadius: 28, opacity: 0.45 }]}
+          style={styles.neonFrameImage}
           resizeMode="stretch"
         />
       </View>
 
       <LinearGradient
-        colors={['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.neonFrame, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}
+        colors={NEON_FRAME_COLORS}
+        start={GRADIENT_START}
+        end={GRADIENT_END}
+        style={neonFrameStyle}
       >
-        <View style={[styles.frameInner, { width: gridWidth + 2, height: gridHeight + 2, borderRadius: 22 }]}>
+        <View style={frameInnerStyle}>
           <GestureDetector gesture={composedGesture}>
             <View
               ref={gridRef}
-              style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 21 }]}
+              style={gridContainerStyle}
             >
               {columns.map((column, colIndex) => (
                 <View
@@ -237,7 +264,7 @@ export function GameGrid({
                     frozenSet.has(colIndex) && styles.frozenColumn,
                   ]}
                 >
-                  <View style={{ flex: 1 }} />
+                  <View style={EMPTY_FLEX} />
                   {column.map(({ cell, row, col }) => {
                     const key = `${row},${col}`;
                     const selIndex = selectedSet.get(key) ?? -1;
@@ -289,6 +316,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignSelf: 'center',
     overflow: 'hidden',
+  },
+  neonFrameImage: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
+    opacity: 0.45,
   },
   neonFrame: {
     padding: 3,
