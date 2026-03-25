@@ -61,8 +61,9 @@ export function GameGrid({
     const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
     const widthBased = Math.floor(availableWidth / cols);
     if (maxHeight && maxHeight > 0) {
-      const borderAllowance = 6;
-      const heightAvail = maxHeight - borderAllowance - CELL_GAP;
+      // Account for neon frame (framePad*2=6), gradient border (3*2=6), outer glow padding (12)
+      const frameAllowance = 28;
+      const heightAvail = maxHeight - frameAllowance;
       const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
       return Math.min(widthBased, heightBased);
     }
@@ -105,7 +106,7 @@ export function GameGrid({
   }, [grid, rows, cols]);
 
   const gridWidth = useMemo(() => cols * (cellSize + CELL_GAP) + CELL_GAP, [cols, cellSize]);
-  const gridHeight = useMemo(() => rows * (cellSize + CELL_GAP) + CELL_GAP, [rows, cellSize]);
+  const gridHeight = useMemo(() => rows * (cellSize + CELL_GAP), [rows, cellSize]);
 
   const cellBounds = useMemo(() => {
     const bounds: { row: number; col: number; x: number; y: number; w: number; h: number }[] = [];
