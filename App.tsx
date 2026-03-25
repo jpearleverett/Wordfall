@@ -18,6 +18,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
+import NeonTabBar from './src/components/navigation/NeonTabBar';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import ModesScreen from './src/screens/ModesScreen';
@@ -187,23 +188,9 @@ function MainTabs() {
 
   return (
     <Tab.Navigator
+      tabBar={(props) => <NeonTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: '#0a0f28',
-          borderTopColor: 'rgba(255,255,255,0.08)',
-          borderTopWidth: 1,
-          borderTopLeftRadius: 22,
-          borderTopRightRadius: 22,
-          height: 64 + insets.bottom,
-          paddingBottom: 6 + insets.bottom,
-          paddingTop: 8,
-          elevation: 24,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -6 },
-          shadowOpacity: 0.4,
-          shadowRadius: 12,
-        },
         tabBarActiveTintColor: COLORS.accent,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarLabelStyle: {

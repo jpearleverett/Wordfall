@@ -36,6 +36,8 @@ export const LetterCell = React.memo(function LetterCell({
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const movedAnim = useRef(new Animated.Value(0)).current;
+  const rippleAnim = useRef(new Animated.Value(0)).current;
+  const overchargeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (isSelected) {
@@ -58,6 +60,14 @@ export const LetterCell = React.memo(function LetterCell({
         duration: 120,
         useNativeDriver: true,
       }).start();
+
+      // Selection neon ripple — expanding glow ring
+      rippleAnim.setValue(0);
+      Animated.timing(rippleAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
     } else {
       Animated.spring(scaleAnim, {
         toValue: 1,
@@ -71,7 +81,7 @@ export const LetterCell = React.memo(function LetterCell({
         useNativeDriver: true,
       }).start();
     }
-  }, [isSelected, scaleAnim, glowAnim]);
+  }, [isSelected, scaleAnim, glowAnim, rippleAnim]);
 
   useEffect(() => {
     if (isMoved) {
@@ -83,6 +93,18 @@ export const LetterCell = React.memo(function LetterCell({
       }).start();
     }
   }, [isMoved, movedAnim]);
+
+  // Valid word "overcharge" — brief glow surge
+  useEffect(() => {
+    if (isValidWord) {
+      overchargeAnim.setValue(1);
+      Animated.timing(overchargeAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isValidWord, overchargeAnim]);
 
   const borderRadius = size * 0.20;
   const insetBR = Math.max(borderRadius - 2, 2);
@@ -108,13 +130,13 @@ export const LetterCell = React.memo(function LetterCell({
     if (isSelected && isHinted) return COLORS.gold;
     if (isSelected) return COLORS.accent;
     if (isFrozen) return 'rgba(0, 229, 255, 0.5)';
-    return 'rgba(200, 77, 255, 0.30)';
+    return 'rgba(200, 77, 255, 0.40)';
   };
 
   const getShadowColor = () => {
     if (isValidWord) return COLORS.green;
     if (isSelected) return COLORS.accent;
-    return '#1a0a2e';
+    return COLORS.purple;
   };
 
   const showOuterGlow = isSelected || isValidWord;
@@ -122,6 +144,53 @@ export const LetterCell = React.memo(function LetterCell({
 
   return (
     <View pointerEvents="none">
+      {/* Selection neon ripple ring — expanding glow that fades */}
+      {isSelected && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: -8,
+            left: -8,
+            right: -8,
+            bottom: -8,
+            borderRadius: borderRadius + 8,
+            borderWidth: 2,
+            borderColor: COLORS.accent,
+            opacity: rippleAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.8, 0],
+            }),
+            transform: [
+              { scale: rippleAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] }) },
+            ],
+          }}
+        />
+      )}
+
+      {/* Valid word overcharge — brief glow surge */}
+      {isValidWord && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: -10,
+            left: -10,
+            right: -10,
+            bottom: -10,
+            borderRadius: borderRadius + 10,
+            backgroundColor: COLORS.greenGlow,
+            opacity: overchargeAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.6],
+            }),
+            transform: [
+              { scale: overchargeAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) },
+            ],
+          }}
+        />
+      )}
+
       {showOuterGlow && (
         <Animated.View
           pointerEvents="none"

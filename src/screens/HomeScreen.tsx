@@ -16,6 +16,10 @@ import { soundManager } from '../services/sound';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import ChromeText from '../components/common/ChromeText';
+import ScanLineOverlay from '../components/common/ScanLineOverlay';
+import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
+import NeonStreakFlame from '../components/home/NeonStreakFlame';
 
 interface DailyMissionDisplay {
   id: string;
@@ -203,7 +207,10 @@ export function HomeScreen({
         >
           <View style={styles.heroGlowPrimary} />
           <View style={styles.heroGlowSecondary} />
-          <Text style={styles.title}>WORD<Text style={styles.titleAccent}>FALL</Text></Text>
+          <ScanLineOverlay opacity={0.02} height={400} />
+          <ChromeText fontSize={46} letterSpacing={4} glowColor={COLORS.accentGlow}>
+            WORDFALL
+          </ChromeText>
           <Text style={styles.subtitle}>
             {playerStage === 'new'
               ? 'Find hidden words and watch letters fall!'
@@ -266,6 +273,18 @@ export function HomeScreen({
             </Pressable>
           )}
         </LinearGradient>
+      </Animated.View>
+
+      {/* Neon Highway Level Progress */}
+      <Animated.View
+        style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }], marginBottom: 14 }}
+      >
+        <NeonHighwayProgress
+          currentLevel={progress.currentLevel}
+          highestLevel={progress.highestLevel}
+          starsPerLevel={progress.starsByLevel}
+          onLevelPress={() => onPlay()}
+        />
       </Animated.View>
 
       <Animated.View
@@ -358,7 +377,7 @@ export function HomeScreen({
               <Text style={styles.panelMeta}>Next: {nextMilestone} days</Text>
             </View>
             <View style={styles.streakBarRow}>
-              <Text style={styles.streakCount}>{progress.currentStreak}</Text>
+              <NeonStreakFlame streakDays={progress.currentStreak} size="small" />
               <View style={styles.streakTrack}>
                 <LinearGradient
                   colors={[COLORS.orange, '#ff6b35']}
@@ -653,13 +672,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingVertical: 14,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(200,77,255,0.25)',
-    shadowColor: COLORS.purple,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,45,149,0.30)',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
   },
   heroStatValue: {
     color: COLORS.textPrimary,

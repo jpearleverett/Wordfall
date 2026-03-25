@@ -80,6 +80,19 @@ export const COLORS = {
   borderMedium: 'rgba(255,255,255,0.12)',
   borderAccent: 'rgba(255,45,149,0.30)',
   textTertiary: '#4a2d6b',
+
+  // Synthwave extended palette
+  chrome: '#d4e0f7',
+  chromeDark: '#8a9ab5',
+  chromeHighlight: '#eef2ff',
+  sunset: '#ff6b35',
+  sunsetDeep: '#cc4400',
+  sunsetWarm: '#ff9f43',
+  neonTube: '#ff2d95',
+  scanLine: 'rgba(255,255,255,0.03)',
+  vhsStatic: 'rgba(255,255,255,0.02)',
+  mountainSilhouette: '#1a0533',
+  horizonGlow: 'rgba(255,45,149,0.35)',
 };
 
 // Gradient presets — synthwave / Miami
@@ -113,6 +126,15 @@ export const GRADIENTS = {
     sunInner: ['rgba(255,45,149,0.9)', 'rgba(255,110,184,0.6)', 'rgba(200,77,255,0.4)', 'rgba(0,229,255,0.2)'] as const,
     ground: ['#1a0533', '#0d0020', '#060010'] as const,
     gridLine: ['rgba(255,45,149,0.5)', 'rgba(200,77,255,0.3)', 'rgba(0,229,255,0.15)'] as const,
+    // New synthwave materials
+    sunBands: ['#ff1493', '#ff2d95', '#ff6b35', '#ffb800', '#ff6b35', '#ff2d95'] as const,
+    chrome: ['#d4e0f7', '#8a9ab5', '#d4e0f7'] as const,
+    neonTube: ['rgba(255,45,149,0.0)', 'rgba(255,45,149,0.8)', 'rgba(255,45,149,0.0)'] as const,
+    crtScreen: ['rgba(0,0,0,0.15)', 'transparent', 'rgba(0,0,0,0.1)'] as const,
+    holographic: ['#ff2d95', '#c84dff', '#00e5ff', '#00ff87', '#ffb800'] as const,
+    mountainFar: ['#2a0845', '#1a0533'] as const,
+    mountainNear: ['#1a0533', '#0d0020'] as const,
+    aurora: ['rgba(0,229,255,0.12)', 'rgba(200,77,255,0.08)', 'rgba(0,245,212,0.06)'] as const,
   },
 
   tileSurface: ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.02)'] as const,
@@ -152,6 +174,27 @@ export const SHADOWS = {
     shadowRadius: 12,
     elevation: 10,
   }),
+  neonGlow: (color: string) => ({
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 24,
+    elevation: 14,
+  }),
+  neonEdge: (color: string) => ({
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    elevation: 12,
+  }),
+  chromeDepth: {
+    shadowColor: '#8a9ab5',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 12,
+  },
 };
 
 // Difficulty configs
@@ -406,6 +449,22 @@ export const ANIM = {
   celebrationDuration: 1200,
   chainPopupDuration: 800,
   starAnimDelay: [200, 500, 800],
+  // Synthwave effects
+  glitchDuration: 150,
+  neonFlickerDuration: 80,
+  chromeSweepDuration: 2000,
+  scanLinePeriod: 4000,
+  selectionRippleDuration: 300,
+  neonOverchargeDuration: 100,
+  gridDissolveDelay: 30, // per-tile stagger
+  victoryPhase1: 500,
+  victoryPhase2: 700,
+  victoryPhase3: 800,
+  victoryPhase4: 1500,
+  crtShutdownDuration: 200,
+  tabSlideSpeed: 250,
+  trailFadeDuration: 400,
+  gravityTrailDuration: 500,
 };
 
 // Economy
@@ -665,6 +724,12 @@ export const TYPOGRAPHY = {
   score: { fontFamily: FONTS.display, fontSize: 22, letterSpacing: 0.5 },
   comboText: { fontFamily: FONTS.display, fontSize: 28, letterSpacing: 1 },
   tileLetter: { fontFamily: FONTS.display, letterSpacing: 0.8 },
+  // Synthwave typography presets
+  chromeTitle: { fontFamily: FONTS.display, fontSize: 36, letterSpacing: 4 },
+  neonDisplay: { fontFamily: FONTS.display, fontSize: 48, letterSpacing: 6 },
+  arcadeScore: { fontFamily: FONTS.display, fontSize: 40, letterSpacing: 2 },
+  vhsLabel: { fontFamily: FONTS.bodySemiBold, fontSize: 11, letterSpacing: 3, textTransform: 'uppercase' as const },
+  neonCounter: { fontFamily: FONTS.display, fontSize: 32, letterSpacing: 1 },
 };
 
 // Spacing scale
@@ -687,6 +752,45 @@ export const RADIUS = {
   xxl: 24,
   full: 999,
 };
+
+// Materials — synthwave material definitions for component styling
+export const MATERIALS = {
+  chrome: {
+    textShadowColor: '#d4e0f7',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 20,
+  },
+  neonTube: {
+    borderWidth: 1.5,
+    glowRadius: 12,
+    glowOpacity: 0.6,
+  },
+  crtGlass: {
+    scanLineSpacing: 3,
+    scanLineOpacity: 0.03,
+    vignetteOpacity: 0.15,
+  },
+  holographic: {
+    sweepSpeed: 2000,
+    shimmerOpacity: 0.3,
+  },
+};
+
+// Chain combo visual intensity tiers
+export const CHAIN_INTENSITY = {
+  1: { borderGlow: false, pulse: false, glitch: false },
+  2: { borderGlow: true, pulse: false, glitch: false, color: COLORS.accent },
+  3: { borderGlow: true, pulse: true, glitch: false, colors: [COLORS.accent, COLORS.purple, COLORS.cyan] },
+  4: { borderGlow: true, pulse: true, glitch: true, colors: [COLORS.accent, COLORS.purple, COLORS.cyan, COLORS.gold] },
+} as const;
+
+// Background evolution by player level
+export const BACKGROUND_EVOLUTION = {
+  easy: { starCount: 10, sunScale: 1.0, gridSpeed: 8000, mountains: 0, meteor: false, aurora: false },
+  medium: { starCount: 15, sunScale: 1.1, gridSpeed: 6500, mountains: 1, meteor: false, aurora: false },
+  hard: { starCount: 20, sunScale: 1.2, gridSpeed: 5000, mountains: 2, meteor: true, aurora: false },
+  expert: { starCount: 25, sunScale: 1.3, gridSpeed: 4000, mountains: 2, meteor: true, aurora: true },
+} as const;
 
 // Economy Tuning — central knobs for balancing the free-to-play economy
 export const ECONOMY_TUNING = {

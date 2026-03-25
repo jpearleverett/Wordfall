@@ -236,10 +236,14 @@ function NeonSun() {
   );
 }
 
-export function SynthwaveBackdrop() {
+export function SynthwaveBackdrop({ playerLevel = 1 }: { playerLevel?: number } = {}) {
+  // Background evolution based on player level
+  const evolution = playerLevel <= 5 ? 'easy' : playerLevel <= 15 ? 'medium' : playerLevel <= 30 ? 'hard' : 'expert';
+  const starCount = evolution === 'easy' ? 10 : evolution === 'medium' ? 15 : evolution === 'hard' ? 20 : 25;
+
   const stars = useMemo(
     () =>
-      Array.from({ length: 20 }, (_, i) => ({
+      Array.from({ length: starCount }, (_, i) => ({
         id: i,
         top: `${2 + ((i * 7 + 3) % 34)}%` as DimensionValue,
         left: `${1 + ((i * 19 + 5) % 96)}%` as DimensionValue,
@@ -299,6 +303,53 @@ export function SynthwaveBackdrop() {
           duration={star.duration}
         />
       ))}
+
+      {/* Mountain silhouettes — appear at medium+ levels */}
+      {(evolution === 'medium' || evolution === 'hard' || evolution === 'expert') && (
+        <View pointerEvents="none" style={{ position: 'absolute', top: HORIZON_Y - SW * 0.12, left: SW * 0.05, zIndex: 1 }}>
+          <View style={{
+            width: 0, height: 0,
+            borderLeftWidth: SW * 0.18,
+            borderRightWidth: SW * 0.18,
+            borderBottomWidth: SW * 0.12,
+            borderLeftColor: 'transparent',
+            borderRightColor: 'transparent',
+            borderBottomColor: '#2a0845',
+            opacity: 0.7,
+          }} />
+        </View>
+      )}
+      {(evolution === 'hard' || evolution === 'expert') && (
+        <View pointerEvents="none" style={{ position: 'absolute', top: HORIZON_Y - SW * 0.18, left: SW * 0.55, zIndex: 1 }}>
+          <View style={{
+            width: 0, height: 0,
+            borderLeftWidth: SW * 0.22,
+            borderRightWidth: SW * 0.22,
+            borderBottomWidth: SW * 0.18,
+            borderLeftColor: 'transparent',
+            borderRightColor: 'transparent',
+            borderBottomColor: '#1a0533',
+            opacity: 0.6,
+          }} />
+        </View>
+      )}
+
+      {/* Aurora effect — expert only */}
+      {evolution === 'expert' && (
+        <View pointerEvents="none" style={{
+          position: 'absolute',
+          top: HORIZON_Y * 0.5,
+          left: SW * 0.1,
+          right: SW * 0.1,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: 'rgba(0,229,255,0.06)',
+          shadowColor: '#00e5ff',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.3,
+          shadowRadius: 30,
+        }} />
+      )}
 
       <LinearGradient
         colors={['transparent', 'rgba(10, 0, 21, 0.85)'] as [string, string]}
