@@ -8,11 +8,15 @@ The entire UI uses a synthwave/vaporwave/Miami aesthetic with real depth and 3D 
 - **Primary accent:** Hot pink (#ff2d95) with neon glow effects
 - **Secondary:** Electric purple (#c84dff) and cyan (#00e5ff)
 - **Background:** Deep purple-black (#0a0015) with nebula orbs
-- **Tiles:** 3D crystal gems with 4-stop body gradient, top specular highlight strip, white reflection bar, bottom shadow edge, inner border ring on selection
-- **Grid:** Neon gradient border frame (pink→purple→cyan) with ambient outer glow
+- **Tiles:** 3D crystal gems with 5-stop body gradient, top specular highlight strip, wide reflection bar, diagonal facet overlay, deep bottom shadow zone (10% height), inner border ring on selection, gem texture at 12% opacity
+- **Grid:** Neon gradient border frame (pink→purple→cyan) with amplified outer glow (40px radius), darker inner backdrop
 - **Backdrop:** Synthwave perspective grid floor with converging lines, neon sun with horizontal stripe slicing, horizon glow line, twinkling stars
-- **Buttons:** Pink-to-purple gradients with glow shadows
-- **Cards:** Glass morphism with purple-tinted borders, deep shadows, ambient glow orbs
+- **Buttons:** Pink-to-purple gradients with glow shadows, inner white border highlight
+- **Cards:** Glass morphism with purple-tinted borders, deep shadows (28px radius), ambient glow orbs
+- **Popups:** Chain/score popups with white neon text glow, 2.5px borders, 30px shadow radius
+- **Header:** Enhanced glass chrome with 3-stop top edge highlight, deeper shadow (28px), neon battery fill glow, progress dot with border ring
+- **WordBank:** Purple-tinted text shadow on current word, wider underline, letter count badges with purple accent, enhanced word chip borders and shadows
+- **Victory:** Larger hero glow orbs (280px/240px), golden ribbon with neon border, 38px score with stronger gold glow, enlarged star glow rings
 
 Key files for the visual system:
 - `src/constants.ts` — COLORS, GRADIENTS, and SHADOWS definitions

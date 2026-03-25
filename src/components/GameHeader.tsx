@@ -2,8 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, FONTS } from '../constants';
-import { Ionicons } from '@expo/vector-icons';
+import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
 import { GameMode } from '../types';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
@@ -86,7 +85,7 @@ export function GameHeader({
         />
         {/* Glass top edge highlight */}
         <LinearGradient
-          colors={['rgba(255,255,255,0.08)', 'transparent'] as [string, string]}
+          colors={['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.03)', 'transparent'] as [string, string, string]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={styles.glassEdge}
@@ -236,33 +235,33 @@ const styles = StyleSheet.create({
   chromeCard: {
     borderRadius: 22,
     borderWidth: 1.5,
-    borderColor: 'rgba(200,77,255,0.20)',
+    borderColor: 'rgba(200,77,255,0.25)',
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 4,
     overflow: 'visible',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.55,
-    shadowRadius: 22,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.65,
+    shadowRadius: 28,
+    elevation: 18,
   },
   glassEdge: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 40,
+    height: 50,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
   },
   chromeGlow: {
     position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    right: -50,
-    top: -60,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    right: -55,
+    top: -70,
   },
   topRow: {
     flexDirection: 'row',
@@ -311,7 +310,11 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: COLORS.accent,
     borderRadius: 5,
-    opacity: 0.75,
+    opacity: 0.80,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
   },
   batteryLabelOverlay: {
     position: 'absolute',
@@ -359,24 +362,31 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     color: COLORS.accent,
-    fontSize: 18,
+    fontSize: 19,
     fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 14,
+    textShadowRadius: 18,
   },
   comboChip: {
-    backgroundColor: 'rgba(255, 82, 82, 0.2)',
-    borderRadius: 6,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    backgroundColor: 'rgba(255, 82, 82, 0.25)',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
     borderWidth: 1,
-    borderColor: 'rgba(255, 82, 82, 0.3)',
+    borderColor: 'rgba(255, 82, 82, 0.40)',
     marginBottom: 2,
+    shadowColor: COLORS.coral,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 3,
   },
   comboTag: {
     color: COLORS.coral,
     fontSize: 10,
     fontFamily: 'SpaceGrotesk_700Bold',
+    textShadowColor: COLORS.coralGlow,
+    textShadowRadius: 4,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -448,9 +458,9 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceGrotesk_700Bold',
   },
   progressTrack: {
-    height: 4,
+    height: 5,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'visible',
     marginTop: 10,
     position: 'relative',
@@ -471,15 +481,17 @@ const styles = StyleSheet.create({
   },
   progressGlowDot: {
     position: 'absolute',
-    top: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginLeft: -4,
+    top: -3,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginLeft: -5,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   btnPressed: {
     transform: [{ scale: 0.92 }],

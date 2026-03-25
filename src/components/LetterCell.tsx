@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS } from '../constants';
+import { COLORS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface LetterCellProps {
@@ -88,19 +88,19 @@ export const LetterCell = React.memo(function LetterCell({
   const insetBR = Math.max(borderRadius - 2, 2);
 
   const getBodyColors = (): [string, string, ...string[]] => {
-    if (isValidWord) return ['#00ff87', '#00e676', '#00b85c', '#009e42'];
-    if (isSelected && isHinted) return ['#ffe580', '#ffd24d', '#ffb800', '#e6a200'];
-    if (isSelected) return ['#ff6eb8', '#ff2d95', '#e91e8c', '#c84dff'];
-    if (isFrozen) return ['rgba(40,180,220,0.50)', 'rgba(0,180,216,0.40)', 'rgba(0,140,180,0.35)', 'rgba(0,100,140,0.40)'];
-    return ['#3d1e6d', '#2d1452', '#221040', '#1a0a30'];
+    if (isValidWord) return ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
+    if (isSelected && isHinted) return ['#fff0b3', '#ffe580', '#ffd24d', '#ffb800', '#cc9200'];
+    if (isSelected) return ['#ff8fd0', '#ff6eb8', '#ff2d95', '#e91e8c', '#b8147a'];
+    if (isFrozen) return ['rgba(80,210,240,0.55)', 'rgba(40,180,220,0.45)', 'rgba(0,160,200,0.40)', 'rgba(0,120,160,0.45)'];
+    return ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'];
   };
 
   const getTopHighlightColors = (): [string, string] => {
-    if (isValidWord) return ['rgba(180,255,220,0.55)', 'rgba(0,255,135,0.0)'];
-    if (isSelected && isHinted) return ['rgba(255,240,180,0.55)', 'rgba(255,184,0,0.0)'];
-    if (isSelected) return ['rgba(255,200,230,0.50)', 'rgba(255,45,149,0.0)'];
-    if (isFrozen) return ['rgba(180,240,255,0.40)', 'rgba(0,229,255,0.0)'];
-    return ['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.0)'];
+    if (isValidWord) return ['rgba(200,255,230,0.65)', 'rgba(0,255,135,0.0)'];
+    if (isSelected && isHinted) return ['rgba(255,245,200,0.65)', 'rgba(255,184,0,0.0)'];
+    if (isSelected) return ['rgba(255,210,240,0.60)', 'rgba(255,45,149,0.0)'];
+    if (isFrozen) return ['rgba(200,245,255,0.50)', 'rgba(0,229,255,0.0)'];
+    return ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.0)'];
   };
 
   const getBorderColor = () => {
@@ -201,27 +201,27 @@ export const LetterCell = React.memo(function LetterCell({
         <View
           style={{
             position: 'absolute',
-            top: size * 0.08,
-            left: size * 0.15,
-            right: size * 0.15,
-            height: size * 0.06,
-            borderRadius: size * 0.03,
+            top: size * 0.06,
+            left: size * 0.12,
+            right: size * 0.12,
+            height: size * 0.05,
+            borderRadius: size * 0.025,
             backgroundColor: isSelected || isValidWord
-              ? 'rgba(255,255,255,0.35)'
-              : 'rgba(255,255,255,0.12)',
+              ? 'rgba(255,255,255,0.45)'
+              : 'rgba(255,255,255,0.16)',
           }}
         />
 
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.40)'] as [string, string]}
-          start={{ x: 0.5, y: 0.5 }}
+          colors={['transparent', 'transparent', 'rgba(0,0,0,0.22)', 'rgba(0,0,0,0.50)'] as [string, string, ...string[]]}
+          start={{ x: 0.5, y: 0.35 }}
           end={{ x: 0.5, y: 1 }}
           style={{
             position: 'absolute',
             bottom: 0,
             left: 0,
             right: 0,
-            height: '40%',
+            height: '55%',
             borderBottomLeftRadius: insetBR,
             borderBottomRightRadius: insetBR,
           }}
@@ -233,10 +233,20 @@ export const LetterCell = React.memo(function LetterCell({
             bottom: 0,
             left: 0,
             right: 0,
-            height: size * 0.08,
-            backgroundColor: 'rgba(0,0,0,0.25)',
+            height: size * 0.10,
+            backgroundColor: 'rgba(0,0,0,0.35)',
             borderBottomLeftRadius: insetBR,
             borderBottomRightRadius: insetBR,
+          }}
+        />
+
+        <LinearGradient
+          colors={['rgba(255,255,255,0.06)', 'transparent', 'transparent', 'rgba(255,255,255,0.03)'] as [string, string, ...string[]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            borderRadius: insetBR,
           }}
         />
 
@@ -246,7 +256,7 @@ export const LetterCell = React.memo(function LetterCell({
             style={{
               ...StyleSheet.absoluteFillObject,
               borderRadius: insetBR,
-              opacity: 0.08,
+              opacity: 0.12,
             }}
             resizeMode="cover"
           />
@@ -331,20 +341,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   letterDefault: {
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowRadius: 4,
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowRadius: 6,
     textShadowOffset: { width: 0, height: 2 },
   },
   letterSelected: {
     color: '#fff',
-    textShadowColor: 'rgba(255,255,255,0.6)',
-    textShadowRadius: 12,
+    textShadowColor: 'rgba(255,255,255,0.7)',
+    textShadowRadius: 16,
     textShadowOffset: { width: 0, height: 0 },
   },
   letterValid: {
     color: '#fff',
-    textShadowColor: 'rgba(255,255,255,0.6)',
-    textShadowRadius: 14,
+    textShadowColor: 'rgba(200,255,220,0.8)',
+    textShadowRadius: 18,
     textShadowOffset: { width: 0, height: 0 },
   },
   indexBadge: {
