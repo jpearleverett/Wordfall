@@ -642,7 +642,7 @@ const styles = StyleSheet.create({
   },
   heroLogo: {
     width: '100%',
-    height: 80,
+    height: 180,
     marginBottom: 8,
     alignSelf: 'center',
   },
