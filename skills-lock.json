@@ -6,6 +6,16 @@
       "sourceType": "github",
       "computedHash": "b7dc4bc5a5fe0aee778ed86e3a24cbf8c26377cf0c7e57c7b5cba63f6a23bb00"
     },
+    "ai-image-generation": {
+      "source": "skill-zero/s",
+      "sourceType": "github",
+      "computedHash": "e45c0ee94791e67e355130109fd827bd8b4bd0fb1d6b2ff8f782eb566d435174"
+    },
+    "ai-video-generation": {
+      "source": "skill-zero/s",
+      "sourceType": "github",
+      "computedHash": "6fedc9632f486cef1f562b83563b0b38f135f5bc691445dabea2ee1a905b7712"
+    },
     "better-auth-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",

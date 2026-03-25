@@ -39,6 +39,16 @@ All key screens now use custom AI-generated synthwave imagery:
 - `neon-sun-element.png` — Stripe-sliced neon sun (replaces procedural sun in SynthwaveBackdrop)
 - `neon-frame-border.png` — Ornate neon tube frame overlay behind the game grid
 - `crystal-gems-collection.png` — Five colored gem icons for future booster/collectible use
+- `bg-shop-neon.png` — Shop/marketplace screen: neon display cases, chrome shelves, holographic tags
+- `bg-leaderboard.png` — Leaderboard/rankings: chrome podium, lightning trophy, stadium spotlights
+- `bg-collections.png` — Collections library: crystal cabinets, bioluminescent glow, gem shelves
+- `bg-profile.png` — Profile screen: holographic identity display, data streams, HUD elements
+- `bg-game-over.png` — Game over scene: shattered neon glass, fading sun, pink lightning, destruction
+- `bg-loading-splash.png` — Loading/splash: light speed neon tunnel, concentric energy rings
+- `particle-starburst.png` — Starburst explosion particle effect for celebrations/combos
+- `trophy-crown-element.png` — Neon wireframe crown/trophy overlay element
+- `tile-holographic-texture.png` — Holographic iridescent texture for special tile states
+- `energy-ring-element.png` — Glowing plasma energy ring halo for victory/power-up effects
 
 ## Architecture
 
