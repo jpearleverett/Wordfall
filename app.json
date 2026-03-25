@@ -24,7 +24,7 @@
       "package": "com.wordfall.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon2.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#060918"
       },
       "permissions": []
