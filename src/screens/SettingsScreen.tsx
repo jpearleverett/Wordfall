@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   },
   toggleOn: {
     backgroundColor: COLORS.accent,
-    borderColor: 'rgba(0,212,255,0.3)',
+    borderColor: 'rgba(255,45,149,0.3)',
     ...SHADOWS.glow(COLORS.accent),
   },
   toggleThumb: {

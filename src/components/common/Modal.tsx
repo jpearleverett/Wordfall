@@ -82,7 +82,7 @@ export default function Modal({ visible, onClose, title, children }: ModalProps)
         >
           {/* Gradient border wrapper */}
           <LinearGradient
-            colors={['rgba(0,212,255,0.25)', 'rgba(168,85,247,0.15)', 'rgba(0,212,255,0.08)']}
+            colors={['rgba(255,45,149,0.25)', 'rgba(168,85,247,0.15)', 'rgba(255,45,149,0.08)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.borderGradient}

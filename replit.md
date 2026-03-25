@@ -2,6 +2,24 @@
 
 A gravity-based strategic word puzzle game built with React Native and Expo.
 
+## Visual Theme: Synthwave / Miami Vice
+
+The entire UI uses a synthwave/vaporwave/Miami aesthetic with:
+- **Primary accent:** Hot pink (#ff2d95) with neon glow effects
+- **Secondary:** Electric purple (#c84dff) and cyan (#00e5ff)
+- **Background:** Deep purple-black (#0a0015) with nebula orbs
+- **Tiles:** Purple glass with neon pink borders when selected
+- **Buttons:** Pink-to-purple gradients with glow shadows
+- **Stars:** Twinkling in pink, purple, and cyan colors
+
+Key files for the visual system:
+- `src/constants.ts` — COLORS, GRADIENTS, and SHADOWS definitions
+- `src/components/common/SynthwaveBackdrop.tsx` — Animated game background
+- `src/components/common/AmbientBackdrop.tsx` — Menu/home backgrounds
+- `src/components/LetterCell.tsx` — Tile visuals and animations
+- `src/components/GameHeader.tsx` — Header chrome with neon accents
+- `src/components/WordBank.tsx` — Word chips with glow effects
+
 ## Architecture
 
 - **Framework:** React Native + Expo (~54.0.0)

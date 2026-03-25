@@ -369,7 +369,7 @@ export function PuzzleComplete({
 
   const borderColors = perfectRun
     ? [COLORS.gold, 'rgba(255,215,0,0.6)', COLORS.gold]
-    : [COLORS.accent, 'rgba(0,212,255,0.5)', COLORS.accent];
+    : [COLORS.accent, 'rgba(255,45,149,0.5)', COLORS.accent];
 
   // Constrain max height to fit screen
   const maxCardHeight = screenHeight * 0.85;

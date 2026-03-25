@@ -10,7 +10,6 @@ interface AmbientBackdropProps {
   variant?: 'home' | 'library' | 'game' | 'collections' | 'profile';
 }
 
-// ─── Floating Nebula Orb ────────────────────────────────────────────────
 function NebulaOrb({
   color,
   size,
@@ -64,7 +63,6 @@ function NebulaOrb({
   );
 }
 
-// ─── Twinkling Star ─────────────────────────────────────────────────────
 function TwinklingStar({
   top,
   left,
@@ -115,7 +113,6 @@ function TwinklingStar({
   );
 }
 
-// ─── Background image for variant ───────────────────────────────────────
 function getBackgroundUri(variant: string): string | null {
   switch (variant) {
     case 'home':
@@ -134,27 +131,25 @@ function getBackgroundUri(variant: string): string | null {
 }
 
 export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
-  // Game variant uses the dedicated synthwave backdrop
   if (variant === 'game') {
     return <SynthwaveBackdrop />;
   }
 
   const bgUri = getBackgroundUri(variant);
 
-  // Reduced from 32 to 10 stars for performance
   const stars = useMemo(
     () =>
-      Array.from({ length: 10 }, (_, index) => ({
+      Array.from({ length: 12 }, (_, index) => ({
         id: index,
         top: `${4 + ((index * 17) % 88)}%` as DimensionValue,
         left: `${2 + ((index * 23) % 94)}%` as DimensionValue,
         color:
           index % 5 === 0
-            ? COLORS.goldLight
+            ? '#ff2d95'
             : index % 4 === 0
-            ? COLORS.purpleLight
+            ? '#c84dff'
             : index % 3 === 0
-            ? COLORS.accentLight
+            ? '#00e5ff'
             : index % 2 === 0
             ? 'rgba(255,255,255,0.9)'
             : 'rgba(255,255,255,0.6)',
@@ -167,47 +162,53 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
 
   return (
     <View pointerEvents="none" style={styles.container}>
-      {/* Deep space background gradient */}
       <LinearGradient
-        colors={GRADIENTS.bg as unknown as [string, string, ...string[]]}
+        colors={['#08000f', '#0a0015', '#1a0533', '#12002a'] as [string, string, ...string[]]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Background image with overlay */}
       {bgUri && (
         <CachedImage
           uri={bgUri}
-          overlayColor="rgba(6, 9, 24, 0.82)"
+          overlayColor="rgba(10, 0, 21, 0.82)"
           overlayOpacity={0.82}
           blurRadius={2}
         />
       )}
 
-      {/* Nebula orbs — reduced from 5 to 2 for performance */}
       <NebulaOrb
-        color={COLORS.purpleGlow}
-        size={280}
-        top="-8%"
-        left="58%"
+        color="rgba(255, 45, 149, 0.35)"
+        size={300}
+        top="-10%"
+        left="55%"
         duration={7000}
         xOffset={14}
         yOffset={16}
-        opacity={0.4}
+        opacity={0.45}
       />
       <NebulaOrb
-        color={COLORS.accentGlow}
-        size={240}
-        top="18%"
-        left="-14%"
+        color="rgba(200, 77, 255, 0.30)"
+        size={250}
+        top="20%"
+        left="-15%"
         duration={8200}
         xOffset={18}
         yOffset={20}
-        opacity={0.35}
+        opacity={0.38}
+      />
+      <NebulaOrb
+        color="rgba(0, 229, 255, 0.20)"
+        size={200}
+        top="60%"
+        left="70%"
+        duration={9000}
+        xOffset={12}
+        yOffset={14}
+        opacity={0.28}
       />
 
-      {/* Twinkling stars — reduced from 32 to 10 */}
       {stars.map((star) => (
         <TwinklingStar
           key={star.id}
@@ -220,9 +221,8 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         />
       ))}
 
-      {/* Bottom gradient fade for content readability */}
       <LinearGradient
-        colors={['transparent', 'rgba(6,9,24,0.4)'] as [string, string]}
+        colors={['transparent', 'rgba(10,0,21,0.5)'] as [string, string]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.bottomFade}

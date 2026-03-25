@@ -17,7 +17,7 @@ export function HomeHeroIllustration() {
       >
         {/* Top edge highlight */}
         <LinearGradient
-          colors={['rgba(0, 212, 255, 0.12)', 'rgba(0, 212, 255, 0)']}
+          colors={['rgba(255, 45, 149, 0.12)', 'rgba(255, 45, 149, 0)']}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={styles.boardCardTopHighlight}
@@ -208,14 +208,14 @@ const styles = StyleSheet.create({
     left: '10%',
     width: '80%',
     height: 120,
-    backgroundColor: 'rgba(0, 212, 255, 0.06)',
+    backgroundColor: 'rgba(255, 45, 149, 0.06)',
     borderRadius: 80,
   },
   boardCard: {
     alignSelf: 'stretch',
     borderRadius: 26,
     borderWidth: 1.5,
-    borderColor: 'rgba(0, 212, 255, 0.22)',
+    borderColor: 'rgba(255, 45, 149, 0.22)',
     padding: 18,
     overflow: 'hidden',
     shadowColor: '#00d4ff',
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
     left: '15%',
     width: '70%',
     height: 100,
-    backgroundColor: 'rgba(0, 212, 255, 0.08)',
+    backgroundColor: 'rgba(255, 45, 149, 0.08)',
     borderRadius: 60,
   },
   boardCardGlowSecondary: {
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   tileLetterAccent: {
-    textShadowColor: 'rgba(0, 212, 255, 0.5)',
+    textShadowColor: 'rgba(255, 45, 149, 0.5)',
     textShadowRadius: 8,
   },
   tileLetterGold: {
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 36,
     borderRadius: 999,
-    backgroundColor: 'rgba(0, 212, 255, 0.03)',
+    backgroundColor: 'rgba(255, 45, 149, 0.03)',
     alignSelf: 'center',
   },
   floorGlowOuter: {
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 30,
     borderRadius: 999,
-    backgroundColor: 'rgba(0, 212, 255, 0.06)',
+    backgroundColor: 'rgba(255, 45, 149, 0.06)',
     alignSelf: 'center',
   },
   floorGlow: {
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     width: 130,
     height: 20,
     borderRadius: 999,
-    backgroundColor: 'rgba(0, 212, 255, 0.16)',
+    backgroundColor: 'rgba(255, 45, 149, 0.16)',
     alignSelf: 'center',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },

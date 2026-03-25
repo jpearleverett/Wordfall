@@ -39,7 +39,7 @@ export default function EventBanner({
       />
       {/* Cyan accent sweep on right */}
       <LinearGradient
-        colors={['transparent', 'rgba(0, 212, 255, 0.12)', 'rgba(0, 212, 255, 0.06)']}
+        colors={['transparent', 'rgba(255, 45, 149, 0.12)', 'rgba(255, 45, 149, 0.06)']}
         start={{ x: 0.3, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.cyanSweep}

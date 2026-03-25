@@ -627,7 +627,7 @@ export function GameScreen({
     ? 'rgba(168, 85, 247, 0.95)'   // Purple for 6+
     : state.combo >= 4
     ? 'rgba(255, 215, 0, 0.95)'    // Gold for 4-5
-    : 'rgba(0, 212, 255, 0.95)';   // Cyan for 2-3
+    : 'rgba(255, 45, 149, 0.95)';   // Pink for 2-3
 
   const chainShadowColor = state.combo >= 6
     ? COLORS.purple
@@ -978,7 +978,7 @@ export function GameScreen({
                 colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
                 style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
               />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 45, 149, 0.18)' }]} />
               <View style={styles.boosterIconWrap}>
                 <Image source={LOCAL_IMAGES.iconFreeze} style={styles.boosterIconImage} resizeMode="contain" />
               </View>
@@ -999,7 +999,7 @@ export function GameScreen({
                 colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
                 style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
               />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.18)' }]} />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 45, 149, 0.18)' }]} />
               <View style={styles.boosterIconWrap}>
                 <Image source={LOCAL_IMAGES.iconPreview} style={styles.boosterIconImage} resizeMode="contain" />
               </View>
@@ -1164,7 +1164,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 3,
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.2)',
+    borderColor: 'rgba(255, 45, 149, 0.2)',
   },
   timerBarDanger: {
     backgroundColor: 'rgba(255, 107, 107, 0.12)',
@@ -1225,14 +1225,14 @@ const styles = StyleSheet.create({
     textShadowRadius: 6,
   },
   frozenBanner: {
-    backgroundColor: 'rgba(0, 212, 255, 0.08)',
+    backgroundColor: 'rgba(255, 45, 149, 0.08)',
     paddingVertical: 5,
     paddingHorizontal: 14,
     marginHorizontal: 12,
     borderRadius: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.25)',
+    borderColor: 'rgba(255, 45, 149, 0.25)',
   },
   frozenText: {
     color: COLORS.accent,
@@ -1240,14 +1240,14 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyBold,
   },
   freezeModeBanner: {
-    backgroundColor: 'rgba(0, 212, 255, 0.15)',
+    backgroundColor: 'rgba(255, 45, 149, 0.15)',
     paddingVertical: 6,
     paddingHorizontal: 14,
     marginHorizontal: 12,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(0, 212, 255, 0.5)',
+    borderColor: 'rgba(255, 45, 149, 0.5)',
   },
   freezeModeText: {
     fontFamily: FONTS.display,
@@ -1266,7 +1266,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     zIndex: 200,
     elevation: 28,
-    backgroundColor: 'rgba(0, 212, 255, 0.95)',
+    backgroundColor: 'rgba(255, 45, 149, 0.95)',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.7,
@@ -1294,14 +1294,14 @@ const styles = StyleSheet.create({
     zIndex: 50,
   },
   idleHintBanner: {
-    backgroundColor: 'rgba(0, 212, 255, 0.08)',
+    backgroundColor: 'rgba(255, 45, 149, 0.08)',
     paddingVertical: 8,
     paddingHorizontal: 14,
     marginHorizontal: 12,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.2)',
+    borderColor: 'rgba(255, 45, 149, 0.2)',
   },
   idleHintText: {
     color: COLORS.accent,
@@ -1349,7 +1349,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     paddingVertical: 14,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 212, 255, 0.95)',
+    backgroundColor: 'rgba(255, 45, 149, 0.95)',
     elevation: 28,
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 8 },
@@ -1429,17 +1429,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(0, 212, 255, 0.20)',
+    borderColor: 'rgba(255, 45, 149, 0.20)',
     minWidth: 90,
     overflow: 'visible',
-    shadowColor: 'rgba(0, 212, 255, 0.3)',
+    shadowColor: 'rgba(255, 45, 149, 0.3)',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 8,
     elevation: 6,
   },
   boosterActive: {
-    borderColor: 'rgba(0, 212, 255, 0.6)',
+    borderColor: 'rgba(255, 45, 149, 0.6)',
     shadowColor: COLORS.accent,
     shadowOpacity: 0.7,
     shadowRadius: 14,

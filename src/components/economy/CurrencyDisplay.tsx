@@ -22,7 +22,7 @@ const COLORS = {
 const GLOW_COLORS: Record<string, string> = {
   [COLORS.gold]: 'rgba(255, 215, 0, 0.5)',
   [COLORS.purple]: 'rgba(168, 85, 247, 0.5)',
-  [COLORS.accent]: 'rgba(0, 212, 255, 0.5)',
+  [COLORS.accent]: 'rgba(255, 45, 149, 0.5)',
 };
 
 interface CurrencyDisplayProps {
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    shadowColor: 'rgba(0, 212, 255, 0.15)',
+    shadowColor: 'rgba(255, 45, 149, 0.15)',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 12,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     left: '20%',
     width: '60%',
     height: 40,
-    backgroundColor: 'rgba(0, 212, 255, 0.04)',
+    backgroundColor: 'rgba(255, 45, 149, 0.04)',
     borderRadius: 40,
   },
   item: {
