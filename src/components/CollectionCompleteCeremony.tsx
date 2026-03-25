@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface CollectionCompleteCeremonyProps {
   collectionName: string;
@@ -40,12 +41,12 @@ export function CollectionCompleteCeremony({
 
           <View style={styles.rewardRow}>
             <View style={styles.rewardChip}>
-              <Text style={styles.rewardEmoji}>🪙</Text>
+              <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.rewardIconImg} resizeMode="contain" />
               <Text style={styles.rewardAmount}>+{reward.coins}</Text>
             </View>
             {reward.gems > 0 && (
               <View style={styles.rewardChip}>
-                <Text style={styles.rewardEmoji}>💎</Text>
+                <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImg} resizeMode="contain" />
                 <Text style={[styles.rewardAmount, { color: COLORS.accent }]}>+{reward.gems}</Text>
               </View>
             )}
@@ -112,6 +113,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   rewardEmoji: { fontSize: 16 },
+  rewardIconImg: { width: 18, height: 18 },
   rewardAmount: { color: COLORS.gold, fontFamily: FONTS.display, fontSize: 14 },
   button: {
     borderRadius: 14,

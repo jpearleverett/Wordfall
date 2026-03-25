@@ -2,11 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   Animated,
   StyleSheet,
 } from 'react-native';
 import { FONTS } from '../../constants';
+import { LOCAL_IMAGES } from '../../utils/localAssets';
 
 const COLORS = {
   bg: '#0a0e27',
@@ -69,8 +71,16 @@ function useAnimatedValue(target: number) {
 // Single currency item
 // ---------------------------------------------------------------------------
 
+/** Map of currency type to image asset source */
+const CURRENCY_ICONS: Record<string, number | null> = {
+  coins: LOCAL_IMAGES.iconCoinGold,
+  gems: LOCAL_IMAGES.iconGemDiamond,
+  hints: null, // no image asset for hints yet
+};
+
 interface ItemProps {
   icon: string;
+  iconKey?: string;
   amount: number;
   label?: string;
   color: string;
@@ -78,7 +88,7 @@ interface ItemProps {
   onPress?: () => void;
 }
 
-function CurrencyItem({ icon, amount, label, color, compact, onPress }: ItemProps) {
+function CurrencyItem({ icon, iconKey, amount, label, color, compact, onPress }: ItemProps) {
   const { scaleAnim, value } = useAnimatedValue(amount);
 
   const formatted =
@@ -89,6 +99,7 @@ function CurrencyItem({ icon, amount, label, color, compact, onPress }: ItemProp
       : String(value);
 
   const glowColor = GLOW_COLORS[color] || 'rgba(255,255,255,0.3)';
+  const imageSource = iconKey ? CURRENCY_ICONS[iconKey] : null;
 
   const content = (
     <Animated.View
@@ -98,7 +109,11 @@ function CurrencyItem({ icon, amount, label, color, compact, onPress }: ItemProp
         { transform: [{ scale: scaleAnim }] },
       ]}
     >
-      <Text style={styles.icon}>{icon}</Text>
+      {imageSource ? (
+        <Image source={imageSource} style={styles.iconImage} resizeMode="contain" />
+      ) : (
+        <Text style={styles.icon}>{icon}</Text>
+      )}
       <Text
         style={[
           styles.amount,
@@ -147,6 +162,7 @@ export default function CurrencyDisplay({
       {coins > 0 || !compact ? (
         <CurrencyItem
           icon={'\uD83E\uDE99'}
+          iconKey="coins"
           amount={coins}
           label="Coins"
           color={COLORS.gold}
@@ -157,6 +173,7 @@ export default function CurrencyDisplay({
       {gems > 0 || !compact ? (
         <CurrencyItem
           icon={'\uD83D\uDC8E'}
+          iconKey="gems"
           amount={gems}
           label="Gems"
           color={COLORS.purple}
@@ -167,6 +184,7 @@ export default function CurrencyDisplay({
       {hintTokens > 0 || !compact ? (
         <CurrencyItem
           icon={'\uD83D\uDCA1'}
+          iconKey="hints"
           amount={hintTokens}
           label="Hints"
           color={COLORS.accent}
@@ -223,6 +241,10 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontSize: 16,
+  },
+  iconImage: {
+    width: 20,
+    height: 20,
   },
   amount: {
     fontSize: 15,

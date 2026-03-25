@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -12,6 +13,7 @@ import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 
 const { width } = Dimensions.get('window');
 const TILE_SIZE = (width - 80) / 7;
@@ -291,6 +293,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
     <View style={styles.container}>
       <AmbientBackdrop variant="collections" />
       <View style={styles.header}>
+        <Image source={LOCAL_IMAGES.crystalGems} style={{ width: 28, height: 28 }} resizeMode="contain" />
         <Text style={styles.headerTitle}>COLLECTIONS</Text>
       </View>
       <Tooltip

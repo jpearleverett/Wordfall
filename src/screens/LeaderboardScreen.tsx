@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlayer } from '../contexts/PlayerContext';
 
@@ -235,6 +237,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     <View style={styles.container}>
       <AmbientBackdrop variant="leaderboard" />
       <View style={styles.header}>
+        <Image source={LOCAL_IMAGES.trophyCrown} style={{ width: 28, height: 28 }} resizeMode="contain" />
         <Text style={styles.headerTitle}>LEADERBOARD</Text>
       </View>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useSettings } from '../contexts/SettingsContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { iapManager, PurchaseResult } from '../services/iap';
@@ -337,6 +339,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     <View style={styles.container}>
       <AmbientBackdrop variant="shop" />
       <View style={styles.header}>
+        <Image source={LOCAL_IMAGES.iconGemDiamond} style={{ width: 26, height: 26 }} resizeMode="contain" />
         <Text style={styles.headerTitle}>SHOP</Text>
       </View>
 

@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
-import { LOCAL_IMAGES } from '../utils/localAssets';
+import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
+import { VideoBackground } from '../components/common/VideoBackground';
 import { generateTutorialBoard, TUTORIAL_STEPS } from '../data/tutorialBoards';
 import { GameGrid } from '../components/Grid';
 import { CellPosition } from '../types';
@@ -121,11 +122,16 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
       <View style={styles.container}>
         <Image
           source={LOCAL_IMAGES.bgOnboarding}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, { opacity: 0.6 }]}
           resizeMode="cover"
         />
+        <VideoBackground
+          source={LOCAL_VIDEOS.neonAuroraAmbient}
+          opacity={0.3}
+          overlayColor="rgba(10,0,21,0.25)"
+        />
         <LinearGradient
-          colors={['rgba(10,0,21,0.55)', 'rgba(10,0,21,0.70)', 'rgba(10,0,21,0.85)'] as [string, string, ...string[]]}
+          colors={['rgba(10,0,21,0.35)', 'rgba(10,0,21,0.55)', 'rgba(10,0,21,0.75)'] as [string, string, ...string[]]}
           style={StyleSheet.absoluteFill}
         />
         <Animated.View style={[styles.centerContent, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>

@@ -256,7 +256,19 @@ export const LetterCell = React.memo(function LetterCell({
             style={{
               ...StyleSheet.absoluteFillObject,
               borderRadius: insetBR,
-              opacity: 0.12,
+              opacity: 0.18,
+            }}
+            resizeMode="cover"
+          />
+        )}
+
+        {isFrozen && !isSelected && (
+          <Image
+            source={LOCAL_IMAGES.tileHolographic}
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              borderRadius: insetBR,
+              opacity: 0.25,
             }}
             resizeMode="cover"
           />

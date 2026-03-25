@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface AchievementCeremonyProps {
   icon: string;
@@ -61,6 +62,7 @@ export function AchievementCeremony({
             ]}
           >
             <View style={[styles.badge, { borderColor: tierColor, backgroundColor: tierColor + '20' }]}>
+              <Image source={LOCAL_IMAGES.achievementBadge} style={styles.badgeFrame} resizeMode="contain" />
               <Text style={styles.badgeIcon}>{icon}</Text>
             </View>
             <View style={[styles.tierTag, { backgroundColor: tierColor }]}>
@@ -73,12 +75,12 @@ export function AchievementCeremony({
 
           <View style={styles.rewardRow}>
             <View style={styles.rewardChip}>
-              <Text style={styles.rewardEmoji}>🪙</Text>
+              <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.rewardIconImg} resizeMode="contain" />
               <Text style={styles.rewardAmount}>+{reward.coins}</Text>
             </View>
             {reward.gems > 0 && (
               <View style={[styles.rewardChip, styles.rewardChipGems]}>
-                <Text style={styles.rewardEmoji}>💎</Text>
+                <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImg} resizeMode="contain" />
                 <Text style={[styles.rewardAmount, { color: COLORS.accent }]}>+{reward.gems}</Text>
               </View>
             )}
@@ -139,9 +141,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
+    overflow: 'hidden',
+  },
+  badgeFrame: {
+    ...StyleSheet.absoluteFillObject,
+    width: 72,
+    height: 72,
+    opacity: 0.4,
   },
   badgeIcon: {
     fontSize: 36,
+  },
+  rewardIconImg: {
+    width: 18,
+    height: 18,
   },
   tierTag: {
     marginTop: -8,
