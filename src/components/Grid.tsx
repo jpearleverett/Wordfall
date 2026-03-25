@@ -15,6 +15,8 @@ import { Grid as GridType, CellPosition } from '../types';
 import { LetterCell } from './LetterCell';
 import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import ScanLineOverlay from './common/ScanLineOverlay';
+import SelectionTrailOverlay from './game/SelectionTrailOverlay';
 
 // Extracted constants to avoid creating new objects on every render
 const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]];
@@ -248,6 +250,9 @@ export function GameGrid({
         style={neonFrameStyle}
       >
         <View style={frameInnerStyle}>
+          {/* CRT scan line overlay inside the grid frame */}
+          <ScanLineOverlay opacity={0.03} height={gridHeight} animated scrollDuration={4000} />
+
           <GestureDetector gesture={composedGesture}>
             <View
               ref={gridRef}
@@ -291,6 +296,17 @@ export function GameGrid({
               ))}
             </View>
           </GestureDetector>
+
+          {/* Neon selection trail lines between selected cells */}
+          {selectedCells.length > 1 && (
+            <SelectionTrailOverlay
+              selectedCells={selectedCells}
+              cellSize={cellSize}
+              cellGap={CELL_GAP}
+              gridPadding={CELL_GAP / 2}
+              cols={cols}
+            />
+          )}
         </View>
       </LinearGradient>
     </View>

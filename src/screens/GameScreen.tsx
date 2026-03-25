@@ -20,7 +20,7 @@ import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
@@ -771,6 +771,45 @@ export function GameScreen({
         </Animated.View>
       )}
 
+      {/* Chain combo neon pulse overlay — escalates with combo count */}
+      {chainVisible && state.combo >= 3 && (
+        <Animated.View
+          style={[
+            styles.neonPulseOverlay,
+            {
+              borderColor: state.combo >= 4 ? COLORS.cyan : COLORS.accent,
+              opacity: chainAnim.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0, 0.6, 0],
+              }),
+            },
+          ]}
+          pointerEvents="none"
+        />
+      )}
+
+      {/* VHS glitch overlay for 4x+ chains */}
+      {chainVisible && state.combo >= 4 && (
+        <Animated.View
+          style={[
+            styles.vhsGlitchOverlay,
+            {
+              opacity: chainAnim.interpolate({
+                inputRange: [0, 0.3, 0.5, 0.7, 1],
+                outputRange: [0, 0.12, 0, 0.08, 0],
+              }),
+              transform: [{
+                translateX: chainAnim.interpolate({
+                  inputRange: [0, 0.2, 0.25, 0.45, 0.5, 1],
+                  outputRange: [0, 4, -3, 2, -1, 0],
+                }),
+              }],
+            },
+          ]}
+          pointerEvents="none"
+        />
+      )}
+
       {/* Valid word green flash overlay */}
       {showValidFlash && (
         <Animated.View
@@ -1318,6 +1357,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textShadowColor: 'rgba(255,255,255,0.5)',
     textShadowRadius: 14,
+  },
+  neonPulseOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 3,
+    borderRadius: 24,
+    borderColor: COLORS.accent,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 30,
+    elevation: 0,
+    zIndex: 190,
+  },
+  vhsGlitchOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,45,149,0.12)',
+    zIndex: 185,
   },
   validFlashOverlay: {
     ...StyleSheet.absoluteFillObject,

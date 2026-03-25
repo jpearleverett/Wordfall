@@ -11,12 +11,15 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES } from '../constants';
+import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { GameMode } from '../types';
 import { usePlayer } from '../contexts/PlayerContext';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { VideoBackground } from './common/VideoBackground';
+import ChromeText from './common/ChromeText';
+import ScanLineOverlay from './common/ScanLineOverlay';
+import NeonStarBurst from './victory/NeonStarBurst';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -303,8 +306,11 @@ export function PuzzleComplete({
   const ribbonAnim = useRef(new Animated.Value(0)).current;
   const statsAnim = useRef(new Animated.Value(0)).current;
   const actionsAnim = useRef(new Animated.Value(0)).current;
+  const glitchAnim = useRef(new Animated.Value(0)).current;
+  const [starsRevealed, setStarsRevealed] = useState(false);
 
   useEffect(() => {
+    // VHS glitch entrance on title
     Animated.sequence([
       Animated.parallel([
         Animated.timing(fadeAnim, {
@@ -318,6 +324,12 @@ export function PuzzleComplete({
           tension: 90,
           useNativeDriver: true,
         }),
+      ]),
+      // VHS glitch on title entrance
+      Animated.sequence([
+        Animated.timing(glitchAnim, { toValue: 1, duration: 40, useNativeDriver: true }),
+        Animated.timing(glitchAnim, { toValue: -0.5, duration: 40, useNativeDriver: true }),
+        Animated.timing(glitchAnim, { toValue: 0, duration: ANIM.neonFlickerDuration, useNativeDriver: true }),
       ]),
       Animated.spring(ribbonAnim, {
         toValue: 1,
@@ -338,7 +350,11 @@ export function PuzzleComplete({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [actionsAnim, cardAnim, fadeAnim, ribbonAnim, statsAnim]);
+
+    // Trigger star burst effects after star reveal delay
+    const timer = setTimeout(() => setStarsRevealed(true), 800);
+    return () => clearTimeout(timer);
+  }, [actionsAnim, cardAnim, fadeAnim, glitchAnim, ribbonAnim, statsAnim]);
 
   const title = useMemo(() => {
     if (isDaily) return 'Daily Triumph';
@@ -447,22 +463,50 @@ export function PuzzleComplete({
                 <Text style={styles.ribbonText}>{perfectRun ? '✨ PERFECT RUN' : isDaily ? '☀ DAILY WIN' : '🏆 STAGE COMPLETE'}</Text>
               </Animated.View>
 
-              <Text style={[styles.title, perfectRun && styles.titlePerfect]}>{title}</Text>
+              {/* Chrome title with VHS glitch entrance */}
+              <Animated.View style={{
+                transform: [{
+                  translateX: glitchAnim.interpolate({
+                    inputRange: [-1, 0, 1],
+                    outputRange: [-4, 0, 4],
+                  }),
+                }],
+              }}>
+                <ChromeText
+                  fontSize={perfectRun ? 30 : 26}
+                  letterSpacing={3}
+                  glowColor={perfectRun ? COLORS.goldGlow : COLORS.accentGlow}
+                >
+                  {title.toUpperCase()}
+                </ChromeText>
+              </Animated.View>
               <Text style={styles.subtitle}>{subtitle}</Text>
 
+              {/* Stars with neon burst effects */}
               <View style={styles.starsRow}>
-                <Star filled={stars >= 1} delay={140} size={44} />
-                <Star filled={stars >= 2} delay={340} size={56} />
-                <Star filled={stars >= 3} delay={560} size={44} />
+                <View style={styles.starContainer}>
+                  <Star filled={stars >= 1} delay={140} size={44} />
+                  <NeonStarBurst active={starsRevealed && stars >= 1} color={COLORS.gold} size={50} />
+                </View>
+                <View style={styles.starContainer}>
+                  <Star filled={stars >= 2} delay={340} size={56} />
+                  <NeonStarBurst active={starsRevealed && stars >= 2} color={COLORS.gold} size={64} />
+                </View>
+                <View style={styles.starContainer}>
+                  <Star filled={stars >= 3} delay={560} size={44} />
+                  <NeonStarBurst active={starsRevealed && stars >= 3} color={COLORS.gold} size={50} />
+                </View>
               </View>
 
+              {/* Chrome score panel with CRT scan lines */}
               <LinearGradient
                 colors={GRADIENTS.scorePanel as unknown as [string, string, ...string[]]}
                 start={{ x: 0.5, y: 0 }}
                 end={{ x: 0.5, y: 1 }}
                 style={styles.scorePanel}
               >
-                <Text style={styles.scoreLabel}>Final Score</Text>
+                <ScanLineOverlay opacity={0.02} height={80} />
+                <Text style={styles.scoreLabel}>FINAL SCORE</Text>
                 <AnimatedScore targetScore={score} />
               </LinearGradient>
 
@@ -747,6 +791,10 @@ const styles = StyleSheet.create({
     gap: 4,
     marginBottom: 14,
   },
+  starContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   starGlowRing: {
     position: 'absolute',
     backgroundColor: 'rgba(255,215,0,0.18)',
@@ -777,7 +825,7 @@ const styles = StyleSheet.create({
   scoreLabel: {
     color: COLORS.textMuted,
     fontSize: 11,
-    letterSpacing: 2,
+    letterSpacing: 3,
     textTransform: 'uppercase',
     marginBottom: 6,
     fontFamily: FONTS.bodySemiBold,
