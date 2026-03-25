@@ -10,9 +10,10 @@ import {
   GestureDetector,
   Gesture,
 } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Grid as GridType, CellPosition } from '../types';
 import { LetterCell } from './LetterCell';
-import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
+import { CELL_GAP, COLORS, GRADIENTS, MAX_GRID_WIDTH } from '../constants';
 
 if (
   Platform.OS === 'android' &&
@@ -143,7 +144,6 @@ export function GameGrid({
     return null;
   }, [cellBounds]);
 
-  // Memoize gesture objects to avoid reattaching on every render
   const onCellPressRef = useRef(onCellPress);
   onCellPressRef.current = onCellPress;
   const onDragStartRef = useRef(onDragStart);
@@ -196,65 +196,101 @@ export function GameGrid({
     return Gesture.Race(panGesture, tapGesture);
   }, [hitTestCell]);
 
-  // Outer wrapper dimensions include the gradient border padding
-  const borderWidth = 2;
-  const outerWidth = gridWidth + borderWidth * 2;
-  const outerHeight = gridHeight + borderWidth * 2;
+  const framePad = 3;
+  const outerWidth = gridWidth + framePad * 2;
+  const outerHeight = gridHeight + framePad * 2;
 
   return (
-    <View style={[styles.outerWrapper, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}>
-      <GestureDetector gesture={composedGesture}>
-        <View
-          ref={gridRef}
-          style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 22 }]}
-        >
-          {columns.map((column, colIndex) => (
-            <View
-              key={colIndex}
-              style={[
-                styles.column,
-                {
-                  width: cellSize + CELL_GAP,
-                  height: gridHeight,
-                },
-                frozenSet.has(colIndex) && styles.frozenColumn,
-              ]}
-            >
-              <View style={{ flex: 1 }} />
-              {column.map(({ cell, row, col }) => {
-                const key = `${row},${col}`;
-                const selIndex = selectedSet.get(key) ?? -1;
-                const isSelected = selIndex >= 0;
-                const isHinted = hintedSet.has(key);
+    <View style={styles.shadowWrap}>
+      <View style={[styles.outerGlow, { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28 }]} />
 
-                return (
-                  <LetterCell
-                    key={cell.id}
-                    letter={cell.letter}
-                    cellId={cell.id}
-                    size={cellSize}
-                    isSelected={isSelected}
-                    isHinted={isHinted}
-                    selectionIndex={selIndex}
-                    isFrozen={frozenSet.has(col)}
-                    isValidWord={validWord && isSelected}
-                    isMoved={movedSet.has(key)}
-                  />
-                );
-              })}
+      <LinearGradient
+        colors={['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.neonFrame, { width: outerWidth, height: outerHeight, borderRadius: 24 }]}
+      >
+        <View style={[styles.frameInner, { width: gridWidth + 2, height: gridHeight + 2, borderRadius: 22 }]}>
+          <GestureDetector gesture={composedGesture}>
+            <View
+              ref={gridRef}
+              style={[styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 21 }]}
+            >
+              {columns.map((column, colIndex) => (
+                <View
+                  key={colIndex}
+                  style={[
+                    styles.column,
+                    {
+                      width: cellSize + CELL_GAP,
+                      height: gridHeight,
+                    },
+                    frozenSet.has(colIndex) && styles.frozenColumn,
+                  ]}
+                >
+                  <View style={{ flex: 1 }} />
+                  {column.map(({ cell, row, col }) => {
+                    const key = `${row},${col}`;
+                    const selIndex = selectedSet.get(key) ?? -1;
+                    const isSelected = selIndex >= 0;
+                    const isHinted = hintedSet.has(key);
+
+                    return (
+                      <LetterCell
+                        key={cell.id}
+                        letter={cell.letter}
+                        cellId={cell.id}
+                        size={cellSize}
+                        isSelected={isSelected}
+                        isHinted={isHinted}
+                        selectionIndex={selIndex}
+                        isFrozen={frozenSet.has(col)}
+                        isValidWord={validWord && isSelected}
+                        isMoved={movedSet.has(key)}
+                      />
+                    );
+                  })}
+                </View>
+              ))}
             </View>
-          ))}
+          </GestureDetector>
         </View>
-      </GestureDetector>
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  outerWrapper: {
+  shadowWrap: {
     alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outerGlow: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255,45,149,0.06)',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 0,
+    alignSelf: 'center',
+  },
+  neonFrame: {
+    padding: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  frameInner: {
+    backgroundColor: 'rgba(10, 0, 21, 0.85)',
     overflow: 'hidden',
-    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gridContainer: {
     flexDirection: 'row',
@@ -268,7 +304,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   frozenColumn: {
-    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    backgroundColor: 'rgba(0, 229, 255, 0.10)',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(0, 229, 255, 0.08)',

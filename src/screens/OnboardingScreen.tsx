@@ -119,6 +119,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
       <View style={styles.container}>
         <Animated.View style={[styles.centerContent, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
           <Animated.View style={[styles.glowCircle, { transform: [{ scale: pulseAnim }] }]} />
+          <View style={styles.glowRingOuter} />
+          <View style={styles.glowRingInner} />
           <Text style={styles.welcomeEmoji}>🎮</Text>
           <Text style={styles.welcomeTitle}>Welcome to</Text>
           <Text style={styles.welcomeTitleAccent}>WORDFALL</Text>
@@ -270,14 +272,36 @@ const styles = StyleSheet.create({
   },
   glowCircle: {
     position: 'absolute',
-    width: 240,
-    height: 240,
-    borderRadius: 120,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
     backgroundColor: COLORS.accentGlow,
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 40,
+    shadowOpacity: 0.7,
+    shadowRadius: 60,
+  },
+  glowRingOuter: {
+    position: 'absolute',
+    width: 340,
+    height: 340,
+    borderRadius: 170,
+    borderWidth: 1,
+    borderColor: 'rgba(255,45,149,0.15)',
+    backgroundColor: 'transparent',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  glowRingInner: {
+    position: 'absolute',
+    width: 380,
+    height: 380,
+    borderRadius: 190,
+    borderWidth: 0.5,
+    borderColor: 'rgba(200,77,255,0.10)',
+    backgroundColor: 'transparent',
   },
   glowCircleGreen: {
     position: 'absolute',

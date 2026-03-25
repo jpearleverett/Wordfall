@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -35,7 +36,6 @@ export const LetterCell = React.memo(function LetterCell({
   const glowAnim = useRef(new Animated.Value(0)).current;
   const movedAnim = useRef(new Animated.Value(0)).current;
 
-  // Selection animation — scale bounce + glow
   useEffect(() => {
     if (isSelected) {
       Animated.sequence([
@@ -72,7 +72,6 @@ export const LetterCell = React.memo(function LetterCell({
     }
   }, [isSelected, scaleAnim, glowAnim]);
 
-  // Moved cell flash — simple opacity pulse
   useEffect(() => {
     if (isMoved) {
       movedAnim.setValue(1);
@@ -84,13 +83,23 @@ export const LetterCell = React.memo(function LetterCell({
     }
   }, [isMoved, movedAnim]);
 
-  // Rich gradient colors based on state
-  const getGradientColors = (): readonly [string, string, ...string[]] => {
-    if (isValidWord) return GRADIENTS.tile.valid;
-    if (isSelected && isHinted) return GRADIENTS.tile.hint;
-    if (isSelected) return GRADIENTS.tile.selected;
-    if (isFrozen) return GRADIENTS.tile.frozen;
-    return GRADIENTS.tile.default;
+  const borderRadius = size * 0.20;
+  const insetBR = Math.max(borderRadius - 2, 2);
+
+  const getBodyColors = (): [string, string, ...string[]] => {
+    if (isValidWord) return ['#00ff87', '#00e676', '#00b85c', '#009e42'];
+    if (isSelected && isHinted) return ['#ffe580', '#ffd24d', '#ffb800', '#e6a200'];
+    if (isSelected) return ['#ff6eb8', '#ff2d95', '#e91e8c', '#c84dff'];
+    if (isFrozen) return ['rgba(40,180,220,0.50)', 'rgba(0,180,216,0.40)', 'rgba(0,140,180,0.35)', 'rgba(0,100,140,0.40)'];
+    return ['#3d1e6d', '#2d1452', '#221040', '#1a0a30'];
+  };
+
+  const getTopHighlightColors = (): [string, string] => {
+    if (isValidWord) return ['rgba(180,255,220,0.55)', 'rgba(0,255,135,0.0)'];
+    if (isSelected && isHinted) return ['rgba(255,240,180,0.55)', 'rgba(255,184,0,0.0)'];
+    if (isSelected) return ['rgba(255,200,230,0.50)', 'rgba(255,45,149,0.0)'];
+    if (isFrozen) return ['rgba(180,240,255,0.40)', 'rgba(0,229,255,0.0)'];
+    return ['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.0)'];
   };
 
   const getBorderColor = () => {
@@ -101,41 +110,36 @@ export const LetterCell = React.memo(function LetterCell({
     return 'rgba(200, 77, 255, 0.30)';
   };
 
-  const borderRadius = size * 0.22;
-
   const getShadowColor = () => {
     if (isValidWord) return COLORS.green;
     if (isSelected) return COLORS.accent;
-    return '#000';
+    return '#1a0a2e';
   };
 
-  // Outer glow ring for selected/valid states
   const showOuterGlow = isSelected || isValidWord;
   const outerGlowColor = isValidWord ? COLORS.greenGlow : isSelected ? COLORS.accentGlow : 'transparent';
 
   return (
     <View pointerEvents="none">
-      {/* Outer ambient glow ring */}
       {showOuterGlow && (
         <Animated.View
           pointerEvents="none"
           style={{
             position: 'absolute',
-            top: -4,
-            left: -4,
-            right: -4,
-            bottom: -4,
-            borderRadius: borderRadius + 4,
+            top: -6,
+            left: -6,
+            right: -6,
+            bottom: -6,
+            borderRadius: borderRadius + 6,
             backgroundColor: outerGlowColor,
             opacity: glowAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0, 0.45],
+              outputRange: [0, 0.5],
             }),
           }}
         />
       )}
 
-      {/* Moved cell flash overlay */}
       {isMoved && (
         <Animated.View
           pointerEvents="none"
@@ -147,7 +151,7 @@ export const LetterCell = React.memo(function LetterCell({
             bottom: -2,
             borderRadius: borderRadius + 2,
             borderWidth: 1.5,
-            borderColor: 'rgba(255, 45, 149, 0.8)',
+            borderColor: COLORS.accent,
             opacity: movedAnim,
           }}
         />
@@ -161,37 +165,95 @@ export const LetterCell = React.memo(function LetterCell({
             height: size,
             borderRadius,
             borderColor: getBorderColor(),
-            borderWidth: isSelected || isValidWord ? 2.5 : isFrozen ? 2 : 1.5,
+            borderWidth: isSelected || isValidWord ? 2 : isFrozen ? 1.5 : 1,
             transform: [{ scale: scaleAnim }],
             shadowColor: getShadowColor(),
-            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.4,
-            shadowRadius: (isSelected || isValidWord) ? 14 : 6,
-            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 6 : 3 },
-            elevation: (isSelected || isValidWord) ? 12 : 5,
+            shadowOpacity: (isSelected || isValidWord) ? 0.8 : 0.5,
+            shadowRadius: (isSelected || isValidWord) ? 16 : 8,
+            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 8 : 4 },
+            elevation: (isSelected || isValidWord) ? 14 : 6,
           },
         ]}
       >
-        {/* Base gradient - the gem body */}
         <LinearGradient
-          colors={getGradientColors() as [string, string, ...string[]]}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius }]}
+          colors={getBodyColors()}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.8, y: 1 }}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: insetBR }]}
         />
 
-        {/* Bottom edge shadow for 3D depth */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.25)'] as [string, string]}
+          colors={getTopHighlightColors()}
           start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={[styles.bottomShadow, { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius }]}
+          end={{ x: 0.5, y: 0.55 }}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '55%',
+            borderTopLeftRadius: insetBR,
+            borderTopRightRadius: insetBR,
+          }}
         />
 
-        {/* Letter with premium text rendering */}
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.08,
+            left: size * 0.15,
+            right: size * 0.15,
+            height: size * 0.06,
+            borderRadius: size * 0.03,
+            backgroundColor: isSelected || isValidWord
+              ? 'rgba(255,255,255,0.35)'
+              : 'rgba(255,255,255,0.12)',
+          }}
+        />
+
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.40)'] as [string, string]}
+          start={{ x: 0.5, y: 0.5 }}
+          end={{ x: 0.5, y: 1 }}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '40%',
+            borderBottomLeftRadius: insetBR,
+            borderBottomRightRadius: insetBR,
+          }}
+        />
+
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: size * 0.08,
+            backgroundColor: 'rgba(0,0,0,0.25)',
+            borderBottomLeftRadius: insetBR,
+            borderBottomRightRadius: insetBR,
+          }}
+        />
+
+        {(isSelected || isValidWord) && (
+          <View
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              borderRadius: insetBR,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.15)',
+            }}
+          />
+        )}
+
         <Text
           style={[
             styles.letter,
-            { fontSize: size * 0.48 },
+            { fontSize: size * 0.46 },
             isSelected && styles.letterSelected,
             isValidWord && styles.letterValid,
             !isSelected && !isValidWord && styles.letterDefault,
@@ -200,41 +262,38 @@ export const LetterCell = React.memo(function LetterCell({
           {letter}
         </Text>
 
-        {/* Selection index badge */}
         {isSelected && selectionIndex >= 0 && !isValidWord && (
           <View
             style={[
               styles.indexBadge,
               {
-                width: size * 0.30,
-                height: size * 0.30,
-                borderRadius: size * 0.15,
+                width: size * 0.28,
+                height: size * 0.28,
+                borderRadius: size * 0.14,
               },
             ]}
           >
-            <Text style={[styles.indexText, { fontSize: size * 0.16 }]}>
+            <Text style={[styles.indexText, { fontSize: size * 0.14 }]}>
               {selectionIndex + 1}
             </Text>
           </View>
         )}
 
-        {/* Valid word checkmark */}
         {isValidWord && (
           <View
             style={[
               styles.checkBadge,
               {
-                borderRadius: size * 0.15,
-                width: size * 0.28,
-                height: size * 0.28,
+                borderRadius: size * 0.14,
+                width: size * 0.26,
+                height: size * 0.26,
               },
             ]}
           >
-            <Text style={[styles.checkText, { fontSize: size * 0.15 }]}>✓</Text>
+            <Text style={[styles.checkText, { fontSize: size * 0.14 }]}>✓</Text>
           </View>
         )}
 
-        {/* Frozen snowflake indicator */}
         {isFrozen && !isSelected && (
           <View style={styles.frozenIndicator}>
             <Text style={styles.frozenIcon}>❄</Text>
@@ -252,13 +311,6 @@ const styles = StyleSheet.create({
     margin: 2,
     overflow: 'hidden',
   },
-  bottomShadow: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '30%',
-  },
   letter: {
     color: COLORS.textPrimary,
     fontFamily: 'SpaceGrotesk_700Bold',
@@ -266,39 +318,41 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   letterDefault: {
-    textShadowColor: 'rgba(200,77,255,0.4)',
-    textShadowRadius: 8,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowRadius: 4,
     textShadowOffset: { width: 0, height: 2 },
   },
   letterSelected: {
     color: '#fff',
-    textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 16,
+    textShadowColor: 'rgba(255,255,255,0.6)',
+    textShadowRadius: 12,
     textShadowOffset: { width: 0, height: 0 },
   },
   letterValid: {
     color: '#fff',
-    textShadowColor: COLORS.greenGlow,
-    textShadowRadius: 20,
+    textShadowColor: 'rgba(255,255,255,0.6)',
+    textShadowRadius: 14,
     textShadowOffset: { width: 0, height: 0 },
   },
   indexBadge: {
     position: 'absolute',
     top: 2,
     right: 2,
-    backgroundColor: 'rgba(255, 45, 149, 0.95)',
+    backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   indexText: {
     color: '#fff',
     fontFamily: 'SpaceGrotesk_700Bold',
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowRadius: 2,
   },
   checkBadge: {
@@ -310,9 +364,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: COLORS.green,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   checkText: {
     color: '#fff',
