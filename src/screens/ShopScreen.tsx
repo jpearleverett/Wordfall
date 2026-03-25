@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,26 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { useSettings } from '../contexts/SettingsContext';
+import { useEconomy } from '../contexts/EconomyContext';
+import { iapManager, PurchaseResult } from '../services/iap';
+import { adManager } from '../services/ads';
+import {
+  getCurrentRotatingItems,
+  getTimeRemainingHours,
+  getRarityColor,
+  RotatingItem,
+} from '../data/rotatingShop';
+import { funnelTracker } from '../services/funnelTracker';
 
 const { width } = Dimensions.get('window');
+
+// ─── Static item data ────────────────────────────────────────────────────────
 
 interface ShopItem {
   id: string;
@@ -20,18 +34,19 @@ interface ShopItem {
   price: string;
   quantity?: number;
   bestValue?: boolean;
+  iapProductId?: string;
 }
 
 const HINT_BUNDLES: ShopItem[] = [
-  { id: 'hints_10', name: '10 Hints', icon: '\u{1F4A1}', price: '$0.99', quantity: 10 },
-  { id: 'hints_25', name: '25 Hints', icon: '\u{1F4A1}', price: '$1.99', quantity: 25 },
-  { id: 'hints_50', name: '50 Hints', icon: '\u{1F4A1}', price: '$2.99', quantity: 50, bestValue: true },
+  { id: 'hints_10', name: '10 Hints', icon: '\u{1F4A1}', price: '$0.99', quantity: 10, iapProductId: 'hint_bundle_10' },
+  { id: 'hints_25', name: '25 Hints', icon: '\u{1F4A1}', price: '$1.99', quantity: 25, iapProductId: 'hint_bundle_25' },
+  { id: 'hints_50', name: '50 Hints', icon: '\u{1F4A1}', price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'hint_bundle_50' },
 ];
 
 const UNDO_BUNDLES: ShopItem[] = [
-  { id: 'undos_10', name: '10 Undos', icon: '\u21A9\uFE0F', price: '$0.99', quantity: 10 },
-  { id: 'undos_25', name: '25 Undos', icon: '\u21A9\uFE0F', price: '$1.99', quantity: 25 },
-  { id: 'undos_50', name: '50 Undos', icon: '\u21A9\uFE0F', price: '$2.99', quantity: 50, bestValue: true },
+  { id: 'undos_10', name: '10 Undos', icon: '\u21A9\uFE0F', price: '$0.99', quantity: 10, iapProductId: 'undo_bundle_10' },
+  { id: 'undos_25', name: '25 Undos', icon: '\u21A9\uFE0F', price: '$1.99', quantity: 25, iapProductId: 'undo_bundle_25' },
+  { id: 'undos_50', name: '50 Undos', icon: '\u21A9\uFE0F', price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'undo_bundle_50' },
 ];
 
 const COIN_PACKS: ShopItem[] = [
@@ -46,6 +61,63 @@ const GEM_PACKS: ShopItem[] = [
   { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', price: '$14.99', quantity: 500, bestValue: true },
 ];
 
+// ─── Purchase fulfilment ─────────────────────────────────────────────────────
+
+interface FulfilmentActions {
+  addCoins: (n: number) => void;
+  addGems: (n: number) => void;
+  addHintTokens: (n: number) => void;
+  updateSetting: <K extends keyof { adsRemoved: boolean; premiumPass: boolean }>(key: K, value: boolean) => void;
+}
+
+function fulfilPurchase(productId: string, actions: FulfilmentActions): void {
+  switch (productId) {
+    case 'starter_pack':
+      actions.addCoins(500);
+      actions.addGems(50);
+      actions.addHintTokens(10);
+      break;
+    case 'hint_bundle_10':
+      actions.addHintTokens(10);
+      break;
+    case 'hint_bundle_25':
+      actions.addHintTokens(25);
+      break;
+    case 'hint_bundle_50':
+      actions.addHintTokens(50);
+      break;
+    case 'undo_bundle_10':
+      // Undo tokens tracked separately — for now grant as hint tokens
+      actions.addHintTokens(10);
+      break;
+    case 'undo_bundle_25':
+      actions.addHintTokens(25);
+      break;
+    case 'undo_bundle_50':
+      actions.addHintTokens(50);
+      break;
+    case 'daily_value_pack':
+      actions.addCoins(100);
+      actions.addGems(5);
+      actions.addHintTokens(3);
+      break;
+    case 'chapter_bundle':
+      actions.addGems(20);
+      actions.addHintTokens(10);
+      break;
+    case 'premium_pass':
+      actions.updateSetting('premiumPass', true);
+      break;
+    case 'ad_removal':
+      actions.updateSetting('adsRemoved', true);
+      break;
+    default:
+      console.warn('[Shop] Unknown product for fulfilment:', productId);
+  }
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 interface ShopScreenProps {
   onPurchase?: (itemId: string) => void;
   adsRemoved?: boolean;
@@ -58,12 +130,30 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   premiumPass: premiumPassProp,
 }) => {
   const settings = useSettings();
-  const onPurchase = onPurchaseProp ?? ((_itemId: string) => {});
+  const economy = useEconomy();
   const adsRemoved = adsRemovedProp ?? settings.adsRemoved;
   const premiumPass = premiumPassProp ?? settings.premiumPass;
+
   const [countdown, setCountdown] = useState('23:59:59');
+  const [purchasingId, setPurchasingId] = useState<string | null>(null);
+  const [watchingAd, setWatchingAd] = useState(false);
+  const [restoringPurchases, setRestoringPurchases] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Today's rotating items
+  const today = new Date().toISOString().slice(0, 10);
+  const rotatingItems = getCurrentRotatingItems(today);
+  const rotatingHoursLeft = getTimeRemainingHours(today);
+
+  // Initialise IAP + Ads
+  useEffect(() => {
+    iapManager.init().catch(() => {});
+    adManager.init().catch(() => {});
+    if (adsRemoved) adManager.setAdsRemoved(true);
+    void funnelTracker.trackStep('shop_view');
+  }, [adsRemoved]);
+
+  // Countdown timer
   useEffect(() => {
     const endTime = Date.now() + 24 * 60 * 60 * 1000;
     timerRef.current = setInterval(() => {
@@ -82,12 +172,124 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     };
   }, []);
 
+  // ── Purchase handler ────────────────────────────────────────────────────
+
+  const fulfilmentActions: FulfilmentActions = {
+    addCoins: economy.addCoins,
+    addGems: economy.addGems,
+    addHintTokens: economy.addHintTokens,
+    updateSetting: settings.updateSetting as any,
+  };
+
+  const handlePurchase = useCallback(
+    async (productId: string) => {
+      if (purchasingId) return; // already in flight
+      setPurchasingId(productId);
+      void funnelTracker.trackStep('iap_initiated');
+
+      try {
+        const result: PurchaseResult = await iapManager.purchase(productId);
+        if (result.success) {
+          fulfilPurchase(result.productId, fulfilmentActions);
+          Alert.alert('Purchase Complete', 'Your items have been delivered!');
+        } else {
+          if (result.error && result.error !== 'User cancelled') {
+            Alert.alert('Purchase Failed', result.error);
+          }
+        }
+      } catch (e: any) {
+        Alert.alert('Purchase Error', e?.message ?? 'Something went wrong');
+      } finally {
+        setPurchasingId(null);
+      }
+
+      // Also call the legacy prop callback if provided
+      if (onPurchaseProp) onPurchaseProp(productId);
+    },
+    [purchasingId, onPurchaseProp, fulfilmentActions],
+  );
+
+  // ── Rewarded ad handler ─────────────────────────────────────────────────
+
+  const handleWatchAd = useCallback(async () => {
+    if (watchingAd) return;
+    setWatchingAd(true);
+    try {
+      const result = await adManager.showRewardedAd('hint');
+      if (result.rewarded) {
+        economy.addHintTokens(1);
+        Alert.alert('Reward Earned!', 'You received 1 free hint!');
+      }
+    } catch {
+      Alert.alert('Ad Unavailable', 'Please try again later.');
+    } finally {
+      setWatchingAd(false);
+    }
+  }, [watchingAd, economy]);
+
+  // ── Restore purchases handler ───────────────────────────────────────────
+
+  const handleRestorePurchases = useCallback(async () => {
+    if (restoringPurchases) return;
+    setRestoringPurchases(true);
+    try {
+      const results = await iapManager.restorePurchases();
+      if (results.length === 0) {
+        Alert.alert('No Purchases Found', 'There are no purchases to restore.');
+      } else {
+        for (const result of results) {
+          if (result.success) {
+            fulfilPurchase(result.productId, fulfilmentActions);
+          }
+        }
+        Alert.alert('Purchases Restored', `${results.length} purchase(s) restored successfully.`);
+      }
+    } catch {
+      Alert.alert('Restore Failed', 'Could not restore purchases. Please try again.');
+    } finally {
+      setRestoringPurchases(false);
+    }
+  }, [restoringPurchases, fulfilmentActions]);
+
+  // ── Rotating item gem purchase ──────────────────────────────────────────
+
+  const handleRotatingPurchase = useCallback(
+    (item: RotatingItem) => {
+      if (!economy.canAfford('gems', item.gemCost)) {
+        Alert.alert('Not Enough Gems', `You need ${item.gemCost} gems for this item.`);
+        return;
+      }
+      Alert.alert(
+        `Buy ${item.name}?`,
+        `This will cost ${item.gemCost} gems.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Buy',
+            onPress: () => {
+              const spent = economy.spendGems(item.gemCost);
+              if (spent) {
+                Alert.alert('Purchased!', `${item.name} has been added to your collection.`);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [economy],
+  );
+
+  // ── Render helpers ──────────────────────────────────────────────────────
+
+  const isLoading = (id: string) => purchasingId === id;
+
   const renderItemCard = (item: ShopItem) => (
     <TouchableOpacity
       key={item.id}
       style={styles.itemCard}
-      onPress={() => onPurchase(item.id)}
+      onPress={() => handlePurchase(item.iapProductId ?? item.id)}
       activeOpacity={0.7}
+      disabled={!!purchasingId}
     >
       <LinearGradient
         colors={[...GRADIENTS.surfaceCard]}
@@ -115,7 +317,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         />
-        <Text style={styles.priceText}>{item.price}</Text>
+        {isLoading(item.iapProductId ?? item.id) ? (
+          <ActivityIndicator size="small" color={COLORS.bg} />
+        ) : (
+          <Text style={styles.priceText}>{item.price}</Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -137,7 +343,38 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Featured Offers */}
+        {/* ── Watch Ad for Hints ─────────────────────────────────────── */}
+        {!adsRemoved && (
+          <TouchableOpacity
+            style={styles.adBanner}
+            onPress={handleWatchAd}
+            activeOpacity={0.7}
+            disabled={watchingAd}
+          >
+            <LinearGradient
+              colors={[COLORS.green + '30', COLORS.teal + '20']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
+            {watchingAd ? (
+              <ActivityIndicator size="small" color={COLORS.green} style={{ marginRight: 10 }} />
+            ) : (
+              <Text style={styles.adIcon}>{'\u{1F3AC}'}</Text>
+            )}
+            <View style={styles.adInfo}>
+              <Text style={styles.adTitle}>Watch Ad for 1 Free Hint</Text>
+              <Text style={styles.adSubtitle}>
+                {watchingAd ? 'Watching ad...' : 'Tap to watch a short video'}
+              </Text>
+            </View>
+            <View style={styles.adBadge}>
+              <Text style={styles.adBadgeText}>FREE</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* ── Featured Offers ────────────────────────────────────────── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -146,8 +383,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         >
           <TouchableOpacity
             style={styles.featuredCard}
-            onPress={() => onPurchase('starter_pack')}
+            onPress={() => handlePurchase('starter_pack')}
             activeOpacity={0.7}
+            disabled={!!purchasingId}
           >
             <LinearGradient
               colors={['#1e2352', '#181d42']}
@@ -166,7 +404,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             </Text>
             <View style={styles.featuredPriceRow}>
               <Text style={styles.featuredOldPrice}>$4.99</Text>
-              <Text style={styles.featuredPrice}>$1.99</Text>
+              {isLoading('starter_pack') ? (
+                <ActivityIndicator size="small" color={COLORS.green} />
+              ) : (
+                <Text style={styles.featuredPrice}>$1.99</Text>
+              )}
             </View>
             <View style={styles.timerContainer}>
               <Text style={styles.timerText}>{countdown}</Text>
@@ -175,8 +417,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
           <TouchableOpacity
             style={[styles.featuredCard, styles.featuredCardAlt]}
-            onPress={() => onPurchase('weekend_special')}
+            onPress={() => handlePurchase('chapter_bundle')}
             activeOpacity={0.7}
+            disabled={!!purchasingId}
           >
             <LinearGradient
               colors={['#251e52', '#1e1842']}
@@ -195,7 +438,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             </Text>
             <View style={styles.featuredPriceRow}>
               <Text style={styles.featuredOldPrice}>$14.99</Text>
-              <Text style={styles.featuredPrice}>$4.99</Text>
+              {isLoading('chapter_bundle') ? (
+                <ActivityIndicator size="small" color={COLORS.green} />
+              ) : (
+                <Text style={styles.featuredPrice}>$4.99</Text>
+              )}
             </View>
             <View style={[styles.timerContainer, { backgroundColor: COLORS.purple + '30' }]}>
               <Text style={[styles.timerText, { color: COLORS.purple }]}>{countdown}</Text>
@@ -203,29 +450,77 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Hint Bundles */}
+        {/* ── Rotating Exclusive Shop ────────────────────────────────── */}
+        <Text style={styles.sectionTitle}>Exclusive Cosmetics</Text>
+        <Text style={styles.rotatingSubtitle}>
+          {rotatingHoursLeft > 0
+            ? `Leaving in ${rotatingHoursLeft}h — won't return for months!`
+            : 'Refreshing soon...'}
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.rotatingRow}
+        >
+          {rotatingItems.map((item) => {
+            const rarityColor = getRarityColor(item.rarity);
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.rotatingCard, { borderColor: rarityColor + '60' }]}
+                onPress={() => handleRotatingPurchase(item)}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={[rarityColor + '18', rarityColor + '08']}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                />
+                <View style={[styles.rarityBadge, { backgroundColor: rarityColor + '30' }]}>
+                  <Text style={[styles.rarityText, { color: rarityColor }]}>
+                    {item.rarity.toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={styles.rotatingIcon}>{item.icon}</Text>
+                <Text style={styles.rotatingName}>{item.name}</Text>
+                <Text style={styles.rotatingDesc}>{item.description}</Text>
+                <View style={styles.gemPriceRow}>
+                  <Text style={styles.gemIcon}>{'\u{1F48E}'}</Text>
+                  <Text style={[styles.gemPrice, { color: rarityColor }]}>{item.gemCost}</Text>
+                </View>
+                <Text style={styles.rotatingTimer}>
+                  {item.returnsInDays >= 180 ? "Won't return for 6 months" : `Returns in ${item.returnsInDays} days`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* ── Hint Bundles ───────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Hint Bundles</Text>
         {renderItemRow(HINT_BUNDLES)}
 
-        {/* Undo Bundles */}
+        {/* ── Undo Bundles ───────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Undo Bundles</Text>
         {renderItemRow(UNDO_BUNDLES)}
 
-        {/* Coin Packs */}
+        {/* ── Coin Packs ─────────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Coin Packs</Text>
         {renderItemRow(COIN_PACKS)}
 
-        {/* Gem Packs */}
+        {/* ── Gem Packs ──────────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Gem Packs</Text>
         {renderItemRow(GEM_PACKS)}
 
-        {/* Premium */}
+        {/* ── Premium ────────────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Premium</Text>
         <View style={styles.premiumSection}>
           <TouchableOpacity
             style={styles.premiumCard}
-            onPress={() => onPurchase('chapter_bundle')}
+            onPress={() => handlePurchase('chapter_bundle')}
             activeOpacity={0.7}
+            disabled={!!purchasingId}
           >
             <LinearGradient
               colors={[...GRADIENTS.surfaceCard]}
@@ -247,14 +542,19 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               />
-              <Text style={styles.priceText}>$2.99</Text>
+              {isLoading('chapter_bundle') ? (
+                <ActivityIndicator size="small" color={COLORS.bg} />
+              ) : (
+                <Text style={styles.priceText}>$2.99</Text>
+              )}
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.premiumCard}
-            onPress={() => onPurchase('daily_value')}
+            onPress={() => handlePurchase('daily_value_pack')}
             activeOpacity={0.7}
+            disabled={!!purchasingId}
           >
             <LinearGradient
               colors={[...GRADIENTS.surfaceCard]}
@@ -276,7 +576,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               />
-              <Text style={styles.priceText}>$0.99</Text>
+              {isLoading('daily_value_pack') ? (
+                <ActivityIndicator size="small" color={COLORS.bg} />
+              ) : (
+                <Text style={styles.priceText}>$0.99</Text>
+              )}
             </View>
           </TouchableOpacity>
 
@@ -285,8 +589,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               styles.premiumCard,
               premiumPass && styles.purchasedCard,
             ]}
-            onPress={() => !premiumPass && onPurchase('premium_pass')}
+            onPress={() => !premiumPass && handlePurchase('premium_pass')}
             activeOpacity={premiumPass ? 1 : 0.7}
+            disabled={premiumPass || !!purchasingId}
           >
             <LinearGradient
               colors={[...GRADIENTS.surfaceCard]}
@@ -313,7 +618,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 />
-                <Text style={styles.priceText}>$4.99</Text>
+                {isLoading('premium_pass') ? (
+                  <ActivityIndicator size="small" color={COLORS.bg} />
+                ) : (
+                  <Text style={styles.priceText}>$4.99</Text>
+                )}
               </View>
             )}
           </TouchableOpacity>
@@ -323,8 +632,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               styles.premiumCard,
               adsRemoved && styles.purchasedCard,
             ]}
-            onPress={() => !adsRemoved && onPurchase('ad_removal')}
+            onPress={() => !adsRemoved && handlePurchase('ad_removal')}
             activeOpacity={adsRemoved ? 1 : 0.7}
+            disabled={adsRemoved || !!purchasingId}
           >
             <LinearGradient
               colors={[...GRADIENTS.surfaceCard]}
@@ -351,11 +661,29 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 />
-                <Text style={styles.priceText}>$4.99</Text>
+                {isLoading('ad_removal') ? (
+                  <ActivityIndicator size="small" color={COLORS.bg} />
+                ) : (
+                  <Text style={styles.priceText}>$4.99</Text>
+                )}
               </View>
             )}
           </TouchableOpacity>
         </View>
+
+        {/* ── Restore Purchases ──────────────────────────────────────── */}
+        <TouchableOpacity
+          style={styles.restoreButton}
+          onPress={handleRestorePurchases}
+          activeOpacity={0.7}
+          disabled={restoringPurchases}
+        >
+          {restoringPurchases ? (
+            <ActivityIndicator size="small" color={COLORS.textSecondary} />
+          ) : (
+            <Text style={styles.restoreText}>Restore Purchases</Text>
+          )}
+        </TouchableOpacity>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -390,6 +718,115 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
   },
+
+  // ── Ad banner ─────────────────────────────────────────────────────────
+  adBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.green + '40',
+    overflow: 'hidden',
+  },
+  adIcon: {
+    fontSize: 26,
+    marginRight: 10,
+  },
+  adInfo: {
+    flex: 1,
+  },
+  adTitle: {
+    fontSize: 15,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.green,
+  },
+  adSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  adBadge: {
+    backgroundColor: COLORS.green,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  adBadgeText: {
+    fontSize: 12,
+    fontFamily: FONTS.display,
+    color: COLORS.bg,
+    letterSpacing: 1,
+  },
+
+  // ── Rotating shop ─────────────────────────────────────────────────────
+  rotatingSubtitle: {
+    fontSize: 12,
+    color: COLORS.coral,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 10,
+    marginTop: -6,
+  },
+  rotatingRow: {
+    gap: 12,
+    paddingRight: 16,
+  },
+  rotatingCard: {
+    width: width * 0.55,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  rarityBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 8,
+  },
+  rarityText: {
+    fontSize: 9,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
+  },
+  rotatingIcon: {
+    fontSize: 36,
+    marginBottom: 8,
+  },
+  rotatingName: {
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  rotatingDesc: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  gemPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  gemIcon: {
+    fontSize: 16,
+  },
+  gemPrice: {
+    fontSize: 18,
+    fontFamily: FONTS.display,
+  },
+  rotatingTimer: {
+    fontSize: 10,
+    color: COLORS.coral,
+    fontFamily: FONTS.bodySemiBold,
+  },
+
+  // ── Sections ──────────────────────────────────────────────────────────
   sectionTitle: {
     fontSize: 18,
     fontFamily: FONTS.bodyBold,
@@ -608,6 +1045,21 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     color: COLORS.green,
   },
+
+  // ── Restore purchases ─────────────────────────────────────────────────
+  restoreButton: {
+    alignSelf: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    marginTop: 28,
+  },
+  restoreText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.bodySemiBold,
+    textDecorationLine: 'underline',
+  },
+
   bottomSpacer: {
     height: 40,
   },

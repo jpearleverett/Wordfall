@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,11 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
+import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
 
-const TIME_TABS = ['Daily', 'Weekly', 'All-Time'] as const;
+const TIME_TABS = ['Daily Challenge', 'Daily', 'Weekly', 'All-Time'] as const;
 const SCOPE_TABS = ['Global', 'Friends', 'Club'] as const;
 
 interface LeaderboardEntry {
@@ -22,6 +23,88 @@ interface LeaderboardEntry {
   score: number;
   rank: number;
   avatar?: string;
+}
+
+// Seeded PRNG for deterministic mock data (Mulberry32)
+function mulberry32(seed: number) {
+  return function () {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const MOCK_FIRST_NAMES = [
+  'Alex', 'Blake', 'Casey', 'Dana', 'Eliot', 'Finn', 'Gray', 'Harper',
+  'Iris', 'Jules', 'Kai', 'Luna', 'Morgan', 'Nova', 'Orion', 'Parker',
+  'Quinn', 'Riley', 'Sage', 'Taylor', 'Uma', 'Val', 'Wren', 'Xan',
+  'Yuki', 'Zara', 'Avery', 'Blair', 'Cedar', 'Drew', 'Eden', 'Fox',
+  'Gem', 'Haven', 'Ivy', 'Jade', 'Kira', 'Lark', 'Mika', 'Neve',
+  'Oakley', 'Pax', 'Rain', 'Sky', 'Tatum', 'Uri', 'Vesper', 'Winter',
+  'Xena', 'Zephyr',
+];
+
+function generateDailyLeaderboard(playerDailyScore: number | null, playerId: string): LeaderboardEntry[] {
+  const today = new Date();
+  const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+  const rng = mulberry32(dateSeed);
+
+  // Generate 50 mock entries
+  const entries: LeaderboardEntry[] = [];
+  const usedNames = new Set<string>();
+
+  for (let i = 0; i < 50; i++) {
+    let name: string;
+    do {
+      name = MOCK_FIRST_NAMES[Math.floor(rng() * MOCK_FIRST_NAMES.length)];
+    } while (usedNames.has(name));
+    usedNames.add(name);
+
+    // Top players get higher scores, with natural distribution
+    const baseScore = Math.floor(800 - i * 12 + rng() * 200);
+    const score = Math.max(100, baseScore);
+
+    entries.push({
+      id: `mock_${i}`,
+      name,
+      score,
+      rank: i + 1,
+    });
+  }
+
+  // Sort by score descending
+  entries.sort((a, b) => b.score - a.score);
+
+  // If the player has a daily score, insert them at the correct position
+  if (playerDailyScore !== null && playerDailyScore > 0) {
+    // Remove any existing player entry placeholder
+    const playerEntry: LeaderboardEntry = {
+      id: playerId,
+      name: 'You',
+      score: playerDailyScore,
+      rank: 0,
+    };
+
+    entries.push(playerEntry);
+    entries.sort((a, b) => b.score - a.score);
+
+    // Limit to 50 entries
+    entries.splice(50);
+  }
+
+  // Assign ranks
+  entries.forEach((entry, index) => {
+    entry.rank = index + 1;
+  });
+
+  return entries;
+}
+
+function formatTodayDate(): string {
+  const today = new Date();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[today.getMonth()]} ${today.getDate()}, ${today.getFullYear()}`;
 }
 
 interface LeaderboardScreenProps {
@@ -38,21 +121,39 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   onChangeTab: onChangeTabProp,
 }) => {
   const { user } = useAuth();
+  const player = usePlayer();
   const currentUserId = currentUserIdProp ?? user?.uid ?? '';
-  const activeTab = activeTabProp ?? 'daily_global';
-  const onChangeTab = onChangeTabProp ?? ((_tab: string) => {});
-  const activeTime = TIME_TABS.find((t) => activeTab.includes(t.toLowerCase())) ?? 'Daily';
+  const [internalTab, setInternalTab] = useState<string>(activeTabProp ?? 'daily_challenge');
+  const activeTab = activeTabProp ?? internalTab;
+  const onChangeTab = onChangeTabProp ?? setInternalTab;
+
+  const isDailyChallenge = activeTab === 'daily_challenge';
+  const activeTime = isDailyChallenge
+    ? 'Daily Challenge'
+    : TIME_TABS.find((t) => activeTab.includes(t.toLowerCase())) ?? 'Daily';
   const activeScope = SCOPE_TABS.find((s) => activeTab.includes(s.toLowerCase())) ?? 'Global';
 
-  const entries: LeaderboardEntry[] = (leaderboardData ?? []).map(
-    (entry: any, index: number) => ({
-      id: entry.id ?? `user_${index}`,
-      name: entry.name ?? `Player ${index + 1}`,
-      score: entry.score ?? 0,
-      rank: entry.rank ?? index + 1,
-      avatar: entry.avatar,
-    }),
+  // Check if player completed today's daily
+  const today = new Date().toISOString().split('T')[0];
+  const playerCompletedDaily = player.dailyCompleted.includes(today);
+
+  // For the daily challenge tab, compute a mock score from player data
+  const playerDailyScore = playerCompletedDaily ? Math.max(300, player.totalScore % 900 + 200) : null;
+
+  const dailyChallengeEntries = useMemo(
+    () => generateDailyLeaderboard(playerDailyScore, currentUserId),
+    [playerDailyScore, currentUserId],
   );
+
+  const entries: LeaderboardEntry[] = isDailyChallenge
+    ? dailyChallengeEntries
+    : (leaderboardData ?? []).map((entry: any, index: number) => ({
+        id: entry.id ?? `user_${index}`,
+        name: entry.name ?? `Player ${index + 1}`,
+        score: entry.score ?? 0,
+        rank: entry.rank ?? index + 1,
+        avatar: entry.avatar,
+      }));
 
   const getRankColor = (rank: number): string => {
     if (rank === 1) return '#FFD700';
@@ -83,6 +184,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           if (!entry) return <View key={idx} style={styles.topPlaceholder} />;
 
           const isFirst = idx === 0;
+          const isMe = entry.id === currentUserId;
           const rankColor = getRankColor(entry.rank);
 
           return (
@@ -94,6 +196,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
               style={[
                 styles.topCard,
                 isFirst && styles.topCardFirst,
+                isMe && { borderColor: COLORS.accent + '60' },
               ]}
             >
               <Text style={styles.topRankEmoji}>{getRankEmoji(entry.rank)}</Text>
@@ -101,7 +204,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 style={[
                   styles.topAvatar,
                   isFirst && styles.topAvatarFirst,
-                  { borderColor: rankColor },
+                  { borderColor: isMe ? COLORS.accent : rankColor },
                   isFirst && SHADOWS.glow(rankColor),
                 ]}
               >
@@ -115,9 +218,9 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 </Text>
               </View>
               <Text style={styles.topName} numberOfLines={1}>
-                {entry.name}
+                {entry.name}{isMe ? ' (You)' : ''}
               </Text>
-              <Text style={[styles.topScore, { color: rankColor, textShadowColor: rankColor + '60', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }]}>
+              <Text style={[styles.topScore, { color: isMe ? COLORS.accent : rankColor, textShadowColor: (isMe ? COLORS.accent : rankColor) + '60', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }]}>
                 {entry.score.toLocaleString()}
               </Text>
             </LinearGradient>
@@ -135,35 +238,68 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
       {/* Time Tabs */}
       <View style={styles.tabBar}>
-        {TIME_TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTime === tab && styles.tabActive]}
-            onPress={() => onChangeTab(`${tab.toLowerCase()}_${activeScope.toLowerCase()}`)}
-          >
-            <Text style={[styles.tabText, activeTime === tab && styles.tabTextActive]}>
-              {tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {TIME_TABS.map((tab) => {
+          const isActive = activeTime === tab;
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, isActive && styles.tabActive]}
+              onPress={() => {
+                if (tab === 'Daily Challenge') {
+                  onChangeTab('daily_challenge');
+                } else {
+                  onChangeTab(`${tab.toLowerCase()}_${activeScope.toLowerCase()}`);
+                }
+              }}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {tab === 'Daily Challenge' ? 'Daily' : tab}
+              </Text>
+              {tab === 'Daily Challenge' && (
+                <Text style={[styles.tabSubText, isActive && { color: COLORS.gold }]}>Challenge</Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      {/* Scope Tabs */}
-      <View style={styles.scopeBar}>
-        {SCOPE_TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.scopeTab, activeScope === tab && styles.scopeTabActive]}
-            onPress={() => onChangeTab(`${activeTime.toLowerCase()}_${tab.toLowerCase()}`)}
-          >
-            <Text
-              style={[styles.scopeTabText, activeScope === tab && styles.scopeTabTextActive]}
+      {/* Daily Challenge Date Header */}
+      {isDailyChallenge && (
+        <LinearGradient
+          colors={['rgba(255,215,0,0.10)', 'rgba(255,159,0,0.05)'] as [string, string]}
+          style={styles.dailyDateBanner}
+        >
+          <Text style={styles.dailyDateIcon}>{'☀️'}</Text>
+          <View>
+            <Text style={styles.dailyDateTitle}>Daily Challenge</Text>
+            <Text style={styles.dailyDateText}>{formatTodayDate()}</Text>
+          </View>
+          {!playerCompletedDaily && (
+            <View style={styles.dailyNotCompleted}>
+              <Text style={styles.dailyNotCompletedText}>Not played yet</Text>
+            </View>
+          )}
+        </LinearGradient>
+      )}
+
+      {/* Scope Tabs - only for non-daily-challenge */}
+      {!isDailyChallenge && (
+        <View style={styles.scopeBar}>
+          {SCOPE_TABS.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.scopeTab, activeScope === tab && styles.scopeTabActive]}
+              onPress={() => onChangeTab(`${activeTime.toLowerCase()}_${tab.toLowerCase()}`)}
             >
-              {tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Text
+                style={[styles.scopeTabText, activeScope === tab && styles.scopeTabTextActive]}
+              >
+                {tab}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       <ScrollView
         style={styles.scrollView}
@@ -172,7 +308,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       >
         {entries.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🏆</Text>
+            <Text style={styles.emptyIcon}>{'🏆'}</Text>
             <Text style={styles.emptyText}>No leaderboard data yet</Text>
             <Text style={styles.emptySubtext}>
               Play puzzles to appear on the leaderboard!
@@ -322,12 +458,57 @@ const styles = StyleSheet.create({
     ...SHADOWS.soft,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textMuted,
   },
   tabTextActive: {
     color: COLORS.accent,
+  },
+  tabSubText: {
+    fontSize: 8,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
+  },
+  dailyDateBanner: {
+    marginHorizontal: 16,
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.15)',
+  },
+  dailyDateIcon: {
+    fontSize: 28,
+  },
+  dailyDateTitle: {
+    color: COLORS.gold,
+    fontSize: 15,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.5,
+  },
+  dailyDateText: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  dailyNotCompleted: {
+    marginLeft: 'auto',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  dailyNotCompletedText: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontFamily: FONTS.bodySemiBold,
   },
   scopeBar: {
     flexDirection: 'row',

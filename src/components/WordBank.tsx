@@ -23,21 +23,31 @@ const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isVa
     if (wordPlacement.found && !wasFound.current) {
       wasFound.current = true;
       Animated.sequence([
+        // Initial pop up to 1.25x
         Animated.spring(scaleAnim, {
-          toValue: 1.22,
+          toValue: 1.25,
           friction: 3,
-          tension: 220,
+          tension: 280,
           useNativeDriver: true,
         }),
+        // Bounce down past 1.0 to 0.9
+        Animated.spring(scaleAnim, {
+          toValue: 0.9,
+          friction: 4,
+          tension: 200,
+          useNativeDriver: true,
+        }),
+        // Settle back to 1.0 with checkmark fade-in
         Animated.parallel([
           Animated.timing(foundAnim, {
             toValue: 1,
-            duration: 300,
+            duration: 250,
             useNativeDriver: true,
           }),
           Animated.spring(scaleAnim, {
             toValue: 1,
             friction: 5,
+            tension: 160,
             useNativeDriver: true,
           }),
         ]),

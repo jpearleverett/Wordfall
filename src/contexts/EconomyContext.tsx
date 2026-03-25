@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
+import { LIVES } from '../constants';
 
 interface Economy {
   coins: number;
@@ -28,9 +29,15 @@ interface PurchaseRecord {
   timestamp: number;
 }
 
+interface LivesData {
+  current: number;
+  lastRefillTime: number;
+}
+
 interface EconomyState extends Economy {
   totalEarned: TotalEarned;
   purchaseHistory: PurchaseRecord[];
+  lives: LivesData;
 }
 
 interface EconomyContextType extends Economy {
@@ -46,6 +53,13 @@ interface EconomyContextType extends Economy {
   totalEarned: TotalEarned;
   purchaseHistory: PurchaseRecord[];
   loaded: boolean;
+  // Lives system
+  lives: number;
+  maxLives: number;
+  nextLifeTime: number | null;
+  spendLife: () => boolean;
+  refillLives: () => boolean;
+  getTimeUntilNextLife: () => number;
 }
 
 const STORAGE_KEY = '@wordfall_economy';
@@ -64,7 +78,31 @@ const DEFAULT_ECONOMY: EconomyState = {
     libraryPoints: 0,
   },
   purchaseHistory: [],
+  lives: {
+    current: LIVES.max,
+    lastRefillTime: Date.now(),
+  },
 };
+
+/** Calculate how many lives should have refilled since lastRefillTime. */
+function computeRefilledLives(livesData: LivesData): LivesData {
+  const now = Date.now();
+  const elapsed = now - livesData.lastRefillTime;
+  const refillMs = LIVES.refillMinutes * 60 * 1000;
+  const livesEarned = Math.floor(elapsed / refillMs);
+
+  if (livesEarned <= 0 || livesData.current >= LIVES.max) {
+    return livesData;
+  }
+
+  const newCurrent = Math.min(livesData.current + livesEarned, LIVES.max);
+  const newLastRefill =
+    newCurrent >= LIVES.max
+      ? now
+      : livesData.lastRefillTime + livesEarned * refillMs;
+
+  return { current: newCurrent, lastRefillTime: newLastRefill };
+}
 
 const EconomyContext = createContext<EconomyContextType>({
   ...DEFAULT_ECONOMY,
@@ -78,6 +116,12 @@ const EconomyContext = createContext<EconomyContextType>({
   addLibraryPoints: () => {},
   canAfford: () => false,
   loaded: false,
+  lives: LIVES.max,
+  maxLives: LIVES.max,
+  nextLifeTime: null,
+  spendLife: () => false,
+  refillLives: () => false,
+  getTimeUntilNextLife: () => 0,
 });
 
 export function EconomyProvider({ children }: { children: ReactNode }) {
@@ -85,13 +129,17 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<EconomyState>(DEFAULT_ECONOMY);
   const [loaded, setLoaded] = useState(false);
 
-  // Load from AsyncStorage on mount
+  // Load from AsyncStorage on mount, computing refilled lives
   useEffect(() => {
     const loadEconomy = async () => {
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored) as Partial<EconomyState>;
+          // Compute refilled lives since last session
+          if (parsed.lives) {
+            parsed.lives = computeRefilledLives(parsed.lives);
+          }
           setState((prev) => ({ ...prev, ...parsed }));
         }
       } catch (e) {
@@ -101,6 +149,19 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     };
     loadEconomy();
   }, []);
+
+  // Periodically recalculate lives (every 60 seconds)
+  useEffect(() => {
+    if (!loaded) return;
+    const interval = setInterval(() => {
+      setState((prev) => {
+        const updated = computeRefilledLives(prev.lives);
+        if (updated.current === prev.lives.current) return prev;
+        return { ...prev, lives: updated };
+      });
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [loaded]);
 
   // Sync with Firestore when user is available
   useEffect(() => {
@@ -244,6 +305,56 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     [state],
   );
 
+  // ── Lives ──────────────────────────────────────────────────────────────────
+
+  const spendLife = useCallback((): boolean => {
+    let success = false;
+    setState((prev) => {
+      const updated = computeRefilledLives(prev.lives);
+      if (updated.current <= 0) return prev;
+      success = true;
+      return {
+        ...prev,
+        lives: {
+          current: updated.current - 1,
+          lastRefillTime: updated.current >= LIVES.max ? Date.now() : updated.lastRefillTime,
+        },
+      };
+    });
+    return success;
+  }, []);
+
+  const refillLives = useCallback((): boolean => {
+    let success = false;
+    setState((prev) => {
+      if (prev.gems < LIVES.gemRefillCost) return prev;
+      success = true;
+      return {
+        ...prev,
+        gems: prev.gems - LIVES.gemRefillCost,
+        lives: {
+          current: LIVES.max,
+          lastRefillTime: Date.now(),
+        },
+      };
+    });
+    return success;
+  }, []);
+
+  const getTimeUntilNextLife = useCallback((): number => {
+    const livesNow = computeRefilledLives(state.lives);
+    if (livesNow.current >= LIVES.max) return 0;
+    const refillMs = LIVES.refillMinutes * 60 * 1000;
+    const elapsed = Date.now() - livesNow.lastRefillTime;
+    const remaining = refillMs - (elapsed % refillMs);
+    return Math.max(0, remaining);
+  }, [state.lives]);
+
+  const currentLives = computeRefilledLives(state.lives).current;
+  const nextLifeTime = currentLives < LIVES.max
+    ? state.lives.lastRefillTime + LIVES.refillMinutes * 60 * 1000
+    : null;
+
   return (
     <EconomyContext.Provider
       value={{
@@ -264,6 +375,12 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         addLibraryPoints,
         canAfford,
         loaded,
+        lives: currentLives,
+        maxLives: LIVES.max,
+        nextLifeTime,
+        spendLife,
+        refillLives,
+        getTimeUntilNextLife,
       }}
     >
       {children}

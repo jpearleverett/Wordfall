@@ -109,6 +109,7 @@ function createInitialState(
       boardPreview: 1,
       shuffleFiller: 1,
     },
+    lastInvalidTap: null,
   };
 }
 
@@ -181,6 +182,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           ...state,
           selectedCells: newSelected,
           selectionDirection: newSelected.length < 2 ? null : selectionDirection,
+          lastInvalidTap: null,
         };
       }
 
@@ -190,6 +192,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           ...state,
           selectedCells: [position],
           selectionDirection: null,
+          lastInvalidTap: null,
         };
       }
 
@@ -202,11 +205,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       );
 
       if (!adjacent) {
-        // Non-adjacent tap — signal rejection via special marker
+        // Non-adjacent tap — track for UI feedback and start new selection
         return {
           ...state,
           selectedCells: [position],
           selectionDirection: null,
+          lastInvalidTap: position,
         };
       }
 
@@ -215,6 +219,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         selectedCells: newSelected,
         selectionDirection: newDir,
+        lastInvalidTap: null,
       };
     }
 
@@ -223,6 +228,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         selectedCells: [],
         selectionDirection: null,
+        lastInvalidTap: null,
       };
 
     case 'SUBMIT_WORD': {
@@ -515,6 +521,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
   }
 }
 
+// Export for testing
+export { gameReducer, createInitialState };
+
 export function useGame(
   initialBoard: Board,
   level: number,
@@ -655,5 +664,6 @@ export function useGame(
     foundWords,
     totalWords,
     remainingWords,
+    lastInvalidTap: state.lastInvalidTap,
   };
 }

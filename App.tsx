@@ -49,6 +49,8 @@ import { StreakMilestoneCeremony } from './src/components/StreakMilestoneCeremon
 import { CollectionCompleteCeremony } from './src/components/CollectionCompleteCeremony';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { analytics } from './src/services/analytics';
+import { crashReporter } from './src/services/crashReporting';
+import { funnelTracker } from './src/services/funnelTracker';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createStackNavigator();
@@ -252,9 +254,27 @@ function MainTabs() {
 // Modes screen wrapper - wires navigation to start game in selected mode
 function ModesScreenWrapper({ navigation }: any) {
   const player = usePlayer();
+  const economy = useEconomy();
 
   const handleSelectMode = useCallback((modeId: string) => {
     const mode = modeId as GameMode;
+
+    // Lives check - relax mode is free play (ethical F2P per GDD)
+    if (mode !== 'relax' && economy.lives <= 0) {
+      Alert.alert(
+        'Out of Lives!',
+        `Your next life refills in ${Math.ceil(economy.getTimeUntilNextLife() / 60000)} minutes.\n\nRefill all lives for 10 gems?`,
+        [
+          { text: 'Wait', style: 'cancel' },
+          { text: 'Refill (10 \u{1F48E})', onPress: () => { economy.refillLives(); } },
+        ]
+      );
+      return;
+    }
+    if (mode !== 'relax') {
+      economy.spendLife();
+    }
+
     try {
       void analytics.logEvent('mode_started', {
         modeId,
@@ -433,6 +453,9 @@ function GameScreenWrapper({ route, navigation }: any) {
     // Detect level-up
     const newLevel = Math.max(level + 1, prevLevel);
     const leveledUp = newLevel > prevHighest;
+
+    // Track level milestone in funnel
+    void funnelTracker.trackLevelMilestone(newLevel);
 
     // Detect difficulty transition
     const difficultyTransition = leveledUp ? detectDifficultyTransition(prevHighest, newLevel) : null;
@@ -695,6 +718,20 @@ function HomeMainScreen({ navigation }: any) {
 
   const startGame = useCallback(
     (difficulty?: Difficulty) => {
+      // Lives check - classic mode requires a life
+      if (economy.lives <= 0) {
+        Alert.alert(
+          'Out of Lives!',
+          `Your next life refills in ${Math.ceil(economy.getTimeUntilNextLife() / 60000)} minutes.\n\nRefill all lives for 10 gems?`,
+          [
+            { text: 'Wait', style: 'cancel' },
+            { text: 'Refill (10 \u{1F48E})', onPress: () => { economy.refillLives(); } },
+          ]
+        );
+        return;
+      }
+      economy.spendLife();
+
       setLoading(true);
       setTimeout(() => {
         try {
@@ -716,10 +753,24 @@ function HomeMainScreen({ navigation }: any) {
         }
       }, 50);
     },
-    [player.currentLevel, navigation, player]
+    [player.currentLevel, navigation, player, economy]
   );
 
   const startDaily = useCallback(() => {
+    // Lives check for daily mode
+    if (economy.lives <= 0) {
+      Alert.alert(
+        'Out of Lives!',
+        `Your next life refills in ${Math.ceil(economy.getTimeUntilNextLife() / 60000)} minutes.\n\nRefill all lives for 10 gems?`,
+        [
+          { text: 'Wait', style: 'cancel' },
+          { text: 'Refill (10 \u{1F48E})', onPress: () => { economy.refillLives(); } },
+        ]
+      );
+      return;
+    }
+    economy.spendLife();
+
     setLoading(true);
     setTimeout(() => {
       try {
@@ -732,7 +783,7 @@ function HomeMainScreen({ navigation }: any) {
         setLoading(false);
       }
     }, 50);
-  }, [navigation]);
+  }, [navigation, economy]);
 
   const handleReset = useCallback(() => {
     Alert.alert(
@@ -781,6 +832,23 @@ function HomeMainScreen({ navigation }: any) {
         onResetProgress={handleReset}
         onOpenShop={() => navigation.navigate('Shop')}
         onOpenSettings={() => navigation.navigate('Settings')}
+        onBuyDeal={(deal) => {
+          const canAfford = economy.canAfford(deal.currency, deal.salePrice);
+          if (!canAfford) {
+            Alert.alert('Not Enough ' + (deal.currency === 'coins' ? 'Coins' : 'Gems'),
+              `You need ${deal.salePrice} ${deal.currency} for this deal.`);
+            return;
+          }
+          const spent = deal.currency === 'coins'
+            ? economy.spendCoins(deal.salePrice)
+            : economy.spendGems(deal.salePrice);
+          if (spent) {
+            if (deal.contents.coins) economy.addCoins(deal.contents.coins);
+            if (deal.contents.gems) economy.addGems(deal.contents.gems);
+            if (deal.contents.hintTokens) economy.addHintTokens(deal.contents.hintTokens);
+            Alert.alert('Deal Purchased!', `${deal.name} has been delivered!`);
+          }
+        }}
         currencies={{
           coins: economy.coins,
           gems: economy.gems,
@@ -985,6 +1053,9 @@ export default function App() {
 
   useEffect(() => {
     soundManager.init();
+    crashReporter.init();
+    analytics.initFirebase();
+    funnelTracker.trackStep('app_open');
   }, []);
 
   if (!fontsLoaded) {

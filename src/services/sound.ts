@@ -1,6 +1,6 @@
 import { Audio } from 'expo-av';
 
-type SoundName = 'tap' | 'gravity' | 'wordFound' | 'wordInvalid' | 'combo' | 'puzzleComplete' | 'starEarn' | 'buttonPress' | 'hintUsed' | 'undoUsed';
+type SoundName = 'tap' | 'gravity' | 'wordFound' | 'wordInvalid' | 'combo' | 'puzzleComplete' | 'starEarn' | 'buttonPress' | 'hintUsed' | 'undoUsed' | 'chainBonus';
 type MusicTrack = 'menu' | 'gameplay' | 'tense';
 
 type ToneSpec = {
@@ -8,6 +8,18 @@ type ToneSpec = {
   duration: number;
   volume?: number;
   pulse?: number;
+  // ADSR envelope parameters
+  attack?: number;
+  decay?: number;
+  sustain?: number;  // sustain level (0-1)
+  release?: number;
+  // Pitch slide: end frequency multiplier (e.g. 0.5 = slide down to half freq)
+  pitchSlide?: number;
+  // Harmonic content
+  harmonics?: number[];  // relative amplitudes of 2nd, 3rd, ... harmonics
+  // Reverb tail
+  reverbMix?: number;    // 0-1, how much reverb to blend
+  reverbDecay?: number;  // seconds of reverb tail
 };
 
 type ProgressionSpec = {
@@ -16,21 +28,163 @@ type ProgressionSpec = {
   volume?: number;
 };
 
-const SAMPLE_RATE = 22050;
+const SAMPLE_RATE = 44100;
 const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
+// ── Sound Definitions ──────────────────────────────────────────────
+
 const SOUND_DEFS: Record<SoundName, ToneSpec> = {
-  tap: { freqs: [880, 1320], duration: 0.08, volume: 0.18 },
-  gravity: { freqs: [220, 330], duration: 0.22, volume: 0.24, pulse: 8 },
-  wordFound: { freqs: [523.25, 659.25, 783.99], duration: 0.28, volume: 0.22 },
-  wordInvalid: { freqs: [180, 160], duration: 0.18, volume: 0.2 },
-  combo: { freqs: [659.25, 783.99, 1046.5], duration: 0.35, volume: 0.22 },
-  puzzleComplete: { freqs: [523.25, 659.25, 783.99, 1046.5], duration: 0.75, volume: 0.23 },
-  starEarn: { freqs: [988, 1318], duration: 0.22, volume: 0.19 },
-  buttonPress: { freqs: [740, 988], duration: 0.12, volume: 0.16 },
-  hintUsed: { freqs: [440, 587.33], duration: 0.18, volume: 0.18 },
-  undoUsed: { freqs: [261.63, 220], duration: 0.22, volume: 0.18 },
+  // Short percussive click with bass body
+  tap: {
+    freqs: [1200, 600, 300],
+    duration: 0.10,
+    volume: 0.18,
+    attack: 0.002,
+    decay: 0.02,
+    sustain: 0.3,
+    release: 0.06,
+    harmonics: [0.4, 0.15],
+  },
+
+  // Rich ascending 4-note chime with reverb
+  wordFound: {
+    freqs: [523.25, 659.25, 783.99, 1046.5],
+    duration: 0.40,
+    volume: 0.22,
+    attack: 0.008,
+    decay: 0.06,
+    sustain: 0.7,
+    release: 0.15,
+    harmonics: [0.35, 0.15, 0.06],
+    reverbMix: 0.18,
+    reverbDecay: 0.12,
+  },
+
+  // Dissonant low buzz with error feel
+  wordInvalid: {
+    freqs: [155, 165, 130],
+    duration: 0.20,
+    volume: 0.20,
+    attack: 0.005,
+    decay: 0.04,
+    sustain: 0.6,
+    release: 0.08,
+    harmonics: [0.5, 0.35, 0.2],
+    pulse: 18,
+  },
+
+  // Escalating 5-note musical phrase with layered chords
+  combo: {
+    freqs: [523.25, 659.25, 783.99, 987.77, 1174.66],
+    duration: 0.50,
+    volume: 0.22,
+    attack: 0.006,
+    decay: 0.05,
+    sustain: 0.65,
+    release: 0.18,
+    harmonics: [0.3, 0.12, 0.05],
+    reverbMix: 0.15,
+    reverbDecay: 0.14,
+  },
+
+  // Grand triumphant fanfare - 6 ascending notes with bass and harmonics
+  puzzleComplete: {
+    freqs: [392.0, 493.88, 587.33, 659.25, 783.99, 1046.5],
+    duration: 1.20,
+    volume: 0.24,
+    attack: 0.01,
+    decay: 0.08,
+    sustain: 0.7,
+    release: 0.35,
+    harmonics: [0.4, 0.2, 0.1, 0.05],
+    reverbMix: 0.20,
+    reverbDecay: 0.25,
+  },
+
+  // Deep rumble with subtle pitch slide down
+  gravity: {
+    freqs: [180, 120, 80],
+    duration: 0.25,
+    volume: 0.22,
+    attack: 0.005,
+    decay: 0.06,
+    sustain: 0.5,
+    release: 0.10,
+    pitchSlide: 0.6,
+    harmonics: [0.5, 0.3],
+    pulse: 6,
+  },
+
+  // Bright sparkle arpeggio
+  starEarn: {
+    freqs: [1046.5, 1318.5, 1568.0, 2093.0],
+    duration: 0.30,
+    volume: 0.19,
+    attack: 0.004,
+    decay: 0.04,
+    sustain: 0.6,
+    release: 0.12,
+    harmonics: [0.25, 0.1],
+    reverbMix: 0.15,
+    reverbDecay: 0.10,
+  },
+
+  // Crisp UI click
+  buttonPress: {
+    freqs: [900, 1400],
+    duration: 0.08,
+    volume: 0.16,
+    attack: 0.001,
+    decay: 0.015,
+    sustain: 0.2,
+    release: 0.04,
+    harmonics: [0.3, 0.1],
+  },
+
+  // Soft mystical whoosh with descending tone
+  hintUsed: {
+    freqs: [880, 660, 440],
+    duration: 0.20,
+    volume: 0.18,
+    attack: 0.01,
+    decay: 0.05,
+    sustain: 0.5,
+    release: 0.10,
+    pitchSlide: 0.7,
+    harmonics: [0.2, 0.08],
+    reverbMix: 0.16,
+    reverbDecay: 0.08,
+  },
+
+  // Quick reverse swoosh descending
+  undoUsed: {
+    freqs: [587.33, 440, 329.63],
+    duration: 0.20,
+    volume: 0.18,
+    attack: 0.003,
+    decay: 0.04,
+    sustain: 0.4,
+    release: 0.10,
+    pitchSlide: 0.65,
+    harmonics: [0.25, 0.1],
+  },
+
+  // Rising major chord arpeggio with shimmer
+  chainBonus: {
+    freqs: [523.25, 659.25, 783.99, 1046.5, 1318.5],
+    duration: 0.45,
+    volume: 0.22,
+    attack: 0.005,
+    decay: 0.05,
+    sustain: 0.65,
+    release: 0.16,
+    harmonics: [0.35, 0.15, 0.06],
+    reverbMix: 0.18,
+    reverbDecay: 0.15,
+  },
 };
+
+// ── Music Definitions ──────────────────────────────────────────────
 
 const MUSIC_DEFS: Record<MusicTrack, ProgressionSpec> = {
   menu: {
@@ -65,6 +219,38 @@ const MUSIC_DEFS: Record<MusicTrack, ProgressionSpec> = {
   },
 };
 
+// ── DSP Helpers ────────────────────────────────────────────────────
+
+/** ADSR envelope generator */
+function adsrEnvelope(
+  progress: number,
+  duration: number,
+  attack: number,
+  decay: number,
+  sustainLevel: number,
+  release: number,
+): number {
+  const t = progress * duration;
+  const releaseStart = duration - release;
+
+  if (t < attack) {
+    // Attack: ramp up from 0 to 1
+    return t / attack;
+  } else if (t < attack + decay) {
+    // Decay: ramp down from 1 to sustain level
+    const decayProgress = (t - attack) / decay;
+    return 1.0 - (1.0 - sustainLevel) * decayProgress;
+  } else if (t < releaseStart) {
+    // Sustain: hold at sustain level
+    return sustainLevel;
+  } else {
+    // Release: ramp down from sustain to 0
+    const releaseProgress = (t - releaseStart) / release;
+    return sustainLevel * Math.max(0, 1.0 - releaseProgress);
+  }
+}
+
+/** Legacy simple envelope for backward compat */
 function envelope(progress: number, attack = 0.02, release = 0.12): number {
   if (progress < attack) return progress / attack;
   if (progress > 1 - release) return Math.max(0, (1 - progress) / release);
@@ -126,54 +312,217 @@ function createWavDataUri(samples: Int16Array, sampleRate: number): string {
   return `data:audio/wav;base64,${encodeBase64(bytes)}`;
 }
 
-function synthesizeTone(spec: ToneSpec): string {
-  const total = Math.floor(SAMPLE_RATE * spec.duration);
-  const samples = new Int16Array(total);
-  const volume = spec.volume ?? 0.2;
+// ── Synthesis Engine ───────────────────────────────────────────────
 
-  for (let i = 0; i < total; i++) {
+/**
+ * Synthesize a rich tone with harmonics, ADSR envelope, pitch slide, and reverb.
+ * Each frequency in spec.freqs is staggered in time (arpeggio-style) so
+ * multi-note sounds sweep upward/downward rather than all hitting at once.
+ */
+function synthesizeTone(spec: ToneSpec): string {
+  const attack = spec.attack ?? 0.01;
+  const decay = spec.decay ?? 0.04;
+  const sustainLevel = spec.sustain ?? 0.6;
+  const release = spec.release ?? 0.12;
+  const volume = spec.volume ?? 0.2;
+  const harmonicAmps = spec.harmonics ?? [0.25, 0.1];
+  const reverbMix = spec.reverbMix ?? 0;
+  const reverbDecaySec = spec.reverbDecay ?? 0.12;
+  const pitchSlide = spec.pitchSlide ?? 1.0;
+
+  // Total duration includes reverb tail
+  const mainDuration = spec.duration;
+  const totalDuration = mainDuration + (reverbMix > 0 ? reverbDecaySec : 0);
+  const totalSamples = Math.floor(SAMPLE_RATE * totalDuration);
+  const mainSamples = Math.floor(SAMPLE_RATE * mainDuration);
+
+  // Dry buffer (the main sound)
+  const dry = new Float32Array(totalSamples);
+
+  const numFreqs = spec.freqs.length;
+  // Stagger onset: each freq enters slightly after the previous
+  const staggerTime = numFreqs > 1 ? Math.min(0.06, mainDuration * 0.4 / numFreqs) : 0;
+
+  for (let i = 0; i < mainSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const progress = i / total;
+    const progress = i / mainSamples;
+
     let sample = 0;
-    spec.freqs.forEach((freq, index) => {
-      const detune = 1 + index * 0.003;
-      sample += Math.sin(2 * Math.PI * freq * detune * t);
+
+    spec.freqs.forEach((baseFreq, freqIndex) => {
+      const onset = freqIndex * staggerTime;
+      if (t < onset) return;
+
+      const localT = t - onset;
+      const localDuration = mainDuration - onset;
+      const localProgress = Math.min(1, localT / localDuration);
+
+      // Pitch slide: interpolate frequency over time
+      const slideAmount = 1.0 + (pitchSlide - 1.0) * localProgress;
+      const freq = baseFreq * slideAmount;
+
+      // Slight detuning per voice for warmth
+      const detune = 1 + freqIndex * 0.003;
+
+      // ADSR envelope per voice
+      const env = adsrEnvelope(localProgress, localDuration, attack, decay, sustainLevel, release);
+
+      // Fundamental
+      let voiceSample = Math.sin(2 * Math.PI * freq * detune * localT);
+
+      // Harmonic overtones (2nd, 3rd, etc. at decreasing volumes)
+      harmonicAmps.forEach((amp, hIdx) => {
+        const harmonicNum = hIdx + 2;
+        voiceSample += amp * Math.sin(2 * Math.PI * freq * detune * harmonicNum * localT);
+      });
+
+      // Normalize by number of components
+      const componentCount = 1 + harmonicAmps.length;
+      voiceSample /= componentCount;
+
+      sample += voiceSample * env;
     });
-    sample /= Math.max(1, spec.freqs.length);
+
+    // Average across voices
+    sample /= Math.max(1, numFreqs);
+
+    // Pulse modulation
     if (spec.pulse) {
       sample *= 0.65 + 0.35 * Math.sin(2 * Math.PI * spec.pulse * t);
     }
-    sample *= envelope(progress) * volume;
-    samples[i] = Math.floor(clamp(sample) * 32767);
+
+    dry[i] = sample * volume;
+  }
+
+  // Apply simple reverb (feedback delay network approximation)
+  let output: Float32Array;
+  if (reverbMix > 0) {
+    output = new Float32Array(totalSamples);
+
+    // Multiple delay taps for diffuse reverb
+    const delayTaps = [
+      { delaySamples: Math.floor(SAMPLE_RATE * 0.031), feedback: 0.35 },
+      { delaySamples: Math.floor(SAMPLE_RATE * 0.047), feedback: 0.28 },
+      { delaySamples: Math.floor(SAMPLE_RATE * 0.071), feedback: 0.22 },
+    ];
+
+    // Start with dry signal
+    for (let i = 0; i < totalSamples; i++) {
+      output[i] = dry[i];
+    }
+
+    // Add delay taps as reverb
+    for (const tap of delayTaps) {
+      const buffer = new Float32Array(totalSamples);
+      for (let i = 0; i < totalSamples; i++) {
+        const delayed = i - tap.delaySamples;
+        const input = dry[i] + (delayed >= 0 ? buffer[delayed] * tap.feedback : 0);
+        buffer[i] = input;
+      }
+      // Mix reverb in
+      for (let i = 0; i < totalSamples; i++) {
+        const reverbSample = buffer[i] - dry[i]; // Only the wet part
+        // Fade out reverb tail after main sound ends
+        let tailEnv = 1.0;
+        if (i >= mainSamples) {
+          tailEnv = Math.max(0, 1.0 - (i - mainSamples) / (SAMPLE_RATE * reverbDecaySec));
+        }
+        output[i] += reverbSample * reverbMix * tailEnv;
+      }
+    }
+  } else {
+    output = dry;
+  }
+
+  // Convert to Int16
+  const samples = new Int16Array(totalSamples);
+  for (let i = 0; i < totalSamples; i++) {
+    samples[i] = Math.floor(clamp(output[i]) * 32767);
   }
 
   return createWavDataUri(samples, SAMPLE_RATE);
 }
 
+/**
+ * Synthesize background music progression with sub-bass, chorus detuning,
+ * pad-style tones, and smooth crossfade between chords.
+ */
 function synthesizeProgression(spec: ProgressionSpec): string {
-  const chordSamples = spec.chords.length * Math.floor(SAMPLE_RATE * spec.stepDuration);
-  const samples = new Int16Array(chordSamples);
   const volume = spec.volume ?? 0.12;
-  let cursor = 0;
+  const crossfade = 0.15; // seconds of crossfade overlap between chords
 
-  spec.chords.forEach((chord) => {
-    const total = Math.floor(SAMPLE_RATE * spec.stepDuration);
-    for (let i = 0; i < total; i++) {
+  // Calculate total length including crossfade tails
+  const stepSamples = Math.floor(SAMPLE_RATE * spec.stepDuration);
+  const totalSamples = spec.chords.length * stepSamples;
+  const samples = new Int16Array(totalSamples);
+  const floatBuf = new Float32Array(totalSamples);
+
+  spec.chords.forEach((chord, chordIndex) => {
+    const chordStart = chordIndex * stepSamples;
+
+    for (let i = 0; i < stepSamples; i++) {
       const t = i / SAMPLE_RATE;
-      const progress = i / total;
+      const progress = i / stepSamples;
+
+      // Smooth envelope with longer crossfade
+      const env = envelope(progress, 0.08, crossfade / spec.stepDuration + 0.05);
+
       let sample = 0;
-      chord.forEach((freq) => {
-        sample += Math.sin(2 * Math.PI * freq * t);
+      const root = chord[0];
+
+      // Sub-bass: half frequency of root for warmth
+      sample += 0.30 * Math.sin(2 * Math.PI * (root * 0.5) * t) * env;
+
+      // Main chord voices with chorus detuning
+      chord.forEach((freq, voiceIdx) => {
+        // Center voice
+        const centerSin = Math.sin(2 * Math.PI * freq * t);
+        // Detuned voice slightly sharp (chorus)
+        const sharpSin = Math.sin(2 * Math.PI * freq * 1.004 * t);
+        // Detuned voice slightly flat (chorus)
+        const flatSin = Math.sin(2 * Math.PI * freq * 0.996 * t);
+
+        // Blend center + detuned for chorus effect
+        const voice = centerSin * 0.5 + sharpSin * 0.25 + flatSin * 0.25;
+
+        // Add 2nd harmonic at low level for richness
+        const harmonic = 0.12 * Math.sin(2 * Math.PI * freq * 2 * t);
+
+        // Pad-style: triangle wave blended in softly for texture
+        const phase = (freq * t) % 1.0;
+        const triangle = 2.0 * Math.abs(2.0 * phase - 1.0) - 1.0;
+        const pad = triangle * 0.08;
+
+        // Weight higher voices slightly lower
+        const voiceWeight = 1.0 / (1.0 + voiceIdx * 0.15);
+
+        sample += (voice + harmonic + pad) * voiceWeight * env;
       });
-      sample /= chord.length;
-      sample += 0.25 * Math.sin(2 * Math.PI * chord[0] * 0.5 * t);
-      sample *= envelope(progress, 0.05, 0.15) * volume;
-      samples[cursor++] = Math.floor(clamp(sample) * 32767);
+
+      // Normalize
+      const voiceCount = chord.length + 1; // +1 for sub-bass
+      sample /= voiceCount;
+      sample *= volume;
+
+      const idx = chordStart + i;
+      if (idx < totalSamples) {
+        floatBuf[idx] += sample;
+      }
     }
   });
 
+  // Soft limiting to prevent clipping
+  for (let i = 0; i < totalSamples; i++) {
+    // Tanh soft clip
+    const x = floatBuf[i];
+    const softClipped = Math.tanh(x * 1.5) / 1.5;
+    samples[i] = Math.floor(clamp(softClipped) * 32767);
+  }
+
   return createWavDataUri(samples, SAMPLE_RATE);
 }
+
+// ── Sound Manager ──────────────────────────────────────────────────
 
 class SoundManager {
   private static instance: SoundManager;

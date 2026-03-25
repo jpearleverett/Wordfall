@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,18 +6,23 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { usePlayer } from '../contexts/PlayerContext';
+import { useSettings } from '../contexts/SettingsContext';
 import {
   MASTERY_REWARDS,
-  MASTERY_SEASON,
   MASTERY_MAX_TIER,
   getMasteryTierForXP,
   getXPProgressInTier,
+  currentSeason,
+  daysRemaining,
 } from '../data/masteryRewards';
 import { CollectionReward } from '../types';
+import { iapManager } from '../services/iap';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +32,7 @@ interface MasteryScreenProps {
 
 const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
   const player = usePlayer();
+  const settings = useSettings();
 
   // Use puzzlesSolved * 100 as mastery XP proxy
   const masteryXP = (player.puzzlesSolved ?? 0) * 100;
@@ -34,9 +40,35 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
   const { current: tierProgress, needed: tierNeeded } = getXPProgressInTier(masteryXP);
   const progressPercent = Math.min(100, (tierProgress / tierNeeded) * 100);
 
-  const isPremium = false; // Future IAP integration
+  const isPremium = settings.premiumPass;
+  const seasonName = currentSeason();
+  const days = daysRemaining();
 
-  const renderRewardSummary = (reward: CollectionReward, label: string, unlocked: boolean) => {
+  const [purchasingPass, setPurchasingPass] = useState(false);
+
+  // ── Premium pass purchase ─────────────────────────────────────────────
+
+  const handleBuyPremium = useCallback(async () => {
+    if (isPremium || purchasingPass) return;
+    setPurchasingPass(true);
+    try {
+      const result = await iapManager.purchase('premium_pass');
+      if (result.success) {
+        settings.updateSetting('premiumPass', true);
+        Alert.alert('Premium Unlocked!', 'You now have access to all premium rewards this season.');
+      } else if (result.error && result.error !== 'User cancelled') {
+        Alert.alert('Purchase Failed', result.error);
+      }
+    } catch (e: any) {
+      Alert.alert('Purchase Error', e?.message ?? 'Something went wrong');
+    } finally {
+      setPurchasingPass(false);
+    }
+  }, [isPremium, purchasingPass, settings]);
+
+  // ── Render helpers ────────────────────────────────────────────────────
+
+  const renderRewardSummary = (reward: CollectionReward, label: string, unlocked: boolean, isPremiumLane: boolean) => {
     const items: string[] = [];
     if (reward.coins > 0) items.push(`${reward.coins} coins`);
     if (reward.gems > 0) items.push(`${reward.gems} gems`);
@@ -44,9 +76,16 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
     if (reward.badge) items.push('Badge');
     if (reward.decoration) items.push('Decoration');
 
+    const showLock = isPremiumLane && !isPremium;
+
     return (
       <View style={[styles.rewardColumn, !unlocked && styles.rewardLocked]}>
-        <Text style={[styles.rewardLabel, !unlocked && styles.textLocked]}>{label}</Text>
+        <View style={styles.rewardLabelRow}>
+          <Text style={[styles.rewardLabel, !unlocked && styles.textLocked, isPremiumLane && styles.premiumLabel]}>
+            {label}
+          </Text>
+          {showLock && <Text style={styles.lockIcon}>{'\u{1F512}'}</Text>}
+        </View>
         {items.map((item, i) => (
           <Text key={i} style={[styles.rewardItem, !unlocked && styles.textLocked]}>
             {item}
@@ -64,6 +103,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
     const unlocked = currentTier >= tier;
     const isCurrent = currentTier === tier - 1;
     const isMilestone = tier % 5 === 0;
+    const premiumUnlocked = unlocked && isPremium;
 
     return (
       <View
@@ -73,6 +113,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
           unlocked && styles.tierCardUnlocked,
           isCurrent && styles.tierCardCurrent,
           isMilestone && styles.tierCardMilestone,
+          !isPremium && isMilestone && styles.tierCardMilestoneLocked,
         ]}
       >
         {unlocked ? (
@@ -98,7 +139,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
             </Text>
           </View>
           {unlocked && (
-            <Text style={styles.unlockedCheck}>✓</Text>
+            <Text style={styles.unlockedCheck}>{'\u2713'}</Text>
           )}
           {isCurrent && (
             <View style={styles.currentIndicator}>
@@ -107,15 +148,15 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
           )}
           {isMilestone && (
             <Text style={styles.milestoneIcon}>
-              {tier === 10 ? '⭐' : tier === 20 ? '💎' : tier === 30 ? '👑' : '🏆'}
+              {tier === 10 ? '\u2B50' : tier === 20 ? '\u{1F48E}' : tier === 30 ? '\u{1F451}' : '\u{1F3C6}'}
             </Text>
           )}
         </View>
 
         <View style={styles.rewardsRow}>
-          {renderRewardSummary(reward.free, 'FREE', unlocked)}
+          {renderRewardSummary(reward.free, 'FREE', unlocked, false)}
           <View style={styles.rewardDivider} />
-          {renderRewardSummary(reward.premium, 'PREMIUM', unlocked && isPremium)}
+          {renderRewardSummary(reward.premium, 'PREMIUM', premiumUnlocked, true)}
         </View>
       </View>
     );
@@ -127,14 +168,72 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
       <View style={styles.header}>
         {onBack && (
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backText}>←</Text>
+            <Text style={styles.backText}>{'\u2190'}</Text>
           </TouchableOpacity>
         )}
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>MASTERY TRACK</Text>
-          <Text style={styles.seasonName}>{MASTERY_SEASON}</Text>
+          <Text style={styles.seasonName}>{seasonName}</Text>
         </View>
       </View>
+
+      {/* Season Countdown */}
+      <View style={styles.countdownBar}>
+        <LinearGradient
+          colors={[COLORS.coral + '20', COLORS.orange + '10']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        />
+        <Text style={styles.countdownIcon}>{'\u23F3'}</Text>
+        <Text style={styles.countdownText}>
+          {days > 0 ? `${days} day${days === 1 ? '' : 's'} remaining this season` : 'Season ending soon!'}
+        </Text>
+      </View>
+
+      {/* Premium CTA (if not premium) */}
+      {!isPremium && (
+        <View style={styles.premiumCta}>
+          <LinearGradient
+            colors={[COLORS.gold + '20', COLORS.gold + '08']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <View style={styles.premiumCtaContent}>
+            <Text style={styles.premiumCtaIcon}>{'\u{1F451}'}</Text>
+            <View style={styles.premiumCtaInfo}>
+              <Text style={styles.premiumCtaTitle}>GET PREMIUM</Text>
+              <Text style={styles.premiumCtaDesc}>
+                Unlock exclusive rewards at every tier!
+              </Text>
+              {days <= 14 && days > 0 && (
+                <Text style={styles.fomoText}>
+                  Don't miss out! Only {days} day{days === 1 ? '' : 's'} left to earn exclusive rewards
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.premiumCtaButton}
+              onPress={handleBuyPremium}
+              activeOpacity={0.7}
+              disabled={purchasingPass}
+            >
+              <LinearGradient
+                colors={[COLORS.gold, '#e6b800']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+              {purchasingPass ? (
+                <ActivityIndicator size="small" color={COLORS.bg} />
+              ) : (
+                <Text style={styles.premiumCtaButtonText}>$4.99</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Progress Summary */}
       <View style={styles.progressCard}>
@@ -147,6 +246,11 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
         <View style={styles.progressHeader}>
           <Text style={styles.progressTierLabel}>Tier {currentTier}</Text>
           <Text style={styles.progressTierMax}>/ {MASTERY_MAX_TIER}</Text>
+          {isPremium && (
+            <View style={styles.premiumBadge}>
+              <Text style={styles.premiumBadgeText}>{'\u{1F451}'} PREMIUM</Text>
+            </View>
+          )}
         </View>
         <View style={styles.progressBarContainer}>
           <View style={styles.progressBarTrack}>
@@ -188,7 +292,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 60,
-    paddingBottom: 16,
+    paddingBottom: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -224,6 +328,81 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontFamily: FONTS.bodySemiBold,
   },
+
+  // ── Countdown bar ─────────────────────────────────────────────────────
+  countdownBar: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    padding: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.coral + '30',
+  },
+  countdownIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  countdownText: {
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.coral,
+  },
+
+  // ── Premium CTA ───────────────────────────────────────────────────────
+  premiumCta: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.gold + '40',
+  },
+  premiumCtaContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+  },
+  premiumCtaIcon: {
+    fontSize: 28,
+    marginRight: 12,
+  },
+  premiumCtaInfo: {
+    flex: 1,
+  },
+  premiumCtaTitle: {
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 2,
+  },
+  premiumCtaDesc: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  fomoText: {
+    fontSize: 11,
+    color: COLORS.coral,
+    fontFamily: FONTS.bodySemiBold,
+    marginTop: 4,
+  },
+  premiumCtaButton: {
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    overflow: 'hidden',
+    marginLeft: 10,
+  },
+  premiumCtaButtonText: {
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    color: COLORS.bg,
+  },
+
+  // ── Progress card ─────────────────────────────────────────────────────
   progressCard: {
     marginHorizontal: 16,
     borderRadius: 20,
@@ -252,6 +431,19 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontFamily: FONTS.bodySemiBold,
   },
+  premiumBadge: {
+    marginLeft: 'auto',
+    backgroundColor: COLORS.gold + '25',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  premiumBadgeText: {
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 1,
+  },
   progressBarContainer: {
     marginBottom: 8,
   },
@@ -277,6 +469,8 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontFamily: FONTS.bodyMedium,
   },
+
+  // ── Tier list ─────────────────────────────────────────────────────────
   scrollView: {
     flex: 1,
     marginTop: 16,
@@ -301,6 +495,9 @@ const styles = StyleSheet.create({
   },
   tierCardMilestone: {
     borderColor: COLORS.gold + '40',
+  },
+  tierCardMilestoneLocked: {
+    borderColor: COLORS.gold + '20',
   },
   tierHeader: {
     flexDirection: 'row',
@@ -354,6 +551,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     marginLeft: 'auto',
   },
+
+  // ── Rewards ───────────────────────────────────────────────────────────
   rewardsRow: {
     flexDirection: 'row',
     gap: 12,
@@ -364,12 +563,23 @@ const styles = StyleSheet.create({
   rewardLocked: {
     opacity: 0.4,
   },
+  rewardLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
   rewardLabel: {
     fontSize: 10,
     fontFamily: FONTS.display,
     color: COLORS.textSecondary,
     letterSpacing: 1,
-    marginBottom: 6,
+  },
+  premiumLabel: {
+    color: COLORS.gold,
+  },
+  lockIcon: {
+    fontSize: 10,
   },
   rewardItem: {
     fontSize: 12,
@@ -384,6 +594,7 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
+
   bottomSpacer: {
     height: 40,
   },

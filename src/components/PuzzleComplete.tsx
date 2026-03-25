@@ -10,8 +10,9 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, ECONOMY, FONTS, GRADIENTS, SHADOWS } from '../constants';
+import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES } from '../constants';
 import { GameMode } from '../types';
+import { usePlayer } from '../contexts/PlayerContext';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 
 interface PuzzleCompleteProps {
@@ -43,7 +44,7 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
   const swayAnim = useRef(new Animated.Value(0)).current;
 
   const shape = useMemo(() => CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)], []);
-  const baseSize = useMemo(() => 6 + Math.random() * 12, []);
+  const baseSize = useMemo(() => 7 + Math.random() * 14, []);
   const rotEnd = useMemo(() => `${320 + Math.random() * 260}deg`, []);
   const swayDur = useMemo(() => 380 + Math.random() * 260, []);
   const fallDur = useMemo(() => 2200 + Math.random() * 900, []);
@@ -191,7 +192,86 @@ const CONFETTI_COLORS = [
   COLORS.orange,
   COLORS.teal,
   '#ffffff',
+  '#ff69b4', // hot pink
+  '#7df9ff', // electric blue
+  '#adff2f', // green-yellow
+  '#ff4500', // orange-red
 ];
+
+function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: number; statsAnim: Animated.Value }) {
+  const player = usePlayer();
+  const totalStars = Object.values(player.starsByLevel).reduce((sum, v) => sum + v, 0) + stars;
+  const puzzlesSolved = player.puzzlesSolved;
+  const currentStreak = player.streaks.currentStreak;
+
+  // Milestone proximity: library wing
+  const wingMilestoneMsg = useMemo(() => {
+    const wingChapterThresholds = LIBRARY.wingChapters.map(([start]) => start);
+    const currentChapter = player.currentChapter;
+    for (const threshold of wingChapterThresholds) {
+      if (currentChapter < threshold) {
+        const chaptersAway = threshold - currentChapter;
+        if (chaptersAway <= 3) {
+          const wingIdx = wingChapterThresholds.indexOf(threshold);
+          const wingName = LIBRARY.wingNames[wingIdx] ?? 'new';
+          return `${chaptersAway} chapter${chaptersAway === 1 ? '' : 's'} away from the ${wingName} library wing!`;
+        }
+        break;
+      }
+    }
+    return null;
+  }, [player.currentChapter]);
+
+  // Star milestone proximity
+  const starMilestoneMsg = useMemo(() => {
+    for (const milestone of STAR_MILESTONES) {
+      if (totalStars < milestone.stars) {
+        const starsAway = milestone.stars - totalStars;
+        if (starsAway <= 15) {
+          return `${starsAway} star${starsAway === 1 ? '' : 's'} until ${milestone.name}!`;
+        }
+        break;
+      }
+    }
+    return null;
+  }, [totalStars]);
+
+  const milestoneMsg = wingMilestoneMsg || starMilestoneMsg;
+
+  const hasStreak = currentStreak > 0;
+
+  return (
+    <Animated.View style={[hookStyles.container, { opacity: statsAnim, transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
+      {/* Milestone Proximity */}
+      {milestoneMsg && (
+        <LinearGradient
+          colors={['rgba(255,215,0,0.10)', 'rgba(255,159,0,0.05)'] as [string, string]}
+          style={hookStyles.milestoneCard}
+        >
+          <Text style={hookStyles.milestoneIcon}>{'🎯'}</Text>
+          <Text style={hookStyles.milestoneText}>{milestoneMsg}</Text>
+        </LinearGradient>
+      )}
+
+      {/* Streak Reinforcement */}
+      {hasStreak && (
+        <LinearGradient
+          colors={['rgba(255,145,0,0.10)', 'rgba(255,107,0,0.05)'] as [string, string]}
+          style={hookStyles.streakCard}
+        >
+          <View style={hookStyles.streakLeft}>
+            <Text style={hookStyles.streakFireIcon}>{'🔥'}</Text>
+            <Text style={hookStyles.streakNumber}>{currentStreak}</Text>
+          </View>
+          <View style={hookStyles.streakRight}>
+            <Text style={hookStyles.streakLabel}>Day Streak</Text>
+            <Text style={hookStyles.streakCta}>Keep it going!</Text>
+          </View>
+        </LinearGradient>
+      )}
+    </Animated.View>
+  );
+}
 
 export function PuzzleComplete({
   score,
@@ -276,14 +356,13 @@ export function PuzzleComplete({
   const difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
   const coinReward = ECONOMY.puzzleCompleteCoins[difficulty] + stars * ECONOMY.starBonus;
 
-  // Reduced from 32 to 16 confetti particles
   const confetti = useMemo(
     () =>
-      Array.from({ length: 16 }, (_, index) => ({
+      Array.from({ length: 40 }, (_, index) => ({
         id: index,
-        delay: Math.random() * 360,
+        delay: Math.random() * 500,
         color: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
-        startX: Math.random() * 320,
+        startX: Math.random() * 360,
       })),
     [],
   );
@@ -470,13 +549,27 @@ export function PuzzleComplete({
                 </Animated.View>
               )}
 
-              {/* Next Level Preview */}
+              {/* Next Level Preview Card */}
               {nextLevelPreview && !isDaily && (
-                <Animated.View style={[styles.nextPreview, { opacity: statsAnim }]}>
-                  <Text style={styles.nextPreviewLabel}>COMING UP</Text>
-                  <Text style={styles.nextPreviewText}>Level {nextLevelPreview.level} — {nextLevelPreview.difficulty}</Text>
+                <Animated.View style={[styles.nextPreviewCard, { opacity: statsAnim }]}>
+                  <LinearGradient
+                    colors={GRADIENTS.surfaceCard as unknown as [string, string, ...string[]]}
+                    style={styles.nextPreviewCardInner}
+                  >
+                    <Text style={styles.nextPreviewLabel}>COMING UP</Text>
+                    <View style={styles.nextPreviewRow}>
+                      <View style={[styles.nextPreviewDiffDot, { backgroundColor: nextLevelPreview.difficulty === 'easy' ? COLORS.green : nextLevelPreview.difficulty === 'medium' ? COLORS.accent : nextLevelPreview.difficulty === 'hard' ? COLORS.orange : COLORS.purple }]} />
+                      <View>
+                        <Text style={styles.nextPreviewLevelText}>Level {nextLevelPreview.level}</Text>
+                        <Text style={styles.nextPreviewDiffText}>{nextLevelPreview.difficulty.charAt(0).toUpperCase() + nextLevelPreview.difficulty.slice(1)}</Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
                 </Animated.View>
               )}
+
+              {/* One More Level Hooks */}
+              <OneMoreLevelHooks level={level} stars={stars} statsAnim={statsAnim} />
 
               <Animated.View
                 style={[
@@ -842,22 +935,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.bodyBold,
   },
-  nextPreview: {
-    alignItems: 'center',
+  nextPreviewCard: {
     marginBottom: 10,
-    paddingVertical: 6,
+  },
+  nextPreviewCardInner: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.soft,
   },
   nextPreviewLabel: {
     color: COLORS.textMuted,
     fontSize: 10,
     fontFamily: FONTS.display,
     letterSpacing: 1.5,
-    marginBottom: 3,
+    marginBottom: 8,
   },
-  nextPreviewText: {
+  nextPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  nextPreviewDiffDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  nextPreviewLevelText: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontFamily: FONTS.bodyBold,
+  },
+  nextPreviewDiffText: {
     color: COLORS.textSecondary,
     fontSize: 12,
-    fontFamily: FONTS.bodyBold,
   },
   shareButton: {
     borderColor: COLORS.accent + '30',
@@ -866,5 +978,67 @@ const styles = StyleSheet.create({
   shareButtonText: {
     color: COLORS.accent,
     fontFamily: FONTS.display,
+  },
+});
+
+const hookStyles = StyleSheet.create({
+  container: {
+    gap: 8,
+    marginBottom: 10,
+  },
+  milestoneCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.15)',
+  },
+  milestoneIcon: {
+    fontSize: 18,
+  },
+  milestoneText: {
+    flex: 1,
+    color: COLORS.gold,
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+  },
+  streakCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,145,0,0.15)',
+  },
+  streakLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  streakFireIcon: {
+    fontSize: 20,
+  },
+  streakNumber: {
+    color: COLORS.orange,
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    textShadowColor: COLORS.orangeGlow,
+    textShadowRadius: 8,
+  },
+  streakRight: {
+    flex: 1,
+  },
+  streakLabel: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontFamily: FONTS.bodyBold,
+  },
+  streakCta: {
+    color: COLORS.orange,
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
   },
 });

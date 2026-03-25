@@ -56,3 +56,38 @@ export const getXPProgressInTier = (xp: number): { current: number; needed: numb
   const tierXP = xp % MASTERY_XP_PER_TIER;
   return { current: tierXP, needed: MASTERY_XP_PER_TIER };
 };
+
+// ─── Seasonal rotation ──────────────────────────────────────────────────────
+
+/** Season definitions: each season runs ~3 months. */
+const SEASONS: { name: string; startMonth: number; endMonth: number }[] = [
+  { name: 'Winter Wonderland', startMonth: 0, endMonth: 2 },   // Jan-Mar
+  { name: 'Spring Blossom', startMonth: 3, endMonth: 5 },      // Apr-Jun
+  { name: 'Summer Solstice', startMonth: 6, endMonth: 8 },     // Jul-Sep
+  { name: 'Autumn Harvest', startMonth: 9, endMonth: 11 },     // Oct-Dec
+];
+
+/** Returns the current season name based on the given date (defaults to now). */
+export function currentSeason(date: Date = new Date()): string {
+  const month = date.getMonth();
+  const year = date.getFullYear();
+  const season = SEASONS.find((s) => month >= s.startMonth && month <= s.endMonth);
+  return season ? `${season.name} ${year}` : `Season ${year}`;
+}
+
+/** Returns the end date of the current season. */
+export function seasonEndDate(date: Date = new Date()): Date {
+  const month = date.getMonth();
+  const year = date.getFullYear();
+  const season = SEASONS.find((s) => month >= s.startMonth && month <= s.endMonth);
+  if (!season) return new Date(year, 11, 31, 23, 59, 59);
+  // End of the last month of the season
+  return new Date(year, season.endMonth + 1, 0, 23, 59, 59);
+}
+
+/** Returns the number of full days remaining in the current season. */
+export function daysRemaining(date: Date = new Date()): number {
+  const end = seasonEndDate(date);
+  const diffMs = end.getTime() - date.getTime();
+  return Math.max(0, Math.ceil(diffMs / 86_400_000));
+}

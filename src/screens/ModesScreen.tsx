@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS, MODE_CONFIGS } from '../constants';
+import { ModeConfig } from '../types';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
 
@@ -40,24 +41,44 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
   const onSelectMode = onSelectModeProp ?? ((_mode: string) => {});
   const unlockedModes = unlockedModesProp ?? player.unlockedModes;
   const playerLevel = playerLevelProp ?? player.currentLevel;
-  const isUnlocked = (mode: typeof MODES[number]): boolean => {
-    return unlockedModes.includes(mode.id) || playerLevel >= mode.unlockLevel;
+  const isModeAccessible = (modeId: string): { accessible: boolean; reason: string } => {
+    const modeConfig = MODE_CONFIGS[modeId as keyof typeof MODE_CONFIGS] as ModeConfig | undefined;
+    if (!modeConfig) return { accessible: false, reason: 'Unknown mode' };
+
+    if (playerLevel < modeConfig.unlockLevel && !unlockedModes.includes(modeId)) {
+      return { accessible: false, reason: `Reach level ${modeConfig.unlockLevel}` };
+    }
+
+    const gate = modeConfig.rules.skillGate;
+    if (gate) {
+      if (gate.perfectSolves && player.perfectSolves < gate.perfectSolves) {
+        return { accessible: false, reason: `Need ${gate.perfectSolves} perfect solves (${player.perfectSolves}/${gate.perfectSolves})` };
+      }
+      if (gate.minStars && player.totalStars < gate.minStars) {
+        return { accessible: false, reason: `Need ${gate.minStars} stars (${player.totalStars}/${gate.minStars})` };
+      }
+      if (gate.puzzlesSolved && player.puzzlesSolved < gate.puzzlesSolved) {
+        return { accessible: false, reason: `Need ${gate.puzzlesSolved} puzzles solved (${player.puzzlesSolved}/${gate.puzzlesSolved})` };
+      }
+    }
+
+    return { accessible: true, reason: '' };
   };
 
   const renderModeCard = (mode: typeof MODES[number]) => {
-    const unlocked = isUnlocked(mode);
+    const { accessible, reason } = isModeAccessible(mode.id);
 
     return (
       <TouchableOpacity
         key={mode.id}
         style={[
           styles.card,
-          unlocked ? styles.cardUnlocked : styles.cardLocked,
+          accessible ? styles.cardUnlocked : styles.cardLocked,
         ]}
-        onPress={() => unlocked && onSelectMode(mode.id)}
-        activeOpacity={unlocked ? 0.7 : 1}
+        onPress={() => accessible && onSelectMode(mode.id)}
+        activeOpacity={accessible ? 0.7 : 1}
       >
-        {unlocked ? (
+        {accessible ? (
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
             style={StyleSheet.absoluteFill}
@@ -72,21 +93,21 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
             end={{ x: 0, y: 1 }}
           />
         )}
-        {unlocked && <View style={styles.cardGlow} />}
+        {accessible && <View style={styles.cardGlow} />}
         <View style={styles.cardContent}>
-          <Text style={styles.cardIcon}>{unlocked ? mode.icon : '🔒'}</Text>
-          <Text style={[styles.cardName, !unlocked && styles.textLocked]}>
+          <Text style={styles.cardIcon}>{accessible ? mode.icon : '\u{1F512}'}</Text>
+          <Text style={[styles.cardName, !accessible && styles.textLocked]}>
             {mode.name}
           </Text>
-          {unlocked ? (
+          {accessible ? (
             <Text style={styles.cardDesc}>{mode.desc}</Text>
           ) : (
             <Text style={styles.lockText}>
-              Unlocks at Level {mode.unlockLevel}
+              {reason}
             </Text>
           )}
         </View>
-        {unlocked && (
+        {accessible && (
           <View style={styles.cardAccent} />
         )}
       </TouchableOpacity>
