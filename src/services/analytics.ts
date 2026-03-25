@@ -57,6 +57,14 @@ class Analytics {
    */
   async initFirebase(): Promise<void> {
     try {
+      const { isFirebaseConfigured } = await import('../config/firebase');
+
+      if (!isFirebaseConfigured) {
+        console.log('[Analytics] Firebase not configured (placeholder keys), using local buffer only');
+        this.startAutoFlush();
+        return;
+      }
+
       // Dynamically import Firebase modules so the app works without them
       const { getAnalytics, logEvent: fbLogEvent } = await import('firebase/analytics');
       const { getFirestore, collection, addDoc } = await import('firebase/firestore');
