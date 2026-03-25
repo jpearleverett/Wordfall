@@ -35,14 +35,30 @@ src/
   utils/                    # Share generator, etc.
 ```
 
-## Running the App
+## Running in Replit (Web)
 
-```bash
-npm install
-npx expo start --web --port 5000
+The workflow builds a static web bundle and serves it on port 5000:
+
+```
+Workflow: "Start application"
+Command:  npx expo export --platform web --output-dir dist && npx serve dist -l 5000 --single
+Port:     5000
 ```
 
-The workflow "Start application" runs: `npx expo start --web --port 5000`
+**Important:** The Metro dev server (`expo start --web`) does not work with Replit's proxy. Instead, this project builds a static web export (`dist/`) and serves it via `serve`. Restarting the workflow will rebuild the static bundle.
+
+## Web Dependencies Added for Replit
+
+- `react-dom` — Required for Expo web
+- `react-native-web` — React Native web renderer
+- `@expo/metro-runtime` — Metro bundler web runtime
+- `serve` — Static file server for the built output
+
+## Deployment
+
+Configured as a static site:
+- **Build:** `npx expo export --platform web`
+- **Output directory:** `dist/`
 
 ## Environment Variables
 
@@ -53,7 +69,3 @@ Firebase configuration (optional, required for auth and cloud features):
 - `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`
 - `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
 - `EXPO_PUBLIC_FIREBASE_APP_ID`
-
-## Deployment
-
-Configured as a static site using `npx expo export --platform web` → `dist/` directory.
