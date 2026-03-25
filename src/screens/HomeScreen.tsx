@@ -16,7 +16,6 @@ import { soundManager } from '../services/sound';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import ChromeText from '../components/common/ChromeText';
 import ScanLineOverlay from '../components/common/ScanLineOverlay';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
@@ -208,9 +207,11 @@ export function HomeScreen({
           <View style={styles.heroGlowPrimary} />
           <View style={styles.heroGlowSecondary} />
           <ScanLineOverlay opacity={0.02} height={400} />
-          <ChromeText fontSize={46} letterSpacing={4} glowColor={COLORS.accentGlow}>
-            WORDFALL
-          </ChromeText>
+          <Image
+            source={LOCAL_IMAGES.wordfallLogo}
+            style={styles.heroLogo}
+            resizeMode="contain"
+          />
           <Text style={styles.subtitle}>
             {playerStage === 'new'
               ? 'Find hidden words and watch letters fall!'
@@ -639,21 +640,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 30,
   },
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: 46,
-    fontFamily: FONTS.display,
-    letterSpacing: 4,
+  heroLogo: {
+    width: '100%',
+    height: 80,
     marginBottom: 8,
-    textShadowColor: 'rgba(255,255,255,0.12)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 10,
-  },
-  titleAccent: {
-    color: COLORS.accent,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 28,
+    alignSelf: 'center',
   },
   subtitle: {
     color: COLORS.textSecondary,
