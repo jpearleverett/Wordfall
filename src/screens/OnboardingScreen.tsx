@@ -7,9 +7,11 @@ import {
   Dimensions,
   Animated,
   Pressable,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 import { generateTutorialBoard, TUTORIAL_STEPS } from '../data/tutorialBoards';
 import { GameGrid } from '../components/Grid';
 import { CellPosition } from '../types';
@@ -117,6 +119,15 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
   if (phase === 'welcome') {
     return (
       <View style={styles.container}>
+        <Image
+          source={LOCAL_IMAGES.bgOnboarding}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+        <LinearGradient
+          colors={['rgba(10,0,21,0.55)', 'rgba(10,0,21,0.70)', 'rgba(10,0,21,0.85)'] as [string, string, ...string[]]}
+          style={StyleSheet.absoluteFill}
+        />
         <Animated.View style={[styles.centerContent, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
           <Animated.View style={[styles.glowCircle, { transform: [{ scale: pulseAnim }] }]} />
           <View style={styles.glowRingOuter} />

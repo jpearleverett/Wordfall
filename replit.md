@@ -22,8 +22,19 @@ Key files for the visual system:
 - `src/components/Grid.tsx` — Neon-bordered game grid frame
 - `src/components/GameHeader.tsx` — Glass chrome header with deep shadows
 - `src/components/WordBank.tsx` — Word chips with shadow depth
-- `src/utils/assetUrls.ts` — CDN-hosted background images and textures
-- `src/utils/localAssets.ts` — Local PNG assets (icons, backgrounds)
+- `src/utils/assetUrls.ts` — CDN-hosted background images and textures (legacy fallback)
+- `src/utils/localAssets.ts` — Local PNG assets (icons, backgrounds, AI-generated synthwave art)
+
+### Custom AI-Generated Image Assets (assets/images/)
+All key screens now use custom AI-generated synthwave imagery:
+- `bg-synthwave-gameplay.png` — Gameplay backdrop: perspective grid, neon sun, palm silhouettes, mountains
+- `bg-home-neon.png` — Home screen: neon cyberpunk cityscape at night
+- `bg-onboarding.png` — Welcome screen: crystal aurora landscape with grid floor
+- `bg-victory.png` — Victory overlay: purple energy burst with crystal shards
+- `tile-gem-texture.png` — Amethyst crystal texture overlay for idle letter tiles (8% opacity)
+- `neon-sun-element.png` — Stripe-sliced neon sun (replaces procedural sun in SynthwaveBackdrop)
+- `neon-frame-border.png` — Ornate neon tube frame overlay behind the game grid
+- `crystal-gems-collection.png` — Five colored gem icons for future booster/collectible use
 
 ## Architecture
 

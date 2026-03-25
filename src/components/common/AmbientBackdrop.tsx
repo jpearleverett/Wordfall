@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, DimensionValue, StyleSheet, View } from 'react-native';
+import { Animated, DimensionValue, Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../../constants';
+import { COLORS } from '../../constants';
 import { CachedImage } from './CachedImage';
-import { BACKGROUND_ASSETS } from '../../utils/assetUrls';
 import { SynthwaveBackdrop } from './SynthwaveBackdrop';
+import { LOCAL_IMAGES } from '../../utils/localAssets';
+import { BACKGROUND_ASSETS } from '../../utils/assetUrls';
 
 interface AmbientBackdropProps {
   variant?: 'home' | 'library' | 'game' | 'collections' | 'profile';
@@ -113,12 +114,13 @@ function TwinklingStar({
   );
 }
 
-function getBackgroundUri(variant: string): string | null {
+function getLocalBg(variant: string) {
+  if (variant === 'home') return LOCAL_IMAGES.bgHome;
+  return null;
+}
+
+function getCdnBg(variant: string): string | null {
   switch (variant) {
-    case 'home':
-      return BACKGROUND_ASSETS.homeBg;
-    case 'game':
-      return BACKGROUND_ASSETS.gameplayBg;
     case 'library':
       return BACKGROUND_ASSETS.libraryBg;
     case 'collections':
@@ -135,7 +137,8 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
     return <SynthwaveBackdrop />;
   }
 
-  const bgUri = getBackgroundUri(variant);
+  const localBg = getLocalBg(variant);
+  const cdnBg = getCdnBg(variant);
 
   const stars = useMemo(
     () =>
@@ -169,9 +172,22 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         style={StyleSheet.absoluteFill}
       />
 
-      {bgUri && (
+      {localBg && (
+        <Image
+          source={localBg}
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            width: '100%',
+            height: '100%',
+            opacity: 0.35,
+          }}
+          resizeMode="cover"
+        />
+      )}
+
+      {!localBg && cdnBg && (
         <CachedImage
-          uri={bgUri}
+          uri={cdnBg}
           overlayColor="rgba(10, 0, 21, 0.82)"
           overlayOpacity={0.82}
           blurRadius={2}

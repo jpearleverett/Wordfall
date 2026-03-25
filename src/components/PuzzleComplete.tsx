@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Image,
   Pressable,
   ScrollView,
   Share,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES } from '../constants';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 import { GameMode } from '../types';
 import { usePlayer } from '../contexts/PlayerContext';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
@@ -376,7 +378,15 @@ export function PuzzleComplete({
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-      {/* Reduced sparkle field and celebration burst */}
+      <Image
+        source={LOCAL_IMAGES.bgVictory}
+        style={[StyleSheet.absoluteFill, { opacity: 0.25 }]}
+        resizeMode="cover"
+      />
+      <LinearGradient
+        colors={['rgba(4,6,18,0.3)', 'rgba(4,6,18,0.85)'] as [string, string]}
+        style={StyleSheet.absoluteFill}
+      />
       <SparkleField count={12} intensity="medium" />
       <CelebrationBurst centerX={190} centerY={200} particleCount={10} />
       {confetti.map((particle) => (

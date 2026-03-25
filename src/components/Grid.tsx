@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useCallback } from 'react';
 import {
-  LayoutAnimation,
+  Image,
   Platform,
   StyleSheet,
   UIManager,
@@ -13,7 +13,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Grid as GridType, CellPosition } from '../types';
 import { LetterCell } from './LetterCell';
-import { CELL_GAP, COLORS, GRADIENTS, MAX_GRID_WIDTH } from '../constants';
+import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 
 if (
   Platform.OS === 'android' &&
@@ -204,6 +205,14 @@ export function GameGrid({
     <View style={styles.shadowWrap}>
       <View style={[styles.outerGlow, { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28 }]} />
 
+      <View style={[styles.neonFrameWrap, { width: outerWidth + 16, height: outerHeight + 16, borderRadius: 28 }]}>
+        <Image
+          source={LOCAL_IMAGES.neonFrame}
+          style={[StyleSheet.absoluteFill, { borderRadius: 28, opacity: 0.45 }]}
+          resizeMode="stretch"
+        />
+      </View>
+
       <LinearGradient
         colors={['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]]}
         start={{ x: 0, y: 0 }}
@@ -275,6 +284,11 @@ const styles = StyleSheet.create({
     shadowRadius: 30,
     elevation: 0,
     alignSelf: 'center',
+  },
+  neonFrameWrap: {
+    position: 'absolute',
+    alignSelf: 'center',
+    overflow: 'hidden',
   },
   neonFrame: {
     padding: 3,

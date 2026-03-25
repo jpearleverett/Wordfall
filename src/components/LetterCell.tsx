@@ -1,13 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
-  Platform,
+  Image,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, GRADIENTS } from '../constants';
+import { COLORS, FONTS } from '../constants';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface LetterCellProps {
   letter: string;
@@ -238,6 +239,18 @@ export const LetterCell = React.memo(function LetterCell({
             borderBottomRightRadius: insetBR,
           }}
         />
+
+        {!isSelected && !isValidWord && !isFrozen && (
+          <Image
+            source={LOCAL_IMAGES.tileGemTexture}
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              borderRadius: insetBR,
+              opacity: 0.08,
+            }}
+            resizeMode="cover"
+          />
+        )}
 
         {(isSelected || isValidWord) && (
           <View

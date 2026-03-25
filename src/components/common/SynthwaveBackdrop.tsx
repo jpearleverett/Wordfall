@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Dimensions, DimensionValue, Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../../constants';
+import { COLORS } from '../../constants';
 import { LOCAL_IMAGES } from '../../utils/localAssets';
 
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -187,7 +187,8 @@ function NeonSun() {
         }}
       />
 
-      <View
+      <Image
+        source={LOCAL_IMAGES.neonSun}
         style={{
           position: 'absolute',
           top: sunTop,
@@ -195,43 +196,9 @@ function NeonSun() {
           width: SUN_SIZE,
           height: SUN_SIZE,
           borderRadius: SUN_SIZE / 2,
-          overflow: 'hidden',
-          shadowColor: COLORS.accent,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.7,
-          shadowRadius: 40,
         }}
-      >
-        <LinearGradient
-          colors={['#ff6eb8', '#ff2d95', '#e91e8c', '#c84dff', '#7b2fbe'] as [string, string, ...string[]]}
-          locations={[0, 0.25, 0.5, 0.75, 1]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-
-        {[0.2, 0.35, 0.5, 0.65, 0.8].map((pos, i) => (
-          <View
-            key={i}
-            style={{
-              position: 'absolute',
-              top: SUN_SIZE * pos,
-              left: 0,
-              right: 0,
-              height: SUN_SIZE * 0.02,
-              backgroundColor: COLORS.bg,
-              opacity: 0.3 + i * 0.08,
-            }}
-          />
-        ))}
-
-        <LinearGradient
-          colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.0)'] as [string, string]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 0.5 }}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%' }}
-        />
-      </View>
+        resizeMode="cover"
+      />
 
       <View
         style={{
