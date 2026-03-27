@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
   playButtonWrapper: {
     position: 'relative',
     width: '100%',
-    height: 90,
+    height: 110,
     marginBottom: 12,
   },
   playButtonImage: {
