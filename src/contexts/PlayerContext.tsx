@@ -7,7 +7,7 @@ import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { CeremonyItem, WeeklyGoalsState } from '../types';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
-import { FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
+import { COLLECTION, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -589,13 +589,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Duplicate: increment mastery counter (max 5 = gold border)
         const currentMastery = prev.collections.atlasWordMastery[word] ?? 1;
         if (currentMastery >= 5) return prev;
+        const newMastery = currentMastery + 1;
+        // Queue gold mastery ceremony when reaching 5
+        let pendingCeremonies = prev.pendingCeremonies;
+        if (newMastery === 5) {
+          pendingCeremonies = [
+            ...pendingCeremonies,
+            { type: 'word_mastery_gold' as const, data: { word } },
+          ];
+        }
         return {
           ...prev,
+          pendingCeremonies,
           collections: {
             ...prev.collections,
             atlasWordMastery: {
               ...prev.collections.atlasWordMastery,
-              [word]: currentMastery + 1,
+              [word]: newMastery,
             },
           },
         };
@@ -618,16 +628,29 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addRareTile = useCallback((letter: string, count: number = 1) => {
-    setData((prev) => ({
-      ...prev,
-      collections: {
-        ...prev.collections,
-        rareTiles: {
-          ...prev.collections.rareTiles,
-          [letter]: (prev.collections.rareTiles[letter] ?? 0) + count,
+    setData((prev) => {
+      const newCount = (prev.collections.rareTiles[letter] ?? 0) + count;
+      // Check if any tile just crossed the wildcard threshold (5 dupes)
+      let pendingCeremonies = prev.pendingCeremonies;
+      const oldCount = prev.collections.rareTiles[letter] ?? 0;
+      if (oldCount < COLLECTION.duplicatesForWildcard && newCount >= COLLECTION.duplicatesForWildcard) {
+        pendingCeremonies = [
+          ...pendingCeremonies,
+          { type: 'wildcard_earned' as const, data: { letter } },
+        ];
+      }
+      return {
+        ...prev,
+        pendingCeremonies,
+        collections: {
+          ...prev.collections,
+          rareTiles: {
+            ...prev.collections.rareTiles,
+            [letter]: newCount,
+          },
         },
-      },
-    }));
+      };
+    });
   }, []);
 
   const collectStamp = useCallback((albumId: string, stampIndex: number) => {
@@ -888,6 +911,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return {
         ...prev,
         restoredWings: [...prev.restoredWings, wingId],
+        pendingCeremonies: [
+          ...prev.pendingCeremonies,
+          { type: 'wing_complete' as const, data: { wingId, wingName: wingId } },
+        ],
       };
     });
   }, []);
