@@ -196,11 +196,9 @@ export function HomeScreen({
         ]}
       >
         <LinearGradient
-          colors={GRADIENTS.surfaceCard}
+          colors={['rgba(45,20,82,0.40)', 'rgba(26,10,46,0.45)']}
           style={styles.heroCard}
         >
-          <View style={styles.heroGlowPrimary} />
-          <View style={styles.heroGlowSecondary} />
           <ScanLineOverlay opacity={0.02} height={400} />
           <Image
             source={LOCAL_IMAGES.wordfallLogo}
@@ -613,32 +611,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 30,
     elevation: 16,
-  },
-  heroGlowPrimary: {
-    position: 'absolute',
-    width: 360,
-    height: 360,
-    borderRadius: 180,
-    backgroundColor: 'rgba(255,45,149,0.15)',
-    top: -160,
-    right: -80,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 40,
-  },
-  heroGlowSecondary: {
-    position: 'absolute',
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: 'rgba(200,77,255,0.12)',
-    bottom: -120,
-    left: -70,
-    shadowColor: COLORS.purple,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 30,
   },
   heroLogo: {
     width: '100%',
