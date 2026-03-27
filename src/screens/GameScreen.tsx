@@ -594,30 +594,44 @@ export function GameScreen({
     onNextLevel();
   }, [onNextLevel]);
 
+  // First-booster ceremony (fires once ever, tracked via tooltipsShown)
+  const checkFirstBooster = useCallback(() => {
+    if (!player.tooltipsShown.includes('first_booster_used')) {
+      player.markTooltipShown('first_booster_used');
+      player.queueCeremony({
+        type: 'first_booster',
+        data: {},
+      });
+    }
+  }, [player]);
+
   // Booster handlers
   const handleWildcard = useCallback(() => {
     if (state.boosterCounts.wildcardTile > 0) {
       void soundManager.playSound('buttonPress');
       void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
+      checkFirstBooster();
       activateWildcard();
     }
-  }, [activateWildcard, state.boosterCounts.wildcardTile, level, mode]);
+  }, [activateWildcard, state.boosterCounts.wildcardTile, level, mode, checkFirstBooster]);
 
   const handleSpotlight = useCallback(() => {
     if (state.boosterCounts.spotlight > 0) {
       void soundManager.playSound('buttonPress');
       void analytics.logEvent('booster_used', { level, mode, booster: 'spotlight' });
+      checkFirstBooster();
       activateSpotlight();
     }
-  }, [activateSpotlight, state.boosterCounts.spotlight, level, mode]);
+  }, [activateSpotlight, state.boosterCounts.spotlight, level, mode, checkFirstBooster]);
 
   const handleSmartShuffle = useCallback(() => {
     if (state.boosterCounts.smartShuffle > 0) {
       void soundManager.playSound('buttonPress');
       void analytics.logEvent('booster_used', { level, mode, booster: 'smartShuffle' });
+      checkFirstBooster();
       activateSmartShuffle();
     }
-  }, [activateSmartShuffle, state.boosterCounts.smartShuffle, level, mode]);
+  }, [activateSmartShuffle, state.boosterCounts.smartShuffle, level, mode, checkFirstBooster]);
 
   // Format timer — extracted as useCallback to avoid recreation on every render
   const formatTime = useCallback((seconds: number) => {

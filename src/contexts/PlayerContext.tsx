@@ -7,7 +7,7 @@ import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { CeremonyItem, WeeklyGoalsState } from '../types';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
-import { FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
+import { COLLECTION, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -124,6 +124,24 @@ interface PlayerData {
   lastGiftDate: string;
   tileGiftsSentToday: number;
 
+  // Mystery Wheel
+  mysteryWheel: {
+    spinsAvailable: number;
+    puzzlesSinceLastSpin: number;
+    puzzlesPerFreeSpin: number;
+    totalSpins: number;
+    lastJackpotSpin: number;
+    jackpotPity: number;
+  };
+
+  // Win Streak (per-session consecutive wins)
+  winStreak: {
+    currentStreak: number;
+    bestStreak: number;
+    lastWinDate: string | null;
+    rewardsClaimed: number[];
+  };
+
   // Cloud sync
   lastModified: number;
 }
@@ -197,6 +215,13 @@ interface PlayerContextType extends PlayerData {
   // Gifting
   sendHintGift: (friendId: string) => boolean;
   sendTileGift: (friendId: string, tileLetter: string) => boolean;
+
+  // Mystery Wheel
+  updateMysteryWheel: (updates: Partial<PlayerData['mysteryWheel']>) => void;
+  awardFreeSpin: () => void;
+
+  // Win Streak
+  updateWinStreak: (won: boolean) => void;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -302,6 +327,24 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   lastGiftDate: '',
   tileGiftsSentToday: 0,
 
+  // Mystery Wheel
+  mysteryWheel: {
+    spinsAvailable: 1, // Start with 1 free spin
+    puzzlesSinceLastSpin: 0,
+    puzzlesPerFreeSpin: 3,
+    totalSpins: 0,
+    lastJackpotSpin: 0,
+    jackpotPity: 25,
+  },
+
+  // Win Streak
+  winStreak: {
+    currentStreak: 0,
+    bestStreak: 0,
+    lastWinDate: null,
+    rewardsClaimed: [],
+  },
+
   // Cloud sync
   lastModified: 0,
 };
@@ -344,6 +387,9 @@ const PlayerContext = createContext<PlayerContextType>({
   checkAchievements: () => [],
   sendHintGift: () => false,
   sendTileGift: () => false,
+  updateMysteryWheel: () => {},
+  awardFreeSpin: () => {},
+  updateWinStreak: () => {},
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -543,13 +589,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Duplicate: increment mastery counter (max 5 = gold border)
         const currentMastery = prev.collections.atlasWordMastery[word] ?? 1;
         if (currentMastery >= 5) return prev;
+        const newMastery = currentMastery + 1;
+        // Queue gold mastery ceremony when reaching 5
+        let pendingCeremonies = prev.pendingCeremonies;
+        if (newMastery === 5) {
+          pendingCeremonies = [
+            ...pendingCeremonies,
+            { type: 'word_mastery_gold' as const, data: { word } },
+          ];
+        }
         return {
           ...prev,
+          pendingCeremonies,
           collections: {
             ...prev.collections,
             atlasWordMastery: {
               ...prev.collections.atlasWordMastery,
-              [word]: currentMastery + 1,
+              [word]: newMastery,
             },
           },
         };
@@ -572,16 +628,29 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addRareTile = useCallback((letter: string, count: number = 1) => {
-    setData((prev) => ({
-      ...prev,
-      collections: {
-        ...prev.collections,
-        rareTiles: {
-          ...prev.collections.rareTiles,
-          [letter]: (prev.collections.rareTiles[letter] ?? 0) + count,
+    setData((prev) => {
+      const newCount = (prev.collections.rareTiles[letter] ?? 0) + count;
+      // Check if any tile just crossed the wildcard threshold (5 dupes)
+      let pendingCeremonies = prev.pendingCeremonies;
+      const oldCount = prev.collections.rareTiles[letter] ?? 0;
+      if (oldCount < COLLECTION.duplicatesForWildcard && newCount >= COLLECTION.duplicatesForWildcard) {
+        pendingCeremonies = [
+          ...pendingCeremonies,
+          { type: 'wildcard_earned' as const, data: { letter } },
+        ];
+      }
+      return {
+        ...prev,
+        pendingCeremonies,
+        collections: {
+          ...prev.collections,
+          rareTiles: {
+            ...prev.collections.rareTiles,
+            [letter]: newCount,
+          },
         },
-      },
-    }));
+      };
+    });
   }, []);
 
   const collectStamp = useCallback((albumId: string, stampIndex: number) => {
@@ -842,6 +911,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return {
         ...prev,
         restoredWings: [...prev.restoredWings, wingId],
+        pendingCeremonies: [
+          ...prev.pendingCeremonies,
+          { type: 'wing_complete' as const, data: { wingId, wingName: wingId } },
+        ],
       };
     });
   }, []);
@@ -1127,6 +1200,85 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return rewards;
   }, [data.lastActiveDate, data.comebackRewardsClaimed]);
 
+  // ── Mystery Wheel ──────────────────────────────────────────────────────
+
+  const updateMysteryWheel = useCallback((updates: Partial<PlayerData['mysteryWheel']>) => {
+    setData((prev) => ({
+      ...prev,
+      mysteryWheel: { ...prev.mysteryWheel, ...updates },
+    }));
+  }, []);
+
+  const awardFreeSpin = useCallback(() => {
+    setData((prev) => {
+      const newPuzzleCount = prev.mysteryWheel.puzzlesSinceLastSpin + 1;
+      if (newPuzzleCount >= prev.mysteryWheel.puzzlesPerFreeSpin) {
+        return {
+          ...prev,
+          mysteryWheel: {
+            ...prev.mysteryWheel,
+            spinsAvailable: prev.mysteryWheel.spinsAvailable + 1,
+            puzzlesSinceLastSpin: 0,
+          },
+        };
+      }
+      return {
+        ...prev,
+        mysteryWheel: {
+          ...prev.mysteryWheel,
+          puzzlesSinceLastSpin: newPuzzleCount,
+        },
+      };
+    });
+  }, []);
+
+  // ── Win Streak ────────────────────────────────────────────────────────
+
+  const updateWinStreak = useCallback((won: boolean) => {
+    setData((prev) => {
+      if (!won) {
+        return {
+          ...prev,
+          winStreak: { ...prev.winStreak, currentStreak: 0 },
+        };
+      }
+
+      const newStreak = prev.winStreak.currentStreak + 1;
+      const newBest = Math.max(newStreak, prev.winStreak.bestStreak);
+      const today = new Date().toISOString().split('T')[0];
+
+      // Check win streak milestones (3, 5, 7, 10, 15, 20)
+      const winStreakMilestones = [3, 5, 7, 10, 15, 20];
+      let pendingCeremonies = prev.pendingCeremonies;
+      for (const milestone of winStreakMilestones) {
+        if (newStreak >= milestone && prev.winStreak.currentStreak < milestone) {
+          const labels: Record<number, string> = {
+            3: 'Hat Trick!', 5: 'On Fire!', 7: 'Unstoppable!',
+            10: 'LEGENDARY!', 15: 'GODLIKE!', 20: 'IMPOSSIBLE!',
+          };
+          pendingCeremonies = [
+            ...pendingCeremonies,
+            {
+              type: 'win_streak_milestone' as const,
+              data: { streak: milestone, label: labels[milestone] || `${milestone} Wins!` },
+            },
+          ];
+        }
+      }
+
+      return {
+        ...prev,
+        pendingCeremonies,
+        winStreak: {
+          currentStreak: newStreak,
+          bestStreak: newBest,
+          lastWinDate: today,
+          rewardsClaimed: prev.winStreak.rewardsClaimed,
+        },
+      };
+    });
+  }, []);
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -1167,6 +1319,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         checkAchievements,
         sendHintGift,
         sendTileGift,
+        updateMysteryWheel,
+        awardFreeSpin,
+        updateWinStreak,
       }}
     >
       {children}
