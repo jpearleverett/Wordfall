@@ -1509,6 +1509,65 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+
+  // ── Friend Challenges ────────────────────────────────────────────────
+
+  const sendChallenge = useCallback((friendId: string, puzzleData: {
+    score: number;
+    stars: number;
+    time: number;
+    level: number;
+    seed: number;
+    mode: import('../types').GameMode;
+    boardConfig: import('../types').BoardConfig;
+  }) => {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const challenge: import('../types').FriendChallenge = {
+      id: `challenge_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+      challengerId: user?.uid ?? 'local_player',
+      challengerName: data.equippedTitle || 'Player',
+      challengerScore: puzzleData.score,
+      challengerStars: puzzleData.stars,
+      challengerTime: puzzleData.time,
+      level: puzzleData.level,
+      seed: puzzleData.seed,
+      mode: puzzleData.mode,
+      boardConfig: puzzleData.boardConfig,
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      status: 'pending',
+    };
+
+    setData((prev) => ({
+      ...prev,
+      friendChallenges: {
+        ...prev.friendChallenges,
+        sent: [...prev.friendChallenges.sent, challenge],
+      },
+    }));
+
+    return challenge;
+  }, [user, data.equippedTitle]);
+
+  const respondToChallenge = useCallback((challengeId: string, score: number, stars: number) => {
+    setData((prev) => {
+      const updatedReceived = prev.friendChallenges.received.map((c) => {
+        if (c.id === challengeId) {
+          return { ...c, status: 'completed' as const, respondentScore: score, respondentStars: stars };
+        }
+        return c;
+      });
+      return {
+        ...prev,
+        friendChallenges: {
+          ...prev.friendChallenges,
+          received: updatedReceived,
+        },
+      };
+    });
+  }, []);
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -1557,6 +1616,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         getTimeUntilNextEnergy,
         getEnergyDisplay,
         recordPerformanceMetrics,
+        sendChallenge,
+        respondToChallenge,
       }}
     >
       {children}
