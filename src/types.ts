@@ -7,6 +7,8 @@ export type Grid = (Cell | null)[][];
 
 export type Direction = 'horizontal' | 'vertical';
 
+export type GravityDirection = 'down' | 'right' | 'up' | 'left';
+
 export interface CellPosition {
   row: number;
   col: number;
@@ -62,15 +64,19 @@ export interface GameState {
   maxMoves: number;
   mode: GameMode;
   timeRemaining: number;
-  cascadeMultiplier: number;
   perfectRun: boolean;
   chainCount: number;
-  frozenColumns: number[];
-  previewGrid: Grid | null;
+  gravityDirection: GravityDirection;
+  shrinkCount: number;
+  wordsUntilShrink: number;
+  wildcardCells: CellPosition[];
+  wildcardMode: boolean;
+  spotlightActive: boolean;
+  spotlightLetters: string[];
   boosterCounts: {
-    freezeColumn: number;
-    boardPreview: number;
-    shuffleFiller: number;
+    wildcardTile: number;
+    spotlight: number;
+    smartShuffle: number;
   };
   lastInvalidTap: CellPosition | null;
 }
@@ -85,9 +91,9 @@ export type GameAction =
   | { type: 'RESET_COMBO' }
   | { type: 'TICK_TIMER' }
   | { type: 'USE_BOOSTER'; booster: string }
-  | { type: 'FREEZE_COLUMN'; col: number }
-  | { type: 'SHUFFLE_FILLER' }
-  | { type: 'PREVIEW_MOVE'; positions: CellPosition[] };
+  | { type: 'WILDCARD_PLACE'; position: CellPosition }
+  | { type: 'SPOTLIGHT_ACTIVATE' }
+  | { type: 'SMART_SHUFFLE' };
 
 export interface PlayerProgress {
   currentLevel: number;
@@ -151,13 +157,13 @@ export interface Chapter {
 // ============ GAME MODES ============
 export type GameMode =
   | 'classic'
-  | 'limitedMoves'
+  | 'gravityFlip'
   | 'timePressure'
   | 'perfectSolve'
-  | 'cascade'
+  | 'shrinkingBoard'
   | 'daily'
   | 'weekly'
-  | 'endless'
+  | 'noGravity'
   | 'expert'
   | 'relax';
 
@@ -308,7 +314,7 @@ export type EventType =
   | 'speedSolve'
   | 'perfectClear'
   | 'clubRally'
-  | 'cascadeChampionship'
+  | 'gravityFlipChampionship'
   | 'mysteryWords'
   | 'retroRewind'
   | 'themeWeek'

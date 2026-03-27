@@ -78,18 +78,18 @@ describe('createInitialState', () => {
     expect(state.timeRemaining).toBe(120);
   });
 
-  it('sets max moves for limitedMoves mode', () => {
+  it('initializes gravity direction for gravityFlip mode', () => {
     const board = makeSimpleBoard();
-    const state = createInitialState(board, 1, 'limitedMoves', 5);
-    expect(state.maxMoves).toBe(5);
+    const state = createInitialState(board, 1, 'gravityFlip');
+    expect(state.gravityDirection).toBe('down');
   });
 
   it('initializes booster counts', () => {
     const board = makeSimpleBoard();
     const state = createInitialState(board, 1);
-    expect(state.boosterCounts.freezeColumn).toBe(2);
-    expect(state.boosterCounts.boardPreview).toBe(1);
-    expect(state.boosterCounts.shuffleFiller).toBe(1);
+    expect(state.boosterCounts.wildcardTile).toBe(1);
+    expect(state.boosterCounts.spotlight).toBe(1);
+    expect(state.boosterCounts.smartShuffle).toBe(1);
   });
 });
 
@@ -344,14 +344,14 @@ describe('gameReducer - scoring', () => {
     expect(state.score).toBeGreaterThan(scoreAfterFirst + 140);
   });
 
-  it('cascade mode increases multiplier', () => {
+  it('gravityFlip mode rotates direction after word', () => {
     const board = makeSimpleBoard();
-    let state = createInitialState(board, 1, 'cascade');
-    expect(state.cascadeMultiplier).toBe(1);
+    let state = createInitialState(board, 1, 'gravityFlip');
+    expect(state.gravityDirection).toBe('down');
     state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 0, col: 0 } });
     state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 0, col: 1 } });
     state = gameReducer(state, { type: 'SUBMIT_WORD' });
-    expect(state.cascadeMultiplier).toBe(1.25);
+    expect(state.gravityDirection).toBe('right');
   });
 });
 
@@ -386,22 +386,14 @@ describe('gameReducer - CLEAR_SELECTION', () => {
   });
 });
 
-describe('gameReducer - FREEZE_COLUMN', () => {
-  it('freezes a column and decrements booster count', () => {
+describe('gameReducer - SPOTLIGHT_ACTIVATE', () => {
+  it('activates spotlight and computes relevant letters', () => {
     const board = makeSimpleBoard();
     let state = createInitialState(board, 1);
-    state = gameReducer(state, { type: 'FREEZE_COLUMN', col: 0 });
-    expect(state.frozenColumns).toContain(0);
-    expect(state.boosterCounts.freezeColumn).toBe(1);
-  });
-
-  it('unfreezes an already frozen column', () => {
-    const board = makeSimpleBoard();
-    let state = createInitialState(board, 1);
-    state = gameReducer(state, { type: 'FREEZE_COLUMN', col: 0 });
-    state = gameReducer(state, { type: 'FREEZE_COLUMN', col: 0 });
-    expect(state.frozenColumns).not.toContain(0);
-    expect(state.boosterCounts.freezeColumn).toBe(2);
+    state = gameReducer(state, { type: 'SPOTLIGHT_ACTIVATE' });
+    expect(state.spotlightActive).toBe(true);
+    expect(state.spotlightLetters.length).toBeGreaterThan(0);
+    expect(state.boosterCounts.spotlight).toBe(0);
   });
 });
 

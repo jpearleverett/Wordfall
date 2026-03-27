@@ -103,6 +103,7 @@ export const GRADIENTS = {
     valid: ['#00ff87', '#00e676', '#00cc6a'] as const,
     hint: ['#ffd24d', '#ffb800', '#ff9500'] as const,
     frozen: ['rgba(0,229,255,0.30)', 'rgba(0,180,216,0.25)', 'rgba(0,140,180,0.30)'] as const,
+    wildcard: ['#ffd700', '#ff9500', '#ff2d95'] as const,
   },
   button: {
     primary: ['#ff2d95', '#e91e8c', '#c84dff'] as const,
@@ -260,16 +261,16 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       comboMode: false,
     },
   },
-  limitedMoves: {
-    id: 'limitedMoves',
-    name: 'Limited Moves',
-    description: 'Complete in exactly N moves',
-    icon: '🎯',
+  shrinkingBoard: {
+    id: 'shrinkingBoard',
+    name: 'Shrinking Board',
+    description: 'Board shrinks every 2 words',
+    icon: '🔻',
     color: COLORS.coral,
     unlockLevel: 5,
     rules: {
       hasTimer: false,
-      hasMoveLimit: true,
+      hasMoveLimit: false,
       allowHints: true,
       allowUndo: true,
       unlimitedUndo: false,
@@ -315,11 +316,11 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       skillGate: { perfectSolves: 10, minStars: 30 },
     },
   },
-  cascade: {
-    id: 'cascade',
-    name: 'Cascade',
-    description: 'Build combo multipliers',
-    icon: '🔥',
+  gravityFlip: {
+    id: 'gravityFlip',
+    name: 'Gravity Flip',
+    description: 'Gravity rotates 90° after each word',
+    icon: '🔄',
     color: COLORS.coral,
     unlockLevel: 10,
     rules: {
@@ -328,8 +329,8 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       allowHints: true,
       allowUndo: true,
       unlimitedUndo: false,
-      scoreMultiplier: 1,
-      comboMode: true,
+      scoreMultiplier: 1.5,
+      comboMode: false,
       skillGate: { minStars: 50 },
     },
   },
@@ -368,11 +369,11 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       skillGate: { puzzlesSolved: 20 },
     },
   },
-  endless: {
-    id: 'endless',
-    name: 'Endless',
-    description: 'Never-ending puzzles',
-    icon: '♾️',
+  noGravity: {
+    id: 'noGravity',
+    name: 'No Gravity',
+    description: 'Letters stay put — pure word finding',
+    icon: '🚀',
     color: COLORS.teal,
     unlockLevel: 3,
     rules: {
@@ -381,7 +382,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       allowHints: true,
       allowUndo: true,
       unlimitedUndo: false,
-      scoreMultiplier: 1,
+      scoreMultiplier: 0.75,
       comboMode: false,
     },
   },
@@ -663,7 +664,7 @@ export const SHOP_ITEMS = {
     gems: 20,
     hints: 10,
     decoration: true,
-    boardPreview: 1,
+    smartShuffle: 1,
   },
 };
 

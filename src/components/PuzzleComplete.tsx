@@ -359,7 +359,7 @@ export function PuzzleComplete({
   const title = useMemo(() => {
     if (isDaily) return 'Daily Triumph';
     if (perfectRun) return 'Perfect Clear';
-    if (mode === 'cascade') return 'Combo Mastery';
+    if (mode === 'gravityFlip') return 'Gravity Master';
     if (mode === 'expert') return 'Expert Conquered';
     if (mode === 'timePressure') return 'Clock Defeated';
     if (mode === 'perfectSolve') return 'Flawless Solve';

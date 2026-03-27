@@ -19,7 +19,6 @@ interface GameHeaderProps {
   mode?: GameMode;
   maxMoves?: number;
   timeRemaining?: number;
-  cascadeMultiplier?: number;
   onHint: () => void;
   onUndo: () => void;
   onBack: () => void;
@@ -38,7 +37,6 @@ export function GameHeader({
   mode = 'classic',
   maxMoves = 0,
   timeRemaining = 0,
-  cascadeMultiplier = 1,
   onHint,
   onUndo,
   onBack,

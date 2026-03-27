@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../constants';
+import { COLORS, GRADIENTS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface LetterCellProps {
@@ -17,9 +17,10 @@ interface LetterCellProps {
   isSelected: boolean;
   isHinted: boolean;
   selectionIndex: number;
-  isFrozen?: boolean;
   isValidWord?: boolean;
   isMoved?: boolean;
+  isWildcard?: boolean;
+  isSpotlightDimmed?: boolean;
 }
 
 export const LetterCell = React.memo(function LetterCell({
@@ -29,9 +30,10 @@ export const LetterCell = React.memo(function LetterCell({
   isSelected,
   isHinted,
   selectionIndex,
-  isFrozen = false,
   isValidWord = false,
   isMoved = false,
+  isWildcard = false,
+  isSpotlightDimmed = false,
 }: LetterCellProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -113,7 +115,7 @@ export const LetterCell = React.memo(function LetterCell({
     if (isValidWord) return ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
     if (isSelected && isHinted) return ['#fff0b3', '#ffe580', '#ffd24d', '#ffb800', '#cc9200'];
     if (isSelected) return ['#ff8fd0', '#ff6eb8', '#ff2d95', '#e91e8c', '#b8147a'];
-    if (isFrozen) return ['rgba(80,210,240,0.55)', 'rgba(40,180,220,0.45)', 'rgba(0,160,200,0.40)', 'rgba(0,120,160,0.45)'];
+    if (isWildcard) return [...GRADIENTS.tile.wildcard] as [string, string, ...string[]];
     return ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'];
   };
 
@@ -121,7 +123,6 @@ export const LetterCell = React.memo(function LetterCell({
     if (isValidWord) return ['rgba(200,255,230,0.65)', 'rgba(0,255,135,0.0)'];
     if (isSelected && isHinted) return ['rgba(255,245,200,0.65)', 'rgba(255,184,0,0.0)'];
     if (isSelected) return ['rgba(255,210,240,0.60)', 'rgba(255,45,149,0.0)'];
-    if (isFrozen) return ['rgba(200,245,255,0.50)', 'rgba(0,229,255,0.0)'];
     return ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.0)'];
   };
 
@@ -129,13 +130,14 @@ export const LetterCell = React.memo(function LetterCell({
     if (isValidWord) return COLORS.green;
     if (isSelected && isHinted) return COLORS.gold;
     if (isSelected) return COLORS.accent;
-    if (isFrozen) return 'rgba(0, 229, 255, 0.5)';
+    if (isWildcard) return COLORS.gold;
     return 'rgba(200, 77, 255, 0.40)';
   };
 
   const getShadowColor = () => {
     if (isValidWord) return COLORS.green;
     if (isSelected) return COLORS.accent;
+    if (isWildcard) return COLORS.gold;
     return COLORS.purple;
   };
 
@@ -143,7 +145,7 @@ export const LetterCell = React.memo(function LetterCell({
   const outerGlowColor = isValidWord ? COLORS.greenGlow : isSelected ? COLORS.accentGlow : 'transparent';
 
   return (
-    <View pointerEvents="none">
+    <View pointerEvents="none" style={isSpotlightDimmed ? { opacity: 0.3 } : undefined}>
       {/* Selection neon ripple ring — expanding glow that fades */}
       {isSelected && (
         <Animated.View
@@ -235,7 +237,7 @@ export const LetterCell = React.memo(function LetterCell({
             height: size,
             borderRadius,
             borderColor: getBorderColor(),
-            borderWidth: isSelected || isValidWord ? 2 : isFrozen ? 1.5 : 1,
+            borderWidth: isSelected || isValidWord ? 2 : isWildcard ? 1.5 : 1,
             transform: [{ scale: scaleAnim }],
             shadowColor: getShadowColor(),
             shadowOpacity: (isSelected || isValidWord) ? 0.8 : 0.5,
@@ -319,25 +321,13 @@ export const LetterCell = React.memo(function LetterCell({
           }}
         />
 
-        {!isSelected && !isValidWord && !isFrozen && (
+        {!isSelected && !isValidWord && (
           <Image
             source={LOCAL_IMAGES.tileGemTexture}
             style={{
               ...StyleSheet.absoluteFillObject,
               borderRadius: insetBR,
               opacity: 0.18,
-            }}
-            resizeMode="cover"
-          />
-        )}
-
-        {isFrozen && !isSelected && (
-          <Image
-            source={LOCAL_IMAGES.tileHolographic}
-            style={{
-              ...StyleSheet.absoluteFillObject,
-              borderRadius: insetBR,
-              opacity: 0.25,
             }}
             resizeMode="cover"
           />
@@ -363,7 +353,7 @@ export const LetterCell = React.memo(function LetterCell({
             !isSelected && !isValidWord && styles.letterDefault,
           ]}
         >
-          {letter}
+          {isWildcard ? '★' : letter}
         </Text>
 
         {isSelected && selectionIndex >= 0 && !isValidWord && (
@@ -398,11 +388,6 @@ export const LetterCell = React.memo(function LetterCell({
           </View>
         )}
 
-        {isFrozen && !isSelected && (
-          <View style={styles.frozenIndicator}>
-            <Text style={styles.frozenIcon}>❄</Text>
-          </View>
-        )}
       </Animated.View>
     </View>
   );
@@ -477,14 +462,5 @@ const styles = StyleSheet.create({
   checkText: {
     color: '#fff',
     fontFamily: 'SpaceGrotesk_700Bold',
-  },
-  frozenIndicator: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-  },
-  frozenIcon: {
-    fontSize: 10,
-    opacity: 0.8,
   },
 });

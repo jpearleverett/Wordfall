@@ -1,6 +1,6 @@
-import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition } from '../types';
+import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition, GameMode } from '../types';
 import { applyGravity } from './gravity';
-import { isSolvable, trySolveWithOrder, countSolutions } from './solver';
+import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating } from './solver';
 import { getWordsByLength } from '../words';
 
 // Simple seeded PRNG (mulberry32)
@@ -244,14 +244,34 @@ function getOrderingHeuristics(
 
 /**
  * Fast solvability check using heuristic orderings before budgeted full solve.
+ * Mode-aware: uses different validation for gravityFlip, noGravity, shrinkingBoard.
  */
 function checkSolvability(
   grid: Grid,
   words: string[],
   wordPositions: Map<string, CellPosition[]>,
-  rng: () => number
+  rng: () => number,
+  mode?: GameMode
 ): boolean {
-  // Try heuristic orderings first — each is O(n) word lookups
+  // noGravity: just check all words are independently findable
+  if (mode === 'noGravity') {
+    return areAllWordsIndependentlyFindable(grid, words);
+  }
+
+  // gravityFlip: use rotating gravity solver
+  if (mode === 'gravityFlip') {
+    // Try heuristic orderings with rotating gravity first
+    const orderings = getOrderingHeuristics(words, wordPositions, rng);
+    for (const ordering of orderings) {
+      if (trySolveWithOrderRotating(grid, ordering, 'down') !== null) {
+        return true;
+      }
+    }
+    return isSolvableGravityFlip(grid, words, 'down');
+  }
+
+  // shrinkingBoard: standard solvability (shrink timing is validated separately)
+  // classic / timePressure / perfectSolve / etc: standard solvability
   const orderings = getOrderingHeuristics(words, wordPositions, rng);
   for (const ordering of orderings) {
     if (trySolveWithOrder(grid, ordering) !== null) {
@@ -269,7 +289,8 @@ function checkSolvability(
  */
 function attemptGenerate(
   config: BoardConfig,
-  rng: () => number
+  rng: () => number,
+  mode?: GameMode
 ): Board | null {
   const words = selectWords(config, rng);
   if (words.length < config.wordCount) return null;
@@ -319,7 +340,7 @@ function attemptGenerate(
 
   // Verify solvability using fast heuristics + budgeted fallback
   const wordStrings = placements.map(p => p.word);
-  if (!checkSolvability(grid, wordStrings, wordPositions, rng)) return null;
+  if (!checkSolvability(grid, wordStrings, wordPositions, rng, mode)) return null;
 
   return { grid, words: placements, config };
 }
@@ -327,43 +348,51 @@ function attemptGenerate(
 /**
  * Generate a board for the given config.
  * Retries with different seeds until a valid board is found.
+ * Mode-aware: shrinkingBoard gets +1 row/col, gravityFlip and noGravity
+ * use mode-specific solvability validation.
  */
 export function generateBoard(
   config: BoardConfig,
-  seed?: number
+  seed?: number,
+  mode?: GameMode
 ): Board {
   const baseSeed = seed ?? Date.now();
+
+  // shrinkingBoard: add buffer row/col for the outer ring that will be removed
+  const effectiveConfig: BoardConfig = mode === 'shrinkingBoard'
+    ? { ...config, rows: config.rows + 1, cols: config.cols + 1 }
+    : config;
 
   // Primary attempts with full config
   for (let attempt = 0; attempt < 80; attempt++) {
     const rng = createRng(baseSeed + attempt * 7919);
-    const board = attemptGenerate(config, rng);
+    const board = attemptGenerate(effectiveConfig, rng, mode);
     if (board) return board;
   }
 
   // Fallback: slightly simpler board (1 fewer word, cap word length)
   const fallbackConfig: BoardConfig = {
-    ...config,
-    wordCount: Math.max(2, config.wordCount - 1),
-    maxWordLength: Math.min(config.maxWordLength, 5),
+    ...effectiveConfig,
+    wordCount: Math.max(2, effectiveConfig.wordCount - 1),
+    maxWordLength: Math.min(effectiveConfig.maxWordLength, 5),
   };
 
   for (let attempt = 0; attempt < 60; attempt++) {
     const rng = createRng(baseSeed + 1000 + attempt * 7919);
-    const board = attemptGenerate(fallbackConfig, rng);
+    const board = attemptGenerate(fallbackConfig, rng, mode);
     if (board) return board;
   }
 
   // Second fallback: even simpler
   const fallback2Config: BoardConfig = {
-    ...config,
-    wordCount: Math.max(2, config.wordCount - 2),
-    maxWordLength: Math.min(config.maxWordLength, 4),
+    ...effectiveConfig,
+    wordCount: Math.max(2, effectiveConfig.wordCount - 2),
+    maxWordLength: Math.min(effectiveConfig.maxWordLength, 4),
   };
 
   for (let attempt = 0; attempt < 60; attempt++) {
     const rng = createRng(baseSeed + 2000 + attempt * 7919);
-    const board = attemptGenerate(fallback2Config, rng);
+    const board = attemptGenerate(fallback2Config, rng, mode);
     if (board) return board;
   }
 
@@ -379,7 +408,7 @@ export function generateBoard(
 
   for (let attempt = 0; attempt < 100; attempt++) {
     const rng = createRng(baseSeed + 3000 + attempt * 7919);
-    const board = attemptGenerate(minimalConfig, rng);
+    const board = attemptGenerate(minimalConfig, rng, mode);
     if (board) return board;
   }
 

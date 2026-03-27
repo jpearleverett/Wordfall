@@ -1,32 +1,67 @@
-import { Grid, Cell, CellPosition } from '../types';
+import { Grid, Cell, CellPosition, GravityDirection } from '../types';
 
 /**
- * Apply gravity to the grid: for each column, compact non-null cells
- * to the bottom rows. Returns a new grid.
+ * Apply gravity in any of 4 directions.
+ * - down: compact non-null cells to bottom of each column (standard)
+ * - up: compact to top of each column
+ * - right: compact to right end of each row
+ * - left: compact to left end of each row
  */
-export function applyGravity(grid: Grid): Grid {
+export function applyGravityInDirection(grid: Grid, direction: GravityDirection): Grid {
   const rows = grid.length;
   const cols = grid[0].length;
   const newGrid: Grid = Array.from({ length: rows }, () =>
     Array(cols).fill(null)
   );
 
-  for (let col = 0; col < cols; col++) {
-    // Collect non-null cells from this column, top to bottom
-    const cells: Cell[] = [];
-    for (let row = 0; row < rows; row++) {
-      if (grid[row][col] !== null) {
-        cells.push(grid[row][col]!);
+  if (direction === 'down' || direction === 'up') {
+    for (let col = 0; col < cols; col++) {
+      const cells: Cell[] = [];
+      for (let row = 0; row < rows; row++) {
+        if (grid[row][col] !== null) cells.push(grid[row][col]!);
+      }
+      if (direction === 'down') {
+        const startRow = rows - cells.length;
+        for (let i = 0; i < cells.length; i++) newGrid[startRow + i][col] = cells[i];
+      } else {
+        for (let i = 0; i < cells.length; i++) newGrid[i][col] = cells[i];
       }
     }
-    // Place them at the bottom of the column
-    const startRow = rows - cells.length;
-    for (let i = 0; i < cells.length; i++) {
-      newGrid[startRow + i][col] = cells[i];
+  } else {
+    // left or right — compact within each row
+    for (let row = 0; row < rows; row++) {
+      const cells: Cell[] = [];
+      for (let col = 0; col < cols; col++) {
+        if (grid[row][col] !== null) cells.push(grid[row][col]!);
+      }
+      if (direction === 'right') {
+        const startCol = cols - cells.length;
+        for (let i = 0; i < cells.length; i++) newGrid[row][startCol + i] = cells[i];
+      } else {
+        for (let i = 0; i < cells.length; i++) newGrid[row][i] = cells[i];
+      }
     }
   }
 
   return newGrid;
+}
+
+/**
+ * Apply standard downward gravity. Convenience wrapper.
+ */
+export function applyGravity(grid: Grid): Grid {
+  return applyGravityInDirection(grid, 'down');
+}
+
+/**
+ * Remove cells and apply gravity in a given direction.
+ */
+export function removeCellsAndApplyGravityInDirection(
+  grid: Grid,
+  positions: CellPosition[],
+  direction: GravityDirection
+): Grid {
+  return applyGravityInDirection(removeCells(grid, positions), direction);
 }
 
 /**
