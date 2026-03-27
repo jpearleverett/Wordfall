@@ -176,7 +176,12 @@ export function HomeScreen({
           )}
           {onOpenShop && (
             <Pressable onPress={onOpenShop} style={({ pressed }) => [pressed && styles.buttonPressed]}>
-              <Image source={LOCAL_IMAGES.shopButton} style={styles.shopButtonImage} resizeMode="contain" />
+              <View style={styles.shopButtonWrapper}>
+                <Image source={LOCAL_IMAGES.shopButton} style={styles.shopButtonImage} resizeMode="contain" />
+                <View style={styles.shopButtonOverlay}>
+                  <Text style={styles.shopButtonText}>Shop</Text>
+                </View>
+              </View>
             </Pressable>
           )}
         </View>
@@ -208,29 +213,36 @@ export function HomeScreen({
               : `Every word changes the board. Restore Chapter ${currentChapter} of the library.`}
           </Text>
 
-          <View style={styles.statsCardWrapper}>
-            <Image source={LOCAL_IMAGES.statsCard} style={styles.statsCardImage} resizeMode="contain" />
-            <View style={styles.statsCardOverlay}>
-              <View style={styles.statsCardItem}>
-                <Text style={styles.heroStatValue}>★ {totalStars}</Text>
-                <Text style={styles.heroStatLabel}>Stars</Text>
+          <View style={styles.statsRow}>
+            {[
+              { value: `★ ${totalStars}`, label: 'Stars' },
+              { value: `${progress.puzzlesSolved}`, label: 'Solved' },
+              { value: `🔥 ${progress.currentStreak}`, label: 'Streak' },
+            ].map((stat) => (
+              <View key={stat.label} style={styles.statCardWrapper}>
+                <Image source={LOCAL_IMAGES.statsCard} style={styles.statCardImage} resizeMode="stretch" />
+                <View style={styles.statCardOverlay}>
+                  <Text style={styles.heroStatValue}>{stat.value}</Text>
+                  <Text style={styles.heroStatLabel}>{stat.label}</Text>
+                </View>
               </View>
-              <View style={styles.statsCardItem}>
-                <Text style={styles.heroStatValue}>{progress.puzzlesSolved}</Text>
-                <Text style={styles.heroStatLabel}>Solved</Text>
-              </View>
-              <View style={styles.statsCardItem}>
-                <Text style={styles.heroStatValue}>🔥 {progress.currentStreak}</Text>
-                <Text style={styles.heroStatLabel}>Streak</Text>
-              </View>
-            </View>
+            ))}
           </View>
 
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={() => onPlay()}
           >
-            <Image source={LOCAL_IMAGES.playButton} style={styles.playButtonImage} resizeMode="contain" />
+            <View style={styles.playButtonWrapper}>
+              <Image source={LOCAL_IMAGES.playButton} style={styles.playButtonImage} resizeMode="stretch" />
+              <View style={styles.playButtonOverlay}>
+                <View>
+                  <Text style={styles.playButtonLabel}>{playerStage === 'new' ? 'Start playing' : 'Continue journey'}</Text>
+                  <Text style={styles.playButtonLevel}>Play Level {progress.currentLevel}</Text>
+                </View>
+                <Text style={styles.playButtonArrow}>→</Text>
+              </View>
+            </View>
           </Pressable>
 
           {/* Daily challenge - show for all except brand new players */}
@@ -570,9 +582,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.bodyBold,
   },
+  shopButtonWrapper: {
+    position: 'relative',
+    width: 60,
+    height: 36,
+  },
   shopButtonImage: {
-    width: 44,
-    height: 44,
+    width: '100%',
+    height: '100%',
+  },
+  shopButtonOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shopButtonText: {
+    color: '#fff',
+    fontFamily: FONTS.display,
+    fontSize: 13,
   },
   heroCard: {
     borderRadius: 30,
@@ -626,24 +653,25 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     maxWidth: '90%',
   },
-  statsCardWrapper: {
-    position: 'relative',
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  statsCardImage: {
-    width: '100%',
-    height: 90,
-  },
-  statsCardOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: 12,
+    gap: 10,
+    marginBottom: 20,
   },
-  statsCardItem: {
+  statCardWrapper: {
+    flex: 1,
+    position: 'relative',
     alignItems: 'center',
+  },
+  statCardImage: {
+    width: '100%',
+    height: 80,
+    borderRadius: 14,
+  },
+  statCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroStatValue: {
     color: COLORS.textPrimary,
@@ -660,10 +688,40 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     fontFamily: FONTS.bodyBold,
   },
-  playButtonImage: {
+  playButtonWrapper: {
+    position: 'relative',
     width: '100%',
     height: 70,
     marginBottom: 12,
+  },
+  playButtonImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
+  },
+  playButtonOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 22,
+  },
+  playButtonLabel: {
+    color: '#fff',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    fontFamily: FONTS.display,
+    letterSpacing: 1.5,
+  },
+  playButtonLevel: {
+    color: '#fff',
+    fontSize: 22,
+    fontFamily: FONTS.display,
+  },
+  playButtonArrow: {
+    color: '#fff',
+    fontSize: 28,
+    fontFamily: FONTS.display,
   },
   dailyCard: {
     borderRadius: 18,
