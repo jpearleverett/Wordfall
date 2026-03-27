@@ -1547,4 +1547,36 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.96 }],
     opacity: 0.88,
   },
+
+  // Event Banners
+  eventBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    ...SHADOWS.soft,
+  },
+  eventBannerIcon: {
+    fontSize: 28,
+    marginRight: 12,
+  },
+  eventBannerInfo: {
+    flex: 1,
+  },
+  eventBannerLabel: {
+    fontSize: 10,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1.5,
+    marginBottom: 2,
+  },
+  eventBannerName: {
+    fontSize: 15,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textPrimary,
+  },
+  eventBannerArrow: {
+    fontSize: 24,
+  },
 });
