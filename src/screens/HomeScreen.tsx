@@ -662,11 +662,11 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     alignItems: 'center',
+    aspectRatio: 1,
   },
   statCardImage: {
     width: '100%',
-    height: 80,
-    borderRadius: 14,
+    height: '100%',
   },
   statCardOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -691,13 +691,12 @@ const styles = StyleSheet.create({
   playButtonWrapper: {
     position: 'relative',
     width: '100%',
-    height: 70,
+    height: 90,
     marginBottom: 12,
   },
   playButtonImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 24,
   },
   playButtonOverlay: {
     ...StyleSheet.absoluteFillObject,
