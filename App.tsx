@@ -868,6 +868,9 @@ function HomeMainScreen({ route, navigation }: any) {
   // Check for comeback rewards and process ceremonies on mount
   useEffect(() => {
     if (player.loaded) {
+      // Initialize event manager with saved progress
+      eventManager.init(player.eventProgress);
+
       void analytics.startSession('app_launch');
       void analytics.trackAppOpen();
       void analytics.updateUserProperties({
@@ -1102,14 +1105,46 @@ function HomeMainScreen({ route, navigation }: any) {
     : player.puzzlesSolved <= 30 ? 'established'
     : 'veteran';
 
-  // Personalized recommendation
+  // Segment-driven personalized home content
+  const segmentHomeContent = React.useMemo(
+    () => getPersonalizedHomeContent(player.segments),
+    [player.segments],
+  );
+
+  // Segment-driven welcome back message for at-risk/lapsed/returned
+  const segmentWelcomeMessage = React.useMemo(
+    () => getWelcomeBackMessage(player.segments),
+    [player.segments],
+  );
+
+  // Personalized recommendation (segment-aware)
   const recommendation = React.useMemo(() => {
     if (playerStage === 'new') return null;
 
-    // Suggest untried modes
+    // Use segment-recommended mode as primary suggestion
+    const segmentMode = getRecommendedMode(player.segments);
+    const segmentConfig = MODE_CONFIGS[segmentMode];
+
+    // Suggest untried modes (prefer segment-recommended if untried)
     const untriedModes = player.unlockedModes.filter(
       (m: string) => !player.modeStats[m] || player.modeStats[m].played === 0
     );
+
+    // If segment-recommended mode is unlocked and untried, suggest it first
+    if (untriedModes.includes(segmentMode) && segmentConfig) {
+      return {
+        icon: segmentConfig.icon || '🎮',
+        title: `Try ${segmentConfig.name} Mode`,
+        subtitle: player.segments.motivations.includes('competitor')
+          ? 'Compete against others in this mode!'
+          : player.segments.motivations.includes('achiever')
+          ? 'Perfect for earning stars and achievements!'
+          : 'You unlocked this mode — give it a go!',
+        action: () => navigation.navigate('Play'),
+      };
+    }
+
+    // Fallback: any untried mode
     if (untriedModes.length > 0) {
       const modeId = untriedModes[0];
       const config = MODE_CONFIGS[modeId as GameMode];
@@ -1127,8 +1162,20 @@ function HomeMainScreen({ route, navigation }: any) {
       return {
         icon: '☀️',
         title: 'Daily Challenge',
-        subtitle: 'Same puzzle for everyone — compete globally!',
+        subtitle: player.segments.motivations.includes('competitor')
+          ? "Beat your friends on today's puzzle!"
+          : 'Same puzzle for everyone — compete globally!',
         action: () => navigation.navigate('Play' as never),
+      };
+    }
+
+    // Segment-driven default recommendation
+    if (player.segments.motivations.includes('completionist')) {
+      return {
+        icon: '📚',
+        title: 'Complete Your Collection',
+        subtitle: "Check your atlas for words you haven't found yet!",
+        action: () => navigation.navigate('Collections' as never),
       };
     }
 
@@ -1139,7 +1186,7 @@ function HomeMainScreen({ route, navigation }: any) {
       subtitle: 'Try a harder difficulty to earn more stars!',
       action: () => navigation.navigate('Play' as never),
     };
-  }, [playerStage, player.unlockedModes, player.modeStats, player.dailyCompleted, navigation]);
+  }, [playerStage, player.segments, player.unlockedModes, player.modeStats, player.dailyCompleted, navigation]);
 
   const startGame = useCallback(
     (difficulty?: Difficulty) => {
@@ -1867,5 +1914,37 @@ const styles = StyleSheet.create({
     color: COLORS.bg,
     fontSize: 16,
     letterSpacing: 3,
+  },
+  giftBanner: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginHorizontal: 16,
+    marginTop: 60,
+    marginBottom: -52,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    zIndex: 10,
+  },
+  giftBannerIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  giftBannerTextContainer: {
+    flex: 1,
+  },
+  giftBannerTitle: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 14,
+    color: COLORS.purple,
+  },
+  giftBannerSubtext: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 1,
   },
 });

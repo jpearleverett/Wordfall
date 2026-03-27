@@ -61,6 +61,10 @@ interface HomeScreenProps {
   streakGraceDaysUsed?: number;
   /** Whether streak shield is currently active */
   streakShieldActive?: boolean;
+  /** Segment-driven list of home content sections to show */
+  segmentHomeContent?: string[];
+  /** Segment-driven welcome back message for at-risk/lapsed/returned players */
+  segmentWelcomeMessage?: { title: string; subtitle: string } | null;
 }
 
 const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: string }> = {
@@ -101,6 +105,8 @@ export function HomeScreen({
   recommendation = null,
   streakGraceDaysUsed = 0,
   streakShieldActive = false,
+  segmentHomeContent = [],
+  segmentWelcomeMessage = null,
 }: HomeScreenProps) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;

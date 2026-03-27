@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  Share,
   UIManager,
   View,
 } from 'react-native';
@@ -1284,6 +1285,42 @@ export function GameScreen({
           onDoubleReward={handleWatchAdForDoubleReward}
           rewardDoubled={rewardDoubled}
           showAdOption={!economy.isAdFree && adManager.canShowAd('double_reward')}
+          onWatchReplay={solveSequence.length > 0 ? () => setShowReplay(true) : undefined}
+          onShareSolve={solveSequence.length > 0 ? () => {
+            const text = generateReplayText(solveSequence, level, stars, state.score, isDaily);
+            Share.share({ message: text }).catch(() => {});
+          } : undefined}
+          onChallengeFrend={() => {
+            const challenge = player.sendChallenge('friend', {
+              score: state.score,
+              stars,
+              time: solveSequence.length > 0 ? solveSequence[solveSequence.length - 1].timestamp : 0,
+              level,
+              seed: Date.now(),
+              mode,
+              boardConfig: board.config,
+            });
+            const challengeText = [
+              `I challenge you to beat my score on Wordfall Level ${level}!`,
+              `My score: ${state.score.toLocaleString()} | ${'*'.repeat(stars)}`,
+              `Challenge code: ${challenge.id}`,
+              '',
+              '#Wordfall #Challenge',
+            ].join('\n');
+            Share.share({ message: challengeText }).catch(() => {});
+          }}
+        />
+      )}
+
+      {/* Replay viewer overlay */}
+      {showReplay && solveSequence.length > 0 && (
+        <ReplayViewer
+          steps={solveSequence}
+          level={level}
+          stars={stars}
+          totalScore={state.score}
+          isDaily={isDaily}
+          onClose={() => setShowReplay(false)}
         />
       )}
 
