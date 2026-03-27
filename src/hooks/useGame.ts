@@ -385,6 +385,17 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const usedWildcard = selectedCells.some(c => wildcardSet.has(`${c.row},${c.col}`));
       const newWildcardCells = usedWildcard ? [] : state.wildcardCells;
 
+      // Record solve step for replay
+      const solveStep: SolveStep = {
+        wordFound: matchingWord.word,
+        cellPositions: selectedCells.map(c => [c.row, c.col] as [number, number]),
+        gridStateBefore: gridToSnapshot(board.grid),
+        gridStateAfter: gridToSnapshot(newGrid),
+        timestamp: Date.now() - state.puzzleStartTime,
+        score: wordScore,
+        combo: comboLevel,
+      };
+
       return {
         ...state,
         board: { ...board, grid: newGrid, words: newWords },
@@ -403,6 +414,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         wildcardCells: newWildcardCells,
         spotlightActive: false,
         spotlightLetters: [],
+        solveSequence: [...state.solveSequence, solveStep],
       };
     }
 
@@ -757,5 +769,6 @@ export function useGame(
     totalWords,
     remainingWords,
     lastInvalidTap: state.lastInvalidTap,
+    solveSequence: state.solveSequence,
   };
 }
