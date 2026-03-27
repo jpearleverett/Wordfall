@@ -271,6 +271,9 @@ interface PlayerContextType extends PlayerData {
     boardConfig: import('../types').BoardConfig;
   }) => import('../types').FriendChallenge;
   respondToChallenge: (challengeId: string, score: number, stars: number) => void;
+
+  // Event Progress
+  updateEventProgress: (eventId: string, progress: number, claimedTiers?: string[]) => void;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -1515,6 +1518,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+
+  // ── Player Segmentation ─────────────────────────────────────────────
+
+  const recomputeSegments = useCallback((_totalSpendCents?: number, _sharesCount?: number) => {
+    // Segmentation recomputation — stub for now
+  }, []);
 
   // ── Friend Challenges ────────────────────────────────────────────────
 

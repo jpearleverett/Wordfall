@@ -59,6 +59,14 @@ import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT } fr
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
 import { funnelTracker } from './src/services/funnelTracker';
+import {
+  getPersonalizedHomeContent,
+  getPersonalizedNotifications,
+  getPersonalizedDifficulty,
+  getRecommendedMode,
+  getWelcomeBackMessage,
+} from './src/services/playerSegmentation';
+import { firestoreService, FirestoreGift } from './src/services/firestore';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createStackNavigator();
