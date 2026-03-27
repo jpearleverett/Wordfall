@@ -1,12 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   Image,
   ScrollView,
   TouchableOpacity,
+  TextInput,
   StyleSheet,
   Dimensions,
+  RefreshControl,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
@@ -14,11 +18,15 @@ import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlayer } from '../contexts/PlayerContext';
+import {
+  firestoreService,
+  FirestoreLeaderboardEntry,
+} from '../services/firestore';
 
 const { width } = Dimensions.get('window');
 
-const TIME_TABS = ['Daily Challenge', 'Daily', 'Weekly', 'All-Time'] as const;
-const SCOPE_TABS = ['Global', 'Friends', 'Club'] as const;
+const TIME_TABS = ['Daily', 'Weekly', 'All-Time'] as const;
+type TimeTab = (typeof TIME_TABS)[number];
 
 interface LeaderboardEntry {
   id: string;
@@ -48,12 +56,12 @@ const MOCK_FIRST_NAMES = [
   'Xena', 'Zephyr',
 ];
 
-function generateDailyLeaderboard(playerDailyScore: number | null, playerId: string): LeaderboardEntry[] {
-  const today = new Date();
-  const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-  const rng = mulberry32(dateSeed);
-
-  // Generate 50 mock entries
+function generateMockLeaderboard(
+  seed: number,
+  playerScore: number | null,
+  playerId: string
+): LeaderboardEntry[] {
+  const rng = mulberry32(seed);
   const entries: LeaderboardEntry[] = [];
   const usedNames = new Set<string>();
 
@@ -64,39 +72,19 @@ function generateDailyLeaderboard(playerDailyScore: number | null, playerId: str
     } while (usedNames.has(name));
     usedNames.add(name);
 
-    // Top players get higher scores, with natural distribution
     const baseScore = Math.floor(800 - i * 12 + rng() * 200);
     const score = Math.max(100, baseScore);
-
-    entries.push({
-      id: `mock_${i}`,
-      name,
-      score,
-      rank: i + 1,
-    });
+    entries.push({ id: `mock_${i}`, name, score, rank: i + 1 });
   }
 
-  // Sort by score descending
   entries.sort((a, b) => b.score - a.score);
 
-  // If the player has a daily score, insert them at the correct position
-  if (playerDailyScore !== null && playerDailyScore > 0) {
-    // Remove any existing player entry placeholder
-    const playerEntry: LeaderboardEntry = {
-      id: playerId,
-      name: 'You',
-      score: playerDailyScore,
-      rank: 0,
-    };
-
-    entries.push(playerEntry);
+  if (playerScore !== null && playerScore > 0) {
+    entries.push({ id: playerId, name: 'You', score: playerScore, rank: 0 });
     entries.sort((a, b) => b.score - a.score);
-
-    // Limit to 50 entries
     entries.splice(50);
   }
 
-  // Assign ranks
   entries.forEach((entry, index) => {
     entry.rank = index + 1;
   });
@@ -106,8 +94,23 @@ function generateDailyLeaderboard(playerDailyScore: number | null, playerId: str
 
 function formatTodayDate(): string {
   const today = new Date();
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
   return `${months[today.getMonth()]} ${today.getDate()}, ${today.getFullYear()}`;
+}
+
+function firestoreToEntries(
+  data: FirestoreLeaderboardEntry[],
+  currentUserId: string
+): LeaderboardEntry[] {
+  return data.map((entry, index) => ({
+    id: entry.userId,
+    name: entry.userId === currentUserId ? 'You' : entry.displayName,
+    score: entry.score,
+    rank: index + 1,
+  }));
 }
 
 interface LeaderboardScreenProps {
@@ -126,37 +129,155 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   const { user } = useAuth();
   const player = usePlayer();
   const currentUserId = currentUserIdProp ?? user?.uid ?? '';
-  const [internalTab, setInternalTab] = useState<string>(activeTabProp ?? 'daily_challenge');
-  const activeTab = activeTabProp ?? internalTab;
-  const onChangeTab = onChangeTabProp ?? setInternalTab;
 
-  const isDailyChallenge = activeTab === 'daily_challenge';
-  const activeTime = isDailyChallenge
-    ? 'Daily Challenge'
-    : TIME_TABS.find((t) => activeTab.includes(t.toLowerCase())) ?? 'Daily';
-  const activeScope = SCOPE_TABS.find((s) => activeTab.includes(s.toLowerCase())) ?? 'Global';
+  const [activeTime, setActiveTime] = useState<TimeTab>('Daily');
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [firestoreEntries, setFirestoreEntries] = useState<LeaderboardEntry[]>([]);
+  const [friendCode, setFriendCode] = useState('');
+  const [myFriendCode, setMyFriendCode] = useState('');
+  const [showAddFriend, setShowAddFriend] = useState(false);
+  const [addFriendInput, setAddFriendInput] = useState('');
+  const [addingFriend, setAddingFriend] = useState(false);
+
+  const isFirestoreAvailable = firestoreService.isAvailable();
 
   // Check if player completed today's daily
   const today = new Date().toISOString().split('T')[0];
   const playerCompletedDaily = player.dailyCompleted.includes(today);
+  const playerDailyScore = playerCompletedDaily
+    ? Math.max(300, (player.totalScore % 900) + 200)
+    : null;
 
-  // For the daily challenge tab, compute a mock score from player data
-  const playerDailyScore = playerCompletedDaily ? Math.max(300, player.totalScore % 900 + 200) : null;
+  // Mock fallback for when Firestore is not available
+  const mockDailyEntries = useMemo(() => {
+    const dateSeed =
+      new Date().getFullYear() * 10000 +
+      (new Date().getMonth() + 1) * 100 +
+      new Date().getDate();
+    return generateMockLeaderboard(dateSeed, playerDailyScore, currentUserId);
+  }, [playerDailyScore, currentUserId]);
 
-  const dailyChallengeEntries = useMemo(
-    () => generateDailyLeaderboard(playerDailyScore, currentUserId),
-    [playerDailyScore, currentUserId],
+  const mockWeeklyEntries = useMemo(() => {
+    const weekSeed =
+      new Date().getFullYear() * 100 +
+      Math.ceil(
+        (new Date().getTime() - new Date(new Date().getFullYear(), 0, 1).getTime()) /
+          604800000
+      );
+    return generateMockLeaderboard(weekSeed, player.totalScore > 0 ? Math.floor(player.totalScore * 0.3) : null, currentUserId);
+  }, [player.totalScore, currentUserId]);
+
+  const mockAllTimeEntries = useMemo(() => {
+    return generateMockLeaderboard(42, player.totalScore > 0 ? player.totalScore : null, currentUserId);
+  }, [player.totalScore, currentUserId]);
+
+  // Fetch leaderboard data from Firestore
+  const fetchLeaderboard = useCallback(
+    async (tab: TimeTab) => {
+      if (!isFirestoreAvailable) return;
+      setLoading(true);
+      try {
+        let data: FirestoreLeaderboardEntry[] = [];
+        if (tab === 'Daily') {
+          data = await firestoreService.getDailyLeaderboard(50);
+        } else if (tab === 'Weekly') {
+          data = await firestoreService.getWeeklyLeaderboard(50);
+        } else {
+          data = await firestoreService.getAllTimeLeaderboard(50);
+        }
+
+        if (data.length > 0) {
+          // Merge with current player if not already in the list
+          const entries = firestoreToEntries(data, currentUserId);
+          const playerInList = entries.some((e) => e.id === currentUserId);
+          if (!playerInList && player.totalScore > 0) {
+            let playerScore = 0;
+            if (tab === 'Daily') playerScore = playerDailyScore || 0;
+            else if (tab === 'Weekly') playerScore = Math.floor(player.totalScore * 0.3);
+            else playerScore = player.totalScore;
+
+            if (playerScore > 0) {
+              entries.push({
+                id: currentUserId,
+                name: 'You',
+                score: playerScore,
+                rank: 0,
+              });
+              entries.sort((a, b) => b.score - a.score);
+              entries.forEach((e, i) => (e.rank = i + 1));
+            }
+          }
+          setFirestoreEntries(entries);
+        } else {
+          setFirestoreEntries([]);
+        }
+      } catch (e) {
+        console.warn('[Leaderboard] fetch failed:', e);
+        setFirestoreEntries([]);
+      }
+      setLoading(false);
+    },
+    [currentUserId, isFirestoreAvailable, playerDailyScore, player.totalScore]
   );
 
-  const entries: LeaderboardEntry[] = isDailyChallenge
-    ? dailyChallengeEntries
-    : (leaderboardData ?? []).map((entry: any, index: number) => ({
-        id: entry.id ?? `user_${index}`,
-        name: entry.name ?? `Player ${index + 1}`,
-        score: entry.score ?? 0,
-        rank: entry.rank ?? index + 1,
-        avatar: entry.avatar,
-      }));
+  // Load friend code on mount
+  useEffect(() => {
+    if (currentUserId && isFirestoreAvailable) {
+      firestoreService.generateFriendCode(currentUserId).then(setMyFriendCode);
+    } else {
+      setMyFriendCode(currentUserId.slice(0, 8).toUpperCase());
+    }
+  }, [currentUserId, isFirestoreAvailable]);
+
+  // Fetch data when tab changes
+  useEffect(() => {
+    fetchLeaderboard(activeTime);
+  }, [activeTime, fetchLeaderboard]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchLeaderboard(activeTime);
+    setRefreshing(false);
+  }, [activeTime, fetchLeaderboard]);
+
+  const handleAddFriend = useCallback(async () => {
+    if (!addFriendInput.trim()) return;
+    setAddingFriend(true);
+    const result = await firestoreService.addFriend(currentUserId, addFriendInput.trim());
+    setAddingFriend(false);
+    if (result) {
+      Alert.alert(
+        'Friend Request Sent!',
+        `Request sent to ${result.friendName}. They will appear in your friends list once accepted.`
+      );
+      setAddFriendInput('');
+      setShowAddFriend(false);
+    } else {
+      Alert.alert(
+        'Could Not Add Friend',
+        'Friend code not found, or you already have a pending request with this player.'
+      );
+    }
+  }, [addFriendInput, currentUserId]);
+
+  // Determine which entries to show — prefer Firestore, fall back to mock
+  const entries: LeaderboardEntry[] = useMemo(() => {
+    if (isFirestoreAvailable && firestoreEntries.length > 0) {
+      return firestoreEntries;
+    }
+    // Offline fallback
+    if (activeTime === 'Daily') return mockDailyEntries;
+    if (activeTime === 'Weekly') return mockWeeklyEntries;
+    return mockAllTimeEntries;
+  }, [
+    isFirestoreAvailable,
+    firestoreEntries,
+    activeTime,
+    mockDailyEntries,
+    mockWeeklyEntries,
+    mockAllTimeEntries,
+  ]);
 
   const getRankColor = (rank: number): string => {
     if (rank === 1) return '#FFD700';
@@ -221,9 +342,21 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 </Text>
               </View>
               <Text style={styles.topName} numberOfLines={1}>
-                {entry.name}{isMe ? ' (You)' : ''}
+                {entry.name}
+                {isMe ? ' (You)' : ''}
               </Text>
-              <Text style={[styles.topScore, { color: isMe ? COLORS.accent : rankColor, textShadowColor: (isMe ? COLORS.accent : rankColor) + '60', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 }]}>
+              <Text
+                style={[
+                  styles.topScore,
+                  {
+                    color: isMe ? COLORS.accent : rankColor,
+                    textShadowColor:
+                      (isMe ? COLORS.accent : rankColor) + '60',
+                    textShadowOffset: { width: 0, height: 0 },
+                    textShadowRadius: 8,
+                  },
+                ]}
+              >
                 {entry.score.toLocaleString()}
               </Text>
             </LinearGradient>
@@ -237,7 +370,11 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     <View style={styles.container}>
       <AmbientBackdrop variant="leaderboard" />
       <View style={styles.header}>
-        <Image source={LOCAL_IMAGES.trophyCrown} style={{ width: 28, height: 28 }} resizeMode="contain" />
+        <Image
+          source={LOCAL_IMAGES.trophyCrown}
+          style={{ width: 28, height: 28 }}
+          resizeMode="contain"
+        />
         <Text style={styles.headerTitle}>LEADERBOARD</Text>
       </View>
 
@@ -249,29 +386,25 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             <TouchableOpacity
               key={tab}
               style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => {
-                if (tab === 'Daily Challenge') {
-                  onChangeTab('daily_challenge');
-                } else {
-                  onChangeTab(`${tab.toLowerCase()}_${activeScope.toLowerCase()}`);
-                }
-              }}
+              onPress={() => setActiveTime(tab)}
             >
               <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {tab === 'Daily Challenge' ? 'Daily' : tab}
+                {tab}
               </Text>
-              {tab === 'Daily Challenge' && (
-                <Text style={[styles.tabSubText, isActive && { color: COLORS.gold }]}>Challenge</Text>
-              )}
             </TouchableOpacity>
           );
         })}
       </View>
 
-      {/* Daily Challenge Date Header */}
-      {isDailyChallenge && (
+      {/* Daily Date Header */}
+      {activeTime === 'Daily' && (
         <LinearGradient
-          colors={['rgba(255,215,0,0.10)', 'rgba(255,159,0,0.05)'] as [string, string]}
+          colors={
+            ['rgba(255,215,0,0.10)', 'rgba(255,159,0,0.05)'] as [
+              string,
+              string,
+            ]
+          }
           style={styles.dailyDateBanner}
         >
           <Text style={styles.dailyDateIcon}>{'☀️'}</Text>
@@ -287,22 +420,55 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         </LinearGradient>
       )}
 
-      {/* Scope Tabs - only for non-daily-challenge */}
-      {!isDailyChallenge && (
-        <View style={styles.scopeBar}>
-          {SCOPE_TABS.map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.scopeTab, activeScope === tab && styles.scopeTabActive]}
-              onPress={() => onChangeTab(`${activeTime.toLowerCase()}_${tab.toLowerCase()}`)}
-            >
-              <Text
-                style={[styles.scopeTabText, activeScope === tab && styles.scopeTabTextActive]}
-              >
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {/* Friend Code + Add Friend */}
+      <View style={styles.friendCodeBar}>
+        <View style={styles.friendCodeLeft}>
+          <Text style={styles.friendCodeLabel}>Your Code:</Text>
+          <Text style={styles.friendCodeValue}>{myFriendCode}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.addFriendButton}
+          onPress={() => setShowAddFriend(!showAddFriend)}
+        >
+          <Text style={styles.addFriendButtonText}>
+            {showAddFriend ? 'Cancel' : '+ Add Friend'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {showAddFriend && (
+        <View style={styles.addFriendRow}>
+          <TextInput
+            style={styles.addFriendInput}
+            placeholder="Enter friend code..."
+            placeholderTextColor={COLORS.textMuted}
+            value={addFriendInput}
+            onChangeText={setAddFriendInput}
+            autoCapitalize="characters"
+            maxLength={12}
+          />
+          <TouchableOpacity
+            style={[
+              styles.addFriendSubmit,
+              addingFriend && { opacity: 0.5 },
+            ]}
+            onPress={handleAddFriend}
+            disabled={addingFriend}
+          >
+            {addingFriend ? (
+              <ActivityIndicator size="small" color={COLORS.bg} />
+            ) : (
+              <Text style={styles.addFriendSubmitText}>Send</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {!isFirestoreAvailable && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>
+            Offline mode — showing simulated leaderboard
+          </Text>
         </View>
       )}
 
@@ -310,8 +476,21 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.accent}
+            colors={[COLORS.accent]}
+          />
+        }
       >
-        {entries.length === 0 ? (
+        {loading && entries.length === 0 ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator size="large" color={COLORS.accent} />
+            <Text style={styles.emptySubtext}>Loading leaderboard...</Text>
+          </View>
+        ) : entries.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>{'🏆'}</Text>
             <Text style={styles.emptyText}>No leaderboard data yet</Text>
@@ -392,7 +571,9 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         {/* Current user bar (sticky at bottom if not in top list) */}
         {currentUser && currentUser.rank > 3 && (
           <LinearGradient
-            colors={[COLORS.accent + '18', COLORS.accent + '08'] as [string, string]}
+            colors={
+              [COLORS.accent + '18', COLORS.accent + '08'] as [string, string]
+            }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.currentUserBar}
@@ -463,18 +644,12 @@ const styles = StyleSheet.create({
     ...SHADOWS.soft,
   },
   tabText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textMuted,
   },
   tabTextActive: {
     color: COLORS.accent,
-  },
-  tabSubText: {
-    fontSize: 8,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textMuted,
-    letterSpacing: 0.5,
   },
   dailyDateBanner: {
     marginHorizontal: 16,
@@ -483,7 +658,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,215,0,0.15)',
   },
@@ -515,33 +690,95 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: FONTS.bodySemiBold,
   },
-  scopeBar: {
+  friendCodeBar: {
     flexDirection: 'row',
-    marginHorizontal: 16,
-    gap: 8,
-    marginBottom: 12,
-  },
-  scopeTab: {
-    flex: 1,
-    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 10,
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(17, 22, 56, 0.6)',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: 'rgba(26, 31, 69, 0.4)',
   },
-  scopeTabActive: {
-    borderColor: COLORS.accent + '60',
-    backgroundColor: COLORS.accent + '15',
-    ...SHADOWS.glow(COLORS.accent),
+  friendCodeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  scopeTabText: {
-    fontSize: 13,
+  friendCodeLabel: {
+    fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textMuted,
   },
-  scopeTabTextActive: {
+  friendCodeValue: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
     color: COLORS.accent,
+    letterSpacing: 2,
+  },
+  addFriendButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: COLORS.accent + '20',
+    borderWidth: 1,
+    borderColor: COLORS.accent + '40',
+  },
+  addFriendButtonText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
+  },
+  addFriendRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    gap: 8,
+  },
+  addFriendInput: {
+    flex: 1,
+    height: 42,
+    backgroundColor: 'rgba(17, 22, 56, 0.8)',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    letterSpacing: 2,
+  },
+  addFriendSubmit: {
+    height: 42,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addFriendSubmitText: {
+    fontSize: 14,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.bg,
+  },
+  offlineBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,159,67,0.12)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,159,67,0.25)',
+    alignItems: 'center',
+  },
+  offlineBannerText: {
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.orange,
   },
   scrollView: {
     flex: 1,
@@ -566,6 +803,7 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     color: COLORS.textSecondary,
+    marginTop: 8,
   },
   topThreeContainer: {
     flexDirection: 'row',

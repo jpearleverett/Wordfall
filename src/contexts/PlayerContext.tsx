@@ -155,6 +155,9 @@ interface PlayerData {
     rewardsClaimed: number[];
   };
 
+  // Event Progress
+  eventProgress: Record<string, { progress: number; claimedTiers: string[]; startedAt: number }>;
+
   // Puzzle Energy
   puzzleEnergy: PuzzleEnergyState;
 
@@ -396,6 +399,9 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
     lastWinDate: null,
     rewardsClaimed: [],
   },
+
+  // Event Progress
+  eventProgress: {},
 
   // Puzzle Energy
   puzzleEnergy: {
@@ -1568,6 +1574,43 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ── Player Segmentation ───────────────────────────────────────────────
+
+  const recomputeSegments = useCallback((totalSpendCents: number = 0, sharesCount: number = 0) => {
+    setData((prev) => {
+      const rareTilesCount = Object.values(prev.collections.rareTiles)
+        .reduce((sum, c) => sum + c, 0);
+      const input: SegmentationInput = {
+        puzzlesSolved: prev.puzzlesSolved,
+        currentLevel: prev.currentLevel,
+        highestLevel: prev.highestLevel,
+        totalStars: prev.totalStars,
+        starsByLevel: prev.starsByLevel,
+        perfectSolves: prev.perfectSolves,
+        dailyLoginDates: prev.dailyLoginDates,
+        lastActiveDate: prev.lastActiveDate,
+        dailyCompleted: prev.dailyCompleted,
+        atlasPages: prev.collections.atlasPages,
+        rareTilesCount,
+        restoredWings: prev.restoredWings,
+        clubId: prev.clubId,
+        friendIds: prev.friendIds,
+        hintGiftsSentToday: prev.hintGiftsSentToday,
+        tileGiftsSentToday: prev.tileGiftsSentToday,
+        unlockedModes: prev.unlockedModes,
+        modeStats: prev.modeStats,
+        achievementIds: prev.achievementIds,
+        tooltipsShown: prev.tooltipsShown,
+        totalSpendCents,
+        wordsFoundTotal: prev.wordsFoundTotal,
+        modesPlayedThisWeek: prev.modesPlayedThisWeek,
+        sharesCount,
+      };
+      const segments = computeSegments(input);
+      return { ...prev, segments };
+    });
+  }, []);
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -1618,6 +1661,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         recordPerformanceMetrics,
         sendChallenge,
         respondToChallenge,
+        recomputeSegments,
       }}
     >
       {children}
