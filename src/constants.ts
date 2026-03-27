@@ -851,6 +851,20 @@ export const BACKGROUND_EVOLUTION = {
   expert: { starCount: 25, sunScale: 1.3, gridSpeed: 4000, mountains: 2, meteor: true, aurora: true },
 } as const;
 
+// Ad configuration — rewarded ads tuning
+export const AD_CONFIG = {
+  /** AdMob rewarded ad unit ID (defaults to Google test ID for development) */
+  REWARDED_AD_UNIT_ID:
+    (typeof process !== 'undefined' && (process as any).env?.EXPO_PUBLIC_ADMOB_REWARDED_ID) ||
+    'ca-app-pub-3940256099942544/5224354917', // Google test ad unit
+  /** Maximum total rewarded ads a player can watch per day */
+  MAX_ADS_PER_DAY: 10,
+  /** Maximum "watch ad for coins" ads per day */
+  MAX_COIN_ADS_PER_DAY: 3,
+  /** Minimum cooldown between rewarded ads (ms) */
+  REWARDED_COOLDOWN_MS: 30_000, // 30 seconds
+};
+
 // Economy Tuning — central knobs for balancing the free-to-play economy
 export const ECONOMY_TUNING = {
   // Coins earned vs spent ratio target: 1.5:1 (earn 50% more than spend)
