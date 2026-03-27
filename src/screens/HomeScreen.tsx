@@ -65,6 +65,10 @@ interface HomeScreenProps {
   segmentHomeContent?: string[];
   /** Segment-driven welcome back message for at-risk/lapsed/returned players */
   segmentWelcomeMessage?: { title: string; subtitle: string } | null;
+  /** Active event banners to display */
+  activeEventBanners?: Array<{ id: string; name: string; icon: string; label: string; color: string }>;
+  /** Navigate to event screen */
+  onOpenEvents?: () => void;
 }
 
 const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: string }> = {
@@ -107,6 +111,8 @@ export function HomeScreen({
   streakShieldActive = false,
   segmentHomeContent = [],
   segmentWelcomeMessage = null,
+  activeEventBanners = [],
+  onOpenEvents,
 }: HomeScreenProps) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
