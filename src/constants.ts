@@ -592,6 +592,16 @@ export const LIVES = {
   gemRefillCost: 10,
 };
 
+// Puzzle Energy (soft scarcity — NOT a hard wall)
+export const ENERGY = {
+  MAX: 30,
+  REGEN_MINUTES: 15,
+  FREE_MODES: ['daily', 'endless', 'relax'] as string[],
+  BONUS_PLAYS_AFTER_ZERO: 3,
+  AD_REFILL_AMOUNT: 5,
+  GEM_REFILL_COST: 10,
+};
+
 // Streak
 export const STREAK = {
   graceDays: 1,

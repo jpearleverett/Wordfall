@@ -35,6 +35,7 @@ interface ContextualOfferProps {
     levelNumber?: number;
     difficulty?: string;
     wordsRemaining?: number;
+    hintsUsed?: number;
   };
   onAccept: () => void;
   onDismiss: () => void;

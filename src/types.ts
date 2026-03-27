@@ -595,6 +595,24 @@ export interface WinStreakState {
   rewardsClaimed: number[];
 }
 
+// ============ PUZZLE ENERGY ============
+export interface PuzzleEnergyState {
+  current: number;
+  lastRegenTime: string; // ISO timestamp
+  lastResetDate: string; // YYYY-MM-DD — for daily reset
+  bonusPlaysUsed: number;
+}
+
+// ============ PLAYER METRICS (for adaptive difficulty) ============
+export interface PlayerMetrics {
+  levelAttempts: Record<number, number>;
+  averageStars: number;
+  averageCompletionTime: number;
+  consecutiveThreeStars: number;
+  recentStars: number[]; // last 20 puzzle star results
+  recentCompletionTimes: number[]; // last 20 puzzle completion times (seconds)
+}
+
 // ============ CONTEXTUAL OFFER ============
 export type ContextualOfferType =
   | 'hint_rescue'
@@ -618,18 +636,48 @@ export const DEFAULT_LIVES: LivesState = {
 };
 
 // ============ ANALYTICS ============
+// Canonical event type — kept in sync with src/services/analytics.ts AnalyticsEventName
 export type AnalyticsEvent =
+  // Core retention
+  | 'app_open'
+  | 'tutorial_step'
+  | 'tutorial_complete'
+  // Puzzle lifecycle
   | 'puzzle_start'
   | 'puzzle_complete'
   | 'puzzle_fail'
   | 'puzzle_abandon'
-  | 'daily_login'
-  | 'streak_count'
-  | 'session_start'
-  | 'session_end'
+  // In-game actions
+  | 'hint_used'
+  | 'booster_used'
+  | 'dead_end_detected'
+  // Offers & monetization
+  | 'offer_shown'
+  | 'offer_accepted'
+  | 'offer_dismissed'
+  | 'mystery_wheel_spin'
+  | 'iap_initiated'
+  | 'iap_completed'
   | 'iap_purchase'
   | 'ad_watched'
-  | 'hint_used'
+  // Progression & social
+  | 'daily_challenge_complete'
+  | 'streak_broken'
+  | 'achievement_earned'
+  | 'ceremony_shown'
+  | 'ceremony_dismissed'
+  | 'feature_unlocked'
+  | 'screen_view'
+  | 'club_joined'
+  | 'share_tapped'
+  // Session
+  | 'session_start'
+  | 'session_end'
+  // A/B testing
+  | 'experiment_assigned'
+  // Legacy / granular events
+  | 'daily_login'
+  | 'streak_count'
   | 'undo_used'
   | 'club_join'
   | 'friend_challenge_sent'
@@ -641,6 +689,8 @@ export type AnalyticsEvent =
   | 'atlas_word_found'
   | 'rare_tile_earned'
   | 'stamp_collected'
+  | 'mode_started'
   | 'mode_played'
   | 'event_participated'
-  | 'collection_completed';
+  | 'collection_completed'
+  | 'level_up';

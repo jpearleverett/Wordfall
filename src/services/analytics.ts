@@ -1,33 +1,112 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type AnalyticsEvent =
-  | 'puzzle_start' | 'puzzle_complete' | 'puzzle_fail' | 'puzzle_abandon'
-  | 'daily_login' | 'streak_count' | 'session_start' | 'session_end'
-  | 'iap_purchase' | 'ad_watched' | 'hint_used' | 'undo_used'
-  | 'club_join' | 'friend_challenge_sent' | 'gift_sent'
-  | 'gravity_interaction' | 'dead_end_hit' | 'wrong_order_attempt' | 'chain_count'
-  | 'atlas_word_found' | 'rare_tile_earned' | 'stamp_collected'
-  | 'mode_started' | 'booster_used' | 'collection_completed'
-  | 'chapter_completed' | 'level_up' | 'tutorial_step';
+// ── Event types ──
+export type AnalyticsEventName =
+  // Core retention
+  | 'app_open'
+  | 'tutorial_step'
+  | 'tutorial_complete'
+  // Puzzle lifecycle
+  | 'puzzle_start'
+  | 'puzzle_complete'
+  | 'puzzle_fail'
+  | 'puzzle_abandon'
+  // In-game actions
+  | 'hint_used'
+  | 'booster_used'
+  | 'dead_end_detected'
+  // Offers & monetization
+  | 'offer_shown'
+  | 'offer_accepted'
+  | 'offer_dismissed'
+  | 'mystery_wheel_spin'
+  | 'iap_initiated'
+  | 'iap_completed'
+  | 'ad_watched'
+  // Progression & social
+  | 'daily_challenge_complete'
+  | 'streak_broken'
+  | 'achievement_earned'
+  | 'ceremony_shown'
+  | 'ceremony_dismissed'
+  | 'feature_unlocked'
+  | 'screen_view'
+  | 'club_joined'
+  | 'share_tapped'
+  // Session
+  | 'session_end'
+  // A/B testing
+  | 'experiment_assigned'
+  // Legacy events (kept for backward compat with existing callsites)
+  | 'mode_started'
+  | 'daily_login'
+  | 'streak_count'
+  | 'session_start'
+  | 'undo_used'
+  | 'chain_count'
+  | 'gravity_interaction'
+  | 'rare_tile_earned'
+  | 'atlas_word_found'
+  | 'stamp_collected'
+  | 'mode_played'
+  | 'event_participated'
+  | 'collection_completed'
+  | 'club_join'
+  | 'friend_challenge_sent'
+  | 'gift_sent'
+  | 'wrong_order_attempt'
+  | 'iap_purchase'
+  | 'level_up'
+  | 'tutorial_step';
 
-interface BufferedEvent {
+export type EventParams = Record<string, unknown>;
+
+export interface StoredEvent {
   id: string;
-  event: AnalyticsEvent;
+  event: AnalyticsEventName;
   timestamp: number;
-  params?: Record<string, unknown>;
+  params?: EventParams;
+  userId: string | null;
+  sessionId: string | null;
 }
 
 interface AnalyticsState {
   userId: string | null;
   sessionId: string | null;
   sessionStartedAt: number | null;
-  buffer: BufferedEvent[];
+  sessionNumber: number;
+  installTimestamp: number;
   userProperties: Record<string, string>;
+  experiments: Record<string, string>; // experimentName -> variant
 }
 
-const STORAGE_KEY = '@wordfall_analytics_buffer_v1';
-const MAX_BUFFER = 300;
-const FLUSH_INTERVAL_MS = 60_000; // Auto-flush every 60 seconds
+interface RetentionMetrics {
+  d1: boolean | null;
+  d7: boolean | null;
+  d30: boolean | null;
+  installDate: string | null;
+  appOpenDates: string[];
+}
+
+// ── Storage keys ──
+const STORAGE_KEY_STATE = '@wordfall_analytics_state_v2';
+const STORAGE_KEY_EVENTS = '@wordfall_analytics_events_v2';
+const STORAGE_KEY_RETENTION = '@wordfall_analytics_retention_v2';
+
+const MAX_LOCAL_EVENTS = 5000;
+const FLUSH_INTERVAL_MS = 60_000;
+const EVENT_RETENTION_DAYS = 7;
+
+// ── Deterministic hash for A/B testing ──
+function simpleHash(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+}
 
 class Analytics {
   private static instance: Analytics;
@@ -35,13 +114,16 @@ class Analytics {
     userId: null,
     sessionId: null,
     sessionStartedAt: null,
-    buffer: [],
+    sessionNumber: 0,
+    installTimestamp: 0,
     userProperties: {},
+    experiments: {},
   };
   private loaded = false;
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private firebaseAnalytics: any = null;
   private firestore: any = null;
+  private useFirebase = false;
 
   static getInstance(): Analytics {
     if (!Analytics.instance) {
@@ -50,39 +132,121 @@ class Analytics {
     return Analytics.instance;
   }
 
-  /**
-   * Initialize Firebase Analytics and Firestore integrations.
-   * Call this once after Firebase app is initialized.
-   * Silently degrades if Firebase is not configured.
-   */
+  // ─────────────────────────────────────────
+  // Initialization
+  // ─────────────────────────────────────────
+
   async initFirebase(): Promise<void> {
+    await this.ensureLoaded();
+
     try {
       const { isFirebaseConfigured } = await import('../config/firebase');
 
       if (!isFirebaseConfigured) {
-        console.log('[Analytics] Firebase not configured (placeholder keys), using local buffer only');
+        console.log('[Analytics] Firebase not configured, using local storage only');
         this.startAutoFlush();
         return;
       }
 
       // Dynamically import Firebase modules so the app works without them
-      const { getAnalytics, logEvent: fbLogEvent } = await import('firebase/analytics');
+      const { getAnalytics, logEvent: fbLogEvent, setUserId: fbSetUserId, setUserProperties: fbSetUserProperties } = await import('firebase/analytics');
       const { getFirestore, collection, addDoc } = await import('firebase/firestore');
       const { getApp } = await import('firebase/app');
 
       const app = getApp();
-      this.firebaseAnalytics = { instance: getAnalytics(app), logEvent: fbLogEvent };
+      this.firebaseAnalytics = {
+        instance: getAnalytics(app),
+        logEvent: fbLogEvent,
+        setUserId: fbSetUserId,
+        setUserProperties: fbSetUserProperties,
+      };
       this.firestore = { instance: getFirestore(app), collection, addDoc };
+      this.useFirebase = true;
 
-      console.log('[Analytics] Firebase Analytics and Firestore connected');
+      console.log('[Analytics] Firebase Analytics connected');
     } catch (error) {
-      // Firebase not configured or not available — use buffer-only mode
-      console.log('[Analytics] Firebase not available, using local buffer only');
+      console.log('[Analytics] Firebase not available, using local storage only');
     }
 
-    // Start auto-flush timer
     this.startAutoFlush();
   }
+
+  // ─────────────────────────────────────────
+  // Persistence
+  // ─────────────────────────────────────────
+
+  private async ensureLoaded(): Promise<void> {
+    if (this.loaded) return;
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY_STATE);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<AnalyticsState>;
+        this.state = {
+          ...this.state,
+          ...parsed,
+          userProperties: parsed.userProperties ?? {},
+          experiments: parsed.experiments ?? {},
+        };
+      }
+      // Set install timestamp if first run
+      if (!this.state.installTimestamp) {
+        this.state.installTimestamp = Date.now();
+      }
+    } catch (error) {
+      console.warn('[Analytics] Failed to load state:', error);
+    }
+    this.loaded = true;
+  }
+
+  private async persistState(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(this.state));
+    } catch (error) {
+      console.warn('[Analytics] Failed to persist state:', error);
+    }
+  }
+
+  private async loadEvents(): Promise<StoredEvent[]> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY_EVENTS);
+      if (raw) {
+        return JSON.parse(raw) as StoredEvent[];
+      }
+    } catch (error) {
+      console.warn('[Analytics] Failed to load events:', error);
+    }
+    return [];
+  }
+
+  private async persistEvents(events: StoredEvent[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(events));
+    } catch (error) {
+      console.warn('[Analytics] Failed to persist events:', error);
+    }
+  }
+
+  private async loadRetention(): Promise<RetentionMetrics> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY_RETENTION);
+      if (raw) return JSON.parse(raw) as RetentionMetrics;
+    } catch (error) {
+      console.warn('[Analytics] Failed to load retention:', error);
+    }
+    return { d1: null, d7: null, d30: null, installDate: null, appOpenDates: [] };
+  }
+
+  private async persistRetention(r: RetentionMetrics): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_RETENTION, JSON.stringify(r));
+    } catch (error) {
+      console.warn('[Analytics] Failed to persist retention:', error);
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // Auto-flush & pruning
+  // ─────────────────────────────────────────
 
   private startAutoFlush(): void {
     if (this.flushTimer) return;
@@ -100,115 +264,88 @@ class Analytics {
     }
   }
 
-  private async ensureLoaded(): Promise<void> {
-    if (this.loaded) return;
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<AnalyticsState>;
-        this.state = {
-          ...this.state,
-          ...parsed,
-          buffer: Array.isArray(parsed.buffer) ? parsed.buffer : [],
-          userProperties: parsed.userProperties ?? {},
-        };
+  /** Remove events older than EVENT_RETENTION_DAYS */
+  private async pruneOldEvents(): Promise<void> {
+    const events = await this.loadEvents();
+    const cutoff = Date.now() - (EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const pruned = events.filter(e => e.timestamp >= cutoff);
+    if (pruned.length !== events.length) {
+      await this.persistEvents(pruned);
+      if (__DEV__) {
+        console.log(`[Analytics] Pruned ${events.length - pruned.length} old events`);
       }
-    } catch (error) {
-      console.warn('[Analytics] Failed to load buffered events:', error);
     }
-    this.loaded = true;
   }
 
-  private async persist(): Promise<void> {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
-    } catch (error) {
-      console.warn('[Analytics] Failed to persist buffered events:', error);
-    }
-  }
+  // ─────────────────────────────────────────
+  // Event logging (core)
+  // ─────────────────────────────────────────
 
   private makeEventId(): string {
     return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  private appendEvent(event: AnalyticsEvent, params?: Record<string, unknown>): void {
-    const payload: BufferedEvent = {
+  async logEvent(event: AnalyticsEventName | string, params?: EventParams): Promise<void> {
+    await this.ensureLoaded();
+
+    // Auto-open a session when events start firing outside a session
+    if (!this.state.sessionId && event !== 'session_start' && event !== 'session_end') {
+      await this.startSession('foreground');
+    }
+
+    const storedEvent: StoredEvent = {
       id: this.makeEventId(),
-      event,
+      event: event as AnalyticsEventName,
       timestamp: Date.now(),
-      params: {
-        ...params,
-        userId: this.state.userId,
-        sessionId: this.state.sessionId,
-      },
+      params,
+      userId: this.state.userId,
+      sessionId: this.state.sessionId,
     };
 
-    this.state.buffer = [...this.state.buffer, payload].slice(-MAX_BUFFER);
-  }
-
-  /**
-   * Flush buffered events to Firestore `analytics_events` collection.
-   * Events that are successfully written are removed from the local buffer.
-   * Falls back silently if Firestore is not available.
-   */
-  async flush(): Promise<number> {
-    await this.ensureLoaded();
-    const eventsToFlush = [...this.state.buffer];
-
-    if (eventsToFlush.length === 0) return 0;
-
-    if (this.firestore) {
-      try {
-        const { instance: db, collection: col, addDoc } = this.firestore;
-        const analyticsCol = col(db, 'analytics_events');
-
-        // Write events in batches of 50 to avoid overwhelming Firestore
-        const batchSize = 50;
-        let flushed = 0;
-
-        for (let i = 0; i < eventsToFlush.length; i += batchSize) {
-          const batch = eventsToFlush.slice(i, i + batchSize);
-          const writePromises = batch.map((evt: BufferedEvent) =>
-            addDoc(analyticsCol, {
-              ...evt,
-              userProperties: { ...this.state.userProperties },
-              flushedAt: Date.now(),
-            })
-          );
-          await Promise.all(writePromises);
-          flushed += batch.length;
-        }
-
-        // Clear flushed events from buffer
-        const flushedIds = new Set(eventsToFlush.map((e: BufferedEvent) => e.id));
-        this.state.buffer = this.state.buffer.filter(e => !flushedIds.has(e.id));
-        await this.persist();
-
-        if (__DEV__) {
-          console.log(`[Analytics] Flushed ${flushed} events to Firestore`);
-        }
-
-        return flushed;
-      } catch (error) {
-        console.warn('[Analytics] Firestore flush failed, events retained in buffer:', error);
-        return 0;
-      }
-    }
+    // Store locally
+    const events = await this.loadEvents();
+    events.push(storedEvent);
+    // Cap local storage
+    const trimmed = events.length > MAX_LOCAL_EVENTS
+      ? events.slice(events.length - MAX_LOCAL_EVENTS)
+      : events;
+    await this.persistEvents(trimmed);
 
     if (__DEV__) {
-      console.log(`[Analytics] No Firestore connection, ${eventsToFlush.length} events buffered locally`);
+      console.log(`[Analytics] ${event}`, params ?? '');
     }
-    return 0;
+
+    // Forward to Firebase Analytics if available
+    if (this.useFirebase && this.firebaseAnalytics) {
+      try {
+        this.firebaseAnalytics.logEvent(
+          this.firebaseAnalytics.instance,
+          event,
+          params ?? {},
+        );
+      } catch (error) {
+        // Firebase Analytics logging is best-effort
+        if (__DEV__) {
+          console.warn('[Analytics] Firebase logEvent failed:', error);
+        }
+      }
+    }
   }
+
+  // ─────────────────────────────────────────
+  // Session management
+  // ─────────────────────────────────────────
 
   async startSession(source: 'app_launch' | 'foreground' = 'app_launch'): Promise<void> {
     await this.ensureLoaded();
     if (this.state.sessionId) return;
 
+    this.state.sessionNumber += 1;
     this.state.sessionId = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
     this.state.sessionStartedAt = Date.now();
-    this.appendEvent('session_start', { source });
-    await this.persist();
+    await this.persistState();
+
+    await this.logEvent('session_start', { source });
 
     if (__DEV__) {
       console.log('[Analytics] session_start', { sessionId: this.state.sessionId, source });
@@ -219,57 +356,224 @@ class Analytics {
     await this.ensureLoaded();
     if (!this.state.sessionId) return;
 
-    const durationMs = this.state.sessionStartedAt
-      ? Date.now() - this.state.sessionStartedAt
+    const durationSeconds = this.state.sessionStartedAt
+      ? Math.round((Date.now() - this.state.sessionStartedAt) / 1000)
       : 0;
 
-    this.appendEvent('session_end', { reason, durationMs });
+    await this.logEvent('session_end', { reason, duration_seconds: durationSeconds });
     this.state.sessionId = null;
     this.state.sessionStartedAt = null;
+    await this.persistState();
 
-    // Flush on session end to capture the full session
+    // Flush on session end
     await this.flush();
-    await this.persist();
 
     if (__DEV__) {
-      console.log('[Analytics] session_end', { reason, durationMs });
+      console.log('[Analytics] session_end', { reason, durationSeconds });
     }
   }
 
-  async logEvent(event: AnalyticsEvent, params?: Record<string, unknown>): Promise<void> {
+  // ─────────────────────────────────────────
+  // App open & retention tracking
+  // ─────────────────────────────────────────
+
+  async trackAppOpen(): Promise<void> {
     await this.ensureLoaded();
 
-    // Auto-open a session when gameplay events start firing.
-    if (!this.state.sessionId && event !== 'session_start' && event !== 'session_end') {
-      await this.startSession('foreground');
+    const daysSinceInstall = this.state.installTimestamp
+      ? Math.floor((Date.now() - this.state.installTimestamp) / (24 * 60 * 60 * 1000))
+      : 0;
+
+    await this.logEvent('app_open', {
+      session_number: this.state.sessionNumber,
+      days_since_install: daysSinceInstall,
+    });
+
+    // Update retention tracking
+    const retention = await this.loadRetention();
+    const today = new Date().toISOString().split('T')[0];
+
+    if (!retention.installDate) {
+      retention.installDate = today;
     }
 
-    this.appendEvent(event, params);
-    await this.persist();
-
-    if (__DEV__) {
-      console.log(`[Analytics] ${event}`, params);
-    }
-
-    // Send to Firebase Analytics if available
-    if (this.firebaseAnalytics) {
-      try {
-        this.firebaseAnalytics.logEvent(
-          this.firebaseAnalytics.instance,
-          event,
-          params ?? {},
-        );
-      } catch (error) {
-        // Firebase Analytics logging is best-effort
-        console.warn('[Analytics] Firebase logEvent failed:', error);
+    if (!retention.appOpenDates.includes(today)) {
+      retention.appOpenDates.push(today);
+      // Keep only last 60 days of dates
+      if (retention.appOpenDates.length > 60) {
+        retention.appOpenDates = retention.appOpenDates.slice(-60);
       }
     }
+
+    // Calculate retention metrics
+    if (retention.installDate) {
+      const installDate = new Date(retention.installDate);
+      const dayAfterInstall = (days: number): string => {
+        const d = new Date(installDate);
+        d.setDate(d.getDate() + days);
+        return d.toISOString().split('T')[0];
+      };
+
+      const d1Date = dayAfterInstall(1);
+      const d7Date = dayAfterInstall(7);
+      const d30Date = dayAfterInstall(30);
+
+      // Only mark as true/false once the day has passed
+      if (today >= d1Date && retention.d1 === null) {
+        retention.d1 = retention.appOpenDates.includes(d1Date);
+      }
+      if (today >= d7Date && retention.d7 === null) {
+        retention.d7 = retention.appOpenDates.includes(d7Date);
+      }
+      if (today >= d30Date && retention.d30 === null) {
+        retention.d30 = retention.appOpenDates.includes(d30Date);
+      }
+    }
+
+    await this.persistRetention(retention);
   }
+
+  // ─────────────────────────────────────────
+  // Typed convenience methods
+  // ─────────────────────────────────────────
+
+  async trackTutorialStep(stepName: string, completed: boolean): Promise<void> {
+    await this.logEvent('tutorial_step', { step_name: stepName, completed });
+  }
+
+  async trackTutorialComplete(durationSeconds: number): Promise<void> {
+    await this.logEvent('tutorial_complete', { duration_seconds: durationSeconds });
+  }
+
+  async trackPuzzleStart(level: number, mode: string, difficulty: string): Promise<void> {
+    await this.logEvent('puzzle_start', { level, mode, difficulty });
+  }
+
+  async trackPuzzleComplete(params: {
+    level: number;
+    mode: string;
+    stars: number;
+    duration_seconds: number;
+    hints_used: number;
+    undos_used: number;
+    words_found: number;
+    score: number;
+  }): Promise<void> {
+    await this.logEvent('puzzle_complete', params);
+  }
+
+  async trackPuzzleFail(params: {
+    level: number;
+    mode: string;
+    words_remaining: number;
+    attempts_on_level: number;
+  }): Promise<void> {
+    await this.logEvent('puzzle_fail', params);
+  }
+
+  async trackPuzzleAbandon(params: {
+    level: number;
+    mode: string;
+    words_found: number;
+    duration_seconds: number;
+  }): Promise<void> {
+    await this.logEvent('puzzle_abandon', params);
+  }
+
+  async trackHintUsed(level: number, hintsRemaining: number, timeSincePuzzleStart: number): Promise<void> {
+    await this.logEvent('hint_used', { level, hints_remaining: hintsRemaining, time_since_puzzle_start: timeSincePuzzleStart });
+  }
+
+  async trackBoosterUsed(boosterType: string, level: number, firstEver: boolean): Promise<void> {
+    await this.logEvent('booster_used', { booster_type: boosterType, level, first_ever: firstEver });
+  }
+
+  async trackDeadEndDetected(level: number, wordsRemaining: number): Promise<void> {
+    await this.logEvent('dead_end_detected', { level, words_remaining: wordsRemaining });
+  }
+
+  async trackOfferShown(offerType: string, context: string): Promise<void> {
+    await this.logEvent('offer_shown', { offer_type: offerType, context });
+  }
+
+  async trackOfferAccepted(offerType: string, context: string): Promise<void> {
+    await this.logEvent('offer_accepted', { offer_type: offerType, context });
+  }
+
+  async trackOfferDismissed(offerType: string, context: string): Promise<void> {
+    await this.logEvent('offer_dismissed', { offer_type: offerType, context });
+  }
+
+  async trackMysteryWheelSpin(resultType: string, isFree: boolean, totalSpins: number): Promise<void> {
+    await this.logEvent('mystery_wheel_spin', { result_type: resultType, is_free: isFree, total_spins: totalSpins });
+  }
+
+  async trackIAPInitiated(productId: string, price: number): Promise<void> {
+    await this.logEvent('iap_initiated', { product_id: productId, price });
+  }
+
+  async trackIAPCompleted(productId: string, price: number, revenue: number): Promise<void> {
+    await this.logEvent('iap_completed', { product_id: productId, price, revenue });
+  }
+
+  async trackAdWatched(adType: string, rewardType: string): Promise<void> {
+    await this.logEvent('ad_watched', { ad_type: adType, reward_type: rewardType });
+  }
+
+  async trackDailyChallengeComplete(streakLength: number): Promise<void> {
+    await this.logEvent('daily_challenge_complete', { streak_length: streakLength });
+  }
+
+  async trackStreakBroken(previousLength: number): Promise<void> {
+    await this.logEvent('streak_broken', { previous_length: previousLength });
+  }
+
+  async trackAchievementEarned(achievementId: string, tier: string): Promise<void> {
+    await this.logEvent('achievement_earned', { achievement_id: achievementId, tier });
+  }
+
+  async trackCeremonyShown(ceremonyType: string): Promise<void> {
+    await this.logEvent('ceremony_shown', { ceremony_type: ceremonyType });
+  }
+
+  async trackCeremonyDismissed(ceremonyType: string, durationShownMs: number): Promise<void> {
+    await this.logEvent('ceremony_dismissed', { ceremony_type: ceremonyType, duration_shown_ms: durationShownMs });
+  }
+
+  async trackSessionEnd(durationSeconds: number, puzzlesPlayed: number, coinsEarned: number): Promise<void> {
+    await this.logEvent('session_end', { duration_seconds: durationSeconds, puzzles_played: puzzlesPlayed, coins_earned: coinsEarned });
+  }
+
+  async trackFeatureUnlocked(featureId: string, playerLevel: number): Promise<void> {
+    await this.logEvent('feature_unlocked', { feature_id: featureId, player_level: playerLevel });
+  }
+
+  async trackScreenView(screenName: string): Promise<void> {
+    await this.logEvent('screen_view', { screen_name: screenName });
+  }
+
+  async trackClubJoined(clubId: string): Promise<void> {
+    await this.logEvent('club_joined', { club_id: clubId });
+  }
+
+  async trackShareTapped(shareType: 'puzzle' | 'streak' | 'collection'): Promise<void> {
+    await this.logEvent('share_tapped', { share_type: shareType });
+  }
+
+  // ─────────────────────────────────────────
+  // User identity & properties
+  // ─────────────────────────────────────────
 
   async setUserId(userId: string): Promise<void> {
     await this.ensureLoaded();
     this.state.userId = userId;
-    await this.persist();
+    await this.persistState();
+
+    if (this.useFirebase && this.firebaseAnalytics) {
+      try {
+        this.firebaseAnalytics.setUserId(this.firebaseAnalytics.instance, userId);
+      } catch (_) { /* best effort */ }
+    }
 
     if (__DEV__) {
       console.log(`[Analytics] setUserId: ${userId}`);
@@ -279,22 +583,193 @@ class Analytics {
   async setUserProperty(name: string, value: string): Promise<void> {
     await this.ensureLoaded();
     this.state.userProperties[name] = value;
-    await this.persist();
+    await this.persistState();
+
+    if (this.useFirebase && this.firebaseAnalytics) {
+      try {
+        this.firebaseAnalytics.setUserProperties(
+          this.firebaseAnalytics.instance,
+          { [name]: value },
+        );
+      } catch (_) { /* best effort */ }
+    }
 
     if (__DEV__) {
       console.log(`[Analytics] setUserProperty: ${name}=${value}`);
     }
   }
 
-  async getBufferedEvents(limit = 100): Promise<BufferedEvent[]> {
-    await this.ensureLoaded();
-    return this.state.buffer.slice(-Math.max(1, limit));
+  /** Batch-update all standard user properties at once */
+  async updateUserProperties(props: {
+    player_level?: number;
+    total_puzzles_solved?: number;
+    days_since_install?: number;
+    player_stage?: 'new' | 'early' | 'established' | 'veteran';
+    is_payer?: boolean;
+    total_spend?: number;
+  }): Promise<void> {
+    for (const [key, value] of Object.entries(props)) {
+      if (value !== undefined) {
+        await this.setUserProperty(key, String(value));
+      }
+    }
   }
 
-  async clearBufferedEvents(): Promise<void> {
+  // ─────────────────────────────────────────
+  // A/B Testing
+  // ─────────────────────────────────────────
+
+  /**
+   * Get a deterministic variant assignment for an experiment.
+   * Uses a hash of (userId + experimentName) to assign consistently.
+   * Once assigned, the variant is persisted and an experiment_assigned event is logged.
+   */
+  async getVariant(experimentName: string, variants: string[]): Promise<string> {
     await this.ensureLoaded();
-    this.state.buffer = [];
-    await this.persist();
+
+    if (variants.length === 0) {
+      throw new Error('[Analytics] getVariant called with empty variants array');
+    }
+
+    // Return existing assignment if present
+    if (this.state.experiments[experimentName]) {
+      return this.state.experiments[experimentName];
+    }
+
+    // Deterministic assignment based on userId + experimentName
+    const seed = `${this.state.userId ?? 'anonymous'}_${experimentName}`;
+    const index = simpleHash(seed) % variants.length;
+    const variant = variants[index];
+
+    // Persist assignment
+    this.state.experiments[experimentName] = variant;
+    await this.persistState();
+
+    // Log assignment event
+    await this.logEvent('experiment_assigned', {
+      experiment_name: experimentName,
+      variant,
+    });
+
+    if (__DEV__) {
+      console.log(`[Analytics] Experiment "${experimentName}" -> variant "${variant}"`);
+    }
+
+    return variant;
+  }
+
+  /** Get all currently assigned experiments */
+  getActiveExperiments(): Record<string, string> {
+    return { ...this.state.experiments };
+  }
+
+  // ─────────────────────────────────────────
+  // Flush to Firestore (when Firebase is configured)
+  // ─────────────────────────────────────────
+
+  async flush(): Promise<number> {
+    await this.ensureLoaded();
+
+    // Prune old events first
+    await this.pruneOldEvents();
+
+    if (!this.useFirebase || !this.firestore) {
+      if (__DEV__) {
+        const events = await this.loadEvents();
+        console.log(`[Analytics] Local mode — ${events.length} events stored`);
+      }
+      return 0;
+    }
+
+    const events = await this.loadEvents();
+    if (events.length === 0) return 0;
+
+    try {
+      const { instance: db, collection: col, addDoc } = this.firestore;
+      const analyticsCol = col(db, 'analytics_events');
+
+      const batchSize = 50;
+      let flushed = 0;
+
+      for (let i = 0; i < events.length; i += batchSize) {
+        const batch = events.slice(i, i + batchSize);
+        const writePromises = batch.map((evt: StoredEvent) =>
+          addDoc(analyticsCol, {
+            ...evt,
+            userProperties: { ...this.state.userProperties },
+            flushedAt: Date.now(),
+          })
+        );
+        await Promise.all(writePromises);
+        flushed += batch.length;
+      }
+
+      // Clear flushed events from local storage
+      const flushedIds = new Set(events.map((e: StoredEvent) => e.id));
+      const remaining = (await this.loadEvents()).filter(e => !flushedIds.has(e.id));
+      await this.persistEvents(remaining);
+
+      if (__DEV__) {
+        console.log(`[Analytics] Flushed ${flushed} events to Firestore`);
+      }
+
+      return flushed;
+    } catch (error) {
+      console.warn('[Analytics] Firestore flush failed, events retained locally:', error);
+      return 0;
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // Local analytics: export & retention
+  // ─────────────────────────────────────────
+
+  /** Export all locally stored events as JSON (for debugging or manual upload) */
+  async exportEvents(): Promise<{
+    events: StoredEvent[];
+    userProperties: Record<string, string>;
+    experiments: Record<string, string>;
+    retention: RetentionMetrics;
+    exportedAt: number;
+  }> {
+    await this.ensureLoaded();
+    const events = await this.loadEvents();
+    const retention = await this.loadRetention();
+
+    return {
+      events,
+      userProperties: { ...this.state.userProperties },
+      experiments: { ...this.state.experiments },
+      retention,
+      exportedAt: Date.now(),
+    };
+  }
+
+  /** Get local retention metrics (D1, D7, D30 based on app_open dates) */
+  async getRetentionMetrics(): Promise<RetentionMetrics> {
+    return this.loadRetention();
+  }
+
+  /** Get all buffered events (backward compat + debugging) */
+  async getBufferedEvents(limit = 100): Promise<StoredEvent[]> {
+    const events = await this.loadEvents();
+    return events.slice(-Math.max(1, limit));
+  }
+
+  /** Clear all locally stored events */
+  async clearBufferedEvents(): Promise<void> {
+    await this.persistEvents([]);
+  }
+
+  /** Get the current session number */
+  getSessionNumber(): number {
+    return this.state.sessionNumber;
+  }
+
+  /** Get days since install */
+  getDaysSinceInstall(): number {
+    if (!this.state.installTimestamp) return 0;
+    return Math.floor((Date.now() - this.state.installTimestamp) / (24 * 60 * 60 * 1000));
   }
 
   /**
@@ -306,4 +781,4 @@ class Analytics {
 }
 
 export const analytics = Analytics.getInstance();
-export type { AnalyticsEvent, BufferedEvent };
+export type { StoredEvent as BufferedEvent, RetentionMetrics };

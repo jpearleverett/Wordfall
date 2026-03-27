@@ -5,6 +5,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { LIVES } from '../constants';
 import { AdRewardType, AD_REWARD_VALUES } from '../services/ads';
+import { getProductById, ProductRewards } from '../data/shopProducts';
 
 interface Economy {
   coins: number;
@@ -35,7 +36,22 @@ interface LivesData {
   lastRefillTime: number;
 }
 
-interface EconomyState extends Economy {
+interface IAPState {
+  /** Whether the user has purchased ad removal */
+  isAdFreeFlag: boolean;
+  /** Whether the user has purchased the premium pass */
+  isPremiumPassFlag: boolean;
+  /** Daily value pack expiry timestamp (0 = not active) */
+  dailyValuePackExpiry: number;
+  /** Last date daily value pack drip was claimed (YYYY-MM-DD) */
+  dailyValuePackLastClaim: string;
+  /** Starter pack available until this timestamp (0 = expired/not tracked) */
+  starterPackExpiresAt: number;
+  /** Undo tokens (separate from hint tokens) */
+  undoTokens: number;
+}
+
+interface EconomyState extends Economy, IAPState {
   totalEarned: TotalEarned;
   purchaseHistory: PurchaseRecord[];
   lives: LivesData;
@@ -64,9 +80,21 @@ interface EconomyContextType extends Economy {
   // Ad reward processing
   processAdReward: (rewardType: AdRewardType) => void;
   isAdFree: boolean;
+  // IAP
+  processPurchase: (productId: string) => void;
+  isPremiumPass: boolean;
+  dailyValuePackExpiry: number;
+  starterPackAvailable: boolean;
+  undoTokens: number;
+  addUndoTokens: (amount: number) => void;
+  spendUndoToken: () => boolean;
+  claimDailyValuePackDrip: () => boolean;
 }
 
 const STORAGE_KEY = '@wordfall_economy';
+
+/** 72 hours in milliseconds (starter pack availability window) */
+const STARTER_PACK_WINDOW_MS = 72 * 60 * 60 * 1000;
 
 const DEFAULT_ECONOMY: EconomyState = {
   coins: 500,
@@ -86,6 +114,13 @@ const DEFAULT_ECONOMY: EconomyState = {
     current: LIVES.max,
     lastRefillTime: Date.now(),
   },
+  // IAP state
+  isAdFreeFlag: false,
+  isPremiumPassFlag: false,
+  dailyValuePackExpiry: 0,
+  dailyValuePackLastClaim: '',
+  starterPackExpiresAt: Date.now() + STARTER_PACK_WINDOW_MS,
+  undoTokens: 0,
 };
 
 /** Calculate how many lives should have refilled since lastRefillTime. */
@@ -128,6 +163,14 @@ const EconomyContext = createContext<EconomyContextType>({
   getTimeUntilNextLife: () => 0,
   processAdReward: () => {},
   isAdFree: false,
+  processPurchase: () => {},
+  isPremiumPass: false,
+  dailyValuePackExpiry: 0,
+  starterPackAvailable: true,
+  undoTokens: 0,
+  addUndoTokens: () => {},
+  spendUndoToken: () => false,
+  claimDailyValuePackDrip: () => false,
 });
 
 export function EconomyProvider({ children }: { children: ReactNode }) {
@@ -378,6 +421,128 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     }
   }, [addCoins, addHintTokens]);
 
+  // ── Undo tokens ────────────────────────────────────────────────────────────
+
+  const addUndoTokens = useCallback((amount: number) => {
+    setState((prev) => ({ ...prev, undoTokens: prev.undoTokens + amount }));
+  }, []);
+
+  const spendUndoToken = useCallback((): boolean => {
+    let success = false;
+    setState((prev) => {
+      if (prev.undoTokens > 0) {
+        success = true;
+        return { ...prev, undoTokens: prev.undoTokens - 1 };
+      }
+      return prev;
+    });
+    return success;
+  }, []);
+
+  // ── IAP purchase processing ───────────────────────────────────────────────
+
+  const processPurchase = useCallback((productId: string) => {
+    const product = getProductById(productId);
+    if (!product) {
+      console.warn('[Economy] Unknown product for processPurchase:', productId);
+      return;
+    }
+
+    const rewards = product.rewards;
+
+    setState((prev) => {
+      const next = { ...prev };
+
+      // Award currencies
+      if (rewards.coins) {
+        next.coins += rewards.coins;
+        next.totalEarned = { ...next.totalEarned, coins: next.totalEarned.coins + rewards.coins };
+      }
+      if (rewards.gems) {
+        next.gems += rewards.gems;
+        next.totalEarned = { ...next.totalEarned, gems: next.totalEarned.gems + rewards.gems };
+      }
+      if (rewards.hintTokens) {
+        next.hintTokens += rewards.hintTokens;
+        next.totalEarned = { ...next.totalEarned, hintTokens: next.totalEarned.hintTokens + rewards.hintTokens };
+      }
+      if (rewards.undoTokens) {
+        next.undoTokens += rewards.undoTokens;
+      }
+
+      // Set flags (premiumPass, adsRemoved)
+      if (rewards.flags) {
+        if (rewards.flags.premiumPass) {
+          next.isPremiumPassFlag = true;
+        }
+        if (rewards.flags.adsRemoved) {
+          next.isAdFreeFlag = true;
+        }
+      }
+
+      // Daily value pack — set expiry
+      if (rewards.dripDays) {
+        next.dailyValuePackExpiry = Date.now() + rewards.dripDays * 24 * 60 * 60 * 1000;
+        next.dailyValuePackLastClaim = ''; // reset so they can claim today
+      }
+
+      // Record purchase in history
+      next.purchaseHistory = [
+        ...next.purchaseHistory,
+        {
+          id: `iap_${productId}_${Date.now()}`,
+          item: productId,
+          currency: 'USD',
+          amount: product.fallbackPriceAmount,
+          timestamp: Date.now(),
+        },
+      ];
+
+      return next;
+    });
+
+    // Note: decorations and boosters from rewards need to be handled by
+    // the caller (e.g. PlayerContext) since EconomyContext doesn't manage those.
+    console.log(`[Economy] Processed purchase: ${productId}`);
+  }, []);
+
+  /** Claim today's daily value pack drip rewards. Returns true if claimed. */
+  const claimDailyValuePackDrip = useCallback((): boolean => {
+    const today = new Date().toISOString().slice(0, 10);
+    let claimed = false;
+
+    setState((prev) => {
+      // Not active or already claimed today
+      if (prev.dailyValuePackExpiry <= Date.now()) return prev;
+      if (prev.dailyValuePackLastClaim === today) return prev;
+
+      // Find the daily value pack product for drip values
+      const product = getProductById('daily_value_pack');
+      const drip = product?.rewards.dailyDrip;
+      if (!drip) return prev;
+
+      claimed = true;
+      const next = { ...prev, dailyValuePackLastClaim: today };
+
+      if (drip.coins) {
+        next.coins += drip.coins;
+        next.totalEarned = { ...next.totalEarned, coins: next.totalEarned.coins + drip.coins };
+      }
+      if (drip.gems) {
+        next.gems += drip.gems;
+        next.totalEarned = { ...next.totalEarned, gems: next.totalEarned.gems + drip.gems };
+      }
+      if (drip.hintTokens) {
+        next.hintTokens += drip.hintTokens;
+        next.totalEarned = { ...next.totalEarned, hintTokens: next.totalEarned.hintTokens + drip.hintTokens };
+      }
+
+      return next;
+    });
+
+    return claimed;
+  }, []);
+
   const currentLives = computeRefilledLives(state.lives).current;
   const nextLifeTime = currentLives < LIVES.max
     ? state.lives.lastRefillTime + LIVES.refillMinutes * 60 * 1000
@@ -410,7 +575,15 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         refillLives,
         getTimeUntilNextLife,
         processAdReward,
-        isAdFree: false, // Replaced at runtime by settings.adsRemoved — see ShopScreen
+        isAdFree: state.isAdFreeFlag,
+        processPurchase,
+        isPremiumPass: state.isPremiumPassFlag,
+        dailyValuePackExpiry: state.dailyValuePackExpiry,
+        starterPackAvailable: state.starterPackExpiresAt > Date.now(),
+        undoTokens: state.undoTokens,
+        addUndoTokens,
+        spendUndoToken,
+        claimDailyValuePackDrip,
       }}
     >
       {children}

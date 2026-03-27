@@ -28,6 +28,8 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { analytics } from '../services/analytics';
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
+import { adManager, AdRewardType } from '../services/ads';
+import { MockAdModal } from '../components/MockAdModal';
 
 if (
   Platform.OS === 'android' &&
@@ -214,6 +216,46 @@ export function GameScreen({
   // booster_pack: only show once per level on first entry to hard/expert
   const boosterPackShown = useRef(false);
 
+  // --- Rewarded Ad state ---
+  const [mockAdState, setMockAdState] = useState<{
+    rewardType: AdRewardType;
+    resolver: (watched: boolean) => void;
+  } | null>(null);
+  const [rewardDoubled, setRewardDoubled] = useState(false);
+
+  // Register mock ad handler on mount so adManager can trigger the modal
+  useEffect(() => {
+    adManager.setMockAdHandler((rewardType, resolve) => {
+      setMockAdState({ rewardType, resolver: resolve });
+    });
+    return () => {
+      adManager.setMockAdHandler(() => {});
+    };
+  }, []);
+
+  const handleWatchAdForHint = useCallback(async () => {
+    const result = await adManager.showRewardedAd('hint_reward');
+    if (result.rewarded) {
+      economy.processAdReward('hint_reward');
+      void soundManager.playSound('hintUsed');
+    }
+  }, [economy]);
+
+  const handleWatchAdForDoubleReward = useCallback(async () => {
+    const result = await adManager.showRewardedAd('double_reward');
+    if (result.rewarded) {
+      setRewardDoubled(true);
+      // The actual doubling is applied in onComplete callback — we just set the flag
+    }
+  }, []);
+
+  const handleMockAdComplete = useCallback((watched: boolean) => {
+    if (mockAdState) {
+      mockAdState.resolver(watched);
+      setMockAdState(null);
+    }
+  }, [mockAdState]);
+
   const difficulty = useMemo(() => getDifficultyTier(level), [level]);
 
   const dismissOffer = useCallback(() => {
@@ -248,7 +290,7 @@ export function GameScreen({
     }
     if (
       state.status === 'playing' &&
-      remainingWords === 1 &&
+      remainingWords.length === 1 &&
       !offerShownThisLevel.current &&
       !activeOffer
     ) {
@@ -1059,6 +1101,17 @@ export function GameScreen({
               </Text>
             </Pressable>
           )}
+          {/* When hints are depleted, offer ad-for-hint during gameplay */}
+          {showIdleHint && state.hintsLeft === 0 && state.status === 'playing' && !economy.isAdFree && adManager.canShowAd('hint_reward') && (
+            <Pressable
+              style={styles.adHintBanner}
+              onPress={() => { setShowIdleHint(false); handleWatchAdForHint(); }}
+            >
+              <Text style={styles.adHintBannerText}>
+                {'\uD83C\uDFAC'} Out of hints — watch ad for +1 hint
+              </Text>
+            </Pressable>
+          )}
           {isStuck && state.status === 'playing' && state.undosLeft > 0 && (
             <Pressable
               style={styles.stuckBanner}
@@ -1233,7 +1286,8 @@ export function GameScreen({
             failCount: sessionFailCount.current,
             levelNumber: level,
             difficulty,
-            wordsRemaining: remainingWords,
+            wordsRemaining: remainingWords.length,
+            hintsUsed: INITIAL_HINTS - state.hintsLeft,
           }}
           onAccept={handleOfferAccept}
           onDismiss={dismissOffer}
@@ -1297,6 +1351,15 @@ export function GameScreen({
               >
                 <Text style={styles.retryButtonText}>TRY AGAIN</Text>
               </Pressable>
+              {/* Watch ad for a free hint — shown after failure when player has no hints */}
+              {!economy.isAdFree && adManager.canShowAd('hint_reward') && state.hintsLeft === 0 && (
+                <Pressable
+                  style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
+                  onPress={handleWatchAdForHint}
+                >
+                  <Text style={styles.adHintButtonText}>{'\uD83C\uDFAC'} Watch Ad for Free Hint</Text>
+                </Pressable>
+              )}
               {state.undosLeft > 0 && state.history.length > 0 && (
                 <Pressable
                   style={({ pressed }) => [styles.undoRecoverButton, pressed && styles.buttonPressed]}
@@ -1314,6 +1377,14 @@ export function GameScreen({
             </View>
           </View>
         </View>
+      )}
+
+      {/* Mock Ad Modal — shown during development when no real ad SDK is installed */}
+      {mockAdState && (
+        <MockAdModal
+          rewardType={mockAdState.rewardType}
+          onComplete={handleMockAdComplete}
+        />
       )}
     </SafeAreaView>
     </Animated.View>
@@ -1513,6 +1584,21 @@ const styles = StyleSheet.create({
   },
   idleHintText: {
     color: COLORS.accent,
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+  },
+  adHintBanner: {
+    backgroundColor: 'rgba(0, 255, 135, 0.08)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 135, 0.2)',
+  },
+  adHintBannerText: {
+    color: COLORS.green,
     fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
   },
@@ -1774,6 +1860,20 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textShadowColor: 'rgba(255,255,255,0.3)',
     textShadowRadius: 6,
+  },
+  adHintButton: {
+    backgroundColor: 'rgba(0, 255, 135, 0.12)',
+    paddingVertical: 15,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 135, 0.35)',
+  },
+  adHintButtonText: {
+    fontFamily: FONTS.display,
+    color: COLORS.green,
+    fontSize: 14,
+    letterSpacing: 1,
   },
   undoRecoverButton: {
     backgroundColor: 'rgba(255, 215, 0, 0.12)',

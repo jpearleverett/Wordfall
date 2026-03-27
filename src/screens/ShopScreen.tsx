@@ -59,64 +59,45 @@ const COIN_PACKS: ShopItem[] = [
 ];
 
 const GEM_PACKS: ShopItem[] = [
-  { id: 'gems_50', name: '50 Gems', icon: '\u{1F48E}', price: '$1.99', quantity: 50 },
-  { id: 'gems_150', name: '150 Gems', icon: '\u{1F48E}', price: '$4.99', quantity: 150 },
-  { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', price: '$14.99', quantity: 500, bestValue: true },
+  { id: 'gems_50', name: '50 Gems', icon: '\u{1F48E}', price: '$0.99', quantity: 50, iapProductId: 'gems_50' },
+  { id: 'gems_250', name: '250 Gems', icon: '\u{1F48E}', price: '$4.99', quantity: 250, iapProductId: 'gems_250' },
+  { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', price: '$9.99', quantity: 500, bestValue: true, iapProductId: 'gems_500' },
 ];
 
-// ─── Purchase fulfilment ─────────────────────────────────────────────────────
+// ─── Parental controls helper ────────────────────────────────────────────────
 
-interface FulfilmentActions {
-  addCoins: (n: number) => void;
-  addGems: (n: number) => void;
-  addHintTokens: (n: number) => void;
-  updateSetting: <K extends keyof { adsRemoved: boolean; premiumPass: boolean }>(key: K, value: boolean) => void;
+interface ParentalCheckResult {
+  allowed: boolean;
+  reason?: string;
 }
 
-function fulfilPurchase(productId: string, actions: FulfilmentActions): void {
-  switch (productId) {
-    case 'starter_pack':
-      actions.addCoins(500);
-      actions.addGems(50);
-      actions.addHintTokens(10);
-      break;
-    case 'hint_bundle_10':
-      actions.addHintTokens(10);
-      break;
-    case 'hint_bundle_25':
-      actions.addHintTokens(25);
-      break;
-    case 'hint_bundle_50':
-      actions.addHintTokens(50);
-      break;
-    case 'undo_bundle_10':
-      // Undo tokens tracked separately — for now grant as hint tokens
-      actions.addHintTokens(10);
-      break;
-    case 'undo_bundle_25':
-      actions.addHintTokens(25);
-      break;
-    case 'undo_bundle_50':
-      actions.addHintTokens(50);
-      break;
-    case 'daily_value_pack':
-      actions.addCoins(100);
-      actions.addGems(5);
-      actions.addHintTokens(3);
-      break;
-    case 'chapter_bundle':
-      actions.addGems(20);
-      actions.addHintTokens(10);
-      break;
-    case 'premium_pass':
-      actions.updateSetting('premiumPass', true);
-      break;
-    case 'ad_removal':
-      actions.updateSetting('adsRemoved', true);
-      break;
-    default:
-      console.warn('[Shop] Unknown product for fulfilment:', productId);
+function checkParentalControls(
+  settings: {
+    spendingLimitEnabled: boolean;
+    monthlySpendingLimit: number;
+    monthlySpent: number;
+    monthlySpentResetDate: string;
+    requirePurchasePin: boolean;
+    purchasePin: string;
+  },
+  priceAmount: number,
+): ParentalCheckResult {
+  if (!settings.spendingLimitEnabled) return { allowed: true };
+
+  // Reset monthly spent if we're in a new month
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthlySpent =
+    settings.monthlySpentResetDate === currentMonth ? settings.monthlySpent : 0;
+
+  if (monthlySpent + priceAmount > settings.monthlySpendingLimit) {
+    return {
+      allowed: false,
+      reason: `Monthly spending limit of $${settings.monthlySpendingLimit} would be exceeded. Current spend: $${monthlySpent.toFixed(2)}.`,
+    };
   }
+
+  return { allowed: true };
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -134,8 +115,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 }) => {
   const settings = useSettings();
   const economy = useEconomy();
-  const adsRemoved = adsRemovedProp ?? settings.adsRemoved;
-  const premiumPass = premiumPassProp ?? settings.premiumPass;
+  const adsRemoved = adsRemovedProp ?? economy.isAdFree ?? settings.adsRemoved;
+  const premiumPass = premiumPassProp ?? economy.isPremiumPass ?? settings.premiumPass;
+  const iapAvailable = iapManager.isInitialized();
 
   const [countdown, setCountdown] = useState('23:59:59');
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
@@ -177,23 +159,92 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
   // ── Purchase handler ────────────────────────────────────────────────────
 
-  const fulfilmentActions: FulfilmentActions = {
-    addCoins: economy.addCoins,
-    addGems: economy.addGems,
-    addHintTokens: economy.addHintTokens,
-    updateSetting: settings.updateSetting as any,
-  };
-
   const handlePurchase = useCallback(
     async (productId: string) => {
       if (purchasingId) return; // already in flight
+
+      // Check parental controls
+      const priceAmount = iapManager.getPriceAmount(productId);
+      const parentalCheck = checkParentalControls(
+        {
+          spendingLimitEnabled: settings.spendingLimitEnabled,
+          monthlySpendingLimit: settings.monthlySpendingLimit,
+          monthlySpent: settings.monthlySpent,
+          monthlySpentResetDate: settings.monthlySpentResetDate,
+          requirePurchasePin: settings.requirePurchasePin,
+          purchasePin: settings.purchasePin,
+        },
+        priceAmount,
+      );
+
+      if (!parentalCheck.allowed) {
+        Alert.alert('Purchase Blocked', parentalCheck.reason ?? 'Spending limit reached.');
+        return;
+      }
+
+      // If PIN is required, prompt for it
+      if (settings.spendingLimitEnabled && settings.requirePurchasePin && settings.purchasePin) {
+        // Use a simple prompt — in production this would be a custom modal
+        Alert.prompt?.(
+          'Enter Purchase PIN',
+          'A PIN is required for purchases.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Confirm',
+              onPress: (pin?: string) => {
+                if (pin === settings.purchasePin) {
+                  executePurchase(productId);
+                } else {
+                  Alert.alert('Incorrect PIN', 'The PIN you entered is incorrect.');
+                }
+              },
+            },
+          ],
+          'secure-text',
+        );
+        // If Alert.prompt is not available (Android), skip PIN check
+        if (!(Alert as any).prompt) {
+          executePurchase(productId);
+        }
+        return;
+      }
+
+      executePurchase(productId);
+    },
+    [purchasingId, settings],
+  );
+
+  const executePurchase = useCallback(
+    async (productId: string) => {
       setPurchasingId(productId);
       void funnelTracker.trackStep('iap_initiated');
 
       try {
         const result: PurchaseResult = await iapManager.purchase(productId);
         if (result.success) {
-          fulfilPurchase(result.productId, fulfilmentActions);
+          // Use economy.processPurchase for centralized reward fulfilment
+          economy.processPurchase(result.productId);
+
+          // Also sync flags to settings for backward compat
+          if (result.productId === 'ad_removal') {
+            settings.updateSetting('adsRemoved', true);
+          }
+          if (result.productId === 'premium_pass') {
+            settings.updateSetting('premiumPass', true);
+          }
+
+          // Track spending for parental controls
+          if (settings.spendingLimitEnabled) {
+            const priceAmount = iapManager.getPriceAmount(productId);
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const currentSpent =
+              settings.monthlySpentResetDate === currentMonth ? settings.monthlySpent : 0;
+            settings.updateSetting('monthlySpent', currentSpent + priceAmount);
+            settings.updateSetting('monthlySpentResetDate', currentMonth);
+          }
+
           Alert.alert('Purchase Complete', 'Your items have been delivered!');
         } else {
           if (result.error && result.error !== 'User cancelled') {
@@ -209,7 +260,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       // Also call the legacy prop callback if provided
       if (onPurchaseProp) onPurchaseProp(productId);
     },
-    [purchasingId, onPurchaseProp, fulfilmentActions],
+    [economy, settings, onPurchaseProp],
   );
 
   // ── Rewarded ad handler ─────────────────────────────────────────────────
@@ -240,19 +291,28 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       if (results.length === 0) {
         Alert.alert('No Purchases Found', 'There are no purchases to restore.');
       } else {
+        let restoredCount = 0;
         for (const result of results) {
           if (result.success) {
-            fulfilPurchase(result.productId, fulfilmentActions);
+            economy.processPurchase(result.productId);
+            // Sync flags to settings
+            if (result.productId === 'ad_removal') {
+              settings.updateSetting('adsRemoved', true);
+            }
+            if (result.productId === 'premium_pass') {
+              settings.updateSetting('premiumPass', true);
+            }
+            restoredCount++;
           }
         }
-        Alert.alert('Purchases Restored', `${results.length} purchase(s) restored successfully.`);
+        Alert.alert('Purchases Restored', `${restoredCount} purchase(s) restored successfully.`);
       }
     } catch {
       Alert.alert('Restore Failed', 'Could not restore purchases. Please try again.');
     } finally {
       setRestoringPurchases(false);
     }
-  }, [restoringPurchases, fulfilmentActions]);
+  }, [restoringPurchases, economy, settings]);
 
   // ── Rotating item gem purchase ──────────────────────────────────────────
 
@@ -286,48 +346,62 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
   const isLoading = (id: string) => purchasingId === id;
 
-  const renderItemCard = (item: ShopItem) => (
-    <TouchableOpacity
-      key={item.id}
-      style={styles.itemCard}
-      onPress={() => handlePurchase(item.iapProductId ?? item.id)}
-      activeOpacity={0.7}
-      disabled={!!purchasingId}
-    >
-      <LinearGradient
-        colors={[...GRADIENTS.surfaceCard]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      />
-      {item.bestValue && (
-        <View style={styles.bestValueBadge}>
+  /** Get the display price for an item, preferring store prices */
+  const getDisplayPrice = (item: ShopItem): string => {
+    if (item.iapProductId) {
+      const storePrice = iapManager.getPrice(item.iapProductId);
+      if (storePrice) return storePrice;
+    }
+    return item.price;
+  };
+
+  const renderItemCard = (item: ShopItem) => {
+    const productId = item.iapProductId ?? item.id;
+    const displayPrice = getDisplayPrice(item);
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={styles.itemCard}
+        onPress={() => handlePurchase(productId)}
+        activeOpacity={0.7}
+        disabled={!!purchasingId}
+      >
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+        {item.bestValue && (
+          <View style={styles.bestValueBadge}>
+            <LinearGradient
+              colors={[...GRADIENTS.button.gold]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
+            <Text style={styles.bestValueText}>BEST VALUE</Text>
+          </View>
+        )}
+        <Text style={styles.itemIcon}>{item.icon}</Text>
+        <Text style={styles.itemName}>{item.name}</Text>
+        <View style={styles.priceTag}>
           <LinearGradient
-            colors={[...GRADIENTS.button.gold]}
+            colors={[...GRADIENTS.button.primary]}
             style={StyleSheet.absoluteFill}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           />
-          <Text style={styles.bestValueText}>BEST VALUE</Text>
+          {isLoading(productId) ? (
+            <ActivityIndicator size="small" color={COLORS.bg} />
+          ) : (
+            <Text style={styles.priceText}>{displayPrice}</Text>
+          )}
         </View>
-      )}
-      <Text style={styles.itemIcon}>{item.icon}</Text>
-      <Text style={styles.itemName}>{item.name}</Text>
-      <View style={styles.priceTag}>
-        <LinearGradient
-          colors={[...GRADIENTS.button.primary]}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        />
-        {isLoading(item.iapProductId ?? item.id) ? (
-          <ActivityIndicator size="small" color={COLORS.bg} />
-        ) : (
-          <Text style={styles.priceText}>{item.price}</Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderItemRow = (items: ShopItem[]) => (
     <View style={styles.itemRow}>

@@ -41,6 +41,9 @@ interface PuzzleCompleteProps {
   onHome: () => void;
   onRetry: () => void;
   onShare?: () => void;
+  onDoubleReward?: () => void;
+  rewardDoubled?: boolean;
+  showAdOption?: boolean;
 }
 
 const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
@@ -299,6 +302,9 @@ export function PuzzleComplete({
   onHome,
   onRetry,
   onShare,
+  onDoubleReward,
+  rewardDoubled = false,
+  showAdOption = false,
 }: PuzzleCompleteProps) {
   const { height: screenHeight } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;

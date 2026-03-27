@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useFonts } from 'expo-font';
@@ -33,7 +33,7 @@ import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS } from './src/constants';
+import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS, SHADOWS } from './src/constants';
 import { getBreatherConfig } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
@@ -333,13 +333,23 @@ function GameScreenWrapper({ route, navigation }: any) {
 
     // Record puzzle completion in PlayerContext
     const isPerfect = stars === 3;
-    void analytics.logEvent('puzzle_complete', {
+    const boardData = params.board as Board | undefined;
+    const wordsFound = boardData ? boardData.words.length : 0;
+    void analytics.trackPuzzleComplete({
       level,
       mode,
-      score,
       stars,
-      isPerfect,
-      isDaily,
+      duration_seconds: 0, // Duration tracked in GameScreen; approximate here
+      hints_used: 0,       // Tracked in GameScreen state
+      undos_used: 0,       // Tracked in GameScreen state
+      words_found: wordsFound,
+      score,
+    });
+    // Also update user properties after completion
+    void analytics.updateUserProperties({
+      player_level: Math.max(level + 1, player.currentLevel),
+      total_puzzles_solved: player.puzzlesSolved + 1,
+      player_stage: playerStageFromPuzzles(player.puzzlesSolved + 1),
     });
     player.recordPuzzleComplete(level, score, stars, isPerfect);
 
@@ -374,6 +384,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       economy.addCoins(ECONOMY.dailyCompleteCoins);
       economy.addGems(ECONOMY.dailyCompleteGems);
       player.updateStreak();
+      void analytics.trackDailyChallengeComplete(player.streaks.currentStreak + 1);
       void analytics.logEvent('daily_login', {
         date: today,
         streak: player.streaks.currentStreak + 1,
@@ -488,14 +499,20 @@ function GameScreenWrapper({ route, navigation }: any) {
     const featureUnlocks = player.checkFeatureUnlocks(newLevel);
     for (const ceremony of featureUnlocks) {
       player.queueCeremony(ceremony);
+      if (ceremony.data?.featureId) {
+        void analytics.trackFeatureUnlocked(ceremony.data.featureId, newLevel);
+      }
     }
 
     // Check achievements
-    const board = params.board as Board | undefined;
-    const maxCombo = board ? board.words.length : 0; // Approximate; actual combo tracked in GameScreen
+    const board2 = params.board as Board | undefined;
+    const maxCombo = board2 ? board2.words.length : 0; // Approximate; actual combo tracked in GameScreen
     const achievementCeremonies = player.checkAchievements({ maxCombo });
     for (const ceremony of achievementCeremonies) {
       player.queueCeremony(ceremony);
+      if (ceremony.data?.achievementId && ceremony.data?.tier) {
+        void analytics.trackAchievementEarned(ceremony.data.achievementId, ceremony.data.tier);
+      }
     }
 
     // Auto-unlock modes based on level progression and queue ceremonies
@@ -741,7 +758,15 @@ function HomeMainScreen({ route, navigation }: any) {
   useEffect(() => {
     if (player.loaded) {
       void analytics.startSession('app_launch');
-      void analytics.setUserProperty('player_stage', playerStageFromPuzzles(player.puzzlesSolved));
+      void analytics.trackAppOpen();
+      void analytics.updateUserProperties({
+        player_level: player.currentLevel,
+        total_puzzles_solved: player.puzzlesSolved,
+        days_since_install: analytics.getDaysSinceInstall(),
+        player_stage: playerStageFromPuzzles(player.puzzlesSolved),
+        is_payer: false, // Updated when IAP completes
+        total_spend: 0,
+      });
       void analytics.logEvent('streak_count', {
         currentStreak: player.streaks.currentStreak,
         bestStreak: player.streaks.bestStreak,
@@ -859,15 +884,28 @@ function HomeMainScreen({ route, navigation }: any) {
     setShowMysteryWheel(false);
   }, []);
 
+  // Track when a ceremony is displayed
+  const ceremonyShownAtRef = useRef<number>(0);
+  useEffect(() => {
+    if (activeCeremony) {
+      ceremonyShownAtRef.current = Date.now();
+      void analytics.trackCeremonyShown(activeCeremony.type);
+    }
+  }, [activeCeremony]);
+
   // Process next ceremony when current one is dismissed
   const handleDismissCeremony = useCallback(() => {
+    if (activeCeremony) {
+      const durationMs = Date.now() - ceremonyShownAtRef.current;
+      void analytics.trackCeremonyDismissed(activeCeremony.type, durationMs);
+    }
     setActiveCeremony(null);
     // Check for more ceremonies after a short delay
     setTimeout(() => {
       const next = player.popCeremony();
       if (next) setActiveCeremony(next);
     }, 300);
-  }, [player]);
+  }, [player, activeCeremony]);
 
   // Convert PlayerContext data to PlayerProgress for HomeScreen
   const progress: PlayerProgress = {
@@ -1330,6 +1368,8 @@ function AppContent() {
   const player = usePlayer();
   const settings = useSettings();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const navigationRef = useRef<NavigationContainerRef<any>>(null);
+  const routeNameRef = useRef<string | undefined>();
 
   useEffect(() => {
     if (!settings.loaded) return;
@@ -1345,6 +1385,26 @@ function AppContent() {
     }
   }, [player.loaded, player.tutorialComplete]);
 
+  // Track screen views on navigation state changes
+  const handleNavigationReady = useCallback(() => {
+    const currentRoute = navigationRef.current?.getCurrentRoute();
+    routeNameRef.current = currentRoute?.name;
+    if (currentRoute?.name) {
+      void analytics.trackScreenView(currentRoute.name);
+    }
+  }, []);
+
+  const handleNavigationStateChange = useCallback(() => {
+    const currentRoute = navigationRef.current?.getCurrentRoute();
+    const currentRouteName = currentRoute?.name;
+    const previousRouteName = routeNameRef.current;
+
+    if (currentRouteName && currentRouteName !== previousRouteName) {
+      void analytics.trackScreenView(currentRouteName);
+    }
+    routeNameRef.current = currentRouteName;
+  }, []);
+
   if (!player.loaded) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -1355,6 +1415,9 @@ function AppContent() {
 
   return (
     <NavigationContainer
+      ref={navigationRef}
+      onReady={handleNavigationReady}
+      onStateChange={handleNavigationStateChange}
       theme={{
         dark: true,
         colors: {
