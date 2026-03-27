@@ -43,10 +43,15 @@ export const LOCAL_IMAGES = {
   shelfBooster: require('../../assets/images/shelf-booster.png'),
 
   wordfallLogo: require('../../assets/wordfalllogo.png'),
+
+  playButton: require('../../assets/images/playbutton.png'),
+  statsCard: require('../../assets/images/statscard.png'),
+  shopButton: require('../../assets/images/shopbutton.png'),
 };
 
 export const LOCAL_VIDEOS = {
   synthwaveGridFlow: require('../../attached_assets/generated_videos/synthwave_grid_flow.mp4'),
+  bgHomescreen: require('../../assets/videos/bg-homescreen.mp4'),
   victoryCelebration: require('../../attached_assets/generated_videos/victory_celebration_burst.mp4'),
   neonAuroraAmbient: require('../../attached_assets/generated_videos/neon_aurora_ambient.mp4'),
 };
