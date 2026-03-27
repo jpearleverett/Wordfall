@@ -1,5 +1,5 @@
 /**
- * In-App Purchase manager built on react-native-iap.
+ * In-App Purchase manager built on react-native-iap (v14+).
  *
  * Handles store connection, product fetching, purchasing, acknowledgement,
  * receipt storage, and purchase restoration. Falls back to mock mode when
@@ -8,7 +8,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { IAPProductId } from '../types';
+import type { IAPProductId } from '../types';
 import { validateReceipt } from './receiptValidation';
 import {
   SHOP_PRODUCTS,
@@ -58,6 +58,10 @@ type PurchaseListener = (result: PurchaseResult) => void;
 const RECEIPTS_STORAGE_KEY = '@wordfall_iap_receipts';
 const PENDING_PURCHASES_KEY = '@wordfall_iap_pending';
 
+// Import react-native-iap types for internal use (the module itself is
+// dynamically imported so the app doesn't crash when native code is missing).
+type RNIap = typeof import('react-native-iap');
+
 // ─── Manager class ───────────────────────────────────────────────────────────
 
 class IAPManager {
@@ -69,7 +73,7 @@ class IAPManager {
   private purchaseListeners: PurchaseListener[] = [];
   private purchaseUpdateSubscription: { remove: () => void } | null = null;
   private purchaseErrorSubscription: { remove: () => void } | null = null;
-  private rniap: typeof import('react-native-iap') | null = null;
+  private rniap: RNIap | null = null;
   private pendingPurchaseResolvers: Map<string, {
     resolve: (result: PurchaseResult) => void;
     timeout: ReturnType<typeof setTimeout>;
@@ -92,48 +96,34 @@ class IAPManager {
     try {
       // Dynamically import react-native-iap to avoid crashes when native
       // module is not linked (Expo Go, web).
-      const iap = await import('react-native-iap');
+      const iap: RNIap = await import('react-native-iap');
       this.rniap = iap;
 
       // Establish connection to the store
-      const result = await iap.initConnection();
-      if (result) {
-        this.connected = true;
-        this.useMock = false;
+      await iap.initConnection();
+      this.connected = true;
+      this.useMock = false;
 
-        // On Android, flush any unfinished transactions from prior sessions
-        if (Platform.OS === 'android') {
-          try {
-            await iap.flushFailedPurchasesCachedAsPendingAndroid();
-          } catch {
-            // Non-critical — some devices don't have pending purchases
-          }
-        }
+      // Set up purchase update listeners
+      this.purchaseUpdateSubscription = iap.purchaseUpdatedListener(
+        (purchase) => {
+          void this.handlePurchaseUpdate(purchase);
+        },
+      );
 
-        // Set up purchase update listeners
-        this.purchaseUpdateSubscription = iap.purchaseUpdatedListener(
-          async (purchase) => {
-            await this.handlePurchaseUpdate(purchase);
-          },
-        );
+      this.purchaseErrorSubscription = iap.purchaseErrorListener(
+        (error) => {
+          this.handlePurchaseError(error);
+        },
+      );
 
-        this.purchaseErrorSubscription = iap.purchaseErrorListener(
-          (error) => {
-            this.handlePurchaseError(error);
-          },
-        );
+      // Load products immediately
+      await this.loadProducts();
 
-        // Load products immediately
-        await this.loadProducts();
+      // Process any pending purchases from interrupted sessions
+      await this.processPendingPurchases();
 
-        // Process any pending purchases from interrupted sessions
-        await this.processPendingPurchases();
-
-        console.log('[IAP] react-native-iap connected');
-      } else {
-        this.useMock = true;
-        console.log('[IAP] Store connection returned falsy, using mock mode');
-      }
+      console.log('[IAP] react-native-iap connected');
     } catch (e) {
       this.useMock = true;
       console.log('[IAP] react-native-iap not available, using mock mode:', e);
@@ -178,20 +168,24 @@ class IAPManager {
     const storeIds = getAllStoreProductIds();
 
     try {
-      const storeProducts = await this.rniap.getProducts({ skus: storeIds });
+      const storeProducts = await this.rniap.fetchProducts({ skus: storeIds });
 
-      const products: IAPProduct[] = storeProducts.map((sp: any) => {
-        const shopProduct = getProductByStoreId(sp.productId);
+      if (!storeProducts) {
+        return this.mockLoadProducts();
+      }
+
+      const products: IAPProduct[] = storeProducts.map((sp) => {
+        const shopProduct = getProductByStoreId(sp.id);
         const product: IAPProduct = {
-          productId: sp.productId,
-          internalId: shopProduct?.id ?? (sp.productId as IAPProductId),
+          productId: sp.id,
+          internalId: (shopProduct?.id ?? sp.id) as IAPProductId,
           title: sp.title ?? shopProduct?.name ?? '',
           description: sp.description ?? shopProduct?.description ?? '',
-          price: sp.localizedPrice ?? shopProduct?.fallbackPrice ?? '',
-          priceAmount: parseFloat(sp.price ?? '0'),
+          price: sp.displayPrice ?? shopProduct?.fallbackPrice ?? '',
+          priceAmount: sp.price ?? shopProduct?.fallbackPriceAmount ?? 0,
           currency: sp.currency ?? 'USD',
         };
-        this.products.set(sp.productId, product);
+        this.products.set(sp.id, product);
         // Also store by internal ID for quick lookup
         if (shopProduct) {
           this.products.set(shopProduct.id, product);
@@ -209,12 +203,16 @@ class IAPManager {
 
   /** Get all loaded products */
   getProducts(): IAPProduct[] {
-    return Array.from(new Map(
-      [...this.products.entries()].filter(([key]) =>
-        // Only return entries keyed by store ID to avoid duplicates
-        key.startsWith('wordfall_') || !this.products.has(`wordfall_${key}`)
-      )
-    ).values());
+    // Deduplicate: only return one entry per unique internalId
+    const seen = new Set<string>();
+    const result: IAPProduct[] = [];
+    for (const product of this.products.values()) {
+      if (!seen.has(product.internalId)) {
+        seen.add(product.internalId);
+        result.push(product);
+      }
+    }
+    return result;
   }
 
   // ── Purchasing ──────────────────────────────────────────────────────────
@@ -234,13 +232,13 @@ class IAPManager {
     await this.storePendingPurchase(internalId);
 
     try {
-      const shopProduct = getProductById(internalId);
-      const isConsumable = !(shopProduct?.isNonConsumable ?? false);
-
       // Request the purchase — the result comes through the listener
       await this.rniap.requestPurchase({
-        sku: storeId,
-        andDangerouslyFinishTransactionAutomaticallyIOS: false,
+        request: {
+          apple: { sku: storeId, andDangerouslyFinishTransactionAutomatically: false },
+          google: { skus: [storeId] },
+        },
+        type: 'in-app',
       });
 
       // Wait for the purchase listener to resolve
@@ -260,14 +258,16 @@ class IAPManager {
       await this.clearPendingPurchase(internalId);
 
       // User cancellation is not an error
-      if (e?.code === 'E_USER_CANCELLED' || e?.message?.includes('cancel')) {
+      const code = e?.code ?? '';
+      const msg = e?.message ?? '';
+      if (code === 'E_USER_CANCELLED' || msg.includes('cancel')) {
         return { success: false, productId: internalId, error: 'User cancelled' };
       }
 
       return {
         success: false,
         productId: internalId,
-        error: e?.message ?? 'Purchase failed',
+        error: msg || 'Purchase failed',
       };
     }
   }
@@ -286,14 +286,16 @@ class IAPManager {
       const purchases = await this.rniap.getAvailablePurchases();
       const results: PurchaseResult[] = [];
 
+      if (!purchases) return results;
+
       for (const purchase of purchases) {
         const internalId = storeIdToInternalId(purchase.productId);
         if (internalId) {
           const result: PurchaseResult = {
             success: true,
             productId: internalId,
-            transactionId: purchase.transactionId,
-            receipt: purchase.transactionReceipt,
+            transactionId: purchase.id,
+            receipt: purchase.purchaseToken ?? undefined,
           };
           results.push(result);
 
@@ -301,12 +303,10 @@ class IAPManager {
           await this.storeReceipt({
             productId: purchase.productId,
             internalId,
-            transactionId: purchase.transactionId ?? `restored_${Date.now()}`,
-            receipt: purchase.transactionReceipt ?? '',
+            transactionId: purchase.id ?? `restored_${Date.now()}`,
+            receipt: purchase.purchaseToken ?? '',
             platform: Platform.OS,
-            purchaseDate: purchase.transactionDate
-              ? parseInt(purchase.transactionDate, 10)
-              : Date.now(),
+            purchaseDate: purchase.transactionDate ?? Date.now(),
           });
         }
       }
@@ -372,8 +372,7 @@ class IAPManager {
   }
 
   isAvailable(): boolean {
-    return this.initialized && (!this.useMock || true);
-    // Mock mode still allows "purchases" for development
+    return this.initialized;
   }
 
   // ── Listener management ─────────────────────────────────────────────────
@@ -398,10 +397,10 @@ class IAPManager {
   // ── Purchase event handlers ─────────────────────────────────────────────
 
   private async handlePurchaseUpdate(purchase: any): Promise<void> {
-    const storeId = purchase.productId;
+    const storeId: string = purchase.productId;
     const internalId = storeIdToInternalId(storeId) ?? storeId;
-    const transactionId = purchase.transactionId ?? `tx_${Date.now()}`;
-    const receipt = purchase.transactionReceipt ?? '';
+    const transactionId: string = purchase.id ?? `tx_${Date.now()}`;
+    const receipt: string = purchase.purchaseToken ?? '';
 
     try {
       // Validate receipt
@@ -437,14 +436,13 @@ class IAPManager {
           if (Platform.OS === 'ios') {
             await this.rniap.finishTransaction({ purchase, isConsumable });
           } else {
-            // Android: acknowledge the purchase
-            if (!purchase.isAcknowledgedAndroid) {
-              await this.rniap.acknowledgePurchaseAndroid({
-                token: purchase.purchaseToken,
-              });
+            // Android: acknowledge the purchase if not already acknowledged
+            if (!purchase.isAcknowledgedAndroid && purchase.purchaseToken) {
+              await this.rniap.acknowledgePurchaseAndroid(purchase.purchaseToken);
             }
-            if (isConsumable) {
-              await this.rniap.finishTransaction({ purchase, isConsumable: true });
+            // Consume consumable purchases
+            if (isConsumable && purchase.purchaseToken) {
+              await this.rniap.consumePurchaseAndroid(purchase.purchaseToken);
             }
           }
         } catch (ackError) {
@@ -480,7 +478,7 @@ class IAPManager {
   private handlePurchaseError(error: any): void {
     console.warn('[IAP] Purchase error from store:', error);
 
-    const storeId = error?.productId;
+    const storeId: string | undefined = error?.productId;
     const internalId = storeId ? (storeIdToInternalId(storeId) ?? storeId) : 'unknown';
 
     // User cancellation
@@ -558,6 +556,8 @@ class IAPManager {
 
       // Check available purchases to see if any pending ones completed
       const purchases = await this.rniap.getAvailablePurchases();
+      if (!purchases) return;
+
       for (const purchase of purchases) {
         const internalId = storeIdToInternalId(purchase.productId);
         if (internalId && pending.includes(internalId)) {

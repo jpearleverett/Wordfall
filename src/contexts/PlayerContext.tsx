@@ -310,6 +310,12 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   clubId: null,
   friendIds: [],
 
+  // Friend Challenges
+  friendChallenges: {
+    sent: [],
+    received: [],
+  },
+
   // Cosmetics
   equippedTheme: 'default',
   equippedFrame: 'default',
@@ -440,6 +446,8 @@ const PlayerContext = createContext<PlayerContextType>({
   getTimeUntilNextEnergy: () => 0,
   getEnergyDisplay: () => ({ current: ENERGY.MAX, max: ENERGY.MAX, bonusPlaysLeft: ENERGY.BONUS_PLAYS_AFTER_ZERO, isBonusMode: false }),
   recordPerformanceMetrics: () => {},
+  sendChallenge: () => ({ id: '', challengerId: '', challengerName: '', challengerScore: 0, challengerStars: 0, challengerTime: 0, level: 0, seed: 0, mode: 'classic' as const, boardConfig: { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 5, difficulty: 'easy' as const }, createdAt: '', expiresAt: '', status: 'pending' as const }),
+  respondToChallenge: () => {},
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────

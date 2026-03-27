@@ -258,21 +258,36 @@ function ModesScreenWrapper({ navigation }: any) {
   const handleSelectMode = useCallback((modeId: string) => {
     const mode = modeId as GameMode;
 
-    // Lives check - relax mode is free play (ethical F2P per GDD)
-    if (mode !== 'relax' && economy.lives <= 0) {
-      Alert.alert(
-        'Out of Lives!',
-        `Your next life refills in ${Math.ceil(economy.getTimeUntilNextLife() / 60000)} minutes.\n\nRefill all lives for 10 gems?`,
-        [
-          { text: 'Wait', style: 'cancel' },
-          { text: 'Refill (10 \u{1F48E})', onPress: () => { economy.refillLives(); } },
-        ]
-      );
-      return;
+    // Energy check — free modes (daily, endless, relax) cost 0 energy
+    const isFreeMode = ENERGY.FREE_MODES.includes(mode);
+    if (!isFreeMode) {
+      const energyInfo = player.getEnergyDisplay();
+      if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
+        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
+        Alert.alert(
+          'Take a Break!',
+          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
+          [
+            { text: 'Wait', style: 'cancel' },
+            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            {
+              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
+              onPress: () => {
+                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+                  player.refillEnergy('gems');
+                } else {
+                  Alert.alert('Not Enough Gems', 'Visit the shop to get more gems.');
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
     }
-    if (mode !== 'relax') {
-      economy.spendLife();
-    }
+
+    // Spend energy (free modes handled internally — returns true immediately)
+    player.useEnergy(mode);
 
     try {
       void analytics.logEvent('mode_started', {
@@ -280,7 +295,7 @@ function ModesScreenWrapper({ navigation }: any) {
         playerLevel: player.currentLevel,
       });
       let board: Board;
-      const config = getLevelConfig(player.currentLevel);
+      let config = getLevelConfig(player.currentLevel);
 
       if (mode === 'daily') {
         const today = new Date().toISOString().split('T')[0];
@@ -294,6 +309,10 @@ function ModesScreenWrapper({ navigation }: any) {
         navigation.navigate('Game', { board, level: 0, mode: 'weekly' });
         return;
       }
+
+      // Apply adaptive difficulty adjustment for non-special modes
+      const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+      config = adjusted.config;
 
       const seed = Date.now() + player.currentLevel * 1337;
       board = generateBoard(config, seed);
@@ -309,7 +328,7 @@ function ModesScreenWrapper({ navigation }: any) {
     } catch (e) {
       Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
     }
-  }, [player.currentLevel, navigation]);
+  }, [player.currentLevel, navigation, player, economy]);
 
   return <ModesScreen onSelectMode={handleSelectMode} />;
 }
@@ -364,6 +383,9 @@ function GameScreenWrapper({ route, navigation }: any) {
     if (player.consecutiveFailures > 0) {
       player.updateProgress({ consecutiveFailures: 0, lastLevelStars: stars });
     }
+
+    // Update adaptive difficulty metrics (rolling averages for invisible adjustment)
+    player.recordPerformanceMetrics(level, stars, 0); // completion time tracked in GameScreen
 
     // Award coins based on difficulty
     const difficulty: Difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';

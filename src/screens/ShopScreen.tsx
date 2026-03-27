@@ -17,7 +17,8 @@ import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useSettings } from '../contexts/SettingsContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { iapManager, PurchaseResult } from '../services/iap';
-import { adManager } from '../services/ads';
+import { adManager, AdRewardType } from '../services/ads';
+import { MockAdModal } from '../components/MockAdModal';
 import {
   getCurrentRotatingItems,
   getTimeRemainingHours,
@@ -124,6 +125,10 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   const [watchingAd, setWatchingAd] = useState(false);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [mockAdState, setMockAdState] = useState<{
+    rewardType: AdRewardType;
+    resolver: (watched: boolean) => void;
+  } | null>(null);
 
   // Today's rotating items
   const today = new Date().toISOString().slice(0, 10);
@@ -135,7 +140,14 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     iapManager.init().catch(() => {});
     adManager.init().catch(() => {});
     if (adsRemoved) adManager.setAdsRemoved(true);
+    // Register mock ad handler for development
+    adManager.setMockAdHandler((rewardType, resolve) => {
+      setMockAdState({ rewardType, resolver: resolve });
+    });
     void funnelTracker.trackStep('shop_view');
+    return () => {
+      adManager.setMockAdHandler(() => {});
+    };
   }, [adsRemoved]);
 
   // Countdown timer
