@@ -580,6 +580,46 @@ export function PuzzleComplete({
                     </LinearGradient>
                   )}
                 </View>
+                {/* Double rewards ad button */}
+                {showAdOption && !rewardDoubled && onDoubleReward && (
+                  <Pressable
+                    style={({ pressed }) => [{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: 'rgba(0, 255, 135, 0.12)',
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: 'rgba(0, 255, 135, 0.35)',
+                      marginTop: 8,
+                    }, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
+                    onPress={onDoubleReward}
+                  >
+                    <Text style={{ color: COLORS.green, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5 }}>
+                      {'\uD83C\uDFAC'} Watch Ad to DOUBLE Rewards
+                    </Text>
+                  </Pressable>
+                )}
+                {rewardDoubled && (
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(255, 184, 0, 0.12)',
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 184, 0, 0.35)',
+                    marginTop: 8,
+                  }}>
+                    <Text style={{ color: COLORS.gold, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5 }}>
+                      {'\u2728'} Rewards DOUBLED!
+                    </Text>
+                  </View>
+                )}
               </Animated.View>
 
               {/* First Win / Level Up / Difficulty Transition */}

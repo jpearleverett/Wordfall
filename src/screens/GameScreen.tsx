@@ -1275,6 +1275,9 @@ export function GameScreen({
           onNextLevel={handleNextLevel}
           onHome={onHome}
           onRetry={handleRetry}
+          onDoubleReward={handleWatchAdForDoubleReward}
+          rewardDoubled={rewardDoubled}
+          showAdOption={!economy.isAdFree && adManager.canShowAd('double_reward')}
         />
       )}
 

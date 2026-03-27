@@ -289,15 +289,18 @@ export interface FriendChallenge {
   id: string;
   challengerId: string;
   challengerName: string;
-  challengeeId: string;
-  challengeeName: string;
-  puzzleSeed: number;
-  difficulty: Difficulty;
-  challengerScore?: number;
-  challengeeScore?: number;
-  status: 'pending' | 'active' | 'completed';
+  challengerScore: number;
+  challengerStars: number;
+  challengerTime: number;
+  level: number;
+  seed: number; // board seed for identical puzzle
+  mode: GameMode;
+  boardConfig: BoardConfig;
   createdAt: string;
-  expiresAt: string;
+  expiresAt: string; // 7 days
+  status: 'pending' | 'completed' | 'expired';
+  respondentScore?: number;
+  respondentStars?: number;
 }
 
 export interface LeaderboardEntry {

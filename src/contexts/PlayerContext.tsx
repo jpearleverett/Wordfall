@@ -4,10 +4,11 @@ import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { CHAPTERS, getChapterForLevel } from '../data/chapters';
-import { CeremonyItem, WeeklyGoalsState } from '../types';
+import { CeremonyItem, PlayerMetrics, PuzzleEnergyState, WeeklyGoalsState } from '../types';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
-import { COLLECTION, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
+import { COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
+import { DEFAULT_PLAYER_METRICS, updatePlayerMetrics } from '../engine/difficultyAdjuster';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,12 @@ interface PlayerData {
     rewardsClaimed: number[];
   };
 
+  // Puzzle Energy
+  puzzleEnergy: PuzzleEnergyState;
+
+  // Adaptive Difficulty Metrics
+  performanceMetrics: PlayerMetrics;
+
   // Cloud sync
   lastModified: number;
 }
@@ -222,6 +229,15 @@ interface PlayerContextType extends PlayerData {
 
   // Win Streak
   updateWinStreak: (won: boolean) => void;
+
+  // Puzzle Energy
+  useEnergy: (mode: string) => boolean;
+  refillEnergy: (method: 'ad' | 'gems') => boolean;
+  getTimeUntilNextEnergy: () => number;
+  getEnergyDisplay: () => { current: number; max: number; bonusPlaysLeft: number; isBonusMode: boolean };
+
+  // Adaptive Difficulty
+  recordPerformanceMetrics: (level: number, stars: number, completionTimeSeconds: number) => void;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -345,6 +361,17 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
     rewardsClaimed: [],
   },
 
+  // Puzzle Energy
+  puzzleEnergy: {
+    current: ENERGY.MAX,
+    lastRegenTime: new Date().toISOString(),
+    lastResetDate: new Date().toISOString().split('T')[0],
+    bonusPlaysUsed: 0,
+  },
+
+  // Adaptive Difficulty Metrics
+  performanceMetrics: DEFAULT_PLAYER_METRICS,
+
   // Cloud sync
   lastModified: 0,
 };
@@ -390,6 +417,11 @@ const PlayerContext = createContext<PlayerContextType>({
   updateMysteryWheel: () => {},
   awardFreeSpin: () => {},
   updateWinStreak: () => {},
+  useEnergy: () => false,
+  refillEnergy: () => false,
+  getTimeUntilNextEnergy: () => 0,
+  getEnergyDisplay: () => ({ current: ENERGY.MAX, max: ENERGY.MAX, bonusPlaysLeft: ENERGY.BONUS_PLAYS_AFTER_ZERO, isBonusMode: false }),
+  recordPerformanceMetrics: () => {},
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
