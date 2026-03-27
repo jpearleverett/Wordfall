@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { Skeleton, SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import { usePlayer } from '../contexts/PlayerContext';
 import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
 import { LOCAL_IMAGES } from '../utils/localAssets';
@@ -73,9 +74,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onEditProfile: onEditProfileProp,
   onOpenSettings: onOpenSettingsProp,
 }) => {
+  const [loading, setLoading] = useState(true);
   const playerContext = usePlayer();
   const onEditProfile = onEditProfileProp ?? (() => {});
   const onOpenSettings = onOpenSettingsProp ?? (() => {});
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 400);
+    return () => clearTimeout(timer);
+  }, []);
   const contextPlayer = {
     level: playerContext.currentLevel,
     title: playerContext.equippedTitle,
@@ -103,6 +110,40 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       />
     </View>
   );
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <AmbientBackdrop variant="profile" />
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.headerRow}>
+            <View style={styles.headerSpacer} />
+            <Text style={styles.headerTitle}>PROFILE</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          {/* Avatar skeleton */}
+          <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+            <Skeleton width={100} height={100} borderRadius={50} style={{ marginBottom: 12 }} />
+            <Skeleton width={80} height={20} borderRadius={10} style={{ marginBottom: 10 }} />
+            <Skeleton width={120} height={16} borderRadius={8} />
+          </View>
+          {/* Stats skeleton */}
+          <Skeleton width="40%" height={18} borderRadius={8} style={{ marginTop: 24, marginBottom: 12 }} />
+          <SkeletonGrid rows={2} cols={3} itemHeight={80} />
+          {/* Achievements skeleton */}
+          <Skeleton width="50%" height={18} borderRadius={8} style={{ marginTop: 24, marginBottom: 12 }} />
+          <SkeletonGrid rows={2} cols={3} itemHeight={90} />
+          {/* Collections skeleton */}
+          <Skeleton width="55%" height={18} borderRadius={8} style={{ marginTop: 24, marginBottom: 12 }} />
+          <SkeletonCard />
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

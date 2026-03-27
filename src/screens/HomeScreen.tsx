@@ -413,46 +413,121 @@ export function HomeScreen({
           </LinearGradient>
         )}
 
-        {/* 7-day rewards - hidden for day 1 new players */}
-        {showDailyRewards && (
-          <LinearGradient
-            colors={GRADIENTS.surfaceCard}
-            style={[styles.rewardsPanel, SHADOWS.medium]}
-          >
-            <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelTitle}>7-day rewards</Text>
-              <Text style={styles.panelMeta}>Day {currentRewardDay}</Text>
-            </View>
-            <View style={styles.loginRewardsRow}>
-              {ECONOMY.loginRewards.map((reward) => {
-                const isPast = reward.day < currentRewardDay;
-                const isToday = reward.day === currentRewardDay;
-                return (
-                  <LinearGradient
-                    key={reward.day}
-                    colors={
-                      isToday
-                        ? ['rgba(255,215,0,0.22)', 'rgba(255,159,0,0.10)']
-                        : isPast
-                          ? ['rgba(76,175,80,0.18)', 'rgba(76,175,80,0.06)']
-                          : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)']
-                    }
-                    style={[
-                      styles.loginDay,
-                      isPast && styles.loginDayClaimed,
-                      isToday && styles.loginDayToday,
-                    ]}
-                  >
-                    <Text style={[styles.loginDayNum, isToday && styles.loginDayNumToday]}>{reward.day}</Text>
-                    <Text style={styles.loginDayReward}>{isPast ? '✓' : `🪙${reward.coins}`}</Text>
-                    {'gems' in reward && reward.gems ? <Text style={styles.loginDayBonus}>💎{reward.gems}</Text> : null}
-                    {'rareTile' in reward && reward.rareTile ? <Text style={styles.loginDayBonus}>✨</Text> : null}
-                  </LinearGradient>
-                );
-              })}
-            </View>
-          </LinearGradient>
-        )}
+        {/* 30-day login calendar - hidden for day 1 new players */}
+        {showDailyRewards && (() => {
+          const calendarDay = Math.min(Math.max(loginCycleDay, 1), 30);
+          return (
+            <LinearGradient
+              colors={GRADIENTS.surfaceCard}
+              style={[styles.rewardsPanel, SHADOWS.medium]}
+            >
+              <View style={styles.panelHeaderRow}>
+                <Text style={styles.panelTitle}>Login Calendar</Text>
+                <Text style={styles.panelMeta}>Day {calendarDay} of 30</Text>
+              </View>
+              <View style={styles.calendarGrid}>
+                {Array.from({ length: 30 }, (_, i) => {
+                  const dayNum = i + 1;
+                  const reward = ECONOMY.loginRewards[i] || ECONOMY.loginRewards[(i) % 7];
+                  const isClaimed = dayNum < calendarDay;
+                  const isToday = dayNum === calendarDay;
+                  const isUpcoming = dayNum > calendarDay;
+                  const isSpecial = dayNum % 7 === 0;
+                  const isGrand = dayNum === 30;
+
+                  const rewardIcon = reward.rareTile
+                    ? '✨'
+                    : (reward.gems && reward.gems >= 10)
+                      ? '💎'
+                      : reward.hints
+                        ? '💡'
+                        : '🪙';
+
+                  return (
+                    <View
+                      key={dayNum}
+                      style={[
+                        styles.calendarDayOuter,
+                        (isSpecial || isGrand) && styles.calendarDaySpecialOuter,
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={
+                          isGrand && isClaimed
+                            ? ['rgba(168,85,247,0.35)', 'rgba(168,85,247,0.12)']
+                            : isGrand && isToday
+                              ? ['rgba(168,85,247,0.45)', 'rgba(255,215,0,0.25)']
+                              : isGrand
+                                ? ['rgba(168,85,247,0.18)', 'rgba(168,85,247,0.06)']
+                                : isClaimed
+                                  ? ['rgba(76,175,80,0.28)', 'rgba(76,175,80,0.08)']
+                                  : isToday
+                                    ? ['rgba(255,215,0,0.28)', 'rgba(255,159,0,0.12)']
+                                    : ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)']
+                        }
+                        style={[
+                          styles.calendarDay,
+                          (isSpecial || isGrand) && styles.calendarDaySpecial,
+                          isClaimed && styles.calendarDayClaimed,
+                          isToday && styles.calendarDayToday,
+                          isGrand && isToday && styles.calendarDayGrandToday,
+                          isUpcoming && styles.calendarDayUpcoming,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.calendarDayNum,
+                            isClaimed && styles.calendarDayNumClaimed,
+                            isToday && styles.calendarDayNumToday,
+                            isGrand && styles.calendarDayNumGrand,
+                            isUpcoming && styles.calendarDayNumUpcoming,
+                          ]}
+                        >
+                          {dayNum}
+                        </Text>
+                        {isClaimed ? (
+                          <Text style={styles.calendarCheckmark}>✓</Text>
+                        ) : isGrand ? (
+                          <Text style={styles.calendarGrandIcon}>🏆</Text>
+                        ) : (
+                          <Text style={[styles.calendarRewardIcon, isUpcoming && styles.calendarRewardIconDimmed]}>
+                            {rewardIcon}
+                          </Text>
+                        )}
+                        {isSpecial && !isGrand && (
+                          <View style={styles.calendarSpecialBadge}>
+                            <Text style={styles.calendarSpecialBadgeText}>x{Math.floor(dayNum / 7)}</Text>
+                          </View>
+                        )}
+                      </LinearGradient>
+                    </View>
+                  );
+                })}
+              </View>
+              {/* Grand prize label for day 30 */}
+              <View style={styles.calendarGrandRow}>
+                <Text style={styles.calendarGrandLabel}>Day 30: GRAND PRIZE</Text>
+                <Text style={styles.calendarGrandReward}>🪙1000  💎100  ✨Rare Tile  🎨Exclusive</Text>
+              </View>
+              {/* Claim button for today */}
+              <Pressable
+                style={({ pressed }) => [pressed && styles.buttonPressed]}
+                onPress={() => onPlay()}
+              >
+                <LinearGradient
+                  colors={GRADIENTS.button.gold}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.calendarClaimButton}
+                >
+                  <Text style={styles.calendarClaimText}>
+                    CLAIM DAY {Math.min(Math.max(loginCycleDay, 1), 30)} REWARD
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+            </LinearGradient>
+          );
+        })()}
 
         {/* Recommended for You */}
         {recommendation && playerStage !== 'new' && (
@@ -871,46 +946,133 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
     marginBottom: 14,
   },
-  loginRewardsRow: {
+  calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
     justifyContent: 'center',
+    gap: 6,
+    marginTop: 4,
   },
-  loginDay: {
-    width: 70,
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
+  calendarDayOuter: {
+    width: '15.5%',
+    aspectRatio: 1,
+  },
+  calendarDaySpecialOuter: {
+    width: '15.5%',
+  },
+  calendarDay: {
+    flex: 1,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
   },
-  loginDayClaimed: {
-    borderColor: 'rgba(76,175,80,0.3)',
+  calendarDaySpecial: {
+    borderColor: 'rgba(255,215,0,0.2)',
+    borderWidth: 1.5,
   },
-  loginDayToday: {
-    borderColor: 'rgba(255,215,0,0.35)',
+  calendarDayClaimed: {
+    borderColor: 'rgba(76,175,80,0.35)',
+  },
+  calendarDayToday: {
+    borderColor: 'rgba(255,215,0,0.5)',
+    borderWidth: 2,
     ...SHADOWS.glow(COLORS.gold),
   },
-  loginDayNum: {
+  calendarDayGrandToday: {
+    borderColor: 'rgba(168,85,247,0.6)',
+    ...SHADOWS.glow(COLORS.purple),
+  },
+  calendarDayUpcoming: {
+    opacity: 0.45,
+  },
+  calendarDayNum: {
     color: COLORS.textSecondary,
     fontFamily: FONTS.display,
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  calendarDayNumClaimed: {
+    color: COLORS.green,
+  },
+  calendarDayNumToday: {
+    color: COLORS.gold,
+    fontSize: 11,
+  },
+  calendarDayNumGrand: {
+    color: COLORS.purple,
+    fontSize: 11,
+  },
+  calendarDayNumUpcoming: {
+    color: COLORS.textSecondary,
+  },
+  calendarCheckmark: {
+    color: COLORS.green,
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: FONTS.bodyBold,
+  },
+  calendarRewardIcon: {
     fontSize: 12,
+    lineHeight: 16,
+  },
+  calendarRewardIconDimmed: {
+    opacity: 0.6,
+  },
+  calendarGrandIcon: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  calendarSpecialBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: COLORS.gold,
+    borderRadius: 6,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    minWidth: 16,
+    alignItems: 'center',
+  },
+  calendarSpecialBadgeText: {
+    color: '#0a0e27',
+    fontSize: 7,
+    fontFamily: FONTS.bodyBold,
+    lineHeight: 10,
+  },
+  calendarGrandRow: {
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(168,85,247,0.15)',
+  },
+  calendarGrandLabel: {
+    color: COLORS.purple,
+    fontFamily: FONTS.display,
+    fontSize: 13,
+    letterSpacing: 1,
     marginBottom: 4,
   },
-  loginDayNumToday: {
-    color: COLORS.gold,
-  },
-  loginDayReward: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontFamily: FONTS.bodyBold,
-    marginBottom: 2,
-  },
-  loginDayBonus: {
+  calendarGrandReward: {
     color: COLORS.textSecondary,
+    fontFamily: FONTS.bodyMedium,
     fontSize: 10,
+    letterSpacing: 0.3,
+  },
+  calendarClaimButton: {
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  calendarClaimText: {
+    color: '#0a0e27',
+    fontFamily: FONTS.display,
+    fontSize: 14,
+    letterSpacing: 1,
   },
   recommendCard: {
     borderRadius: 18,

@@ -91,6 +91,8 @@ export function trySolveWithOrder(
  */
 interface SolveBudget {
   remaining: number;
+  startTime?: number;
+  timeoutMs?: number;
 }
 
 /**
@@ -109,6 +111,7 @@ export function solve(
   if (remainingWords.length === 0) return [];
   if (budget && budget.remaining <= 0) return null;
   if (budget) budget.remaining--;
+  if (budget?.startTime && budget.timeoutMs && Date.now() - budget.startTime > budget.timeoutMs) return null;
 
   for (let i = 0; i < remainingWords.length; i++) {
     const word = remainingWords[i];
@@ -236,6 +239,7 @@ function countSolutionsBudgeted(
   if (remainingWords.length === 0) return 1;
   if (budget.remaining <= 0 || limit <= 0) return 0;
   budget.remaining--;
+  if (budget.startTime && budget.timeoutMs && Date.now() - budget.startTime > budget.timeoutMs) return 0;
 
   let count = 0;
   for (let i = 0; i < remainingWords.length; i++) {
@@ -293,7 +297,7 @@ export function getHint(
   }
 
   // Fallback: budgeted full solve
-  const budget: SolveBudget = { remaining: 10000 };
+  const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
   const solution = solve(cloneGrid(grid), remainingWords, budget);
   if (!solution || solution.length === 0) return null;
 
@@ -323,6 +327,6 @@ export function isDeadEnd(grid: Grid, remainingWords: string[]): boolean {
   }
 
   // No heuristic worked — try budgeted full solve
-  const budget: SolveBudget = { remaining: 10000 };
+  const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
   return solve(cloneGrid(grid), remainingWords, budget) === null;
 }

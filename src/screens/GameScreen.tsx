@@ -181,6 +181,8 @@ export function GameScreen({
   const [showFailed, setShowFailed] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [freezeMode, setFreezeMode] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const freezePulseAnim = useRef(new Animated.Value(0)).current;
   const [gridAreaHeight, setGridAreaHeight] = useState(0);
   const gridHeightLocked = useRef(false);
   const chainAnim = useRef(new Animated.Value(0)).current;
@@ -312,6 +314,13 @@ export function GameScreen({
       }),
     ]).start(() => setShowInvalidFlash(false));
   }, [invalidFlashAnim]);
+
+  // Trigger invalid flash when a non-adjacent cell is tapped
+  useEffect(() => {
+    if (state.lastInvalidTap) {
+      showInvalidFlashAnim();
+    }
+  }, [state.lastInvalidTap, showInvalidFlashAnim]);
 
   // Idle hint prompt — use refs to avoid recreating on every state change
   const statusRef = useRef(state.status);
@@ -470,12 +479,11 @@ export function GameScreen({
           ]).start();
         }
 
-        // #2 Gravity bounce — spring animation for settling tiles
+        // #2 Gravity ease-out — 300ms per GDD spec (column stagger not supported by LayoutAnimation)
         LayoutAnimation.configureNext({
           duration: ANIM.gravityDuration,
           update: {
-            type: LayoutAnimation.Types.spring,
-            springDamping: 0.7,
+            type: LayoutAnimation.Types.easeOut,
             property: LayoutAnimation.Properties.opacity,
           },
           delete: {
@@ -615,6 +623,22 @@ export function GameScreen({
       setFreezeMode(prev => !prev);
     }
   }, [state.boosterCounts.freezeColumn, level, mode]);
+
+  // Pulsing border glow when freeze mode is active
+  useEffect(() => {
+    if (freezeMode) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(freezePulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(freezePulseAnim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    } else {
+      freezePulseAnim.setValue(0);
+    }
+  }, [freezeMode, freezePulseAnim]);
 
   const handlePreviewToggle = useCallback(() => {
     if (showPreview) {
@@ -944,13 +968,27 @@ export function GameScreen({
               selectedCells={state.selectedCells}
               hintedCells={isValidWord ? state.selectedCells : []}
               onCellPress={handleCellPress}
+              onDragStart={() => setIsDragging(true)}
+              onDragEnd={() => setIsDragging(false)}
               frozenColumns={state.frozenColumns}
               validWord={showValidFlash}
               movedCells={movedCells}
               maxHeight={gridAreaHeight}
+              isDragging={isDragging}
             />
           )}
         </Animated.View>
+
+        {/* Freeze mode pulsing border glow overlay */}
+        {freezeMode && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.freezePulseOverlay,
+              { opacity: freezePulseAnim },
+            ]}
+          />
+        )}
 
         {/* #1 Word-clear particles */}
         {clearParticles && (
@@ -1045,7 +1083,7 @@ export function GameScreen({
           )}
           {state.boosterCounts.boardPreview > 0 && (
             <Pressable
-              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
+              style={({ pressed }) => [styles.boosterButton, showPreview && styles.boosterActive, pressed && styles.boosterPressed]}
               onPress={handlePreviewToggle}
             >
               <LinearGradient
@@ -1722,5 +1760,17 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.accent,
     zIndex: 55,
+  },
+  freezePulseOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 2.5,
+    borderColor: COLORS.cyan,
+    borderRadius: 18,
+    zIndex: 45,
+    shadowColor: COLORS.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    elevation: 0,
   },
 });

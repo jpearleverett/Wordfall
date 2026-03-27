@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { SkeletonCard } from '../components/common/Skeleton';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
 import { LOCAL_IMAGES } from '../utils/localAssets';
@@ -64,9 +65,15 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
   const player = usePlayer();
   const collections = collectionsProp ?? player.collections;
   const [activeTab, setActiveTab] = useState<TabName>('Word Atlas');
+  const [loading, setLoading] = useState(true);
   const [showTooltip, setShowTooltip] = useState(
     !player.tooltipsShown.includes('collections_screen')
   );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   const atlasPages = collections?.atlas ?? DEFAULT_ATLAS_PAGES;
   const collectedTiles: string[] = collections?.tiles ?? [];
@@ -332,9 +339,24 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
           </TouchableOpacity>
         ))}
       </View>
-      {activeTab === 'Word Atlas' && renderWordAtlas()}
-      {activeTab === 'Rare Tiles' && renderRareTiles()}
-      {activeTab === 'Seasonal Stamps' && renderSeasonalStamps()}
+      {loading ? (
+        <ScrollView
+          style={styles.tabContent}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <SkeletonCard style={{ height: 80 }} />
+          <SkeletonCard style={{ height: 80 }} />
+          <SkeletonCard style={{ height: 80 }} />
+          <SkeletonCard style={{ height: 80 }} />
+        </ScrollView>
+      ) : (
+        <>
+          {activeTab === 'Word Atlas' && renderWordAtlas()}
+          {activeTab === 'Rare Tiles' && renderRareTiles()}
+          {activeTab === 'Seasonal Stamps' && renderSeasonalStamps()}
+        </>
+      )}
     </View>
   );
 };

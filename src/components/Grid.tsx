@@ -42,6 +42,7 @@ interface GridProps {
   validWord?: boolean;
   movedCells?: CellPosition[];
   maxHeight?: number;
+  isDragging?: boolean;
 }
 
 export function GameGrid({
@@ -55,6 +56,7 @@ export function GameGrid({
   validWord = false,
   movedCells = [],
   maxHeight,
+  isDragging = false,
 }: GridProps) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -212,8 +214,10 @@ export function GameGrid({
 
   // Memoize computed style objects to avoid creating new objects on every render
   const outerGlowStyle = useMemo(() => [
-    styles.outerGlow, { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28 }
-  ], [outerWidth, outerHeight]);
+    styles.outerGlow,
+    { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28 },
+    isDragging && styles.outerGlowDragging,
+  ], [outerWidth, outerHeight, isDragging]);
 
   const neonFrameWrapStyle = useMemo(() => [
     styles.neonFrameWrap, { width: outerWidth + 16, height: outerHeight + 16, borderRadius: 28 }
@@ -328,6 +332,11 @@ const styles = StyleSheet.create({
     shadowRadius: 40,
     elevation: 0,
     alignSelf: 'center',
+  },
+  outerGlowDragging: {
+    backgroundColor: 'rgba(255,45,149,0.16)',
+    shadowOpacity: 0.7,
+    shadowRadius: 50,
   },
   neonFrameWrap: {
     position: 'absolute',
