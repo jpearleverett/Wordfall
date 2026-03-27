@@ -44,6 +44,9 @@ interface PuzzleCompleteProps {
   onDoubleReward?: () => void;
   rewardDoubled?: boolean;
   showAdOption?: boolean;
+  onChallengeFrend?: () => void;
+  onWatchReplay?: () => void;
+  onShareSolve?: () => void;
 }
 
 const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
@@ -305,6 +308,9 @@ export function PuzzleComplete({
   onDoubleReward,
   rewardDoubled = false,
   showAdOption = false,
+  onChallengeFrend,
+  onWatchReplay,
+  onShareSolve,
 }: PuzzleCompleteProps) {
   const { height: screenHeight } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -724,6 +730,34 @@ export function PuzzleComplete({
                     <Text style={styles.secondaryButtonText}>Home</Text>
                   </Pressable>
                 </View>
+
+                {/* Replay & Challenge row */}
+                <View style={styles.secondaryRow}>
+                  {onWatchReplay && (
+                    <Pressable
+                      style={({ pressed }) => [styles.secondaryButton, styles.replayButton, pressed && styles.buttonPressed]}
+                      onPress={onWatchReplay}
+                    >
+                      <Text style={styles.replayButtonText}>{'\u25B6'} Replay</Text>
+                    </Pressable>
+                  )}
+                  {onShareSolve && (
+                    <Pressable
+                      style={({ pressed }) => [styles.secondaryButton, styles.shareSolveButton, pressed && styles.buttonPressed]}
+                      onPress={onShareSolve}
+                    >
+                      <Text style={styles.shareSolveButtonText}>Share Solve</Text>
+                    </Pressable>
+                  )}
+                  {onChallengeFrend && (
+                    <Pressable
+                      style={({ pressed }) => [styles.challengeButton, pressed && styles.buttonPressed]}
+                      onPress={onChallengeFrend}
+                    >
+                      <Text style={styles.challengeButtonText}>{'\u2694\uFE0F'} Challenge</Text>
+                    </Pressable>
+                  )}
+                </View>
               </Animated.View>
             </ScrollView>
           </LinearGradient>
@@ -1123,6 +1157,36 @@ const styles = StyleSheet.create({
   },
   shareButtonText: {
     color: COLORS.accent,
+    fontFamily: FONTS.display,
+  },
+  replayButton: {
+    borderColor: COLORS.teal + '30',
+    backgroundColor: COLORS.teal + '10',
+  },
+  replayButtonText: {
+    color: COLORS.teal,
+    fontFamily: FONTS.display,
+  },
+  shareSolveButton: {
+    borderColor: COLORS.accent + '30',
+    backgroundColor: COLORS.accent + '10',
+  },
+  shareSolveButtonText: {
+    color: COLORS.accent,
+    fontFamily: FONTS.display,
+  },
+  challengeButton: {
+    flex: 1,
+    backgroundColor: COLORS.purple + '15',
+    borderRadius: 18,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.purple + '40',
+    ...SHADOWS.soft,
+  },
+  challengeButtonText: {
+    color: COLORS.purple,
     fontFamily: FONTS.display,
   },
 });

@@ -18,6 +18,7 @@ import { GameGrid } from '../components/Grid';
 import { WordBank } from '../components/WordBank';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
+import { ReplayViewer } from '../components/ReplayViewer';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier, INITIAL_HINTS } from '../constants';
@@ -27,6 +28,7 @@ import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } f
 import { usePlayer } from '../contexts/PlayerContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { analytics } from '../services/analytics';
+import { generateReplayText } from '../utils/replayGenerator';
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { adManager, AdRewardType } from '../services/ads';
 import { MockAdModal } from '../components/MockAdModal';
@@ -175,6 +177,7 @@ export function GameScreen({
     foundWords,
     totalWords,
     remainingWords,
+    solveSequence,
   } = useGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
 
   const [showComplete, setShowComplete] = useState(false);
@@ -202,6 +205,9 @@ export function GameScreen({
   const undoFlashAnim = useRef(new Animated.Value(0)).current;
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
+
+  // --- Replay & Challenge state ---
+  const [showReplay, setShowReplay] = useState(false);
 
   // --- Contextual Offer state ---
   const economy = useEconomy();

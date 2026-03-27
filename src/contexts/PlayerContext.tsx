@@ -473,6 +473,7 @@ const PlayerContext = createContext<PlayerContextType>({
   sendChallenge: () => ({ id: '', challengerId: '', challengerName: '', challengerScore: 0, challengerStars: 0, challengerTime: 0, level: 0, seed: 0, mode: 'classic' as const, boardConfig: { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 5, difficulty: 'easy' as const }, createdAt: '', expiresAt: '', status: 'pending' as const }),
   respondToChallenge: () => {},
   recomputeSegments: () => {},
+  updateEventProgress: () => {},
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -1362,6 +1363,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ── Event Progress ────────────────────────────────────────────────────
+
+  const updateEventProgressCb = useCallback((eventId: string, progress: number, claimedTiers?: string[]) => {
+    setData((prev) => {
+      const existing = prev.eventProgress[eventId] || { progress: 0, claimedTiers: [], startedAt: Date.now() };
+      return {
+        ...prev,
+        eventProgress: {
+          ...prev.eventProgress,
+          [eventId]: {
+            progress: existing.progress + progress,
+            claimedTiers: claimedTiers ? [...new Set([...existing.claimedTiers, ...claimedTiers])] : existing.claimedTiers,
+            startedAt: existing.startedAt,
+          },
+        },
+      };
+    });
+  }, []);
+
   // ── Puzzle Energy ──────────────────────────────────────────────────────
 
   /**
@@ -1519,12 +1539,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
 
-  // ── Player Segmentation ─────────────────────────────────────────────
-
-  const recomputeSegments = useCallback((_totalSpendCents?: number, _sharesCount?: number) => {
-    // Segmentation recomputation — stub for now
-  }, []);
-
   // ── Friend Challenges ────────────────────────────────────────────────
 
   const sendChallenge = useCallback((friendId: string, puzzleData: {
@@ -1671,6 +1685,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         sendChallenge,
         respondToChallenge,
         recomputeSegments,
+        updateEventProgress: updateEventProgressCb,
       }}
     >
       {children}

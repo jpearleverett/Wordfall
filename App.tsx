@@ -36,7 +36,7 @@ import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src
 import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS, SHADOWS } from './src/constants';
 import { getBreatherConfig } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
-import { AuthProvider } from './src/contexts/AuthContext';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
 import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
 import { PlayerProvider, usePlayer } from './src/contexts/PlayerContext';
@@ -59,6 +59,8 @@ import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT } fr
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
 import { funnelTracker } from './src/services/funnelTracker';
+import { eventManager } from './src/services/eventManager';
+import { getChapterExtended, getLevelConfigExtended } from './src/engine/puzzleGenerator';
 import {
   getPersonalizedHomeContent,
   getPersonalizedNotifications,
@@ -344,6 +346,7 @@ function ModesScreenWrapper({ navigation }: any) {
 // Wrapper to pass navigation params to GameScreen with full context wiring
 function GameScreenWrapper({ route, navigation }: any) {
   const params = route.params || {};
+  const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
   const [showSpinPrompt, setShowSpinPrompt] = useState(false);
@@ -395,9 +398,11 @@ function GameScreenWrapper({ route, navigation }: any) {
     // Update adaptive difficulty metrics (rolling averages for invisible adjustment)
     player.recordPerformanceMetrics(level, stars, 0); // completion time tracked in GameScreen
 
-    // Award coins based on difficulty
+    // Award coins based on difficulty — apply event multipliers
     const difficulty: Difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
-    const coinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
+    const eventMultipliers = eventManager.getEventMultipliers();
+    const baseCoinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
+    const coinReward = Math.round(baseCoinReward * eventMultipliers.coins);
     economy.addCoins(coinReward);
 
     // Award gems for perfect clears
@@ -405,8 +410,13 @@ function GameScreenWrapper({ route, navigation }: any) {
       economy.addGems(ECONOMY.perfectClearGems);
     }
 
-    // Award library points
-    economy.addLibraryPoints(stars * 5);
+    // Award library points (apply XP multiplier)
+    economy.addLibraryPoints(Math.round(stars * 5 * eventMultipliers.xp));
+
+    // Update event progress for all active events
+    eventManager.onPuzzleComplete(score, stars, isPerfect);
+    // Persist event progress snapshot to player context
+    player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
 
     // Handle daily completion
     if (isDaily) {
@@ -422,10 +432,11 @@ function GameScreenWrapper({ route, navigation }: any) {
       });
     }
 
-    // Check for rare tile drop
-    const dropChance = COLLECTION.rareTileBaseChance
+    // Check for rare tile drop — apply event multiplier to drop rate
+    const baseDropChance = COLLECTION.rareTileBaseChance
       + (difficulty === 'hard' || difficulty === 'expert' ? COLLECTION.rareTileHardBonus : 0)
       + (isPerfect ? COLLECTION.rareTilePerfectBonus : 0);
+    const dropChance = Math.min(baseDropChance * eventMultipliers.rareTileChance, 1);
     if (Math.random() < dropChance) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       const randomLetter = letters[Math.floor(Math.random() * letters.length)];
@@ -623,7 +634,61 @@ function GameScreenWrapper({ route, navigation }: any) {
       ? generateShareText(grid, level, stars, score, 0, isDaily)
       : '';
 
+    // ── Firestore social layer: submit scores + sync profile ──
+    const userId = user?.uid || '';
+    const displayName = player.equippedTitle || 'Player';
+
+    // Submit daily score if this was a daily challenge
+    if (isDaily && userId) {
+      void firestoreService.submitDailyScore(userId, score, stars, level, displayName);
+    }
+
+    // Submit weekly cumulative score
+    if (userId) {
+      void firestoreService.submitWeeklyScore(userId, score, displayName);
+    }
+
+    // Sync player profile on every puzzle complete
+    if (userId) {
+      void firestoreService.syncPlayerProfile(userId, {
+        displayName,
+        level: newLevel,
+        puzzlesSolved: player.puzzlesSolved + 1,
+        totalScore: player.totalScore + score,
+        currentStreak: player.streaks.currentStreak,
+        equippedFrame: player.equippedFrame,
+        equippedTitle: player.equippedTitle,
+      });
+    }
+
+    // Fetch real friend comparison (async — update params when ready)
+    const friendIds = player.friendIds || [];
+    let friendComparison = { beaten: 0, total: 0 };
+    if (firestoreService.isAvailable() && friendIds.length > 0 && userId) {
+      firestoreService
+        .getFriendScores(userId, friendIds)
+        .then((result) => {
+          if (result.total > 0) {
+            navigation.setParams({
+              completionData: {
+                isFirstWin,
+                leveledUp,
+                newLevel,
+                difficultyTransition,
+                nextLevelPreview: !isDaily
+                  ? { level: newLevel, difficulty: getDifficultyForLevel(newLevel) }
+                  : null,
+                shareText,
+                friendComparison: result,
+              },
+            });
+          }
+        })
+        .catch(() => {});
+    }
+
     // Store completion metadata in route params for GameScreen to pick up
+    const eventMultiplierLabel = eventManager.getActiveMultiplierLabel();
     navigation.setParams({
       completionData: {
         isFirstWin,
@@ -635,10 +700,11 @@ function GameScreenWrapper({ route, navigation }: any) {
           difficulty: getDifficultyForLevel(newLevel),
         } : null,
         shareText,
-        friendComparison: { beaten: Math.floor(Math.random() * 4) + 1, total: 5 },
+        friendComparison,
+        eventMultiplierLabel,
       },
     });
-  }, [params, player, economy, navigation]);
+  }, [params, player, economy, navigation, user]);
 
   const handleNextLevel = useCallback(() => {
     try {
@@ -775,6 +841,7 @@ function GameScreenWrapper({ route, navigation }: any) {
 
 // Home main screen wrapper - uses PlayerContext instead of legacy useStorage
 function HomeMainScreen({ route, navigation }: any) {
+  const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
   const [loading, setLoading] = useState(false);
@@ -785,6 +852,10 @@ function HomeMainScreen({ route, navigation }: any) {
 
   // Ceremony queue state
   const [activeCeremony, setActiveCeremony] = useState<CeremonyItem | null>(null);
+
+  // Pending gifts from Firestore
+  const [pendingGifts, setPendingGifts] = useState<FirestoreGift[]>([]);
+  const [claimingGift, setClaimingGift] = useState(false);
 
   // Session end reminder
   const [showSessionReminder, setShowSessionReminder] = useState(false);
@@ -833,12 +904,43 @@ function HomeMainScreen({ route, navigation }: any) {
       player.generateDailyMissions();
       player.initWeeklyGoals();
 
-      // Initialize notifications and schedule reminders
+      // Recompute player segments on session start
+      const totalSpendCents = economy.purchaseHistory.reduce(
+        (sum: number, p: { amount: number }) => sum + Math.round(p.amount * 100), 0,
+      );
+      player.recomputeSegments(totalSpendCents, 0);
+
+      // Initialize notifications with segment-personalized scheduling
       void notificationManager.init().then(() => {
-        notificationManager.scheduleStreakReminder(player.streaks.currentStreak);
-        notificationManager.scheduleDailyChallenge();
-        notificationManager.scheduleComebackReminder();
+        const notifConfig = getPersonalizedNotifications(player.segments);
+        if (notifConfig.enabledCategories.includes('streak_reminder')) {
+          notificationManager.scheduleStreakReminder(player.streaks.currentStreak);
+        }
+        if (notifConfig.enabledCategories.includes('daily_challenge')) {
+          notificationManager.scheduleDailyChallenge();
+        }
+        if (notifConfig.enabledCategories.includes('comeback')) {
+          notificationManager.scheduleComebackReminder();
+        }
       });
+
+      // ── Firestore social: sync profile + check gifts on app open ──
+      const userId = user?.uid || '';
+      if (userId && firestoreService.isAvailable()) {
+        void firestoreService.syncPlayerProfile(userId, {
+          displayName: player.equippedTitle || 'Player',
+          level: player.currentLevel,
+          puzzlesSolved: player.puzzlesSolved,
+          totalScore: player.totalScore,
+          currentStreak: player.streaks.currentStreak,
+          equippedFrame: player.equippedFrame,
+          equippedTitle: player.equippedTitle,
+        });
+        void firestoreService.generateFriendCode(userId);
+        void firestoreService.getPendingGifts(userId).then((gifts) => {
+          if (gifts.length > 0) setPendingGifts(gifts);
+        });
+      }
 
       // Process pending ceremonies
       if (!showWelcomeBack && player.pendingCeremonies.length > 0) {
@@ -923,6 +1025,39 @@ function HomeMainScreen({ route, navigation }: any) {
   const handleWheelDismiss = useCallback(() => {
     setShowMysteryWheel(false);
   }, []);
+
+  // ── Gift claiming ──
+  const handleClaimAllGifts = useCallback(async () => {
+    if (pendingGifts.length === 0 || claimingGift) return;
+    setClaimingGift(true);
+    let totalHints = 0;
+    let totalTiles = 0;
+    for (const gift of pendingGifts) {
+      const claimed = await firestoreService.claimGift(gift.id);
+      if (claimed || !firestoreService.isAvailable()) {
+        if (gift.type === 'hint') {
+          totalHints += gift.amount;
+        } else {
+          totalTiles += gift.amount;
+        }
+      }
+    }
+    if (totalHints > 0) economy.addHintTokens(totalHints);
+    if (totalTiles > 0) {
+      for (let i = 0; i < totalTiles; i++) {
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+      }
+    }
+    setPendingGifts([]);
+    setClaimingGift(false);
+    const parts: string[] = [];
+    if (totalHints > 0) parts.push(`${totalHints} hint${totalHints > 1 ? 's' : ''}`);
+    if (totalTiles > 0) parts.push(`${totalTiles} rare tile${totalTiles > 1 ? 's' : ''}`);
+    if (parts.length > 0) {
+      Alert.alert('Gifts Claimed!', `You received ${parts.join(' and ')} from friends!`);
+    }
+  }, [pendingGifts, claimingGift, economy, player]);
 
   // Track when a ceremony is displayed
   const ceremonyShownAtRef = useRef<number>(0);
@@ -1122,6 +1257,24 @@ function HomeMainScreen({ route, navigation }: any) {
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.accent} />
         </View>
+      )}
+      {/* Pending gifts banner */}
+      {pendingGifts.length > 0 && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.giftBanner,
+            pressed && { opacity: 0.8 },
+          ]}
+          onPress={handleClaimAllGifts}
+        >
+          <Text style={styles.giftBannerIcon}>{'🎁'}</Text>
+          <View style={styles.giftBannerTextContainer}>
+            <Text style={styles.giftBannerTitle}>
+              You have {pendingGifts.length} gift{pendingGifts.length > 1 ? 's' : ''}!
+            </Text>
+            <Text style={styles.giftBannerSubtext}>Tap to claim</Text>
+          </View>
+        </Pressable>
       )}
       <HomeScreen
         progress={progress}
