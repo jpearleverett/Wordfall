@@ -383,6 +383,39 @@ export function HomeScreen({
         </View>
       </Animated.View>
 
+      {/* Active Event Banners */}
+      {activeEventBanners.length > 0 && (
+        <Animated.View
+          style={{
+            opacity: contentAnim,
+            transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [48, 0] }) }],
+            marginBottom: 14,
+          }}
+        >
+          {activeEventBanners.map((eb) => (
+            <Pressable
+              key={eb.id}
+              style={({ pressed }) => [pressed && styles.buttonPressed]}
+              onPress={onOpenEvents}
+            >
+              <LinearGradient
+                colors={[eb.color + '20', eb.color + '08'] as [string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.eventBanner, { borderColor: eb.color + '40' }]}
+              >
+                <Text style={styles.eventBannerIcon}>{eb.icon}</Text>
+                <View style={styles.eventBannerInfo}>
+                  <Text style={[styles.eventBannerLabel, { color: eb.color }]}>{eb.label}</Text>
+                  <Text style={styles.eventBannerName}>{eb.name}</Text>
+                </View>
+                <Text style={[styles.eventBannerArrow, { color: eb.color }]}>{'\u{203A}'}</Text>
+              </LinearGradient>
+            </Pressable>
+          ))}
+        </Animated.View>
+      )}
+
       {/* Mystery Wheel Button */}
       {showMysteryWheel && (
         <Animated.View
