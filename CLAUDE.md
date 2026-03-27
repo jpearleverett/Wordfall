@@ -42,7 +42,7 @@ src/
 │   ├── StreakMilestoneCeremony.tsx              # Streak milestone celebration modal
 │   ├── CollectionCompleteCeremony.tsx           # Collection completion celebration modal
 │   ├── SessionEndReminder.tsx                   # Auto-dismissing daily/streak reminder
-│   ├── common/       # Button, Card, Modal, Badge, ProgressBar, AmbientBackdrop, HeroIllustrations, Tooltip
+│   ├── common/       # Button, Card, Modal, Badge, ProgressBar, AmbientBackdrop, VideoBackground, HeroIllustrations, Tooltip
 │   ├── economy/      # CurrencyDisplay, ShopItem
 │   ├── modes/        # TimerDisplay, MoveCounter
 │   └── events/       # EventBanner, EventProgress
@@ -78,7 +78,7 @@ src/
 | `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, responsive sizing via `maxHeight` prop (cell size constrained by both width and available height), drag-to-select via react-native-gesture-handler (gesture objects memoized with `useMemo`, callbacks via refs), frozen column styling, post-gravity moved-cell highlighting. LetterCell receives no `onPress` — all input handled by grid-level gesture detector |
 | `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro overlay, boosters (all 3 always visible when counts > 0), near-miss encouragement on failure with progress bar. Stable layout: banners float as absolute overlays on grid, wordArea has fixed height, boosterBar always reserves space. Measures grid area via `onLayout` (debounced 2px threshold) and passes `maxHeight` to GameGrid. `handleCellPress` delegates adjacency checks to the reducer |
 | `src/components/GameHeader.tsx` | Chrome card header with back button, battery-style progress indicator (auto-sizes to content), cyan score display with animated pop, undo/hint glass buttons with count badges. Progress bar at bottom with glow dot (hidden at 0%). Battery shell is an image asset that stretches to fit the label text |
-| `src/screens/HomeScreen.tsx` | Dynamic home screen with progressive section visibility based on `playerStage` (new/early/established/veteran). Sections: hero card, streak, daily rewards, weekly goals, mission progress, personalized recommendations, quick play |
+| `src/screens/HomeScreen.tsx` | Dynamic home screen with `VideoBackground` (bg-homescreen.mp4), image-based UI (playbutton.png, statscard.png ×3, shopbutton.png with text overlays), progressive section visibility based on `playerStage` (new/early/established/veteran). Sections: hero card (plain View, no gradient/border), streak, daily rewards, weekly goals, mission progress, personalized recommendations, quick play |
 | `src/screens/OnboardingScreen.tsx` | 4-phase interactive tutorial: welcome → guided tutorial puzzle (real GameGrid + TutorialOverlay) → celebration → ready screen with tips |
 | `src/screens/ProfileScreen.tsx` | Player profile with stats grid, achievements grid (15 achievements × 3 tiers with colored dots), collection progress, cosmetics |
 | `src/screens/MasteryScreen.tsx` | Season pass / mastery track with 30 tiers, free + premium reward lanes, XP progress |
@@ -90,6 +90,7 @@ src/
 | `src/data/achievements.ts` | 15 `AchievementDef` entries across 5 categories (puzzle, collection, streak, mode, mastery), each with bronze/silver/gold tiers |
 | `src/data/weeklyGoals.ts` | 8 goal templates, `generateWeeklyGoals()` picks 3 per week, `isNewWeek()` utility |
 | `src/data/masteryRewards.ts` | 30 `MasteryReward` tiers with free/premium lanes, `getMasteryTierForXP()`, `getXPProgressInTier()` |
+| `src/utils/localAssets.ts` | `LOCAL_IMAGES` and `LOCAL_VIDEOS` asset registries — all image/video `require()` calls centralized here. Includes HomeScreen assets (playButton, statsCard, shopButton, bgHomescreen), gameplay icons, screen backgrounds |
 | `src/utils/shareGenerator.ts` | `generateShareText()` for Wordle-style emoji grid, `generateStreakCard()` for shareable streak display, `generateCollectionCard()` for collection progress sharing |
 | `src/components/common/Tooltip.tsx` | Reusable contextual tooltip with glassmorphism styling, arrow, auto-dismiss persistence via `player.markTooltipShown()` |
 | `GAME_DESIGN_DOCUMENT.md` | Full 48KB GDD with 17 sections - the source of truth for features |
@@ -252,8 +253,9 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - **Shadow presets**: Use `SHADOWS.soft`, `SHADOWS.medium`, `SHADOWS.strong` from constants. `SHADOWS.glow(color)` for colored glow effects
 - **Glassmorphism cards**: Cards use gradient backgrounds + subtle border + shadow for depth
 - **Letter tiles**: Clean architecture — opaque base gradient (`GRADIENTS.tile.default/selected/valid/hint/frozen`) + bottom shadow gradient for 3D depth. No inner glow, specular highlight, or shimmer overlays (these were removed for visual clarity). Tile gradients must be **fully opaque** hex colors (not rgba) to prevent background bleed-through artifacts
-- **Ambient backdrops**: All screens use `<AmbientBackdrop variant="home|library|game|..." />` for floating animated orb backgrounds (10 twinkling stars + 2 nebula orbs, all `useNativeDriver: true`)
-- **Hero illustrations**: Home and Library screens have decorative `<HomeHeroIllustration />` / `<LibraryHeroIllustration />` components built from Views + gradients (no image assets)
+- **Ambient backdrops**: Most screens use `<AmbientBackdrop variant="library|game|..." />` for floating animated orb backgrounds (10 twinkling stars + 2 nebula orbs, all `useNativeDriver: true`). HomeScreen uses `<VideoBackground>` with `bg-homescreen.mp4` instead
+- **Home screen image assets**: HomeScreen hero card uses image-based UI — `playbutton.png`, `statscard.png` (×3, one per stat), `shopbutton.png` — each with text overlaid via absolute-positioned Views. Hero card container is a plain `View` (no LinearGradient, no border, no glow orbs)
+- **Hero illustrations**: Library screen has decorative `<LibraryHeroIllustration />` component built from Views + gradients (no image assets)
 - **Screen top padding**: All screens use `paddingTop: 60` in their `content` style to clear the status bar / safe area consistently
 - **Section layout**: Screens follow a pattern of hero card → section panels, each with `borderRadius: 20-28`, gradient fill, and `SHADOWS.medium`
 - **Accent borders**: Highlighted/active items use thin accent-colored borders with matching glow shadow via `SHADOWS.glow(COLORS.accent)`
@@ -344,7 +346,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 
 ### Scaffolded / Needs Work
 - Professional audio assets — current synthesized tones are functional but could be replaced with studio-quality .mp3/.wav files
-- Image assets — app icon and splash screen are placeholder PNGs; hero illustrations are code-generated Views
+- Image assets — app icon and splash screen are placeholder PNGs; HomeScreen uses image assets (playbutton.png, statscard.png, shopbutton.png) and video background (bg-homescreen.mp4); Library hero illustration is code-generated Views. Note: playbutton/statscard/shopbutton are JPEGs renamed as .png (no alpha channel) — re-export as true PNGs for transparency
 - Firebase Cloud Functions (server-side scheduled tasks)
 - Actual Firestore sync (currently AsyncStorage only) — friend comparison data is mock, ready for Firestore
 - Real-time leaderboard computation
