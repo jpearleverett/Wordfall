@@ -53,6 +53,8 @@ import { LevelUpCeremony } from './src/components/LevelUpCeremony';
 import { notificationManager } from './src/services/notifications';
 import { MilestoneCeremony } from './src/components/MilestoneCeremony';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
+import { MysteryWheel } from './src/components/MysteryWheel';
+import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT } from './src/data/mysteryWheel';
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
 import { funnelTracker } from './src/services/funnelTracker';
@@ -316,6 +318,8 @@ function GameScreenWrapper({ route, navigation }: any) {
   const params = route.params || {};
   const player = usePlayer();
   const economy = useEconomy();
+  const [showSpinPrompt, setShowSpinPrompt] = useState(false);
+  const [pendingNavAction, setPendingNavAction] = useState<'home' | 'next' | null>(null);
 
   const handleComplete = useCallback((stars: number, score: number) => {
     const level = params.level || 0;
@@ -627,30 +631,93 @@ function GameScreenWrapper({ route, navigation }: any) {
   // Extract completion data from params (set by handleComplete)
   const completionData = params.completionData || {};
 
+  // Intercept navigation to show spin prompt when free spins available
+  const handleHomeWithPrompt = useCallback(() => {
+    if (player.mysteryWheel.spinsAvailable > 0 && completionData.shareText) {
+      setPendingNavAction('home');
+      setShowSpinPrompt(true);
+    } else {
+      navigation.goBack();
+    }
+  }, [player.mysteryWheel.spinsAvailable, completionData, navigation]);
+
+  const handleNextWithPrompt = useCallback(() => {
+    if (player.mysteryWheel.spinsAvailable > 0 && completionData.shareText) {
+      setPendingNavAction('next');
+      setShowSpinPrompt(true);
+    } else {
+      handleNextLevel();
+    }
+  }, [player.mysteryWheel.spinsAvailable, completionData, handleNextLevel]);
+
+  const handleSpinPromptAccept = useCallback(() => {
+    setShowSpinPrompt(false);
+    setPendingNavAction(null);
+    // Navigate back to home, passing param to auto-open the wheel
+    navigation.navigate('HomeMain', { openWheel: true });
+  }, [navigation]);
+
+  const handleSpinPromptDismiss = useCallback(() => {
+    setShowSpinPrompt(false);
+    if (pendingNavAction === 'home') {
+      navigation.goBack();
+    } else if (pendingNavAction === 'next') {
+      handleNextLevel();
+    }
+    setPendingNavAction(null);
+  }, [pendingNavAction, navigation, handleNextLevel]);
+
   return (
-    <GameScreen
-      board={params.board}
-      level={params.level || 0}
-      isDaily={params.isDaily || false}
-      mode={params.mode || 'classic'}
-      maxMoves={params.maxMoves || 0}
-      timeLimit={params.timeLimit || 0}
-      onComplete={handleComplete}
-      onNextLevel={handleNextLevel}
-      onHome={() => navigation.goBack()}
-      isFirstWin={completionData.isFirstWin}
-      leveledUp={completionData.leveledUp}
-      newLevel={completionData.newLevel}
-      difficultyTransition={completionData.difficultyTransition}
-      nextLevelPreview={completionData.nextLevelPreview}
-      shareText={completionData.shareText}
-      friendComparison={completionData.friendComparison}
-    />
+    <View style={{ flex: 1 }}>
+      <GameScreen
+        board={params.board}
+        level={params.level || 0}
+        isDaily={params.isDaily || false}
+        mode={params.mode || 'classic'}
+        maxMoves={params.maxMoves || 0}
+        timeLimit={params.timeLimit || 0}
+        onComplete={handleComplete}
+        onNextLevel={handleNextWithPrompt}
+        onHome={handleHomeWithPrompt}
+        isFirstWin={completionData.isFirstWin}
+        leveledUp={completionData.leveledUp}
+        newLevel={completionData.newLevel}
+        difficultyTransition={completionData.difficultyTransition}
+        nextLevelPreview={completionData.nextLevelPreview}
+        shareText={completionData.shareText}
+        friendComparison={completionData.friendComparison}
+      />
+
+      {/* Post-puzzle spin prompt */}
+      {showSpinPrompt && (
+        <View style={spinPromptStyles.overlay}>
+          <View style={spinPromptStyles.card}>
+            <Text style={spinPromptStyles.icon}>{'\u{1F3B0}'}</Text>
+            <Text style={spinPromptStyles.title}>Free Spin Available!</Text>
+            <Text style={spinPromptStyles.subtitle}>
+              You have {player.mysteryWheel.spinsAvailable} spin{player.mysteryWheel.spinsAvailable !== 1 ? 's' : ''} on the Mystery Wheel
+            </Text>
+            <Pressable
+              style={({ pressed }) => [spinPromptStyles.spinButton, pressed && { transform: [{ scale: 0.96 }], opacity: 0.88 }]}
+              onPress={handleSpinPromptAccept}
+            >
+              <Text style={spinPromptStyles.spinButtonText}>SPIN NOW</Text>
+            </Pressable>
+            <Pressable
+              style={spinPromptStyles.skipButton}
+              onPress={handleSpinPromptDismiss}
+            >
+              <Text style={spinPromptStyles.skipText}>Maybe Later</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
 
 // Home main screen wrapper - uses PlayerContext instead of legacy useStorage
-function HomeMainScreen({ navigation }: any) {
+function HomeMainScreen({ route, navigation }: any) {
   const player = usePlayer();
   const economy = useEconomy();
   const [loading, setLoading] = useState(false);
@@ -664,6 +731,11 @@ function HomeMainScreen({ navigation }: any) {
 
   // Session end reminder
   const [showSessionReminder, setShowSessionReminder] = useState(false);
+
+  // Mystery Wheel state
+  const [showMysteryWheel, setShowMysteryWheel] = useState(false);
+  const [freeSpinToast, setFreeSpinToast] = useState(false);
+  const prevSpinsRef = React.useRef(player.mysteryWheel.spinsAvailable);
 
   // Check for comeback rewards and process ceremonies on mount
   useEffect(() => {
@@ -720,6 +792,71 @@ function HomeMainScreen({ navigation }: any) {
       }
     });
     return () => sub.remove();
+  }, []);
+
+  // Auto-open wheel when navigating back from post-puzzle spin prompt
+  useEffect(() => {
+    if (route?.params?.openWheel) {
+      setTimeout(() => setShowMysteryWheel(true), 400);
+      // Clear the param so it doesn't re-trigger
+      navigation.setParams({ openWheel: undefined });
+    }
+  }, [route?.params?.openWheel, navigation]);
+
+  // Detect when a free spin is awarded and show toast
+  useEffect(() => {
+    if (player.loaded && player.mysteryWheel.spinsAvailable > prevSpinsRef.current) {
+      setFreeSpinToast(true);
+      setTimeout(() => setFreeSpinToast(false), 3500);
+    }
+    prevSpinsRef.current = player.mysteryWheel.spinsAvailable;
+  }, [player.mysteryWheel.spinsAvailable, player.loaded]);
+
+  // Mystery Wheel handlers
+  const handleWheelSpin = useCallback(({ segment, updatedState }: { segment: WheelSegment; updatedState: MysteryWheelState }) => {
+    // Update wheel state in player context
+    player.updateMysteryWheel(updatedState);
+
+    // Award rewards from the spin result
+    const reward = segment.reward;
+    if (reward.coins) economy.addCoins(reward.coins);
+    if (reward.gems) economy.addGems(reward.gems);
+    if (reward.hints) economy.addHintTokens(reward.hints);
+    if (reward.rareTile) {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const randomLetter = letters[Math.floor(Math.random() * letters.length)];
+      player.addRareTile(randomLetter);
+    }
+    if (reward.booster) {
+      // Boosters are per-puzzle, so award via cosmetics/unlocks tracking
+      // For now, award equivalent hint tokens as placeholder value
+      economy.addHintTokens(1);
+    }
+
+    // Queue jackpot ceremony for rare+ results
+    if (segment.rarity === 'rare' || segment.rarity === 'epic' || segment.rarity === 'legendary') {
+      player.queueCeremony({
+        type: 'mystery_wheel_jackpot',
+        data: {
+          icon: segment.icon,
+          label: segment.label,
+          rewardLabel: segment.label,
+        },
+      });
+    }
+  }, [player, economy]);
+
+  const handleWheelBuySpin = useCallback((cost: number, count: number) => {
+    const spent = economy.spendGems(cost);
+    if (spent) {
+      player.updateMysteryWheel({
+        spinsAvailable: player.mysteryWheel.spinsAvailable + count,
+      });
+    }
+  }, [economy, player]);
+
+  const handleWheelDismiss = useCallback(() => {
+    setShowMysteryWheel(false);
   }, []);
 
   // Process next ceremony when current one is dismissed
@@ -907,6 +1044,9 @@ function HomeMainScreen({ navigation }: any) {
         onResetProgress={handleReset}
         onOpenShop={() => navigation.navigate('Shop')}
         onOpenSettings={() => navigation.navigate('Settings')}
+        onOpenWheel={() => setShowMysteryWheel(true)}
+        mysteryWheelSpins={player.mysteryWheel.spinsAvailable}
+        freeSpinToast={freeSpinToast}
         onBuyDeal={(deal) => {
           const canAfford = economy.canAfford(deal.currency, deal.salePrice);
           if (!canAfford) {
@@ -980,6 +1120,17 @@ function HomeMainScreen({ navigation }: any) {
             </Pressable>
           </Animated.View>
         </View>
+      )}
+
+      {/* Mystery Wheel Overlay */}
+      {showMysteryWheel && (
+        <MysteryWheel
+          wheelState={player.mysteryWheel}
+          gems={economy.gems}
+          onSpin={handleWheelSpin}
+          onBuySpin={handleWheelBuySpin}
+          onDismiss={handleWheelDismiss}
+        />
       )}
 
       {/* Ceremony modals */}
@@ -1286,6 +1437,69 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+
+const spinPromptStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5,7,20,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 150,
+    padding: 32,
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.purple + '30',
+    maxWidth: 320,
+    width: '100%',
+    ...SHADOWS.strong,
+  },
+  icon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  title: {
+    color: COLORS.gold,
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  subtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  spinButton: {
+    backgroundColor: COLORS.purple,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    marginBottom: 12,
+    ...SHADOWS.medium,
+  },
+  spinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    letterSpacing: 2,
+  },
+  skipButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+  },
+  skipText: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {

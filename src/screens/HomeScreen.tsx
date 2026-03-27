@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Image,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, SHADOWS } from '../constants';
+import { ContextualOffer } from '../components/ContextualOffer';
 import { Ionicons } from '@expo/vector-icons';
 import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
@@ -56,6 +57,10 @@ interface HomeScreenProps {
   weeklyGoals?: WeeklyGoalsState | null;
   dailyMissions?: DailyMissionDisplay[];
   recommendation?: Recommendation | null;
+  /** Streak grace days already used (0 or 1) */
+  streakGraceDaysUsed?: number;
+  /** Whether streak shield is currently active */
+  streakShieldActive?: boolean;
 }
 
 const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: string }> = {
@@ -94,11 +99,54 @@ export function HomeScreen({
   weeklyGoals = null,
   dailyMissions = [],
   recommendation = null,
+  streakGraceDaysUsed = 0,
+  streakShieldActive = false,
 }: HomeScreenProps) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
   const wheelPulse = useRef(new Animated.Value(1)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
+
+  // Pre-compute daily completion for streak offer check
+  const today = new Date().toISOString().split('T')[0];
+  const dailyDone = progress.dailyCompleted.includes(today);
+
+  // --- Streak shield contextual offer ---
+  const [showStreakOffer, setShowStreakOffer] = useState(false);
+  const streakOfferDismissed = useRef(false);
+
+  useEffect(() => {
+    if (streakOfferDismissed.current || streakShieldActive) return;
+    const streak = progress.currentStreak;
+    if (streak <= 0) return;
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const isPastEvening = currentHour >= 18;
+
+    // Streak is at risk if:
+    // 1. Grace day was already used (next miss resets), OR
+    // 2. Streak > 7 AND daily not yet completed AND it's past 6 PM
+    const graceDayUsed = streakGraceDaysUsed >= 1;
+
+    const atRisk = graceDayUsed || (streak > 7 && !dailyDone && isPastEvening);
+    if (atRisk) {
+      const timer = setTimeout(() => setShowStreakOffer(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [progress.currentStreak, streakGraceDaysUsed, streakShieldActive, dailyDone]);
+
+  const handleStreakOfferAccept = useCallback(() => {
+    // Navigate to shop for streak shield purchase
+    setShowStreakOffer(false);
+    streakOfferDismissed.current = true;
+    onOpenShop?.();
+  }, [onOpenShop]);
+
+  const handleStreakOfferDismiss = useCallback(() => {
+    setShowStreakOffer(false);
+    streakOfferDismissed.current = true;
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -175,8 +223,6 @@ export function HomeScreen({
     outputRange: [48, 0],
   });
 
-  const today = new Date().toISOString().split('T')[0];
-  const dailyDone = progress.dailyCompleted.includes(today);
   const totalStars = Object.values(progress.starsByLevel).reduce((a, b) => a + b, 0);
   const dailyDeal = getDailyDeal(today);
   const dealHoursLeft = dailyDeal.availableHours;
@@ -711,6 +757,15 @@ export function HomeScreen({
         )}
       </Animated.View>
     </ScrollView>
+      {/* Streak shield contextual offer */}
+      {showStreakOffer && (
+        <ContextualOffer
+          type="streak_shield"
+          context={{ streakDays: progress.currentStreak }}
+          onAccept={handleStreakOfferAccept}
+          onDismiss={handleStreakOfferDismiss}
+        />
+      )}
     </View>
   );
 }
