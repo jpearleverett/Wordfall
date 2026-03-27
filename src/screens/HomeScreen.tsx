@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, SHADOWS } from '../constants';
@@ -39,7 +40,10 @@ interface HomeScreenProps {
   onResetProgress: () => void;
   onOpenShop?: () => void;
   onOpenSettings?: () => void;
+  onOpenWheel?: () => void;
   onBuyDeal?: (deal: DailyDeal) => void;
+  mysteryWheelSpins?: number;
+  freeSpinToast?: boolean;
   currencies?: {
     coins: number;
     gems: number;
@@ -79,8 +83,11 @@ export function HomeScreen({
   onResetProgress,
   onOpenShop,
   onOpenSettings,
+  onOpenWheel,
   onBuyDeal,
   currencies,
+  mysteryWheelSpins = 0,
+  freeSpinToast = false,
   currentChapter = 1,
   loginCycleDay = 1,
   playerStage = 'new',
@@ -90,6 +97,8 @@ export function HomeScreen({
 }: HomeScreenProps) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
+  const wheelPulse = useRef(new Animated.Value(1)).current;
+  const toastAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -107,6 +116,50 @@ export function HomeScreen({
       }),
     ]).start();
   }, [contentAnim, titleAnim]);
+
+  // Pulse animation for wheel button when spins available
+  useEffect(() => {
+    if (mysteryWheelSpins > 0) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(wheelPulse, {
+            toValue: 1.08,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(wheelPulse, {
+            toValue: 1,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [mysteryWheelSpins, wheelPulse]);
+
+  // Free spin toast animation
+  useEffect(() => {
+    if (freeSpinToast) {
+      Animated.sequence([
+        Animated.spring(toastAnim, {
+          toValue: 1,
+          friction: 6,
+          tension: 100,
+          useNativeDriver: true,
+        }),
+        Animated.delay(2500),
+        Animated.timing(toastAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [freeSpinToast, toastAnim]);
 
   useEffect(() => {
     void soundManager.playMusic('menu');
@@ -137,6 +190,7 @@ export function HomeScreen({
   const showQuickPlay = playerStage !== 'new' && playerStage !== 'early';
   const showWeeklyGoals = (playerStage === 'established' || playerStage === 'veteran') && weeklyGoals;
   const showMissions = (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0;
+  const showMysteryWheel = (playerStage === 'established' || playerStage === 'veteran') && onOpenWheel;
 
   return (
     <View style={styles.container}>
@@ -256,6 +310,80 @@ export function HomeScreen({
           )}
         </View>
       </Animated.View>
+
+      {/* Mystery Wheel Button */}
+      {showMysteryWheel && (
+        <Animated.View
+          style={{
+            opacity: contentAnim,
+            transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [48, 0] }) }],
+            marginBottom: 14,
+          }}
+        >
+          <Pressable
+            style={({ pressed }) => [pressed && styles.buttonPressed]}
+            onPress={onOpenWheel}
+          >
+            <Animated.View style={{ transform: [{ scale: wheelPulse }] }}>
+              <LinearGradient
+                colors={['rgba(168,85,247,0.18)', 'rgba(255,215,0,0.10)', 'rgba(168,85,247,0.12)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[
+                  styles.mysteryWheelButton,
+                  mysteryWheelSpins > 0 && styles.mysteryWheelButtonGlow,
+                  SHADOWS.medium,
+                ]}
+              >
+                <View style={styles.mysteryWheelIconContainer}>
+                  <Text style={styles.mysteryWheelIcon}>{'\u{1F3B0}'}</Text>
+                </View>
+                <View style={styles.mysteryWheelContent}>
+                  <Text style={styles.mysteryWheelTitle}>Mystery Wheel</Text>
+                  <Text style={styles.mysteryWheelSubtitle}>
+                    {mysteryWheelSpins > 0
+                      ? `${mysteryWheelSpins} free spin${mysteryWheelSpins !== 1 ? 's' : ''} available!`
+                      : 'Spin for prizes!'}
+                  </Text>
+                </View>
+                {mysteryWheelSpins > 0 && (
+                  <View style={styles.mysteryWheelBadge}>
+                    <Text style={styles.mysteryWheelBadgeText}>{mysteryWheelSpins}</Text>
+                  </View>
+                )}
+                <Text style={styles.mysteryWheelArrow}>{'\u{25B6}'}</Text>
+              </LinearGradient>
+            </Animated.View>
+          </Pressable>
+        </Animated.View>
+      )}
+
+      {/* Free Spin Toast */}
+      {freeSpinToast && (
+        <Animated.View
+          style={[
+            styles.freeSpinToast,
+            {
+              opacity: toastAnim,
+              transform: [
+                { translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-30, 0] }) },
+                { scale: toastAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.9, 1.02, 1] }) },
+              ],
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <LinearGradient
+            colors={['rgba(168,85,247,0.92)', 'rgba(128,55,207,0.92)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.freeSpinToastInner}
+          >
+            <Text style={styles.freeSpinToastIcon}>{'\u{1F3B0}'}</Text>
+            <Text style={styles.freeSpinToastText}>Free Mystery Wheel Spin Available!</Text>
+          </LinearGradient>
+        </Animated.View>
+      )}
 
       {/* Neon Highway Level Progress */}
       <Animated.View
@@ -1217,6 +1345,89 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.display,
     letterSpacing: 2,
+  },
+  // Mystery Wheel Button
+  mysteryWheelButton: {
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    borderWidth: 1,
+    borderColor: 'rgba(168,85,247,0.25)',
+    gap: 12,
+  },
+  mysteryWheelButtonGlow: {
+    borderColor: COLORS.purple + '50',
+    ...SHADOWS.glow(COLORS.purple),
+  },
+  mysteryWheelIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(168,85,247,0.18)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  mysteryWheelIcon: {
+    fontSize: 24,
+  },
+  mysteryWheelContent: {
+    flex: 1,
+  },
+  mysteryWheelTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontFamily: FONTS.bodyBold,
+    marginBottom: 2,
+  },
+  mysteryWheelSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  mysteryWheelBadge: {
+    backgroundColor: COLORS.purple,
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 6,
+  },
+  mysteryWheelBadgeText: {
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: FONTS.display,
+  },
+  mysteryWheelArrow: {
+    color: COLORS.purple,
+    fontSize: 12,
+    opacity: 0.6,
+  },
+  // Free Spin Toast
+  freeSpinToast: {
+    position: 'absolute' as const,
+    top: 110,
+    left: 16,
+    right: 16,
+    zIndex: 100,
+  },
+  freeSpinToastInner: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    ...SHADOWS.medium,
+  },
+  freeSpinToastIcon: {
+    fontSize: 18,
+  },
+  freeSpinToastText: {
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: FONTS.bodyBold,
   },
   buttonPressed: {
     transform: [{ scale: 0.96 }],

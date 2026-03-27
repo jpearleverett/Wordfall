@@ -408,7 +408,10 @@ export type IAPProductId =
   | 'daily_value_pack'
   | 'chapter_bundle'
   | 'premium_pass'
-  | 'ad_removal';
+  | 'ad_removal'
+  | 'gems_50'
+  | 'gems_250'
+  | 'gems_500';
 
 export interface ShopOffer {
   id: string;

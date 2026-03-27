@@ -20,12 +20,14 @@ import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier, INITIAL_HINTS } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 import { usePlayer } from '../contexts/PlayerContext';
+import { useEconomy } from '../contexts/EconomyContext';
 import { analytics } from '../services/analytics';
+import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 
 if (
   Platform.OS === 'android' &&
@@ -198,6 +200,128 @@ export function GameScreen({
   const undoFlashAnim = useRef(new Animated.Value(0)).current;
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
+
+  // --- Contextual Offer state ---
+  const economy = useEconomy();
+  const [activeOffer, setActiveOffer] = useState<OfferType | null>(null);
+  const offerShownThisLevel = useRef(false);
+  // hint_rescue: track session fail count for this level (local, resets on mount)
+  const sessionFailCount = useRef(0);
+  // close_finish: idle timer for "1 word away" scenario
+  const closeFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // post_puzzle: track whether to show after completion dismissal
+  const [pendingPostPuzzleOffer, setPendingPostPuzzleOffer] = useState(false);
+  // booster_pack: only show once per level on first entry to hard/expert
+  const boosterPackShown = useRef(false);
+
+  const difficulty = useMemo(() => getDifficultyTier(level), [level]);
+
+  const dismissOffer = useCallback(() => {
+    setActiveOffer(null);
+  }, []);
+
+  const showOfferIfAllowed = useCallback((type: OfferType) => {
+    if (offerShownThisLevel.current || activeOffer) return false;
+    offerShownThisLevel.current = true;
+    setTimeout(() => setActiveOffer(type), 750);
+    return true;
+  }, [activeOffer]);
+
+  // booster_pack: show on first entry to a hard/expert level
+  useEffect(() => {
+    if (boosterPackShown.current) return;
+    if (difficulty === 'hard' || difficulty === 'expert') {
+      const levelsPlayed = player.failCountByLevel ?? {};
+      const previouslyPlayed = (levelsPlayed[level] ?? 0) > 0;
+      if (!previouslyPlayed) {
+        boosterPackShown.current = true;
+        showOfferIfAllowed('booster_pack');
+      }
+    }
+  }, [level, difficulty, player.failCountByLevel, showOfferIfAllowed]);
+
+  // close_finish: watch for 1 word remaining + stuck or idle 15s
+  useEffect(() => {
+    if (closeFinishTimerRef.current) {
+      clearTimeout(closeFinishTimerRef.current);
+      closeFinishTimerRef.current = null;
+    }
+    if (
+      state.status === 'playing' &&
+      remainingWords === 1 &&
+      !offerShownThisLevel.current &&
+      !activeOffer
+    ) {
+      // If dead-end detected, show after delay
+      if (isStuck) {
+        showOfferIfAllowed('close_finish');
+      } else {
+        // Start 15s idle timer for close_finish
+        closeFinishTimerRef.current = setTimeout(() => {
+          if (!offerShownThisLevel.current) {
+            showOfferIfAllowed('close_finish');
+          }
+        }, 15000);
+      }
+    }
+    return () => {
+      if (closeFinishTimerRef.current) {
+        clearTimeout(closeFinishTimerRef.current);
+        closeFinishTimerRef.current = null;
+      }
+    };
+  }, [remainingWords, isStuck, state.status, activeOffer, showOfferIfAllowed]);
+
+  // hint_rescue: detect failures and show offer after 2+ fails
+  useEffect(() => {
+    if (state.status === 'failed' || state.status === 'timeout') {
+      sessionFailCount.current += 1;
+      if (sessionFailCount.current >= 2 && !offerShownThisLevel.current && !activeOffer) {
+        showOfferIfAllowed('hint_rescue');
+      }
+    }
+  }, [state.status, activeOffer, showOfferIfAllowed]);
+
+  // post_puzzle: flag when puzzle won with all free hints used
+  useEffect(() => {
+    if (state.status === 'won') {
+      const maxHints = INITIAL_HINTS;
+      if (state.hintsLeft === 0 && maxHints > 0) {
+        setPendingPostPuzzleOffer(true);
+      }
+    }
+  }, [state.status, state.hintsLeft]);
+
+  const handleOfferAccept = useCallback(() => {
+    if (!activeOffer) return;
+    switch (activeOffer) {
+      case 'hint_rescue':
+        // Spend 50 coins, grant 5 hint tokens
+        if (economy.spendCoins(50)) {
+          economy.addHintTokens(5);
+        }
+        break;
+      case 'close_finish':
+        // Spend 25 coins, grant 1 hint token
+        if (economy.spendCoins(25)) {
+          economy.addHintTokens(1);
+        }
+        break;
+      case 'post_puzzle':
+        // Spend 80 coins, grant 10 hint tokens
+        if (economy.spendCoins(80)) {
+          economy.addHintTokens(10);
+        }
+        break;
+      case 'booster_pack':
+        // Spend 15 gems, grant boosters (handled by economy)
+        if (economy.spendGems(15)) {
+          economy.addHintTokens(3);
+        }
+        break;
+    }
+    setActiveOffer(null);
+  }, [activeOffer, economy]);
 
   // Memoize the composed grid scale to avoid creating a new style object each render
   const gridScaleStyle = useMemo(() => ({
@@ -591,8 +715,16 @@ export function GameScreen({
 
   const handleNextLevel = useCallback(() => {
     setShowComplete(false);
-    onNextLevel();
-  }, [onNextLevel]);
+    // post_puzzle: show hint upsell if player used all free hints
+    if (pendingPostPuzzleOffer && !offerShownThisLevel.current) {
+      setPendingPostPuzzleOffer(false);
+      showOfferIfAllowed('post_puzzle');
+      // Still proceed to next level after a brief delay for the offer to appear
+      setTimeout(() => onNextLevel(), 100);
+    } else {
+      onNextLevel();
+    }
+  }, [onNextLevel, pendingPostPuzzleOffer, showOfferIfAllowed]);
 
   // First-booster ceremony (fires once ever, tracked via tooltipsShown)
   const checkFirstBooster = useCallback(() => {
@@ -1090,6 +1222,21 @@ export function GameScreen({
           onNextLevel={handleNextLevel}
           onHome={onHome}
           onRetry={handleRetry}
+        />
+      )}
+
+      {/* Contextual offer overlay */}
+      {activeOffer && (
+        <ContextualOffer
+          type={activeOffer}
+          context={{
+            failCount: sessionFailCount.current,
+            levelNumber: level,
+            difficulty,
+            wordsRemaining: remainingWords,
+          }}
+          onAccept={handleOfferAccept}
+          onDismiss={dismissOffer}
         />
       )}
 
