@@ -202,12 +202,6 @@ export function HomeScreen({
             style={styles.heroLogo}
             resizeMode="contain"
           />
-          <Text style={styles.subtitle}>
-            {playerStage === 'new'
-              ? 'Find hidden words and watch letters fall!'
-              : `Every word changes the board. Restore Chapter ${currentChapter} of the library.`}
-          </Text>
-
           <View style={styles.statsRow}>
             {[
               { value: `★ ${totalStars}`, label: 'Stars' },

@@ -78,7 +78,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
   // Tutorial: handle cell press
   const handleTutorialCellPress = useCallback((position: CellPosition) => {
     const step = TUTORIAL_STEPS[tutorialStep];
-    if (!step || step.waitForAction !== 'tap_cells') return;
+    if (!step || step.waitForAction !== 'word_submitted') return;
 
     // Check if this position is in the highlight
     const isHighlighted = step.highlightPositions?.some(
@@ -172,7 +172,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
         <Animated.View style={[styles.tutorialContainer, { opacity: fadeAnim }]}>
           <Text style={styles.tutorialTitle}>Find the hidden words!</Text>
           <Text style={styles.tutorialProgress}>
-            Words found: {wordsFound}/{TUTORIAL_STEPS.filter(s => s.waitForAction === 'tap_cells').length}
+            Words found: {wordsFound}/{TUTORIAL_STEPS.filter(s => s.waitForAction === 'word_submitted').length}
           </Text>
 
           <View style={styles.gridContainer}>
