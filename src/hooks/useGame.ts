@@ -10,6 +10,7 @@ import {
   GameStatus,
   GravityDirection,
   Grid,
+  SolveStep,
 } from '../types';
 import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
 import { findWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable } from '../engine/solver';
@@ -82,7 +83,18 @@ function createInitialState(
       smartShuffle: 1,
     },
     lastInvalidTap: null,
+    solveSequence: [],
+    puzzleStartTime: Date.now(),
   };
+}
+
+/**
+ * Convert a Grid to a 2D string array snapshot for replay.
+ */
+function gridToSnapshot(grid: Grid): string[][] {
+  return grid.map(row =>
+    row.map(cell => (cell ? cell.letter : ''))
+  );
 }
 
 function getSelectedWord(

@@ -79,6 +79,8 @@ export interface GameState {
     smartShuffle: number;
   };
   lastInvalidTap: CellPosition | null;
+  solveSequence: SolveStep[];
+  puzzleStartTime: number;
 }
 
 export type GameAction =
@@ -697,3 +699,24 @@ export type AnalyticsEvent =
   | 'event_participated'
   | 'collection_completed'
   | 'level_up';
+
+// ============ SOLVE REPLAY ============
+export interface SolveStep {
+  wordFound: string;
+  cellPositions: [number, number][];
+  gridStateBefore: string[][]; // snapshot of letters
+  gridStateAfter: string[][]; // after gravity
+  timestamp: number; // ms since puzzle start
+  score: number;
+  combo: number;
+}
+
+export interface ReplayData {
+  level: number;
+  mode: GameMode;
+  steps: SolveStep[];
+  totalScore: number;
+  stars: number;
+  totalTime: number;
+  perfectRun: boolean;
+}

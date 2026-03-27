@@ -1311,6 +1311,162 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ── Puzzle Energy ──────────────────────────────────────────────────────
+
+  /**
+   * Compute the current energy after regeneration since last regen time,
+   * and daily reset if the date has changed.
+   */
+  const computeCurrentEnergy = useCallback((energyState: PuzzleEnergyState): PuzzleEnergyState => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+
+    let state = { ...energyState };
+
+    // Daily reset: refill to max and reset bonus plays at midnight
+    if (state.lastResetDate !== today) {
+      state = {
+        current: ENERGY.MAX,
+        lastRegenTime: now.toISOString(),
+        lastResetDate: today,
+        bonusPlaysUsed: 0,
+      };
+      return state;
+    }
+
+    // Compute regenerated energy since last regen
+    if (state.current < ENERGY.MAX) {
+      const lastRegen = new Date(state.lastRegenTime).getTime();
+      const elapsed = now.getTime() - lastRegen;
+      const regenMs = ENERGY.REGEN_MINUTES * 60 * 1000;
+      const energyGained = Math.floor(elapsed / regenMs);
+
+      if (energyGained > 0) {
+        const newCurrent = Math.min(state.current + energyGained, ENERGY.MAX);
+        const consumedTime = energyGained * regenMs;
+        state = {
+          ...state,
+          current: newCurrent,
+          lastRegenTime: newCurrent >= ENERGY.MAX
+            ? now.toISOString()
+            : new Date(lastRegen + consumedTime).toISOString(),
+        };
+      }
+    }
+
+    return state;
+  }, []);
+
+  const useEnergy = useCallback((mode: string): boolean => {
+    // Free modes cost 0 energy
+    if (ENERGY.FREE_MODES.includes(mode)) return true;
+
+    let success = false;
+    setData((prev) => {
+      const energyNow = computeCurrentEnergy(prev.puzzleEnergy);
+
+      // Has energy — spend it
+      if (energyNow.current > 0) {
+        success = true;
+        return {
+          ...prev,
+          puzzleEnergy: {
+            ...energyNow,
+            current: energyNow.current - 1,
+            lastRegenTime: energyNow.current >= ENERGY.MAX
+              ? new Date().toISOString()
+              : energyNow.lastRegenTime,
+          },
+        };
+      }
+
+      // Out of energy — allow bonus plays (soft wall, NOT hard gate)
+      if (energyNow.bonusPlaysUsed < ENERGY.BONUS_PLAYS_AFTER_ZERO) {
+        success = true;
+        return {
+          ...prev,
+          puzzleEnergy: {
+            ...energyNow,
+            bonusPlaysUsed: energyNow.bonusPlaysUsed + 1,
+          },
+        };
+      }
+
+      // Truly gated — no energy and no bonus plays left
+      return { ...prev, puzzleEnergy: energyNow };
+    });
+    return success;
+  }, [computeCurrentEnergy]);
+
+  const refillEnergy = useCallback((method: 'ad' | 'gems'): boolean => {
+    let success = false;
+    setData((prev) => {
+      const energyNow = computeCurrentEnergy(prev.puzzleEnergy);
+
+      if (method === 'ad') {
+        // Ad gives +5 energy (capped at max)
+        success = true;
+        return {
+          ...prev,
+          puzzleEnergy: {
+            ...energyNow,
+            current: Math.min(energyNow.current + ENERGY.AD_REFILL_AMOUNT, ENERGY.MAX),
+          },
+        };
+      }
+
+      // Gem refill — full refill for ENERGY.GEM_REFILL_COST gems
+      // Note: gem spending is handled by the caller (EconomyContext)
+      success = true;
+      return {
+        ...prev,
+        puzzleEnergy: {
+          ...energyNow,
+          current: ENERGY.MAX,
+          bonusPlaysUsed: 0,
+          lastRegenTime: new Date().toISOString(),
+        },
+      };
+    });
+    return success;
+  }, [computeCurrentEnergy]);
+
+  const getTimeUntilNextEnergy = useCallback((): number => {
+    const energyNow = computeCurrentEnergy(data.puzzleEnergy);
+    if (energyNow.current >= ENERGY.MAX) return 0;
+
+    const lastRegen = new Date(energyNow.lastRegenTime).getTime();
+    const regenMs = ENERGY.REGEN_MINUTES * 60 * 1000;
+    const elapsed = Date.now() - lastRegen;
+    const remaining = regenMs - (elapsed % regenMs);
+    return Math.max(0, remaining);
+  }, [data.puzzleEnergy, computeCurrentEnergy]);
+
+  const getEnergyDisplay = useCallback(() => {
+    const energyNow = computeCurrentEnergy(data.puzzleEnergy);
+    const bonusPlaysLeft = ENERGY.BONUS_PLAYS_AFTER_ZERO - energyNow.bonusPlaysUsed;
+    return {
+      current: energyNow.current,
+      max: ENERGY.MAX,
+      bonusPlaysLeft: Math.max(0, bonusPlaysLeft),
+      isBonusMode: energyNow.current <= 0 && energyNow.bonusPlaysUsed > 0,
+    };
+  }, [data.puzzleEnergy, computeCurrentEnergy]);
+
+  // ── Adaptive Difficulty Metrics ───────────────────────────────────────
+
+  const recordPerformanceMetrics = useCallback((level: number, stars: number, completionTimeSeconds: number) => {
+    setData((prev) => ({
+      ...prev,
+      performanceMetrics: updatePlayerMetrics(
+        prev.performanceMetrics,
+        level,
+        stars,
+        completionTimeSeconds,
+      ),
+    }));
+  }, []);
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -1354,6 +1510,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         updateMysteryWheel,
         awardFreeSpin,
         updateWinStreak,
+        useEnergy,
+        refillEnergy,
+        getTimeUntilNextEnergy,
+        getEnergyDisplay,
+        recordPerformanceMetrics,
       }}
     >
       {children}

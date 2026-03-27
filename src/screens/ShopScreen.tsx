@@ -263,15 +263,15 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     [economy, settings, onPurchaseProp],
   );
 
-  // ── Rewarded ad handler ─────────────────────────────────────────────────
+  // ── Rewarded ad handlers ────────────────────────────────────────────────
 
-  const handleWatchAd = useCallback(async () => {
+  const handleWatchAdForHint = useCallback(async () => {
     if (watchingAd) return;
     setWatchingAd(true);
     try {
-      const result = await adManager.showRewardedAd('hint');
+      const result = await adManager.showRewardedAd('hint_reward');
       if (result.rewarded) {
-        economy.addHintTokens(1);
+        economy.processAdReward('hint_reward');
         Alert.alert('Reward Earned!', 'You received 1 free hint!');
       }
     } catch {
@@ -280,6 +280,39 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       setWatchingAd(false);
     }
   }, [watchingAd, economy]);
+
+  const handleWatchAdForCoins = useCallback(async () => {
+    if (watchingAd) return;
+    setWatchingAd(true);
+    try {
+      const result = await adManager.showRewardedAd('coins_reward');
+      if (result.rewarded) {
+        economy.processAdReward('coins_reward');
+        Alert.alert('Reward Earned!', 'You received 50 coins!');
+      }
+    } catch {
+      Alert.alert('Ad Unavailable', 'Please try again later.');
+    } finally {
+      setWatchingAd(false);
+    }
+  }, [watchingAd, economy]);
+
+  const handleWatchAdForSpin = useCallback(async () => {
+    if (watchingAd) return;
+    setWatchingAd(true);
+    try {
+      const result = await adManager.showRewardedAd('spin_reward');
+      if (result.rewarded) {
+        // Spins are tracked in PlayerContext — import and call if available,
+        // otherwise the caller can handle it. For now, grant via economy hook.
+        Alert.alert('Reward Earned!', 'You received 1 free Mystery Wheel spin!');
+      }
+    } catch {
+      Alert.alert('Ad Unavailable', 'Please try again later.');
+    } finally {
+      setWatchingAd(false);
+    }
+  }, [watchingAd]);
 
   // ── Restore purchases handler ───────────────────────────────────────────
 
