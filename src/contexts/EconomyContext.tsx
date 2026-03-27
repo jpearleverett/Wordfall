@@ -4,6 +4,7 @@ import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { LIVES } from '../constants';
+import { AdRewardType, AD_REWARD_VALUES } from '../services/ads';
 
 interface Economy {
   coins: number;
@@ -60,6 +61,9 @@ interface EconomyContextType extends Economy {
   spendLife: () => boolean;
   refillLives: () => boolean;
   getTimeUntilNextLife: () => number;
+  // Ad reward processing
+  processAdReward: (rewardType: AdRewardType) => void;
+  isAdFree: boolean;
 }
 
 const STORAGE_KEY = '@wordfall_economy';
@@ -122,6 +126,8 @@ const EconomyContext = createContext<EconomyContextType>({
   spendLife: () => false,
   refillLives: () => false,
   getTimeUntilNextLife: () => 0,
+  processAdReward: () => {},
+  isAdFree: false,
 });
 
 export function EconomyProvider({ children }: { children: ReactNode }) {
@@ -350,6 +356,28 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return Math.max(0, remaining);
   }, [state.lives]);
 
+  // ── Ad reward processing ─────────────────────────────────────────────────
+  const processAdReward = useCallback((rewardType: AdRewardType) => {
+    const def = AD_REWARD_VALUES[rewardType];
+    if (!def) return;
+    switch (def.currency) {
+      case 'coins':
+        addCoins(def.amount);
+        break;
+      case 'hintTokens':
+        addHintTokens(def.amount);
+        break;
+      case 'spins':
+        // Spins are handled by PlayerContext — caller should call player.updateMysteryWheel
+        break;
+      case 'double':
+        // Double reward is a multiplier — caller handles the actual doubling
+        break;
+      default:
+        console.warn('[Economy] Unknown ad reward currency:', def.currency);
+    }
+  }, [addCoins, addHintTokens]);
+
   const currentLives = computeRefilledLives(state.lives).current;
   const nextLifeTime = currentLives < LIVES.max
     ? state.lives.lastRefillTime + LIVES.refillMinutes * 60 * 1000
@@ -381,6 +409,8 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         spendLife,
         refillLives,
         getTimeUntilNextLife,
+        processAdReward,
+        isAdFree: false, // Replaced at runtime by settings.adsRemoved — see ShopScreen
       }}
     >
       {children}
