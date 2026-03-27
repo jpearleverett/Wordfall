@@ -142,6 +142,8 @@ async function setupAndroidChannel(): Promise<void> {
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -252,6 +254,7 @@ class NotificationManager {
       }
 
       // Build the expo-notifications trigger object
+      const channelId = Platform.OS === 'android' ? ANDROID_CHANNEL_ID : undefined;
       let expoTrigger: Notifications.NotificationTriggerInput;
 
       if (trigger.type === 'timeInterval') {
@@ -259,25 +262,23 @@ class NotificationManager {
           type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
           seconds: trigger.seconds,
           repeats: trigger.repeats ?? false,
-          channelId: Platform.OS === 'android' ? ANDROID_CHANNEL_ID : undefined,
+          channelId,
         };
       } else if (trigger.type === 'daily') {
         expoTrigger = {
-          type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
           hour: trigger.hour,
           minute: trigger.minute,
-          repeats: true,
-          channelId: Platform.OS === 'android' ? ANDROID_CHANNEL_ID : undefined,
+          channelId,
         };
       } else {
         // weekly
         expoTrigger = {
-          type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
           weekday: trigger.weekday,
           hour: trigger.hour,
           minute: trigger.minute,
-          repeats: true,
-          channelId: Platform.OS === 'android' ? ANDROID_CHANNEL_ID : undefined,
+          channelId,
         };
       }
 
