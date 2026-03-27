@@ -3,6 +3,7 @@ import {
   Image,
   Platform,
   StyleSheet,
+  Text,
   UIManager,
   View,
 } from 'react-native';
@@ -11,7 +12,7 @@ import {
   Gesture,
 } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Grid as GridType, CellPosition } from '../types';
+import { Grid as GridType, CellPosition, GravityDirection } from '../types';
 import { LetterCell } from './LetterCell';
 import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
@@ -38,7 +39,9 @@ interface GridProps {
   onCellPress: (position: CellPosition) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
-  frozenColumns?: number[];
+  wildcardCells?: CellPosition[];
+  spotlightDimmedCells?: Set<string>;
+  gravityDirection?: GravityDirection;
   validWord?: boolean;
   movedCells?: CellPosition[];
   maxHeight?: number;
@@ -52,7 +55,9 @@ export function GameGrid({
   onCellPress,
   onDragStart,
   onDragEnd,
-  frozenColumns = [],
+  wildcardCells = [],
+  spotlightDimmedCells,
+  gravityDirection,
   validWord = false,
   movedCells = [],
   maxHeight,
@@ -86,7 +91,11 @@ export function GameGrid({
     return set;
   }, [hintedCells]);
 
-  const frozenSet = useMemo(() => new Set(frozenColumns), [frozenColumns]);
+  const wildcardSet = useMemo(() => {
+    const set = new Set<string>();
+    wildcardCells.forEach(c => set.add(`${c.row},${c.col}`));
+    return set;
+  }, [wildcardCells]);
 
   const movedSet = useMemo(() => {
     const set = new Set<string>();
@@ -271,7 +280,6 @@ export function GameGrid({
                       width: cellSize + CELL_GAP,
                       height: gridHeight,
                     },
-                    frozenSet.has(colIndex) && styles.frozenColumn,
                   ]}
                 >
                   <View style={EMPTY_FLEX} />
@@ -290,9 +298,10 @@ export function GameGrid({
                         isSelected={isSelected}
                         isHinted={isHinted}
                         selectionIndex={selIndex}
-                        isFrozen={frozenSet.has(col)}
                         isValidWord={validWord && isSelected}
                         isMoved={movedSet.has(key)}
+                        isWildcard={wildcardSet.has(`${row},${col}`)}
+                        isSpotlightDimmed={spotlightDimmedCells?.has(`${row},${col}`) || false}
                       />
                     );
                   })}
@@ -300,6 +309,22 @@ export function GameGrid({
               ))}
             </View>
           </GestureDetector>
+
+          {/* Gravity direction arrow indicator */}
+          {gravityDirection && gravityDirection !== 'down' && (
+            <View style={[
+              styles.gravityArrowContainer,
+              gravityDirection === 'right' && styles.gravityArrowRight,
+              gravityDirection === 'up' && styles.gravityArrowUp,
+              gravityDirection === 'left' && styles.gravityArrowLeft,
+            ]}>
+              <View style={styles.gravityArrowBadge}>
+                <Text style={styles.gravityArrowText}>
+                  {gravityDirection === 'right' ? '→' : gravityDirection === 'up' ? '↑' : '←'}
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* Neon selection trail lines between selected cells */}
           {selectedCells.length > 1 && (
@@ -375,10 +400,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  frozenColumn: {
-    backgroundColor: 'rgba(0, 229, 255, 0.10)',
-    borderRadius: 12,
+  gravityArrowContainer: {
+    position: 'absolute',
+    zIndex: 10,
+  },
+  gravityArrowRight: {
+    right: -28,
+    top: '50%' as unknown as number,
+    marginTop: -14,
+  },
+  gravityArrowUp: {
+    top: -28,
+    left: '50%' as unknown as number,
+    marginLeft: -14,
+  },
+  gravityArrowLeft: {
+    left: -28,
+    top: '50%' as unknown as number,
+    marginTop: -14,
+  },
+  gravityArrowBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 212, 255, 0.25)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 229, 255, 0.08)',
+    borderColor: 'rgba(0, 212, 255, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gravityArrowText: {
+    fontSize: 16,
+    color: COLORS.accent,
+    fontWeight: '700',
+    lineHeight: 18,
   },
 });

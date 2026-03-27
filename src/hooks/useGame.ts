@@ -8,46 +8,14 @@ import {
   WordPlacement,
   GameMode,
   GameStatus,
+  GravityDirection,
+  Grid,
 } from '../types';
-import { removeCells, applyGravity, cloneGrid } from '../engine/gravity';
-import { findWordInGrid, isDeadEnd, getHint } from '../engine/solver';
-import { INITIAL_HINTS, INITIAL_UNDOS, SCORE } from '../constants';
+import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
+import { findWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable } from '../engine/solver';
+import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 
-/**
- * Apply gravity but skip frozen columns — letters in frozen columns stay in place.
- */
-function applyGravityWithFrozen(grid: (import('../types').Cell | null)[][], frozenCols: number[]): (import('../types').Cell | null)[][] {
-  if (frozenCols.length === 0) return applyGravity(grid);
-
-  const rows = grid.length;
-  const cols = grid[0].length;
-  const newGrid: (import('../types').Cell | null)[][] = Array.from({ length: rows }, () =>
-    Array(cols).fill(null)
-  );
-
-  for (let col = 0; col < cols; col++) {
-    if (frozenCols.includes(col)) {
-      // Copy column as-is (no gravity)
-      for (let row = 0; row < rows; row++) {
-        newGrid[row][col] = grid[row][col];
-      }
-    } else {
-      // Normal gravity: compact cells to bottom
-      const cells: import('../types').Cell[] = [];
-      for (let row = 0; row < rows; row++) {
-        if (grid[row][col] !== null) {
-          cells.push(grid[row][col]!);
-        }
-      }
-      const startRow = rows - cells.length;
-      for (let i = 0; i < cells.length; i++) {
-        newGrid[startRow + i][col] = cells[i];
-      }
-    }
-  }
-
-  return newGrid;
-}
+const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
 
 function getHintsForMode(mode: GameMode): number {
   switch (mode) {
@@ -99,15 +67,19 @@ function createInitialState(
     maxCombo: 0,
     mode,
     timeRemaining,
-    cascadeMultiplier: 1,
     perfectRun: true,
     chainCount: 0,
-    frozenColumns: [],
-    previewGrid: null,
+    gravityDirection: 'down',
+    shrinkCount: 0,
+    wordsUntilShrink: 2,
+    wildcardCells: [],
+    wildcardMode: false,
+    spotlightActive: false,
+    spotlightLetters: [],
     boosterCounts: {
-      freezeColumn: 2,
-      boardPreview: 1,
-      shuffleFiller: 1,
+      wildcardTile: 1,
+      spotlight: 1,
+      smartShuffle: 1,
     },
     lastInvalidTap: null,
   };
@@ -129,38 +101,87 @@ function areAdjacent(
 ): { adjacent: boolean; direction: Direction | null } {
   const rowDiff = Math.abs(a.row - b.row);
   const colDiff = Math.abs(a.col - b.col);
-
-  // Allow all 8 directions: horizontal, vertical, and diagonal
   const isAdjacent = rowDiff <= 1 && colDiff <= 1 && (rowDiff + colDiff > 0);
-
   if (isAdjacent) {
     return { adjacent: true, direction: null };
   }
-
   return { adjacent: false, direction: null };
+}
+
+/**
+ * Check if a word matches, accounting for wildcard cells.
+ */
+function matchesWord(
+  selectedWord: string,
+  targetWord: string,
+  selectedCells: CellPosition[],
+  wildcardCells: CellPosition[]
+): boolean {
+  if (selectedWord.length !== targetWord.length) return false;
+  const wildcardSet = new Set(wildcardCells.map(c => `${c.row},${c.col}`));
+  for (let i = 0; i < selectedWord.length; i++) {
+    const cellKey = `${selectedCells[i].row},${selectedCells[i].col}`;
+    if (wildcardSet.has(cellKey)) continue; // wildcard matches anything
+    if (selectedWord[i] !== targetWord[i]) return false;
+  }
+  return true;
 }
 
 function calculateScore(
   word: string,
   comboLevel: number,
   mode: GameMode,
-  cascadeMultiplier: number,
 ): number {
   const baseScore = SCORE.wordFound + word.length * SCORE.bonusPerLetter;
   const comboBonus = Math.floor(baseScore * (comboLevel - 1) * SCORE.comboMultiplier);
   let total = baseScore + comboBonus;
 
-  // Cascade mode multiplier
-  if (mode === 'cascade') {
-    total = Math.floor(total * cascadeMultiplier);
+  // Apply mode score multiplier
+  const modeConfig = MODE_CONFIGS[mode];
+  if (modeConfig) {
+    total = Math.floor(total * modeConfig.rules.scoreMultiplier);
   }
 
-  // Expert mode bonus
+  // Expert mode extra bonus
   if (mode === 'expert') {
     total = Math.floor(total * 1.5);
   }
 
   return total;
+}
+
+/**
+ * Compute the outer ring of non-null cells for shrinking board.
+ */
+function getOuterRing(grid: Grid): CellPosition[] {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const ring: CellPosition[] = [];
+
+  // Find the bounding box of non-null cells
+  let minRow = rows, maxRow = -1, minCol = cols, maxCol = -1;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] !== null) {
+        minRow = Math.min(minRow, r);
+        maxRow = Math.max(maxRow, r);
+        minCol = Math.min(minCol, c);
+        maxCol = Math.max(maxCol, c);
+      }
+    }
+  }
+
+  if (maxRow < 0) return ring; // empty grid
+
+  for (let r = minRow; r <= maxRow; r++) {
+    for (let c = minCol; c <= maxCol; c++) {
+      if (grid[r][c] !== null && (r === minRow || r === maxRow || c === minCol || c === maxCol)) {
+        ring.push({ row: r, col: c });
+      }
+    }
+  }
+
+  return ring;
 }
 
 function gameReducer(state: GameState, action: GameAction): GameState {
@@ -171,6 +192,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const { selectedCells, selectionDirection, board } = state;
 
       if (!board.grid[position.row]?.[position.col]) return state;
+
+      // If in wildcard placement mode, place the wildcard instead
+      if (state.wildcardMode) {
+        return {
+          ...state,
+          wildcardMode: false,
+          wildcardCells: [position], // replace any existing wildcard (max 1)
+          boosterCounts: { ...state.boosterCounts, wildcardTile: state.boosterCounts.wildcardTile - 1 },
+        };
+      }
 
       // If tapping an already selected cell, deselect from that point
       const existingIndex = selectedCells.findIndex(
@@ -205,7 +236,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       );
 
       if (!adjacent) {
-        // Non-adjacent tap — track for UI feedback and start new selection
         return {
           ...state,
           selectedCells: [position],
@@ -229,6 +259,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectedCells: [],
         selectionDirection: null,
         lastInvalidTap: null,
+        spotlightActive: false,
+        spotlightLetters: [],
       };
 
     case 'SUBMIT_WORD': {
@@ -238,14 +270,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       const word = getSelectedWord(board.grid, selectedCells);
 
-      // Check if it matches a remaining target word
+      // Check if it matches a remaining target word (wildcard-aware)
       const wordIndex = board.words.findIndex(
-        w => !w.found && w.word === word
+        w => !w.found && matchesWord(word, w.word, selectedCells, state.wildcardCells)
       );
 
       if (wordIndex === -1) {
-        // Not a target word - clear selection
-        // Perfect solve mode: any wrong tap = fail
+        // Not a target word
         if (mode === 'perfectSolve') {
           return {
             ...state,
@@ -255,7 +286,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             status: 'failed',
           };
         }
-
         return {
           ...state,
           selectedCells: [],
@@ -265,15 +295,30 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       // Word found!
-      // Save history for undo
       const historyEntry = {
         grid: cloneGrid(board.grid),
         words: board.words.map(w => ({ ...w })),
       };
 
-      // Remove letters and apply gravity (respecting frozen columns)
+      // Remove letters from grid
       const gridAfterRemoval = removeCells(board.grid, selectedCells);
-      const newGrid = applyGravityWithFrozen(gridAfterRemoval, state.frozenColumns);
+
+      // Apply gravity based on mode
+      let newGrid: Grid;
+      let newGravityDirection = state.gravityDirection;
+
+      if (mode === 'noGravity') {
+        // No gravity — cleared cells stay as holes
+        newGrid = gridAfterRemoval;
+      } else if (mode === 'gravityFlip') {
+        // Gravity in current direction, then rotate
+        newGrid = applyGravityInDirection(gridAfterRemoval, state.gravityDirection);
+        const currentIdx = GRAVITY_CYCLE.indexOf(state.gravityDirection);
+        newGravityDirection = GRAVITY_CYCLE[(currentIdx + 1) % 4];
+      } else {
+        // Standard downward gravity
+        newGrid = applyGravity(gridAfterRemoval);
+      }
 
       // Update word status
       const matchingWord = board.words[wordIndex];
@@ -281,10 +326,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         i === wordIndex ? { ...w, found: true } : { ...w }
       );
 
-      // Chain detection: check if gravity made new words findable
+      // Chain detection
       const remainingAfter = board.words.filter(w => !w.found && w.word !== matchingWord.word);
       let newChainCount = state.chainCount;
-      if (remainingAfter.length > 0) {
+      if (remainingAfter.length > 0 && mode !== 'noGravity') {
         const findableBefore = remainingAfter.filter(w => findWordInGrid(gridAfterRemoval, w.word, 1).length > 0);
         const findableAfter = remainingAfter.filter(w => findWordInGrid(newGrid, w.word, 1).length > 0);
         if (findableAfter.length > findableBefore.length) {
@@ -292,24 +337,43 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
-      // Calculate score
+      // Score
       const comboLevel = state.combo + 1;
-      const newCascadeMultiplier = mode === 'cascade'
-        ? state.cascadeMultiplier + 0.25
-        : state.cascadeMultiplier;
-      const wordScore = calculateScore(word, comboLevel, mode, newCascadeMultiplier);
+      const wordScore = calculateScore(matchingWord.word, comboLevel, mode);
 
       // Check win condition
       const allFound = newWords.every(w => w.found);
       const newMoves = state.moves + 1;
-
-      // Check limited moves failure
       let newStatus: GameStatus = allFound ? 'won' : 'playing';
-      if (mode === 'limitedMoves' && state.maxMoves > 0 && newMoves >= state.maxMoves && !allFound) {
-        newStatus = 'failed';
+
+      // Shrinking board: apply shrink after every 2 words
+      let newShrinkCount = state.shrinkCount;
+      let newWordsUntilShrink = state.wordsUntilShrink - 1;
+
+      if (mode === 'shrinkingBoard' && !allFound && newWordsUntilShrink <= 0) {
+        // Time to shrink
+        const outerRing = getOuterRing(newGrid);
+        if (outerRing.length > 0) {
+          const gridAfterShrink = removeCells(newGrid, outerRing);
+          newGrid = applyGravity(gridAfterShrink);
+          newShrinkCount = state.shrinkCount + 1;
+
+          // Check if remaining words are still findable
+          const remainingWordStrings = newWords.filter(w => !w.found).map(w => w.word);
+          const stillSolvable = remainingWordStrings.every(w => findWordInGrid(newGrid, w, 1).length > 0);
+          if (!stillSolvable) {
+            newStatus = 'failed';
+          }
+        }
+        newWordsUntilShrink = 2; // reset countdown
       }
 
-      const newState: GameState = {
+      // Clean up wildcard if it was used in this word
+      const wildcardSet = new Set(state.wildcardCells.map(c => `${c.row},${c.col}`));
+      const usedWildcard = selectedCells.some(c => wildcardSet.has(`${c.row},${c.col}`));
+      const newWildcardCells = usedWildcard ? [] : state.wildcardCells;
+
+      return {
         ...state,
         board: { ...board, grid: newGrid, words: newWords },
         selectedCells: [],
@@ -318,15 +382,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         moves: newMoves,
         combo: comboLevel,
         maxCombo: Math.max(state.maxCombo, comboLevel),
-        cascadeMultiplier: newCascadeMultiplier,
         chainCount: newChainCount,
         history: [...state.history, historyEntry],
         status: newStatus,
-        frozenColumns: [], // Reset frozen columns after each move
-        previewGrid: null, // Clear any preview
+        gravityDirection: newGravityDirection,
+        shrinkCount: newShrinkCount,
+        wordsUntilShrink: newWordsUntilShrink,
+        wildcardCells: newWildcardCells,
+        spotlightActive: false,
+        spotlightLetters: [],
       };
-
-      return newState;
     }
 
     case 'USE_HINT': {
@@ -350,11 +415,31 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'UNDO_MOVE': {
       if (state.history.length === 0) return state;
-      // Allow undo in 'playing' state, or when 'failed' (to recover from dead-ends/perfectSolve)
       if (state.status !== 'playing' && state.status !== 'failed') return state;
       if (state.undosLeft <= 0) return state;
 
       const lastHistory = state.history[state.history.length - 1];
+
+      // Reverse gravity direction for gravityFlip
+      let prevDirection = state.gravityDirection;
+      if (state.mode === 'gravityFlip') {
+        const currentIdx = GRAVITY_CYCLE.indexOf(state.gravityDirection);
+        prevDirection = GRAVITY_CYCLE[(currentIdx + 3) % 4]; // go back one step
+      }
+
+      // Reverse shrink if one happened on this move
+      let prevShrinkCount = state.shrinkCount;
+      let prevWordsUntilShrink = state.wordsUntilShrink;
+      if (state.mode === 'shrinkingBoard') {
+        // If wordsUntilShrink is 2 and shrinkCount > 0, a shrink just happened
+        if (state.wordsUntilShrink === 2 && state.shrinkCount > 0) {
+          prevShrinkCount = state.shrinkCount - 1;
+          prevWordsUntilShrink = 0; // will be incremented below... actually just set to 1
+          prevWordsUntilShrink = 1;
+        } else {
+          prevWordsUntilShrink = state.wordsUntilShrink + 1;
+        }
+      }
 
       return {
         ...state,
@@ -369,9 +454,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         undosLeft: state.undosLeft - 1,
         history: state.history.slice(0, -1),
         combo: 0,
-        cascadeMultiplier: state.mode === 'cascade' ? 1 : state.cascadeMultiplier,
         perfectRun: false,
-        status: 'playing', // Reset status so player can continue after undo
+        status: 'playing',
+        gravityDirection: prevDirection,
+        shrinkCount: prevShrinkCount,
+        wordsUntilShrink: prevWordsUntilShrink,
       };
     }
 
@@ -388,7 +475,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         combo: 0,
-        cascadeMultiplier: state.mode === 'cascade' ? 1 : state.cascadeMultiplier,
       };
 
     case 'TICK_TIMER': {
@@ -400,118 +486,100 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, timeRemaining: newTime };
     }
 
-    case 'SHUFFLE_FILLER': {
+    case 'WILDCARD_PLACE': {
       if (state.status !== 'playing') return state;
-      // Shuffle all non-word cells
-      const { grid, words } = state.board;
-      const newGrid = cloneGrid(grid);
+      if (!state.wildcardMode) return state;
+      const { position } = action;
+      return {
+        ...state,
+        wildcardMode: false,
+        wildcardCells: [position],
+        boosterCounts: { ...state.boosterCounts, wildcardTile: state.boosterCounts.wildcardTile - 1 },
+      };
+    }
 
-      // Collect positions that are part of words
-      const wordPositions = new Set<string>();
-      words.forEach(w => {
+    case 'SPOTLIGHT_ACTIVATE': {
+      if (state.status !== 'playing') return state;
+      if (state.boosterCounts.spotlight <= 0) return state;
+
+      // Compute relevant letters from all remaining words
+      const relevantLetters = new Set<string>();
+      state.board.words.forEach(w => {
         if (!w.found) {
-          // Find where this word currently is
-          const occurrences = findWordInGrid(newGrid, w.word);
-          if (occurrences.length > 0) {
-            occurrences[0].forEach(pos => wordPositions.add(`${pos.row},${pos.col}`));
-          }
+          for (const ch of w.word) relevantLetters.add(ch);
         }
       });
 
-      // Shuffle non-word cells
-      const vowels = 'AEIOU';
-      const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
-      for (let r = 0; r < newGrid.length; r++) {
-        for (let c = 0; c < newGrid[0].length; c++) {
-          if (newGrid[r][c] && !wordPositions.has(`${r},${c}`)) {
-            const useVowel = Math.random() < 0.35;
-            const pool = useVowel ? vowels : consonants;
-            newGrid[r][c] = {
-              ...newGrid[r][c]!,
-              letter: pool[Math.floor(Math.random() * pool.length)],
-            };
-          }
+      return {
+        ...state,
+        spotlightActive: true,
+        spotlightLetters: [...relevantLetters],
+        boosterCounts: { ...state.boosterCounts, spotlight: state.boosterCounts.spotlight - 1 },
+      };
+    }
+
+    case 'SMART_SHUFFLE': {
+      if (state.status !== 'playing') return state;
+      if (state.boosterCounts.smartShuffle <= 0) return state;
+
+      const { grid, words } = state.board;
+      const remainingWords = words.filter(w => !w.found).map(w => w.word);
+
+      // Identify cells on remaining word paths
+      const wordCellSet = new Set<string>();
+      for (const w of remainingWords) {
+        const occurrences = findWordInGrid(grid, w, 1);
+        if (occurrences.length > 0) {
+          occurrences[0].forEach(pos => wordCellSet.add(`${pos.row},${pos.col}`));
         }
       }
 
-      return {
-        ...state,
-        board: { ...state.board, grid: newGrid },
-      };
-    }
+      const vowels = 'AEIOU';
+      const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
 
-    case 'FREEZE_COLUMN': {
-      if (state.status !== 'playing') return state;
-      if (state.boosterCounts.freezeColumn <= 0) return state;
-      const { col } = action;
-      // Toggle frozen column
-      const isFrozen = state.frozenColumns.includes(col);
-      const newFrozen = isFrozen
-        ? state.frozenColumns.filter(c => c !== col)
-        : [...state.frozenColumns, col];
-      return {
-        ...state,
-        frozenColumns: newFrozen,
-        boosterCounts: isFrozen
-          ? { ...state.boosterCounts, freezeColumn: state.boosterCounts.freezeColumn + 1 }
-          : { ...state.boosterCounts, freezeColumn: state.boosterCounts.freezeColumn - 1 },
-      };
-    }
-
-    case 'PREVIEW_MOVE': {
-      if (state.status !== 'playing') return state;
-      const { positions } = action;
-      if (positions.length === 0) {
-        // Clear preview
-        return { ...state, previewGrid: null };
-      }
-      // Show what the board would look like after removing these cells
-      const previewResult = applyGravityWithFrozen(removeCells(state.board.grid, positions), state.frozenColumns);
-      return { ...state, previewGrid: previewResult };
-    }
-
-    case 'USE_BOOSTER': {
-      if (state.status !== 'playing') return state;
-      const { booster } = action;
-      if (booster === 'shuffleFiller' && state.boosterCounts.shuffleFiller > 0) {
-        // Delegate to SHUFFLE_FILLER logic
-        const { grid: bGrid, words: bWords } = state.board;
-        const newBGrid = cloneGrid(bGrid);
-        const bWordPositions = new Set<string>();
-        bWords.forEach(w => {
-          if (!w.found) {
-            const occurrences = findWordInGrid(newBGrid, w.word);
-            if (occurrences.length > 0) {
-              occurrences[0].forEach(pos => bWordPositions.add(`${pos.row},${pos.col}`));
-            }
-          }
-        });
-        const bVowels = 'AEIOU';
-        const bConsonants = 'BCDFGHJKLMNPQRSTVWXYZ';
-        for (let r = 0; r < newBGrid.length; r++) {
-          for (let c = 0; c < newBGrid[0].length; c++) {
-            if (newBGrid[r][c] && !bWordPositions.has(`${r},${c}`)) {
-              const useV = Math.random() < 0.35;
-              const pool = useV ? bVowels : bConsonants;
-              newBGrid[r][c] = {
-                ...newBGrid[r][c]!,
+      // Try up to 10 shuffles to find a solvable board
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const newGrid = cloneGrid(grid);
+        for (let r = 0; r < newGrid.length; r++) {
+          for (let c = 0; c < newGrid[0].length; c++) {
+            if (newGrid[r][c] && !wordCellSet.has(`${r},${c}`)) {
+              const useVowel = Math.random() < 0.35;
+              const pool = useVowel ? vowels : consonants;
+              newGrid[r][c] = {
+                ...newGrid[r][c]!,
                 letter: pool[Math.floor(Math.random() * pool.length)],
               };
             }
           }
         }
-        return {
-          ...state,
-          board: { ...state.board, grid: newBGrid },
-          boosterCounts: { ...state.boosterCounts, shuffleFiller: state.boosterCounts.shuffleFiller - 1 },
-        };
+
+        // Verify solvability
+        if (isSolvable(newGrid, remainingWords)) {
+          return {
+            ...state,
+            board: { ...state.board, grid: newGrid },
+            boosterCounts: { ...state.boosterCounts, smartShuffle: state.boosterCounts.smartShuffle - 1 },
+          };
+        }
       }
-      if (booster === 'boardPreview' && state.boosterCounts.boardPreview > 0) {
-        // Board preview is activated — handled via UI state, just track usage
-        return {
-          ...state,
-          boosterCounts: { ...state.boosterCounts, boardPreview: state.boosterCounts.boardPreview - 1 },
-        };
+
+      // All attempts failed — refund booster (don't decrement)
+      return state;
+    }
+
+    case 'USE_BOOSTER': {
+      if (state.status !== 'playing') return state;
+      const { booster } = action;
+
+      if (booster === 'wildcardTile' && state.boosterCounts.wildcardTile > 0) {
+        // Enter wildcard placement mode (actual placement happens on next SELECT_CELL)
+        return { ...state, wildcardMode: !state.wildcardMode };
+      }
+      if (booster === 'spotlight' && state.boosterCounts.spotlight > 0) {
+        return gameReducer(state, { type: 'SPOTLIGHT_ACTIVATE' });
+      }
+      if (booster === 'smartShuffle' && state.boosterCounts.smartShuffle > 0) {
+        return gameReducer(state, { type: 'SMART_SHUFFLE' });
       }
       return state;
     }
@@ -536,7 +604,7 @@ export function useGame(
     createInitialState(initialBoard, level, mode, maxMoves, timeLimit)
   );
 
-  // Timer for timed modes — use ref for status to avoid recreating interval
+  // Timer for timed modes
   const statusRef = useRef(state.status);
   statusRef.current = state.status;
 
@@ -550,7 +618,6 @@ export function useGame(
     }, 1000);
 
     return () => clearInterval(interval);
-  // Only recreate when mode or status changes, not on every tick
   }, [mode, state.status]);
 
   const selectCell = useCallback((position: CellPosition) => {
@@ -577,20 +644,16 @@ export function useGame(
     dispatch({ type: 'NEW_GAME', board, level: newLevel, mode: newMode, maxMoves: newMaxMoves, timeRemaining: newTimeLimit });
   }, []);
 
-  const shuffleFiller = useCallback(() => {
-    dispatch({ type: 'SHUFFLE_FILLER' });
+  const activateWildcard = useCallback(() => {
+    dispatch({ type: 'USE_BOOSTER', booster: 'wildcardTile' });
   }, []);
 
-  const freezeColumn = useCallback((col: number) => {
-    dispatch({ type: 'FREEZE_COLUMN', col });
+  const activateSpotlight = useCallback(() => {
+    dispatch({ type: 'USE_BOOSTER', booster: 'spotlight' });
   }, []);
 
-  const previewMove = useCallback((positions: CellPosition[]) => {
-    dispatch({ type: 'PREVIEW_MOVE', positions });
-  }, []);
-
-  const clearPreview = useCallback(() => {
-    dispatch({ type: 'PREVIEW_MOVE', positions: [] });
+  const activateSmartShuffle = useCallback(() => {
+    dispatch({ type: 'USE_BOOSTER', booster: 'smartShuffle' });
   }, []);
 
   const useBooster = useCallback((booster: string) => {
@@ -603,19 +666,21 @@ export function useGame(
     [state.board.grid, state.selectedCells]
   );
 
-  // Cache remaining words — only recompute when words change
+  // Cache remaining words
   const remainingWords = useMemo(
     () => state.board.words.filter(w => !w.found).map(w => w.word),
     [state.board.words]
   );
 
-  // Check if current selection matches a target word
-  const isValidWord = useMemo(
-    () => remainingWords.includes(currentWord),
-    [remainingWords, currentWord]
-  );
+  // Check if current selection matches a target word (wildcard-aware)
+  const isValidWord = useMemo(() => {
+    if (state.selectedCells.length === 0) return false;
+    return state.board.words.some(
+      w => !w.found && matchesWord(currentWord, w.word, state.selectedCells, state.wildcardCells)
+    );
+  }, [remainingWords, currentWord, state.selectedCells, state.wildcardCells]);
 
-  // Compute isStuck lazily — only after word found, not on every render
+  // Compute isStuck lazily — mode-aware
   const [isStuck, setIsStuck] = useState(false);
   const foundWords = state.board.words.filter(w => w.found).length;
 
@@ -624,15 +689,31 @@ export function useGame(
       setIsStuck(false);
       return;
     }
-    // Defer expensive computation to avoid blocking animations
+
+    // noGravity mode: just check if all words still exist in grid
+    if (mode === 'noGravity') {
+      const timer = setTimeout(() => {
+        setIsStuck(isDeadEndNoGravity(state.board.grid, remainingWords));
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
+    // gravityFlip mode: use rotating gravity dead-end detection
+    if (mode === 'gravityFlip') {
+      const timer = setTimeout(() => {
+        setIsStuck(isDeadEndGravityFlip(state.board.grid, remainingWords, state.gravityDirection, state.moves));
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
+    // Standard dead-end detection
     const timer = setTimeout(() => {
-      const stuck = isDeadEnd(state.board.grid, remainingWords);
-      setIsStuck(stuck);
+      setIsStuck(isDeadEnd(state.board.grid, remainingWords));
     }, 100);
     return () => clearTimeout(timer);
-  }, [foundWords, state.status, state.board.grid, remainingWords]);
+  }, [foundWords, state.status, state.board.grid, remainingWords, mode, state.gravityDirection, state.moves]);
 
-  // Calculate stars — based on hints used + move efficiency per GDD
+  // Calculate stars
   const totalWords = state.board.words.length;
   const hintsUsed = (getHintsForMode(state.mode) === 0 ? 0 : getHintsForMode(state.mode) - state.hintsLeft);
   const stars =
@@ -652,10 +733,9 @@ export function useGame(
     useHint: useHintAction,
     undoMove,
     newGame,
-    shuffleFiller,
-    freezeColumn,
-    previewMove,
-    clearPreview,
+    activateWildcard,
+    activateSpotlight,
+    activateSmartShuffle,
     useBooster,
     currentWord,
     isValidWord,

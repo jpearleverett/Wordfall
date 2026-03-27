@@ -34,9 +34,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Stable no-op callback for preview grid to avoid new function creation on every render
-const noOpCellPress = () => {};
-
 interface GameScreenProps {
   board: Board;
   level: number;
@@ -163,10 +160,9 @@ export function GameScreen({
     useHint,
     undoMove,
     newGame,
-    shuffleFiller,
-    freezeColumn,
-    previewMove,
-    clearPreview,
+    activateWildcard,
+    activateSpotlight,
+    activateSmartShuffle,
     useBooster,
     currentWord,
     isValidWord,
@@ -179,10 +175,7 @@ export function GameScreen({
 
   const [showComplete, setShowComplete] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [freezeMode, setFreezeMode] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const freezePulseAnim = useRef(new Animated.Value(0)).current;
   const [gridAreaHeight, setGridAreaHeight] = useState(0);
   const gridHeightLocked = useRef(false);
   const chainAnim = useRef(new Animated.Value(0)).current;
@@ -532,15 +525,11 @@ export function GameScreen({
       resetIdleTimer();
       void tapHaptic();
       void soundManager.playSound('tap');
-      if (freezeMode) {
-        freezeColumn(position.col);
-        setFreezeMode(false);
-        return;
-      }
       // Adjacency is handled by the reducer — non-adjacent taps start a new selection
+      // Wildcard placement mode is also handled by the reducer via SELECT_CELL
       selectCell(position);
     },
-    [selectCell, freezeMode, freezeColumn, resetIdleTimer]
+    [selectCell, resetIdleTimer]
   );
 
   const handleHint = useCallback(() => {
@@ -598,8 +587,6 @@ export function GameScreen({
     setShowComplete(false);
 
     setShowFailed(false);
-    setFreezeMode(false);
-    setShowPreview(false);
   }, [board, level, mode, effectiveMaxMoves, effectiveTimeLimit, newGame]);
 
   const handleNextLevel = useCallback(() => {
@@ -608,49 +595,29 @@ export function GameScreen({
   }, [onNextLevel]);
 
   // Booster handlers
-  const handleShuffle = useCallback(() => {
-    if (state.boosterCounts.shuffleFiller > 0) {
+  const handleWildcard = useCallback(() => {
+    if (state.boosterCounts.wildcardTile > 0) {
       void soundManager.playSound('buttonPress');
-      void analytics.logEvent('booster_used', { level, mode, booster: 'shuffleFiller' });
-      useBooster('shuffleFiller');
+      void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
+      activateWildcard();
     }
-  }, [useBooster, state.boosterCounts.shuffleFiller, level, mode]);
+  }, [activateWildcard, state.boosterCounts.wildcardTile, level, mode]);
 
-  const handleFreezeToggle = useCallback(() => {
-    if (state.boosterCounts.freezeColumn > 0) {
+  const handleSpotlight = useCallback(() => {
+    if (state.boosterCounts.spotlight > 0) {
       void soundManager.playSound('buttonPress');
-      void analytics.logEvent('booster_used', { level, mode, booster: 'freezeColumn_toggle' });
-      setFreezeMode(prev => !prev);
+      void analytics.logEvent('booster_used', { level, mode, booster: 'spotlight' });
+      activateSpotlight();
     }
-  }, [state.boosterCounts.freezeColumn, level, mode]);
+  }, [activateSpotlight, state.boosterCounts.spotlight, level, mode]);
 
-  // Pulsing border glow when freeze mode is active
-  useEffect(() => {
-    if (freezeMode) {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(freezePulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-          Animated.timing(freezePulseAnim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-        ])
-      );
-      pulse.start();
-      return () => pulse.stop();
-    } else {
-      freezePulseAnim.setValue(0);
+  const handleSmartShuffle = useCallback(() => {
+    if (state.boosterCounts.smartShuffle > 0) {
+      void soundManager.playSound('buttonPress');
+      void analytics.logEvent('booster_used', { level, mode, booster: 'smartShuffle' });
+      activateSmartShuffle();
     }
-  }, [freezeMode, freezePulseAnim]);
-
-  const handlePreviewToggle = useCallback(() => {
-    if (showPreview) {
-      clearPreview();
-      setShowPreview(false);
-    } else if (state.boosterCounts.boardPreview > 0 && state.selectedCells.length > 0) {
-      previewMove(state.selectedCells);
-      void analytics.logEvent('booster_used', { level, mode, booster: 'boardPreview' });
-      useBooster('boardPreview');
-      setShowPreview(true);
-    }
-  }, [showPreview, clearPreview, previewMove, useBooster, state.boosterCounts.boardPreview, state.selectedCells, level, mode]);
+  }, [activateSmartShuffle, state.boosterCounts.smartShuffle, level, mode]);
 
   // Format timer — extracted as useCallback to avoid recreation on every render
   const formatTime = useCallback((seconds: number) => {
@@ -691,9 +658,24 @@ export function GameScreen({
   });
 
   const hasAnyBoosters =
-    state.boosterCounts.shuffleFiller > 0 ||
-    state.boosterCounts.freezeColumn > 0 ||
-    state.boosterCounts.boardPreview > 0;
+    state.boosterCounts.wildcardTile > 0 ||
+    state.boosterCounts.spotlight > 0 ||
+    state.boosterCounts.smartShuffle > 0;
+
+  // Compute spotlight dimmed cells for grid rendering
+  const spotlightDimmedSet = useMemo(() => {
+    if (!state.spotlightActive) return new Set<string>();
+    const relevant = new Set(state.spotlightLetters);
+    const dimmed = new Set<string>();
+    state.board.grid.forEach((row, r) => {
+      row.forEach((cell, c) => {
+        if (cell && !relevant.has(cell.letter)) {
+          dimmed.add(`${r},${c}`);
+        }
+      });
+    });
+    return dimmed;
+  }, [state.spotlightActive, state.spotlightLetters, state.board.grid]);
 
   const invalidFlashOpacity = invalidFlashAnim.interpolate({
     inputRange: [0, 1],
@@ -713,9 +695,10 @@ export function GameScreen({
             </Text>
             <Text style={styles.modeIntroDesc}>
               {mode === 'perfectSolve' ? 'No mistakes allowed!' :
-               mode === 'limitedMoves' ? `Complete in ${effectiveMaxMoves} moves!` :
+               mode === 'gravityFlip' ? 'Gravity rotates after each word!' :
                mode === 'timePressure' ? `Beat the clock! ${formatTime(effectiveTimeLimit)}` :
-               mode === 'cascade' ? 'Build combos for bonus multipliers!' :
+               mode === 'shrinkingBoard' ? 'Clear edge words before the board shrinks!' :
+               mode === 'noGravity' ? 'No gravity — letters stay put!' :
                mode === 'expert' ? 'No hints. No mercy.' :
                mode === 'relax' ? 'Take your time. Enjoy the words.' :
                modeConfig.description}
@@ -737,7 +720,6 @@ export function GameScreen({
         mode={mode}
         maxMoves={effectiveMaxMoves}
         timeRemaining={state.timeRemaining}
-        cascadeMultiplier={state.cascadeMultiplier}
         onHint={handleHint}
         onUndo={handleUndo}
         onBack={onHome}
@@ -900,24 +882,24 @@ export function GameScreen({
       <View style={styles.gridArea} onLayout={handleGridLayout}>
         {/* Floating banners - absolute overlay, don't affect grid sizing */}
         <View style={styles.bannerOverlay} pointerEvents="box-none">
-          {mode === 'cascade' && state.cascadeMultiplier > 1 && (
+          {mode === 'gravityFlip' && state.gravityDirection !== 'down' && (
             <View style={styles.cascadeBar}>
               <Text style={styles.cascadeText}>
-                🔥 {state.cascadeMultiplier.toFixed(2)}x Multiplier
+                🔄 Gravity: {state.gravityDirection === 'right' ? '→' : state.gravityDirection === 'up' ? '↑' : '←'}
               </Text>
             </View>
           )}
-          {state.frozenColumns.length > 0 && (
-            <View style={styles.frozenBanner}>
-              <Text style={styles.frozenText}>
-                ❄️ Column {state.frozenColumns.map(c => c + 1).join(', ')} frozen
+          {mode === 'shrinkingBoard' && state.wordsUntilShrink === 1 && state.status === 'playing' && (
+            <View style={[styles.cascadeBar, { borderColor: COLORS.coral }]}>
+              <Text style={[styles.cascadeText, { color: COLORS.coral }]}>
+                🔻 SHRINKING IN 1 WORD
               </Text>
             </View>
           )}
-          {freezeMode && (
-            <View style={styles.freezeModeBanner}>
-              <Text style={styles.freezeModeText}>
-                ❄️ Tap a column to freeze it
+          {state.wildcardMode && (
+            <View style={[styles.cascadeBar, { borderColor: COLORS.gold }]}>
+              <Text style={[styles.cascadeText, { color: COLORS.gold }]}>
+                ★ Tap a cell to place wildcard
               </Text>
             </View>
           )}
@@ -945,50 +927,22 @@ export function GameScreen({
 
         {/* Grid wrapper with scale animations (#3 letter pop, #4 undo pulse) */}
         <Animated.View style={gridScaleStyle}>
-          {/* Show preview grid if active */}
-          {showPreview && state.previewGrid ? (
-            <View style={styles.previewContainer}>
-              <Text style={styles.previewLabel}>PREVIEW</Text>
-              <GameGrid
-                grid={state.previewGrid}
-                selectedCells={[]}
-                onCellPress={noOpCellPress}
-                maxHeight={gridAreaHeight}
-              />
-              <Pressable
-                style={styles.previewDismiss}
-                onPress={() => { clearPreview(); setShowPreview(false); }}
-              >
-                <Text style={styles.previewDismissText}>Dismiss Preview</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <GameGrid
-              grid={state.board.grid}
-              selectedCells={state.selectedCells}
-              hintedCells={isValidWord ? state.selectedCells : []}
-              onCellPress={handleCellPress}
-              onDragStart={() => setIsDragging(true)}
-              onDragEnd={() => setIsDragging(false)}
-              frozenColumns={state.frozenColumns}
-              validWord={showValidFlash}
-              movedCells={movedCells}
-              maxHeight={gridAreaHeight}
-              isDragging={isDragging}
-            />
-          )}
-        </Animated.View>
-
-        {/* Freeze mode pulsing border glow overlay */}
-        {freezeMode && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.freezePulseOverlay,
-              { opacity: freezePulseAnim },
-            ]}
+          <GameGrid
+            grid={state.board.grid}
+            selectedCells={state.selectedCells}
+            hintedCells={isValidWord ? state.selectedCells : []}
+            onCellPress={handleCellPress}
+            onDragStart={() => setIsDragging(true)}
+            onDragEnd={() => setIsDragging(false)}
+            validWord={showValidFlash}
+            movedCells={mode === 'noGravity' ? [] : movedCells}
+            maxHeight={gridAreaHeight}
+            isDragging={isDragging}
+            wildcardCells={state.wildcardCells}
+            spotlightDimmedCells={spotlightDimmedSet}
+            gravityDirection={mode === 'gravityFlip' ? state.gravityDirection : undefined}
           />
-        )}
+        </Animated.View>
 
         {/* #1 Word-clear particles */}
         {clearParticles && (
@@ -1033,73 +987,69 @@ export function GameScreen({
           resizeMode="stretch"
         />
         <View style={styles.boosterShelf}>
-          {state.boosterCounts.shuffleFiller > 0 && (
+          {state.boosterCounts.wildcardTile > 0 && (
             <Pressable
-              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
-              onPress={handleShuffle}
+              style={({ pressed }) => [
+                styles.boosterButton,
+                state.wildcardMode && styles.boosterActive,
+                pressed && styles.boosterPressed,
+              ]}
+              onPress={handleWildcard}
             >
-              {/* Pedestal card */}
               <LinearGradient
                 colors={['rgba(25, 15, 50, 0.85)', 'rgba(15, 8, 35, 0.90)'] as [string, string]}
                 style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
               />
-              {/* Icon glow background */}
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(168, 85, 247, 0.20)' }]} />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 215, 0, 0.20)' }]} />
               <View style={styles.boosterIconWrap}>
-                <Image source={LOCAL_IMAGES.iconShuffle} style={styles.boosterIconImage} resizeMode="contain" />
+                <Text style={styles.boosterEmoji}>★</Text>
               </View>
-              <Text style={styles.boosterLabel}>Shuffle</Text>
-              {state.boosterCounts.shuffleFiller > 0 && (
-                <View style={styles.boosterCount}>
-                  <Text style={styles.boosterCountText}>{state.boosterCounts.shuffleFiller}</Text>
-                </View>
-              )}
+              <Text style={styles.boosterLabel}>Wildcard</Text>
+              <View style={styles.boosterCount}>
+                <Text style={styles.boosterCountText}>{state.boosterCounts.wildcardTile}</Text>
+              </View>
             </Pressable>
           )}
-          {state.boosterCounts.freezeColumn > 0 && (
+          {state.boosterCounts.spotlight > 0 && (
             <Pressable
               style={({ pressed }) => [
                 styles.boosterButton,
-                freezeMode && styles.boosterActive,
+                state.spotlightActive && styles.boosterActive,
                 pressed && styles.boosterPressed,
               ]}
-              onPress={handleFreezeToggle}
+              onPress={handleSpotlight}
             >
               <LinearGradient
                 colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
                 style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
               />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 45, 149, 0.18)' }]} />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 215, 0, 0.18)' }]} />
               <View style={styles.boosterIconWrap}>
-                <Image source={LOCAL_IMAGES.iconFreeze} style={styles.boosterIconImage} resizeMode="contain" />
+                <Text style={styles.boosterEmoji}>💡</Text>
               </View>
-              <Text style={styles.boosterLabel}>Freeze</Text>
-              {state.boosterCounts.freezeColumn > 0 && (
-                <View style={styles.boosterCount}>
-                  <Text style={styles.boosterCountText}>{state.boosterCounts.freezeColumn}</Text>
-                </View>
-              )}
+              <Text style={styles.boosterLabel}>Spotlight</Text>
+              <View style={styles.boosterCount}>
+                <Text style={styles.boosterCountText}>{state.boosterCounts.spotlight}</Text>
+              </View>
             </Pressable>
           )}
-          {state.boosterCounts.boardPreview > 0 && (
+          {state.boosterCounts.smartShuffle > 0 && (
             <Pressable
-              style={({ pressed }) => [styles.boosterButton, showPreview && styles.boosterActive, pressed && styles.boosterPressed]}
-              onPress={handlePreviewToggle}
+              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
+              onPress={handleSmartShuffle}
             >
               <LinearGradient
                 colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
                 style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
               />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 45, 149, 0.18)' }]} />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(168, 85, 247, 0.20)' }]} />
               <View style={styles.boosterIconWrap}>
-                <Image source={LOCAL_IMAGES.iconPreview} style={styles.boosterIconImage} resizeMode="contain" />
+                <Text style={styles.boosterEmoji}>🔀</Text>
               </View>
-              <Text style={styles.boosterLabel}>Preview</Text>
-              {state.boosterCounts.boardPreview > 0 && (
-                <View style={styles.boosterCount}>
-                  <Text style={styles.boosterCountText}>{state.boosterCounts.boardPreview}</Text>
-                </View>
-              )}
+              <Text style={styles.boosterLabel}>Shuffle</Text>
+              <View style={styles.boosterCount}>
+                <Text style={styles.boosterCountText}>{state.boosterCounts.smartShuffle}</Text>
+              </View>
             </Pressable>
           )}
         </View>
@@ -1337,39 +1287,6 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.coralGlow,
     textShadowRadius: 10,
   },
-  frozenBanner: {
-    backgroundColor: 'rgba(255, 45, 149, 0.08)',
-    paddingVertical: 5,
-    paddingHorizontal: 14,
-    marginHorizontal: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 45, 149, 0.25)',
-  },
-  frozenText: {
-    color: COLORS.accent,
-    fontSize: 12,
-    fontFamily: FONTS.bodyBold,
-  },
-  freezeModeBanner: {
-    backgroundColor: 'rgba(255, 45, 149, 0.15)',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    marginHorizontal: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 45, 149, 0.5)',
-  },
-  freezeModeText: {
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    fontSize: 13,
-    letterSpacing: 1,
-    textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 8,
-  },
   chainPopup: {
     position: 'absolute',
     top: '36%',
@@ -1502,32 +1419,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255, 215, 0, 0.8)',
     textShadowRadius: 20,
   },
-  previewContainer: {
-    alignItems: 'center',
-  },
-  previewLabel: {
-    color: COLORS.gold,
-    fontSize: 12,
-    fontFamily: FONTS.display,
-    letterSpacing: 3,
-    marginBottom: 8,
-    textShadowColor: COLORS.goldGlow,
-    textShadowRadius: 6,
-  },
-  previewDismiss: {
-    marginTop: 8,
-    paddingVertical: 7,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  previewDismissText: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    fontFamily: FONTS.bodySemiBold,
-  },
   boosterBar: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -1598,6 +1489,9 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 11,
     letterSpacing: 0.5,
+  },
+  boosterEmoji: {
+    fontSize: 28,
   },
   boosterCount: {
     position: 'absolute',
@@ -1760,17 +1654,5 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.accent,
     zIndex: 55,
-  },
-  freezePulseOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: 2.5,
-    borderColor: COLORS.cyan,
-    borderRadius: 18,
-    zIndex: 45,
-    shadowColor: COLORS.cyan,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 16,
-    elevation: 0,
   },
 });

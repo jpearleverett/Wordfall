@@ -48,17 +48,17 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     ],
   },
   {
-    type: 'cascadeChampionship',
-    name: 'Cascade Championship',
-    description: 'Build the longest chains! Cascade mode scoring with boosted multipliers.',
-    rules: { cascadeBoost: 2, minChainLength: 3 },
-    exclusiveReward: { type: 'frame', id: 'cascade_crown_frame', name: 'Cascade Crown', rarity: 'legendary' },
+    type: 'gravityFlipChampionship',
+    name: 'Gravity Flip Championship',
+    description: 'Master rotating gravity! Gravity Flip mode with boosted multipliers.',
+    rules: { gravityFlipBoost: 2, minWordCount: 3 },
+    exclusiveReward: { type: 'frame', id: 'gravity_flip_crown_frame', name: 'Gravity Flip Crown', rarity: 'legendary' },
     isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 1000, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 3000, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
       { tier: 'gold', threshold: 6000, rewards: { coins: 1500, gems: 30, hintTokens: 10, badge: 'chain_master' } },
-      { tier: 'diamond', threshold: 10000, rewards: { coins: 3000, gems: 50, hintTokens: 20, decoration: 'cascade_crystal' } },
+      { tier: 'diamond', threshold: 10000, rewards: { coins: 3000, gems: 50, hintTokens: 20, decoration: 'gravity_flip_crystal' } },
     ],
   },
   {

@@ -1,5 +1,5 @@
-import { Grid, CellPosition } from '../types';
-import { removeCellsAndApplyGravity, cloneGrid } from './gravity';
+import { Grid, CellPosition, GravityDirection } from '../types';
+import { removeCellsAndApplyGravity, removeCellsAndApplyGravityInDirection, cloneGrid, removeCells } from './gravity';
 
 // 8-directional deltas: right, left, down, up, and 4 diagonals
 const DIRS = [
@@ -329,4 +329,135 @@ export function isDeadEnd(grid: Grid, remainingWords: string[]): boolean {
   // No heuristic worked — try budgeted full solve
   const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
   return solve(cloneGrid(grid), remainingWords, budget) === null;
+}
+
+// ============ GRAVITY FLIP MODE ============
+
+const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
+
+/**
+ * Try to solve with a specific ordering using rotating gravity directions.
+ * Direction advances after each word cleared.
+ */
+export function trySolveWithOrderRotating(
+  grid: Grid,
+  orderedWords: string[],
+  startDirection: GravityDirection = 'down'
+): string[] | null {
+  let currentGrid = grid;
+  const startIdx = GRAVITY_CYCLE.indexOf(startDirection);
+
+  for (let i = 0; i < orderedWords.length; i++) {
+    const word = orderedWords[i];
+    const occurrences = findWordInGrid(currentGrid, word, 1);
+    if (occurrences.length === 0) return null;
+    const dir = GRAVITY_CYCLE[(startIdx + i) % 4];
+    currentGrid = removeCellsAndApplyGravityInDirection(currentGrid, occurrences[0], dir);
+  }
+  return orderedWords;
+}
+
+/**
+ * Backtracking solve with rotating gravity for gravityFlip mode.
+ */
+export function solveWithRotatingGravity(
+  grid: Grid,
+  remainingWords: string[],
+  startDirection: GravityDirection = 'down',
+  wordsCleared: number = 0,
+  budget?: SolveBudget
+): string[] | null {
+  if (remainingWords.length === 0) return [];
+  if (budget && budget.remaining <= 0) return null;
+  if (budget) budget.remaining--;
+
+  const dir = GRAVITY_CYCLE[(GRAVITY_CYCLE.indexOf(startDirection) + wordsCleared) % 4];
+
+  for (let i = 0; i < remainingWords.length; i++) {
+    const word = remainingWords[i];
+    const occurrences = findWordInGrid(grid, word, 1);
+
+    for (const positions of occurrences) {
+      if (budget && budget.remaining <= 0) return null;
+      const newGrid = removeCellsAndApplyGravityInDirection(grid, positions, dir);
+      const rest = [
+        ...remainingWords.slice(0, i),
+        ...remainingWords.slice(i + 1),
+      ];
+      const subSolution = solveWithRotatingGravity(newGrid, rest, startDirection, wordsCleared + 1, budget);
+      if (subSolution !== null) {
+        return [word, ...subSolution];
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Check if a gravityFlip puzzle is solvable using heuristics then backtracking.
+ */
+export function isSolvableGravityFlip(
+  grid: Grid,
+  words: string[],
+  startDirection: GravityDirection = 'down'
+): boolean {
+  if (words.length === 0) return true;
+
+  const gridCopy = cloneGrid(grid);
+
+  // Try heuristic orderings with rotating gravity
+  const shortFirst = [...words].sort((a, b) => a.length - b.length);
+  const orderings = [words, shortFirst, [...shortFirst].reverse()];
+
+  for (const ordering of orderings) {
+    if (trySolveWithOrderRotating(gridCopy, ordering, startDirection)) return true;
+  }
+
+  // Budgeted backtracking
+  const budget: SolveBudget = {
+    remaining: Math.min(5000, words.length <= 4 ? 500 : words.length <= 6 ? 2000 : 5000),
+  };
+  return solveWithRotatingGravity(cloneGrid(grid), words, startDirection, 0, budget) !== null;
+}
+
+/**
+ * Dead-end detection for gravityFlip mode.
+ */
+export function isDeadEndGravityFlip(
+  grid: Grid,
+  remainingWords: string[],
+  currentDirection: GravityDirection,
+  wordsCleared: number
+): boolean {
+  if (remainingWords.length === 0) return false;
+
+  const shortFirst = [...remainingWords].sort((a, b) => a.length - b.length);
+  const orderings = [remainingWords, shortFirst, [...shortFirst].reverse()];
+
+  for (const ordering of orderings) {
+    if (trySolveWithOrderRotating(cloneGrid(grid), ordering, currentDirection)) return false;
+  }
+
+  const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
+  return solveWithRotatingGravity(cloneGrid(grid), remainingWords, currentDirection, wordsCleared, budget) === null;
+}
+
+// ============ NO GRAVITY MODE ============
+
+/**
+ * Check if all words can be found independently in the grid (no gravity needed).
+ * Used for noGravity mode validation.
+ */
+export function areAllWordsIndependentlyFindable(grid: Grid, words: string[]): boolean {
+  return words.every(word => isWordInGrid(grid, word));
+}
+
+/**
+ * Check if the grid still has all remaining words after some removals (noGravity).
+ * Since there's no gravity, words never become unfindable due to ordering.
+ */
+export function isDeadEndNoGravity(grid: Grid, remainingWords: string[]): boolean {
+  // In no-gravity mode, if a word's letters still exist, it's always findable
+  return !areAllWordsIndependentlyFindable(grid, remainingWords);
 }
