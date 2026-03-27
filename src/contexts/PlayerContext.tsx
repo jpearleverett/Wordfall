@@ -124,6 +124,24 @@ interface PlayerData {
   lastGiftDate: string;
   tileGiftsSentToday: number;
 
+  // Mystery Wheel
+  mysteryWheel: {
+    spinsAvailable: number;
+    puzzlesSinceLastSpin: number;
+    puzzlesPerFreeSpin: number;
+    totalSpins: number;
+    lastJackpotSpin: number;
+    jackpotPity: number;
+  };
+
+  // Win Streak (per-session consecutive wins)
+  winStreak: {
+    currentStreak: number;
+    bestStreak: number;
+    lastWinDate: string | null;
+    rewardsClaimed: number[];
+  };
+
   // Cloud sync
   lastModified: number;
 }
@@ -197,6 +215,13 @@ interface PlayerContextType extends PlayerData {
   // Gifting
   sendHintGift: (friendId: string) => boolean;
   sendTileGift: (friendId: string, tileLetter: string) => boolean;
+
+  // Mystery Wheel
+  updateMysteryWheel: (updates: Partial<PlayerData['mysteryWheel']>) => void;
+  awardFreeSpin: () => void;
+
+  // Win Streak
+  updateWinStreak: (won: boolean) => void;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -302,6 +327,24 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   lastGiftDate: '',
   tileGiftsSentToday: 0,
 
+  // Mystery Wheel
+  mysteryWheel: {
+    spinsAvailable: 1, // Start with 1 free spin
+    puzzlesSinceLastSpin: 0,
+    puzzlesPerFreeSpin: 3,
+    totalSpins: 0,
+    lastJackpotSpin: 0,
+    jackpotPity: 25,
+  },
+
+  // Win Streak
+  winStreak: {
+    currentStreak: 0,
+    bestStreak: 0,
+    lastWinDate: null,
+    rewardsClaimed: [],
+  },
+
   // Cloud sync
   lastModified: 0,
 };
@@ -344,6 +387,9 @@ const PlayerContext = createContext<PlayerContextType>({
   checkAchievements: () => [],
   sendHintGift: () => false,
   sendTileGift: () => false,
+  updateMysteryWheel: () => {},
+  awardFreeSpin: () => {},
+  updateWinStreak: () => {},
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -1127,6 +1173,65 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return rewards;
   }, [data.lastActiveDate, data.comebackRewardsClaimed]);
 
+  // ── Mystery Wheel ──────────────────────────────────────────────────────
+
+  const updateMysteryWheel = useCallback((updates: Partial<PlayerData['mysteryWheel']>) => {
+    setData((prev) => ({
+      ...prev,
+      mysteryWheel: { ...prev.mysteryWheel, ...updates },
+    }));
+  }, []);
+
+  const awardFreeSpin = useCallback(() => {
+    setData((prev) => {
+      const newPuzzleCount = prev.mysteryWheel.puzzlesSinceLastSpin + 1;
+      if (newPuzzleCount >= prev.mysteryWheel.puzzlesPerFreeSpin) {
+        return {
+          ...prev,
+          mysteryWheel: {
+            ...prev.mysteryWheel,
+            spinsAvailable: prev.mysteryWheel.spinsAvailable + 1,
+            puzzlesSinceLastSpin: 0,
+          },
+        };
+      }
+      return {
+        ...prev,
+        mysteryWheel: {
+          ...prev.mysteryWheel,
+          puzzlesSinceLastSpin: newPuzzleCount,
+        },
+      };
+    });
+  }, []);
+
+  // ── Win Streak ────────────────────────────────────────────────────────
+
+  const updateWinStreak = useCallback((won: boolean) => {
+    setData((prev) => {
+      if (!won) {
+        return {
+          ...prev,
+          winStreak: { ...prev.winStreak, currentStreak: 0 },
+        };
+      }
+
+      const newStreak = prev.winStreak.currentStreak + 1;
+      const newBest = Math.max(newStreak, prev.winStreak.bestStreak);
+      const today = new Date().toISOString().split('T')[0];
+
+      return {
+        ...prev,
+        winStreak: {
+          currentStreak: newStreak,
+          bestStreak: newBest,
+          lastWinDate: today,
+          rewardsClaimed: prev.winStreak.rewardsClaimed,
+        },
+      };
+    });
+  }, []);
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -1167,6 +1272,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         checkAchievements,
         sendHintGift,
         sendTileGift,
+        updateMysteryWheel,
+        awardFreeSpin,
+        updateWinStreak,
       }}
     >
       {children}

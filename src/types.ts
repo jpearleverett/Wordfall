@@ -552,9 +552,36 @@ export interface WeeklyGoalsState {
 
 // ============ CEREMONY QUEUE ============
 export interface CeremonyItem {
-  type: 'feature_unlock' | 'mode_unlock' | 'achievement' | 'streak_milestone' | 'collection_complete' | 'level_up' | 'difficulty_transition';
+  type: 'feature_unlock' | 'mode_unlock' | 'achievement' | 'streak_milestone' | 'collection_complete' | 'level_up' | 'difficulty_transition' | 'mystery_wheel_jackpot' | 'win_streak_milestone';
   data: Record<string, any>;
 }
+
+// ============ MYSTERY WHEEL ============
+export interface MysteryWheelState {
+  spinsAvailable: number;
+  puzzlesSinceLastSpin: number;
+  puzzlesPerFreeSpin: number;
+  totalSpins: number;
+  lastJackpotSpin: number;
+  jackpotPity: number;
+}
+
+// ============ WIN STREAK ============
+export interface WinStreakState {
+  currentStreak: number;
+  bestStreak: number;
+  lastWinDate: string | null;
+  rewardsClaimed: number[];
+}
+
+// ============ CONTEXTUAL OFFER ============
+export type ContextualOfferType =
+  | 'hint_rescue'
+  | 'life_refill'
+  | 'streak_shield'
+  | 'close_finish'
+  | 'post_puzzle'
+  | 'booster_pack';
 
 // ============ LIVES / ENERGY ============
 export interface LivesState {

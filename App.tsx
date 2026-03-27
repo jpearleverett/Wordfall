@@ -48,6 +48,9 @@ import { ModeUnlockCeremony } from './src/components/ModeUnlockCeremony';
 import { AchievementCeremony } from './src/components/AchievementCeremony';
 import { StreakMilestoneCeremony } from './src/components/StreakMilestoneCeremony';
 import { CollectionCompleteCeremony } from './src/components/CollectionCompleteCeremony';
+import { DifficultyTransitionCeremony } from './src/components/DifficultyTransitionCeremony';
+import { LevelUpCeremony } from './src/components/LevelUpCeremony';
+import { notificationManager } from './src/services/notifications';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
@@ -449,6 +452,14 @@ function GameScreenWrapper({ route, navigation }: any) {
     // Track level milestone in funnel
     void funnelTracker.trackLevelMilestone(newLevel);
 
+    // Queue level-up ceremony
+    if (leveledUp) {
+      player.queueCeremony({
+        type: 'level_up',
+        data: { newLevel },
+      });
+    }
+
     // Detect difficulty transition
     const difficultyTransition = leveledUp ? detectDifficultyTransition(prevHighest, newLevel) : null;
     if (difficultyTransition) {
@@ -488,6 +499,12 @@ function GameScreenWrapper({ route, navigation }: any) {
         });
       }
     }
+
+    // Award mystery wheel free spin progress
+    player.awardFreeSpin();
+
+    // Update win streak
+    player.updateWinStreak(true);
 
     // Generate share text
     const grid = params.board ? (params.board as Board).grid : null;
@@ -619,6 +636,13 @@ function HomeMainScreen({ navigation }: any) {
       player.updateStreak();
       player.generateDailyMissions();
       player.initWeeklyGoals();
+
+      // Initialize notifications and schedule reminders
+      void notificationManager.init().then(() => {
+        notificationManager.scheduleStreakReminder(player.streaks.currentStreak);
+        notificationManager.scheduleDailyChallenge();
+        notificationManager.scheduleComebackReminder();
+      });
 
       // Process pending ceremonies
       if (!showWelcomeBack && player.pendingCeremonies.length > 0) {
@@ -939,6 +963,19 @@ function HomeMainScreen({ navigation }: any) {
           collectionIcon={activeCeremony.data.icon}
           collectionName={activeCeremony.data.name}
           reward={activeCeremony.data.reward}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'difficulty_transition' && (
+        <DifficultyTransitionCeremony
+          from={activeCeremony.data.from}
+          to={activeCeremony.data.to}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'level_up' && (
+        <LevelUpCeremony
+          newLevel={activeCeremony.data.newLevel}
           onDismiss={handleDismissCeremony}
         />
       )}
