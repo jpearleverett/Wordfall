@@ -16,7 +16,6 @@ import { soundManager } from '../services/sound';
 import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
-import ScanLineOverlay from '../components/common/ScanLineOverlay';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
 
@@ -195,11 +194,9 @@ export function HomeScreen({
           },
         ]}
       >
-        <LinearGradient
-          colors={['rgba(45,20,82,0.40)', 'rgba(26,10,46,0.45)']}
+        <View
           style={styles.heroCard}
         >
-          <ScanLineOverlay opacity={0.02} height={400} />
           <Image
             source={LOCAL_IMAGES.wordfallLogo}
             style={styles.heroLogo}
@@ -263,7 +260,7 @@ export function HomeScreen({
               </LinearGradient>
             </Pressable>
           )}
-        </LinearGradient>
+        </View>
       </Animated.View>
 
       {/* Neon Highway Level Progress */}
@@ -600,17 +597,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   heroCard: {
-    borderRadius: 30,
     padding: 24,
     marginBottom: 18,
-    borderWidth: 1.5,
-    borderColor: 'rgba(200,77,255,0.20)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.6,
-    shadowRadius: 30,
-    elevation: 16,
   },
   heroLogo: {
     width: '100%',
