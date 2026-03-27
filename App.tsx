@@ -33,7 +33,7 @@ import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY } from './src/constants';
+import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS } from './src/constants';
 import { getBreatherConfig } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
@@ -51,6 +51,7 @@ import { CollectionCompleteCeremony } from './src/components/CollectionCompleteC
 import { DifficultyTransitionCeremony } from './src/components/DifficultyTransitionCeremony';
 import { LevelUpCeremony } from './src/components/LevelUpCeremony';
 import { notificationManager } from './src/services/notifications';
+import { MilestoneCeremony } from './src/components/MilestoneCeremony';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
@@ -338,6 +339,9 @@ function GameScreenWrapper({ route, navigation }: any) {
     });
     player.recordPuzzleComplete(level, score, stars, isPerfect);
 
+    // Capture pre-play mode stats for first-clear detection
+    const prevModePlayed = player.modeStats?.[mode]?.played || 0;
+
     // Record mode play
     player.recordModePlay(mode, score, true);
 
@@ -379,12 +383,19 @@ function GameScreenWrapper({ route, navigation }: any) {
     if (Math.random() < dropChance) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       const randomLetter = letters[Math.floor(Math.random() * letters.length)];
+      const wasFirstTile = Object.keys(player.collections.rareTiles || {}).length === 0;
       player.addRareTile(randomLetter);
       void analytics.logEvent('rare_tile_earned', {
         letter: randomLetter,
         difficulty,
         isPerfect,
       });
+      if (wasFirstTile) {
+        player.queueCeremony({
+          type: 'first_rare_tile',
+          data: { letter: randomLetter },
+        });
+      }
     }
 
     // Check for atlas word collection from the words found (all pages)
@@ -496,6 +507,54 @@ function GameScreenWrapper({ route, navigation }: any) {
             modeDescription: config.description,
             modeColor: config.color,
           },
+        });
+      }
+    }
+
+    // ── Star milestones (50/100/250/500 total stars) ──
+    const totalStarsNow = player.totalScore > 0 ? Math.floor(player.puzzlesSolved * 2) + stars : stars; // approximate
+    for (const sm of STAR_MILESTONES) {
+      const prevStars = totalStarsNow - stars;
+      if (totalStarsNow >= sm.stars && prevStars < sm.stars) {
+        player.queueCeremony({
+          type: 'star_milestone',
+          data: { stars: sm.stars, reward: sm.reward, name: sm.name, type: sm.type },
+        });
+      }
+    }
+
+    // ── Perfect solve milestones (10/25/50 perfects) ──
+    if (isPerfect) {
+      const perfectCount = player.perfectSolves + 1;
+      for (const pm of PERFECT_MILESTONES) {
+        if (perfectCount === pm.count) {
+          player.queueCeremony({
+            type: 'perfect_milestone',
+            data: { count: pm.count, badge: pm.badge, name: pm.name },
+          });
+        }
+      }
+    }
+
+    // ── Milestone decoration unlocks (every 5 levels) ──
+    if (leveledUp) {
+      for (const md of MILESTONE_DECORATIONS) {
+        if (newLevel >= md.level && prevHighest < md.level) {
+          player.queueCeremony({
+            type: 'decoration_unlock',
+            data: { level: md.level, decoration: md.decoration, name: md.name, icon: md.icon },
+          });
+        }
+      }
+    }
+
+    // ── First mode clear ──
+    if (prevModePlayed === 0 && mode !== 'classic') {
+      const modeConfig = MODE_CONFIGS[mode as keyof typeof MODE_CONFIGS];
+      if (modeConfig) {
+        player.queueCeremony({
+          type: 'first_mode_clear',
+          data: { modeId: mode, modeName: modeConfig.name },
         });
       }
     }
@@ -976,6 +1035,122 @@ function HomeMainScreen({ navigation }: any) {
       {activeCeremony?.type === 'level_up' && (
         <LevelUpCeremony
           newLevel={activeCeremony.data.newLevel}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'mystery_wheel_jackpot' && (
+        <MilestoneCeremony
+          ribbon="JACKPOT!"
+          icon={activeCeremony.data.icon || '\u{1F3B0}'}
+          title={activeCeremony.data.label || 'Rare Reward!'}
+          description="The Mystery Wheel delivered something special!"
+          accentColor={COLORS.gold}
+          rewardLabel={activeCeremony.data.rewardLabel}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'win_streak_milestone' && (
+        <MilestoneCeremony
+          ribbon="WIN STREAK!"
+          icon={'\u{1F525}'}
+          title={activeCeremony.data.label || `${activeCeremony.data.streak} Wins!`}
+          description={`You won ${activeCeremony.data.streak} puzzles in a row!`}
+          accentColor={COLORS.orange}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'star_milestone' && (
+        <MilestoneCeremony
+          ribbon="STAR MILESTONE"
+          icon={'\u{2B50}'}
+          title={`${activeCeremony.data.stars} Stars!`}
+          description={`You earned the ${activeCeremony.data.name}!`}
+          accentColor={COLORS.gold}
+          rewardLabel={activeCeremony.data.name}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'perfect_milestone' && (
+        <MilestoneCeremony
+          ribbon="PERFECT MASTERY"
+          icon={'\u{1F48E}'}
+          title={activeCeremony.data.name}
+          description={`${activeCeremony.data.count} perfect solves! Flawless.`}
+          accentColor={COLORS.purple}
+          rewardLabel={activeCeremony.data.badge}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'decoration_unlock' && (
+        <MilestoneCeremony
+          ribbon="NEW DECORATION"
+          icon={activeCeremony.data.icon}
+          title={activeCeremony.data.name}
+          description={`Reached Level ${activeCeremony.data.level}! A new decoration for your library.`}
+          accentColor={COLORS.teal}
+          buttonText="PLACE IT"
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'first_rare_tile' && (
+        <MilestoneCeremony
+          ribbon="FIRST RARE TILE!"
+          icon={'\u{1FA99}'}
+          title="Rare Tile Found!"
+          description={`You found the "${activeCeremony.data.letter}" tile! Collect all 26 letters for rewards.`}
+          accentColor={COLORS.gold}
+          buttonText="COLLECT"
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'first_booster' && (
+        <MilestoneCeremony
+          ribbon="POWER UP!"
+          icon={'\u{26A1}'}
+          title="Boosters Unlocked!"
+          description="Use boosters to freeze columns, preview moves, or shuffle filler letters!"
+          accentColor={COLORS.accent}
+          buttonText="TRY IT"
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'wing_complete' && (
+        <MilestoneCeremony
+          ribbon="WING RESTORED"
+          icon={'\u{1F4DA}'}
+          title={`${activeCeremony.data.wingName} Complete!`}
+          description="Another wing of the library has been fully restored!"
+          accentColor={COLORS.teal}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'word_mastery_gold' && (
+        <MilestoneCeremony
+          ribbon="GOLD MASTERY"
+          icon={'\u{1F451}'}
+          title={`"${activeCeremony.data.word}" Mastered!`}
+          description="Found this word 5 times! It now has a gold border in your Atlas."
+          accentColor={COLORS.gold}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'first_mode_clear' && (
+        <MilestoneCeremony
+          ribbon="MODE CONQUERED"
+          icon={'\u{1F3C6}'}
+          title={`${activeCeremony.data.modeName} Cleared!`}
+          description="First victory in this mode! Try it again for higher scores."
+          accentColor={COLORS.green}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'wildcard_earned' && (
+        <MilestoneCeremony
+          ribbon="WILDCARD!"
+          icon={'\u{1F0CF}'}
+          title="Wildcard Tile Earned!"
+          description="5 duplicate tiles converted into a wildcard. Use it to complete any set!"
+          accentColor={COLORS.purple}
           onDismiss={handleDismissCeremony}
         />
       )}

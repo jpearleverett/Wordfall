@@ -234,12 +234,72 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, BoardConfig> = {
   },
 };
 
-// Level progression
+// Level progression — smooth per-level ramp with breather pacing
+// Inspired by Candy Crush / Royal Match: gradual increase with periodic easy levels
+// instead of a cliff at each difficulty threshold.
 export function getLevelConfig(level: number): BoardConfig {
-  if (level <= 5) return DIFFICULTY_CONFIGS.easy;
-  if (level <= 15) return DIFFICULTY_CONFIGS.medium;
-  if (level <= 30) return DIFFICULTY_CONFIGS.hard;
-  return DIFFICULTY_CONFIGS.expert;
+  // Breather levels: every 5th level is slightly easier (sawtooth pattern)
+  const isBreather = level > 1 && level % 5 === 0;
+  const effectiveLevel = isBreather ? level - 2 : level;
+
+  // Phase 1: Tutorial / Easy (levels 1-5) — gentle ramp from 2 to 3 words
+  if (effectiveLevel <= 3) {
+    return { rows: 5, cols: 4, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' };
+  }
+  if (effectiveLevel <= 5) {
+    return { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
+  }
+
+  // Phase 2: Early game (levels 6-10) — introduce bigger grids gradually
+  if (effectiveLevel <= 7) {
+    return { rows: 6, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
+  }
+  if (effectiveLevel <= 10) {
+    return { rows: 6, cols: 5, wordCount: 4, minWordLength: 3, maxWordLength: 4, difficulty: 'medium' };
+  }
+
+  // Phase 3: Building confidence (levels 11-15) — 4-5 words, longer words creep in
+  if (effectiveLevel <= 12) {
+    return { rows: 6, cols: 6, wordCount: 4, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' };
+  }
+  if (effectiveLevel <= 15) {
+    return { rows: 7, cols: 6, wordCount: 5, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' };
+  }
+
+  // Phase 4: Mid-game (levels 16-22) — grid grows, word count climbs
+  if (effectiveLevel <= 18) {
+    return { rows: 7, cols: 6, wordCount: 5, minWordLength: 3, maxWordLength: 5, difficulty: 'hard' };
+  }
+  if (effectiveLevel <= 22) {
+    return { rows: 7, cols: 7, wordCount: 5, minWordLength: 3, maxWordLength: 6, difficulty: 'hard' };
+  }
+
+  // Phase 5: Late mid-game (levels 23-30) — 6 words, bigger grids
+  if (effectiveLevel <= 26) {
+    return { rows: 8, cols: 7, wordCount: 6, minWordLength: 3, maxWordLength: 6, difficulty: 'hard' };
+  }
+  if (effectiveLevel <= 30) {
+    return { rows: 8, cols: 7, wordCount: 6, minWordLength: 3, maxWordLength: 6, difficulty: 'hard' };
+  }
+
+  // Phase 6: Expert (levels 31-40) — harder word constraints, more words
+  if (effectiveLevel <= 35) {
+    return { rows: 8, cols: 7, wordCount: 7, minWordLength: 3, maxWordLength: 6, difficulty: 'expert' };
+  }
+  if (effectiveLevel <= 40) {
+    return { rows: 9, cols: 7, wordCount: 7, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
+  }
+
+  // Phase 7: Endgame (levels 41+) — full expert config
+  return { rows: 9, cols: 7, wordCount: 8, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
+}
+
+// Legacy helper: get the broad difficulty tier for a level (used for rewards, UI labels)
+export function getDifficultyTier(level: number): Difficulty {
+  if (level <= 5) return 'easy';
+  if (level <= 15) return 'medium';
+  if (level <= 30) return 'hard';
+  return 'expert';
 }
 
 // Mode configurations
@@ -685,12 +745,10 @@ export const FEATURE_UNLOCK_SCHEDULE: {
   { id: 'weekly_goals', unlockLevel: 5, icon: '📋', title: 'Weekly Goals!', description: 'Complete weekly objectives for bonus gems and exclusive rewards.', accentColor: COLORS.green },
 ];
 
-// Breather difficulty config (slightly easier version of current difficulty)
+// Breather difficulty config — drops the player back ~3-4 levels worth of difficulty
 export function getBreatherConfig(level: number): BoardConfig {
-  if (level <= 5) return DIFFICULTY_CONFIGS.easy;
-  if (level <= 15) return { ...DIFFICULTY_CONFIGS.easy, wordCount: 4, maxWordLength: 4, difficulty: 'medium' as const };
-  if (level <= 30) return DIFFICULTY_CONFIGS.medium;
-  return DIFFICULTY_CONFIGS.hard;
+  const easierLevel = Math.max(1, level - 4);
+  return getLevelConfig(easierLevel);
 }
 
 // Events

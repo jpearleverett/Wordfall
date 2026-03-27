@@ -1220,8 +1220,28 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const newBest = Math.max(newStreak, prev.winStreak.bestStreak);
       const today = new Date().toISOString().split('T')[0];
 
+      // Check win streak milestones (3, 5, 7, 10, 15, 20)
+      const winStreakMilestones = [3, 5, 7, 10, 15, 20];
+      let pendingCeremonies = prev.pendingCeremonies;
+      for (const milestone of winStreakMilestones) {
+        if (newStreak >= milestone && prev.winStreak.currentStreak < milestone) {
+          const labels: Record<number, string> = {
+            3: 'Hat Trick!', 5: 'On Fire!', 7: 'Unstoppable!',
+            10: 'LEGENDARY!', 15: 'GODLIKE!', 20: 'IMPOSSIBLE!',
+          };
+          pendingCeremonies = [
+            ...pendingCeremonies,
+            {
+              type: 'win_streak_milestone' as const,
+              data: { streak: milestone, label: labels[milestone] || `${milestone} Wins!` },
+            },
+          ];
+        }
+      }
+
       return {
         ...prev,
+        pendingCeremonies,
         winStreak: {
           currentStreak: newStreak,
           bestStreak: newBest,
