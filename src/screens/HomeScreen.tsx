@@ -13,9 +13,9 @@ import { COLORS, ECONOMY, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
-import { LOCAL_IMAGES } from '../utils/localAssets';
+import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import ScanLineOverlay from '../components/common/ScanLineOverlay';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
@@ -141,7 +141,7 @@ export function HomeScreen({
 
   return (
     <View style={styles.container}>
-      <AmbientBackdrop variant="home" />
+      <VideoBackground source={LOCAL_VIDEOS.bgHomescreen} opacity={0.6} overlayColor="rgba(10,14,39,0.4)" />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         {onOpenSettings && (
@@ -175,18 +175,8 @@ export function HomeScreen({
             </>
           )}
           {onOpenShop && (
-            <Pressable onPress={onOpenShop}>
-              <LinearGradient
-                colors={GRADIENTS.button.primary}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.shopButton}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="bag-outline" size={14} color="#fff" />
-                  <Text style={styles.shopButtonText}>Shop</Text>
-                </View>
-              </LinearGradient>
+            <Pressable onPress={onOpenShop} style={({ pressed }) => [pressed && styles.buttonPressed]}>
+              <Image source={LOCAL_IMAGES.shopButton} style={styles.shopButtonImage} resizeMode="contain" />
             </Pressable>
           )}
         </View>
@@ -218,39 +208,29 @@ export function HomeScreen({
               : `Every word changes the board. Restore Chapter ${currentChapter} of the library.`}
           </Text>
 
-          <View style={styles.heroStatsRow}>
-            {[
-              { value: `★ ${totalStars}`, label: 'Stars' },
-              { value: `${progress.puzzlesSolved}`, label: 'Solved' },
-              { value: `🔥 ${progress.currentStreak}`, label: 'Streak' },
-            ].map((stat) => (
-              <LinearGradient
-                key={stat.label}
-                colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)']}
-                style={styles.heroStatCard}
-              >
-                <Text style={styles.heroStatValue}>{stat.value}</Text>
-                <Text style={styles.heroStatLabel}>{stat.label}</Text>
-              </LinearGradient>
-            ))}
+          <View style={styles.statsCardWrapper}>
+            <Image source={LOCAL_IMAGES.statsCard} style={styles.statsCardImage} resizeMode="contain" />
+            <View style={styles.statsCardOverlay}>
+              <View style={styles.statsCardItem}>
+                <Text style={styles.heroStatValue}>★ {totalStars}</Text>
+                <Text style={styles.heroStatLabel}>Stars</Text>
+              </View>
+              <View style={styles.statsCardItem}>
+                <Text style={styles.heroStatValue}>{progress.puzzlesSolved}</Text>
+                <Text style={styles.heroStatLabel}>Solved</Text>
+              </View>
+              <View style={styles.statsCardItem}>
+                <Text style={styles.heroStatValue}>🔥 {progress.currentStreak}</Text>
+                <Text style={styles.heroStatLabel}>Streak</Text>
+              </View>
+            </View>
           </View>
 
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={() => onPlay()}
           >
-            <LinearGradient
-              colors={GRADIENTS.button.primary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.primaryButton, SHADOWS.glow(COLORS.accent)]}
-            >
-              <View>
-                <Text style={styles.primaryButtonLabel}>{playerStage === 'new' ? 'Start playing' : 'Continue journey'}</Text>
-                <Text style={styles.primaryButtonSubLabel}>Play Level {progress.currentLevel}</Text>
-              </View>
-              <Text style={styles.primaryButtonArrow}>→</Text>
-            </LinearGradient>
+            <Image source={LOCAL_IMAGES.playButton} style={styles.playButtonImage} resizeMode="contain" />
           </Pressable>
 
           {/* Daily challenge - show for all except brand new players */}
@@ -590,16 +570,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.bodyBold,
   },
-  shopButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    ...SHADOWS.glow(COLORS.accent),
-  },
-  shopButtonText: {
-    color: '#fff',
-    fontFamily: FONTS.display,
-    fontSize: 13,
+  shopButtonImage: {
+    width: 44,
+    height: 44,
   },
   heroCard: {
     borderRadius: 30,
@@ -653,23 +626,24 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     maxWidth: '90%',
   },
-  heroStatsRow: {
-    flexDirection: 'row',
-    gap: 10,
+  statsCardWrapper: {
+    position: 'relative',
     marginBottom: 20,
-  },
-  heroStatCard: {
-    flex: 1,
-    borderRadius: 18,
-    paddingVertical: 14,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,45,149,0.30)',
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
+  },
+  statsCardImage: {
+    width: '100%',
+    height: 90,
+  },
+  statsCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  statsCardItem: {
+    alignItems: 'center',
   },
   heroStatValue: {
     color: COLORS.textPrimary,
@@ -686,32 +660,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     fontFamily: FONTS.bodyBold,
   },
-  primaryButton: {
-    borderRadius: 24,
-    paddingHorizontal: 22,
-    paddingVertical: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  playButtonImage: {
+    width: '100%',
+    height: 70,
     marginBottom: 12,
-  },
-  primaryButtonLabel: {
-    color: '#fff',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    fontFamily: FONTS.display,
-    letterSpacing: 1.5,
-    marginBottom: 3,
-  },
-  primaryButtonSubLabel: {
-    color: '#fff',
-    fontSize: 22,
-    fontFamily: FONTS.display,
-  },
-  primaryButtonArrow: {
-    color: '#fff',
-    fontSize: 28,
-    fontFamily: FONTS.display,
   },
   dailyCard: {
     borderRadius: 18,
