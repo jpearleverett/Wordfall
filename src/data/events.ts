@@ -1,4 +1,4 @@
-import { GameEvent, EventType } from '../types';
+import { GameEvent, EventType, EventExclusiveReward } from '../types';
 
 /**
  * 12-week rotating event calendar.
@@ -10,6 +10,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Speed Blitz',
     description: 'Solve puzzles as fast as possible! Top times earn exclusive rewards.',
     rules: { timeLimit: 60, bonusPerSecondRemaining: 50 },
+    exclusiveReward: { type: 'frame', id: 'speed_demon_frame', name: 'Speed Demon Frame', rarity: 'epic' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 200, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 500, gems: 15, hintTokens: 5 } },
@@ -22,6 +24,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Perfect Week',
     description: 'Achieve the most perfect clears this week. No hints, no undos!',
     rules: { noHints: true, noUndo: true, scoreMultiplier: 2 },
+    exclusiveReward: { type: 'title', id: 'perfectionist_title', name: 'The Perfectionist', rarity: 'epic' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 3, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 7, rewards: { coins: 600, gems: 15, hintTokens: 5 } },
@@ -34,6 +38,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Club Rally',
     description: 'Your club competes together! Combined scores determine club ranking.',
     rules: { teamMode: true, clubScoreMultiplier: 1.5 },
+    exclusiveReward: { type: 'decoration', id: 'rally_banner', name: 'Rally Banner', rarity: 'rare' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 5000, rewards: { coins: 500, gems: 10, hintTokens: 5 } },
       { tier: 'silver', threshold: 15000, rewards: { coins: 1000, gems: 25, hintTokens: 10 } },
@@ -46,6 +52,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Cascade Championship',
     description: 'Build the longest chains! Cascade mode scoring with boosted multipliers.',
     rules: { cascadeBoost: 2, minChainLength: 3 },
+    exclusiveReward: { type: 'frame', id: 'cascade_crown_frame', name: 'Cascade Crown', rarity: 'legendary' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 1000, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 3000, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
@@ -58,6 +66,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Mystery Words',
     description: 'Words are hidden! Find them without seeing the word bank.',
     rules: { hiddenWordBank: true, revealOnFind: true, bonusScore: 200 },
+    exclusiveReward: { type: 'decoration', id: 'mystery_orb', name: 'Mystery Orb', rarity: 'epic' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 10, rewards: { coins: 400, gems: 10, hintTokens: 5 } },
       { tier: 'silver', threshold: 25, rewards: { coins: 800, gems: 20, hintTokens: 10 } },
@@ -70,6 +80,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Retro Rewind',
     description: 'Replay classic puzzles with a retro theme and boosted rewards.',
     rules: { retro: true, rewardMultiplier: 1.5 },
+    exclusiveReward: { type: 'title', id: 'retro_master_title', name: 'Retro Master', rarity: 'rare' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 250, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 600, gems: 15, hintTokens: 5 } },
@@ -82,6 +94,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Nature Week',
     description: 'All puzzles feature nature-themed words. Bonus for nature atlas words!',
     rules: { themeCategory: 'nature', atlasBonus: true },
+    exclusiveReward: { type: 'frame', id: 'nature_bloom_frame', name: 'Nature Bloom Frame', rarity: 'rare' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
@@ -94,6 +108,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Expert Gauntlet',
     description: 'Expert-difficulty puzzles only. No hints, no undos, maximum glory.',
     rules: { difficulty: 'expert', noHints: true, noUndo: true, scoreMultiplier: 3 },
+    exclusiveReward: { type: 'title', id: 'gauntlet_survivor', name: 'Gauntlet Survivor', rarity: 'legendary' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 1000, rewards: { coins: 500, gems: 10, hintTokens: 5 } },
       { tier: 'silver', threshold: 3000, rewards: { coins: 1000, gems: 25, hintTokens: 10 } },
@@ -106,6 +122,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Community Goal',
     description: 'All players work together to reach a massive word-finding goal!',
     rules: { communityTarget: 1000000 },
+    exclusiveReward: { type: 'decoration', id: 'community_star', name: 'Community Star', rarity: 'rare' },
+    isTimeLimited: true,
     communityGoal: 1000000,
     communityProgress: 0,
     rewards: [
@@ -120,6 +138,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Season Finale',
     description: 'The grand finale! Compete for the top spot with boosted everything.',
     rules: { allModesUnlocked: true, scoreMultiplier: 2, bonusStamps: true },
+    exclusiveReward: { type: 'frame', id: 'season_champion_frame', name: 'Season Champion Frame', rarity: 'legendary' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 2000, rewards: { coins: 500, gems: 15, hintTokens: 5 } },
       { tier: 'silver', threshold: 5000, rewards: { coins: 1000, gems: 30, hintTokens: 10 } },
@@ -132,6 +152,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Weekend Blitz',
     description: 'Saturday and Sunday only! Double XP and increased rare tile drop rates.',
     rules: { doubleXP: true, rareTileDropBoost: 2, durationDays: 2 },
+    exclusiveReward: { type: 'title', id: 'blitz_warrior', name: 'Blitz Warrior', rarity: 'rare' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
@@ -144,6 +166,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Science Week',
     description: 'All puzzles feature science-themed words. Perfect for the curious mind.',
     rules: { themeCategory: 'science', atlasBonus: true },
+    exclusiveReward: { type: 'frame', id: 'cosmic_frame', name: 'Cosmic Frame', rarity: 'epic' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },
@@ -156,6 +180,8 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
     name: 'Ocean Week',
     description: 'Dive deep into ocean-themed word puzzles all week!',
     rules: { themeCategory: 'ocean', atlasBonus: true },
+    exclusiveReward: { type: 'decoration', id: 'ocean_wave_deco', name: 'Ocean Wave', rarity: 'epic' },
+    isTimeLimited: true,
     rewards: [
       { tier: 'bronze', threshold: 500, rewards: { coins: 300, gems: 5, hintTokens: 3 } },
       { tier: 'silver', threshold: 1500, rewards: { coins: 700, gems: 15, hintTokens: 5 } },

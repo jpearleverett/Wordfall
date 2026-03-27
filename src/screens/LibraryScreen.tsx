@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS, SHADOWS, LIBRARY } from '../constants';
+import { SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import { usePlayer } from '../contexts/PlayerContext';
 import { CHAPTERS } from '../data/chapters';
 import { Chapter } from '../types';
@@ -46,9 +47,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const currentChapter = currentChapterProp ?? player.currentChapter;
   const decorations = decorationsProp ?? player.placedDecorations;
   const [selectedWing, setSelectedWing] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showTooltip, setShowTooltip] = useState(
     !player.tooltipsShown.includes('library_screen')
   );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 350);
+    return () => clearTimeout(timer);
+  }, []);
 
   const wings = useMemo(() => {
     const wingIds = Array.from(new Set(CHAPTERS.map((chapter) => chapter.wingId)));
@@ -109,6 +116,18 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         }}
         position="top"
       />
+      {loading ? (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <SkeletonCard style={{ height: 260, borderRadius: 28 }} />
+          <SkeletonCard style={{ height: 180, borderRadius: 24 }} />
+          <SkeletonGrid rows={2} cols={4} itemHeight={100} />
+          <SkeletonCard style={{ height: 200, borderRadius: 28, marginTop: 14 }} />
+        </ScrollView>
+      ) : (
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
@@ -337,6 +356,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+      )}
     </View>
   );
 };

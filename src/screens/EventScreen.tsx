@@ -10,6 +10,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { getCurrentEvent } from '../data/events';
+import { EventExclusiveReward } from '../types';
 
 const { width } = Dimensions.get('window');
 
@@ -103,6 +105,30 @@ const EventScreen: React.FC<EventScreenProps> = ({
 
   const progressPercent = data.totalSteps > 0 ? (progress / data.totalSteps) * 100 : 0;
 
+  // Get the current event's exclusive reward
+  const currentEvent = getCurrentEvent();
+  const exclusiveReward: EventExclusiveReward | undefined =
+    event?.exclusiveReward ?? currentEvent?.exclusiveReward;
+  const isTimeLimited: boolean = event?.isTimeLimited ?? currentEvent?.isTimeLimited ?? false;
+
+  const getRewardTypeIcon = (type: string): string => {
+    switch (type) {
+      case 'frame': return '🖼️';
+      case 'title': return '🏷️';
+      case 'decoration': return '🎨';
+      default: return '🎁';
+    }
+  };
+
+  const getRarityColor = (rarity: string): string => {
+    switch (rarity) {
+      case 'legendary': return COLORS.rarityLegendary;
+      case 'epic': return COLORS.rarityEpic;
+      case 'rare': return COLORS.rarityRare;
+      default: return COLORS.rarityCommon;
+    }
+  };
+
   const getDifficultyColor = (difficulty: string): string => {
     switch (difficulty.toLowerCase()) {
       case 'easy':
@@ -164,6 +190,64 @@ const EventScreen: React.FC<EventScreenProps> = ({
         >
           <Text style={styles.descText}>{data.description}</Text>
         </LinearGradient>
+
+        {/* Limited Time Exclusive Reward */}
+        {isTimeLimited && exclusiveReward && (
+          <LinearGradient
+            colors={[COLORS.gold + '18', COLORS.rarityLegendary + '08'] as [string, string]}
+            style={styles.exclusiveCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <LinearGradient
+              colors={[COLORS.gold + '20', 'transparent'] as [string, string]}
+              style={styles.exclusiveGlow}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+            />
+            <View style={styles.exclusiveLabelRow}>
+              <Text style={styles.exclusiveLabelIcon}>{'⏳'}</Text>
+              <Text style={styles.exclusiveLabel}>LIMITED TIME EXCLUSIVE</Text>
+            </View>
+            <View style={styles.exclusiveContent}>
+              <View style={[
+                styles.exclusiveIconCircle,
+                { borderColor: getRarityColor(exclusiveReward.rarity), ...SHADOWS.glow(getRarityColor(exclusiveReward.rarity)) },
+              ]}>
+                <Text style={styles.exclusiveIconText}>
+                  {getRewardTypeIcon(exclusiveReward.type)}
+                </Text>
+              </View>
+              <View style={styles.exclusiveInfo}>
+                <Text style={styles.exclusiveRewardName}>
+                  {exclusiveReward.name}
+                </Text>
+                <View style={styles.exclusiveMetaRow}>
+                  <View style={[
+                    styles.exclusiveRarityBadge,
+                    { backgroundColor: getRarityColor(exclusiveReward.rarity) + '25', borderColor: getRarityColor(exclusiveReward.rarity) + '60' },
+                  ]}>
+                    <Text style={[styles.exclusiveRarityText, { color: getRarityColor(exclusiveReward.rarity) }]}>
+                      {exclusiveReward.rarity.toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={styles.exclusiveTypeText}>
+                    {exclusiveReward.type.charAt(0).toUpperCase() + exclusiveReward.type.slice(1)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.exclusiveTimerRow}>
+              <Text style={styles.exclusiveTimerIcon}>{'🔥'}</Text>
+              <Text style={styles.exclusiveTimerText}>
+                Ends in {timeRemaining}
+              </Text>
+            </View>
+            <Text style={styles.exclusiveHint}>
+              Reach the Gold tier to unlock this exclusive reward!
+            </Text>
+          </LinearGradient>
+        )}
 
         {/* Progress Bar */}
         <LinearGradient
@@ -459,6 +543,117 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     lineHeight: 20,
+  },
+  exclusiveCard: {
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.gold + '50',
+    overflow: 'hidden',
+    ...SHADOWS.glow(COLORS.gold),
+  },
+  exclusiveGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  exclusiveLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  exclusiveLabelIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  exclusiveLabel: {
+    fontSize: 12,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.gold,
+    letterSpacing: 2,
+    textShadowColor: COLORS.gold + '60',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  exclusiveContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  exclusiveIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(17, 22, 56, 0.8)',
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  exclusiveIconText: {
+    fontSize: 26,
+  },
+  exclusiveInfo: {
+    flex: 1,
+  },
+  exclusiveRewardName: {
+    fontSize: 18,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+    textShadowColor: 'rgba(255,255,255,0.08)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  exclusiveMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  exclusiveRarityBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderWidth: 1,
+    marginRight: 10,
+  },
+  exclusiveRarityText: {
+    fontSize: 10,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+  },
+  exclusiveTypeText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textSecondary,
+  },
+  exclusiveTimerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  exclusiveTimerIcon: {
+    fontSize: 13,
+    marginRight: 6,
+  },
+  exclusiveTimerText: {
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.gold,
+    fontVariant: ['tabular-nums'],
+    textShadowColor: COLORS.gold + '40',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+  exclusiveHint: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   progressSection: {
     borderRadius: 18,

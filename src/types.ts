@@ -317,6 +317,13 @@ export type EventType =
   | 'seasonFinale'
   | 'weekendBlitz';
 
+export interface EventExclusiveReward {
+  type: 'frame' | 'title' | 'decoration';
+  id: string;
+  name: string;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+}
+
 export interface GameEvent {
   id: string;
   type: EventType;
@@ -327,6 +334,8 @@ export interface GameEvent {
   active: boolean;
   rules: Record<string, any>;
   rewards: EventRewardTier[];
+  exclusiveReward?: EventExclusiveReward;
+  isTimeLimited?: boolean;
   leaderboardId?: string;
   communityGoal?: number;
   communityProgress?: number;
