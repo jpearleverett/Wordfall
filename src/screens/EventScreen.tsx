@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,26 +6,17 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { getCurrentEvent } from '../data/events';
 import { EventExclusiveReward } from '../types';
+import { eventManager, ActiveEvent, EventRewardTierDisplay } from '../services/eventManager';
+import { useEconomy } from '../contexts/EconomyContext';
 
 const { width } = Dimensions.get('window');
-
-interface EventData {
-  name: string;
-  description: string;
-  bannerColor?: string;
-  bannerIcon?: string;
-  endTime: number;
-  totalSteps: number;
-  rewards: Array<{ milestone: number; reward: string; icon: string }>;
-  puzzles: Array<{ id: string; name: string; difficulty: string; completed: boolean }>;
-  leaderboard: Array<{ name: string; score: number }>;
-}
 
 interface EventScreenProps {
   event?: any;
@@ -40,46 +31,28 @@ const EventScreen: React.FC<EventScreenProps> = ({
   onPlayEventPuzzle: onPlayEventPuzzleProp,
   onOpenEventShop: onOpenEventShopProp,
 }) => {
-  const progress = progressProp ?? 0;
+  const economy = useEconomy();
   const onPlayEventPuzzle = onPlayEventPuzzleProp ?? (() => {});
   const onOpenEventShop = onOpenEventShopProp ?? (() => {});
   const [timeRemaining, setTimeRemaining] = useState('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [activeEvents, setActiveEvents] = useState<ActiveEvent[]>([]);
+  const [claimAnim] = useState(new Animated.Value(1));
 
-  const data: EventData = {
-    name: event?.name ?? 'Spring Festival',
-    description:
-      event?.description ??
-      'Celebrate the season with special puzzles and exclusive rewards! Complete event puzzles to earn Spring Tokens.',
-    bannerColor: event?.bannerColor ?? COLORS.accent,
-    bannerIcon: event?.bannerIcon ?? '🌸',
-    endTime: event?.endTime ?? Date.now() + 5 * 24 * 60 * 60 * 1000,
-    totalSteps: event?.totalSteps ?? 100,
-    rewards: event?.rewards ?? [
-      { milestone: 25, reward: '500 Coins', icon: '🪙' },
-      { milestone: 50, reward: 'Rare Frame', icon: '🖼️' },
-      { milestone: 75, reward: '100 Gems', icon: '💎' },
-      { milestone: 100, reward: 'Exclusive Title', icon: '👑' },
-    ],
-    puzzles: event?.puzzles ?? [
-      { id: 'e1', name: 'Spring Bloom', difficulty: 'Easy', completed: false },
-      { id: 'e2', name: 'April Showers', difficulty: 'Medium', completed: false },
-      { id: 'e3', name: 'Garden Path', difficulty: 'Medium', completed: false },
-      { id: 'e4', name: 'Butterfly Effect', difficulty: 'Hard', completed: false },
-      { id: 'e5', name: 'Rainbow Bridge', difficulty: 'Expert', completed: false },
-    ],
-    leaderboard: event?.leaderboard ?? [
-      { name: 'StarPlayer', score: 9500 },
-      { name: 'WordMaster', score: 8200 },
-      { name: 'PuzzleKing', score: 7800 },
-      { name: 'LexiconPro', score: 6400 },
-      { name: 'BrainWave', score: 5900 },
-    ],
-  };
+  // Fetch active events from the event manager
+  useEffect(() => {
+    const events = eventManager.getActiveEvents();
+    setActiveEvents(events);
+  }, []);
 
+  // Get the primary event (main or first active)
+  const primaryEvent = activeEvents.find(e => e.type === 'main') || activeEvents[0];
+  const endTime = primaryEvent?.endTime ?? (event?.endTime ?? Date.now() + 5 * 24 * 60 * 60 * 1000);
+
+  // Countdown timer
   useEffect(() => {
     const updateTimer = () => {
-      const remaining = Math.max(0, data.endTime - Date.now());
+      const remaining = Math.max(0, endTime - Date.now());
       const days = Math.floor(remaining / 86400000);
       const hours = Math.floor((remaining % 86400000) / 3600000);
       const minutes = Math.floor((remaining % 3600000) / 60000);
@@ -101,9 +74,26 @@ const EventScreen: React.FC<EventScreenProps> = ({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [data.endTime]);
+  }, [endTime]);
 
-  const progressPercent = data.totalSteps > 0 ? (progress / data.totalSteps) * 100 : 0;
+  // Claim a reward tier
+  const handleClaimReward = useCallback((eventId: string, tier: string) => {
+    const reward = eventManager.claimEventReward(eventId, tier);
+    if (reward) {
+      if (reward.coins) economy.addCoins(reward.coins);
+      if (reward.gems) economy.addGems(reward.gems);
+      if (reward.hintTokens) economy.addHintTokens(reward.hintTokens);
+
+      // Animate claim
+      Animated.sequence([
+        Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
+        Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+      ]).start();
+
+      // Refresh events
+      setActiveEvents(eventManager.getActiveEvents());
+    }
+  }, [economy, claimAnim]);
 
   // Get the current event's exclusive reward
   const currentEvent = getCurrentEvent();
@@ -111,12 +101,16 @@ const EventScreen: React.FC<EventScreenProps> = ({
     event?.exclusiveReward ?? currentEvent?.exclusiveReward;
   const isTimeLimited: boolean = event?.isTimeLimited ?? currentEvent?.isTimeLimited ?? false;
 
+  // Multiplier display
+  const multipliers = eventManager.getEventMultipliers();
+  const hasActiveMultipliers = multipliers.coins > 1 || multipliers.xp > 1 || multipliers.rareTileChance > 1;
+
   const getRewardTypeIcon = (type: string): string => {
     switch (type) {
-      case 'frame': return '🖼️';
-      case 'title': return '🏷️';
-      case 'decoration': return '🎨';
-      default: return '🎁';
+      case 'frame': return '\u{1F5BC}\u{FE0F}';
+      case 'title': return '\u{1F3F7}\u{FE0F}';
+      case 'decoration': return '\u{1F3A8}';
+      default: return '\u{1F381}';
     }
   };
 
@@ -144,6 +138,37 @@ const EventScreen: React.FC<EventScreenProps> = ({
     }
   };
 
+  const getEventTypeColor = (type: string): string => {
+    switch (type) {
+      case 'main': return COLORS.accent;
+      case 'mini': return COLORS.teal;
+      case 'weekend_blitz': return COLORS.orange;
+      case 'win_streak': return COLORS.gold;
+      default: return COLORS.accent;
+    }
+  };
+
+  const getEventTypeLabel = (type: string): string => {
+    switch (type) {
+      case 'main': return 'WEEKLY EVENT';
+      case 'mini': return 'MINI EVENT';
+      case 'weekend_blitz': return 'WEEKEND BLITZ';
+      case 'win_streak': return 'WIN STREAK';
+      default: return 'EVENT';
+    }
+  };
+
+  const formatCountdown = (endMs: number): string => {
+    const remaining = Math.max(0, endMs - Date.now());
+    const hours = Math.floor(remaining / 3600000);
+    const minutes = Math.floor((remaining % 3600000) / 60000);
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      return `${days}d ${hours % 24}h`;
+    }
+    return `${hours}h ${minutes}m`;
+  };
+
   return (
     <View style={styles.container}>
       <AmbientBackdrop variant="event" />
@@ -152,44 +177,159 @@ const EventScreen: React.FC<EventScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Event Banner */}
-        <LinearGradient
-          colors={[...GRADIENTS.surfaceCard] as [string, string]}
-          style={[styles.banner, { borderColor: data.bannerColor }]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
+        {/* Active Event Multipliers Banner */}
+        {hasActiveMultipliers && (
           <LinearGradient
-            colors={[data.bannerColor + '25', 'transparent'] as [string, string]}
-            style={styles.bannerGlow}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-          />
-          <Text style={styles.bannerIcon}>{data.bannerIcon}</Text>
-          <Text style={[styles.bannerName, { color: data.bannerColor, textShadowColor: data.bannerColor + '60' }]}>
-            {data.name}
-          </Text>
-          <LinearGradient
-            colors={[data.bannerColor + '30', data.bannerColor + '10'] as [string, string]}
-            style={styles.timerBadge}
+            colors={[COLORS.gold + '20', COLORS.orange + '10'] as [string, string]}
+            style={styles.multiplierBanner}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            <Text style={[styles.timerText, { color: data.bannerColor }]}>
-              {timeRemaining} remaining
-            </Text>
+            <Text style={styles.multiplierIcon}>{'\u{26A1}'}</Text>
+            <View style={styles.multiplierInfo}>
+              <Text style={styles.multiplierTitle}>ACTIVE BONUSES</Text>
+              <View style={styles.multiplierRow}>
+                {multipliers.coins > 1 && (
+                  <View style={styles.multiplierChip}>
+                    <Text style={styles.multiplierChipText}>{multipliers.coins}x Coins</Text>
+                  </View>
+                )}
+                {multipliers.xp > 1 && (
+                  <View style={styles.multiplierChip}>
+                    <Text style={styles.multiplierChipText}>{multipliers.xp}x XP</Text>
+                  </View>
+                )}
+                {multipliers.rareTileChance > 1 && (
+                  <View style={styles.multiplierChip}>
+                    <Text style={styles.multiplierChipText}>{multipliers.rareTileChance}x Rare Tiles</Text>
+                  </View>
+                )}
+              </View>
+            </View>
           </LinearGradient>
-        </LinearGradient>
+        )}
 
-        {/* Description */}
-        <LinearGradient
-          colors={[...GRADIENTS.surfaceCard] as [string, string]}
-          style={styles.descCard}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.descText}>{data.description}</Text>
-        </LinearGradient>
+        {/* Active Events List */}
+        {activeEvents.map((activeEvent) => {
+          const color = getEventTypeColor(activeEvent.type);
+          const progress = activeEvent.progress;
+          const maxThreshold = activeEvent.rewards.length > 0
+            ? activeEvent.rewards[activeEvent.rewards.length - 1].threshold
+            : 100;
+          const progressPercent = maxThreshold > 0 ? Math.min((progress / maxThreshold) * 100, 100) : 0;
+
+          return (
+            <LinearGradient
+              key={activeEvent.id}
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              style={[styles.eventCard, { borderColor: color + '40' }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              {/* Event Type Label */}
+              <View style={[styles.eventTypeBadge, { backgroundColor: color + '20' }]}>
+                <Text style={[styles.eventTypeText, { color }]}>
+                  {getEventTypeLabel(activeEvent.type)}
+                </Text>
+              </View>
+
+              {/* Event Header */}
+              <View style={styles.eventHeader}>
+                <Text style={styles.eventIcon}>{activeEvent.icon}</Text>
+                <View style={styles.eventTitleArea}>
+                  <Text style={[styles.eventName, { color }]}>{activeEvent.name}</Text>
+                  <Text style={styles.eventDesc}>{activeEvent.description}</Text>
+                </View>
+              </View>
+
+              {/* Countdown */}
+              <LinearGradient
+                colors={[color + '15', color + '05'] as [string, string]}
+                style={styles.countdownBadge}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={[styles.countdownText, { color }]}>
+                  {formatCountdown(activeEvent.endTime)} remaining
+                </Text>
+              </LinearGradient>
+
+              {/* Progress Bar */}
+              <View style={styles.eventProgressHeader}>
+                <Text style={styles.eventProgressLabel}>Progress</Text>
+                <Text style={styles.eventProgressValue}>
+                  {progress} / {maxThreshold}
+                </Text>
+              </View>
+              <View style={styles.eventProgressBarBg}>
+                <LinearGradient
+                  colors={[color, color + 'CC'] as [string, string]}
+                  style={[styles.eventProgressBarFill, { width: `${progressPercent}%` }]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+              </View>
+
+              {/* Reward Tiers */}
+              <View style={styles.rewardTiersRow}>
+                {activeEvent.rewards.map((reward) => {
+                  const canClaim = reward.reached && !reward.claimed;
+                  return (
+                    <TouchableOpacity
+                      key={reward.tier}
+                      onPress={() => canClaim && handleClaimReward(activeEvent.id, reward.tier)}
+                      disabled={!canClaim}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[
+                        styles.rewardTierItem,
+                        reward.reached && !reward.claimed && styles.rewardTierClaimable,
+                        reward.claimed && styles.rewardTierClaimed,
+                      ]}>
+                        <View style={[
+                          styles.rewardTierCircle,
+                          reward.reached && { borderColor: color, backgroundColor: color + '18' },
+                          reward.claimed && { borderColor: COLORS.green, backgroundColor: COLORS.green + '18' },
+                        ]}>
+                          <Text style={styles.rewardTierIcon}>
+                            {reward.claimed ? '\u{2705}' : reward.reached ? '\u{1F381}' : '\u{1F512}'}
+                          </Text>
+                        </View>
+                        <Text style={styles.rewardTierThreshold}>{reward.threshold}</Text>
+                        <Text style={[
+                          styles.rewardTierLabel,
+                          reward.reached && { color: COLORS.textPrimary },
+                          reward.claimed && { color: COLORS.green },
+                        ]}>
+                          {reward.tier.charAt(0).toUpperCase() + reward.tier.slice(1)}
+                        </Text>
+                        {canClaim && (
+                          <View style={[styles.claimButton, { backgroundColor: color }]}>
+                            <Text style={styles.claimButtonText}>Claim</Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </LinearGradient>
+          );
+        })}
+
+        {/* No Active Events Fallback */}
+        {activeEvents.length === 0 && (
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard] as [string, string]}
+            style={styles.emptyCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Text style={styles.emptyIcon}>{'\u{1F3AE}'}</Text>
+            <Text style={styles.emptyTitle}>No Active Events</Text>
+            <Text style={styles.emptyDesc}>Check back soon for new events and challenges!</Text>
+          </LinearGradient>
+        )}
 
         {/* Limited Time Exclusive Reward */}
         {isTimeLimited && exclusiveReward && (
@@ -206,7 +346,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
               end={{ x: 0.5, y: 1 }}
             />
             <View style={styles.exclusiveLabelRow}>
-              <Text style={styles.exclusiveLabelIcon}>{'⏳'}</Text>
+              <Text style={styles.exclusiveLabelIcon}>{'\u{231B}'}</Text>
               <Text style={styles.exclusiveLabel}>LIMITED TIME EXCLUSIVE</Text>
             </View>
             <View style={styles.exclusiveContent}>
@@ -238,7 +378,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
               </View>
             </View>
             <View style={styles.exclusiveTimerRow}>
-              <Text style={styles.exclusiveTimerIcon}>{'🔥'}</Text>
+              <Text style={styles.exclusiveTimerIcon}>{'\u{1F525}'}</Text>
               <Text style={styles.exclusiveTimerText}>
                 Ends in {timeRemaining}
               </Text>
@@ -248,82 +388,6 @@ const EventScreen: React.FC<EventScreenProps> = ({
             </Text>
           </LinearGradient>
         )}
-
-        {/* Progress Bar */}
-        <LinearGradient
-          colors={[...GRADIENTS.surfaceCard] as [string, string]}
-          style={styles.progressSection}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>Event Progress</Text>
-            <Text style={styles.progressValue}>
-              {progress} / {data.totalSteps}
-            </Text>
-          </View>
-          <View style={styles.progressBarBg}>
-            <LinearGradient
-              colors={[data.bannerColor ?? COLORS.accent, (data.bannerColor ?? COLORS.accent) + 'CC'] as [string, string]}
-              style={[
-                styles.progressBarFill,
-                { width: `${Math.min(progressPercent, 100)}%` },
-              ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
-            {/* Milestone markers */}
-            {data.rewards.map((reward) => {
-              const markerPos = (reward.milestone / data.totalSteps) * 100;
-              const isReached = progress >= reward.milestone;
-              return (
-                <View
-                  key={reward.milestone}
-                  style={[
-                    styles.milestoneMarker,
-                    { left: `${markerPos}%` },
-                    isReached && { backgroundColor: data.bannerColor },
-                  ]}
-                />
-              );
-            })}
-          </View>
-
-          {/* Rewards */}
-          <View style={styles.rewardsRow}>
-            {data.rewards.map((reward) => {
-              const isReached = progress >= reward.milestone;
-              return (
-                <View key={reward.milestone} style={styles.rewardItem}>
-                  <View
-                    style={[
-                      styles.rewardCircle,
-                      isReached && styles.rewardCircleReached,
-                      isReached && {
-                        shadowColor: COLORS.gold,
-                        shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.5,
-                        shadowRadius: 10,
-                        elevation: 8,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.rewardIcon}>
-                      {isReached ? reward.icon : '🔒'}
-                    </Text>
-                  </View>
-                  <Text style={styles.rewardMilestone}>{reward.milestone}</Text>
-                  <Text
-                    style={[styles.rewardName, isReached && styles.rewardNameReached]}
-                    numberOfLines={2}
-                  >
-                    {reward.reward}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-        </LinearGradient>
 
         {/* Event Puzzles */}
         <View style={styles.puzzlesSection}>
@@ -340,59 +404,6 @@ const EventScreen: React.FC<EventScreenProps> = ({
               </LinearGradient>
             </TouchableOpacity>
           </View>
-          {data.puzzles.map((puzzle) => (
-            <TouchableOpacity
-              key={puzzle.id}
-              onPress={onPlayEventPuzzle}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={
-                  puzzle.completed
-                    ? ([COLORS.cellFound, '#122e1e'] as [string, string])
-                    : ([...GRADIENTS.surfaceCard] as [string, string])
-                }
-                style={[
-                  styles.puzzleRow,
-                  puzzle.completed && styles.puzzleRowComplete,
-                ]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <View
-                  style={[
-                    styles.puzzleDot,
-                    puzzle.completed
-                      ? { backgroundColor: COLORS.green }
-                      : { backgroundColor: COLORS.cellDefault },
-                  ]}
-                >
-                  {puzzle.completed && (
-                    <Text style={styles.puzzleCheck}>✓</Text>
-                  )}
-                </View>
-                <View style={styles.puzzleInfo}>
-                  <Text
-                    style={[
-                      styles.puzzleName,
-                      puzzle.completed && styles.puzzleNameComplete,
-                    ]}
-                  >
-                    {puzzle.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.puzzleDifficulty,
-                      { color: getDifficultyColor(puzzle.difficulty) },
-                    ]}
-                  >
-                    {puzzle.difficulty}
-                  </Text>
-                </View>
-                <Text style={styles.puzzleChevron}>›</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          ))}
         </View>
 
         {/* Event Shop Button */}
@@ -403,70 +414,31 @@ const EventScreen: React.FC<EventScreenProps> = ({
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <Text style={styles.shopButtonIcon}>🛍️</Text>
+            <Text style={styles.shopButtonIcon}>{'\u{1F6CD}\u{FE0F}'}</Text>
             <View style={styles.shopButtonInfo}>
               <Text style={styles.shopButtonTitle}>Event Shop</Text>
               <Text style={styles.shopButtonDesc}>
                 Spend tokens on exclusive items
               </Text>
             </View>
-            <Text style={styles.shopChevron}>›</Text>
+            <Text style={styles.shopChevron}>{'\u{203A}'}</Text>
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Leaderboard Preview */}
-        <View style={styles.leaderboardSection}>
-          <Text style={styles.sectionTitle}>Event Leaderboard</Text>
+        {/* Upcoming Events */}
+        <View style={styles.upcomingSection}>
+          <Text style={styles.sectionTitle}>Coming Up</Text>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard] as [string, string]}
-            style={styles.leaderboardCard}
+            style={styles.upcomingCard}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            {data.leaderboard.slice(0, 5).map((entry, index) => (
-              <View key={index}>
-                {index > 0 && <View style={styles.leaderboardDivider} />}
-                <View style={styles.leaderboardRow}>
-                  <Text
-                    style={[
-                      styles.leaderboardRank,
-                      index < 3 && { color: ['#FFD700', '#C0C0C0', '#CD7F32'][index] },
-                    ]}
-                  >
-                    {index < 3
-                      ? ['🥇', '🥈', '🥉'][index]
-                      : `${index + 1}`}
-                  </Text>
-                  <View
-                    style={[
-                      styles.leaderboardAvatar,
-                      index < 3 && {
-                        borderWidth: 2,
-                        borderColor: ['#FFD700', '#C0C0C0', '#CD7F32'][index],
-                        shadowColor: ['#FFD700', '#C0C0C0', '#CD7F32'][index],
-                        shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.4,
-                        shadowRadius: 6,
-                        elevation: 4,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.leaderboardAvatarText}>
-                      {entry.name.charAt(0)}
-                    </Text>
-                  </View>
-                  <Text style={styles.leaderboardName} numberOfLines={1}>
-                    {entry.name}
-                  </Text>
-                  <Text style={[
-                    styles.leaderboardScore,
-                    index < 3 && { color: ['#FFD700', '#C0C0C0', '#CD7F32'][index] },
-                  ]}>
-                    {entry.score.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-            ))}
+            <Text style={styles.upcomingHint}>
+              {eventManager.isWeekendBlitz()
+                ? 'Weekend Blitz is active! Enjoy double XP and boosted rare tile drops.'
+                : 'Weekend Blitz returns every Saturday & Sunday with 2x XP!'}
+            </Text>
           </LinearGradient>
         </View>
 
@@ -488,62 +460,220 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 60,
   },
-  banner: {
-    borderRadius: 22,
-    padding: 28,
+
+  // Multiplier Banner
+  multiplierBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    overflow: 'hidden',
-    marginBottom: 14,
-    ...SHADOWS.strong,
-  },
-  bannerGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 120,
-  },
-  bannerIcon: {
-    fontSize: 60,
-    marginBottom: 12,
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 12,
-  },
-  bannerName: {
-    fontSize: 28,
-    fontFamily: FONTS.display,
-    marginBottom: 10,
-    letterSpacing: 1.5,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
-  },
-  timerBadge: {
-    borderRadius: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  timerText: {
-    fontSize: 15,
-    fontFamily: FONTS.bodyBold,
-    fontVariant: ['tabular-nums'],
-  },
-  descCard: {
     borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '40',
+    ...SHADOWS.glow(COLORS.gold),
+  },
+  multiplierIcon: {
+    fontSize: 28,
+    marginRight: 12,
+  },
+  multiplierInfo: {
+    flex: 1,
+  },
+  multiplierTitle: {
+    fontSize: 12,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.gold,
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  multiplierRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  multiplierChip: {
+    backgroundColor: COLORS.gold + '20',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '40',
+  },
+  multiplierChipText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.gold,
+  },
+
+  // Event Card
+  eventCard: {
+    borderRadius: 20,
     padding: 18,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
     ...SHADOWS.medium,
   },
-  descText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
+  eventTypeBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginBottom: 12,
   },
+  eventTypeText: {
+    fontSize: 10,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1.5,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  eventIcon: {
+    fontSize: 40,
+    marginRight: 14,
+  },
+  eventTitleArea: {
+    flex: 1,
+  },
+  eventName: {
+    fontSize: 20,
+    fontFamily: FONTS.display,
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  eventDesc: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  countdownBadge: {
+    alignSelf: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  countdownText: {
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    fontVariant: ['tabular-nums'],
+  },
+
+  // Event Progress
+  eventProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  eventProgressLabel: {
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textSecondary,
+  },
+  eventProgressValue: {
+    fontSize: 13,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  eventProgressBarBg: {
+    height: 12,
+    backgroundColor: 'rgba(42, 48, 96, 0.6)',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  eventProgressBarFill: {
+    height: '100%',
+    borderRadius: 6,
+  },
+
+  // Reward Tiers
+  rewardTiersRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  rewardTierItem: {
+    alignItems: 'center',
+    width: (width - 80) / 4,
+    opacity: 0.6,
+  },
+  rewardTierClaimable: {
+    opacity: 1,
+  },
+  rewardTierClaimed: {
+    opacity: 0.8,
+  },
+  rewardTierCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(17, 22, 56, 0.8)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  rewardTierIcon: {
+    fontSize: 18,
+  },
+  rewardTierThreshold: {
+    fontSize: 11,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.textMuted,
+  },
+  rewardTierLabel: {
+    fontSize: 10,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textMuted,
+    marginBottom: 4,
+  },
+  claimButton: {
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  claimButtonText: {
+    fontSize: 10,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.bg,
+  },
+
+  // Empty State
+  emptyCard: {
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 14,
+    ...SHADOWS.medium,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  emptyDesc: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+
+  // Exclusive Reward
   exclusiveCard: {
     borderRadius: 18,
     padding: 18,
@@ -655,100 +785,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  progressSection: {
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    ...SHADOWS.medium,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  progressLabel: {
-    fontSize: 15,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textPrimary,
-  },
-  progressValue: {
-    fontSize: 14,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textSecondary,
-  },
-  progressBarBg: {
-    height: 16,
-    backgroundColor: 'rgba(42, 48, 96, 0.6)',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 8,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-  },
-  milestoneMarker: {
-    position: 'absolute',
-    top: -2,
-    width: 4,
-    height: 16,
-    backgroundColor: COLORS.textMuted,
-    borderRadius: 2,
-    marginLeft: -2,
-  },
-  rewardsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  rewardItem: {
-    alignItems: 'center',
-    width: (width - 64) / 4,
-  },
-  rewardCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(17, 22, 56, 0.8)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-    ...SHADOWS.soft,
-  },
-  rewardCircleReached: {
-    borderColor: COLORS.gold,
-    backgroundColor: COLORS.gold + '18',
-    borderWidth: 2,
-    ...SHADOWS.glow(COLORS.gold),
-  },
-  rewardIcon: {
-    fontSize: 20,
-  },
-  rewardMilestone: {
-    fontSize: 11,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textMuted,
-    marginBottom: 2,
-  },
-  rewardName: {
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-  rewardNameReached: {
-    color: COLORS.gold,
-    fontFamily: FONTS.bodySemiBold,
-  },
+
+  // Puzzles
   puzzlesSection: {
     marginBottom: 14,
   },
@@ -777,52 +815,8 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyBold,
     color: COLORS.bg,
   },
-  puzzleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    padding: 15,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    ...SHADOWS.soft,
-  },
-  puzzleRowComplete: {
-    borderColor: COLORS.green + '40',
-  },
-  puzzleDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  puzzleCheck: {
-    fontSize: 13,
-    fontFamily: FONTS.display,
-    color: COLORS.textPrimary,
-  },
-  puzzleInfo: {
-    flex: 1,
-  },
-  puzzleName: {
-    fontSize: 15,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textPrimary,
-    marginBottom: 2,
-  },
-  puzzleNameComplete: {
-    color: COLORS.green,
-  },
-  puzzleDifficulty: {
-    fontSize: 12,
-    fontFamily: FONTS.bodySemiBold,
-  },
-  puzzleChevron: {
-    fontSize: 22,
-    color: COLORS.textMuted,
-  },
+
+  // Shop Button
   shopButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -857,62 +851,25 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: COLORS.gold,
   },
-  leaderboardSection: {
+
+  // Upcoming
+  upcomingSection: {
     marginBottom: 14,
   },
-  leaderboardCard: {
+  upcomingCard: {
     borderRadius: 16,
-    overflow: 'hidden',
+    padding: 18,
+    marginTop: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    marginTop: 10,
     ...SHADOWS.medium,
   },
-  leaderboardDivider: {
-    height: 1,
-    backgroundColor: COLORS.bgLight,
-    marginHorizontal: 14,
-  },
-  leaderboardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-  },
-  leaderboardRank: {
-    fontSize: 16,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textMuted,
-    width: 32,
-    textAlign: 'center',
-    marginRight: 8,
-  },
-  leaderboardAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(37, 43, 94, 0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  leaderboardAvatarText: {
+  upcomingHint: {
     fontSize: 14,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textPrimary,
-  },
-  leaderboardName: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textPrimary,
-  },
-  leaderboardScore: {
-    fontSize: 14,
-    fontFamily: FONTS.bodyBold,
     color: COLORS.textSecondary,
+    lineHeight: 20,
   },
+
   bottomSpacer: {
     height: 40,
   },

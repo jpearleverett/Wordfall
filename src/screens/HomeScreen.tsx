@@ -237,12 +237,26 @@ export function HomeScreen({
   const currentRewardDay = ((loginCycleDay - 1) % 7) + 1;
 
   // Progressive disclosure flags
-  const showStreak = playerStage !== 'new';
-  const showDailyRewards = playerStage !== 'new';
-  const showQuickPlay = playerStage !== 'new' && playerStage !== 'early';
-  const showWeeklyGoals = (playerStage === 'established' || playerStage === 'veteran') && weeklyGoals;
-  const showMissions = (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0;
-  const showMysteryWheel = (playerStage === 'established' || playerStage === 'veteran') && onOpenWheel;
+  // Progressive disclosure: segment-aware when available, falls back to playerStage
+  const hasSegmentContent = segmentHomeContent.length > 0;
+  const showStreak = hasSegmentContent
+    ? segmentHomeContent.includes('streak')
+    : playerStage !== 'new';
+  const showDailyRewards = hasSegmentContent
+    ? segmentHomeContent.includes('daily_rewards')
+    : playerStage !== 'new';
+  const showQuickPlay = hasSegmentContent
+    ? segmentHomeContent.includes('daily_challenge')
+    : playerStage !== 'new' && playerStage !== 'early';
+  const showWeeklyGoals = hasSegmentContent
+    ? segmentHomeContent.includes('weekly_goals') && weeklyGoals
+    : (playerStage === 'established' || playerStage === 'veteran') && weeklyGoals;
+  const showMissions = hasSegmentContent
+    ? segmentHomeContent.includes('missions') && dailyMissions.length > 0
+    : (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0;
+  const showMysteryWheel = hasSegmentContent
+    ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
+    : (playerStage === 'established' || playerStage === 'veteran') && onOpenWheel;
 
   return (
     <View style={styles.container}>

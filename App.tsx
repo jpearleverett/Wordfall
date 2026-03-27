@@ -1362,6 +1362,8 @@ function HomeMainScreen({ route, navigation }: any) {
         weeklyGoals={player.weeklyGoals}
         dailyMissions={player.missions.dailyMissions}
         recommendation={recommendation}
+        segmentHomeContent={segmentHomeContent}
+        segmentWelcomeMessage={segmentWelcomeMessage}
       />
       {/* Welcome Back Modal */}
       {showWelcomeBack && (

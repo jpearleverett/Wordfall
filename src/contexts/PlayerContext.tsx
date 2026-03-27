@@ -968,8 +968,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         lastGiftDate: today,
       };
     });
+    // Deliver via Firestore if available
+    if (success && user) {
+      import('../services/firestore').then(({ firestoreService }) => {
+        void firestoreService.sendGift(
+          user.uid,
+          data.equippedTitle || 'A friend',
+          friendId,
+          'hint',
+          1
+        );
+      });
+    }
     return success;
-  }, []);
+  }, [user, data.equippedTitle]);
 
   const sendTileGift = useCallback((friendId: string, tileLetter: string): boolean => {
     const today = getToday();
@@ -984,8 +996,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         lastGiftDate: today,
       };
     });
+    // Deliver via Firestore if available
+    if (success && user) {
+      import('../services/firestore').then(({ firestoreService }) => {
+        void firestoreService.sendGift(
+          user.uid,
+          data.equippedTitle || 'A friend',
+          friendId,
+          'tile',
+          1
+        );
+      });
+    }
     return success;
-  }, []);
+  }, [user, data.equippedTitle]);
 
   // ── Library ─────────────────────────────────────────────────────────────
 
