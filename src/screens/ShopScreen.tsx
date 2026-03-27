@@ -878,6 +878,17 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Mock Ad Modal — shown during development when no real ad SDK is installed */}
+      {mockAdState && (
+        <MockAdModal
+          rewardType={mockAdState.rewardType}
+          onComplete={(watched) => {
+            mockAdState.resolver(watched);
+            setMockAdState(null);
+          }}
+        />
+      )}
     </View>
   );
 };

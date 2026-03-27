@@ -637,13 +637,22 @@ function GameScreenWrapper({ route, navigation }: any) {
       const currentLevel = params.level || 0;
       const nextLevel = currentLevel + 1;
 
+      // Spend energy for next level (free modes handled internally)
+      const mode = (params.mode || 'classic') as GameMode;
+      player.useEnergy(mode);
+
       // Check if player needs a breather level
       const useBreather = player.needsBreather();
-      const config = useBreather ? getBreatherConfig(nextLevel) : getLevelConfig(nextLevel);
+      let config = useBreather ? getBreatherConfig(nextLevel) : getLevelConfig(nextLevel);
+
+      // Apply adaptive difficulty (only when not in breather mode)
+      if (!useBreather) {
+        const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+        config = adjusted.config;
+      }
 
       const seed = nextLevel * 1337 + Date.now();
       const board = generateBoard(config, seed);
-      const mode = (params.mode || 'classic') as GameMode;
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -1048,19 +1057,9 @@ function HomeMainScreen({ route, navigation }: any) {
   );
 
   const startDaily = useCallback(() => {
-    // Lives check for daily mode
-    if (economy.lives <= 0) {
-      Alert.alert(
-        'Out of Lives!',
-        `Your next life refills in ${Math.ceil(economy.getTimeUntilNextLife() / 60000)} minutes.\n\nRefill all lives for 10 gems?`,
-        [
-          { text: 'Wait', style: 'cancel' },
-          { text: 'Refill (10 \u{1F48E})', onPress: () => { economy.refillLives(); } },
-        ]
-      );
-      return;
-    }
-    economy.spendLife();
+    // Daily mode is free — no energy cost (per ENERGY.FREE_MODES)
+    // Just track the use for analytics
+    player.useEnergy('daily');
 
     setLoading(true);
     setTimeout(() => {

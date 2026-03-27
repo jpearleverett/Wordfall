@@ -9,6 +9,12 @@ import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
 import { DEFAULT_PLAYER_METRICS, updatePlayerMetrics } from '../engine/difficultyAdjuster';
+import {
+  PlayerSegments,
+  DEFAULT_SEGMENTS,
+  computeSegments,
+  SegmentationInput,
+} from '../services/playerSegmentation';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -155,6 +161,9 @@ interface PlayerData {
   // Adaptive Difficulty Metrics
   performanceMetrics: PlayerMetrics;
 
+  // Player Segmentation
+  segments: PlayerSegments;
+
   // Cloud sync
   lastModified: number;
 }
@@ -244,6 +253,9 @@ interface PlayerContextType extends PlayerData {
 
   // Adaptive Difficulty
   recordPerformanceMetrics: (level: number, stars: number, completionTimeSeconds: number) => void;
+
+  // Player Segmentation
+  recomputeSegments: (totalSpendCents?: number, sharesCount?: number) => void;
 
   // Friend Challenges
   sendChallenge: (friendId: string, puzzleData: {
@@ -396,6 +408,9 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Adaptive Difficulty Metrics
   performanceMetrics: DEFAULT_PLAYER_METRICS,
 
+  // Player Segmentation
+  segments: DEFAULT_SEGMENTS,
+
   // Cloud sync
   lastModified: 0,
 };
@@ -448,6 +463,7 @@ const PlayerContext = createContext<PlayerContextType>({
   recordPerformanceMetrics: () => {},
   sendChallenge: () => ({ id: '', challengerId: '', challengerName: '', challengerScore: 0, challengerStars: 0, challengerTime: 0, level: 0, seed: 0, mode: 'classic' as const, boardConfig: { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 5, difficulty: 'easy' as const }, createdAt: '', expiresAt: '', status: 'pending' as const }),
   respondToChallenge: () => {},
+  recomputeSegments: () => {},
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────

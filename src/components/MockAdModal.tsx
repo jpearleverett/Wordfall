@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   headerSub: {
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.bodyRegular,
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 2,
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   adSubtext: {
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.bodyRegular,
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 4,
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   skipText: {
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.bodyRegular,
     fontSize: 12,
     color: COLORS.textMuted,
     textDecorationLine: 'underline',
