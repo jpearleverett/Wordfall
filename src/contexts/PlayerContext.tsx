@@ -76,6 +76,12 @@ interface PlayerData {
   clubId: string | null;
   friendIds: string[];
 
+  // Friend Challenges
+  friendChallenges: {
+    sent: import('../types').FriendChallenge[];
+    received: import('../types').FriendChallenge[];
+  };
+
   // Cosmetics
   equippedTheme: string;
   equippedFrame: string;
@@ -238,6 +244,18 @@ interface PlayerContextType extends PlayerData {
 
   // Adaptive Difficulty
   recordPerformanceMetrics: (level: number, stars: number, completionTimeSeconds: number) => void;
+
+  // Friend Challenges
+  sendChallenge: (friendId: string, puzzleData: {
+    score: number;
+    stars: number;
+    time: number;
+    level: number;
+    seed: number;
+    mode: import('../types').GameMode;
+    boardConfig: import('../types').BoardConfig;
+  }) => import('../types').FriendChallenge;
+  respondToChallenge: (challengeId: string, score: number, stars: number) => void;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────

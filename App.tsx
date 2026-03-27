@@ -969,19 +969,34 @@ function HomeMainScreen({ route, navigation }: any) {
 
   const startGame = useCallback(
     (difficulty?: Difficulty) => {
-      // Lives check - classic mode requires a life
-      if (economy.lives <= 0) {
+      // Energy check — classic mode costs 1 energy
+      const energyInfo = player.getEnergyDisplay();
+      if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
+        // Truly out of energy + bonus plays — show friendly "take a break" prompt
+        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
         Alert.alert(
-          'Out of Lives!',
-          `Your next life refills in ${Math.ceil(economy.getTimeUntilNextLife() / 60000)} minutes.\n\nRefill all lives for 10 gems?`,
+          'Take a Break!',
+          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
           [
             { text: 'Wait', style: 'cancel' },
-            { text: 'Refill (10 \u{1F48E})', onPress: () => { economy.refillLives(); } },
+            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            {
+              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
+              onPress: () => {
+                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+                  player.refillEnergy('gems');
+                } else {
+                  Alert.alert('Not Enough Gems', 'Visit the shop to get more gems.');
+                }
+              },
+            },
           ]
         );
         return;
       }
-      economy.spendLife();
+
+      // Spend energy (handles free modes, bonus plays internally)
+      player.useEnergy('classic');
 
       setLoading(true);
       setTimeout(() => {
@@ -993,6 +1008,9 @@ function HomeMainScreen({ route, navigation }: any) {
             config = getBreatherConfig(player.currentLevel);
           } else {
             config = getLevelConfig(player.currentLevel);
+            // Apply adaptive difficulty adjustment (invisible to player)
+            const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+            config = adjusted.config;
           }
           const level = difficulty ? 0 : player.currentLevel;
           const board = generateBoard(config, level * 1337 + Date.now());

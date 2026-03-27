@@ -455,35 +455,102 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Watch Ad for Hints ─────────────────────────────────────── */}
+        {/* ── Free Rewards (Watch Ads) ──────────────────────────────── */}
         {!adsRemoved && (
-          <TouchableOpacity
-            style={styles.adBanner}
-            onPress={handleWatchAd}
-            activeOpacity={0.7}
-            disabled={watchingAd}
-          >
-            <LinearGradient
-              colors={[COLORS.green + '30', COLORS.teal + '20']}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
-            {watchingAd ? (
-              <ActivityIndicator size="small" color={COLORS.green} style={{ marginRight: 10 }} />
-            ) : (
-              <Text style={styles.adIcon}>{'\u{1F3AC}'}</Text>
+          <View style={styles.adSection}>
+            <Text style={styles.adSectionTitle}>Free Rewards</Text>
+
+            {/* Watch Ad for Hint */}
+            <TouchableOpacity
+              style={styles.adBanner}
+              onPress={handleWatchAdForHint}
+              activeOpacity={0.7}
+              disabled={watchingAd}
+            >
+              <LinearGradient
+                colors={[COLORS.green + '30', COLORS.teal + '20']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+              {watchingAd ? (
+                <ActivityIndicator size="small" color={COLORS.green} style={{ marginRight: 10 }} />
+              ) : (
+                <Text style={styles.adIcon}>{'\u{1F3AC}'}</Text>
+              )}
+              <View style={styles.adInfo}>
+                <Text style={styles.adTitle}>Watch Ad for 1 Free Hint</Text>
+                <Text style={styles.adSubtitle}>
+                  {watchingAd ? 'Watching ad...' : 'Tap to watch a short video'}
+                </Text>
+              </View>
+              <View style={styles.adBadge}>
+                <Text style={styles.adBadgeText}>FREE</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Watch Ad for Coins (max 3/day) */}
+            {adManager.canWatchCoinAd() && (
+              <TouchableOpacity
+                style={styles.adBanner}
+                onPress={handleWatchAdForCoins}
+                activeOpacity={0.7}
+                disabled={watchingAd}
+              >
+                <LinearGradient
+                  colors={[COLORS.gold + '30', COLORS.orange + '20']}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+                {watchingAd ? (
+                  <ActivityIndicator size="small" color={COLORS.gold} style={{ marginRight: 10 }} />
+                ) : (
+                  <Text style={styles.adIcon}>{'\u{1FA99}'}</Text>
+                )}
+                <View style={styles.adInfo}>
+                  <Text style={[styles.adTitle, { color: COLORS.gold }]}>Watch Ad for 50 Coins</Text>
+                  <Text style={styles.adSubtitle}>
+                    {watchingAd ? 'Watching ad...' : `${adManager.coinAdsRemaining()} remaining today`}
+                  </Text>
+                </View>
+                <View style={[styles.adBadge, { backgroundColor: COLORS.gold + '20' }]}>
+                  <Text style={[styles.adBadgeText, { color: COLORS.gold }]}>FREE</Text>
+                </View>
+              </TouchableOpacity>
             )}
-            <View style={styles.adInfo}>
-              <Text style={styles.adTitle}>Watch Ad for 1 Free Hint</Text>
-              <Text style={styles.adSubtitle}>
-                {watchingAd ? 'Watching ad...' : 'Tap to watch a short video'}
-              </Text>
-            </View>
-            <View style={styles.adBadge}>
-              <Text style={styles.adBadgeText}>FREE</Text>
-            </View>
-          </TouchableOpacity>
+
+            {/* Watch Ad for Mystery Wheel Spin */}
+            {adManager.canShowAd('spin_reward') && (
+              <TouchableOpacity
+                style={styles.adBanner}
+                onPress={handleWatchAdForSpin}
+                activeOpacity={0.7}
+                disabled={watchingAd}
+              >
+                <LinearGradient
+                  colors={[COLORS.purple + '30', COLORS.accent + '20']}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+                {watchingAd ? (
+                  <ActivityIndicator size="small" color={COLORS.purple} style={{ marginRight: 10 }} />
+                ) : (
+                  <Text style={styles.adIcon}>{'\u{1F3B0}'}</Text>
+                )}
+                <View style={styles.adInfo}>
+                  <Text style={[styles.adTitle, { color: COLORS.purple }]}>Watch Ad for Mystery Spin</Text>
+                  <Text style={styles.adSubtitle}>
+                    {watchingAd ? 'Watching ad...' : 'Get a free Mystery Wheel spin'}
+                  </Text>
+                </View>
+                <View style={[styles.adBadge, { backgroundColor: COLORS.purple + '20' }]}>
+                  <Text style={[styles.adBadgeText, { color: COLORS.purple }]}>FREE</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
         {/* ── Featured Offers ────────────────────────────────────────── */}
@@ -831,7 +898,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
-  // ── Ad banner ─────────────────────────────────────────────────────────
+  // ── Ad section ────────────────────────────────────────────────────────
+  adSection: {
+    marginBottom: 12,
+  },
+  adSectionTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
   adBanner: {
     flexDirection: 'row',
     alignItems: 'center',
