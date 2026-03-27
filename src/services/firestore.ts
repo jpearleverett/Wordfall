@@ -62,6 +62,18 @@
  * }
  *
  * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * ─── Required Firestore Composite Indexes ───────────────────────────────────
+ *
+ * Collection: dailyScores  — Fields: date ASC, score DESC
+ * Collection: weeklyScores — Fields: weekId ASC, score DESC
+ * Collection: friendships  — Fields: users (array-contains), status ASC
+ * Collection: gifts        — Fields: toUserId ASC, claimed ASC
+ *
+ * These indexes will be auto-suggested by Firestore on first query if missing.
+ * You can also create them in the Firebase Console or via firebase.json.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import { db, isFirebaseConfigured } from '../config/firebase';
