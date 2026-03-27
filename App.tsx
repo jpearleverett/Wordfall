@@ -1364,6 +1364,14 @@ function HomeMainScreen({ route, navigation }: any) {
         recommendation={recommendation}
         segmentHomeContent={segmentHomeContent}
         segmentWelcomeMessage={segmentWelcomeMessage}
+        activeEventBanners={eventManager.getActiveEvents().map(e => ({
+          id: e.id,
+          name: e.name,
+          icon: e.icon,
+          label: e.type === 'weekend_blitz' ? 'WEEKEND BLITZ' : e.type === 'mini' ? 'MINI EVENT' : 'EVENT',
+          color: e.type === 'weekend_blitz' ? COLORS.orange : e.type === 'mini' ? COLORS.teal : COLORS.accent,
+        }))}
+        onOpenEvents={() => navigation.navigate('Play', { screen: 'Event' })}
       />
       {/* Welcome Back Modal */}
       {showWelcomeBack && (
