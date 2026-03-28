@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useFonts } from 'expo-font';
@@ -33,9 +33,10 @@ import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS } from './src/constants';
+import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS, SHADOWS } from './src/constants';
 import { getBreatherConfig } from './src/constants';
-import { AuthProvider } from './src/contexts/AuthContext';
+import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
 import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
 import { PlayerProvider, usePlayer } from './src/contexts/PlayerContext';
@@ -53,9 +54,21 @@ import { LevelUpCeremony } from './src/components/LevelUpCeremony';
 import { notificationManager } from './src/services/notifications';
 import { MilestoneCeremony } from './src/components/MilestoneCeremony';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
+import { MysteryWheel } from './src/components/MysteryWheel';
+import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT } from './src/data/mysteryWheel';
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
 import { funnelTracker } from './src/services/funnelTracker';
+import { eventManager } from './src/services/eventManager';
+import { getChapterExtended, getLevelConfigExtended } from './src/engine/puzzleGenerator';
+import {
+  getPersonalizedHomeContent,
+  getPersonalizedNotifications,
+  getPersonalizedDifficulty,
+  getRecommendedMode,
+  getWelcomeBackMessage,
+} from './src/services/playerSegmentation';
+import { firestoreService, FirestoreGift } from './src/services/firestore';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createStackNavigator();
@@ -255,21 +268,36 @@ function ModesScreenWrapper({ navigation }: any) {
   const handleSelectMode = useCallback((modeId: string) => {
     const mode = modeId as GameMode;
 
-    // Lives check - relax mode is free play (ethical F2P per GDD)
-    if (mode !== 'relax' && economy.lives <= 0) {
-      Alert.alert(
-        'Out of Lives!',
-        `Your next life refills in ${Math.ceil(economy.getTimeUntilNextLife() / 60000)} minutes.\n\nRefill all lives for 10 gems?`,
-        [
-          { text: 'Wait', style: 'cancel' },
-          { text: 'Refill (10 \u{1F48E})', onPress: () => { economy.refillLives(); } },
-        ]
-      );
-      return;
+    // Energy check — free modes (daily, endless, relax) cost 0 energy
+    const isFreeMode = ENERGY.FREE_MODES.includes(mode);
+    if (!isFreeMode) {
+      const energyInfo = player.getEnergyDisplay();
+      if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
+        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
+        Alert.alert(
+          'Take a Break!',
+          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
+          [
+            { text: 'Wait', style: 'cancel' },
+            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            {
+              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
+              onPress: () => {
+                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+                  player.refillEnergy('gems');
+                } else {
+                  Alert.alert('Not Enough Gems', 'Visit the shop to get more gems.');
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
     }
-    if (mode !== 'relax') {
-      economy.spendLife();
-    }
+
+    // Spend energy (free modes handled internally — returns true immediately)
+    player.useEnergy(mode);
 
     try {
       void analytics.logEvent('mode_started', {
@@ -277,7 +305,7 @@ function ModesScreenWrapper({ navigation }: any) {
         playerLevel: player.currentLevel,
       });
       let board: Board;
-      const config = getLevelConfig(player.currentLevel);
+      let config = getLevelConfig(player.currentLevel);
 
       if (mode === 'daily') {
         const today = new Date().toISOString().split('T')[0];
@@ -291,6 +319,10 @@ function ModesScreenWrapper({ navigation }: any) {
         navigation.navigate('Game', { board, level: 0, mode: 'weekly' });
         return;
       }
+
+      // Apply adaptive difficulty adjustment for non-special modes
+      const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+      config = adjusted.config;
 
       const seed = Date.now() + player.currentLevel * 1337;
       board = generateBoard(config, seed);
@@ -306,7 +338,7 @@ function ModesScreenWrapper({ navigation }: any) {
     } catch (e) {
       Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
     }
-  }, [player.currentLevel, navigation]);
+  }, [player.currentLevel, navigation, player, economy]);
 
   return <ModesScreen onSelectMode={handleSelectMode} />;
 }
@@ -314,8 +346,11 @@ function ModesScreenWrapper({ navigation }: any) {
 // Wrapper to pass navigation params to GameScreen with full context wiring
 function GameScreenWrapper({ route, navigation }: any) {
   const params = route.params || {};
+  const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
+  const [showSpinPrompt, setShowSpinPrompt] = useState(false);
+  const [pendingNavAction, setPendingNavAction] = useState<'home' | 'next' | null>(null);
 
   const handleComplete = useCallback((stars: number, score: number) => {
     const level = params.level || 0;
@@ -329,13 +364,23 @@ function GameScreenWrapper({ route, navigation }: any) {
 
     // Record puzzle completion in PlayerContext
     const isPerfect = stars === 3;
-    void analytics.logEvent('puzzle_complete', {
+    const boardData = params.board as Board | undefined;
+    const wordsFound = boardData ? boardData.words.length : 0;
+    void analytics.trackPuzzleComplete({
       level,
       mode,
-      score,
       stars,
-      isPerfect,
-      isDaily,
+      duration_seconds: 0, // Duration tracked in GameScreen; approximate here
+      hints_used: 0,       // Tracked in GameScreen state
+      undos_used: 0,       // Tracked in GameScreen state
+      words_found: wordsFound,
+      score,
+    });
+    // Also update user properties after completion
+    void analytics.updateUserProperties({
+      player_level: Math.max(level + 1, player.currentLevel),
+      total_puzzles_solved: player.puzzlesSolved + 1,
+      player_stage: playerStageFromPuzzles(player.puzzlesSolved + 1),
     });
     player.recordPuzzleComplete(level, score, stars, isPerfect);
 
@@ -350,9 +395,14 @@ function GameScreenWrapper({ route, navigation }: any) {
       player.updateProgress({ consecutiveFailures: 0, lastLevelStars: stars });
     }
 
-    // Award coins based on difficulty
+    // Update adaptive difficulty metrics (rolling averages for invisible adjustment)
+    player.recordPerformanceMetrics(level, stars, 0); // completion time tracked in GameScreen
+
+    // Award coins based on difficulty — apply event multipliers
     const difficulty: Difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
-    const coinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
+    const eventMultipliers = eventManager.getEventMultipliers();
+    const baseCoinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
+    const coinReward = Math.round(baseCoinReward * eventMultipliers.coins);
     economy.addCoins(coinReward);
 
     // Award gems for perfect clears
@@ -360,8 +410,13 @@ function GameScreenWrapper({ route, navigation }: any) {
       economy.addGems(ECONOMY.perfectClearGems);
     }
 
-    // Award library points
-    economy.addLibraryPoints(stars * 5);
+    // Award library points (apply XP multiplier)
+    economy.addLibraryPoints(Math.round(stars * 5 * eventMultipliers.xp));
+
+    // Update event progress for all active events
+    eventManager.onPuzzleComplete(score, stars, isPerfect);
+    // Persist event progress snapshot to player context
+    player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
 
     // Handle daily completion
     if (isDaily) {
@@ -370,16 +425,18 @@ function GameScreenWrapper({ route, navigation }: any) {
       economy.addCoins(ECONOMY.dailyCompleteCoins);
       economy.addGems(ECONOMY.dailyCompleteGems);
       player.updateStreak();
+      void analytics.trackDailyChallengeComplete(player.streaks.currentStreak + 1);
       void analytics.logEvent('daily_login', {
         date: today,
         streak: player.streaks.currentStreak + 1,
       });
     }
 
-    // Check for rare tile drop
-    const dropChance = COLLECTION.rareTileBaseChance
+    // Check for rare tile drop — apply event multiplier to drop rate
+    const baseDropChance = COLLECTION.rareTileBaseChance
       + (difficulty === 'hard' || difficulty === 'expert' ? COLLECTION.rareTileHardBonus : 0)
       + (isPerfect ? COLLECTION.rareTilePerfectBonus : 0);
+    const dropChance = Math.min(baseDropChance * eventMultipliers.rareTileChance, 1);
     if (Math.random() < dropChance) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       const randomLetter = letters[Math.floor(Math.random() * letters.length)];
@@ -484,14 +541,20 @@ function GameScreenWrapper({ route, navigation }: any) {
     const featureUnlocks = player.checkFeatureUnlocks(newLevel);
     for (const ceremony of featureUnlocks) {
       player.queueCeremony(ceremony);
+      if (ceremony.data?.featureId) {
+        void analytics.trackFeatureUnlocked(ceremony.data.featureId, newLevel);
+      }
     }
 
     // Check achievements
-    const board = params.board as Board | undefined;
-    const maxCombo = board ? board.words.length : 0; // Approximate; actual combo tracked in GameScreen
+    const board2 = params.board as Board | undefined;
+    const maxCombo = board2 ? board2.words.length : 0; // Approximate; actual combo tracked in GameScreen
     const achievementCeremonies = player.checkAchievements({ maxCombo });
     for (const ceremony of achievementCeremonies) {
       player.queueCeremony(ceremony);
+      if (ceremony.data?.achievementId && ceremony.data?.tier) {
+        void analytics.trackAchievementEarned(ceremony.data.achievementId, ceremony.data.tier);
+      }
     }
 
     // Auto-unlock modes based on level progression and queue ceremonies
@@ -571,7 +634,61 @@ function GameScreenWrapper({ route, navigation }: any) {
       ? generateShareText(grid, level, stars, score, 0, isDaily)
       : '';
 
+    // ── Firestore social layer: submit scores + sync profile ──
+    const userId = user?.uid || '';
+    const displayName = player.equippedTitle || 'Player';
+
+    // Submit daily score if this was a daily challenge
+    if (isDaily && userId) {
+      void firestoreService.submitDailyScore(userId, score, stars, level, displayName);
+    }
+
+    // Submit weekly cumulative score
+    if (userId) {
+      void firestoreService.submitWeeklyScore(userId, score, displayName);
+    }
+
+    // Sync player profile on every puzzle complete
+    if (userId) {
+      void firestoreService.syncPlayerProfile(userId, {
+        displayName,
+        level: newLevel,
+        puzzlesSolved: player.puzzlesSolved + 1,
+        totalScore: player.totalScore + score,
+        currentStreak: player.streaks.currentStreak,
+        equippedFrame: player.equippedFrame,
+        equippedTitle: player.equippedTitle,
+      });
+    }
+
+    // Fetch real friend comparison (async — update params when ready)
+    const friendIds = player.friendIds || [];
+    let friendComparison = { beaten: 0, total: 0 };
+    if (firestoreService.isAvailable() && friendIds.length > 0 && userId) {
+      firestoreService
+        .getFriendScores(userId, friendIds)
+        .then((result) => {
+          if (result.total > 0) {
+            navigation.setParams({
+              completionData: {
+                isFirstWin,
+                leveledUp,
+                newLevel,
+                difficultyTransition,
+                nextLevelPreview: !isDaily
+                  ? { level: newLevel, difficulty: getDifficultyForLevel(newLevel) }
+                  : null,
+                shareText,
+                friendComparison: result,
+              },
+            });
+          }
+        })
+        .catch(() => {});
+    }
+
     // Store completion metadata in route params for GameScreen to pick up
+    const eventMultiplierLabel = eventManager.getActiveMultiplierLabel();
     navigation.setParams({
       completionData: {
         isFirstWin,
@@ -583,23 +700,33 @@ function GameScreenWrapper({ route, navigation }: any) {
           difficulty: getDifficultyForLevel(newLevel),
         } : null,
         shareText,
-        friendComparison: { beaten: Math.floor(Math.random() * 4) + 1, total: 5 },
+        friendComparison,
+        eventMultiplierLabel,
       },
     });
-  }, [params, player, economy, navigation]);
+  }, [params, player, economy, navigation, user]);
 
   const handleNextLevel = useCallback(() => {
     try {
       const currentLevel = params.level || 0;
       const nextLevel = currentLevel + 1;
 
+      // Spend energy for next level (free modes handled internally)
+      const mode = (params.mode || 'classic') as GameMode;
+      player.useEnergy(mode);
+
       // Check if player needs a breather level
       const useBreather = player.needsBreather();
-      const config = useBreather ? getBreatherConfig(nextLevel) : getLevelConfig(nextLevel);
+      let config = useBreather ? getBreatherConfig(nextLevel) : getLevelConfig(nextLevel);
+
+      // Apply adaptive difficulty (only when not in breather mode)
+      if (!useBreather) {
+        const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+        config = adjusted.config;
+      }
 
       const seed = nextLevel * 1337 + Date.now();
       const board = generateBoard(config, seed);
-      const mode = (params.mode || 'classic') as GameMode;
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -627,30 +754,94 @@ function GameScreenWrapper({ route, navigation }: any) {
   // Extract completion data from params (set by handleComplete)
   const completionData = params.completionData || {};
 
+  // Intercept navigation to show spin prompt when free spins available
+  const handleHomeWithPrompt = useCallback(() => {
+    if (player.mysteryWheel.spinsAvailable > 0 && completionData.shareText) {
+      setPendingNavAction('home');
+      setShowSpinPrompt(true);
+    } else {
+      navigation.goBack();
+    }
+  }, [player.mysteryWheel.spinsAvailable, completionData, navigation]);
+
+  const handleNextWithPrompt = useCallback(() => {
+    if (player.mysteryWheel.spinsAvailable > 0 && completionData.shareText) {
+      setPendingNavAction('next');
+      setShowSpinPrompt(true);
+    } else {
+      handleNextLevel();
+    }
+  }, [player.mysteryWheel.spinsAvailable, completionData, handleNextLevel]);
+
+  const handleSpinPromptAccept = useCallback(() => {
+    setShowSpinPrompt(false);
+    setPendingNavAction(null);
+    // Navigate back to home, passing param to auto-open the wheel
+    navigation.navigate('HomeMain', { openWheel: true });
+  }, [navigation]);
+
+  const handleSpinPromptDismiss = useCallback(() => {
+    setShowSpinPrompt(false);
+    if (pendingNavAction === 'home') {
+      navigation.goBack();
+    } else if (pendingNavAction === 'next') {
+      handleNextLevel();
+    }
+    setPendingNavAction(null);
+  }, [pendingNavAction, navigation, handleNextLevel]);
+
   return (
-    <GameScreen
-      board={params.board}
-      level={params.level || 0}
-      isDaily={params.isDaily || false}
-      mode={params.mode || 'classic'}
-      maxMoves={params.maxMoves || 0}
-      timeLimit={params.timeLimit || 0}
-      onComplete={handleComplete}
-      onNextLevel={handleNextLevel}
-      onHome={() => navigation.goBack()}
-      isFirstWin={completionData.isFirstWin}
-      leveledUp={completionData.leveledUp}
-      newLevel={completionData.newLevel}
-      difficultyTransition={completionData.difficultyTransition}
-      nextLevelPreview={completionData.nextLevelPreview}
-      shareText={completionData.shareText}
-      friendComparison={completionData.friendComparison}
-    />
+    <View style={{ flex: 1 }}>
+      <GameScreen
+        board={params.board}
+        level={params.level || 0}
+        isDaily={params.isDaily || false}
+        mode={params.mode || 'classic'}
+        maxMoves={params.maxMoves || 0}
+        timeLimit={params.timeLimit || 0}
+        onComplete={handleComplete}
+        onNextLevel={handleNextWithPrompt}
+        onHome={handleHomeWithPrompt}
+        isFirstWin={completionData.isFirstWin}
+        leveledUp={completionData.leveledUp}
+        newLevel={completionData.newLevel}
+        difficultyTransition={completionData.difficultyTransition}
+        nextLevelPreview={completionData.nextLevelPreview}
+        shareText={completionData.shareText}
+        friendComparison={completionData.friendComparison}
+      />
+
+      {/* Post-puzzle spin prompt */}
+      {showSpinPrompt && (
+        <View style={spinPromptStyles.overlay}>
+          <View style={spinPromptStyles.card}>
+            <Text style={spinPromptStyles.icon}>{'\u{1F3B0}'}</Text>
+            <Text style={spinPromptStyles.title}>Free Spin Available!</Text>
+            <Text style={spinPromptStyles.subtitle}>
+              You have {player.mysteryWheel.spinsAvailable} spin{player.mysteryWheel.spinsAvailable !== 1 ? 's' : ''} on the Mystery Wheel
+            </Text>
+            <Pressable
+              style={({ pressed }) => [spinPromptStyles.spinButton, pressed && { transform: [{ scale: 0.96 }], opacity: 0.88 }]}
+              onPress={handleSpinPromptAccept}
+            >
+              <Text style={spinPromptStyles.spinButtonText}>SPIN NOW</Text>
+            </Pressable>
+            <Pressable
+              style={spinPromptStyles.skipButton}
+              onPress={handleSpinPromptDismiss}
+            >
+              <Text style={spinPromptStyles.skipText}>Maybe Later</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
 
 // Home main screen wrapper - uses PlayerContext instead of legacy useStorage
-function HomeMainScreen({ navigation }: any) {
+function HomeMainScreen({ route, navigation }: any) {
+  const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
   const [loading, setLoading] = useState(false);
@@ -662,14 +853,34 @@ function HomeMainScreen({ navigation }: any) {
   // Ceremony queue state
   const [activeCeremony, setActiveCeremony] = useState<CeremonyItem | null>(null);
 
+  // Pending gifts from Firestore
+  const [pendingGifts, setPendingGifts] = useState<FirestoreGift[]>([]);
+  const [claimingGift, setClaimingGift] = useState(false);
+
   // Session end reminder
   const [showSessionReminder, setShowSessionReminder] = useState(false);
+
+  // Mystery Wheel state
+  const [showMysteryWheel, setShowMysteryWheel] = useState(false);
+  const [freeSpinToast, setFreeSpinToast] = useState(false);
+  const prevSpinsRef = React.useRef(player.mysteryWheel.spinsAvailable);
 
   // Check for comeback rewards and process ceremonies on mount
   useEffect(() => {
     if (player.loaded) {
+      // Initialize event manager with saved progress
+      eventManager.init(player.eventProgress);
+
       void analytics.startSession('app_launch');
-      void analytics.setUserProperty('player_stage', playerStageFromPuzzles(player.puzzlesSolved));
+      void analytics.trackAppOpen();
+      void analytics.updateUserProperties({
+        player_level: player.currentLevel,
+        total_puzzles_solved: player.puzzlesSolved,
+        days_since_install: analytics.getDaysSinceInstall(),
+        player_stage: playerStageFromPuzzles(player.puzzlesSolved),
+        is_payer: false, // Updated when IAP completes
+        total_spend: 0,
+      });
       void analytics.logEvent('streak_count', {
         currentStreak: player.streaks.currentStreak,
         bestStreak: player.streaks.bestStreak,
@@ -696,12 +907,43 @@ function HomeMainScreen({ navigation }: any) {
       player.generateDailyMissions();
       player.initWeeklyGoals();
 
-      // Initialize notifications and schedule reminders
+      // Recompute player segments on session start
+      const totalSpendCents = economy.purchaseHistory.reduce(
+        (sum: number, p: { amount: number }) => sum + Math.round(p.amount * 100), 0,
+      );
+      player.recomputeSegments(totalSpendCents, 0);
+
+      // Initialize notifications with segment-personalized scheduling
       void notificationManager.init().then(() => {
-        notificationManager.scheduleStreakReminder(player.streaks.currentStreak);
-        notificationManager.scheduleDailyChallenge();
-        notificationManager.scheduleComebackReminder();
+        const notifConfig = getPersonalizedNotifications(player.segments);
+        if (notifConfig.enabledCategories.includes('streak_reminder')) {
+          notificationManager.scheduleStreakReminder(player.streaks.currentStreak);
+        }
+        if (notifConfig.enabledCategories.includes('daily_challenge')) {
+          notificationManager.scheduleDailyChallenge();
+        }
+        if (notifConfig.enabledCategories.includes('comeback')) {
+          notificationManager.scheduleComebackReminder();
+        }
       });
+
+      // ── Firestore social: sync profile + check gifts on app open ──
+      const userId = user?.uid || '';
+      if (userId && firestoreService.isAvailable()) {
+        void firestoreService.syncPlayerProfile(userId, {
+          displayName: player.equippedTitle || 'Player',
+          level: player.currentLevel,
+          puzzlesSolved: player.puzzlesSolved,
+          totalScore: player.totalScore,
+          currentStreak: player.streaks.currentStreak,
+          equippedFrame: player.equippedFrame,
+          equippedTitle: player.equippedTitle,
+        });
+        void firestoreService.generateFriendCode(userId);
+        void firestoreService.getPendingGifts(userId).then((gifts) => {
+          if (gifts.length > 0) setPendingGifts(gifts);
+        });
+      }
 
       // Process pending ceremonies
       if (!showWelcomeBack && player.pendingCeremonies.length > 0) {
@@ -722,15 +964,126 @@ function HomeMainScreen({ navigation }: any) {
     return () => sub.remove();
   }, []);
 
+  // Auto-open wheel when navigating back from post-puzzle spin prompt
+  useEffect(() => {
+    if (route?.params?.openWheel) {
+      setTimeout(() => setShowMysteryWheel(true), 400);
+      // Clear the param so it doesn't re-trigger
+      navigation.setParams({ openWheel: undefined });
+    }
+  }, [route?.params?.openWheel, navigation]);
+
+  // Detect when a free spin is awarded and show toast
+  useEffect(() => {
+    if (player.loaded && player.mysteryWheel.spinsAvailable > prevSpinsRef.current) {
+      setFreeSpinToast(true);
+      setTimeout(() => setFreeSpinToast(false), 3500);
+    }
+    prevSpinsRef.current = player.mysteryWheel.spinsAvailable;
+  }, [player.mysteryWheel.spinsAvailable, player.loaded]);
+
+  // Mystery Wheel handlers
+  const handleWheelSpin = useCallback(({ segment, updatedState }: { segment: WheelSegment; updatedState: MysteryWheelState }) => {
+    // Update wheel state in player context
+    player.updateMysteryWheel(updatedState);
+
+    // Award rewards from the spin result
+    const reward = segment.reward;
+    if (reward.coins) economy.addCoins(reward.coins);
+    if (reward.gems) economy.addGems(reward.gems);
+    if (reward.hints) economy.addHintTokens(reward.hints);
+    if (reward.rareTile) {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const randomLetter = letters[Math.floor(Math.random() * letters.length)];
+      player.addRareTile(randomLetter);
+    }
+    if (reward.booster) {
+      // Boosters are per-puzzle, so award via cosmetics/unlocks tracking
+      // For now, award equivalent hint tokens as placeholder value
+      economy.addHintTokens(1);
+    }
+
+    // Queue jackpot ceremony for rare+ results
+    if (segment.rarity === 'rare' || segment.rarity === 'epic' || segment.rarity === 'legendary') {
+      player.queueCeremony({
+        type: 'mystery_wheel_jackpot',
+        data: {
+          icon: segment.icon,
+          label: segment.label,
+          rewardLabel: segment.label,
+        },
+      });
+    }
+  }, [player, economy]);
+
+  const handleWheelBuySpin = useCallback((cost: number, count: number) => {
+    const spent = economy.spendGems(cost);
+    if (spent) {
+      player.updateMysteryWheel({
+        spinsAvailable: player.mysteryWheel.spinsAvailable + count,
+      });
+    }
+  }, [economy, player]);
+
+  const handleWheelDismiss = useCallback(() => {
+    setShowMysteryWheel(false);
+  }, []);
+
+  // ── Gift claiming ──
+  const handleClaimAllGifts = useCallback(async () => {
+    if (pendingGifts.length === 0 || claimingGift) return;
+    setClaimingGift(true);
+    let totalHints = 0;
+    let totalTiles = 0;
+    for (const gift of pendingGifts) {
+      const claimed = await firestoreService.claimGift(gift.id);
+      if (claimed || !firestoreService.isAvailable()) {
+        if (gift.type === 'hint') {
+          totalHints += gift.amount;
+        } else {
+          totalTiles += gift.amount;
+        }
+      }
+    }
+    if (totalHints > 0) economy.addHintTokens(totalHints);
+    if (totalTiles > 0) {
+      for (let i = 0; i < totalTiles; i++) {
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+      }
+    }
+    setPendingGifts([]);
+    setClaimingGift(false);
+    const parts: string[] = [];
+    if (totalHints > 0) parts.push(`${totalHints} hint${totalHints > 1 ? 's' : ''}`);
+    if (totalTiles > 0) parts.push(`${totalTiles} rare tile${totalTiles > 1 ? 's' : ''}`);
+    if (parts.length > 0) {
+      Alert.alert('Gifts Claimed!', `You received ${parts.join(' and ')} from friends!`);
+    }
+  }, [pendingGifts, claimingGift, economy, player]);
+
+  // Track when a ceremony is displayed
+  const ceremonyShownAtRef = useRef<number>(0);
+  useEffect(() => {
+    if (activeCeremony) {
+      ceremonyShownAtRef.current = Date.now();
+      void analytics.trackCeremonyShown(activeCeremony.type);
+    }
+  }, [activeCeremony]);
+
   // Process next ceremony when current one is dismissed
   const handleDismissCeremony = useCallback(() => {
+    if (activeCeremony) {
+      const durationMs = Date.now() - ceremonyShownAtRef.current;
+      void analytics.trackCeremonyDismissed(activeCeremony.type, durationMs);
+    }
     setActiveCeremony(null);
     // Check for more ceremonies after a short delay
     setTimeout(() => {
       const next = player.popCeremony();
       if (next) setActiveCeremony(next);
     }, 300);
-  }, [player]);
+  }, [player, activeCeremony]);
 
   // Convert PlayerContext data to PlayerProgress for HomeScreen
   const progress: PlayerProgress = {
@@ -752,14 +1105,46 @@ function HomeMainScreen({ navigation }: any) {
     : player.puzzlesSolved <= 30 ? 'established'
     : 'veteran';
 
-  // Personalized recommendation
+  // Segment-driven personalized home content
+  const segmentHomeContent = React.useMemo(
+    () => getPersonalizedHomeContent(player.segments),
+    [player.segments],
+  );
+
+  // Segment-driven welcome back message for at-risk/lapsed/returned
+  const segmentWelcomeMessage = React.useMemo(
+    () => getWelcomeBackMessage(player.segments),
+    [player.segments],
+  );
+
+  // Personalized recommendation (segment-aware)
   const recommendation = React.useMemo(() => {
     if (playerStage === 'new') return null;
 
-    // Suggest untried modes
+    // Use segment-recommended mode as primary suggestion
+    const segmentMode = getRecommendedMode(player.segments);
+    const segmentConfig = MODE_CONFIGS[segmentMode];
+
+    // Suggest untried modes (prefer segment-recommended if untried)
     const untriedModes = player.unlockedModes.filter(
       (m: string) => !player.modeStats[m] || player.modeStats[m].played === 0
     );
+
+    // If segment-recommended mode is unlocked and untried, suggest it first
+    if (untriedModes.includes(segmentMode) && segmentConfig) {
+      return {
+        icon: segmentConfig.icon || '🎮',
+        title: `Try ${segmentConfig.name} Mode`,
+        subtitle: player.segments.motivations.includes('competitor')
+          ? 'Compete against others in this mode!'
+          : player.segments.motivations.includes('achiever')
+          ? 'Perfect for earning stars and achievements!'
+          : 'You unlocked this mode — give it a go!',
+        action: () => navigation.navigate('Play'),
+      };
+    }
+
+    // Fallback: any untried mode
     if (untriedModes.length > 0) {
       const modeId = untriedModes[0];
       const config = MODE_CONFIGS[modeId as GameMode];
@@ -777,8 +1162,20 @@ function HomeMainScreen({ navigation }: any) {
       return {
         icon: '☀️',
         title: 'Daily Challenge',
-        subtitle: 'Same puzzle for everyone — compete globally!',
+        subtitle: player.segments.motivations.includes('competitor')
+          ? "Beat your friends on today's puzzle!"
+          : 'Same puzzle for everyone — compete globally!',
         action: () => navigation.navigate('Play' as never),
+      };
+    }
+
+    // Segment-driven default recommendation
+    if (player.segments.motivations.includes('completionist')) {
+      return {
+        icon: '📚',
+        title: 'Complete Your Collection',
+        subtitle: "Check your atlas for words you haven't found yet!",
+        action: () => navigation.navigate('Collections' as never),
       };
     }
 
@@ -789,23 +1186,38 @@ function HomeMainScreen({ navigation }: any) {
       subtitle: 'Try a harder difficulty to earn more stars!',
       action: () => navigation.navigate('Play' as never),
     };
-  }, [playerStage, player.unlockedModes, player.modeStats, player.dailyCompleted, navigation]);
+  }, [playerStage, player.segments, player.unlockedModes, player.modeStats, player.dailyCompleted, navigation]);
 
   const startGame = useCallback(
     (difficulty?: Difficulty) => {
-      // Lives check - classic mode requires a life
-      if (economy.lives <= 0) {
+      // Energy check — classic mode costs 1 energy
+      const energyInfo = player.getEnergyDisplay();
+      if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
+        // Truly out of energy + bonus plays — show friendly "take a break" prompt
+        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
         Alert.alert(
-          'Out of Lives!',
-          `Your next life refills in ${Math.ceil(economy.getTimeUntilNextLife() / 60000)} minutes.\n\nRefill all lives for 10 gems?`,
+          'Take a Break!',
+          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
           [
             { text: 'Wait', style: 'cancel' },
-            { text: 'Refill (10 \u{1F48E})', onPress: () => { economy.refillLives(); } },
+            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            {
+              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
+              onPress: () => {
+                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+                  player.refillEnergy('gems');
+                } else {
+                  Alert.alert('Not Enough Gems', 'Visit the shop to get more gems.');
+                }
+              },
+            },
           ]
         );
         return;
       }
-      economy.spendLife();
+
+      // Spend energy (handles free modes, bonus plays internally)
+      player.useEnergy('classic');
 
       setLoading(true);
       setTimeout(() => {
@@ -817,6 +1229,9 @@ function HomeMainScreen({ navigation }: any) {
             config = getBreatherConfig(player.currentLevel);
           } else {
             config = getLevelConfig(player.currentLevel);
+            // Apply adaptive difficulty adjustment (invisible to player)
+            const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+            config = adjusted.config;
           }
           const level = difficulty ? 0 : player.currentLevel;
           const board = generateBoard(config, level * 1337 + Date.now());
@@ -832,19 +1247,9 @@ function HomeMainScreen({ navigation }: any) {
   );
 
   const startDaily = useCallback(() => {
-    // Lives check for daily mode
-    if (economy.lives <= 0) {
-      Alert.alert(
-        'Out of Lives!',
-        `Your next life refills in ${Math.ceil(economy.getTimeUntilNextLife() / 60000)} minutes.\n\nRefill all lives for 10 gems?`,
-        [
-          { text: 'Wait', style: 'cancel' },
-          { text: 'Refill (10 \u{1F48E})', onPress: () => { economy.refillLives(); } },
-        ]
-      );
-      return;
-    }
-    economy.spendLife();
+    // Daily mode is free — no energy cost (per ENERGY.FREE_MODES)
+    // Just track the use for analytics
+    player.useEnergy('daily');
 
     setLoading(true);
     setTimeout(() => {
@@ -900,6 +1305,24 @@ function HomeMainScreen({ navigation }: any) {
           <ActivityIndicator size="large" color={COLORS.accent} />
         </View>
       )}
+      {/* Pending gifts banner */}
+      {pendingGifts.length > 0 && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.giftBanner,
+            pressed && { opacity: 0.8 },
+          ]}
+          onPress={handleClaimAllGifts}
+        >
+          <Text style={styles.giftBannerIcon}>{'🎁'}</Text>
+          <View style={styles.giftBannerTextContainer}>
+            <Text style={styles.giftBannerTitle}>
+              You have {pendingGifts.length} gift{pendingGifts.length > 1 ? 's' : ''}!
+            </Text>
+            <Text style={styles.giftBannerSubtext}>Tap to claim</Text>
+          </View>
+        </Pressable>
+      )}
       <HomeScreen
         progress={progress}
         onPlay={startGame}
@@ -907,6 +1330,9 @@ function HomeMainScreen({ navigation }: any) {
         onResetProgress={handleReset}
         onOpenShop={() => navigation.navigate('Shop')}
         onOpenSettings={() => navigation.navigate('Settings')}
+        onOpenWheel={() => setShowMysteryWheel(true)}
+        mysteryWheelSpins={player.mysteryWheel.spinsAvailable}
+        freeSpinToast={freeSpinToast}
         onBuyDeal={(deal) => {
           const canAfford = economy.canAfford(deal.currency, deal.salePrice);
           if (!canAfford) {
@@ -936,6 +1362,16 @@ function HomeMainScreen({ navigation }: any) {
         weeklyGoals={player.weeklyGoals}
         dailyMissions={player.missions.dailyMissions}
         recommendation={recommendation}
+        segmentHomeContent={segmentHomeContent}
+        segmentWelcomeMessage={segmentWelcomeMessage}
+        activeEventBanners={eventManager.getActiveEvents().map(e => ({
+          id: e.id,
+          name: e.name,
+          icon: e.icon,
+          label: e.type === 'weekend_blitz' ? 'WEEKEND BLITZ' : e.type === 'mini' ? 'MINI EVENT' : 'EVENT',
+          color: e.type === 'weekend_blitz' ? COLORS.orange : e.type === 'mini' ? COLORS.teal : COLORS.accent,
+        }))}
+        onOpenEvents={() => navigation.navigate('Play', { screen: 'Event' })}
       />
       {/* Welcome Back Modal */}
       {showWelcomeBack && (
@@ -980,6 +1416,17 @@ function HomeMainScreen({ navigation }: any) {
             </Pressable>
           </Animated.View>
         </View>
+      )}
+
+      {/* Mystery Wheel Overlay */}
+      {showMysteryWheel && (
+        <MysteryWheel
+          wheelState={player.mysteryWheel}
+          gems={economy.gems}
+          onSpin={handleWheelSpin}
+          onBuySpin={handleWheelBuySpin}
+          onDismiss={handleWheelDismiss}
+        />
       )}
 
       {/* Ceremony modals */}
@@ -1179,6 +1626,8 @@ function AppContent() {
   const player = usePlayer();
   const settings = useSettings();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const navigationRef = useRef<NavigationContainerRef<any>>(null);
+  const routeNameRef = useRef<string | undefined>();
 
   useEffect(() => {
     if (!settings.loaded) return;
@@ -1194,6 +1643,26 @@ function AppContent() {
     }
   }, [player.loaded, player.tutorialComplete]);
 
+  // Track screen views on navigation state changes
+  const handleNavigationReady = useCallback(() => {
+    const currentRoute = navigationRef.current?.getCurrentRoute();
+    routeNameRef.current = currentRoute?.name;
+    if (currentRoute?.name) {
+      void analytics.trackScreenView(currentRoute.name);
+    }
+  }, []);
+
+  const handleNavigationStateChange = useCallback(() => {
+    const currentRoute = navigationRef.current?.getCurrentRoute();
+    const currentRouteName = currentRoute?.name;
+    const previousRouteName = routeNameRef.current;
+
+    if (currentRouteName && currentRouteName !== previousRouteName) {
+      void analytics.trackScreenView(currentRouteName);
+    }
+    routeNameRef.current = currentRouteName;
+  }, []);
+
   if (!player.loaded) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -1204,6 +1673,9 @@ function AppContent() {
 
   return (
     <NavigationContainer
+      ref={navigationRef}
+      onReady={handleNavigationReady}
+      onStateChange={handleNavigationStateChange}
       theme={{
         dark: true,
         colors: {
@@ -1286,6 +1758,69 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+
+const spinPromptStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5,7,20,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 150,
+    padding: 32,
+  },
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.purple + '30',
+    maxWidth: 320,
+    width: '100%',
+    ...SHADOWS.strong,
+  },
+  icon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  title: {
+    color: COLORS.gold,
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  subtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  spinButton: {
+    backgroundColor: COLORS.purple,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    marginBottom: 12,
+    ...SHADOWS.medium,
+  },
+  spinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    letterSpacing: 2,
+  },
+  skipButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+  },
+  skipText: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -1389,5 +1924,37 @@ const styles = StyleSheet.create({
     color: COLORS.bg,
     fontSize: 16,
     letterSpacing: 3,
+  },
+  giftBanner: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginHorizontal: 16,
+    marginTop: 60,
+    marginBottom: -52,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    zIndex: 10,
+  },
+  giftBannerIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  giftBannerTextContainer: {
+    flex: 1,
+  },
+  giftBannerTitle: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 14,
+    color: COLORS.purple,
+  },
+  giftBannerSubtext: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 1,
   },
 });

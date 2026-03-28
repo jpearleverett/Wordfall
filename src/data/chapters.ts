@@ -526,6 +526,15 @@ export function getChapterForLevel(level: number): Chapter | undefined {
     }
   }
 
-  // Past authored content: clamp to final chapter.
-  return CHAPTERS[CHAPTERS.length - 1];
+  // Past authored content: use procedural chapter generation
+  // Import dynamically to avoid circular dependency
+  const proceduralLevel = level - cumulativeLevels;
+  const chapterId = CHAPTERS.length + 1 + Math.floor(proceduralLevel / 15);
+  try {
+    const { generateProceduralChapter } = require('../engine/puzzleGenerator');
+    return generateProceduralChapter(chapterId);
+  } catch {
+    // Fallback: clamp to final chapter
+    return CHAPTERS[CHAPTERS.length - 1];
+  }
 }

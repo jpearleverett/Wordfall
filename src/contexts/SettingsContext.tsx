@@ -13,6 +13,13 @@ interface Settings {
   premiumPass: boolean;
   showTutorial: boolean;
   language: string;
+  // Parental controls
+  spendingLimitEnabled: boolean;
+  monthlySpendingLimit: number;
+  requirePurchasePin: boolean;
+  purchasePin: string;
+  monthlySpent: number;
+  monthlySpentResetDate: string;
 }
 
 interface SettingsContextType extends Settings {
@@ -31,6 +38,13 @@ const DEFAULT_SETTINGS: Settings = {
   premiumPass: false,
   showTutorial: true,
   language: 'en',
+  // Parental controls
+  spendingLimitEnabled: false,
+  monthlySpendingLimit: 25,
+  requirePurchasePin: false,
+  purchasePin: '',
+  monthlySpent: 0,
+  monthlySpentResetDate: '',
 };
 
 const STORAGE_KEY = '@wordfall_settings';

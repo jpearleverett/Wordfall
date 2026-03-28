@@ -41,6 +41,12 @@ interface PuzzleCompleteProps {
   onHome: () => void;
   onRetry: () => void;
   onShare?: () => void;
+  onDoubleReward?: () => void;
+  rewardDoubled?: boolean;
+  showAdOption?: boolean;
+  onChallengeFrend?: () => void;
+  onWatchReplay?: () => void;
+  onShareSolve?: () => void;
 }
 
 const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
@@ -299,6 +305,12 @@ export function PuzzleComplete({
   onHome,
   onRetry,
   onShare,
+  onDoubleReward,
+  rewardDoubled = false,
+  showAdOption = false,
+  onChallengeFrend,
+  onWatchReplay,
+  onShareSolve,
 }: PuzzleCompleteProps) {
   const { height: screenHeight } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -574,6 +586,46 @@ export function PuzzleComplete({
                     </LinearGradient>
                   )}
                 </View>
+                {/* Double rewards ad button */}
+                {showAdOption && !rewardDoubled && onDoubleReward && (
+                  <Pressable
+                    style={({ pressed }) => [{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: 'rgba(0, 255, 135, 0.12)',
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: 'rgba(0, 255, 135, 0.35)',
+                      marginTop: 8,
+                    }, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
+                    onPress={onDoubleReward}
+                  >
+                    <Text style={{ color: COLORS.green, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5 }}>
+                      {'\uD83C\uDFAC'} Watch Ad to DOUBLE Rewards
+                    </Text>
+                  </Pressable>
+                )}
+                {rewardDoubled && (
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(255, 184, 0, 0.12)',
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 184, 0, 0.35)',
+                    marginTop: 8,
+                  }}>
+                    <Text style={{ color: COLORS.gold, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5 }}>
+                      {'\u2728'} Rewards DOUBLED!
+                    </Text>
+                  </View>
+                )}
               </Animated.View>
 
               {/* First Win / Level Up / Difficulty Transition */}
@@ -677,6 +729,34 @@ export function PuzzleComplete({
                   <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
                     <Text style={styles.secondaryButtonText}>Home</Text>
                   </Pressable>
+                </View>
+
+                {/* Replay & Challenge row */}
+                <View style={styles.secondaryRow}>
+                  {onWatchReplay && (
+                    <Pressable
+                      style={({ pressed }) => [styles.secondaryButton, styles.replayButton, pressed && styles.buttonPressed]}
+                      onPress={onWatchReplay}
+                    >
+                      <Text style={styles.replayButtonText}>{'\u25B6'} Replay</Text>
+                    </Pressable>
+                  )}
+                  {onShareSolve && (
+                    <Pressable
+                      style={({ pressed }) => [styles.secondaryButton, styles.shareSolveButton, pressed && styles.buttonPressed]}
+                      onPress={onShareSolve}
+                    >
+                      <Text style={styles.shareSolveButtonText}>Share Solve</Text>
+                    </Pressable>
+                  )}
+                  {onChallengeFrend && (
+                    <Pressable
+                      style={({ pressed }) => [styles.challengeButton, pressed && styles.buttonPressed]}
+                      onPress={onChallengeFrend}
+                    >
+                      <Text style={styles.challengeButtonText}>{'\u2694\uFE0F'} Challenge</Text>
+                    </Pressable>
+                  )}
                 </View>
               </Animated.View>
             </ScrollView>
@@ -1077,6 +1157,36 @@ const styles = StyleSheet.create({
   },
   shareButtonText: {
     color: COLORS.accent,
+    fontFamily: FONTS.display,
+  },
+  replayButton: {
+    borderColor: COLORS.teal + '30',
+    backgroundColor: COLORS.teal + '10',
+  },
+  replayButtonText: {
+    color: COLORS.teal,
+    fontFamily: FONTS.display,
+  },
+  shareSolveButton: {
+    borderColor: COLORS.accent + '30',
+    backgroundColor: COLORS.accent + '10',
+  },
+  shareSolveButtonText: {
+    color: COLORS.accent,
+    fontFamily: FONTS.display,
+  },
+  challengeButton: {
+    flex: 1,
+    backgroundColor: COLORS.purple + '15',
+    borderRadius: 18,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.purple + '40',
+    ...SHADOWS.soft,
+  },
+  challengeButtonText: {
+    color: COLORS.purple,
     fontFamily: FONTS.display,
   },
 });

@@ -4,15 +4,17 @@
  * Implements the "external trigger" layer of the Hooked Model.
  * Without push notifications, retention relies entirely on player habit (pull-only).
  *
- * SETUP REQUIRED:
- * 1. Run: npx expo install expo-notifications expo-device expo-constants
- * 2. Add "expo-notifications" to app.json plugins array
- * 3. For Android: Add Firebase Cloud Messaging (FCM) credentials
- * 4. For iOS: Configure Apple Push Notification service (APNs) in Apple Developer account
- *
  * This service provides both local notifications (scheduled on-device, no server needed)
  * and scaffolding for remote push notifications (requires Firebase Cloud Functions).
+ *
+ * For Android: Add Firebase Cloud Messaging (FCM) credentials
+ * For iOS: Configure Apple Push Notification service (APNs) in Apple Developer account
  */
+
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -117,10 +119,41 @@ const NOTIFICATION_TEMPLATES: Record<NotificationCategory, { titles: string[]; b
   },
 };
 
+// ─── Android Notification Channel ─────────────────────────────────────────────
+
+const ANDROID_CHANNEL_ID = 'wordfall-default';
+
+async function setupAndroidChannel(): Promise<void> {
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+      name: 'Wordfall',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#00d4ff',
+      sound: 'default',
+    });
+  }
+}
+
+// ─── Foreground Notification Handler ──────────────────────────────────────────
+
+// Configure how notifications are handled when the app is in the foreground.
+// This must be called before any notifications are received.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
 // ─── Notification Manager ──────────────────────────────────────────────────────
 
 class NotificationManager {
   private initialized = false;
+  private permissionGranted = false;
   private expoPushToken: string | null = null;
   private scheduledIds: Map<string, string> = new Map(); // category -> notification ID
 
@@ -128,49 +161,60 @@ class NotificationManager {
    * Initialize notification permissions and token.
    * Call this once on app startup.
    *
-   * IMPORTANT: This is a scaffold. Full implementation requires:
-   * - expo-notifications package installed
-   * - expo-device for device checks
-   * - expo-constants for project ID
-   * Replace the placeholder code below with actual Expo Notifications API calls.
+   * Gracefully handles permission denial -- returns false and skips all
+   * future scheduling calls without crashing.
    */
   async init(): Promise<boolean> {
     try {
-      // Placeholder — replace with actual implementation after installing expo-notifications:
-      //
-      // import * as Notifications from 'expo-notifications';
-      // import * as Device from 'expo-device';
-      // import Constants from 'expo-constants';
-      //
-      // if (!Device.isDevice) return false;
-      //
-      // const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      // let finalStatus = existingStatus;
-      // if (existingStatus !== 'granted') {
-      //   const { status } = await Notifications.requestPermissionsAsync();
-      //   finalStatus = status;
-      // }
-      // if (finalStatus !== 'granted') return false;
-      //
-      // const token = await Notifications.getExpoPushTokenAsync({
-      //   projectId: Constants.expirationDetails?.projectId,
-      // });
-      // this.expoPushToken = token.data;
-      //
-      // // Configure notification handler
-      // Notifications.setNotificationHandler({
-      //   handleNotification: async () => ({
-      //     shouldShowAlert: true,
-      //     shouldPlaySound: true,
-      //     shouldSetBadge: true,
-      //   }),
-      // });
+      // Physical device check -- push tokens are unavailable on simulators
+      if (!Device.isDevice) {
+        console.log('[Notifications] Not a physical device, skipping push token registration');
+        // Still allow local notifications on simulator for dev/testing
+      }
+
+      // Set up Android notification channel (required for Android 8+)
+      await setupAndroidChannel();
+
+      // Request permissions
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        console.log('[Notifications] Permission denied by user — notifications disabled');
+        this.initialized = true;
+        this.permissionGranted = false;
+        return false;
+      }
+
+      this.permissionGranted = true;
+
+      // Get Expo push token for remote notifications (physical devices only)
+      if (Device.isDevice) {
+        try {
+          const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+          const tokenData = await Notifications.getExpoPushTokenAsync(
+            projectId ? { projectId } : undefined,
+          );
+          this.expoPushToken = tokenData.data;
+          console.log('[Notifications] Push token:', this.expoPushToken);
+        } catch (tokenError) {
+          // Push token failure is non-fatal -- local notifications still work
+          console.warn('[Notifications] Failed to get push token (local notifications still work):', tokenError);
+        }
+      }
 
       this.initialized = true;
-      console.log('[Notifications] Initialized (scaffold mode)');
+      console.log('[Notifications] Initialized successfully');
       return true;
     } catch (error) {
       console.warn('[Notifications] Init failed:', error);
+      this.initialized = true; // Mark initialized so we don't retry
+      this.permissionGranted = false;
       return false;
     }
   }
@@ -183,7 +227,7 @@ class NotificationManager {
     trigger: NotificationTrigger,
     templateVars?: Record<string, string | number>,
   ): Promise<string | null> {
-    if (!this.initialized) return null;
+    if (!this.initialized || !this.permissionGranted) return null;
 
     const template = NOTIFICATION_TEMPLATES[category];
     const titleIdx = Math.floor(Math.random() * template.titles.length);
@@ -201,34 +245,57 @@ class NotificationManager {
     }
 
     try {
-      // Placeholder — replace with actual Expo Notifications scheduling:
-      //
-      // import * as Notifications from 'expo-notifications';
-      //
-      // // Cancel existing notification for this category
-      // const existingId = this.scheduledIds.get(category);
-      // if (existingId) {
-      //   await Notifications.cancelScheduledNotificationAsync(existingId);
-      // }
-      //
-      // const expoTrigger = trigger.type === 'timeInterval'
-      //   ? { seconds: trigger.seconds, repeats: trigger.repeats }
-      //   : trigger.type === 'daily'
-      //   ? { hour: trigger.hour, minute: trigger.minute, repeats: true }
-      //   : { weekday: trigger.weekday, hour: trigger.hour, minute: trigger.minute, repeats: true };
-      //
-      // const id = await Notifications.scheduleNotificationAsync({
-      //   content: { title, body, data: { category } },
-      //   trigger: expoTrigger,
-      // });
-      //
-      // this.scheduledIds.set(category, id);
-      // return id;
+      // Cancel existing notification for this category to avoid duplicates
+      const existingId = this.scheduledIds.get(category);
+      if (existingId) {
+        await Notifications.cancelScheduledNotificationAsync(existingId).catch(() => {
+          // Ignore cancel errors for already-fired or expired notifications
+        });
+      }
 
-      const mockId = `notif_${category}_${Date.now()}`;
-      this.scheduledIds.set(category, mockId);
-      console.log(`[Notifications] Scheduled: ${title} — ${body}`);
-      return mockId;
+      // Build the expo-notifications trigger object
+      const channelId = Platform.OS === 'android' ? ANDROID_CHANNEL_ID : undefined;
+      let expoTrigger: Notifications.NotificationTriggerInput;
+
+      if (trigger.type === 'timeInterval') {
+        expoTrigger = {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: trigger.seconds,
+          repeats: trigger.repeats ?? false,
+          channelId,
+        };
+      } else if (trigger.type === 'daily') {
+        expoTrigger = {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: trigger.hour,
+          minute: trigger.minute,
+          channelId,
+        };
+      } else {
+        // weekly
+        expoTrigger = {
+          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+          weekday: trigger.weekday,
+          hour: trigger.hour,
+          minute: trigger.minute,
+          channelId,
+        };
+      }
+
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: { category },
+          sound: 'default',
+          ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
+        },
+        trigger: expoTrigger,
+      });
+
+      this.scheduledIds.set(category, id);
+      console.log(`[Notifications] Scheduled (${category}): ${title} — ${body}`);
+      return id;
     } catch (error) {
       console.warn('[Notifications] Schedule failed:', error);
       return null;
@@ -242,8 +309,11 @@ class NotificationManager {
     const existingId = this.scheduledIds.get(category);
     if (!existingId) return;
 
-    // Placeholder:
-    // await Notifications.cancelScheduledNotificationAsync(existingId);
+    try {
+      await Notifications.cancelScheduledNotificationAsync(existingId);
+    } catch {
+      // Notification may have already fired or been dismissed
+    }
 
     this.scheduledIds.delete(category);
     console.log(`[Notifications] Cancelled: ${category}`);
@@ -253,8 +323,11 @@ class NotificationManager {
    * Cancel all scheduled notifications.
    */
   async cancelAll(): Promise<void> {
-    // Placeholder:
-    // await Notifications.cancelAllScheduledNotificationsAsync();
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+    } catch {
+      // Ignore errors
+    }
 
     this.scheduledIds.clear();
     console.log('[Notifications] All cancelled');
@@ -305,6 +378,33 @@ class NotificationManager {
    */
   getExpoPushToken(): string | null {
     return this.expoPushToken;
+  }
+
+  /**
+   * Whether notification permissions were granted.
+   */
+  isPermissionGranted(): boolean {
+    return this.permissionGranted;
+  }
+
+  /**
+   * Add a listener for when a notification is received while the app is foregrounded.
+   * Returns a subscription that should be removed on cleanup.
+   */
+  addForegroundListener(
+    callback: (notification: Notifications.Notification) => void,
+  ): Notifications.Subscription {
+    return Notifications.addNotificationReceivedListener(callback);
+  }
+
+  /**
+   * Add a listener for when the user taps a notification.
+   * Returns a subscription that should be removed on cleanup.
+   */
+  addResponseListener(
+    callback: (response: Notifications.NotificationResponse) => void,
+  ): Notifications.Subscription {
+    return Notifications.addNotificationResponseReceivedListener(callback);
   }
 }
 

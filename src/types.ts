@@ -79,6 +79,8 @@ export interface GameState {
     smartShuffle: number;
   };
   lastInvalidTap: CellPosition | null;
+  solveSequence: SolveStep[];
+  puzzleStartTime: number;
 }
 
 export type GameAction =
@@ -289,15 +291,18 @@ export interface FriendChallenge {
   id: string;
   challengerId: string;
   challengerName: string;
-  challengeeId: string;
-  challengeeName: string;
-  puzzleSeed: number;
-  difficulty: Difficulty;
-  challengerScore?: number;
-  challengeeScore?: number;
-  status: 'pending' | 'active' | 'completed';
+  challengerScore: number;
+  challengerStars: number;
+  challengerTime: number;
+  level: number;
+  seed: number; // board seed for identical puzzle
+  mode: GameMode;
+  boardConfig: BoardConfig;
   createdAt: string;
-  expiresAt: string;
+  expiresAt: string; // 7 days
+  status: 'pending' | 'completed' | 'expired';
+  respondentScore?: number;
+  respondentStars?: number;
 }
 
 export interface LeaderboardEntry {
@@ -408,7 +413,10 @@ export type IAPProductId =
   | 'daily_value_pack'
   | 'chapter_bundle'
   | 'premium_pass'
-  | 'ad_removal';
+  | 'ad_removal'
+  | 'gems_50'
+  | 'gems_250'
+  | 'gems_500';
 
 export interface ShopOffer {
   id: string;
@@ -592,6 +600,24 @@ export interface WinStreakState {
   rewardsClaimed: number[];
 }
 
+// ============ PUZZLE ENERGY ============
+export interface PuzzleEnergyState {
+  current: number;
+  lastRegenTime: string; // ISO timestamp
+  lastResetDate: string; // YYYY-MM-DD — for daily reset
+  bonusPlaysUsed: number;
+}
+
+// ============ PLAYER METRICS (for adaptive difficulty) ============
+export interface PlayerMetrics {
+  levelAttempts: Record<number, number>;
+  averageStars: number;
+  averageCompletionTime: number;
+  consecutiveThreeStars: number;
+  recentStars: number[]; // last 20 puzzle star results
+  recentCompletionTimes: number[]; // last 20 puzzle completion times (seconds)
+}
+
 // ============ CONTEXTUAL OFFER ============
 export type ContextualOfferType =
   | 'hint_rescue'
@@ -615,18 +641,48 @@ export const DEFAULT_LIVES: LivesState = {
 };
 
 // ============ ANALYTICS ============
+// Canonical event type — kept in sync with src/services/analytics.ts AnalyticsEventName
 export type AnalyticsEvent =
+  // Core retention
+  | 'app_open'
+  | 'tutorial_step'
+  | 'tutorial_complete'
+  // Puzzle lifecycle
   | 'puzzle_start'
   | 'puzzle_complete'
   | 'puzzle_fail'
   | 'puzzle_abandon'
-  | 'daily_login'
-  | 'streak_count'
-  | 'session_start'
-  | 'session_end'
+  // In-game actions
+  | 'hint_used'
+  | 'booster_used'
+  | 'dead_end_detected'
+  // Offers & monetization
+  | 'offer_shown'
+  | 'offer_accepted'
+  | 'offer_dismissed'
+  | 'mystery_wheel_spin'
+  | 'iap_initiated'
+  | 'iap_completed'
   | 'iap_purchase'
   | 'ad_watched'
-  | 'hint_used'
+  // Progression & social
+  | 'daily_challenge_complete'
+  | 'streak_broken'
+  | 'achievement_earned'
+  | 'ceremony_shown'
+  | 'ceremony_dismissed'
+  | 'feature_unlocked'
+  | 'screen_view'
+  | 'club_joined'
+  | 'share_tapped'
+  // Session
+  | 'session_start'
+  | 'session_end'
+  // A/B testing
+  | 'experiment_assigned'
+  // Legacy / granular events
+  | 'daily_login'
+  | 'streak_count'
   | 'undo_used'
   | 'club_join'
   | 'friend_challenge_sent'
@@ -638,6 +694,29 @@ export type AnalyticsEvent =
   | 'atlas_word_found'
   | 'rare_tile_earned'
   | 'stamp_collected'
+  | 'mode_started'
   | 'mode_played'
   | 'event_participated'
-  | 'collection_completed';
+  | 'collection_completed'
+  | 'level_up';
+
+// ============ SOLVE REPLAY ============
+export interface SolveStep {
+  wordFound: string;
+  cellPositions: [number, number][];
+  gridStateBefore: string[][]; // snapshot of letters
+  gridStateAfter: string[][]; // after gravity
+  timestamp: number; // ms since puzzle start
+  score: number;
+  combo: number;
+}
+
+export interface ReplayData {
+  level: number;
+  mode: GameMode;
+  steps: SolveStep[];
+  totalScore: number;
+  stars: number;
+  totalTime: number;
+  perfectRun: boolean;
+}

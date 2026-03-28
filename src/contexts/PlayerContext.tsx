@@ -4,10 +4,17 @@ import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { CHAPTERS, getChapterForLevel } from '../data/chapters';
-import { CeremonyItem, WeeklyGoalsState } from '../types';
+import { CeremonyItem, PlayerMetrics, PuzzleEnergyState, WeeklyGoalsState } from '../types';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
-import { COLLECTION, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
+import { COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
+import { DEFAULT_PLAYER_METRICS, updatePlayerMetrics } from '../engine/difficultyAdjuster';
+import {
+  PlayerSegments,
+  DEFAULT_SEGMENTS,
+  computeSegments,
+  SegmentationInput,
+} from '../services/playerSegmentation';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -75,6 +82,12 @@ interface PlayerData {
   clubId: string | null;
   friendIds: string[];
 
+  // Friend Challenges
+  friendChallenges: {
+    sent: import('../types').FriendChallenge[];
+    received: import('../types').FriendChallenge[];
+  };
+
   // Cosmetics
   equippedTheme: string;
   equippedFrame: string;
@@ -141,6 +154,18 @@ interface PlayerData {
     lastWinDate: string | null;
     rewardsClaimed: number[];
   };
+
+  // Event Progress
+  eventProgress: Record<string, { progress: number; claimedTiers: string[]; startedAt: number }>;
+
+  // Puzzle Energy
+  puzzleEnergy: PuzzleEnergyState;
+
+  // Adaptive Difficulty Metrics
+  performanceMetrics: PlayerMetrics;
+
+  // Player Segmentation
+  segments: PlayerSegments;
 
   // Cloud sync
   lastModified: number;
@@ -222,6 +247,33 @@ interface PlayerContextType extends PlayerData {
 
   // Win Streak
   updateWinStreak: (won: boolean) => void;
+
+  // Puzzle Energy
+  useEnergy: (mode: string) => boolean;
+  refillEnergy: (method: 'ad' | 'gems') => boolean;
+  getTimeUntilNextEnergy: () => number;
+  getEnergyDisplay: () => { current: number; max: number; bonusPlaysLeft: number; isBonusMode: boolean };
+
+  // Adaptive Difficulty
+  recordPerformanceMetrics: (level: number, stars: number, completionTimeSeconds: number) => void;
+
+  // Player Segmentation
+  recomputeSegments: (totalSpendCents?: number, sharesCount?: number) => void;
+
+  // Friend Challenges
+  sendChallenge: (friendId: string, puzzleData: {
+    score: number;
+    stars: number;
+    time: number;
+    level: number;
+    seed: number;
+    mode: import('../types').GameMode;
+    boardConfig: import('../types').BoardConfig;
+  }) => import('../types').FriendChallenge;
+  respondToChallenge: (challengeId: string, score: number, stars: number) => void;
+
+  // Event Progress
+  updateEventProgress: (eventId: string, progress: number, claimedTiers?: string[]) => void;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -275,6 +327,12 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Social
   clubId: null,
   friendIds: [],
+
+  // Friend Challenges
+  friendChallenges: {
+    sent: [],
+    received: [],
+  },
 
   // Cosmetics
   equippedTheme: 'default',
@@ -345,6 +403,23 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
     rewardsClaimed: [],
   },
 
+  // Event Progress
+  eventProgress: {},
+
+  // Puzzle Energy
+  puzzleEnergy: {
+    current: ENERGY.MAX,
+    lastRegenTime: new Date().toISOString(),
+    lastResetDate: new Date().toISOString().split('T')[0],
+    bonusPlaysUsed: 0,
+  },
+
+  // Adaptive Difficulty Metrics
+  performanceMetrics: DEFAULT_PLAYER_METRICS,
+
+  // Player Segmentation
+  segments: DEFAULT_SEGMENTS,
+
   // Cloud sync
   lastModified: 0,
 };
@@ -390,6 +465,15 @@ const PlayerContext = createContext<PlayerContextType>({
   updateMysteryWheel: () => {},
   awardFreeSpin: () => {},
   updateWinStreak: () => {},
+  useEnergy: () => false,
+  refillEnergy: () => false,
+  getTimeUntilNextEnergy: () => 0,
+  getEnergyDisplay: () => ({ current: ENERGY.MAX, max: ENERGY.MAX, bonusPlaysLeft: ENERGY.BONUS_PLAYS_AFTER_ZERO, isBonusMode: false }),
+  recordPerformanceMetrics: () => {},
+  sendChallenge: () => ({ id: '', challengerId: '', challengerName: '', challengerScore: 0, challengerStars: 0, challengerTime: 0, level: 0, seed: 0, mode: 'classic' as const, boardConfig: { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 5, difficulty: 'easy' as const }, createdAt: '', expiresAt: '', status: 'pending' as const }),
+  respondToChallenge: () => {},
+  recomputeSegments: () => {},
+  updateEventProgress: () => {},
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -884,8 +968,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         lastGiftDate: today,
       };
     });
+    // Deliver via Firestore if available
+    if (success && user) {
+      import('../services/firestore').then(({ firestoreService }) => {
+        void firestoreService.sendGift(
+          user.uid,
+          data.equippedTitle || 'A friend',
+          friendId,
+          'hint',
+          1
+        );
+      });
+    }
     return success;
-  }, []);
+  }, [user, data.equippedTitle]);
 
   const sendTileGift = useCallback((friendId: string, tileLetter: string): boolean => {
     const today = getToday();
@@ -900,8 +996,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         lastGiftDate: today,
       };
     });
+    // Deliver via Firestore if available
+    if (success && user) {
+      import('../services/firestore').then(({ firestoreService }) => {
+        void firestoreService.sendGift(
+          user.uid,
+          data.equippedTitle || 'A friend',
+          friendId,
+          'tile',
+          1
+        );
+      });
+    }
     return success;
-  }, []);
+  }, [user, data.equippedTitle]);
 
   // ── Library ─────────────────────────────────────────────────────────────
 
@@ -1279,6 +1387,277 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ── Event Progress ────────────────────────────────────────────────────
+
+  const updateEventProgressCb = useCallback((eventId: string, progress: number, claimedTiers?: string[]) => {
+    setData((prev) => {
+      const existing = prev.eventProgress[eventId] || { progress: 0, claimedTiers: [], startedAt: Date.now() };
+      return {
+        ...prev,
+        eventProgress: {
+          ...prev.eventProgress,
+          [eventId]: {
+            progress: existing.progress + progress,
+            claimedTiers: claimedTiers ? [...new Set([...existing.claimedTiers, ...claimedTiers])] : existing.claimedTiers,
+            startedAt: existing.startedAt,
+          },
+        },
+      };
+    });
+  }, []);
+
+  // ── Puzzle Energy ──────────────────────────────────────────────────────
+
+  /**
+   * Compute the current energy after regeneration since last regen time,
+   * and daily reset if the date has changed.
+   */
+  const computeCurrentEnergy = useCallback((energyState: PuzzleEnergyState): PuzzleEnergyState => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+
+    let state = { ...energyState };
+
+    // Daily reset: refill to max and reset bonus plays at midnight
+    if (state.lastResetDate !== today) {
+      state = {
+        current: ENERGY.MAX,
+        lastRegenTime: now.toISOString(),
+        lastResetDate: today,
+        bonusPlaysUsed: 0,
+      };
+      return state;
+    }
+
+    // Compute regenerated energy since last regen
+    if (state.current < ENERGY.MAX) {
+      const lastRegen = new Date(state.lastRegenTime).getTime();
+      const elapsed = now.getTime() - lastRegen;
+      const regenMs = ENERGY.REGEN_MINUTES * 60 * 1000;
+      const energyGained = Math.floor(elapsed / regenMs);
+
+      if (energyGained > 0) {
+        const newCurrent = Math.min(state.current + energyGained, ENERGY.MAX);
+        const consumedTime = energyGained * regenMs;
+        state = {
+          ...state,
+          current: newCurrent,
+          lastRegenTime: newCurrent >= ENERGY.MAX
+            ? now.toISOString()
+            : new Date(lastRegen + consumedTime).toISOString(),
+        };
+      }
+    }
+
+    return state;
+  }, []);
+
+  const useEnergy = useCallback((mode: string): boolean => {
+    // Free modes cost 0 energy
+    if (ENERGY.FREE_MODES.includes(mode)) return true;
+
+    let success = false;
+    setData((prev) => {
+      const energyNow = computeCurrentEnergy(prev.puzzleEnergy);
+
+      // Has energy — spend it
+      if (energyNow.current > 0) {
+        success = true;
+        return {
+          ...prev,
+          puzzleEnergy: {
+            ...energyNow,
+            current: energyNow.current - 1,
+            lastRegenTime: energyNow.current >= ENERGY.MAX
+              ? new Date().toISOString()
+              : energyNow.lastRegenTime,
+          },
+        };
+      }
+
+      // Out of energy — allow bonus plays (soft wall, NOT hard gate)
+      if (energyNow.bonusPlaysUsed < ENERGY.BONUS_PLAYS_AFTER_ZERO) {
+        success = true;
+        return {
+          ...prev,
+          puzzleEnergy: {
+            ...energyNow,
+            bonusPlaysUsed: energyNow.bonusPlaysUsed + 1,
+          },
+        };
+      }
+
+      // Truly gated — no energy and no bonus plays left
+      return { ...prev, puzzleEnergy: energyNow };
+    });
+    return success;
+  }, [computeCurrentEnergy]);
+
+  const refillEnergy = useCallback((method: 'ad' | 'gems'): boolean => {
+    let success = false;
+    setData((prev) => {
+      const energyNow = computeCurrentEnergy(prev.puzzleEnergy);
+
+      if (method === 'ad') {
+        // Ad gives +5 energy (capped at max)
+        success = true;
+        return {
+          ...prev,
+          puzzleEnergy: {
+            ...energyNow,
+            current: Math.min(energyNow.current + ENERGY.AD_REFILL_AMOUNT, ENERGY.MAX),
+          },
+        };
+      }
+
+      // Gem refill — full refill for ENERGY.GEM_REFILL_COST gems
+      // Note: gem spending is handled by the caller (EconomyContext)
+      success = true;
+      return {
+        ...prev,
+        puzzleEnergy: {
+          ...energyNow,
+          current: ENERGY.MAX,
+          bonusPlaysUsed: 0,
+          lastRegenTime: new Date().toISOString(),
+        },
+      };
+    });
+    return success;
+  }, [computeCurrentEnergy]);
+
+  const getTimeUntilNextEnergy = useCallback((): number => {
+    const energyNow = computeCurrentEnergy(data.puzzleEnergy);
+    if (energyNow.current >= ENERGY.MAX) return 0;
+
+    const lastRegen = new Date(energyNow.lastRegenTime).getTime();
+    const regenMs = ENERGY.REGEN_MINUTES * 60 * 1000;
+    const elapsed = Date.now() - lastRegen;
+    const remaining = regenMs - (elapsed % regenMs);
+    return Math.max(0, remaining);
+  }, [data.puzzleEnergy, computeCurrentEnergy]);
+
+  const getEnergyDisplay = useCallback(() => {
+    const energyNow = computeCurrentEnergy(data.puzzleEnergy);
+    const bonusPlaysLeft = ENERGY.BONUS_PLAYS_AFTER_ZERO - energyNow.bonusPlaysUsed;
+    return {
+      current: energyNow.current,
+      max: ENERGY.MAX,
+      bonusPlaysLeft: Math.max(0, bonusPlaysLeft),
+      isBonusMode: energyNow.current <= 0 && energyNow.bonusPlaysUsed > 0,
+    };
+  }, [data.puzzleEnergy, computeCurrentEnergy]);
+
+  // ── Adaptive Difficulty Metrics ───────────────────────────────────────
+
+  const recordPerformanceMetrics = useCallback((level: number, stars: number, completionTimeSeconds: number) => {
+    setData((prev) => ({
+      ...prev,
+      performanceMetrics: updatePlayerMetrics(
+        prev.performanceMetrics,
+        level,
+        stars,
+        completionTimeSeconds,
+      ),
+    }));
+  }, []);
+
+
+  // ── Friend Challenges ────────────────────────────────────────────────
+
+  const sendChallenge = useCallback((friendId: string, puzzleData: {
+    score: number;
+    stars: number;
+    time: number;
+    level: number;
+    seed: number;
+    mode: import('../types').GameMode;
+    boardConfig: import('../types').BoardConfig;
+  }) => {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const challenge: import('../types').FriendChallenge = {
+      id: `challenge_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+      challengerId: user?.uid ?? 'local_player',
+      challengerName: data.equippedTitle || 'Player',
+      challengerScore: puzzleData.score,
+      challengerStars: puzzleData.stars,
+      challengerTime: puzzleData.time,
+      level: puzzleData.level,
+      seed: puzzleData.seed,
+      mode: puzzleData.mode,
+      boardConfig: puzzleData.boardConfig,
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      status: 'pending',
+    };
+
+    setData((prev) => ({
+      ...prev,
+      friendChallenges: {
+        ...prev.friendChallenges,
+        sent: [...prev.friendChallenges.sent, challenge],
+      },
+    }));
+
+    return challenge;
+  }, [user, data.equippedTitle]);
+
+  const respondToChallenge = useCallback((challengeId: string, score: number, stars: number) => {
+    setData((prev) => {
+      const updatedReceived = prev.friendChallenges.received.map((c) => {
+        if (c.id === challengeId) {
+          return { ...c, status: 'completed' as const, respondentScore: score, respondentStars: stars };
+        }
+        return c;
+      });
+      return {
+        ...prev,
+        friendChallenges: {
+          ...prev.friendChallenges,
+          received: updatedReceived,
+        },
+      };
+    });
+  }, []);
+
+  // ── Player Segmentation ───────────────────────────────────────────────
+
+  const recomputeSegments = useCallback((totalSpendCents: number = 0, sharesCount: number = 0) => {
+    setData((prev) => {
+      const rareTilesCount = Object.values(prev.collections.rareTiles)
+        .reduce((sum, c) => sum + c, 0);
+      const input: SegmentationInput = {
+        puzzlesSolved: prev.puzzlesSolved,
+        currentLevel: prev.currentLevel,
+        highestLevel: prev.highestLevel,
+        totalStars: prev.totalStars,
+        starsByLevel: prev.starsByLevel,
+        perfectSolves: prev.perfectSolves,
+        dailyLoginDates: prev.dailyLoginDates,
+        lastActiveDate: prev.lastActiveDate,
+        dailyCompleted: prev.dailyCompleted,
+        atlasPages: prev.collections.atlasPages,
+        rareTilesCount,
+        restoredWings: prev.restoredWings,
+        clubId: prev.clubId,
+        friendIds: prev.friendIds,
+        hintGiftsSentToday: prev.hintGiftsSentToday,
+        tileGiftsSentToday: prev.tileGiftsSentToday,
+        unlockedModes: prev.unlockedModes,
+        modeStats: prev.modeStats,
+        achievementIds: prev.achievementIds,
+        tooltipsShown: prev.tooltipsShown,
+        totalSpendCents,
+        wordsFoundTotal: prev.wordsFoundTotal,
+        modesPlayedThisWeek: prev.modesPlayedThisWeek,
+        sharesCount,
+      };
+      const segments = computeSegments(input);
+      return { ...prev, segments };
+    });
+  }, []);
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -1322,6 +1701,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         updateMysteryWheel,
         awardFreeSpin,
         updateWinStreak,
+        useEnergy,
+        refillEnergy,
+        getTimeUntilNextEnergy,
+        getEnergyDisplay,
+        recordPerformanceMetrics,
+        sendChallenge,
+        respondToChallenge,
+        recomputeSegments,
+        updateEventProgress: updateEventProgressCb,
       }}
     >
       {children}

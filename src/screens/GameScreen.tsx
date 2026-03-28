@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
+  Share,
   UIManager,
   View,
 } from 'react-native';
@@ -18,14 +19,20 @@ import { GameGrid } from '../components/Grid';
 import { WordBank } from '../components/WordBank';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
+import { ReplayViewer } from '../components/ReplayViewer';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier, INITIAL_HINTS } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 import { usePlayer } from '../contexts/PlayerContext';
+import { useEconomy } from '../contexts/EconomyContext';
 import { analytics } from '../services/analytics';
+import { generateReplayText } from '../utils/replayGenerator';
+import { ContextualOffer, OfferType } from '../components/ContextualOffer';
+import { adManager, AdRewardType } from '../services/ads';
+import { MockAdModal } from '../components/MockAdModal';
 
 if (
   Platform.OS === 'android' &&
@@ -171,6 +178,7 @@ export function GameScreen({
     foundWords,
     totalWords,
     remainingWords,
+    solveSequence,
   } = useGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
 
   const [showComplete, setShowComplete] = useState(false);
@@ -198,6 +206,171 @@ export function GameScreen({
   const undoFlashAnim = useRef(new Animated.Value(0)).current;
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
+
+  // --- Replay & Challenge state ---
+  const [showReplay, setShowReplay] = useState(false);
+
+  // --- Contextual Offer state ---
+  const economy = useEconomy();
+  const [activeOffer, setActiveOffer] = useState<OfferType | null>(null);
+  const offerShownThisLevel = useRef(false);
+  // hint_rescue: track session fail count for this level (local, resets on mount)
+  const sessionFailCount = useRef(0);
+  // close_finish: idle timer for "1 word away" scenario
+  const closeFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // post_puzzle: track whether to show after completion dismissal
+  const [pendingPostPuzzleOffer, setPendingPostPuzzleOffer] = useState(false);
+  // booster_pack: only show once per level on first entry to hard/expert
+  const boosterPackShown = useRef(false);
+
+  // --- Rewarded Ad state ---
+  const [mockAdState, setMockAdState] = useState<{
+    rewardType: AdRewardType;
+    resolver: (watched: boolean) => void;
+  } | null>(null);
+  const [rewardDoubled, setRewardDoubled] = useState(false);
+
+  // Register mock ad handler on mount so adManager can trigger the modal
+  useEffect(() => {
+    adManager.setMockAdHandler((rewardType, resolve) => {
+      setMockAdState({ rewardType, resolver: resolve });
+    });
+    return () => {
+      adManager.setMockAdHandler(() => {});
+    };
+  }, []);
+
+  const handleWatchAdForHint = useCallback(async () => {
+    const result = await adManager.showRewardedAd('hint_reward');
+    if (result.rewarded) {
+      economy.processAdReward('hint_reward');
+      void soundManager.playSound('hintUsed');
+    }
+  }, [economy]);
+
+  const handleWatchAdForDoubleReward = useCallback(async () => {
+    const result = await adManager.showRewardedAd('double_reward');
+    if (result.rewarded) {
+      setRewardDoubled(true);
+      // The actual doubling is applied in onComplete callback — we just set the flag
+    }
+  }, []);
+
+  const handleMockAdComplete = useCallback((watched: boolean) => {
+    if (mockAdState) {
+      mockAdState.resolver(watched);
+      setMockAdState(null);
+    }
+  }, [mockAdState]);
+
+  const difficulty = useMemo(() => getDifficultyTier(level), [level]);
+
+  const dismissOffer = useCallback(() => {
+    setActiveOffer(null);
+  }, []);
+
+  const showOfferIfAllowed = useCallback((type: OfferType) => {
+    if (offerShownThisLevel.current || activeOffer) return false;
+    offerShownThisLevel.current = true;
+    setTimeout(() => setActiveOffer(type), 750);
+    return true;
+  }, [activeOffer]);
+
+  // booster_pack: show on first entry to a hard/expert level
+  useEffect(() => {
+    if (boosterPackShown.current) return;
+    if (difficulty === 'hard' || difficulty === 'expert') {
+      const levelsPlayed = player.failCountByLevel ?? {};
+      const previouslyPlayed = (levelsPlayed[level] ?? 0) > 0;
+      if (!previouslyPlayed) {
+        boosterPackShown.current = true;
+        showOfferIfAllowed('booster_pack');
+      }
+    }
+  }, [level, difficulty, player.failCountByLevel, showOfferIfAllowed]);
+
+  // close_finish: watch for 1 word remaining + stuck or idle 15s
+  useEffect(() => {
+    if (closeFinishTimerRef.current) {
+      clearTimeout(closeFinishTimerRef.current);
+      closeFinishTimerRef.current = null;
+    }
+    if (
+      state.status === 'playing' &&
+      remainingWords.length === 1 &&
+      !offerShownThisLevel.current &&
+      !activeOffer
+    ) {
+      // If dead-end detected, show after delay
+      if (isStuck) {
+        showOfferIfAllowed('close_finish');
+      } else {
+        // Start 15s idle timer for close_finish
+        closeFinishTimerRef.current = setTimeout(() => {
+          if (!offerShownThisLevel.current) {
+            showOfferIfAllowed('close_finish');
+          }
+        }, 15000);
+      }
+    }
+    return () => {
+      if (closeFinishTimerRef.current) {
+        clearTimeout(closeFinishTimerRef.current);
+        closeFinishTimerRef.current = null;
+      }
+    };
+  }, [remainingWords, isStuck, state.status, activeOffer, showOfferIfAllowed]);
+
+  // hint_rescue: detect failures and show offer after 2+ fails
+  useEffect(() => {
+    if (state.status === 'failed' || state.status === 'timeout') {
+      sessionFailCount.current += 1;
+      if (sessionFailCount.current >= 2 && !offerShownThisLevel.current && !activeOffer) {
+        showOfferIfAllowed('hint_rescue');
+      }
+    }
+  }, [state.status, activeOffer, showOfferIfAllowed]);
+
+  // post_puzzle: flag when puzzle won with all free hints used
+  useEffect(() => {
+    if (state.status === 'won') {
+      const maxHints = INITIAL_HINTS;
+      if (state.hintsLeft === 0 && maxHints > 0) {
+        setPendingPostPuzzleOffer(true);
+      }
+    }
+  }, [state.status, state.hintsLeft]);
+
+  const handleOfferAccept = useCallback(() => {
+    if (!activeOffer) return;
+    switch (activeOffer) {
+      case 'hint_rescue':
+        // Spend 50 coins, grant 5 hint tokens
+        if (economy.spendCoins(50)) {
+          economy.addHintTokens(5);
+        }
+        break;
+      case 'close_finish':
+        // Spend 25 coins, grant 1 hint token
+        if (economy.spendCoins(25)) {
+          economy.addHintTokens(1);
+        }
+        break;
+      case 'post_puzzle':
+        // Spend 80 coins, grant 10 hint tokens
+        if (economy.spendCoins(80)) {
+          economy.addHintTokens(10);
+        }
+        break;
+      case 'booster_pack':
+        // Spend 15 gems, grant boosters (handled by economy)
+        if (economy.spendGems(15)) {
+          economy.addHintTokens(3);
+        }
+        break;
+    }
+    setActiveOffer(null);
+  }, [activeOffer, economy]);
 
   // Memoize the composed grid scale to avoid creating a new style object each render
   const gridScaleStyle = useMemo(() => ({
@@ -591,8 +764,16 @@ export function GameScreen({
 
   const handleNextLevel = useCallback(() => {
     setShowComplete(false);
-    onNextLevel();
-  }, [onNextLevel]);
+    // post_puzzle: show hint upsell if player used all free hints
+    if (pendingPostPuzzleOffer && !offerShownThisLevel.current) {
+      setPendingPostPuzzleOffer(false);
+      showOfferIfAllowed('post_puzzle');
+      // Still proceed to next level after a brief delay for the offer to appear
+      setTimeout(() => onNextLevel(), 100);
+    } else {
+      onNextLevel();
+    }
+  }, [onNextLevel, pendingPostPuzzleOffer, showOfferIfAllowed]);
 
   // First-booster ceremony (fires once ever, tracked via tooltipsShown)
   const checkFirstBooster = useCallback(() => {
@@ -927,6 +1108,17 @@ export function GameScreen({
               </Text>
             </Pressable>
           )}
+          {/* When hints are depleted, offer ad-for-hint during gameplay */}
+          {showIdleHint && state.hintsLeft === 0 && state.status === 'playing' && !economy.isAdFree && adManager.canShowAd('hint_reward') && (
+            <Pressable
+              style={styles.adHintBanner}
+              onPress={() => { setShowIdleHint(false); handleWatchAdForHint(); }}
+            >
+              <Text style={styles.adHintBannerText}>
+                {'\uD83C\uDFAC'} Out of hints — watch ad for +1 hint
+              </Text>
+            </Pressable>
+          )}
           {isStuck && state.status === 'playing' && state.undosLeft > 0 && (
             <Pressable
               style={styles.stuckBanner}
@@ -1090,6 +1282,61 @@ export function GameScreen({
           onNextLevel={handleNextLevel}
           onHome={onHome}
           onRetry={handleRetry}
+          onDoubleReward={handleWatchAdForDoubleReward}
+          rewardDoubled={rewardDoubled}
+          showAdOption={!economy.isAdFree && adManager.canShowAd('double_reward')}
+          onWatchReplay={solveSequence.length > 0 ? () => setShowReplay(true) : undefined}
+          onShareSolve={solveSequence.length > 0 ? () => {
+            const text = generateReplayText(solveSequence, level, stars, state.score, isDaily);
+            Share.share({ message: text }).catch(() => {});
+          } : undefined}
+          onChallengeFrend={() => {
+            const challenge = player.sendChallenge('friend', {
+              score: state.score,
+              stars,
+              time: solveSequence.length > 0 ? solveSequence[solveSequence.length - 1].timestamp : 0,
+              level,
+              seed: Date.now(),
+              mode,
+              boardConfig: board.config,
+            });
+            const challengeText = [
+              `I challenge you to beat my score on Wordfall Level ${level}!`,
+              `My score: ${state.score.toLocaleString()} | ${'*'.repeat(stars)}`,
+              `Challenge code: ${challenge.id}`,
+              '',
+              '#Wordfall #Challenge',
+            ].join('\n');
+            Share.share({ message: challengeText }).catch(() => {});
+          }}
+        />
+      )}
+
+      {/* Replay viewer overlay */}
+      {showReplay && solveSequence.length > 0 && (
+        <ReplayViewer
+          steps={solveSequence}
+          level={level}
+          stars={stars}
+          totalScore={state.score}
+          isDaily={isDaily}
+          onClose={() => setShowReplay(false)}
+        />
+      )}
+
+      {/* Contextual offer overlay */}
+      {activeOffer && (
+        <ContextualOffer
+          type={activeOffer}
+          context={{
+            failCount: sessionFailCount.current,
+            levelNumber: level,
+            difficulty,
+            wordsRemaining: remainingWords.length,
+            hintsUsed: INITIAL_HINTS - state.hintsLeft,
+          }}
+          onAccept={handleOfferAccept}
+          onDismiss={dismissOffer}
         />
       )}
 
@@ -1150,6 +1397,15 @@ export function GameScreen({
               >
                 <Text style={styles.retryButtonText}>TRY AGAIN</Text>
               </Pressable>
+              {/* Watch ad for a free hint — shown after failure when player has no hints */}
+              {!economy.isAdFree && adManager.canShowAd('hint_reward') && state.hintsLeft === 0 && (
+                <Pressable
+                  style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
+                  onPress={handleWatchAdForHint}
+                >
+                  <Text style={styles.adHintButtonText}>{'\uD83C\uDFAC'} Watch Ad for Free Hint</Text>
+                </Pressable>
+              )}
               {state.undosLeft > 0 && state.history.length > 0 && (
                 <Pressable
                   style={({ pressed }) => [styles.undoRecoverButton, pressed && styles.buttonPressed]}
@@ -1167,6 +1423,14 @@ export function GameScreen({
             </View>
           </View>
         </View>
+      )}
+
+      {/* Mock Ad Modal — shown during development when no real ad SDK is installed */}
+      {mockAdState && (
+        <MockAdModal
+          rewardType={mockAdState.rewardType}
+          onComplete={handleMockAdComplete}
+        />
       )}
     </SafeAreaView>
     </Animated.View>
@@ -1366,6 +1630,21 @@ const styles = StyleSheet.create({
   },
   idleHintText: {
     color: COLORS.accent,
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+  },
+  adHintBanner: {
+    backgroundColor: 'rgba(0, 255, 135, 0.08)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 135, 0.2)',
+  },
+  adHintBannerText: {
+    color: COLORS.green,
     fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
   },
@@ -1627,6 +1906,20 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textShadowColor: 'rgba(255,255,255,0.3)',
     textShadowRadius: 6,
+  },
+  adHintButton: {
+    backgroundColor: 'rgba(0, 255, 135, 0.12)',
+    paddingVertical: 15,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 135, 0.35)',
+  },
+  adHintButtonText: {
+    fontFamily: FONTS.display,
+    color: COLORS.green,
+    fontSize: 14,
+    letterSpacing: 1,
   },
   undoRecoverButton: {
     backgroundColor: 'rgba(255, 215, 0, 0.12)',

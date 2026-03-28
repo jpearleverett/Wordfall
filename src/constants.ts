@@ -592,6 +592,16 @@ export const LIVES = {
   gemRefillCost: 10,
 };
 
+// Puzzle Energy (soft scarcity — NOT a hard wall)
+export const ENERGY = {
+  MAX: 30,
+  REGEN_MINUTES: 15,
+  FREE_MODES: ['daily', 'endless', 'relax'] as string[],
+  BONUS_PLAYS_AFTER_ZERO: 3,
+  AD_REFILL_AMOUNT: 5,
+  GEM_REFILL_COST: 10,
+};
+
 // Streak
 export const STREAK = {
   graceDays: 1,
@@ -850,6 +860,20 @@ export const BACKGROUND_EVOLUTION = {
   hard: { starCount: 20, sunScale: 1.2, gridSpeed: 5000, mountains: 2, meteor: true, aurora: false },
   expert: { starCount: 25, sunScale: 1.3, gridSpeed: 4000, mountains: 2, meteor: true, aurora: true },
 } as const;
+
+// Ad configuration — rewarded ads tuning
+export const AD_CONFIG = {
+  /** AdMob rewarded ad unit ID (defaults to Google test ID for development) */
+  REWARDED_AD_UNIT_ID:
+    (typeof process !== 'undefined' && (process as any).env?.EXPO_PUBLIC_ADMOB_REWARDED_ID) ||
+    'ca-app-pub-3940256099942544/5224354917', // Google test ad unit
+  /** Maximum total rewarded ads a player can watch per day */
+  MAX_ADS_PER_DAY: 10,
+  /** Maximum "watch ad for coins" ads per day */
+  MAX_COIN_ADS_PER_DAY: 3,
+  /** Minimum cooldown between rewarded ads (ms) */
+  REWARDED_COOLDOWN_MS: 30_000, // 30 seconds
+};
 
 // Economy Tuning — central knobs for balancing the free-to-play economy
 export const ECONOMY_TUNING = {
