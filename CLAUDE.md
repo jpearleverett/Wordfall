@@ -5,8 +5,10 @@
 Wordfall is a gravity-based strategic word puzzle mobile game built with **React Native + Expo**. Players find hidden words on a letter grid; when a word is cleared, letters above fall due to gravity, creating chain opportunities. The game features 10 modes, 40 chapters, collections, social features, a library meta-game, and a full player experience layer (interactive tutorial, progressive disclosure, ceremony system, achievements, weekly goals, mastery track, shareable results).
 
 - **Framework:** React Native 0.81.5, Expo ~54.0.0, TypeScript ~5.8.0
-- **Backend:** Firebase (Auth + Firestore) - scaffolded, env vars needed
-- **State:** React Context (4 providers) + useReducer for game state + AsyncStorage persistence
+- **Backend:** Firebase (Auth + Firestore + Analytics) — Firestore social layer implemented with graceful offline fallback. Env vars needed for real connectivity
+- **State:** React Context (4 providers) + useReducer for game state + AsyncStorage persistence + Firestore sync when configured
+- **Monetization:** IAP via react-native-iap (14 products), rewarded ads via AdMob (mock fallback), contextual offers wired to triggers
+- **Analytics:** Dual-mode (Firebase Analytics + local AsyncStorage fallback) with 27+ typed events and A/B testing
 - **Navigation:** React Navigation (bottom tabs + nested stacks) with progressive tab unlocking
 
 ## Commands
@@ -30,7 +32,7 @@ There are no test scripts configured yet. There is no linter script in package.j
 src/
 ├── engine/           # Core game logic (board generation, gravity physics, solver)
 ├── hooks/            # useGame (game reducer), useStorage (AsyncStorage)
-├── services/         # Singletons: sound (expo-av), haptics (expo-haptics), analytics, notifications
+├── services/         # Singletons: sound, haptics, analytics, notifications, iap, ads, firestore, eventManager, playerSegmentation
 ├── contexts/         # AuthContext, EconomyContext, PlayerContext, SettingsContext
 ├── components/       # UI components organized by domain
 │   ├── Grid.tsx, LetterCell.tsx, WordBank.tsx  # Core gameplay
@@ -44,8 +46,11 @@ src/
 │   ├── DifficultyTransitionCeremony.tsx         # Difficulty tier transition (easy→medium etc.)
 │   ├── LevelUpCeremony.tsx                      # Level-up celebration with gold badge
 │   ├── MilestoneCeremony.tsx                    # Reusable ceremony for 10+ simple milestone types
-│   ├── MysteryWheel.tsx                         # Gacha spin wheel with weighted segments
-│   ├── ContextualOffer.tsx                      # Monetization pressure point modals (6 offer types)
+│   ├── MysteryWheel.tsx                         # Gacha spin wheel with weighted segments (surfaced on HomeScreen + post-puzzle)
+│   ├── ContextualOffer.tsx                      # Monetization pressure point modals (6 offer types, wired to triggers)
+│   ├── MockAdModal.tsx                          # Development mock ad experience (5s countdown, claim reward)
+│   ├── ChallengeCard.tsx                        # Friend challenge display with accept/result comparison
+│   ├── ReplayViewer.tsx                         # Animated solve sequence step-through with share
 │   ├── SessionEndReminder.tsx                   # Auto-dismissing daily/streak reminder
 │   ├── common/       # Button, Card, Modal, Badge, ProgressBar, AmbientBackdrop, VideoBackground, HeroIllustrations, Tooltip
 │   ├── economy/      # CurrencyDisplay, ShopItem
@@ -63,9 +68,15 @@ src/
 │   ├── mysteryWheel.ts      # Mystery Wheel gacha: weighted segments, pity system, mystery box
 │   ├── eventLayers.ts       # Event layering: mini events, win streaks, partner events, weekend blitz
 │   ├── dailyDeals.ts        # 5 rotating daily deals (deterministic by date)
-│   └── rotatingShop.ts      # 12 cosmetic items on 48-hour rotation windows
+│   ├── rotatingShop.ts      # 12 cosmetic items on 48-hour rotation windows
+│   ├── shopProducts.ts      # 14 IAP product definitions with rewards, categories, store IDs
+│   └── wordCategories.ts    # 15 themed word categories (30-50 words each) for procedural puzzles
+├── engine/
+│   ├── difficultyAdjuster.ts # Adaptive difficulty based on rolling 20-puzzle performance metrics
+│   └── puzzleGenerator.ts    # Higher-level puzzle gen: themed sets, procedural chapters beyond level 600
 ├── utils/
-│   └── shareGenerator.ts    # Wordle-style shareable emoji grid + streak card + collection card
+│   ├── shareGenerator.ts    # Wordle-style shareable emoji grid + streak card + collection card
+│   └── replayGenerator.ts   # Solve sequence replay as text, emoji grid, and structured data
 ├── types.ts          # All TypeScript interfaces and type unions
 ├── constants.ts      # Colors, gradients, shadows, configs, scoring, economy, feature unlock schedule
 └── words.ts          # Word dictionary (~4900 curated 3-6 letter words)
@@ -83,11 +94,11 @@ src/
 | `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG, freeform path placement (8-directional), and heuristic-first solvability validation (avoids exponential solver calls) |
 | `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
 | `src/engine/solver.ts` | 8-directional DFS word finder, recursive backtracking solver, dead-end detection, hint generation. `findWordInGrid` supports optional `limit` parameter for early termination. `getHint` uses solution ordering directly without redundant re-solve |
-| `src/components/PuzzleComplete.tsx` | Victory screen with confetti (16 particles), animated score counter, staggered reveals inside a `ScrollView` with `maxHeight` constraint. **Plus**: `isFirstWin` welcome, `leveledUp` badge, `difficultyTransition` ceremony, `nextLevelPreview`, `shareText` with Share API, `friendComparison` mock display |
+| `src/components/PuzzleComplete.tsx` | Victory screen with confetti, animated score counter, staggered reveals. **Plus**: `isFirstWin` welcome, `leveledUp` badge, `difficultyTransition`, `nextLevelPreview`, `shareText` with Share API, friend comparison (Firestore when available), "Watch Ad to DOUBLE Rewards" button, "Challenge a Friend" button, "Watch Replay" button opening ReplayViewer, "Share Solve" emoji replay |
 | `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, responsive sizing via `maxHeight` prop (cell size constrained by both width and available height), drag-to-select via react-native-gesture-handler (gesture objects memoized with `useMemo`, callbacks via refs), frozen column styling, post-gravity moved-cell highlighting. LetterCell receives no `onPress` — all input handled by grid-level gesture detector |
-| `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint (adjusts by fail count), mode intro overlay, boosters (all 3 always visible when counts > 0), near-miss encouragement on failure with progress bar. Stable layout: banners float as absolute overlays on grid, wordArea has fixed height, boosterBar always reserves space. Measures grid area via `onLayout` (debounced 2px threshold) and passes `maxHeight` to GameGrid. `handleCellPress` delegates adjacency checks to the reducer |
+| `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint, mode intro overlay, boosters, near-miss encouragement. **Plus**: contextual offers wired (hint_rescue after 2+ fails, close_finish at 1 word left, booster_pack on hard/expert entry, post_puzzle when hints depleted), rewarded ad triggers (post-fail hint, post-complete double), MockAdModal overlay, ReplayViewer overlay. Stable layout with absolute-positioned overlays |
 | `src/components/GameHeader.tsx` | Chrome card header with back button, battery-style progress indicator (auto-sizes to content), cyan score display with animated pop, undo/hint glass buttons with count badges. Progress bar at bottom with glow dot (hidden at 0%). Battery shell is an image asset that stretches to fit the label text |
-| `src/screens/HomeScreen.tsx` | Dynamic home screen with `VideoBackground` (bg-homescreen.mp4), image-based UI (playbutton.png, statscard.png ×3, shopbutton.png with text overlays), progressive section visibility based on `playerStage` (new/early/established/veteran). Sections: hero card (plain View, no gradient/border), streak, daily rewards, weekly goals, mission progress, personalized recommendations, quick play |
+| `src/screens/HomeScreen.tsx` | Dynamic home screen with `VideoBackground`, image-based UI, progressive section visibility based on `playerStage` AND `playerSegmentation`. Sections: hero card, streak, daily rewards, Mystery Wheel button (with free spin badge/pulse animation), event banners, weekly goals, missions, recommendations, quick play, pending challenge cards, pending gift banner. Section visibility driven by segment-aware `segmentHomeContent` when available |
 | `src/screens/OnboardingScreen.tsx` | 4-phase interactive tutorial: welcome → guided tutorial puzzle (real GameGrid + TutorialOverlay) → celebration → ready screen with tips |
 | `src/screens/ProfileScreen.tsx` | Player profile with stats grid, achievements grid (15 achievements × 3 tiers with colored dots), collection progress, cosmetics |
 | `src/screens/MasteryScreen.tsx` | Season pass / mastery track with 30 tiers, free + premium reward lanes, XP progress |
@@ -107,16 +118,26 @@ src/
 | `src/components/ContextualOffer.tsx` | Monetization pressure point modal — 6 offer types (hint_rescue, life_refill, streak_shield, close_finish, post_puzzle, booster_pack) with template variable replacement and always-dismissible design |
 | `src/data/mysteryWheel.ts` | Mystery Wheel system: 10 weighted segments (common→epic), pity system (guaranteed rare+ within 25 spins), mystery box secondary rewards, free spin every 3 puzzles, `SPIN_COST_GEMS=10`, `SPIN_BUNDLE_COST_GEMS=40` for 5-pack. Functions: `spinWheel()`, `openMysteryBox()`, `checkFreeSpin()` |
 | `src/data/eventLayers.ts` | Event layering system enabling multiple simultaneous events: 5 mini event templates (24-48hr overlays), Royal Match-style win streak with 7 tiers (2→20 wins), weekend blitz detection, partner event scaffold (Firestore-ready). Functions: `getMiniEventForDate()`, `isWeekendBlitz()`, `getActiveEventLayers()`, `updateWinStreak()` |
-| `src/services/notifications.ts` | Push notification service (scaffold mode — requires `expo-notifications` install). 9 notification categories with multiple message templates and variable interpolation. Convenience schedulers: `scheduleStreakReminder()`, `scheduleEnergyFull()`, `scheduleDailyChallenge()`, `scheduleEventEnding()`, `scheduleComebackReminder()`. Init called on app load in HomeMainScreen |
+| `src/services/notifications.ts` | Real push notification service using `expo-notifications`. 9 categories with template interpolation. Permission handling with graceful denial. Android notification channel. Convenience schedulers: `scheduleStreakReminder()` (8 PM), `scheduleDailyChallenge()` (9 AM), `scheduleComebackReminder()` (3 days). Segment-aware scheduling via playerSegmentation |
+| `src/services/analytics.ts` | Dual-mode analytics: Firebase Analytics when configured, AsyncStorage fallback otherwise. 27+ typed events (puzzle_complete, offer_shown, mystery_wheel_spin, etc.), user properties, 7-day local event retention, A/B testing via deterministic variant assignment, retention metrics (D1/D7/D30) |
+| `src/services/iap.ts` | IAP service via `react-native-iap`. 14 products across bundles/consumables/currency/premium. Mock mode for dev/Expo Go. Receipt storage, restore purchases, parental control integration. Wire to ShopScreen for real purchase flow |
+| `src/services/ads.ts` | Rewarded ads service with AdMob integration + mock fallback (MockAdModal with 5s countdown). 5 reward types (hint, undo, spin, coins, double). Daily caps (10 ads/day), cooldown (30s). Wired into GameScreen (post-fail, post-complete) and ShopScreen |
+| `src/services/firestore.ts` | Firestore social layer: leaderboards (daily/weekly/all-time), friend system (codes, requests), real gifting, player profile sync. Graceful offline fallback — all methods return defaults when Firebase unavailable |
+| `src/services/eventManager.ts` | Live event coordination: active event detection, multiplier calculation (coins/xp/rareTile), progress tracking, reward claiming. Wired into handleComplete for reward multipliers. Persisted via PlayerContext.eventProgress |
+| `src/services/playerSegmentation.ts` | Player segmentation across 4 dimensions: engagement (7 segments), skill (4), spending (4), motivation (5). Personalization hooks for offer timing, difficulty, home content, notifications, mode recommendations |
+| `src/engine/difficultyAdjuster.ts` | Invisible adaptive difficulty. Analyzes rolling 20-puzzle performance. Makes easier when struggling (avgStars < 1.5), harder when cruising (consecutiveThreeStars > 5). Adjustments capped at ±1 step from base config |
+| `src/engine/puzzleGenerator.ts` | Higher-level puzzle generation: themed puzzle sets via word categories, procedural chapter generation beyond level 600 with difficulty scaling |
+| `src/data/shopProducts.ts` | 14 IAP product definitions with store IDs, rewards, categories. Helpers: `getProductById()`, `getProductRewards()`, `getProductsByCategory()` |
+| `src/data/wordCategories.ts` | 15 themed word categories (nature, food, science, sports, music, etc.) with 30-50 words each for themed puzzle generation |
 | `FIRESTORE_SOCIAL_GUIDE.md` | Implementation guide for real-time social features: Firestore schemas, security rules, Cloud Functions, friend system, gift delivery, club chat, leaderboards, partner events, community goals. Includes 4-phase migration plan and cost estimates |
 | `GAME_DESIGN_DOCUMENT.md` | Full 48KB GDD with 17 sections - the source of truth for features |
 
 ### State Management
 
-- **Game state:** `useGame` hook with `useReducer` in `GameScreen`. Actions: SELECT_CELL, CLEAR_SELECTION, SUBMIT_WORD, USE_HINT, UNDO_MOVE, NEW_GAME, RESET_COMBO, TICK_TIMER, SHUFFLE_FILLER, FREEZE_COLUMN, PREVIEW_MOVE, USE_BOOSTER. State includes `frozenColumns`, `previewGrid`, `boosterCounts`, `cascadeMultiplier`, `perfectRun`, `maxCombo`, `history` (for undo).
-- **Player data:** `PlayerContext` - progress, collections (atlas/tiles/stamps), missions, streaks (with grace days + shield + milestone ceremonies), cosmetics, library wings, mode stats, achievements, comebacks, **plus**: feature unlock tracking (`featuresUnlocked`), weekly goals, ceremony queue (`pendingCeremonies`), tooltip tracking (`tooltipsShown`), failure tracking (`failCountByLevel`, `consecutiveFailures`), breather level detection, mystery wheel state (`mysteryWheel`), and win streak state (`winStreak`). Persisted to AsyncStorage.
-- **Economy:** `EconomyContext` - coins, gems, hintTokens, eventStars, libraryPoints. Add/spend/check methods. Persisted to AsyncStorage.
-- **Settings:** `SettingsContext` - volume (SFX + music), haptics, notifications, theme (5 themes). Persisted to AsyncStorage.
+- **Game state:** `useGame` hook with `useReducer` in `GameScreen`. Actions: SELECT_CELL, CLEAR_SELECTION, SUBMIT_WORD, USE_HINT, UNDO_MOVE, NEW_GAME, RESET_COMBO, TICK_TIMER, SHUFFLE_FILLER, FREEZE_COLUMN, PREVIEW_MOVE, USE_BOOSTER. State includes `frozenColumns`, `previewGrid`, `boosterCounts`, `cascadeMultiplier`, `perfectRun`, `maxCombo`, `history` (for undo), `solveSequence` (for replay recording).
+- **Player data:** `PlayerContext` - progress, collections (atlas/tiles/stamps), missions, streaks, cosmetics, library wings, mode stats, achievements, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `mysteryWheel`, `winStreak`, `puzzleEnergy` (session scarcity), `performanceMetrics` (adaptive difficulty), `segments` (player segmentation), `eventProgress` (live event tracking), `friendChallenges` (sent/received challenges). Methods include `useEnergy`, `refillEnergy`, `recomputeSegments`, `updateEventProgress`, `sendChallenge`, `respondToChallenge`, `recordPerformanceMetrics`. Persisted to AsyncStorage + Firestore sync when configured.
+- **Economy:** `EconomyContext` - coins, gems, hintTokens, undoTokens, eventStars, libraryPoints, `isAdFree`, `isPremiumPass`, `starterPackAvailable`, `dailyValuePackExpiry`. Methods: add/spend/check + `processPurchase(productId)` for IAP fulfillment + `processAdReward(rewardType)` for ad rewards. Persisted to AsyncStorage.
+- **Settings:** `SettingsContext` - volume (SFX + music), haptics, notifications, theme (5 themes), **plus**: parental controls (`spendingLimitEnabled`, `monthlySpendingLimit`, `requirePurchasePin`, `purchasePin`, `monthlySpent`). Persisted to AsyncStorage.
 - **Auth:** `AuthContext` - Firebase anonymous auth with loading state.
 
 ### Navigation Structure
@@ -378,7 +399,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - Perfect Solve undo recovery (undo from failed state)
 - Performance-optimized: all tile animations use native driver, no continuous animation loops on idle tiles, expensive solver computations deferred out of render path, gesture objects memoized, computed game values cached with `useMemo`
 - Visual polish pass: clean tile rendering (opaque gradients, no overlay artifacts), auto-sizing battery header, centered booster shelf, booster count badges visible (not clipped)
-- TypeScript compiles with zero errors
+- TypeScript compiles with only 2 pre-existing errors in NeonTabBar.tsx
 
 #### Player Experience Systems (all complete)
 - **Interactive tutorial**: 4-phase onboarding with 3 progressive tutorial boards: A (4×4, tap to find GO/HI), B (5×4, gravity intro with CAT/DOG), C (5×5, order matters with SUN/RED/ANT gravity dependency). Players learn through guided puzzle play on real GameGrid + TutorialOverlay
@@ -404,7 +425,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Wildcard earned ceremony**: Fires when 5 duplicate rare tiles convert to a wildcard
 - **Win streak milestone ceremonies**: Fires at 3/5/7/10/15/20 consecutive wins with escalating labels
 - **Shareable results**: Wordle-style emoji grid via `Share` API on PuzzleComplete, plus shareable streak cards and collection completion cards
-- **Friend score comparison**: "You beat X of Y friends!" display on PuzzleComplete (mock data, Firestore-ready)
+- **Friend score comparison**: "You beat X of Y friends!" display on PuzzleComplete (real Firestore data when configured, local fallback otherwise)
 - **Post-puzzle next level preview**: "COMING UP" section showing next level number + difficulty
 - **Near-miss encouragement**: On failure, "SO CLOSE!" or "KEEP GOING!" with progress bar and prominent retry
 - **Breather levels**: After 2+ consecutive failures, serves easier board via `getBreatherConfig()`
@@ -422,28 +443,37 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Club auto-kick config**: `CLUB.autoKickInactiveDays = 14` for removing inactive members
 - **Mystery Wheel (gacha)**: 10 weighted segments (common→epic) with pity system guaranteeing rare+ within 25 spins, mystery box secondary rewards, free spin every 3 puzzles, gem-purchasable spins (10 gems each, 40 gems for 5-pack). State persisted in PlayerContext (`mysteryWheel`). `MysteryWheel` component has animated spin, result display, buy buttons
 - **Event layering**: 5 simultaneous event layers: (1) main weekly event from 12-week rotation, (2) mini events every ~3 days (Coin Rush, Star Shower, Hint Frenzy, Rare Hunt, XP Surge — 24-48hr overlays), (3) automatic weekend blitz (Sat/Sun), (4) Royal Match-style win streak with 7 escalating tiers (3→20 consecutive wins), (5) partner events scaffolded for Firestore
-- **Push notification service**: 9 notification categories (streak_reminder, energy_full, event_starting, event_ending, daily_challenge, friend_activity, comeback, mystery_wheel, win_streak) with multiple message templates and variable interpolation. Scaffold mode — actual `expo-notifications` API calls are commented with exact replacement code. Init called on app load, schedules streak reminder (8 PM), daily challenge (9 AM), comeback (3 days)
-- **Contextual offers**: `ContextualOffer` component with 6 dismissible offer types: hint_rescue (after 2+ fails), life_refill (0 lives), streak_shield (expiring streak), close_finish (1 word away), post_puzzle (soft hint upsell), booster_pack (entering hard/expert). Each has configurable ribbon, icon, price, accent color
+- **Push notifications (real)**: 9 notification categories using real `expo-notifications`. Permission handling, Android channels, segment-aware scheduling. Streak reminder (8 PM), daily challenge (9 AM), comeback (3 days)
+- **Contextual offers (wired)**: 6 dismissible offer types wired to real triggers in GameScreen and HomeScreen. hint_rescue (2+ fails), streak_shield (expiring streak), close_finish (1 word away + stuck), post_puzzle (hints depleted), booster_pack (entering hard/expert). Max 1 offer per level
+- **Analytics service (real)**: Dual-mode — Firebase Analytics when configured, AsyncStorage fallback. 27+ typed events tracked across app lifecycle. User properties (level, stage, payer status). Local retention metrics (D1/D7/D30). A/B testing via deterministic hash variant assignment
+- **IAP service**: Full `react-native-iap` integration with 14 products. Mock mode for development. Receipt storage, restore purchases, parental control enforcement. Wired into ShopScreen for real purchase flow
+- **Rewarded ads**: AdMob integration with MockAdModal fallback for dev. 5 reward types. Wired into GameScreen (post-fail hint, post-complete double rewards) and ShopScreen (coins, mystery spin). Daily caps and cooldown
+- **Firestore social layer**: Real leaderboards (daily/weekly/all-time), friend system with codes, real gift delivery, player profile sync. LeaderboardScreen wired to Firestore. All methods gracefully fallback when offline
+- **Mystery Wheel (surfaced)**: Prominent button on HomeScreen for established+ players with free spin pulse animation. Post-puzzle spin prompt when free spins available. Full overlay with reward granting via economy context
+- **Puzzle energy system**: 30 energy/day, regenerates 1 per 15 min. Daily/endless/relax modes are free. 3 bonus plays after zero. Ad refill (+5) and gem refill (full). NOT a hard wall per GDD ethics
+- **Adaptive difficulty**: Invisible per-player difficulty adjustment. Analyzes rolling 20-puzzle metrics. Makes easier when struggling (avgStars < 1.5), harder when cruising (5+ consecutive 3-stars). Capped at ±1 step. Wired into all board generation points
+- **Live event manager**: Runtime event coordination with multiplier calculation. Coin/XP/rare-tile multipliers applied in handleComplete. Progress tracking and reward claiming. EventScreen shows active events with timers and reward tiers
+- **Content pipeline**: 15 themed word categories (30-50 words each). Procedural chapter generation beyond level 600 with difficulty scaling. Themed puzzle sets for events
+- **Player segmentation**: 7 engagement + 4 skill + 4 spending + 5 motivation segments. Drives personalized offer timing, difficulty, home content, notification scheduling, mode recommendations. Recomputed on each session start
+- **Friend challenges**: Create/send/respond to async puzzle challenges. ChallengeCard on HomeScreen. Side-by-side result comparison. Share via React Native Share API
+- **Solve replay**: Move recording in useGame (solveSequence with grid snapshots). ReplayViewer with animated playback, play/pause/step controls. Emoji grid sharing via replayGenerator. Replay/Share Solve buttons on PuzzleComplete
+- **Audio asset infrastructure**: Dual-mode sound system — loads real .mp3 files from assets/audio/ when present, falls back to synthesized tones. LOCAL_AUDIO registry in localAssets.ts
 - **Smooth difficulty curve**: Per-level ramp across 12 phases (not a staircase). Every 5th level is a breather. Breather config drops difficulty ~4 levels back
 
+### Needs External Setup
+- **Firebase credentials** — set `EXPO_PUBLIC_FIREBASE_*` env vars to enable Analytics, Firestore social, leaderboards. Without them, all services gracefully fall back to local-only mode
+- **AdMob ad unit ID** — set `EXPO_PUBLIC_ADMOB_REWARDED_ID` env var. Without it, MockAdModal (simulated 5s countdown) is used instead
+- **App Store / Play Store IAP products** — register 14 product IDs (prefixed `wordfall_`) in store consoles. Without store config, IAP runs in mock mode
+- **Professional audio assets** — place .mp3 files in `assets/audio/` per the README there. Synthesized tones remain as fallback
+
 ### Scaffolded / Needs Work
-- Professional audio assets — current synthesized tones are functional but could be replaced with studio-quality .mp3/.wav files
-- Image assets — app icon and splash screen are placeholder PNGs; HomeScreen uses image assets (playbutton.png, statscard.png, shopbutton.png) and video background (bg-homescreen.mp4); Library hero illustration is code-generated Views. Note: playbutton/statscard/shopbutton are JPEGs renamed as .png (no alpha channel) — re-export as true PNGs for transparency
-- Firebase Cloud Functions (server-side scheduled tasks) — see `FIRESTORE_SOCIAL_GUIDE.md` for full implementation plan
-- Actual Firestore sync (currently AsyncStorage only) — friend comparison data is mock, ready for Firestore. Complete Firestore schema, security rules, and 4-phase migration plan in `FIRESTORE_SOCIAL_GUIDE.md`
-- Real-time leaderboard computation (Firestore schema defined in guide)
-- IAP integration (expo-in-app-purchases) — Shop UI is complete with all GDD offers (starter pack, hint/undo bundles, daily value pack, chapter bundle, premium pass, ad removal), Mastery premium track is UI-only
-- Ad integration (rewarded ads for hints)
-- Push notifications — service fully coded in `src/services/notifications.ts` with 9 categories and template system, but runs in scaffold mode. **To activate**: run `npx expo install expo-notifications expo-device expo-constants`, add to `app.json` plugins, uncomment the real API calls (marked `// Placeholder`) in the service file
-- Partner events — cooperative 2-player events. Schema + matchmaking Cloud Function defined in `FIRESTORE_SOCIAL_GUIDE.md`, `PartnerEvent` type in `src/data/eventLayers.ts`
-- Friend challenge matchmaking
-- Club chat real-time messaging + auto-kick enforcement (config defined, server-side logic needed)
-- Contextual offer integration — `ContextualOffer` component is built, but trigger points need wiring in GameScreen (on failure, on 0 lives, on near-miss) and HomeScreen (streak expiry warning)
-- Mystery Wheel UI integration — component built, needs to be surfaced (e.g. button on HomeScreen or post-puzzle trigger when spin is available)
-- Analytics service (wired but no-op - no actual tracking)
+- Image assets — app icon and splash screen are placeholder PNGs; HomeScreen JPEGs renamed as .png (no alpha channel)
+- Firebase Cloud Functions (server-side scheduled tasks) — see `FIRESTORE_SOCIAL_GUIDE.md`
+- Club chat real-time messaging + auto-kick enforcement (club creation exists in Firestore service, chat needs Cloud Functions)
+- Partner events — cooperative 2-player events. Schema defined in `FIRESTORE_SOCIAL_GUIDE.md`
 - End-to-end testing
 - Deep linking
-- Smart Solve Replay (animated GIF/video of solve sequence for sharing)
+- Smart Solve Replay as animated GIF/video (text + emoji replay is implemented; video generation is not)
 
 ## Common Patterns
 
@@ -545,8 +575,18 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Mystery Wheel state** persisted in `PlayerContext.mysteryWheel` — tracks `spinsAvailable`, `puzzlesSinceLastSpin`, `totalSpins`, `lastJackpotSpin`, `jackpotPity` (25). Free spin awarded every 3 puzzles via `awardFreeSpin()`. Wheel logic in `src/data/mysteryWheel.ts`, UI in `src/components/MysteryWheel.tsx`
 - **Win streak state** persisted in `PlayerContext.winStreak` — tracks `currentStreak`, `bestStreak`, `lastWinDate`, `rewardsClaimed`. Updated via `updateWinStreak(won)`. Milestone ceremonies at 3/5/7/10/15/20 queued directly in `setData`
 - **Event layering** enables multiple simultaneous events — main weekly event + mini events (every ~3 days) + weekend blitz (auto Sat/Sun) + win streak + partner events (Firestore scaffold). Data in `src/data/eventLayers.ts`
-- **Notification service** in `src/services/notifications.ts` is scaffold mode — logs to console instead of sending real notifications. Uncomment the `expo-notifications` API calls after installing the package. 9 categories with template variables (e.g. `{streak}`, `{eventName}`)
-- **Contextual offers** in `src/components/ContextualOffer.tsx` are built but need trigger wiring — the component accepts `type`, `context`, `onAccept`, `onDismiss` props. Six offer types with pre-configured content
+- **Notification service** in `src/services/notifications.ts` is real (not scaffold). Uses `expo-notifications` with permission handling, Android channels, and segment-aware scheduling
+- **Contextual offers** are fully wired to triggers: hint_rescue in GameScreen after 2+ fails, close_finish when 1 word left + stuck/idle, post_puzzle when hints depleted, streak_shield on HomeScreen when streak at risk, booster_pack on hard/expert entry. Max 1 offer per level
+- **Analytics** in `src/services/analytics.ts` is real (not no-op). Dual-mode: Firebase when configured, local AsyncStorage fallback. Includes A/B testing via `getVariant()` with deterministic hash
+- **IAP** in `src/services/iap.ts` uses `react-native-iap`. Mock mode auto-activates in dev/Expo Go. Parental controls enforced before every purchase via SettingsContext
+- **Ads** in `src/services/ads.ts` uses AdMob when available, otherwise MockAdModal (5s countdown with claim). `isAdFree` flag in EconomyContext disables all ads
+- **Firestore** in `src/services/firestore.ts` handles all social operations. Every method has try/catch returning defaults on failure. App works identically offline
+- **Puzzle energy** is a soft system (NOT a hard wall). Daily/endless/relax modes are always free. 3 bonus plays after zero energy. Energy display in UI when relevant
+- **Adaptive difficulty** in `src/engine/difficultyAdjuster.ts` is invisible to the player. Never shows "we made this easier." Requires 5+ recent results before activating
+- **Player segmentation** recomputes on every app open. Drives offer timing, difficulty, home content, notifications. Segments persisted in PlayerContext
+- **Solve replay** records every SUBMIT_WORD in `solveSequence` with grid snapshots. ReplayViewer has animated playback. Emoji grid generated via `replayGenerator.ts`
+- **Friend challenges** stored locally in PlayerContext.friendChallenges. Shared via Share API with challenge codes. Will upgrade to Firestore delivery when backend is configured
+- **Event multipliers** from eventManager are applied to coin/xp/rare-tile rewards in handleComplete. Active multiplier labels shown in UI
 - **`FIRESTORE_SOCIAL_GUIDE.md`** contains complete Firestore implementation plan — schemas for users/friendships/gifts/clubs/leaderboards/partnerEvents/globalEvents, security rules, Cloud Functions, 4-phase migration plan, cost estimates ($15-20/month at 10K DAU)
 
 ### Performance Architecture
