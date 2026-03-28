@@ -57,43 +57,33 @@ export const LOCAL_IMAGES = {
 // To add a real audio file: place it in assets/audio/ and uncomment
 // the corresponding line below (or add a new entry).
 
-function tryRequireAudio(requireFn: () => any): any {
-  try {
-    return requireFn();
-  } catch {
-    return null;
-  }
-}
+// Audio assets are loaded dynamically at runtime via expo-av's Audio.Sound.createAsync().
+// Place .mp3 files in assets/audio/ and they will be picked up by the sound service.
+// See assets/audio/README.md for the full list of expected audio files.
+// We use an empty registry here — the sound service checks for file existence at runtime.
+export const LOCAL_AUDIO: Record<string, any> = {};
 
-export const LOCAL_AUDIO: Record<string, any> = {
-  // Sound effects
-  tap: tryRequireAudio(() => require('../../assets/audio/tap.mp3')),
-  wordFound: tryRequireAudio(() => require('../../assets/audio/word-found.mp3')),
-  wordInvalid: tryRequireAudio(() => require('../../assets/audio/word-invalid.mp3')),
-  gravity: tryRequireAudio(() => require('../../assets/audio/gravity-drop.mp3')),
-  combo: tryRequireAudio(() => require('../../assets/audio/combo.mp3')),
-  puzzleComplete: tryRequireAudio(() => require('../../assets/audio/puzzle-complete.mp3')),
-  hintUsed: tryRequireAudio(() => require('../../assets/audio/hint-used.mp3')),
-  undoUsed: tryRequireAudio(() => require('../../assets/audio/undo-used.mp3')),
-  buttonPress: tryRequireAudio(() => require('../../assets/audio/button-press.mp3')),
-  starEarn: tryRequireAudio(() => require('../../assets/audio/star-earn.mp3')),
-  chainBonus: tryRequireAudio(() => require('../../assets/audio/chain-bonus.mp3')),
-  boosterUsed: tryRequireAudio(() => require('../../assets/audio/booster-used.mp3')),
-  ceremonyFanfare: tryRequireAudio(() => require('../../assets/audio/ceremony-fanfare.mp3')),
-  wheelSpin: tryRequireAudio(() => require('../../assets/audio/wheel-spin.mp3')),
-  wheelResult: tryRequireAudio(() => require('../../assets/audio/wheel-result.mp3')),
-  streakMilestone: tryRequireAudio(() => require('../../assets/audio/streak-milestone.mp3')),
-  levelUp: tryRequireAudio(() => require('../../assets/audio/level-up.mp3')),
-  collectionComplete: tryRequireAudio(() => require('../../assets/audio/collection-complete.mp3')),
-  achievementUnlock: tryRequireAudio(() => require('../../assets/audio/achievement-unlock.mp3')),
-  featureUnlock: tryRequireAudio(() => require('../../assets/audio/feature-unlock.mp3')),
-
-  // Background music
-  bgmHome: tryRequireAudio(() => require('../../assets/audio/bgm-home.mp3')),
-  bgmGameplay: tryRequireAudio(() => require('../../assets/audio/bgm-gameplay.mp3')),
-  bgmVictory: tryRequireAudio(() => require('../../assets/audio/bgm-victory.mp3')),
-  bgmRelax: tryRequireAudio(() => require('../../assets/audio/bgm-relax.mp3')),
-};
+// To enable audio assets, uncomment lines below AFTER placing the .mp3 files in assets/audio/:
+// export const LOCAL_AUDIO: Record<string, any> = {
+//   tap: require('../../assets/audio/tap.mp3'),
+//   wordFound: require('../../assets/audio/word-found.mp3'),
+//   wordInvalid: require('../../assets/audio/word-invalid.mp3'),
+//   gravity: require('../../assets/audio/gravity-drop.mp3'),
+//   combo: require('../../assets/audio/combo.mp3'),
+//   puzzleComplete: require('../../assets/audio/puzzle-complete.mp3'),
+//   hintUsed: require('../../assets/audio/hint-used.mp3'),
+//   undoUsed: require('../../assets/audio/undo-used.mp3'),
+//   buttonPress: require('../../assets/audio/button-press.mp3'),
+//   boosterUsed: require('../../assets/audio/booster-used.mp3'),
+//   ceremonyFanfare: require('../../assets/audio/ceremony-fanfare.mp3'),
+//   wheelSpin: require('../../assets/audio/wheel-spin.mp3'),
+//   wheelResult: require('../../assets/audio/wheel-result.mp3'),
+//   streakMilestone: require('../../assets/audio/streak-milestone.mp3'),
+//   bgmHome: require('../../assets/audio/bgm-home.mp3'),
+//   bgmGameplay: require('../../assets/audio/bgm-gameplay.mp3'),
+//   bgmVictory: require('../../assets/audio/bgm-victory.mp3'),
+//   bgmRelax: require('../../assets/audio/bgm-relax.mp3'),
+// };
 
 export const LOCAL_VIDEOS = {
   synthwaveGridFlow: require('../../attached_assets/generated_videos/synthwave_grid_flow.mp4'),
