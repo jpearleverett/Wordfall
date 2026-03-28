@@ -4,7 +4,8 @@
 
 Wordfall is a gravity-based strategic word puzzle mobile game built with **React Native + Expo**. Players find hidden words on a letter grid; when a word is cleared, letters above fall due to gravity, creating chain opportunities. The game features 10 modes, 40 chapters, collections, social features, a library meta-game, and a full player experience layer (interactive tutorial, progressive disclosure, ceremony system, achievements, weekly goals, mastery track, shareable results).
 
-- **Framework:** React Native 0.81.5, Expo ~54.0.0, TypeScript ~5.8.0
+- **Framework:** React Native 0.81.5, Expo ~54.0.0 (SDK 54), TypeScript ~5.8.0
+- **Dev Environment:** Expo Go (SDK 54) — see "Expo Go Compatibility" section below for critical constraints
 - **Backend:** Firebase (Auth + Firestore + Analytics) — Firestore social layer implemented with graceful offline fallback. Env vars needed for real connectivity
 - **State:** React Context (4 providers) + useReducer for game state + AsyncStorage persistence + Firestore sync when configured
 - **Monetization:** IAP via react-native-iap (14 products), rewarded ads via AdMob (mock fallback), contextual offers wired to triggers
@@ -23,6 +24,71 @@ npm install --legacy-peer-deps  # Install deps (legacy flag required for peer de
 ```
 
 There are no test scripts configured yet. There is no linter script in package.json.
+
+## Expo Go Compatibility (CRITICAL)
+
+The app is developed and tested using **Expo Go (SDK 54)**. Expo Go is a sandboxed runtime that does NOT include custom native modules. This means:
+
+### Packages that DO NOT work in Expo Go
+These packages require native modules and will crash if imported at module level:
+- **`react-native-iap`** — requires `react-native-nitro-modules` native bridge. Metro resolves `import()` and `require()` at bundle time, so even dynamic imports will crash.
+- **`expo-notifications`** — push token registration was removed from Expo Go in SDK 53+. Local notification scheduling also unavailable.
+- **`expo-ads-admob` / `react-native-google-mobile-ads`** — require native ad SDK linking.
+- **Any package with native C++/Java/Swift code** that isn't in the Expo Go built-in module set.
+
+### How to guard native-only code
+**Never** use top-level `import` or `require()` for native-only packages. Metro resolves ALL requires statically at bundle time — `try/catch` around `require()` does NOT prevent the crash because Metro fails during bundling, not at runtime.
+
+**Pattern 1 — Skip entirely in Expo Go (preferred):**
+```typescript
+import Constants from 'expo-constants';
+const isExpoGo = Constants.appOwnership === 'expo';
+
+async init() {
+  if (isExpoGo) {
+    console.log('[Service] Expo Go detected — using mock mode');
+    this.useMock = true;
+    return;
+  }
+  // Only now is it safe to require the native module
+  const nativeModule = require('some-native-package');
+}
+```
+
+**Pattern 2 — Lazy-load with try/catch at require time (for packages that might work):**
+```typescript
+let SomeModule: typeof import('some-module') | null = null;
+try {
+  SomeModule = require('some-module');
+} catch {
+  console.warn('[Module] not available');
+}
+// Guard ALL usage: if (SomeModule) { ... }
+```
+
+**Pattern 3 — Never use for audio/image assets that may not exist:**
+```typescript
+// BAD — Metro crashes at bundle time if file doesn't exist:
+const sound = require('../../assets/audio/tap.mp3');
+
+// GOOD — export empty registry, uncomment when files are added:
+export const LOCAL_AUDIO: Record<string, any> = {};
+```
+
+### Current guarded services
+| Service | Guard Method | Mock Behavior |
+|---------|-------------|---------------|
+| `notifications.ts` | Lazy `require('expo-notifications')` with try/catch | All schedule/cancel calls silently no-op |
+| `iap.ts` | `isExpoGo` check before `require('react-native-iap')` | Mock purchases with 1s delay, simulated receipts |
+| `ads.ts` | `isExpoGo` check before ad SDK import | MockAdModal component (5s countdown, then reward) |
+| `localAssets.ts` | Empty `LOCAL_AUDIO` registry | Synthesized tones via sound.ts fallback |
+
+### When adding new native dependencies
+1. Check if the package works in Expo Go (most with native code do NOT)
+2. Add an `isExpoGo` guard before any import/require
+3. Provide a mock/fallback that preserves the UI flow
+4. Document the guard in this table above
+5. These packages will work in **development builds** (`npx expo run:android`) and **production** (`eas build`)
 
 ## Architecture
 

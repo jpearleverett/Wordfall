@@ -8,8 +8,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import type { IAPProductId } from '../types';
-import { validateReceipt } from './receiptValidation';
 import {
   SHOP_PRODUCTS,
   getAllStoreProductIds,
@@ -18,6 +18,9 @@ import {
   internalIdToStoreId,
   storeIdToInternalId,
 } from '../data/shopProducts';
+
+// Detect Expo Go — react-native-iap requires native modules unavailable in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -94,9 +97,16 @@ class IAPManager {
     if (this.initialized) return;
 
     try {
-      // Dynamically import react-native-iap to avoid crashes when native
-      // module is not linked (Expo Go, web).
-      const iap: RNIap = await import('react-native-iap');
+      // In Expo Go, react-native-iap's native module (Nitro) is not available.
+      // Skip entirely and use mock mode.
+      if (isExpoGo) {
+        throw new Error('Expo Go detected — IAP native module unavailable');
+      }
+
+      // Dynamically require react-native-iap. This will only succeed in
+      // development builds or production where native modules are linked.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const iap: RNIap = require('react-native-iap');
       this.rniap = iap;
 
       // Establish connection to the store

@@ -10,7 +10,11 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { AD_CONFIG } from '../constants';
+
+// Detect Expo Go — ad SDKs require native modules unavailable in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
 
 // ── Reward type definitions ────────────────────────────────────────────────────
 
@@ -106,6 +110,10 @@ class AdManager {
     this.tracking = await loadTracking();
 
     try {
+      // In Expo Go, ad SDKs are not available — skip and use mock mode
+      if (isExpoGo) {
+        throw new Error('Expo Go detected — ad SDKs unavailable');
+      }
       // Attempt to load expo-ads-admob
       const adModule = await import('expo-ads-admob' as string);
       if (adModule && typeof adModule.setTestDeviceIDAsync === 'function') {
