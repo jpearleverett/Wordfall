@@ -11,10 +11,18 @@
  * For iOS: Configure Apple Push Notification service (APNs) in Apple Developer account
  */
 
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+
+// expo-notifications crashes in Expo Go since SDK 53.
+// Lazy-load the module and gracefully degrade when unavailable.
+let Notifications: typeof import('expo-notifications') | null = null;
+try {
+  Notifications = require('expo-notifications');
+} catch {
+  console.warn('[Notifications] expo-notifications not available (Expo Go?). Notifications disabled.');
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -124,7 +132,7 @@ const NOTIFICATION_TEMPLATES: Record<NotificationCategory, { titles: string[]; b
 const ANDROID_CHANNEL_ID = 'wordfall-default';
 
 async function setupAndroidChannel(): Promise<void> {
-  if (Platform.OS === 'android') {
+  if (Platform.OS === 'android' && Notifications) {
     await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
       name: 'Wordfall',
       importance: Notifications.AndroidImportance.HIGH,
@@ -139,15 +147,17 @@ async function setupAndroidChannel(): Promise<void> {
 
 // Configure how notifications are handled when the app is in the foreground.
 // This must be called before any notifications are received.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+if (Notifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 // ─── Notification Manager ──────────────────────────────────────────────────────
 
@@ -166,6 +176,13 @@ class NotificationManager {
    */
   async init(): Promise<boolean> {
     try {
+      if (!Notifications) {
+        console.log('[Notifications] Module not available — running in Expo Go or notifications unsupported');
+        this.initialized = true;
+        this.permissionGranted = false;
+        return false;
+      }
+
       // Physical device check -- push tokens are unavailable on simulators
       if (!Device.isDevice) {
         console.log('[Notifications] Not a physical device, skipping push token registration');
@@ -227,7 +244,7 @@ class NotificationManager {
     trigger: NotificationTrigger,
     templateVars?: Record<string, string | number>,
   ): Promise<string | null> {
-    if (!this.initialized || !this.permissionGranted) return null;
+    if (!this.initialized || !this.permissionGranted || !Notifications) return null;
 
     const template = NOTIFICATION_TEMPLATES[category];
     const titleIdx = Math.floor(Math.random() * template.titles.length);
@@ -310,7 +327,7 @@ class NotificationManager {
     if (!existingId) return;
 
     try {
-      await Notifications.cancelScheduledNotificationAsync(existingId);
+      if (Notifications) await Notifications.cancelScheduledNotificationAsync(existingId);
     } catch {
       // Notification may have already fired or been dismissed
     }
@@ -324,7 +341,7 @@ class NotificationManager {
    */
   async cancelAll(): Promise<void> {
     try {
-      await Notifications.cancelAllScheduledNotificationsAsync();
+      if (Notifications) await Notifications.cancelAllScheduledNotificationsAsync();
     } catch {
       // Ignore errors
     }
@@ -392,8 +409,9 @@ class NotificationManager {
    * Returns a subscription that should be removed on cleanup.
    */
   addForegroundListener(
-    callback: (notification: Notifications.Notification) => void,
-  ): Notifications.Subscription {
+    callback: (notification: any) => void,
+  ): { remove: () => void } {
+    if (!Notifications) return { remove: () => {} };
     return Notifications.addNotificationReceivedListener(callback);
   }
 
@@ -402,8 +420,9 @@ class NotificationManager {
    * Returns a subscription that should be removed on cleanup.
    */
   addResponseListener(
-    callback: (response: Notifications.NotificationResponse) => void,
-  ): Notifications.Subscription {
+    callback: (response: any) => void,
+  ): { remove: () => void } {
+    if (!Notifications) return { remove: () => {} };
     return Notifications.addNotificationResponseReceivedListener(callback);
   }
 }
