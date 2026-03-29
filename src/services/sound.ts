@@ -1,8 +1,7 @@
-import { Audio } from 'expo-av';
-
-// Lazy-load expo-audio to gracefully handle environments where it's unavailable
+// Lazy-load audio modules to avoid deprecation warnings and crashes
 let createAudioPlayerFn: any = null;
 let setAudioModeFn: any = null;
+let legacyAudio: any = null;
 let audioModuleLoaded = false;
 
 function loadAudioModule() {
@@ -15,10 +14,7 @@ function loadAudioModule() {
     } catch {
       // expo-audio not available — fall back to expo-av
       try {
-        const av = require('expo-av');
-        // Use expo-av as legacy fallback
-        createAudioPlayerFn = null; // signal to use legacy path
-        setAudioModeFn = null;
+        legacyAudio = require('expo-av').Audio;
       } catch {
         // Neither available
       }
@@ -607,14 +603,14 @@ class SoundManager {
       } else {
         // expo-av fallback (legacy)
         this.useNewApi = false;
-        await Audio.setAudioModeAsync({
+        await legacyAudio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
         });
         await Promise.all(
           (Object.keys(SOUND_DEFS) as SoundName[]).map(async (name) => {
-            const { sound } = await Audio.Sound.createAsync(
+            const { sound } = await legacyAudio.Sound.createAsync(
               { uri: this.getSoundUri(name) },
               { shouldPlay: false, volume: this.sfxVolume },
             );
@@ -661,7 +657,7 @@ class SoundManager {
         player.play();
         this.currentMusic = player;
       } else {
-        const { sound } = await Audio.Sound.createAsync(
+        const { sound } = await legacyAudio.Sound.createAsync(
           { uri: this.getMusicUri(track) },
           { shouldPlay: true, isLooping: true, volume: this.musicVolume },
         );
