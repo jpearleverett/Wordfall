@@ -15,6 +15,7 @@ interface VideoBackgroundProps {
 let useVideoPlayerHook: any = null;
 let VideoViewComponent: any = null;
 let videoLoadAttempted = false;
+let videoAvailable = false;
 
 function loadVideoModule() {
   if (!videoLoadAttempted) {
@@ -23,16 +24,49 @@ function loadVideoModule() {
       const mod = require('expo-video');
       useVideoPlayerHook = mod.useVideoPlayer;
       VideoViewComponent = mod.VideoView;
+      videoAvailable = !!(useVideoPlayerHook && VideoViewComponent);
     } catch {
-      // expo-video not available — components stay null
+      videoAvailable = false;
     }
   }
 }
 
 /**
+ * Error boundary that catches crashes from the video player and renders nothing.
+ */
+class VideoErrorBoundary extends React.Component<
+  { children: React.ReactNode; overlayColor?: string; opacity?: number },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.warn('[VideoBackground] Crashed, falling back to static view:', error.message);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // Fallback: just the overlay color, no video
+      return (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: this.props.opacity ?? 0.5 }]}>
+          {this.props.overlayColor && (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: this.props.overlayColor }]} />
+          )}
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/**
  * Full-screen looping video background using expo-video.
- * Designed to be layered behind other content via absolute positioning.
- * Gracefully falls back to a transparent view if expo-video is unavailable.
+ * Wrapped in an error boundary so crashes render a transparent fallback
+ * instead of crashing the entire app.
  */
 function VideoBackgroundInner({
   source,
@@ -41,8 +75,7 @@ function VideoBackgroundInner({
 }: VideoBackgroundProps) {
   loadVideoModule();
 
-  if (!useVideoPlayerHook || !VideoViewComponent) {
-    // Fallback: no video, just optional overlay
+  if (!videoAvailable) {
     return (
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
         {overlayColor && (
@@ -53,11 +86,13 @@ function VideoBackgroundInner({
   }
 
   return (
-    <VideoBackgroundWithPlayer
-      source={source}
-      opacity={opacity}
-      overlayColor={overlayColor}
-    />
+    <VideoErrorBoundary overlayColor={overlayColor} opacity={opacity}>
+      <VideoBackgroundWithPlayer
+        source={source}
+        opacity={opacity}
+        overlayColor={overlayColor}
+      />
+    </VideoErrorBoundary>
   );
 }
 
