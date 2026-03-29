@@ -42,6 +42,8 @@ interface GridProps {
   wildcardCells?: CellPosition[];
   spotlightDimmedCells?: Set<string>;
   gravityDirection?: GravityDirection;
+  /** When true, cells render at their grid row position instead of stacking to bottom */
+  noGravityLayout?: boolean;
   validWord?: boolean;
   movedCells?: CellPosition[];
   maxHeight?: number;
@@ -62,6 +64,7 @@ export function GameGrid({
   movedCells = [],
   maxHeight,
   isDragging = false,
+  noGravityLayout = false,
 }: GridProps) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -104,19 +107,22 @@ export function GameGrid({
   }, [movedCells]);
 
   const columns = useMemo(() => {
-    const cols_arr: { cell: NonNullable<GridType[0][0]>; row: number; col: number }[][] = [];
+    const cols_arr: { cell: NonNullable<GridType[0][0]> | null; row: number; col: number }[][] = [];
     for (let c = 0; c < cols; c++) {
-      const column: { cell: NonNullable<GridType[0][0]>; row: number; col: number }[] = [];
+      const column: { cell: NonNullable<GridType[0][0]> | null; row: number; col: number }[] = [];
       for (let r = 0; r < rows; r++) {
         const cell = grid[r][c];
         if (cell) {
           column.push({ cell, row: r, col: c });
+        } else if (noGravityLayout) {
+          // Preserve empty slots so cells stay at their grid position
+          column.push({ cell: null, row: r, col: c });
         }
       }
       cols_arr.push(column);
     }
     return cols_arr;
-  }, [grid, rows, cols]);
+  }, [grid, rows, cols, noGravityLayout]);
 
   const gridWidth = useMemo(() => cols * (cellSize + CELL_GAP) + CELL_GAP, [cols, cellSize]);
   const gridHeight = useMemo(() => rows * (cellSize + CELL_GAP), [rows, cellSize]);
@@ -134,22 +140,37 @@ export function GameGrid({
         }
       }
       const colX = padding + c * cellStride;
-      const totalCellHeight = colCells.length * cellStride;
-      const startY = gridHeight - totalCellHeight;
 
-      colCells.forEach((cell, i) => {
-        bounds.push({
-          row: cell.row,
-          col: c,
-          x: colX,
-          y: startY + i * cellStride,
-          w: cellSize + CELL_GAP,
-          h: cellSize + CELL_GAP,
+      if (noGravityLayout) {
+        // Cells at their actual row positions (no bottom-stacking)
+        colCells.forEach((cell) => {
+          bounds.push({
+            row: cell.row,
+            col: c,
+            x: colX,
+            y: cell.row * cellStride,
+            w: cellSize + CELL_GAP,
+            h: cellSize + CELL_GAP,
+          });
         });
-      });
+      } else {
+        // Gravity layout: stack cells at bottom of column
+        const totalCellHeight = colCells.length * cellStride;
+        const startY = gridHeight - totalCellHeight;
+        colCells.forEach((cell, i) => {
+          bounds.push({
+            row: cell.row,
+            col: c,
+            x: colX,
+            y: startY + i * cellStride,
+            w: cellSize + CELL_GAP,
+            h: cellSize + CELL_GAP,
+          });
+        });
+      }
     }
     return bounds;
-  }, [grid, rows, cols, cellSize, gridHeight]);
+  }, [grid, rows, cols, cellSize, gridHeight, noGravityLayout]);
 
   const gridRef = useRef<View>(null);
   const gridLayoutRef = useRef({ x: 0, y: 0 });
@@ -321,10 +342,20 @@ export function GameGrid({
                       width: cellSize + CELL_GAP,
                       height: gridHeight,
                     },
+                    noGravityLayout && styles.columnNoGravity,
                   ]}
                 >
-                  <View style={EMPTY_FLEX} />
+                  {!noGravityLayout && <View style={EMPTY_FLEX} />}
                   {column.map(({ cell, row, col }) => {
+                    if (!cell) {
+                      // Empty slot placeholder for noGravity layout
+                      return (
+                        <View
+                          key={`empty-${row}-${col}`}
+                          style={{ width: cellSize, height: cellSize, margin: CELL_GAP / 2 }}
+                        />
+                      );
+                    }
                     const key = `${row},${col}`;
                     const selIndex = selectedSet.get(key) ?? -1;
                     const isSelected = selIndex >= 0;
@@ -437,6 +468,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'flex-end',
+  },
+  columnNoGravity: {
+    justifyContent: 'flex-start',
   },
   gravityArrowContainer: {
     position: 'absolute',

@@ -1,7 +1,7 @@
 /**
  * Mystery Wheel — High-variance reward mechanic.
  *
- * Players earn a free spin after every 3 puzzles completed, or can buy spins with gems.
+ * Players earn a free spin after every 8 puzzles completed, or can buy spins with gems.
  * The wheel has weighted segments creating genuine uncertainty (variable ratio reinforcement).
  *
  * Design philosophy: Most spins yield small rewards, but the rare jackpot possibility
@@ -41,7 +41,7 @@ export interface MysteryWheelState {
 export const DEFAULT_MYSTERY_WHEEL_STATE: MysteryWheelState = {
   spinsAvailable: 1, // Start with 1 free spin as a taste
   puzzlesSinceLastSpin: 0,
-  puzzlesPerFreeSpin: 3,
+  puzzlesPerFreeSpin: 8,
   totalSpins: 0,
   lastJackpotSpin: 0,
   jackpotPity: 25, // Guaranteed rare+ within 25 spins

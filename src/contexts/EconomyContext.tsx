@@ -99,13 +99,13 @@ const STARTER_PACK_WINDOW_MS = 72 * 60 * 60 * 1000;
 const DEFAULT_ECONOMY: EconomyState = {
   coins: 500,
   gems: 10,
-  hintTokens: 0,
+  hintTokens: 5,
   eventStars: 0,
   libraryPoints: 0,
   totalEarned: {
     coins: 500,
     gems: 10,
-    hintTokens: 0,
+    hintTokens: 5,
     eventStars: 0,
     libraryPoints: 0,
   },
@@ -120,7 +120,7 @@ const DEFAULT_ECONOMY: EconomyState = {
   dailyValuePackExpiry: 0,
   dailyValuePackLastClaim: '',
   starterPackExpiresAt: Date.now() + STARTER_PACK_WINDOW_MS,
-  undoTokens: 0,
+  undoTokens: 5,
 };
 
 /** Calculate how many lives should have refilled since lastRefillTime. */

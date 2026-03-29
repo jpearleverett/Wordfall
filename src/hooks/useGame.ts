@@ -26,7 +26,8 @@ function getHintsForMode(mode: GameMode): number {
     case 'relax':
       return 99;
     default:
-      return INITIAL_HINTS;
+      // Persistent inventory: hints come from economy tokens, not per-level allocation
+      return 0;
   }
 }
 
@@ -38,7 +39,8 @@ function getUndosForMode(mode: GameMode): number {
     case 'relax':
       return 99;
     default:
-      return INITIAL_UNDOS;
+      // Persistent inventory: undos come from economy tokens, not per-level allocation
+      return 0;
   }
 }
 
@@ -60,6 +62,7 @@ function createInitialState(
     moves: 0,
     maxMoves,
     hintsLeft: getHintsForMode(mode),
+    hintsUsed: 0,
     undosLeft: getUndosForMode(mode),
     history: [],
     status: 'playing',
@@ -203,17 +206,27 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const { position } = action;
       const { selectedCells, selectionDirection, board } = state;
 
-      if (!board.grid[position.row]?.[position.col]) return state;
-
-      // If in wildcard placement mode, place the wildcard instead
+      // If in wildcard placement mode, allow placing on empty cells too
       if (state.wildcardMode) {
+        // For empty cells, create a placeholder cell so the wildcard has something to render
+        let newGrid = board.grid;
+        if (!board.grid[position.row]?.[position.col]) {
+          newGrid = board.grid.map(r => [...r]);
+          newGrid[position.row][position.col] = {
+            id: `wildcard-${position.row}-${position.col}`,
+            letter: '*',
+          };
+        }
         return {
           ...state,
+          board: { ...board, grid: newGrid },
           wildcardMode: false,
-          wildcardCells: [position], // replace any existing wildcard (max 1)
+          wildcardCells: [position],
           boosterCounts: { ...state.boosterCounts, wildcardTile: state.boosterCounts.wildcardTile - 1 },
         };
       }
+
+      if (!board.grid[position.row]?.[position.col]) return state;
 
       // If tapping an already selected cell, deselect from that point
       const existingIndex = selectedCells.findIndex(
@@ -434,6 +447,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectedCells: hint.positions,
         selectionDirection: null,
         hintsLeft: state.hintsLeft - 1,
+        hintsUsed: state.hintsUsed + 1,
         perfectRun: false,
       };
     }
@@ -605,6 +619,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return state;
     }
 
+    case 'GRANT_HINT':
+      return { ...state, hintsLeft: state.hintsLeft + 1 };
+
+    case 'GRANT_UNDO':
+      return { ...state, undosLeft: state.undosLeft + 1 };
+
     default:
       return state;
   }
@@ -659,6 +679,14 @@ export function useGame(
 
   const undoMove = useCallback(() => {
     dispatch({ type: 'UNDO_MOVE' });
+  }, []);
+
+  const grantHint = useCallback(() => {
+    dispatch({ type: 'GRANT_HINT' });
+  }, []);
+
+  const grantUndo = useCallback(() => {
+    dispatch({ type: 'GRANT_UNDO' });
   }, []);
 
   const newGame = useCallback((board: Board, newLevel: number, newMode?: GameMode, newMaxMoves?: number, newTimeLimit?: number) => {
@@ -736,12 +764,11 @@ export function useGame(
 
   // Calculate stars
   const totalWords = state.board.words.length;
-  const hintsUsed = (getHintsForMode(state.mode) === 0 ? 0 : getHintsForMode(state.mode) - state.hintsLeft);
   const stars =
     state.status === 'won'
-      ? hintsUsed === 0 && state.moves <= totalWords
+      ? state.hintsUsed === 0 && state.moves <= totalWords
         ? 3
-        : hintsUsed <= 1 && state.moves <= totalWords + 1
+        : state.hintsUsed <= 1 && state.moves <= totalWords + 1
         ? 2
         : 1
       : 0;
@@ -753,6 +780,8 @@ export function useGame(
     submitWord,
     useHint: useHintAction,
     undoMove,
+    grantHint,
+    grantUndo,
     newGame,
     activateWildcard,
     activateSpotlight,

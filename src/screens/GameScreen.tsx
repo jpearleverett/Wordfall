@@ -22,7 +22,7 @@ import { PuzzleComplete } from '../components/PuzzleComplete';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier, INITIAL_HINTS } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
@@ -166,6 +166,8 @@ export function GameScreen({
     submitWord,
     useHint,
     undoMove,
+    grantHint,
+    grantUndo,
     newGame,
     activateWildcard,
     activateSpotlight,
@@ -328,15 +330,12 @@ export function GameScreen({
     }
   }, [state.status, activeOffer, showOfferIfAllowed]);
 
-  // post_puzzle: flag when puzzle won with all free hints used
+  // post_puzzle: flag when puzzle won with hint tokens depleted
   useEffect(() => {
-    if (state.status === 'won') {
-      const maxHints = INITIAL_HINTS;
-      if (state.hintsLeft === 0 && maxHints > 0) {
-        setPendingPostPuzzleOffer(true);
-      }
+    if (state.status === 'won' && economy.hintTokens === 0 && mode !== 'relax') {
+      setPendingPostPuzzleOffer(true);
     }
-  }, [state.status, state.hintsLeft]);
+  }, [state.status, economy.hintTokens, mode]);
 
   const handleOfferAccept = useCallback(() => {
     if (!activeOffer) return;
@@ -485,16 +484,21 @@ export function GameScreen({
     }
   }, [state.lastInvalidTap, showInvalidFlashAnim]);
 
+  // Hints/undos use persistent economy tokens (not per-level allocation)
+  // Relax mode still uses unlimited per-level allocation
+  const hintsAvailable = mode === 'relax' ? state.hintsLeft : economy.hintTokens;
+  const undosAvailable = mode === 'relax' ? state.undosLeft : (state.history.length > 0 ? economy.undoTokens : 0);
+
   // Idle hint prompt — use refs to avoid recreating on every state change
   const statusRef = useRef(state.status);
-  const hintsLeftRef = useRef(state.hintsLeft);
+  const hintsAvailableRef = useRef(hintsAvailable);
   statusRef.current = state.status;
-  hintsLeftRef.current = state.hintsLeft;
+  hintsAvailableRef.current = hintsAvailable;
 
   const resetIdleTimer = useCallback(() => {
     setShowIdleHint(false);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    if (statusRef.current === 'playing' && hintsLeftRef.current > 0) {
+    if (statusRef.current === 'playing' && hintsAvailableRef.current > 0) {
       idleTimerRef.current = setTimeout(() => {
         setShowIdleHint(true);
       }, idleHintDelay);
@@ -703,14 +707,26 @@ export function GameScreen({
   );
 
   const handleHint = useCallback(() => {
+    if (mode !== 'relax') {
+      // Spend from persistent inventory and grant into game state
+      if (economy.hintTokens <= 0) return;
+      economy.spendHintToken();
+      grantHint();
+    }
     void soundManager.playSound('hintUsed');
-    void analytics.logEvent('hint_used', { level, mode, hintsLeft: state.hintsLeft });
+    void analytics.logEvent('hint_used', { level, mode, hintsAvailable });
     useHint();
-  }, [useHint, level, mode, state.hintsLeft]);
+  }, [useHint, grantHint, level, mode, hintsAvailable, economy]);
 
   const handleUndo = useCallback(() => {
+    if (mode !== 'relax') {
+      // Spend from persistent inventory and grant into game state
+      if (economy.undoTokens <= 0) return;
+      economy.spendUndoToken();
+      grantUndo();
+    }
     void soundManager.playSound('undoUsed');
-    void analytics.logEvent('undo_used', { level, mode, undosLeft: state.undosLeft });
+    void analytics.logEvent('undo_used', { level, mode, undosAvailable });
 
     // #4 Undo rewind effect — cyan tint flash + scale pulse
     if (!reduceMotion) {
@@ -743,7 +759,7 @@ export function GameScreen({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, level, mode, state.undosLeft, reduceMotion, undoFlashAnim, undoPulseAnim]);
+  }, [undoMove, grantUndo, level, mode, undosAvailable, economy, reduceMotion, undoFlashAnim, undoPulseAnim]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
@@ -904,8 +920,8 @@ export function GameScreen({
         score={state.score}
         combo={state.combo}
         moves={state.moves}
-        hintsLeft={state.hintsLeft}
-        undosLeft={state.undosLeft}
+        hintsLeft={hintsAvailable}
+        undosLeft={undosAvailable}
         foundWords={foundWords}
         totalWords={totalWords}
         isDaily={isDaily}
@@ -1095,7 +1111,7 @@ export function GameScreen({
               </Text>
             </View>
           )}
-          {showIdleHint && state.hintsLeft > 0 && state.status === 'playing' && (
+          {showIdleHint && hintsAvailable > 0 && state.status === 'playing' && (
             <Pressable
               style={styles.idleHintBanner}
               onPress={() => { setShowIdleHint(false); handleHint(); }}
@@ -1106,7 +1122,7 @@ export function GameScreen({
             </Pressable>
           )}
           {/* When hints are depleted, offer ad-for-hint during gameplay */}
-          {showIdleHint && state.hintsLeft === 0 && state.status === 'playing' && !economy.isAdFree && adManager.canShowAd('hint_reward') && (
+          {showIdleHint && hintsAvailable === 0 && state.status === 'playing' && !economy.isAdFree && adManager.canShowAd('hint_reward') && (
             <Pressable
               style={styles.adHintBanner}
               onPress={() => { setShowIdleHint(false); handleWatchAdForHint(); }}
@@ -1123,6 +1139,16 @@ export function GameScreen({
             >
               <Text style={styles.stuckText}>
                 Stuck? Tap here to undo your last move
+              </Text>
+            </Pressable>
+          )}
+          {isStuck && state.status === 'playing' && state.undosLeft <= 0 && (
+            <Pressable
+              style={[styles.stuckBanner, styles.stuckBannerRetry]}
+              onPress={handleRetry}
+            >
+              <Text style={styles.stuckText}>
+                No moves left — tap to retry this puzzle
               </Text>
             </Pressable>
           )}
@@ -1144,6 +1170,7 @@ export function GameScreen({
             wildcardCells={state.wildcardCells}
             spotlightDimmedCells={spotlightDimmedSet}
             gravityDirection={mode === 'gravityFlip' ? state.gravityDirection : undefined}
+            noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
           />
         </Animated.View>
 
@@ -1313,7 +1340,7 @@ export function GameScreen({
             levelNumber: level,
             difficulty,
             wordsRemaining: remainingWords.length,
-            hintsUsed: INITIAL_HINTS - state.hintsLeft,
+            hintsUsed: state.hintsUsed,
           }}
           onAccept={handleOfferAccept}
           onDismiss={dismissOffer}
@@ -1635,6 +1662,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginHorizontal: 8,
     marginTop: 4,
+  },
+  stuckBannerRetry: {
+    backgroundColor: 'rgba(168, 85, 247, 0.85)',
   },
   stuckText: {
     color: '#fff',
