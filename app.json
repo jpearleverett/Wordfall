@@ -38,7 +38,9 @@
           "color": "#00d4ff",
           "sounds": []
         }
-      ]
+      ],
+      "expo-video",
+      "expo-audio"
     ],
     "extra": {
       "eas": {
