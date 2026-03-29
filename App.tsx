@@ -958,6 +958,18 @@ function HomeMainScreen({ route, navigation }: any) {
     }
   }, [player.loaded]);
 
+  // Process pending ceremonies when new ones are queued (e.g. after handleComplete)
+  useEffect(() => {
+    if (
+      !activeCeremony &&
+      !showWelcomeBack &&
+      player.pendingCeremonies.length > 0
+    ) {
+      const next = player.popCeremony();
+      if (next) setActiveCeremony(next);
+    }
+  }, [player.pendingCeremonies.length, activeCeremony, showWelcomeBack]);
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
