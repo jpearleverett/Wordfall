@@ -647,15 +647,7 @@ export function PuzzleComplete({
                   </View>
                 </Animated.View>
               )}
-              {difficultyTransition && (
-                <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.purple + '20', borderColor: COLORS.purple + '40', opacity: statsAnim }]}>
-                  <Text style={styles.levelUpEmoji}>🏆</Text>
-                  <View>
-                    <Text style={[styles.levelUpText, { color: COLORS.purple }]}>NEW CHALLENGE TIER!</Text>
-                    <Text style={styles.levelUpSubtext}>{difficultyTransition.from} → {difficultyTransition.to}</Text>
-                  </View>
-                </Animated.View>
-              )}
+              {/* Difficulty transition shown via DifficultyTransitionCeremony modal */}
 
               {/* Friend Score Comparison */}
               {friendComparison && friendComparison.total > 0 && (
@@ -667,24 +659,7 @@ export function PuzzleComplete({
                 </Animated.View>
               )}
 
-              {/* Next Level Preview Card */}
-              {nextLevelPreview && !isDaily && (
-                <Animated.View style={[styles.nextPreviewCard, { opacity: statsAnim }]}>
-                  <LinearGradient
-                    colors={GRADIENTS.surfaceCard as unknown as [string, string, ...string[]]}
-                    style={styles.nextPreviewCardInner}
-                  >
-                    <Text style={styles.nextPreviewLabel}>COMING UP</Text>
-                    <View style={styles.nextPreviewRow}>
-                      <View style={[styles.nextPreviewDiffDot, { backgroundColor: nextLevelPreview.difficulty === 'easy' ? COLORS.green : nextLevelPreview.difficulty === 'medium' ? COLORS.accent : nextLevelPreview.difficulty === 'hard' ? COLORS.orange : COLORS.purple }]} />
-                      <View>
-                        <Text style={styles.nextPreviewLevelText}>Level {nextLevelPreview.level}</Text>
-                        <Text style={styles.nextPreviewDiffText}>{nextLevelPreview.difficulty.charAt(0).toUpperCase() + nextLevelPreview.difficulty.slice(1)}</Text>
-                      </View>
-                    </View>
-                  </LinearGradient>
-                </Animated.View>
-              )}
+              {/* Next level preview removed — player sees it immediately on tap */}
 
               {/* One More Level Hooks */}
               <OneMoreLevelHooks level={level} stars={stars} statsAnim={statsAnim} />
@@ -712,8 +687,8 @@ export function PuzzleComplete({
                   </LinearGradient>
                 </Pressable>
                 <View style={styles.secondaryRow}>
-                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onRetry}>
-                    <Text style={styles.secondaryButtonText}>Retry</Text>
+                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
+                    <Text style={styles.secondaryButtonText}>Home</Text>
                   </Pressable>
                   {shareText ? (
                     <Pressable
@@ -726,29 +701,6 @@ export function PuzzleComplete({
                       <Text style={styles.shareButtonText}>Share</Text>
                     </Pressable>
                   ) : null}
-                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
-                    <Text style={styles.secondaryButtonText}>Home</Text>
-                  </Pressable>
-                </View>
-
-                {/* Replay & Challenge row */}
-                <View style={styles.secondaryRow}>
-                  {onWatchReplay && (
-                    <Pressable
-                      style={({ pressed }) => [styles.secondaryButton, styles.replayButton, pressed && styles.buttonPressed]}
-                      onPress={onWatchReplay}
-                    >
-                      <Text style={styles.replayButtonText}>{'\u25B6'} Replay</Text>
-                    </Pressable>
-                  )}
-                  {onShareSolve && (
-                    <Pressable
-                      style={({ pressed }) => [styles.secondaryButton, styles.shareSolveButton, pressed && styles.buttonPressed]}
-                      onPress={onShareSolve}
-                    >
-                      <Text style={styles.shareSolveButtonText}>Share Solve</Text>
-                    </Pressable>
-                  )}
                   {onChallengeFrend && (
                     <Pressable
                       style={({ pressed }) => [styles.challengeButton, pressed && styles.buttonPressed]}
@@ -758,6 +710,15 @@ export function PuzzleComplete({
                     </Pressable>
                   )}
                 </View>
+
+                {onWatchReplay && (
+                  <Pressable
+                    style={({ pressed }) => [styles.replayButtonFull, pressed && styles.buttonPressed]}
+                    onPress={onWatchReplay}
+                  >
+                    <Text style={styles.replayButtonText}>{'\u25B6'} Watch Replay</Text>
+                  </Pressable>
+                )}
               </Animated.View>
             </ScrollView>
           </LinearGradient>
@@ -1115,42 +1076,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.bodyBold,
   },
-  nextPreviewCard: {
-    marginBottom: 10,
-  },
-  nextPreviewCardInner: {
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    ...SHADOWS.soft,
-  },
-  nextPreviewLabel: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontFamily: FONTS.display,
-    letterSpacing: 1.5,
-    marginBottom: 8,
-  },
-  nextPreviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  nextPreviewDiffDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  nextPreviewLevelText: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontFamily: FONTS.bodyBold,
-  },
-  nextPreviewDiffText: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-  },
   shareButton: {
     borderColor: COLORS.accent + '30',
     backgroundColor: COLORS.accent + '10',
@@ -1159,20 +1084,16 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     fontFamily: FONTS.display,
   },
-  replayButton: {
-    borderColor: COLORS.teal + '30',
+  replayButtonFull: {
     backgroundColor: COLORS.teal + '10',
+    borderRadius: 18,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.teal + '30',
   },
   replayButtonText: {
     color: COLORS.teal,
-    fontFamily: FONTS.display,
-  },
-  shareSolveButton: {
-    borderColor: COLORS.accent + '30',
-    backgroundColor: COLORS.accent + '10',
-  },
-  shareSolveButtonText: {
-    color: COLORS.accent,
     fontFamily: FONTS.display,
   },
   challengeButton: {
