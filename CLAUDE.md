@@ -8,7 +8,8 @@ Wordfall is a gravity-based strategic word puzzle mobile game built with **React
 - **Backend:** Firebase (Auth + Firestore + Analytics) — Firestore social layer implemented with graceful offline fallback. Env vars needed for real connectivity
 - **State:** React Context (4 providers) + useReducer for game state + AsyncStorage persistence + Firestore sync when configured
 - **Monetization:** IAP via react-native-iap (14 products), rewarded ads via AdMob (mock fallback), contextual offers wired to triggers
-- **Analytics:** Dual-mode (Firebase Analytics + local AsyncStorage fallback) with 27+ typed events and A/B testing
+- **Audio:** `expo-audio` (SDK 54 compatible, `createAudioPlayer` for SFX/music) with `expo-av` fallback
+- **Video:** `expo-video` (SDK 54 compatible, `useVideoPlayer` + `VideoView`) with error boundary fallback
 - **Navigation:** React Navigation (bottom tabs + nested stacks) with progressive tab unlocking
 
 ## Commands
@@ -52,7 +53,7 @@ src/
 │   ├── ChallengeCard.tsx                        # Friend challenge display with accept/result comparison
 │   ├── ReplayViewer.tsx                         # Animated solve sequence step-through with share
 │   ├── SessionEndReminder.tsx                   # Auto-dismissing daily/streak reminder
-│   ├── common/       # Button, Card, Modal, Badge, ProgressBar, AmbientBackdrop, VideoBackground, HeroIllustrations, Tooltip
+│   ├── common/       # Button, Card, Modal, Badge, ProgressBar, AmbientBackdrop, VideoBackground (expo-video + error boundary), HeroIllustrations, Tooltip
 │   ├── economy/      # CurrencyDisplay, ShopItem
 │   ├── modes/        # TimerDisplay, MoveCounter
 │   └── events/       # EventBanner, EventProgress
@@ -192,15 +193,16 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 
 ### Boosters
 Three booster types available during gameplay (first use triggers `first_booster` ceremony):
-- **Wildcard Tile**: Places a wildcard letter that matches any word
 - **Spotlight** (👁️): Highlights a word on the board
-- **Smart Shuffle** (🔀): Randomizes non-word filler letters on the board, validates with mode-appropriate solver (`areAllWordsIndependentlyFindable` for noGravity, `isSolvableGravityFlip` for gravityFlip, `isSolvable` for standard modes)
+- **Wildcard Tile**: Places a wildcard letter that matches any word. Can be placed on empty cells (creates a placeholder cell) — useful in noGravity/shrinkingBoard after words are cleared. Renders as ★ symbol
+- **Spotlight** (👁️): Highlights a word on the board
+- **Smart Shuffle** (🔀): Randomizes non-word filler letters on the board, validates with mode-appropriate solver (`areAllWordsIndependentlyFindable` for noGravity/shrinkingBoard, `isSolvableGravityFlip` for gravityFlip, `isSolvable` for standard modes)
 
 ### Board Generation
 - Uses Mulberry32 seeded PRNG for reproducible puzzles
 - Words placed along random adjacent paths (any direction: horizontal, vertical, diagonal, zigzag) via DFS with randomized neighbor order
 - Each letter in a word must be 8-directionally adjacent to the previous letter, but the path can change direction freely (e.g., right → diagonal-down-left → down → diagonal-up-right)
-- Solvability validated using heuristic-first approach: checks each word is individually findable in the grid (fast DFS) before running the expensive full recursive solver only when needed
+- Solvability validated using heuristic-first approach: checks each word is individually findable in the grid (fast DFS) before running the expensive full recursive solver only when needed. shrinkingBoard uses `areAllWordsIndependentlyFindable` (no gravity); words are constrained to the interior region to survive outer ring removal
 - Filler letters use vowel-balanced distribution (35% vowels)
 - 3-tier fallback: standard → simplified → minimal generation on failure
 - Board generation timeout protection prevents UI hangs on difficult configurations
@@ -209,15 +211,15 @@ Three booster types available during gameplay (first use triggers `first_booster
 | Mode | Key Rule | Unlock Level |
 |------|----------|-------------|
 | `classic` | Standard play | 1 |
-| `limitedMoves` | N moves only | 5 |
-| `timePressure` | Countdown timer (auto-tick in useGame) | 8 |
-| `perfectSolve` | Zero mistakes, no hints/undos | 12 |
-| `cascade` | Score multiplier +0.25x per word | 10 |
 | `daily` | Same puzzle for all players (date-seeded) | 1 |
+| `noGravity` | Cleared cells stay as holes, no gravity | 3 |
+| `relax` | Unlimited hints/undos, gentle puzzles | 3 |
+| `timePressure` | Countdown timer (auto-tick in useGame) | 8 |
+| `gravityFlip` | Gravity direction rotates after each word (down→right→up→left) | 10 |
+| `shrinkingBoard` | No gravity; outer ring removed every 2 words, words placed in interior | 10 |
+| `perfectSolve` | Zero mistakes, no hints/undos | 12 |
 | `weekly` | Harder curated puzzle, 7-day window | 10 |
-| `endless` | Procedural, no level gating | 3 |
 | `expert` | No hints, no undo, harder boards | 30 |
-| `relax` | Unlimited undos, gentle puzzles | 3 |
 
 Modes auto-unlock in `App.tsx` `handleComplete` based on player level.
 
@@ -239,7 +241,7 @@ Sound manager calls are wired at every interaction point in `GameScreen.tsx` and
 - Hint/undo → `hintUsed`/`undoUsed` sound
 - Boosters → `buttonPress` sound
 
-**Audio is synthesized at runtime** — `SoundManager` (`src/services/sound.ts`) generates tones and chords programmatically (sine waves via WAV data URIs loaded into expo-av). No `.mp3`/`.wav` asset files needed. Sound effects use `ToneSpec` definitions (frequency arrays + duration), background music uses `ProgressionSpec` (chord progressions looped with crossfade). All sounds are functional — replace with real assets by swapping `Audio.Sound.createAsync()` calls.
+**Audio is synthesized at runtime** — `SoundManager` (`src/services/sound.ts`) generates tones and chords programmatically (sine waves via WAV data URIs). Uses `expo-audio` (`createAudioPlayer`) with `expo-av` as fallback, both lazy-loaded via `require()` to avoid deprecation warnings. No `.mp3`/`.wav` asset files needed. Sound effects use `ToneSpec` definitions (frequency arrays + duration), background music uses `ProgressionSpec` (chord progressions looped). All sounds are functional — replace with real assets by swapping `createAudioPlayer(require('./path.mp3'))` calls.
 
 ## Reward & Progression Wiring
 
@@ -264,7 +266,7 @@ Sound manager calls are wired at every interaction point in `GameScreen.tsx` and
 - **Milestone decorations**: On level-up, checks against `MILESTONE_DECORATIONS` (every 5 levels, 10 total), queues `decoration_unlock` ceremony
 - **First rare tile**: Detects when player's first-ever rare tile drops, queues `first_rare_tile` ceremony
 - **First mode clear**: Captures `prevModePlayed` before `recordModePlay()`, fires `first_mode_clear` for first win in any non-classic mode
-- **Mystery wheel progress**: Calls `player.awardFreeSpin()` — awards a free spin every 3 puzzle completions
+- **Mystery wheel progress**: Calls `player.awardFreeSpin()` — awards a free spin every 8 puzzle completions
 - **Win streak**: Calls `player.updateWinStreak(true)` — increments consecutive win counter, milestones at 3/5/7/10/15/20 queue `win_streak_milestone` ceremony
 - **Share text generation**: Generates Wordle-style emoji grid via `generateShareText()`
 - **Friend comparison**: Generates mock friend score data (Firestore-ready structure)
@@ -349,7 +351,7 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - **Accent borders**: Highlighted/active items use thin accent-colored borders with matching glow shadow via `SHADOWS.glow(COLORS.accent)`
 
 ### Grid Layout
-- Flex-end columns for gravity visualization
+- Flex-end columns for gravity visualization (standard modes); `noGravityLayout` prop renders cells at their actual row positions with empty placeholders for null cells (noGravity/shrinkingBoard modes)
 - Cell touch targets: 44pt minimum
 - Grid padding: 12px, cell gap: 4px
 - Cell size computed dynamically based on column count, screen width, and available height (`Math.min(widthBased, heightBased)` when `maxHeight` prop is provided via `onLayout` measurement)
@@ -437,10 +439,10 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Milestone rewards**: Library decoration every 5 levels (10 decorations with ceremonies), star milestones (50/100/250/500 with ceremonies), perfect solve badges (10/25/50 with ceremonies) — all fully wired with celebration modals
 - **Parental controls**: Spending limit toggle, monthly cap ($0-500), purchase PIN requirement on SettingsScreen
 - **Weekend Blitz event**: Saturday-Sunday with double XP and increased rare tile drop rates
-- **Stuck detection**: Red banner prompting undo when dead-end state detected during gameplay
+- **Stuck detection**: Red banner prompting undo when dead-end state detected during gameplay. If player has no undos remaining, purple "No moves left — tap to retry" banner appears instead
 - **Star rating system**: 3 stars (no hints + efficient moves), 2 stars (≤1 hint), 1 star (any other win)
 - **Club auto-kick config**: `CLUB.autoKickInactiveDays = 14` for removing inactive members
-- **Mystery Wheel (gacha)**: 10 weighted segments (common→epic) with pity system guaranteeing rare+ within 25 spins, mystery box secondary rewards, free spin every 3 puzzles, gem-purchasable spins (10 gems each, 40 gems for 5-pack). State persisted in PlayerContext (`mysteryWheel`). `MysteryWheel` component has animated spin, result display, buy buttons
+- **Mystery Wheel (gacha)**: 10 weighted segments (common→epic) with pity system guaranteeing rare+ within 25 spins, mystery box secondary rewards, free spin every 8 puzzles, gem-purchasable spins (10 gems each, 40 gems for 5-pack). State persisted in PlayerContext (`mysteryWheel`). `MysteryWheel` component has animated spin, result display, buy buttons
 - **Event layering**: 5 simultaneous event layers: (1) main weekly event from 12-week rotation, (2) mini events every ~3 days (Coin Rush, Star Shower, Hint Frenzy, Rare Hunt, XP Surge — 24-48hr overlays), (3) automatic weekend blitz (Sat/Sun), (4) Royal Match-style win streak with 7 escalating tiers (3→20 consecutive wins), (5) partner events scaffolded for Firestore
 - **Push notifications (real)**: 9 notification categories using real `expo-notifications`. Permission handling, Android channels, segment-aware scheduling. Streak reminder (8 PM), daily challenge (9 AM), comeback (3 days)
 - **Contextual offers (wired)**: 6 dismissible offer types wired to real triggers in GameScreen and HomeScreen. hint_rescue (2+ fails), streak_shield (expiring streak), close_finish (1 word away + stuck), post_puzzle (hints depleted), booster_pack (entering hard/expert). Max 1 offer per level
@@ -448,7 +450,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **IAP service**: Full `react-native-iap` integration with 14 products. Mock mode for development. NativeModules check on init prevents EventEmitter crash in Expo Go. Receipt storage, restore purchases, parental control enforcement. Wired into ShopScreen for real purchase flow
 - **Rewarded ads**: AdMob integration with MockAdModal fallback for dev. 5 reward types. Wired into GameScreen (post-fail hint, post-complete double rewards) and ShopScreen (coins, mystery spin). Daily caps and cooldown
 - **Firestore social layer**: Real leaderboards (daily/weekly/all-time), friend system with codes, real gift delivery, player profile sync. LeaderboardScreen wired to Firestore. All methods gracefully fallback when offline
-- **Mystery Wheel (surfaced)**: Prominent button on HomeScreen for established+ players with free spin pulse animation. Post-puzzle spin prompt when free spins available. Full overlay with reward granting via economy context
+- **Mystery Wheel (surfaced)**: Prominent button on HomeScreen for early+ players (3+ puzzles solved) with free spin pulse animation. Post-puzzle spin prompt when free spins available. Full overlay with reward granting via economy context
 - **Puzzle energy system**: 30 energy/day, regenerates 1 per 15 min. Daily/endless/relax modes are free. 3 bonus plays after zero. Ad refill (+5) and gem refill (full). NOT a hard wall per GDD ethics
 - **Adaptive difficulty**: Invisible per-player difficulty adjustment. Analyzes rolling 20-puzzle metrics. Makes easier when struggling (avgStars < 1.5), harder when cruising (5+ consecutive 3-stars). Capped at ±1 step. Wired into all board generation points
 - **Live event manager**: Runtime event coordination with multiplier calculation. Coin/XP/rare-tile multipliers applied in handleComplete. Progress tracking and reward claiming. EventScreen shows active events with timers and reward tiers
@@ -456,7 +458,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Player segmentation**: 7 engagement + 4 skill + 4 spending + 5 motivation segments. Drives personalized offer timing, difficulty, home content, notification scheduling, mode recommendations. Recomputed on each session start
 - **Friend challenges**: Create/send/respond to async puzzle challenges. ChallengeCard on HomeScreen. Side-by-side result comparison. Share via React Native Share API
 - **Solve replay**: Move recording in useGame (solveSequence with grid snapshots). ReplayViewer component exists with animated playback, play/pause/step controls. Emoji grid sharing via replayGenerator. Not currently surfaced on PuzzleComplete (buttons removed for cleaner victory flow); ReplayViewer could be surfaced from Profile/history if desired
-- **Audio asset infrastructure**: Dual-mode sound system — loads real .mp3 files from assets/audio/ when present, falls back to synthesized tones. LOCAL_AUDIO registry in localAssets.ts
+- **Audio asset infrastructure**: Dual-mode sound system — uses `expo-audio` (`createAudioPlayer`) with `expo-av` fallback, both lazy-loaded via `require()`. Loads real .mp3 files from assets/audio/ when present, falls back to synthesized WAV data URIs. LOCAL_AUDIO registry in localAssets.ts
 - **Smooth difficulty curve**: Per-level ramp across 12 phases (not a staircase). Every 5th level is a breather. Breather config drops difficulty ~4 levels back
 
 ### Needs External Setup
@@ -524,12 +526,12 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 
 ### Adding sound effects
 - **Synthesized (current approach):** Add a `ToneSpec` entry to `SOUND_DEFS` in `src/services/sound.ts` with frequency array + duration, then add the key to the `SoundName` type
-- **Asset-based (upgrade path):** Replace the WAV-generation logic in `SoundManager.init()` with `Audio.Sound.createAsync(require('./path.mp3'))` — all callsites use the same `SoundName` keys and will work immediately
+- **Asset-based (upgrade path):** Replace the WAV-generation logic in `SoundManager.init()` with `createAudioPlayer(require('./path.mp3'))` — all callsites use the same `SoundName` keys and will work immediately
 
 ## Important Notes
 
 - **No energy walls** on core play - ethical F2P design
-- **Hints/undos are consumables** (3 each per puzzle by default, purchasable)
+- **Hints/undos use persistent inventory** (industry standard like Candy Crush/Royal Match). Tokens come from `economy.hintTokens`/`economy.undoTokens`, NOT per-level allocation. New players start with 5 of each. Earned through puzzle completion, events, daily login, ad watching, shop purchases. GameScreen's `handleHint`/`handleUndo` spend from economy via `GRANT_HINT`/`GRANT_UNDO` reducer actions. Relax mode is exempt (unlimited). Expert/perfectSolve modes disable hints/undos entirely. `hintsUsed` counter in game state tracks per-puzzle usage for star rating
 - **Boosters** (wildcardTile, spotlight, smartShuffle) are per-puzzle consumables tracked in `boosterCounts`. First-ever booster use triggers a `first_booster` ceremony (tracked via `tooltipsShown`)
 - **Portrait orientation only** (set in app.json)
 - **Dark mode only** - no light theme (5 dark theme variants in cosmetics)
@@ -567,11 +569,11 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Daily Value Pack** gated to `availableAfterDay: 3` per GDD; `autoEnds: true`
 - **Starter Pack** includes exclusive decoration (`starter_bookend`) per GDD
 - **Chapter Bundle** includes 1 Board Preview booster per GDD
-- **Star rating** uses hints + move efficiency: 3★ = no hints + moves ≤ wordCount, 2★ = ≤1 hint + moves ≤ wordCount+1, 1★ = otherwise
+- **Star rating** uses `hintsUsed` counter + move efficiency: 3★ = no hints + moves ≤ wordCount, 2★ = ≤1 hint + moves ≤ wordCount+1, 1★ = otherwise
 - **`.env.example`** documents all required Firebase env vars; `.env` files are gitignored
 - **`eas.json`** provides development/preview/production build profiles
 - **Difficulty curve is smooth, not a staircase** — `getLevelConfig(level)` returns per-level `BoardConfig` across 12 phases. Every 5th level is a breather (drops back ~2 levels). The old 4-tier staircase (cliff at level 6/16/31) has been replaced. `DIFFICULTY_CONFIGS` still exists for reference but is no longer used by `getLevelConfig`
-- **Mystery Wheel state** persisted in `PlayerContext.mysteryWheel` — tracks `spinsAvailable`, `puzzlesSinceLastSpin`, `totalSpins`, `lastJackpotSpin`, `jackpotPity` (25). Free spin awarded every 3 puzzles via `awardFreeSpin()`. Wheel logic in `src/data/mysteryWheel.ts`, UI in `src/components/MysteryWheel.tsx`
+- **Mystery Wheel state** persisted in `PlayerContext.mysteryWheel` — tracks `spinsAvailable`, `puzzlesSinceLastSpin`, `totalSpins`, `lastJackpotSpin`, `jackpotPity` (25). Free spin awarded every 8 puzzles via `awardFreeSpin()`. Wheel logic in `src/data/mysteryWheel.ts`, UI in `src/components/MysteryWheel.tsx`
 - **Win streak state** persisted in `PlayerContext.winStreak` — tracks `currentStreak`, `bestStreak`, `lastWinDate`, `rewardsClaimed`. Updated via `updateWinStreak(won)`. Milestone ceremonies at 3/5/7/10/15/20 queued directly in `setData`
 - **Event layering** enables multiple simultaneous events — main weekly event + mini events (every ~3 days) + weekend blitz (auto Sat/Sun) + win streak + partner events (Firestore scaffold). Data in `src/data/eventLayers.ts`
 - **Notification service** in `src/services/notifications.ts` is real (not scaffold). Uses `expo-notifications` with permission handling, Android channels, and segment-aware scheduling
