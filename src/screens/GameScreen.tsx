@@ -1285,11 +1285,6 @@ export function GameScreen({
           onDoubleReward={handleWatchAdForDoubleReward}
           rewardDoubled={rewardDoubled}
           showAdOption={!economy.isAdFree && adManager.canShowAd('double_reward')}
-          onWatchReplay={solveSequence.length > 0 ? () => setShowReplay(true) : undefined}
-          onShareSolve={solveSequence.length > 0 ? () => {
-            const text = generateReplayText(solveSequence, level, stars, state.score, isDaily);
-            Share.share({ message: text }).catch(() => {});
-          } : undefined}
           onChallengeFrend={() => {
             const challenge = player.sendChallenge('friend', {
               score: state.score,

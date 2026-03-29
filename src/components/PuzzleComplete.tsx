@@ -45,8 +45,6 @@ interface PuzzleCompleteProps {
   rewardDoubled?: boolean;
   showAdOption?: boolean;
   onChallengeFrend?: () => void;
-  onWatchReplay?: () => void;
-  onShareSolve?: () => void;
 }
 
 const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
@@ -309,8 +307,6 @@ export function PuzzleComplete({
   rewardDoubled = false,
   showAdOption = false,
   onChallengeFrend,
-  onWatchReplay,
-  onShareSolve,
 }: PuzzleCompleteProps) {
   const { height: screenHeight } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -710,15 +706,6 @@ export function PuzzleComplete({
                     </Pressable>
                   )}
                 </View>
-
-                {onWatchReplay && (
-                  <Pressable
-                    style={({ pressed }) => [styles.replayButtonFull, pressed && styles.buttonPressed]}
-                    onPress={onWatchReplay}
-                  >
-                    <Text style={styles.replayButtonText}>{'\u25B6'} Watch Replay</Text>
-                  </Pressable>
-                )}
               </Animated.View>
             </ScrollView>
           </LinearGradient>
@@ -1082,18 +1069,6 @@ const styles = StyleSheet.create({
   },
   shareButtonText: {
     color: COLORS.accent,
-    fontFamily: FONTS.display,
-  },
-  replayButtonFull: {
-    backgroundColor: COLORS.teal + '10',
-    borderRadius: 18,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.teal + '30',
-  },
-  replayButtonText: {
-    color: COLORS.teal,
     fontFamily: FONTS.display,
   },
   challengeButton: {
