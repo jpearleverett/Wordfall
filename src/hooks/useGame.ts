@@ -26,7 +26,8 @@ function getHintsForMode(mode: GameMode): number {
     case 'relax':
       return 99;
     default:
-      return INITIAL_HINTS;
+      // Persistent inventory: hints come from economy tokens, not per-level allocation
+      return 0;
   }
 }
 
@@ -38,7 +39,8 @@ function getUndosForMode(mode: GameMode): number {
     case 'relax':
       return 99;
     default:
-      return INITIAL_UNDOS;
+      // Persistent inventory: undos come from economy tokens, not per-level allocation
+      return 0;
   }
 }
 
@@ -60,6 +62,7 @@ function createInitialState(
     moves: 0,
     maxMoves,
     hintsLeft: getHintsForMode(mode),
+    hintsUsed: 0,
     undosLeft: getUndosForMode(mode),
     history: [],
     status: 'playing',
@@ -444,6 +447,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectedCells: hint.positions,
         selectionDirection: null,
         hintsLeft: state.hintsLeft - 1,
+        hintsUsed: state.hintsUsed + 1,
         perfectRun: false,
       };
     }
@@ -760,12 +764,11 @@ export function useGame(
 
   // Calculate stars
   const totalWords = state.board.words.length;
-  const hintsUsed = (getHintsForMode(state.mode) === 0 ? 0 : getHintsForMode(state.mode) - state.hintsLeft);
   const stars =
     state.status === 'won'
-      ? hintsUsed === 0 && state.moves <= totalWords
+      ? state.hintsUsed === 0 && state.moves <= totalWords
         ? 3
-        : hintsUsed <= 1 && state.moves <= totalWords + 1
+        : state.hintsUsed <= 1 && state.moves <= totalWords + 1
         ? 2
         : 1
       : 0;

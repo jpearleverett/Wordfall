@@ -55,6 +55,7 @@ export interface GameState {
   score: number;
   moves: number;
   hintsLeft: number;
+  hintsUsed: number;
   undosLeft: number;
   history: { grid: Grid; words: WordPlacement[]; wordsUntilShrink?: number; shrinkCount?: number }[];
   status: GameStatus;
