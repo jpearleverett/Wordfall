@@ -321,8 +321,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       let newGrid: Grid;
       let newGravityDirection = state.gravityDirection;
 
-      if (mode === 'noGravity') {
-        // No gravity — cleared cells stay as holes
+      if (mode === 'noGravity' || mode === 'shrinkingBoard') {
+        // No gravity — cleared cells stay as holes (shrinkingBoard relies on static positions)
         newGrid = gridAfterRemoval;
       } else if (mode === 'gravityFlip') {
         // Gravity in current direction, then rotate
@@ -343,7 +343,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Chain detection
       const remainingAfter = board.words.filter(w => !w.found && w.word !== matchingWord.word);
       let newChainCount = state.chainCount;
-      if (remainingAfter.length > 0 && mode !== 'noGravity') {
+      if (remainingAfter.length > 0 && mode !== 'noGravity' && mode !== 'shrinkingBoard') {
         const findableBefore = remainingAfter.filter(w => findWordInGrid(gridAfterRemoval, w.word, 1).length > 0);
         const findableAfter = remainingAfter.filter(w => findWordInGrid(newGrid, w.word, 1).length > 0);
         if (findableAfter.length > findableBefore.length) {
@@ -365,16 +365,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       let newWordsUntilShrink = state.wordsUntilShrink - 1;
 
       if (mode === 'shrinkingBoard' && !allFound && newWordsUntilShrink <= 0) {
-        // Time to shrink
+        // Time to shrink — remove outer ring, no gravity (cells stay in place)
         const outerRing = getOuterRing(newGrid);
         if (outerRing.length > 0) {
-          const gridAfterShrink = removeCells(newGrid, outerRing);
-          newGrid = applyGravity(gridAfterShrink);
+          newGrid = removeCells(newGrid, outerRing);
           newShrinkCount = state.shrinkCount + 1;
 
-          // Check if remaining words can still be solved in sequence (not just individually present)
+          // Check if remaining words are still findable (no gravity, so check independently)
           const remainingWordStrings = newWords.filter(w => !w.found).map(w => w.word);
-          const stillSolvable = isSolvable(newGrid, remainingWordStrings);
+          const stillSolvable = areAllWordsIndependentlyFindable(newGrid, remainingWordStrings);
           if (!stillSolvable) {
             newStatus = 'failed';
           }
@@ -571,7 +570,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
 
         // Verify solvability using mode-appropriate solver
-        const shuffleValid = state.mode === 'noGravity'
+        const shuffleValid = (state.mode === 'noGravity' || state.mode === 'shrinkingBoard')
           ? areAllWordsIndependentlyFindable(newGrid, remainingWords)
           : state.mode === 'gravityFlip'
             ? isSolvableGravityFlip(newGrid, remainingWords, state.gravityDirection)
@@ -712,8 +711,8 @@ export function useGame(
       return;
     }
 
-    // noGravity mode: just check if all words still exist in grid
-    if (mode === 'noGravity') {
+    // noGravity / shrinkingBoard: just check if all words still exist in grid
+    if (mode === 'noGravity' || mode === 'shrinkingBoard') {
       const timer = setTimeout(() => {
         setIsStuck(isDeadEndNoGravity(state.board.grid, remainingWords));
       }, 100);
