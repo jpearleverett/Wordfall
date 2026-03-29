@@ -7,7 +7,7 @@
  * beyond the 40 curated chapters.
  */
 
-import { BoardConfig, Board, Difficulty, Chapter } from '../types';
+import { BoardConfig, Board, Difficulty, Chapter, GameMode } from '../types';
 import { generateBoard } from './boardGenerator';
 import { getLevelConfig } from '../constants';
 import { getWordsByLength, getAllWords } from '../words';
@@ -108,9 +108,10 @@ export function generatePuzzle(
   config: BoardConfig,
   theme?: string,
   seed?: number,
+  mode?: GameMode,
 ): PuzzleDef {
   const puzzleSeed = seed ?? (level * 1337 + Date.now());
-  const board = generateBoard(config, puzzleSeed);
+  const board = generateBoard(config, puzzleSeed, mode);
   const category = theme ? getCategory(theme) : undefined;
 
   return {
@@ -135,6 +136,7 @@ export function generatePuzzleSet(
   difficulty: Difficulty,
   theme?: string,
   baseSeed?: number,
+  mode?: GameMode,
 ): PuzzleDef[] {
   const puzzles: PuzzleDef[] = [];
   const seed = baseSeed ?? Date.now();
@@ -144,7 +146,7 @@ export function generatePuzzleSet(
 
   for (let i = 0; i < count; i++) {
     const puzzleSeed = seed + i * 7919;
-    const board = generateBoard(baseConfig, puzzleSeed);
+    const board = generateBoard(baseConfig, puzzleSeed, mode);
     const category = theme ? getCategory(theme) : undefined;
 
     puzzles.push({

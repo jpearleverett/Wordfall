@@ -325,7 +325,7 @@ function ModesScreenWrapper({ navigation }: any) {
       config = adjusted.config;
 
       const seed = Date.now() + player.currentLevel * 1337;
-      board = generateBoard(config, seed);
+      board = generateBoard(config, seed, mode);
 
       const modeConfig = MODE_CONFIGS[mode];
       navigation.navigate('Game', {
@@ -731,7 +731,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       }
 
       const seed = nextLevel * 1337 + Date.now();
-      const board = generateBoard(config, seed);
+      const board = generateBoard(config, seed, mode);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
