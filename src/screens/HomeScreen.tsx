@@ -262,7 +262,7 @@ export function HomeScreen({
     : (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0;
   const showMysteryWheel = hasSegmentContent
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
-    : (playerStage === 'established' || playerStage === 'veteran') && onOpenWheel;
+    : playerStage !== 'new' && onOpenWheel;
 
   return (
     <View style={styles.container}>
