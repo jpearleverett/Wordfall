@@ -13,7 +13,7 @@ import {
   SolveStep,
 } from '../types';
 import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
-import { findWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable } from '../engine/solver';
+import { findWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 
 const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
@@ -372,9 +372,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           newGrid = applyGravity(gridAfterShrink);
           newShrinkCount = state.shrinkCount + 1;
 
-          // Check if remaining words are still findable
+          // Check if remaining words can still be solved in sequence (not just individually present)
           const remainingWordStrings = newWords.filter(w => !w.found).map(w => w.word);
-          const stillSolvable = remainingWordStrings.every(w => findWordInGrid(newGrid, w, 1).length > 0);
+          const stillSolvable = isSolvable(newGrid, remainingWordStrings);
           if (!stillSolvable) {
             newStatus = 'failed';
           }
@@ -570,8 +570,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           }
         }
 
-        // Verify solvability
-        if (isSolvable(newGrid, remainingWords)) {
+        // Verify solvability using mode-appropriate solver
+        const shuffleValid = state.mode === 'noGravity'
+          ? areAllWordsIndependentlyFindable(newGrid, remainingWords)
+          : state.mode === 'gravityFlip'
+            ? isSolvableGravityFlip(newGrid, remainingWords, state.gravityDirection)
+            : isSolvable(newGrid, remainingWords);
+        if (shuffleValid) {
           return {
             ...state,
             board: { ...state.board, grid: newGrid },

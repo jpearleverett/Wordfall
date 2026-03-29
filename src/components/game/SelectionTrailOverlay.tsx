@@ -1,57 +1,56 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { COLORS, SHADOWS } from '../../constants';
+import { COLORS } from '../../constants';
+
+interface CellBound {
+  row: number;
+  col: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 interface SelectionTrailOverlayProps {
   /** Array of selected cell positions in order */
   selectedCells: Array<{ row: number; col: number }>;
-  /** Size of each cell in pixels */
-  cellSize: number;
-  /** Gap between cells */
-  cellGap: number;
-  /** Grid padding */
-  gridPadding: number;
-  /** Number of columns in the grid */
-  cols: number;
+  /** Precomputed cell bounds from the grid (accounts for gravity alignment) */
+  cellBounds: CellBound[];
 }
 
 const LINE_HEIGHT = 2;
 const DOT_SIZE = 6;
 
-const getCellCenter = (
-  row: number,
-  col: number,
-  cellSize: number,
-  cellGap: number,
-  gridPadding: number,
-): { x: number; y: number } => ({
-  x: gridPadding + col * (cellSize + cellGap) + cellSize / 2,
-  y: gridPadding + row * (cellSize + cellGap) + cellSize / 2,
-});
-
 const SelectionTrailOverlay: React.FC<SelectionTrailOverlayProps> = ({
   selectedCells,
-  cellSize,
-  cellGap,
-  gridPadding,
-  cols,
+  cellBounds,
 }) => {
   const elements = useMemo(() => {
     if (selectedCells.length === 0) return { lines: [], dots: [] };
 
-    const dots = selectedCells.map((cell, index) => {
-      const center = getCellCenter(cell.row, cell.col, cellSize, cellGap, gridPadding);
-      return {
+    // Look up the actual visual center of a cell from cellBounds
+    const getCellCenter = (row: number, col: number): { x: number; y: number } | null => {
+      const bound = cellBounds.find(b => b.row === row && b.col === col);
+      if (!bound) return null;
+      return { x: bound.x + bound.w / 2, y: bound.y + bound.h / 2 };
+    };
+
+    const dots = [];
+    for (let index = 0; index < selectedCells.length; index++) {
+      const center = getCellCenter(selectedCells[index].row, selectedCells[index].col);
+      if (!center) continue;
+      dots.push({
         key: `dot-${index}`,
         x: center.x - DOT_SIZE / 2,
         y: center.y - DOT_SIZE / 2,
-      };
-    });
+      });
+    }
 
     const lines = [];
     for (let i = 0; i < selectedCells.length - 1; i++) {
-      const from = getCellCenter(selectedCells[i].row, selectedCells[i].col, cellSize, cellGap, gridPadding);
-      const to = getCellCenter(selectedCells[i + 1].row, selectedCells[i + 1].col, cellSize, cellGap, gridPadding);
+      const from = getCellCenter(selectedCells[i].row, selectedCells[i].col);
+      const to = getCellCenter(selectedCells[i + 1].row, selectedCells[i + 1].col);
+      if (!from || !to) continue;
 
       const dx = to.x - from.x;
       const dy = to.y - from.y;
@@ -70,7 +69,7 @@ const SelectionTrailOverlay: React.FC<SelectionTrailOverlayProps> = ({
     }
 
     return { lines, dots };
-  }, [selectedCells, cellSize, cellGap, gridPadding]);
+  }, [selectedCells, cellBounds]);
 
   if (selectedCells.length === 0) return null;
 
