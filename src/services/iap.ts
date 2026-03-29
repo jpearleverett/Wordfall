@@ -94,6 +94,15 @@ class IAPManager {
     if (this.initialized) return;
 
     try {
+      // Check if the native module is available before importing.
+      // react-native-iap's module-level code accesses NativeModules and
+      // creates a NativeEventEmitter, which throws "Value is undefined,
+      // expected an Object" when the native module isn't linked (Expo Go).
+      const { NativeModules } = await import('react-native');
+      if (!NativeModules.RNIapModule && !NativeModules.RNIapIos && !NativeModules.RNIapAmazonModule) {
+        throw new Error('react-native-iap native module not linked');
+      }
+
       // Dynamically import react-native-iap to avoid crashes when native
       // module is not linked (Expo Go, web).
       const iap: RNIap = await import('react-native-iap');
@@ -104,18 +113,24 @@ class IAPManager {
       this.connected = true;
       this.useMock = false;
 
-      // Set up purchase update listeners
-      this.purchaseUpdateSubscription = iap.purchaseUpdatedListener(
-        (purchase) => {
-          void this.handlePurchaseUpdate(purchase);
-        },
-      );
+      // Set up purchase update listeners — wrapped in try/catch because
+      // the NativeEventEmitter can throw if the native module isn't linked
+      // (e.g. running in Expo Go where the JS package exists but native code doesn't).
+      try {
+        this.purchaseUpdateSubscription = iap.purchaseUpdatedListener(
+          (purchase) => {
+            void this.handlePurchaseUpdate(purchase);
+          },
+        );
 
-      this.purchaseErrorSubscription = iap.purchaseErrorListener(
-        (error) => {
-          this.handlePurchaseError(error);
-        },
-      );
+        this.purchaseErrorSubscription = iap.purchaseErrorListener(
+          (error) => {
+            this.handlePurchaseError(error);
+          },
+        );
+      } catch (listenerError) {
+        console.warn('[IAP] Failed to set up purchase listeners:', listenerError);
+      }
 
       // Load products immediately
       await this.loadProducts();

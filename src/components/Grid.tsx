@@ -154,15 +154,27 @@ export function GameGrid({
   const gridRef = useRef<View>(null);
   const gridLayoutRef = useRef({ x: 0, y: 0 });
   const lastDragCellRef = useRef<string | null>(null);
+  const lastDragPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
 
+  // Hit test using exact cell size (not cell + gap) for precise boundary detection.
+  // Uses nearest-center tiebreaking for taps in gap space.
   const hitTestCell = useCallback((absX: number, absY: number): CellPosition | null => {
+    let bestDist = Infinity;
+    let bestCell: CellPosition | null = null;
     for (const b of cellBounds) {
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      // Check if within the full cell+gap area first (coarse filter)
       if (absX >= b.x && absX < b.x + b.w && absY >= b.y && absY < b.y + b.h) {
-        return { row: b.row, col: b.col };
+        const dist = Math.abs(absX - cx) + Math.abs(absY - cy);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestCell = { row: b.row, col: b.col };
+        }
       }
     }
-    return null;
+    return bestCell;
   }, [cellBounds]);
 
   const onCellPressRef = useRef(onCellPress);
@@ -178,6 +190,7 @@ export function GameGrid({
       .onBegin((e) => {
         isDraggingRef.current = true;
         lastDragCellRef.current = null;
+        lastDragPosRef.current = { x: e.x, y: e.y };
         onDragStartRef.current?.();
         const cell = hitTestCell(e.x, e.y);
         if (cell) {
@@ -187,6 +200,32 @@ export function GameGrid({
         }
       })
       .onUpdate((e) => {
+        // Interpolate between last position and current to catch cells skipped by fast diagonal drags
+        const prev = lastDragPosRef.current;
+        if (prev) {
+          const dx = e.x - prev.x;
+          const dy = e.y - prev.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const halfCell = (cellSize + CELL_GAP) / 2;
+          if (dist > halfCell) {
+            const steps = Math.ceil(dist / halfCell);
+            for (let s = 1; s < steps; s++) {
+              const t = s / steps;
+              const mx = prev.x + dx * t;
+              const my = prev.y + dy * t;
+              const midCell = hitTestCell(mx, my);
+              if (midCell) {
+                const midKey = `${midCell.row},${midCell.col}`;
+                if (midKey !== lastDragCellRef.current) {
+                  lastDragCellRef.current = midKey;
+                  onCellPressRef.current(midCell);
+                }
+              }
+            }
+          }
+        }
+        lastDragPosRef.current = { x: e.x, y: e.y };
+
         const cell = hitTestCell(e.x, e.y);
         if (cell) {
           const key = `${cell.row},${cell.col}`;
@@ -199,11 +238,13 @@ export function GameGrid({
       .onEnd(() => {
         isDraggingRef.current = false;
         lastDragCellRef.current = null;
+        lastDragPosRef.current = null;
         onDragEndRef.current?.();
       })
       .onFinalize(() => {
         isDraggingRef.current = false;
         lastDragCellRef.current = null;
+        lastDragPosRef.current = null;
       });
 
     const tapGesture = Gesture.Tap()
@@ -330,10 +371,7 @@ export function GameGrid({
           {selectedCells.length > 1 && (
             <SelectionTrailOverlay
               selectedCells={selectedCells}
-              cellSize={cellSize}
-              cellGap={CELL_GAP}
-              gridPadding={CELL_GAP / 2}
-              cols={cols}
+              cellBounds={cellBounds}
             />
           )}
         </View>

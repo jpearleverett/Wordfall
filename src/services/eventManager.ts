@@ -200,8 +200,7 @@ class EventManager {
 
   /**
    * Get combined multipliers from all active events.
-   * Multipliers are multiplicative (e.g., 2x coins from mini + 1x from weekend = 2x total).
-   * Only the highest multiplier per type is used.
+   * Only the highest multiplier per type is used (e.g., 2x coins from event A and 1.5x from event B = 2x total).
    */
   getEventMultipliers(): EventMultipliers {
     const events = this.getActiveEvents();

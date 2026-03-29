@@ -836,16 +836,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         : 0;
 
       let newStreak: number;
+      let graceUsed = false;
       if (diffDays === 1) {
         // Consecutive day
         newStreak = streaks.currentStreak + 1;
       } else if (diffDays === 0) {
         // Same day
         newStreak = streaks.currentStreak;
+      } else if (diffDays === 2 && streaks.graceDaysUsed < 1) {
+        // Missed exactly 1 day — auto-apply grace day (GDD: "Missing one day doesn't break streak")
+        newStreak = streaks.currentStreak + 1;
+        graceUsed = true;
       } else {
-        // Streak broken
+        // Streak broken (missed 2+ days, or no grace day available)
         newStreak = 1;
       }
+
+      // Reset grace days when streak breaks (so new streaks get a fresh grace day)
+      const newGraceDaysUsed = graceUsed
+        ? streaks.graceDaysUsed + 1
+        : diffDays >= 3 ? 0 : streaks.graceDaysUsed;
 
       const newLoginDates = prev.dailyLoginDates.includes(today)
         ? prev.dailyLoginDates
@@ -879,6 +889,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           currentStreak: newStreak,
           bestStreak: Math.max(streaks.bestStreak, newStreak),
           lastPlayDate: today,
+          graceDaysUsed: newGraceDaysUsed,
         },
         lastActiveDate: today,
       };
@@ -1228,26 +1239,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       star_collector: data.totalStars,
     };
 
+    // Collect all new achievement IDs first, then persist in a single setData call
+    // (calling setData in a loop causes each call to close over stale state)
+    const newAchievementIds: string[] = [];
+
     for (const achievement of ACHIEVEMENTS) {
       const value = valueMap[achievement.id] || 0;
       const tier = getAchievementTier(achievement, value);
       if (!tier) continue;
       const tierId = getAchievementTierId(achievement.id, tier);
-      if (data.achievementIds.includes(tierId)) continue;
+      if (data.achievementIds.includes(tierId) || newAchievementIds.includes(tierId)) continue;
 
-      // Check lower tiers first
+      // Add lower tiers first
       const tierIndex = achievement.tiers.findIndex((t) => t.level === tier);
-      const lowerTiers = achievement.tiers.slice(0, tierIndex);
-      for (const lt of lowerTiers) {
+      for (const lt of achievement.tiers.slice(0, tierIndex)) {
         const ltId = getAchievementTierId(achievement.id, lt.level);
-        if (!data.achievementIds.includes(ltId)) {
-          setData((prev) => ({
-            ...prev,
-            achievementIds: [...prev.achievementIds, ltId],
-          }));
+        if (!data.achievementIds.includes(ltId) && !newAchievementIds.includes(ltId)) {
+          newAchievementIds.push(ltId);
         }
       }
 
+      newAchievementIds.push(tierId);
       ceremonies.push({
         type: 'achievement',
         data: {
@@ -1259,9 +1271,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           reward: achievement.tiers[tierIndex].reward,
         },
       });
+    }
+
+    if (newAchievementIds.length > 0) {
       setData((prev) => ({
         ...prev,
-        achievementIds: [...prev.achievementIds, tierId],
+        achievementIds: [...prev.achievementIds, ...newAchievementIds],
       }));
     }
     return ceremonies;
