@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 interface VideoBackgroundProps {
@@ -11,61 +11,81 @@ interface VideoBackgroundProps {
   overlayColor?: string;
 }
 
-/**
- * Full-screen looping video background using expo-av.
- * Designed to be layered behind other content via absolute positioning.
- * Uses `isLooping` + `shouldPlay` for seamless loops. Muted by default.
- *
- * Gracefully falls back to a transparent view if expo-av's Video component
- * is unavailable (e.g. native module not linked in Expo Go) to prevent
- * EventEmitter crashes.
- */
-
-// Lazy-load expo-av to prevent crash when native module isn't available
-let VideoComponent: any = null;
-let ResizeModeValue: any = null;
+// Lazy-load expo-video to gracefully handle environments where it's unavailable
+let useVideoPlayerHook: any = null;
+let VideoViewComponent: any = null;
 let videoLoadAttempted = false;
 
-function getVideoComponent() {
+function loadVideoModule() {
   if (!videoLoadAttempted) {
     videoLoadAttempted = true;
     try {
-      const av = require('expo-av');
-      VideoComponent = av.Video;
-      ResizeModeValue = av.ResizeMode?.COVER ?? 'cover';
+      const mod = require('expo-video');
+      useVideoPlayerHook = mod.useVideoPlayer;
+      VideoViewComponent = mod.VideoView;
     } catch {
-      // expo-av not available — VideoComponent stays null
+      // expo-video not available — components stay null
     }
   }
-  return VideoComponent;
 }
 
-export const VideoBackground = React.memo(function VideoBackground({
+/**
+ * Full-screen looping video background using expo-video.
+ * Designed to be layered behind other content via absolute positioning.
+ * Gracefully falls back to a transparent view if expo-video is unavailable.
+ */
+function VideoBackgroundInner({
   source,
   opacity = 0.5,
   overlayColor,
 }: VideoBackgroundProps) {
-  const videoRef = useRef<any>(null);
-  const Video = getVideoComponent();
+  loadVideoModule();
 
-  const onPlaybackStatusUpdate = useCallback(() => {
-    // No-op: looping is handled by the isLooping prop
-  }, []);
+  if (!useVideoPlayerHook || !VideoViewComponent) {
+    // Fallback: no video, just optional overlay
+    return (
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
+        {overlayColor && (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor }]} />
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <VideoBackgroundWithPlayer
+      source={source}
+      opacity={opacity}
+      overlayColor={overlayColor}
+    />
+  );
+}
+
+/**
+ * Inner component that uses the hook — only rendered when expo-video is available.
+ * Separated so the hook call is unconditional within this component.
+ */
+function VideoBackgroundWithPlayer({
+  source,
+  opacity = 0.5,
+  overlayColor,
+}: VideoBackgroundProps) {
+  const player = useVideoPlayerHook(source, (p: any) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+
+  const VideoView = VideoViewComponent;
 
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
-      {Video ? (
-        <Video
-          ref={videoRef}
-          source={source}
-          resizeMode={ResizeModeValue}
-          shouldPlay
-          isLooping
-          isMuted
-          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        nativeControls={false}
+      />
       {overlayColor && (
         <View
           style={[
@@ -76,4 +96,6 @@ export const VideoBackground = React.memo(function VideoBackground({
       )}
     </View>
   );
-});
+}
+
+export const VideoBackground = React.memo(VideoBackgroundInner);

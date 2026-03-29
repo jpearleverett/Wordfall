@@ -1,5 +1,31 @@
 import { Audio } from 'expo-av';
 
+// Lazy-load expo-audio to gracefully handle environments where it's unavailable
+let createAudioPlayerFn: any = null;
+let setAudioModeFn: any = null;
+let audioModuleLoaded = false;
+
+function loadAudioModule() {
+  if (!audioModuleLoaded) {
+    audioModuleLoaded = true;
+    try {
+      const mod = require('expo-audio');
+      createAudioPlayerFn = mod.createAudioPlayer;
+      setAudioModeFn = mod.setAudioModeAsync;
+    } catch {
+      // expo-audio not available — fall back to expo-av
+      try {
+        const av = require('expo-av');
+        // Use expo-av as legacy fallback
+        createAudioPlayerFn = null; // signal to use legacy path
+        setAudioModeFn = null;
+      } catch {
+        // Neither available
+      }
+    }
+  }
+}
+
 type SoundName = 'tap' | 'gravity' | 'wordFound' | 'wordInvalid' | 'combo' | 'puzzleComplete' | 'starEarn' | 'buttonPress' | 'hintUsed' | 'undoUsed' | 'chainBonus';
 type MusicTrack = 'menu' | 'gameplay' | 'tense';
 
@@ -526,14 +552,15 @@ function synthesizeProgression(spec: ProgressionSpec): string {
 
 class SoundManager {
   private static instance: SoundManager;
-  private sounds: Map<string, Audio.Sound> = new Map();
+  private sounds: Map<string, any> = new Map(); // AudioPlayer instances (expo-audio) or Audio.Sound (expo-av fallback)
   private soundUris: Map<string, string> = new Map();
-  private currentMusic: Audio.Sound | null = null;
+  private currentMusic: any = null;
   private currentTrack: MusicTrack | null = null;
   private sfxVolume: number = 1.0;
   private musicVolume: number = 0.5;
   private muted: boolean = false;
   private initialized: boolean = false;
+  private useNewApi: boolean = false;
 
   static getInstance(): SoundManager {
     if (!SoundManager.instance) {
@@ -561,21 +588,40 @@ class SoundManager {
 
   async init(): Promise<void> {
     if (this.initialized) return;
+    loadAudioModule();
     try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-      });
-      await Promise.all(
-        (Object.keys(SOUND_DEFS) as SoundName[]).map(async (name) => {
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: this.getSoundUri(name) },
-            { shouldPlay: false, volume: this.sfxVolume },
-          );
-          this.sounds.set(name, sound);
-        }),
-      );
+      if (createAudioPlayerFn && setAudioModeFn) {
+        // expo-audio (new API)
+        this.useNewApi = true;
+        await setAudioModeFn({
+          playsInSilentMode: true,
+          shouldPlayInBackground: false,
+          interruptionMode: 'duckOthers',
+        });
+        for (const name of Object.keys(SOUND_DEFS) as SoundName[]) {
+          const uri = this.getSoundUri(name);
+          const player = createAudioPlayerFn(uri);
+          player.volume = this.sfxVolume;
+          this.sounds.set(name, player);
+        }
+      } else {
+        // expo-av fallback (legacy)
+        this.useNewApi = false;
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        });
+        await Promise.all(
+          (Object.keys(SOUND_DEFS) as SoundName[]).map(async (name) => {
+            const { sound } = await Audio.Sound.createAsync(
+              { uri: this.getSoundUri(name) },
+              { shouldPlay: false, volume: this.sfxVolume },
+            );
+            this.sounds.set(name, sound);
+          }),
+        );
+      }
       this.initialized = true;
     } catch (e) {
       console.warn('Sound init failed:', e);
@@ -584,13 +630,19 @@ class SoundManager {
 
   async playSound(name: SoundName): Promise<void> {
     if (this.muted || !this.initialized) return;
-    const sound = this.sounds.get(name);
-    if (!sound) return;
+    const player = this.sounds.get(name);
+    if (!player) return;
     try {
-      await sound.setVolumeAsync(this.sfxVolume);
-      await sound.stopAsync();
-      await sound.setPositionAsync(0);
-      await sound.playAsync();
+      if (this.useNewApi) {
+        player.volume = this.sfxVolume;
+        player.seekTo(0);
+        player.play();
+      } else {
+        await player.setVolumeAsync(this.sfxVolume);
+        await player.stopAsync();
+        await player.setPositionAsync(0);
+        await player.playAsync();
+      }
     } catch (e) {
       console.warn(`Failed to play sound "${name}":`, e);
     }
@@ -601,15 +653,20 @@ class SoundManager {
     if (this.currentTrack === track) return;
     await this.stopMusic();
     try {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: this.getMusicUri(track) },
-        {
-          shouldPlay: true,
-          isLooping: true,
-          volume: this.musicVolume,
-        },
-      );
-      this.currentMusic = sound;
+      if (this.useNewApi && createAudioPlayerFn) {
+        const uri = this.getMusicUri(track);
+        const player = createAudioPlayerFn(uri);
+        player.volume = this.musicVolume;
+        player.loop = true;
+        player.play();
+        this.currentMusic = player;
+      } else {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: this.getMusicUri(track) },
+          { shouldPlay: true, isLooping: true, volume: this.musicVolume },
+        );
+        this.currentMusic = sound;
+      }
       this.currentTrack = track;
     } catch (e) {
       console.warn(`Failed to play music "${track}":`, e);
@@ -619,8 +676,13 @@ class SoundManager {
   async stopMusic(): Promise<void> {
     if (this.currentMusic) {
       try {
-        await this.currentMusic.stopAsync();
-        await this.currentMusic.unloadAsync();
+        if (this.useNewApi) {
+          this.currentMusic.pause();
+          this.currentMusic.remove();
+        } else {
+          await this.currentMusic.stopAsync();
+          await this.currentMusic.unloadAsync();
+        }
       } catch (_e) {
         // Silently handle errors during cleanup
       }
@@ -631,15 +693,23 @@ class SoundManager {
 
   setSfxVolume(vol: number): void {
     this.sfxVolume = Math.max(0, Math.min(1, vol));
-    this.sounds.forEach((sound) => {
-      void sound.setVolumeAsync(this.sfxVolume);
+    this.sounds.forEach((player) => {
+      if (this.useNewApi) {
+        player.volume = this.sfxVolume;
+      } else {
+        void player.setVolumeAsync(this.sfxVolume);
+      }
     });
   }
 
   setMusicVolume(vol: number): void {
     this.musicVolume = Math.max(0, Math.min(1, vol));
     if (this.currentMusic) {
-      void this.currentMusic.setVolumeAsync(this.musicVolume);
+      if (this.useNewApi) {
+        this.currentMusic.volume = this.musicVolume;
+      } else {
+        void this.currentMusic.setVolumeAsync(this.musicVolume);
+      }
     }
   }
 
