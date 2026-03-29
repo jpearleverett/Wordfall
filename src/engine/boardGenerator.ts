@@ -270,8 +270,12 @@ function checkSolvability(
     return isSolvableGravityFlip(grid, words, 'down');
   }
 
-  // shrinkingBoard: standard solvability (shrink timing is validated separately)
-  // classic / timePressure / perfectSolve / etc: standard solvability
+  // shrinkingBoard: no gravity — validate like noGravity (words must be independently findable)
+  if (mode === 'shrinkingBoard') {
+    return areAllWordsIndependentlyFindable(grid, words);
+  }
+
+  // classic / timePressure / perfectSolve / etc: standard solvability with gravity
   const orderings = getOrderingHeuristics(words, wordPositions, rng);
   for (const ordering of orderings) {
     if (trySolveWithOrder(grid, ordering) !== null) {
@@ -303,21 +307,32 @@ function attemptGenerate(
   const sortedWords = [...words].sort((a, b) => b.length - a.length);
 
   // Place words in the grid along random adjacent paths
+  // For shrinkingBoard, constrain placement to the interior (avoid outer ring)
+  // so words survive after the outer ring is removed
+  const isShrinking = mode === 'shrinkingBoard';
+  const rowMin = isShrinking ? 1 : 0;
+  const rowMax = isShrinking ? config.rows - 2 : config.rows - 1;
+  const colMin = isShrinking ? 1 : 0;
+  const colMax = isShrinking ? config.cols - 2 : config.cols - 1;
+
   for (const word of sortedWords) {
     let placed = false;
 
-    // Try random starting positions, preferring positions that spread
-    // words across the grid
+    // Try random starting positions within the allowed region
     const startPositions: [number, number][] = [];
     for (let i = 0; i < 60; i++) {
       startPositions.push([
-        Math.floor(rng() * config.rows),
-        Math.floor(rng() * config.cols),
+        rowMin + Math.floor(rng() * (rowMax - rowMin + 1)),
+        colMin + Math.floor(rng() * (colMax - colMin + 1)),
       ]);
     }
 
     for (const [startRow, startCol] of startPositions) {
       const positions = tryPlace(grid, word, startRow, startCol, rng);
+      // For shrinkingBoard, verify all positions are within the interior
+      if (positions && isShrinking && positions.some(p => p.row < rowMin || p.row > rowMax || p.col < colMin || p.col > colMax)) {
+        continue; // Word path wandered into outer ring — reject
+      }
       if (positions) {
         placeWord(grid, word, positions);
         placements.push({
