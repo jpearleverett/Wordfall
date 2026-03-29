@@ -666,11 +666,24 @@ export function getHintShrinkingBoard(
   // Budgeted backtracking
   const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
   const solution = solveShrinkingBoard(cloneGrid(grid), remainingWords, wordsUntilShrink, budget);
-  if (!solution || solution.length === 0) return null;
+  if (solution && solution.length > 0) {
+    const word = solution[0];
+    const occurrences = findWordInGrid(grid, word, 1);
+    if (occurrences.length > 0) {
+      return { word, positions: occurrences[0] };
+    }
+  }
 
-  const word = solution[0];
-  const occurrences = findWordInGrid(grid, word, 1);
-  return occurrences.length > 0 ? { word, positions: occurrences[0] } : null;
+  // Fallback: if no shrink-safe ordering found, return any findable word.
+  // This prevents the hint from silently doing nothing on edge-case boards.
+  for (const word of remainingWords) {
+    const occurrences = findWordInGrid(grid, word, 1);
+    if (occurrences.length > 0) {
+      return { word, positions: occurrences[0] };
+    }
+  }
+
+  return null;
 }
 
 /**

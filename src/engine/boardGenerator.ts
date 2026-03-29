@@ -308,13 +308,15 @@ function attemptGenerate(
   const sortedWords = [...words].sort((a, b) => b.length - a.length);
 
   // Place words in the grid along random adjacent paths
-  // For shrinkingBoard, constrain placement to the interior (avoid outer ring)
-  // so words survive after the outer ring is removed
+  // For shrinkingBoard, constrain placement to the deep interior so words
+  // survive all shrink phases. Each shrink removes the bounding box perimeter
+  // (1 row/col from each side). Buffer rings = number of shrinks that will occur.
   const isShrinking = mode === 'shrinkingBoard';
-  const rowMin = isShrinking ? 1 : 0;
-  const rowMax = isShrinking ? config.rows - 2 : config.rows - 1;
-  const colMin = isShrinking ? 1 : 0;
-  const colMax = isShrinking ? config.cols - 2 : config.cols - 1;
+  const shrinkBuffer = isShrinking ? Math.floor((config.wordCount - 1) / 2) : 0;
+  const rowMin = isShrinking ? shrinkBuffer : 0;
+  const rowMax = isShrinking ? config.rows - 1 - shrinkBuffer : config.rows - 1;
+  const colMin = isShrinking ? shrinkBuffer : 0;
+  const colMax = isShrinking ? config.cols - 1 - shrinkBuffer : config.cols - 1;
 
   for (const word of sortedWords) {
     let placed = false;
@@ -374,9 +376,14 @@ export function generateBoard(
 ): Board {
   const baseSeed = seed ?? Date.now();
 
-  // shrinkingBoard: add buffer row/col for the outer ring that will be removed
+  // shrinkingBoard: add buffer rings for each shrink that will occur.
+  // Each shrink removes the bounding box perimeter (1 row/col from each side).
+  // With N words, there are floor((N-1)/2) shrinks, each needing 2 extra rows+cols.
+  const shrinkRings = mode === 'shrinkingBoard'
+    ? Math.max(1, Math.floor((config.wordCount - 1) / 2))
+    : 0;
   const effectiveConfig: BoardConfig = mode === 'shrinkingBoard'
-    ? { ...config, rows: config.rows + 1, cols: config.cols + 1 }
+    ? { ...config, rows: config.rows + shrinkRings * 2, cols: config.cols + shrinkRings * 2 }
     : config;
 
   // Primary attempts with full config
