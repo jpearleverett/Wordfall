@@ -95,7 +95,9 @@ export type GameAction =
   | { type: 'USE_BOOSTER'; booster: string }
   | { type: 'WILDCARD_PLACE'; position: CellPosition }
   | { type: 'SPOTLIGHT_ACTIVATE' }
-  | { type: 'SMART_SHUFFLE' };
+  | { type: 'SMART_SHUFFLE' }
+  | { type: 'GRANT_HINT' }
+  | { type: 'GRANT_UNDO' };
 
 export interface PlayerProgress {
   currentLevel: number;

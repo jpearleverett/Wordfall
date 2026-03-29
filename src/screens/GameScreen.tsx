@@ -166,6 +166,8 @@ export function GameScreen({
     submitWord,
     useHint,
     undoMove,
+    grantHint,
+    grantUndo,
     newGame,
     activateWildcard,
     activateSpotlight,
@@ -703,12 +705,22 @@ export function GameScreen({
   );
 
   const handleHint = useCallback(() => {
+    // If per-level hints exhausted, try to use a purchased token from economy
+    if (state.hintsLeft <= 0 && economy.hintTokens > 0) {
+      economy.spendHintToken();
+      grantHint();
+    }
     void soundManager.playSound('hintUsed');
     void analytics.logEvent('hint_used', { level, mode, hintsLeft: state.hintsLeft });
     useHint();
-  }, [useHint, level, mode, state.hintsLeft]);
+  }, [useHint, grantHint, level, mode, state.hintsLeft, economy]);
 
   const handleUndo = useCallback(() => {
+    // If per-level undos exhausted, try to use a purchased token from economy
+    if (state.undosLeft <= 0 && economy.undoTokens > 0) {
+      economy.spendUndoToken();
+      grantUndo();
+    }
     void soundManager.playSound('undoUsed');
     void analytics.logEvent('undo_used', { level, mode, undosLeft: state.undosLeft });
 
@@ -743,7 +755,7 @@ export function GameScreen({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, level, mode, state.undosLeft, reduceMotion, undoFlashAnim, undoPulseAnim]);
+  }, [undoMove, grantUndo, level, mode, state.undosLeft, economy, reduceMotion, undoFlashAnim, undoPulseAnim]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
@@ -1126,6 +1138,16 @@ export function GameScreen({
               </Text>
             </Pressable>
           )}
+          {isStuck && state.status === 'playing' && state.undosLeft <= 0 && (
+            <Pressable
+              style={[styles.stuckBanner, styles.stuckBannerRetry]}
+              onPress={handleRetry}
+            >
+              <Text style={styles.stuckText}>
+                No moves left — tap to retry this puzzle
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Grid wrapper with scale animations (#3 letter pop, #4 undo pulse) */}
@@ -1144,6 +1166,7 @@ export function GameScreen({
             wildcardCells={state.wildcardCells}
             spotlightDimmedCells={spotlightDimmedSet}
             gravityDirection={mode === 'gravityFlip' ? state.gravityDirection : undefined}
+            noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
           />
         </Animated.View>
 
@@ -1635,6 +1658,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginHorizontal: 8,
     marginTop: 4,
+  },
+  stuckBannerRetry: {
+    backgroundColor: 'rgba(168, 85, 247, 0.85)',
   },
   stuckText: {
     color: '#fff',
