@@ -13,7 +13,7 @@ import {
   SolveStep,
 } from '../types';
 import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
-import { findWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable } from '../engine/solver';
+import { findWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 
 const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
@@ -439,7 +439,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         .filter(w => !w.found)
         .map(w => w.word);
 
-      const hint = getHint(state.board.grid, remainingWords);
+      // shrinkingBoard: use shrink-aware hint that accounts for future outer ring removals
+      const hint = state.mode === 'shrinkingBoard'
+        ? getHintShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink)
+        : getHint(state.board.grid, remainingWords);
       if (!hint) return state;
 
       return {
@@ -739,8 +742,16 @@ export function useGame(
       return;
     }
 
-    // noGravity / shrinkingBoard: just check if all words still exist in grid
-    if (mode === 'noGravity' || mode === 'shrinkingBoard') {
+    // shrinkingBoard: use shrink-aware dead-end detection
+    if (mode === 'shrinkingBoard') {
+      const timer = setTimeout(() => {
+        setIsStuck(isDeadEndShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink));
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+
+    // noGravity: just check if all words still exist in grid
+    if (mode === 'noGravity') {
       const timer = setTimeout(() => {
         setIsStuck(isDeadEndNoGravity(state.board.grid, remainingWords));
       }, 100);
@@ -760,7 +771,7 @@ export function useGame(
       setIsStuck(isDeadEnd(state.board.grid, remainingWords));
     }, 100);
     return () => clearTimeout(timer);
-  }, [foundWords, state.status, state.board.grid, remainingWords, mode, state.gravityDirection, state.moves]);
+  }, [foundWords, state.status, state.board.grid, remainingWords, mode, state.gravityDirection, state.moves, state.wordsUntilShrink]);
 
   // Calculate stars
   const totalWords = state.board.words.length;
