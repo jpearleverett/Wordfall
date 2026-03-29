@@ -310,6 +310,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const historyEntry = {
         grid: cloneGrid(board.grid),
         words: board.words.map(w => ({ ...w })),
+        wordsUntilShrink: state.wordsUntilShrink,
+        shrinkCount: state.shrinkCount,
       };
 
       // Remove letters from grid
@@ -451,19 +453,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         prevDirection = GRAVITY_CYCLE[(currentIdx + 3) % 4]; // go back one step
       }
 
-      // Reverse shrink if one happened on this move
-      let prevShrinkCount = state.shrinkCount;
-      let prevWordsUntilShrink = state.wordsUntilShrink;
-      if (state.mode === 'shrinkingBoard') {
-        // If wordsUntilShrink is 2 and shrinkCount > 0, a shrink just happened
-        if (state.wordsUntilShrink === 2 && state.shrinkCount > 0) {
-          prevShrinkCount = state.shrinkCount - 1;
-          prevWordsUntilShrink = 0; // will be incremented below... actually just set to 1
-          prevWordsUntilShrink = 1;
-        } else {
-          prevWordsUntilShrink = state.wordsUntilShrink + 1;
-        }
-      }
+      // Restore shrink state from history (exact values, no heuristics)
+      const prevShrinkCount = lastHistory.shrinkCount ?? state.shrinkCount;
+      const prevWordsUntilShrink = lastHistory.wordsUntilShrink ?? state.wordsUntilShrink;
 
       return {
         ...state,
@@ -477,6 +469,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         moves: state.moves - 1,
         undosLeft: state.undosLeft - 1,
         history: state.history.slice(0, -1),
+        solveSequence: state.solveSequence.slice(0, -1),
         combo: 0,
         perfectRun: false,
         status: 'playing',

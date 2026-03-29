@@ -44,7 +44,7 @@ interface PuzzleCompleteProps {
   onDoubleReward?: () => void;
   rewardDoubled?: boolean;
   showAdOption?: boolean;
-  onChallengeFrend?: () => void;
+  onChallengeFriend?: () => void;
 }
 
 const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
@@ -306,7 +306,7 @@ export function PuzzleComplete({
   onDoubleReward,
   rewardDoubled = false,
   showAdOption = false,
-  onChallengeFrend,
+  onChallengeFriend,
 }: PuzzleCompleteProps) {
   const { height: screenHeight } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -697,10 +697,10 @@ export function PuzzleComplete({
                       <Text style={styles.shareButtonText}>Share</Text>
                     </Pressable>
                   ) : null}
-                  {onChallengeFrend && (
+                  {onChallengeFriend && (
                     <Pressable
                       style={({ pressed }) => [styles.challengeButton, pressed && styles.buttonPressed]}
-                      onPress={onChallengeFrend}
+                      onPress={onChallengeFriend}
                     >
                       <Text style={styles.challengeButtonText}>{'\u2694\uFE0F'} Challenge</Text>
                     </Pressable>

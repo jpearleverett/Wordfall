@@ -19,7 +19,7 @@ import { GameGrid } from '../components/Grid';
 import { WordBank } from '../components/WordBank';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
-import { ReplayViewer } from '../components/ReplayViewer';
+
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier, INITIAL_HINTS } from '../constants';
@@ -29,7 +29,7 @@ import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } f
 import { usePlayer } from '../contexts/PlayerContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { analytics } from '../services/analytics';
-import { generateReplayText } from '../utils/replayGenerator';
+
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { adManager, AdRewardType } from '../services/ads';
 import { MockAdModal } from '../components/MockAdModal';
@@ -206,9 +206,6 @@ export function GameScreen({
   const undoFlashAnim = useRef(new Animated.Value(0)).current;
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
-
-  // --- Replay & Challenge state ---
-  const [showReplay, setShowReplay] = useState(false);
 
   // --- Contextual Offer state ---
   const economy = useEconomy();
@@ -677,7 +674,7 @@ export function GameScreen({
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [state.status]);
+  }, [state.status, showComplete, onComplete, stars, state.score]);
 
   // Reset grid height lock when board changes (new puzzle/level)
   useEffect(() => {
@@ -691,7 +688,7 @@ export function GameScreen({
       const timer = setTimeout(() => setShowFailed(true), 400);
       return () => clearTimeout(timer);
     }
-  }, [state.status]);
+  }, [state.status, showFailed]);
 
   const handleCellPress = useCallback(
     (position: CellPosition) => {
@@ -1285,7 +1282,7 @@ export function GameScreen({
           onDoubleReward={handleWatchAdForDoubleReward}
           rewardDoubled={rewardDoubled}
           showAdOption={!economy.isAdFree && adManager.canShowAd('double_reward')}
-          onChallengeFrend={() => {
+          onChallengeFriend={() => {
             const challenge = player.sendChallenge('friend', {
               score: state.score,
               stars,
@@ -1304,18 +1301,6 @@ export function GameScreen({
             ].join('\n');
             Share.share({ message: challengeText }).catch(() => {});
           }}
-        />
-      )}
-
-      {/* Replay viewer overlay */}
-      {showReplay && solveSequence.length > 0 && (
-        <ReplayViewer
-          steps={solveSequence}
-          level={level}
-          stars={stars}
-          totalScore={state.score}
-          isDaily={isDaily}
-          onClose={() => setShowReplay(false)}
         />
       )}
 

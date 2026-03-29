@@ -458,30 +458,35 @@ function GameScreenWrapper({ route, navigation }: any) {
     // Check for atlas word collection from the words found (all pages)
     if (params.board) {
       const board = params.board as Board;
+
+      // Build local projection of atlas state so we can detect completions
+      // (collectAtlasWord calls setData which is batched — context won't update mid-function)
+      const localAtlas: Record<string, string[]> = {};
+      for (const page of ATLAS_PAGES) {
+        localAtlas[page.id] = [...(player.collections.atlasPages[page.id] || [])];
+      }
+
       board.words.forEach((wp: any) => {
         const word = wp.word.toLowerCase();
         for (const page of ATLAS_PAGES) {
           if (page.words.includes(word)) {
             player.collectAtlasWord(page.id, word);
+            if (!localAtlas[page.id].includes(word)) {
+              localAtlas[page.id].push(word);
+            }
           }
         }
       });
 
-      // Check for collection completions
+      // Check for collection completions using local projection
       for (const page of ATLAS_PAGES) {
-        const collected = player.collections.atlasPages[page.id] || [];
-        if (collected.length === page.words.length && collected.length > 0) {
-          // Check if we just completed it (wasn't complete before this puzzle)
-          const wordsFromThisPuzzle = board.words.map((wp: any) => wp.word.toLowerCase());
-          const newlyCollected = wordsFromThisPuzzle.some(
-            (w: string) => page.words.includes(w) && !collected.includes(w)
-          );
-          if (newlyCollected) {
-            player.queueCeremony({
-              type: 'collection_complete',
-              data: { icon: page.icon, name: page.category, reward: page.reward },
-            });
-          }
+        const projectedCount = localAtlas[page.id].length;
+        const oldCount = (player.collections.atlasPages[page.id] || []).length;
+        if (projectedCount >= page.words.length && oldCount < page.words.length) {
+          player.queueCeremony({
+            type: 'collection_complete',
+            data: { icon: page.icon, name: page.category, reward: page.reward },
+          });
         }
       }
     }
@@ -575,7 +580,7 @@ function GameScreenWrapper({ route, navigation }: any) {
     }
 
     // ── Star milestones (50/100/250/500 total stars) ──
-    const totalStarsNow = player.totalScore > 0 ? Math.floor(player.puzzlesSolved * 2) + stars : stars; // approximate
+    const totalStarsNow = player.totalStars + stars;
     for (const sm of STAR_MILESTONES) {
       const prevStars = totalStarsNow - stars;
       if (totalStarsNow >= sm.stars && prevStars < sm.stars) {
