@@ -1,6 +1,6 @@
 import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition, GameMode } from '../types';
 import { applyGravity } from './gravity';
-import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating } from './solver';
+import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating, isSolvableShrinkingBoard } from './solver';
 import { getWordsByLength } from '../words';
 
 // Simple seeded PRNG (mulberry32)
@@ -270,9 +270,10 @@ function checkSolvability(
     return isSolvableGravityFlip(grid, words, 'down');
   }
 
-  // shrinkingBoard: no gravity — validate like noGravity (words must be independently findable)
+  // shrinkingBoard: simulate the full shrink sequence to verify solvability
+  // Words must survive outer ring removals that happen every 2 words cleared
   if (mode === 'shrinkingBoard') {
-    return areAllWordsIndependentlyFindable(grid, words);
+    return isSolvableShrinkingBoard(grid, words, 2);
   }
 
   // classic / timePressure / perfectSolve / etc: standard solvability with gravity

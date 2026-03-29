@@ -461,3 +461,227 @@ export function isDeadEndNoGravity(grid: Grid, remainingWords: string[]): boolea
   // In no-gravity mode, if a word's letters still exist, it's always findable
   return !areAllWordsIndependentlyFindable(grid, remainingWords);
 }
+
+// ============ SHRINKING BOARD MODE ============
+
+/**
+ * Compute the outer ring of non-null cells (bounding box perimeter).
+ * Duplicated from useGame.ts so the solver can simulate shrinks independently.
+ */
+function getOuterRingSolver(grid: Grid): CellPosition[] {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const ring: CellPosition[] = [];
+
+  let minRow = rows, maxRow = -1, minCol = cols, maxCol = -1;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] !== null) {
+        minRow = Math.min(minRow, r);
+        maxRow = Math.max(maxRow, r);
+        minCol = Math.min(minCol, c);
+        maxCol = Math.max(maxCol, c);
+      }
+    }
+  }
+
+  if (maxRow < 0) return ring;
+
+  for (let r = minRow; r <= maxRow; r++) {
+    for (let c = minCol; c <= maxCol; c++) {
+      if (grid[r][c] !== null && (r === minRow || r === maxRow || c === minCol || c === maxCol)) {
+        ring.push({ row: r, col: c });
+      }
+    }
+  }
+
+  return ring;
+}
+
+/**
+ * Simulate removing a word from a shrinking board grid:
+ * - Remove the word's cells (no gravity)
+ * - If wordsUntilShrink reaches 0, remove the outer ring and reset counter
+ * Returns { grid, wordsUntilShrink } after the operation.
+ */
+function simulateShrinkingMove(
+  grid: Grid,
+  positions: CellPosition[],
+  wordsUntilShrink: number,
+  allDone: boolean
+): { grid: Grid; wordsUntilShrink: number } {
+  let newGrid = removeCells(grid, positions);
+  let newWordsUntilShrink = wordsUntilShrink - 1;
+
+  if (!allDone && newWordsUntilShrink <= 0) {
+    const outerRing = getOuterRingSolver(newGrid);
+    if (outerRing.length > 0) {
+      newGrid = removeCells(newGrid, outerRing);
+    }
+    newWordsUntilShrink = 2;
+  }
+
+  return { grid: newGrid, wordsUntilShrink: newWordsUntilShrink };
+}
+
+/**
+ * Try to solve a shrinking board puzzle with a specific word ordering.
+ * Simulates the shrink mechanic (outer ring removed every 2 words).
+ * Returns the ordering if it works, null otherwise.
+ */
+export function trySolveWithOrderShrinking(
+  grid: Grid,
+  orderedWords: string[],
+  wordsUntilShrink: number = 2
+): string[] | null {
+  let currentGrid = grid;
+  let currentWUS = wordsUntilShrink;
+
+  for (let i = 0; i < orderedWords.length; i++) {
+    const word = orderedWords[i];
+    const occurrences = findWordInGrid(currentGrid, word, 1);
+    if (occurrences.length === 0) return null;
+
+    const allDone = i === orderedWords.length - 1;
+    const result = simulateShrinkingMove(currentGrid, occurrences[0], currentWUS, allDone);
+    currentGrid = result.grid;
+    currentWUS = result.wordsUntilShrink;
+
+    // After shrink, verify remaining words are still findable
+    if (!allDone) {
+      const remaining = orderedWords.slice(i + 1);
+      if (!remaining.every(w => isWordInGrid(currentGrid, w))) {
+        return null;
+      }
+    }
+  }
+
+  return orderedWords;
+}
+
+/**
+ * Backtracking solver for shrinking board mode.
+ * Simulates the shrink mechanic after every 2 words cleared.
+ */
+export function solveShrinkingBoard(
+  grid: Grid,
+  remainingWords: string[],
+  wordsUntilShrink: number = 2,
+  budget?: SolveBudget
+): string[] | null {
+  if (remainingWords.length === 0) return [];
+  if (budget && budget.remaining <= 0) return null;
+  if (budget) budget.remaining--;
+  if (budget?.startTime && budget.timeoutMs && Date.now() - budget.startTime > budget.timeoutMs) return null;
+
+  for (let i = 0; i < remainingWords.length; i++) {
+    const word = remainingWords[i];
+    const occurrences = findWordInGrid(grid, word, 1);
+
+    for (const positions of occurrences) {
+      if (budget && budget.remaining <= 0) return null;
+
+      const rest = [
+        ...remainingWords.slice(0, i),
+        ...remainingWords.slice(i + 1),
+      ];
+      const allDone = rest.length === 0;
+      const result = simulateShrinkingMove(grid, positions, wordsUntilShrink, allDone);
+
+      // After shrink, check remaining words are still in the grid
+      if (!allDone && !rest.every(w => isWordInGrid(result.grid, w))) {
+        continue; // This word choice leads to unsolvable state after shrink
+      }
+
+      const subSolution = solveShrinkingBoard(result.grid, rest, result.wordsUntilShrink, budget);
+      if (subSolution !== null) {
+        return [word, ...subSolution];
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Check if a shrinking board puzzle is solvable.
+ * Uses heuristic orderings first, then budgeted backtracking.
+ */
+export function isSolvableShrinkingBoard(
+  grid: Grid,
+  words: string[],
+  wordsUntilShrink: number = 2
+): boolean {
+  if (words.length === 0) return true;
+
+  // Quick check: all words must at least exist in current grid
+  if (!areAllWordsIndependentlyFindable(grid, words)) return false;
+
+  // If 2 or fewer words remain (no shrink will happen), any order works
+  if (words.length <= wordsUntilShrink) return true;
+
+  // Try heuristic orderings
+  const shortFirst = [...words].sort((a, b) => a.length - b.length);
+  const longFirst = [...shortFirst].reverse();
+  const orderings = [words, shortFirst, longFirst];
+
+  for (const ordering of orderings) {
+    if (trySolveWithOrderShrinking(cloneGrid(grid), ordering, wordsUntilShrink)) return true;
+  }
+
+  // Budgeted backtracking
+  const budget: SolveBudget = {
+    remaining: Math.min(5000, words.length <= 4 ? 500 : words.length <= 6 ? 2000 : 5000),
+    startTime: Date.now(),
+    timeoutMs: 500,
+  };
+  return solveShrinkingBoard(cloneGrid(grid), words, wordsUntilShrink, budget) !== null;
+}
+
+/**
+ * Get a hint for shrinking board mode.
+ * Finds the first word in a valid solve ordering that accounts for future shrinks.
+ */
+export function getHintShrinkingBoard(
+  grid: Grid,
+  remainingWords: string[],
+  wordsUntilShrink: number = 2
+): { word: string; positions: CellPosition[] } | null {
+  // Try heuristic orderings
+  const shortFirst = [...remainingWords].sort((a, b) => a.length - b.length);
+  const longFirst = [...shortFirst].reverse();
+  const orderings = [remainingWords, shortFirst, longFirst];
+
+  for (const ordering of orderings) {
+    const result = trySolveWithOrderShrinking(cloneGrid(grid), ordering, wordsUntilShrink);
+    if (result && result.length > 0) {
+      const word = result[0];
+      const occurrences = findWordInGrid(grid, word, 1);
+      if (occurrences.length > 0) {
+        return { word, positions: occurrences[0] };
+      }
+    }
+  }
+
+  // Budgeted backtracking
+  const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
+  const solution = solveShrinkingBoard(cloneGrid(grid), remainingWords, wordsUntilShrink, budget);
+  if (!solution || solution.length === 0) return null;
+
+  const word = solution[0];
+  const occurrences = findWordInGrid(grid, word, 1);
+  return occurrences.length > 0 ? { word, positions: occurrences[0] } : null;
+}
+
+/**
+ * Dead-end detection for shrinking board mode.
+ * Checks if there's any valid ordering that survives all future shrinks.
+ */
+export function isDeadEndShrinkingBoard(
+  grid: Grid,
+  remainingWords: string[],
+  wordsUntilShrink: number = 2
+): boolean {
+  if (remainingWords.length === 0) return false;
+  return !isSolvableShrinkingBoard(grid, remainingWords, wordsUntilShrink);
+}
