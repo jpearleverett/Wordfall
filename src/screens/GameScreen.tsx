@@ -168,6 +168,7 @@ export function GameScreen({
     undoMove,
     grantHint,
     grantUndo,
+    grantBooster,
     newGame,
     activateWildcard,
     activateSpotlight,
@@ -359,9 +360,11 @@ export function GameScreen({
         }
         break;
       case 'booster_pack':
-        // Spend 15 gems, grant boosters (handled by economy)
+        // Spend 15 gems, grant 1 of each booster
         if (economy.spendGems(15)) {
-          economy.addHintTokens(3);
+          grantBooster('wildcardTile');
+          grantBooster('spotlight');
+          grantBooster('smartShuffle');
         }
         break;
     }

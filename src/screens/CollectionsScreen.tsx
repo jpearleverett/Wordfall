@@ -76,7 +76,9 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
   }, []);
 
   const atlasPages = collections?.atlas ?? DEFAULT_ATLAS_PAGES;
-  const collectedTiles: string[] = collections?.tiles ?? [];
+  const collectedTiles: string[] = collections?.rareTiles
+    ? Object.keys(collections.rareTiles).filter(l => collections.rareTiles[l] > 0)
+    : [];
   const stamps = collections?.stamps ?? DEFAULT_STAMPS;
   const seasonName = collections?.seasonName ?? 'Spring Awakening';
 

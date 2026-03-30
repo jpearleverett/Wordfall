@@ -688,7 +688,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       firestoreService
         .getFriendScores(userId, friendIds)
         .then((result) => {
-          if (result.total > 0) {
+          if (result.total > 0 && navigation.isFocused()) {
             navigation.setParams({
               completionData: {
                 isFirstWin,
@@ -808,8 +808,8 @@ function GameScreenWrapper({ route, navigation }: any) {
     setShowSpinPrompt(false);
     setEarnedNewSpin(false);
     setPendingNavAction(null);
-    // Navigate back to home, passing param to auto-open the wheel
-    navigation.navigate('HomeMain', { openWheel: true });
+    // Navigate to Home tab, then to HomeMain screen with openWheel param
+    navigation.navigate('Home', { screen: 'HomeMain', params: { openWheel: true } });
   }, [navigation]);
 
   const handleSpinPromptDismiss = useCallback(() => {
@@ -1043,9 +1043,9 @@ function HomeMainScreen({ route, navigation }: any) {
       player.addRareTile(randomLetter);
     }
     if (reward.booster) {
-      // Boosters are per-puzzle, so award via cosmetics/unlocks tracking
-      // For now, award equivalent hint tokens as placeholder value
-      economy.addHintTokens(1);
+      // Boosters are per-puzzle consumables — grant via hint tokens as currency.
+      // Players get boosters refreshed each puzzle; wheel boosters grant extra hints.
+      economy.addHintTokens(3);
     }
 
     // Queue jackpot ceremony for rare+ results

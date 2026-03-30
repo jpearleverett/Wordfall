@@ -98,7 +98,8 @@ export type GameAction =
   | { type: 'SPOTLIGHT_ACTIVATE' }
   | { type: 'SMART_SHUFFLE' }
   | { type: 'GRANT_HINT' }
-  | { type: 'GRANT_UNDO' };
+  | { type: 'GRANT_UNDO' }
+  | { type: 'GRANT_BOOSTER'; booster: 'wildcardTile' | 'spotlight' | 'smartShuffle' };
 
 export interface PlayerProgress {
   currentLevel: number;
