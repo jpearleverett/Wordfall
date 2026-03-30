@@ -308,15 +308,15 @@ function attemptGenerate(
   const sortedWords = [...words].sort((a, b) => b.length - a.length);
 
   // Place words in the grid along random adjacent paths
-  // For shrinkingBoard, constrain placement to the deep interior so words
-  // survive all shrink phases. Each shrink removes the bounding box perimeter
-  // (1 row/col from each side). Buffer rings = number of shrinks that will occur.
+  // For shrinkingBoard, constrain to the interior (avoid the outer filler ring).
+  // The shrink-aware solver then validates that at least one word-clearing order
+  // exists where each word survives until it's cleared — edge words must be
+  // cleared before the shrink that would destroy them.
   const isShrinking = mode === 'shrinkingBoard';
-  const shrinkBuffer = isShrinking ? Math.floor((config.wordCount - 1) / 2) : 0;
-  const rowMin = isShrinking ? shrinkBuffer : 0;
-  const rowMax = isShrinking ? config.rows - 1 - shrinkBuffer : config.rows - 1;
-  const colMin = isShrinking ? shrinkBuffer : 0;
-  const colMax = isShrinking ? config.cols - 1 - shrinkBuffer : config.cols - 1;
+  const rowMin = isShrinking ? 1 : 0;
+  const rowMax = isShrinking ? config.rows - 2 : config.rows - 1;
+  const colMin = isShrinking ? 1 : 0;
+  const colMax = isShrinking ? config.cols - 2 : config.cols - 1;
 
   for (const word of sortedWords) {
     let placed = false;
@@ -376,14 +376,12 @@ export function generateBoard(
 ): Board {
   const baseSeed = seed ?? Date.now();
 
-  // shrinkingBoard: add buffer rings for each shrink that will occur.
-  // Each shrink removes the bounding box perimeter (1 row/col from each side).
-  // With N words, there are floor((N-1)/2) shrinks, each needing 2 extra rows+cols.
-  const shrinkRings = mode === 'shrinkingBoard'
-    ? Math.max(1, Math.floor((config.wordCount - 1) / 2))
-    : 0;
+  // shrinkingBoard: add 1 buffer ring (filler perimeter for the initial visual shrink).
+  // Words are placed in the interior and the shrink-aware solver validates that
+  // at least one clearing order exists where words survive each shrink phase.
+  // Edge words get cleared before the shrink that would destroy them.
   const effectiveConfig: BoardConfig = mode === 'shrinkingBoard'
-    ? { ...config, rows: config.rows + shrinkRings * 2, cols: config.cols + shrinkRings * 2 }
+    ? { ...config, rows: config.rows + 2, cols: config.cols + 2 }
     : config;
 
   // Primary attempts with full config
