@@ -628,6 +628,17 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'GRANT_UNDO':
       return { ...state, undosLeft: state.undosLeft + 1 };
 
+    case 'GRANT_BOOSTER': {
+      const { booster } = action;
+      return {
+        ...state,
+        boosterCounts: {
+          ...state.boosterCounts,
+          [booster]: (state.boosterCounts[booster as keyof typeof state.boosterCounts] ?? 0) + 1,
+        },
+      };
+    }
+
     default:
       return state;
   }
@@ -690,6 +701,10 @@ export function useGame(
 
   const grantUndo = useCallback(() => {
     dispatch({ type: 'GRANT_UNDO' });
+  }, []);
+
+  const grantBooster = useCallback((booster: 'wildcardTile' | 'spotlight' | 'smartShuffle') => {
+    dispatch({ type: 'GRANT_BOOSTER', booster });
   }, []);
 
   const newGame = useCallback((board: Board, newLevel: number, newMode?: GameMode, newMaxMoves?: number, newTimeLimit?: number) => {
@@ -793,6 +808,7 @@ export function useGame(
     undoMove,
     grantHint,
     grantUndo,
+    grantBooster,
     newGame,
     activateWildcard,
     activateSpotlight,
