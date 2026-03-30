@@ -294,6 +294,47 @@ export function getLevelConfig(level: number): BoardConfig {
   return { rows: 9, cols: 7, wordCount: 8, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
 }
 
+/**
+ * Get a gentler config for first-time mode plays.
+ * Ramps difficulty based on how many times the player has played this mode,
+ * scaling from easy up to their normal level config over ~5 plays.
+ * This prevents a level-50 player from getting an expert board on their
+ * first ever shrinkingBoard attempt.
+ */
+export function getModeIntroConfig(
+  levelConfig: BoardConfig,
+  modePlays: number,
+): BoardConfig {
+  // After 5 plays in the mode, use the full level config
+  if (modePlays >= 5) return levelConfig;
+
+  // Introductory ramp: blend from easy toward the level config
+  const introConfigs: BoardConfig[] = [
+    // Play 0 (first ever): easy
+    { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' },
+    // Play 1: easy+
+    { rows: 6, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' },
+    // Play 2: medium-
+    { rows: 6, cols: 5, wordCount: 4, minWordLength: 3, maxWordLength: 4, difficulty: 'medium' },
+    // Play 3: medium
+    { rows: 6, cols: 6, wordCount: 4, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' },
+    // Play 4: medium+ (approaching their level config)
+    { rows: 7, cols: 6, wordCount: 5, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' },
+  ];
+
+  const introConfig = introConfigs[modePlays];
+
+  // Never make it harder than their actual level config
+  return {
+    rows: Math.min(introConfig.rows, levelConfig.rows),
+    cols: Math.min(introConfig.cols, levelConfig.cols),
+    wordCount: Math.min(introConfig.wordCount, levelConfig.wordCount),
+    minWordLength: Math.min(introConfig.minWordLength, levelConfig.minWordLength),
+    maxWordLength: Math.min(introConfig.maxWordLength, levelConfig.maxWordLength),
+    difficulty: introConfig.difficulty,
+  };
+}
+
 // Legacy helper: get the broad difficulty tier for a level (used for rewards, UI labels)
 export function getDifficultyTier(level: number): Difficulty {
   if (level <= 5) return 'easy';

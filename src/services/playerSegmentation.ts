@@ -417,8 +417,10 @@ export function getPersonalizedHomeContent(segments: PlayerSegments): string[] {
   if (engagement === 'regular' || engagement === 'hardcore') {
     sections.push('weekly_goals');
     sections.push('missions');
-    sections.push('mystery_wheel');
   }
+
+  // Mystery wheel for all active (non-new) players
+  sections.push('mystery_wheel');
 
   // Explorer: highlight new modes
   if (motivations.includes('explorer')) {

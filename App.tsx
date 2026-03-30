@@ -33,7 +33,7 @@ import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS, SHADOWS } from './src/constants';
+import { getLevelConfig, getModeIntroConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS, SHADOWS } from './src/constants';
 import { getBreatherConfig } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -318,6 +318,13 @@ function ModesScreenWrapper({ navigation }: any) {
         board = generateBoard(DIFFICULTY_CONFIGS.hard, Date.now());
         navigation.navigate('Game', { board, level: 0, mode: 'weekly' });
         return;
+      }
+
+      // For non-classic modes, ramp difficulty for first-time players
+      // so they learn the mode mechanic before facing expert boards
+      if (mode !== 'classic') {
+        const modePlays = player.modeStats[mode]?.played ?? 0;
+        config = getModeIntroConfig(config, modePlays);
       }
 
       // Apply adaptive difficulty adjustment for non-special modes
@@ -723,6 +730,12 @@ function GameScreenWrapper({ route, navigation }: any) {
       // Check if player needs a breather level
       const useBreather = player.needsBreather();
       let config = useBreather ? getBreatherConfig(nextLevel) : getLevelConfig(nextLevel);
+
+      // For non-classic modes, ramp difficulty for players still learning the mode
+      if (!useBreather && mode !== 'classic') {
+        const modePlays = player.modeStats[mode]?.played ?? 0;
+        config = getModeIntroConfig(config, modePlays);
+      }
 
       // Apply adaptive difficulty (only when not in breather mode)
       if (!useBreather) {
