@@ -33,7 +33,7 @@ import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, getModeIntroConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS, SHADOWS } from './src/constants';
+import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS, SHADOWS } from './src/constants';
 import { getBreatherConfig } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -305,7 +305,6 @@ function ModesScreenWrapper({ navigation }: any) {
         playerLevel: player.currentLevel,
       });
       let board: Board;
-      let config = getLevelConfig(player.currentLevel);
 
       if (mode === 'daily') {
         const today = new Date().toISOString().split('T')[0];
@@ -320,24 +319,25 @@ function ModesScreenWrapper({ navigation }: any) {
         return;
       }
 
-      // For non-classic modes, ramp difficulty for first-time players
-      // so they learn the mode mechanic before facing expert boards
-      if (mode !== 'classic') {
-        const modePlays = player.modeStats[mode]?.played ?? 0;
-        config = getModeIntroConfig(config, modePlays);
-      }
+      // Each mode has its own independent level progression.
+      // Classic uses the global player level; all other modes track their own.
+      const modeLevel = mode === 'classic'
+        ? player.currentLevel
+        : player.getModeLevel(mode);
 
-      // Apply adaptive difficulty adjustment for non-special modes
+      let config = getLevelConfig(modeLevel);
+
+      // Apply adaptive difficulty adjustment
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
       config = adjusted.config;
 
-      const seed = Date.now() + player.currentLevel * 1337;
+      const seed = Date.now() + modeLevel * 1337;
       board = generateBoard(config, seed, mode);
 
       const modeConfig = MODE_CONFIGS[mode];
       navigation.navigate('Game', {
         board,
-        level: player.currentLevel,
+        level: modeLevel,
         mode,
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
@@ -394,8 +394,11 @@ function GameScreenWrapper({ route, navigation }: any) {
     // Capture pre-play mode stats for first-clear detection
     const prevModePlayed = player.modeStats?.[mode]?.played || 0;
 
-    // Record mode play
+    // Record mode play and advance mode level on win
     player.recordModePlay(mode, score, true);
+    if (mode !== 'classic') {
+      player.advanceModeLevel(mode);
+    }
 
     // Reset consecutive failures on success
     if (player.consecutiveFailures > 0) {
@@ -720,22 +723,20 @@ function GameScreenWrapper({ route, navigation }: any) {
 
   const handleNextLevel = useCallback(() => {
     try {
-      const currentLevel = params.level || 0;
-      const nextLevel = currentLevel + 1;
-
       // Spend energy for next level (free modes handled internally)
       const mode = (params.mode || 'classic') as GameMode;
       player.useEnergy(mode);
 
+      // Each mode has its own level progression (classic uses global level)
+      // advanceModeLevel was already called in handleComplete on win,
+      // so getModeLevel returns the new (incremented) level
+      const modeLevel = mode === 'classic'
+        ? (params.level || 0) + 1  // classic uses params.level which is global
+        : player.getModeLevel(mode);
+
       // Check if player needs a breather level
       const useBreather = player.needsBreather();
-      let config = useBreather ? getBreatherConfig(nextLevel) : getLevelConfig(nextLevel);
-
-      // For non-classic modes, ramp difficulty for players still learning the mode
-      if (!useBreather && mode !== 'classic') {
-        const modePlays = player.modeStats[mode]?.played ?? 0;
-        config = getModeIntroConfig(config, modePlays);
-      }
+      let config = useBreather ? getBreatherConfig(modeLevel) : getLevelConfig(modeLevel);
 
       // Apply adaptive difficulty (only when not in breather mode)
       if (!useBreather) {
@@ -743,13 +744,13 @@ function GameScreenWrapper({ route, navigation }: any) {
         config = adjusted.config;
       }
 
-      const seed = nextLevel * 1337 + Date.now();
+      const seed = modeLevel * 1337 + Date.now();
       const board = generateBoard(config, seed, mode);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
         board,
-        level: nextLevel,
+        level: modeLevel,
         mode,
         isDaily: false,
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,

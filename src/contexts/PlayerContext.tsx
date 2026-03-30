@@ -101,6 +101,7 @@ interface PlayerData {
   // Modes
   unlockedModes: string[];
   modeStats: Record<string, ModeStats>;
+  modeLevels: Record<string, number>;
 
   // Onboarding
   tutorialComplete: boolean;
@@ -208,6 +209,8 @@ interface PlayerContextType extends PlayerData {
   // Modes
   unlockMode: (modeId: string) => void;
   recordModePlay: (modeId: string, score: number, isWin: boolean) => void;
+  advanceModeLevel: (modeId: string) => void;
+  getModeLevel: (modeId: string) => number;
 
   // Achievements
   completeAchievement: (achievementId: string) => void;
@@ -349,6 +352,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   modeStats: {
     classic: { played: 0, bestScore: 0, wins: 0 },
   },
+  modeLevels: {},
 
   // Onboarding
   tutorialComplete: false,
@@ -448,6 +452,8 @@ const PlayerContext = createContext<PlayerContextType>({
   placeDecoration: () => {},
   unlockMode: () => {},
   recordModePlay: () => {},
+  advanceModeLevel: () => {},
+  getModeLevel: () => 1,
   completeAchievement: () => {},
   checkComebackRewards: () => [],
   unlockFeature: () => {},
@@ -1092,6 +1098,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const advanceModeLevel = useCallback((modeId: string) => {
+    setData((prev) => {
+      const currentModeLevel = prev.modeLevels[modeId] ?? 1;
+      return {
+        ...prev,
+        modeLevels: {
+          ...prev.modeLevels,
+          [modeId]: currentModeLevel + 1,
+        },
+      };
+    });
+  }, []);
+
+  const getModeLevel = useCallback((modeId: string): number => {
+    return data.modeLevels[modeId] ?? 1;
+  }, [data.modeLevels]);
+
   // ── Achievements ────────────────────────────────────────────────────────
 
   const completeAchievement = useCallback((achievementId: string) => {
@@ -1699,6 +1722,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         placeDecoration,
         unlockMode,
         recordModePlay,
+        advanceModeLevel,
+        getModeLevel,
         completeAchievement,
         checkComebackRewards,
         unlockFeature,
