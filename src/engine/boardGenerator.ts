@@ -380,8 +380,14 @@ export function generateBoard(
   // Words are placed in the interior and the shrink-aware solver validates that
   // at least one clearing order exists where words survive each shrink phase.
   // Edge words get cleared before the shrink that would destroy them.
+  // Minimum 3 words so the player sees the shrink mechanic (2 cleared → shrink → solve remaining).
   const effectiveConfig: BoardConfig = mode === 'shrinkingBoard'
-    ? { ...config, rows: config.rows + 2, cols: config.cols + 2 }
+    ? {
+        ...config,
+        rows: Math.max(config.rows, 5) + 2,
+        cols: Math.max(config.cols, 5) + 2,
+        wordCount: Math.max(config.wordCount, 3),
+      }
     : config;
 
   // Primary attempts with full config

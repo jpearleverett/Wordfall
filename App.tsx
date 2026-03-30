@@ -357,9 +357,14 @@ function GameScreenWrapper({ route, navigation }: any) {
   const player = usePlayer();
   const economy = useEconomy();
   const [showSpinPrompt, setShowSpinPrompt] = useState(false);
+  const [earnedNewSpin, setEarnedNewSpin] = useState(false);
+  const spinsBeforeComplete = useRef(0);
   const [pendingNavAction, setPendingNavAction] = useState<'home' | 'next' | null>(null);
 
   const handleComplete = useCallback((stars: number, score: number) => {
+    // Track spins before completion to detect if a new one is awarded
+    spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
+
     const level = params.level || 0;
     const mode = (params.mode || 'classic') as GameMode;
     const isDaily = params.isDaily || false;
@@ -773,27 +778,35 @@ function GameScreenWrapper({ route, navigation }: any) {
   // Extract completion data from params (set by handleComplete)
   const completionData = params.completionData || {};
 
-  // Intercept navigation to show spin prompt when free spins available
+  // Detect when a new spin is earned during puzzle completion
+  useEffect(() => {
+    if (player.mysteryWheel.spinsAvailable > spinsBeforeComplete.current) {
+      setEarnedNewSpin(true);
+    }
+  }, [player.mysteryWheel.spinsAvailable]);
+
+  // Only show spin prompt when a NEW spin was earned this puzzle, not for old spins
   const handleHomeWithPrompt = useCallback(() => {
-    if (player.mysteryWheel.spinsAvailable > 0 && completionData.shareText) {
+    if (earnedNewSpin) {
       setPendingNavAction('home');
       setShowSpinPrompt(true);
     } else {
       navigation.goBack();
     }
-  }, [player.mysteryWheel.spinsAvailable, completionData, navigation]);
+  }, [earnedNewSpin, navigation]);
 
   const handleNextWithPrompt = useCallback(() => {
-    if (player.mysteryWheel.spinsAvailable > 0 && completionData.shareText) {
+    if (earnedNewSpin) {
       setPendingNavAction('next');
       setShowSpinPrompt(true);
     } else {
       handleNextLevel();
     }
-  }, [player.mysteryWheel.spinsAvailable, completionData, handleNextLevel]);
+  }, [earnedNewSpin, handleNextLevel]);
 
   const handleSpinPromptAccept = useCallback(() => {
     setShowSpinPrompt(false);
+    setEarnedNewSpin(false);
     setPendingNavAction(null);
     // Navigate back to home, passing param to auto-open the wheel
     navigation.navigate('HomeMain', { openWheel: true });
@@ -801,6 +814,7 @@ function GameScreenWrapper({ route, navigation }: any) {
 
   const handleSpinPromptDismiss = useCallback(() => {
     setShowSpinPrompt(false);
+    setEarnedNewSpin(false);
     if (pendingNavAction === 'home') {
       navigation.goBack();
     } else if (pendingNavAction === 'next') {
