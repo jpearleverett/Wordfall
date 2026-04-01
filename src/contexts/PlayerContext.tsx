@@ -16,6 +16,7 @@ import {
   SegmentationInput,
 } from '../services/playerSegmentation';
 import { triggerEnergyFullNotification } from '../services/notificationTriggers';
+import { generateReferralCode } from '../data/referralSystem';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -642,6 +643,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!loaded) return;
     recomputeSegments();
   }, [loaded, recomputeSegments]);
+
+  // Generate referral code on first load if not already set
+  useEffect(() => {
+    if (!loaded || !user) return;
+    setData((prev) => {
+      if (prev.referralCode) return prev; // already generated
+      return { ...prev, referralCode: generateReferralCode(user.uid) };
+    });
+  }, [loaded, user]);
 
   // ── Progress ────────────────────────────────────────────────────────────
 

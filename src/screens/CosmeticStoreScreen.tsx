@@ -273,7 +273,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         activeOpacity={0.7}
       >
         <LinearGradient
-          colors={GRADIENTS.surfaceCard as unknown as string[]}
+          colors={[...GRADIENTS.surfaceCard]}
           style={[styles.card, isEquipped && styles.cardEquipped]}
         >
           {/* Rarity badge */}
@@ -362,7 +362,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
             onPress={() => setSelectedItem(null)}
           />
           <LinearGradient
-            colors={['#2d1452', '#1a0a2e', '#120620']}
+            colors={[...GRADIENTS.victoryCard]}
             style={styles.modalCard}
           >
             {/* Close button */}
@@ -427,7 +427,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
                 onPress={() => handleEquip(selectedItem)}
               >
                 <LinearGradient
-                  colors={GRADIENTS.button.primary as unknown as string[]}
+                  colors={[...GRADIENTS.button.primary]}
                   style={styles.actionButton}
                 >
                   <Text style={styles.actionButtonText}>EQUIP</Text>
@@ -439,7 +439,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
                 onPress={() => handlePurchase(selectedItem)}
               >
                 <LinearGradient
-                  colors={GRADIENTS.button.gold as unknown as string[]}
+                  colors={[...GRADIENTS.button.gold]}
                   style={styles.actionButton}
                 >
                   <Text style={styles.actionButtonTextDark}>
