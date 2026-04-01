@@ -27,6 +27,7 @@ import LibraryScreen from './src/screens/LibraryScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ShopScreen from './src/screens/ShopScreen';
+import CosmeticStoreScreen from './src/screens/CosmeticStoreScreen';
 import ClubScreen from './src/screens/ClubScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import EventScreen from './src/screens/EventScreen';
@@ -98,6 +99,7 @@ function HomeStackScreen() {
     <HomeStack.Navigator screenOptions={screenOptions}>
       <HomeStack.Screen name="HomeMain" component={HomeMainScreen} />
       <HomeStack.Screen name="Shop" component={ShopScreen} />
+      <HomeStack.Screen name="CosmeticStore" component={CosmeticStoreScreen} />
       <HomeStack.Screen name="Settings" component={SettingsScreen} />
       <HomeStack.Screen name="Game" component={GameScreenWrapper} />
     </HomeStack.Navigator>

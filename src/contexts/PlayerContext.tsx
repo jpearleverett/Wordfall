@@ -437,6 +437,13 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Player Segmentation
   segments: DEFAULT_SEGMENTS,
 
+  // Referral
+  referralCode: '',
+  referralCount: 0,
+  referredBy: null,
+  referredPlayerIds: [],
+  referralMilestonesClaimed: [],
+
   // Cloud sync
   lastModified: 0,
 };
@@ -493,6 +500,9 @@ const PlayerContext = createContext<PlayerContextType>({
   respondToChallenge: () => {},
   recomputeSegments: () => {},
   updateEventProgress: () => {},
+  applyReferralCode: () => false,
+  recordReferralSuccess: () => {},
+  claimReferralMilestone: () => false,
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -1463,6 +1473,44 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ── Referral ──────────────────────────────────────────────────────────
+
+  const applyReferralCode = useCallback((code: string): boolean => {
+    // Prevent self-referral and double-referral
+    let applied = false;
+    setData((prev) => {
+      if (prev.referredBy !== null) return prev; // already referred
+      if (prev.referralCode === code) return prev; // self-referral
+      applied = true;
+      return {
+        ...prev,
+        referredBy: code,
+      };
+    });
+    return applied;
+  }, []);
+
+  const recordReferralSuccess = useCallback(() => {
+    setData((prev) => ({
+      ...prev,
+      referralCount: prev.referralCount + 1,
+    }));
+  }, []);
+
+  const claimReferralMilestone = useCallback((count: number): boolean => {
+    let claimed = false;
+    setData((prev) => {
+      if (prev.referralMilestonesClaimed.includes(count)) return prev;
+      if (prev.referralCount < count) return prev;
+      claimed = true;
+      return {
+        ...prev,
+        referralMilestonesClaimed: [...prev.referralMilestonesClaimed, count],
+      };
+    });
+    return claimed;
+  }, []);
+
   // ── Puzzle Energy ──────────────────────────────────────────────────────
 
   /**
@@ -1772,6 +1820,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         respondToChallenge,
         recomputeSegments,
         updateEventProgress: updateEventProgressCb,
+        applyReferralCode,
+        recordReferralSuccess,
+        claimReferralMilestone,
       }}
     >
       {children}
