@@ -15,6 +15,7 @@ import {
   computeSegments,
   SegmentationInput,
 } from '../services/playerSegmentation';
+import { triggerEnergyFullNotification } from '../services/notificationTriggers';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -168,6 +169,13 @@ interface PlayerData {
   // Player Segmentation
   segments: PlayerSegments;
 
+  // Referral
+  referralCode: string;
+  referralCount: number;
+  referredBy: string | null;
+  referredPlayerIds: string[];
+  referralMilestonesClaimed: number[];
+
   // Cloud sync
   lastModified: number;
 }
@@ -277,6 +285,11 @@ interface PlayerContextType extends PlayerData {
 
   // Event Progress
   updateEventProgress: (eventId: string, progress: number, claimedTiers?: string[]) => void;
+
+  // Referral
+  applyReferralCode: (code: string) => boolean;
+  recordReferralSuccess: () => void;
+  claimReferralMilestone: (count: number) => boolean;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -1507,11 +1520,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Has energy — spend it
       if (energyNow.current > 0) {
         success = true;
+        const newCurrent = energyNow.current - 1;
+        // Schedule a notification for when energy will be full again
+        void triggerEnergyFullNotification(newCurrent, ENERGY.MAX);
         return {
           ...prev,
           puzzleEnergy: {
             ...energyNow,
-            current: energyNow.current - 1,
+            current: newCurrent,
             lastRegenTime: energyNow.current >= ENERGY.MAX
               ? new Date().toISOString()
               : energyNow.lastRegenTime,

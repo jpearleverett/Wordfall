@@ -9,7 +9,7 @@ import { IAPProductId } from '../types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type ProductCategory = 'bundles' | 'currency' | 'consumables' | 'premium';
+export type ProductCategory = 'bundles' | 'currency' | 'consumables' | 'premium' | 'subscription';
 
 export interface ProductRewards {
   coins?: number;
@@ -240,6 +240,24 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     rewards: { flags: { adsRemoved: true } },
     isNonConsumable: true,
     icon: '\u{1F6AB}',
+  },
+
+  // ── Subscription ────────────────────────────────────────────────────────
+  {
+    id: 'vip_weekly',
+    storeProductId: 'wordfall_vip_weekly',
+    name: 'VIP Weekly',
+    description: 'Ad-free + 50 daily gems + 3 daily hints + exclusive VIP frame + 2x XP boost',
+    fallbackPrice: '$4.99/week',
+    fallbackPriceAmount: 4.99,
+    category: 'subscription',
+    rewards: {
+      flags: { adsRemoved: true, vipSubscriber: true },
+      dailyDrip: { gems: 50, hintTokens: 3 },
+      decorations: ['frame_vip_exclusive'],
+    },
+    isNonConsumable: false,
+    icon: '\u{1F48E}',
   },
 ];
 

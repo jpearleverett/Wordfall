@@ -420,7 +420,8 @@ export type IAPProductId =
   | 'ad_removal'
   | 'gems_50'
   | 'gems_250'
-  | 'gems_500';
+  | 'gems_500'
+  | 'vip_weekly';
 
 export interface ShopOffer {
   id: string;
@@ -703,6 +704,27 @@ export type AnalyticsEvent =
   | 'event_participated'
   | 'collection_completed'
   | 'level_up';
+
+// ============ REFERRAL ============
+export interface ReferralState {
+  referralCode: string;
+  referralCount: number;
+  referredBy: string | null;
+  referredPlayerIds: string[];
+  referralMilestonesClaimed: number[];
+}
+
+export interface ReferralMilestone {
+  count: number;
+  label: string;
+  icon: string;
+  rewards: {
+    coins?: number;
+    gems?: number;
+    cosmeticId?: string;
+    cosmeticType?: 'frame' | 'title';
+  };
+}
 
 // ============ SOLVE REPLAY ============
 export interface SolveStep {

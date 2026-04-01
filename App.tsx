@@ -60,6 +60,14 @@ import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { funnelTracker } from './src/services/funnelTracker';
+import {
+  triggerStreakReminder,
+  triggerEventNotifications,
+  triggerDailyChallengeReminder,
+  triggerComebackReminder,
+  cancelComebackReminder,
+  triggerWinStreakMilestoneNotification,
+} from './src/services/notificationTriggers';
 import { eventManager } from './src/services/eventManager';
 import { getChapterExtended, getLevelConfigExtended } from './src/engine/puzzleGenerator';
 import {
@@ -441,6 +449,8 @@ function GameScreenWrapper({ route, navigation }: any) {
       economy.addCoins(ECONOMY.dailyCompleteCoins);
       economy.addGems(ECONOMY.dailyCompleteGems);
       player.updateStreak();
+      // Re-schedule streak reminder with updated streak count
+      void triggerStreakReminder(player.streaks.currentStreak + 1);
       void analytics.trackDailyChallengeComplete(player.streaks.currentStreak + 1);
       void analytics.logEvent('daily_login', {
         date: today,
@@ -648,6 +658,13 @@ function GameScreenWrapper({ route, navigation }: any) {
 
     // Update win streak
     player.updateWinStreak(true);
+
+    // Send immediate notification for win streak milestones (3/5/7/10/15/20)
+    const newWinStreak = player.winStreak.currentStreak + 1;
+    const winStreakMilestones = [3, 5, 7, 10, 15, 20];
+    if (winStreakMilestones.includes(newWinStreak)) {
+      void triggerWinStreakMilestoneNotification(newWinStreak);
+    }
 
     // Generate share text
     const grid = params.board ? (params.board as Board).grid : null;
@@ -953,15 +970,18 @@ function HomeMainScreen({ route, navigation }: any) {
       // Initialize notifications with segment-personalized scheduling
       void notificationManager.init().then(() => {
         const notifConfig = getPersonalizedNotifications(player.segments);
+        // Streak reminder at 8 PM daily (if player has a streak)
         if (notifConfig.enabledCategories.includes('streak_reminder')) {
-          notificationManager.scheduleStreakReminder(player.streaks.currentStreak);
+          void triggerStreakReminder(player.streaks.currentStreak);
         }
+        // Daily challenge reminder at 9 AM
         if (notifConfig.enabledCategories.includes('daily_challenge')) {
-          notificationManager.scheduleDailyChallenge();
+          void triggerDailyChallengeReminder();
         }
-        if (notifConfig.enabledCategories.includes('comeback')) {
-          notificationManager.scheduleComebackReminder();
-        }
+        // Event ending reminders for any active events
+        void triggerEventNotifications();
+        // Cancel any pending comeback reminder since the player is active now
+        void cancelComebackReminder();
       });
 
       // ── Firestore social: sync profile + check gifts on app open ──
@@ -1006,8 +1026,12 @@ function HomeMainScreen({ route, navigation }: any) {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void analytics.startSession('foreground');
+        // Player returned — cancel any pending comeback reminder
+        void cancelComebackReminder();
       } else if (state === 'background') {
         void analytics.endSession('background');
+        // Player left — schedule comeback reminder for 3 days from now
+        void triggerComebackReminder();
       }
     });
     return () => sub.remove();

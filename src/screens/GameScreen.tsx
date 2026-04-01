@@ -266,15 +266,31 @@ export function GameScreen({
   const difficulty = useMemo(() => getDifficultyTier(level), [level]);
 
   const dismissOffer = useCallback(() => {
+    if (activeOffer) {
+      void analytics.logEvent('offer_dismissed', {
+        offerType: activeOffer,
+        level,
+        mode,
+        difficulty,
+      });
+    }
     setActiveOffer(null);
-  }, []);
+  }, [activeOffer, level, mode, difficulty]);
 
   const showOfferIfAllowed = useCallback((type: OfferType) => {
     if (offerShownThisLevel.current || activeOffer) return false;
     offerShownThisLevel.current = true;
-    setTimeout(() => setActiveOffer(type), 750);
+    setTimeout(() => {
+      setActiveOffer(type);
+      void analytics.logEvent('offer_shown', {
+        offerType: type,
+        level,
+        mode,
+        difficulty,
+      });
+    }, 750);
     return true;
-  }, [activeOffer]);
+  }, [activeOffer, level, mode, difficulty]);
 
   // booster_pack: show on first entry to a hard/expert level
   useEffect(() => {
@@ -321,15 +337,43 @@ export function GameScreen({
     };
   }, [remainingWords, isStuck, state.status, activeOffer, showOfferIfAllowed]);
 
-  // hint_rescue: detect failures and show offer after 2+ fails
+  // hint_rescue: detect failures and show offer after 2+ fails (session or persistent)
   useEffect(() => {
     if (state.status === 'failed' || state.status === 'timeout') {
       sessionFailCount.current += 1;
-      if (sessionFailCount.current >= 2 && !offerShownThisLevel.current && !activeOffer) {
+      const persistentFails = player.failCountByLevel?.[level] ?? 0;
+      const totalFails = Math.max(sessionFailCount.current, persistentFails);
+      if (totalFails >= 2 && !offerShownThisLevel.current && !activeOffer) {
         showOfferIfAllowed('hint_rescue');
       }
     }
-  }, [state.status, activeOffer, showOfferIfAllowed]);
+  }, [state.status, activeOffer, showOfferIfAllowed, player.failCountByLevel, level]);
+
+  // life_refill: show when player fails and has no lives remaining
+  useEffect(() => {
+    if ((state.status === 'failed' || state.status === 'timeout') && economy.lives === 0) {
+      if (!offerShownThisLevel.current && !activeOffer) {
+        showOfferIfAllowed('life_refill');
+      }
+    }
+  }, [state.status, economy.lives, activeOffer, showOfferIfAllowed]);
+
+  // streak_shield: show when player has an active streak at risk during gameplay
+  useEffect(() => {
+    if (state.status !== 'playing') return;
+    const streaks = player.streaks;
+    if (!streaks || streaks.currentStreak < 3 || streaks.shieldActive) return;
+    // Check if last play was yesterday (streak at risk of expiring today)
+    if (!streaks.lastCompletedDate) return;
+    const lastPlayed = new Date(streaks.lastCompletedDate);
+    const now = new Date();
+    const diffMs = now.getTime() - lastPlayed.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    // Streak is at risk if last completed > 20 hours ago (approaching the daily reset)
+    if (diffHours >= 20 && !offerShownThisLevel.current && !activeOffer) {
+      showOfferIfAllowed('streak_shield');
+    }
+  }, [state.status, player.streaks, activeOffer, showOfferIfAllowed]);
 
   // post_puzzle: flag when puzzle won with hint tokens depleted
   useEffect(() => {
@@ -340,23 +384,27 @@ export function GameScreen({
 
   const handleOfferAccept = useCallback(() => {
     if (!activeOffer) return;
+    let accepted = false;
     switch (activeOffer) {
       case 'hint_rescue':
         // Spend 50 coins, grant 5 hint tokens
         if (economy.spendCoins(50)) {
           economy.addHintTokens(5);
+          accepted = true;
         }
         break;
       case 'close_finish':
         // Spend 25 coins, grant 1 hint token
         if (economy.spendCoins(25)) {
           economy.addHintTokens(1);
+          accepted = true;
         }
         break;
       case 'post_puzzle':
         // Spend 80 coins, grant 10 hint tokens
         if (economy.spendCoins(80)) {
           economy.addHintTokens(10);
+          accepted = true;
         }
         break;
       case 'booster_pack':
@@ -365,11 +413,33 @@ export function GameScreen({
           grantBooster('wildcardTile');
           grantBooster('spotlight');
           grantBooster('smartShuffle');
+          accepted = true;
+        }
+        break;
+      case 'life_refill':
+        // Spend 10 gems, refill lives
+        if (economy.spendGems(10)) {
+          economy.addLives(5);
+          accepted = true;
+        }
+        break;
+      case 'streak_shield':
+        // Spend 30 gems, activate streak shield
+        if (economy.spendGems(30)) {
+          player.activateStreakShield?.();
+          accepted = true;
         }
         break;
     }
+    void analytics.logEvent('offer_accepted', {
+      offerType: activeOffer,
+      level,
+      mode,
+      difficulty,
+      transactionCompleted: accepted,
+    });
     setActiveOffer(null);
-  }, [activeOffer, economy]);
+  }, [activeOffer, economy, level, mode, difficulty, player]);
 
   // Memoize the composed grid scale to avoid creating a new style object each render
   const gridScaleStyle = useMemo(() => ({
@@ -1344,6 +1414,8 @@ export function GameScreen({
             difficulty,
             wordsRemaining: remainingWords.length,
             hintsUsed: state.hintsUsed,
+            streakDays: player.streaks?.currentStreak ?? 0,
+            livesRemaining: economy.lives,
           }}
           onAccept={handleOfferAccept}
           onDismiss={dismissOffer}
