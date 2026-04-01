@@ -614,6 +614,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, [loaded, data.currentLevel]);
 
+  // Recompute player segments on app open (when data finishes loading)
+  useEffect(() => {
+    if (!loaded) return;
+    recomputeSegments();
+  }, [loaded, recomputeSegments]);
+
   // ── Progress ────────────────────────────────────────────────────────────
 
   const updateProgress = useCallback((updates: Partial<PlayerData>) => {

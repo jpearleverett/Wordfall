@@ -58,6 +58,7 @@ import { MysteryWheel } from './src/components/MysteryWheel';
 import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT } from './src/data/mysteryWheel';
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
+import ErrorBoundary from './src/components/ErrorBoundary';
 import { funnelTracker } from './src/services/funnelTracker';
 import { eventManager } from './src/services/eventManager';
 import { getChapterExtended, getLevelConfigExtended } from './src/engine/puzzleGenerator';
@@ -897,6 +898,9 @@ function HomeMainScreen({ route, navigation }: any) {
   const [showMysteryWheel, setShowMysteryWheel] = useState(false);
   const [freeSpinToast, setFreeSpinToast] = useState(false);
   const prevSpinsRef = React.useRef(player.mysteryWheel.spinsAvailable);
+  const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ceremonyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check for comeback rewards and process ceremonies on mount
   useEffect(() => {
@@ -1012,19 +1016,25 @@ function HomeMainScreen({ route, navigation }: any) {
   // Auto-open wheel when navigating back from post-puzzle spin prompt
   useEffect(() => {
     if (route?.params?.openWheel) {
-      setTimeout(() => setShowMysteryWheel(true), 400);
+      wheelTimerRef.current = setTimeout(() => setShowMysteryWheel(true), 400);
       // Clear the param so it doesn't re-trigger
       navigation.setParams({ openWheel: undefined });
     }
+    return () => {
+      if (wheelTimerRef.current) clearTimeout(wheelTimerRef.current);
+    };
   }, [route?.params?.openWheel, navigation]);
 
   // Detect when a free spin is awarded and show toast
   useEffect(() => {
     if (player.loaded && player.mysteryWheel.spinsAvailable > prevSpinsRef.current) {
       setFreeSpinToast(true);
-      setTimeout(() => setFreeSpinToast(false), 3500);
+      toastTimerRef.current = setTimeout(() => setFreeSpinToast(false), 3500);
     }
     prevSpinsRef.current = player.mysteryWheel.spinsAvailable;
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
   }, [player.mysteryWheel.spinsAvailable, player.loaded]);
 
   // Mystery Wheel handlers
@@ -1124,11 +1134,18 @@ function HomeMainScreen({ route, navigation }: any) {
     }
     setActiveCeremony(null);
     // Check for more ceremonies after a short delay
-    setTimeout(() => {
+    ceremonyTimerRef.current = setTimeout(() => {
       const next = player.popCeremony();
       if (next) setActiveCeremony(next);
     }, 300);
   }, [player, activeCeremony]);
+
+  // Cleanup ceremony timer on unmount
+  useEffect(() => {
+    return () => {
+      if (ceremonyTimerRef.current) clearTimeout(ceremonyTimerRef.current);
+    };
+  }, []);
 
   // Convert PlayerContext data to PlayerProgress for HomeScreen
   const progress: PlayerProgress = {
@@ -1789,17 +1806,19 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <SettingsProvider>
-            <EconomyProvider>
-              <PlayerProvider>
-                <AppContent />
-              </PlayerProvider>
-            </EconomyProvider>
-          </SettingsProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
+      <ErrorBoundary>
+        <SafeAreaProvider>
+          <AuthProvider>
+            <SettingsProvider>
+              <EconomyProvider>
+                <PlayerProvider>
+                  <AppContent />
+                </PlayerProvider>
+              </EconomyProvider>
+            </SettingsProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

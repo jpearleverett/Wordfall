@@ -37,6 +37,12 @@ export type AnalyticsEventName =
   | 'session_end'
   // A/B testing
   | 'experiment_assigned'
+  // Revenue & funnel tracking
+  | 'iap_revenue'
+  | 'ad_revenue'
+  | 'retention_check'
+  | 'funnel_step'
+  | 'cohort_event'
   // Legacy events (kept for backward compat with existing callsites)
   | 'mode_started'
   | 'daily_login'
@@ -561,6 +567,59 @@ class Analytics {
   }
 
   // ─────────────────────────────────────────
+  // Revenue & funnel tracking
+  // ─────────────────────────────────────────
+
+  /** Track IAP revenue for a completed purchase */
+  async trackRevenue(productId: string, amount: number, currency: string): Promise<void> {
+    await this.logEvent('iap_revenue', {
+      product_id: productId,
+      amount,
+      currency,
+      timestamp: Date.now(),
+    });
+  }
+
+  /** Track estimated ad revenue (from AdMob or mediation) */
+  async trackAdRevenue(adType: string, estimatedRevenue: number): Promise<void> {
+    await this.logEvent('ad_revenue', {
+      ad_type: adType,
+      estimated_revenue: estimatedRevenue,
+      currency: 'USD',
+      timestamp: Date.now(),
+    });
+  }
+
+  /** Track retention check for D1/D7/D30 metrics */
+  async trackRetention(daysSinceInstall: number): Promise<void> {
+    await this.logEvent('retention_check', {
+      days_since_install: daysSinceInstall,
+      is_d1: daysSinceInstall === 1,
+      is_d7: daysSinceInstall === 7,
+      is_d30: daysSinceInstall === 30,
+    });
+  }
+
+  /** Track a funnel step for conversion analysis */
+  async trackFunnel(funnelName: string, step: string, metadata?: Record<string, unknown>): Promise<void> {
+    await this.logEvent('funnel_step', {
+      funnel_name: funnelName,
+      step,
+      timestamp: Date.now(),
+      ...metadata,
+    });
+  }
+
+  /** Track a cohort-specific event for cohort analysis */
+  async trackCohort(cohortId: string, event: string): Promise<void> {
+    await this.logEvent('cohort_event', {
+      cohort_id: cohortId,
+      cohort_event: event,
+      timestamp: Date.now(),
+    });
+  }
+
+  // ─────────────────────────────────────────
   // User identity & properties
   // ─────────────────────────────────────────
 
@@ -597,6 +656,12 @@ class Analytics {
     if (__DEV__) {
       console.log(`[Analytics] setUserProperty: ${name}=${value}`);
     }
+  }
+
+  /** Get all current user properties */
+  async getUserProperties(): Promise<Record<string, string>> {
+    await this.ensureLoaded();
+    return { ...this.state.userProperties };
   }
 
   /** Batch-update all standard user properties at once */

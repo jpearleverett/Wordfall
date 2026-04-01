@@ -5,6 +5,7 @@ export interface AchievementDef {
   icon: string;
   category: 'puzzle' | 'collection' | 'streak' | 'mode' | 'mastery';
   tiers: AchievementTier[];
+  hidden?: boolean;
 }
 
 export interface AchievementTier {
@@ -189,6 +190,86 @@ export const ACHIEVEMENTS: AchievementDef[] = [
       { level: 'bronze', threshold: 30, reward: { coins: 300, gems: 10 } },
       { level: 'silver', threshold: 100, reward: { coins: 800, gems: 30 } },
       { level: 'gold', threshold: 300, reward: { coins: 2500, gems: 80 } },
+    ],
+  },
+
+  // Hidden achievements
+  {
+    id: 'speed_solver',
+    name: 'Lightning Fast',
+    description: 'Solve a puzzle in under 30 seconds',
+    icon: '⚡',
+    category: 'puzzle',
+    hidden: true,
+    tiers: [
+      { level: 'bronze', threshold: 1, reward: { coins: 300, gems: 10 } },
+      { level: 'silver', threshold: 5, reward: { coins: 800, gems: 25 } },
+      { level: 'gold', threshold: 20, reward: { coins: 2000, gems: 75 } },
+    ],
+  },
+  {
+    id: 'no_hint_master',
+    name: 'Pure Genius',
+    description: 'Win puzzles without using any hints',
+    icon: '🧠',
+    category: 'puzzle',
+    hidden: true,
+    tiers: [
+      { level: 'bronze', threshold: 10, reward: { coins: 400, gems: 10 } },
+      { level: 'silver', threshold: 50, reward: { coins: 1000, gems: 30 } },
+      { level: 'gold', threshold: 200, reward: { coins: 3000, gems: 100 } },
+    ],
+  },
+  {
+    id: 'combo_king',
+    name: 'Combo King',
+    description: 'Achieve a combo chain of N words',
+    icon: '🔗',
+    category: 'puzzle',
+    hidden: true,
+    tiers: [
+      { level: 'bronze', threshold: 4, reward: { coins: 300, gems: 10 } },
+      { level: 'silver', threshold: 6, reward: { coins: 800, gems: 30 } },
+      { level: 'gold', threshold: 10, reward: { coins: 2000, gems: 75 } },
+    ],
+  },
+  {
+    id: 'night_owl',
+    name: 'Night Owl',
+    description: 'Play between midnight and 5am',
+    icon: '🦉',
+    category: 'mastery',
+    hidden: true,
+    tiers: [
+      { level: 'bronze', threshold: 1, reward: { coins: 200, gems: 5 } },
+      { level: 'silver', threshold: 5, reward: { coins: 500, gems: 15 } },
+      { level: 'gold', threshold: 20, reward: { coins: 1500, gems: 50 } },
+    ],
+  },
+  {
+    id: 'collector_supreme',
+    name: 'Collector Supreme',
+    description: 'Collect rare tiles',
+    icon: '👑',
+    category: 'collection',
+    hidden: true,
+    tiers: [
+      { level: 'bronze', threshold: 20, reward: { coins: 500, gems: 15 } },
+      { level: 'silver', threshold: 40, reward: { coins: 1500, gems: 50 } },
+      { level: 'gold', threshold: 78, reward: { coins: 5000, gems: 150 } },
+    ],
+  },
+  {
+    id: 'marathon_player',
+    name: 'Marathon Player',
+    description: 'Solve puzzles in a single session',
+    icon: '🏃',
+    category: 'mastery',
+    hidden: true,
+    tiers: [
+      { level: 'bronze', threshold: 10, reward: { coins: 400, gems: 10 } },
+      { level: 'silver', threshold: 25, reward: { coins: 1000, gems: 30 } },
+      { level: 'gold', threshold: 50, reward: { coins: 3000, gems: 100 } },
     ],
   },
 ];

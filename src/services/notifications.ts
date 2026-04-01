@@ -14,6 +14,7 @@
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // expo-notifications crashes in Expo Go since SDK 53.
 // Lazy-load the module and gracefully degrade when unavailable.
@@ -126,6 +127,11 @@ const NOTIFICATION_TEMPLATES: Record<NotificationCategory, { titles: string[]; b
     ],
   },
 };
+
+// ─── Storage Keys ────────────────────────────────────────────────────────────
+
+const PUSH_TOKEN_STORAGE_KEY = '@wordfall_push_token';
+const DEVICE_TOKEN_STORAGE_KEY = '@wordfall_device_push_token';
 
 // ─── Android Notification Channel ─────────────────────────────────────────────
 
@@ -395,6 +401,123 @@ class NotificationManager {
    */
   getExpoPushToken(): string | null {
     return this.expoPushToken;
+  }
+
+  // ─── Remote Push Notification Support ───────────────────────────────────
+
+  /**
+   * Register for remote push notifications.
+   * Gets both Expo push token and device push token, stores in AsyncStorage.
+   * Returns the Expo push token string, or null if unavailable.
+   */
+  async registerForRemotePush(): Promise<string | null> {
+    if (!Notifications) {
+      console.log('[Notifications] Module not available — cannot register for remote push');
+      return null;
+    }
+
+    if (!this.permissionGranted) {
+      console.log('[Notifications] Permission not granted — cannot register for remote push');
+      return null;
+    }
+
+    try {
+      // Get Expo push token
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const expoPushTokenData = await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined,
+      );
+      const expoToken = expoPushTokenData.data;
+      this.expoPushToken = expoToken;
+
+      // Get device push token (FCM for Android, APNs for iOS)
+      let deviceToken: string | null = null;
+      try {
+        const devicePushTokenData = await Notifications.getDevicePushTokenAsync();
+        deviceToken = typeof devicePushTokenData.data === 'string'
+          ? devicePushTokenData.data
+          : JSON.stringify(devicePushTokenData.data);
+      } catch (deviceTokenError) {
+        console.warn('[Notifications] Failed to get device push token:', deviceTokenError);
+      }
+
+      // Store tokens in AsyncStorage
+      await AsyncStorage.setItem(PUSH_TOKEN_STORAGE_KEY, expoToken);
+      if (deviceToken) {
+        await AsyncStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, deviceToken);
+      }
+
+      console.log('[Notifications] Remote push registered — Expo token:', expoToken);
+      return expoToken;
+    } catch (error) {
+      console.warn('[Notifications] Failed to register for remote push:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the stored push token from AsyncStorage.
+   * Returns null if no token has been registered.
+   */
+  async getPushToken(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+    } catch (error) {
+      console.warn('[Notifications] Failed to read push token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Send the push token to the server (Firestore) for remote notification delivery.
+   * Falls back silently if Firebase/Firestore is not available.
+   */
+  async sendTokenToServer(token: string, userId: string): Promise<void> {
+    try {
+      const { isFirebaseConfigured } = await import('../config/firebase');
+      if (!isFirebaseConfigured) {
+        console.log('[Notifications] Firebase not configured — token not sent to server');
+        return;
+      }
+
+      const { getFirestore, doc, setDoc } = await import('firebase/firestore');
+      const { getApp } = await import('firebase/app');
+
+      const app = getApp();
+      const db = getFirestore(app);
+
+      await setDoc(doc(db, 'users', userId, 'tokens', 'push'), {
+        token,
+        platform: Platform.OS,
+        updatedAt: Date.now(),
+      });
+
+      console.log('[Notifications] Push token sent to server for user:', userId);
+    } catch (error) {
+      // Silent fallback — remote push is best-effort
+      console.warn('[Notifications] Failed to send token to server:', error);
+    }
+  }
+
+  /**
+   * Handle an incoming remote notification payload.
+   * Routes the notification data to the appropriate handler based on category.
+   */
+  handleRemoteNotification(data: Record<string, unknown>): void {
+    const category = data.category as NotificationCategory | undefined;
+
+    if (__DEV__) {
+      console.log('[Notifications] Remote notification received:', data);
+    }
+
+    // Route based on category if present
+    if (category && NOTIFICATION_TEMPLATES[category]) {
+      console.log(`[Notifications] Handling remote notification category: ${category}`);
+    }
+
+    // The notification data is available for the app to act on.
+    // Callers can use addForegroundListener / addResponseListener
+    // to react to specific notification payloads in the UI layer.
   }
 
   /**

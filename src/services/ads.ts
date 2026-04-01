@@ -14,6 +14,8 @@ import { AD_CONFIG } from '../constants';
 
 // ── Reward type definitions ────────────────────────────────────────────────────
 
+export type AdType = 'rewarded' | 'interstitial';
+
 export type AdRewardType =
   | 'hint_reward'
   | 'undo_reward'
@@ -44,6 +46,8 @@ interface AdTracking {
   viewCount: number;
   coinAdCount: number; // separate cap for coins_reward (max 3/day)
   lastAdTime: number; // timestamp of last ad shown
+  interstitialCount: number; // separate cap for interstitials (max 5/day)
+  lastInterstitialTime: number; // timestamp of last interstitial shown
 }
 
 function todayKey(): string {
@@ -60,7 +64,7 @@ async function loadTracking(): Promise<AdTracking> {
   } catch {
     // Ignore — fall through to default
   }
-  return { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0 };
+  return { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
 }
 
 async function saveTracking(tracking: AdTracking): Promise<void> {
@@ -79,7 +83,7 @@ class AdManager {
   private rewardedAdReady = false;
   private initialized = false;
   private useMock = true;
-  private tracking: AdTracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0 };
+  private tracking: AdTracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
 
   /** Listeners for ad-availability state changes */
   private adReadyListeners: Array<(ready: boolean) => void> = [];
@@ -154,7 +158,7 @@ class AdManager {
 
     // Refresh tracking if day rolled over
     if (this.tracking.date !== todayKey()) {
-      this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0 };
+      this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
     }
 
     // Daily cap check
@@ -245,6 +249,111 @@ class AdManager {
     if (this.tracking.date === todayKey() && this.tracking.viewCount >= AD_CONFIG.MAX_ADS_PER_DAY) return false;
     if (rewardType === 'coins_reward' && !this.canWatchCoinAd()) return false;
     return true;
+  }
+
+  // ── Interstitial ads ────────────────────────────────────────────────────
+
+  /**
+   * Check whether an interstitial ad can be shown right now.
+   * Respects ad-free purchase, daily cap (5), and minimum interval (90s).
+   */
+  canShowInterstitial(): boolean {
+    if (this.adsRemoved) return false;
+
+    // Refresh tracking if day rolled over
+    if (this.tracking.date !== todayKey()) return true; // new day, all caps reset
+
+    if (this.tracking.interstitialCount >= AD_CONFIG.MAX_INTERSTITIALS_PER_DAY) return false;
+
+    const now = Date.now();
+    if (now - this.tracking.lastInterstitialTime < AD_CONFIG.INTERSTITIAL_INTERVAL_MS) return false;
+
+    return true;
+  }
+
+  /**
+   * Show an interstitial ad. Returns true if it was shown successfully.
+   * Respects ad-free purchase, daily cap, and minimum interval.
+   */
+  async showInterstitialAd(): Promise<boolean> {
+    await this.init();
+
+    if (this.adsRemoved) return false;
+
+    // Refresh tracking if day rolled over
+    if (this.tracking.date !== todayKey()) {
+      this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
+    }
+
+    // Daily cap check
+    if (this.tracking.interstitialCount >= AD_CONFIG.MAX_INTERSTITIALS_PER_DAY) {
+      console.log('[Ads] Daily interstitial cap reached');
+      return false;
+    }
+
+    // Minimum interval check
+    const now = Date.now();
+    if (now - this.tracking.lastInterstitialTime < AD_CONFIG.INTERSTITIAL_INTERVAL_MS) {
+      console.log('[Ads] Interstitial interval not elapsed');
+      return false;
+    }
+
+    let shown = false;
+
+    if (this.useMock) {
+      // Mock mode: resolve immediately (no modal needed for interstitials)
+      console.log('[Ads] Mock interstitial ad shown (instant)');
+      shown = true;
+    } else {
+      shown = await this.nativeShowInterstitialAd();
+    }
+
+    if (shown) {
+      this.tracking.interstitialCount++;
+      this.tracking.lastInterstitialTime = Date.now();
+      await saveTracking(this.tracking);
+    }
+
+    return shown;
+  }
+
+  /** How many interstitial ads remain today */
+  interstitialsRemaining(): number {
+    if (this.tracking.date !== todayKey()) return AD_CONFIG.MAX_INTERSTITIALS_PER_DAY;
+    return Math.max(0, AD_CONFIG.MAX_INTERSTITIALS_PER_DAY - this.tracking.interstitialCount);
+  }
+
+  // ── Native interstitial implementation ─────────────────────────────────
+
+  private async nativeShowInterstitialAd(): Promise<boolean> {
+    try {
+      const adModule = await import('expo-ads-admob' as string);
+      if (typeof adModule.AdMobInterstitial?.showAdAsync === 'function') {
+        await adModule.AdMobInterstitial.requestAdAsync();
+        await adModule.AdMobInterstitial.showAdAsync();
+        return true;
+      }
+    } catch {
+      // expo-ads-admob not available, try react-native-google-mobile-ads
+      try {
+        const mobileAds = await import('react-native-google-mobile-ads' as string);
+        if (mobileAds.InterstitialAd) {
+          return new Promise<boolean>((resolve) => {
+            const ad = mobileAds.InterstitialAd.createForAdRequest(
+              AD_CONFIG.REWARDED_AD_UNIT_ID, // Would use a separate interstitial ID in production
+            );
+            ad.addAdEventListener('closed', () => resolve(true));
+            ad.addAdEventListener('error', () => resolve(false));
+            ad.load();
+            ad.show().catch(() => resolve(false));
+          });
+        }
+      } catch {
+        // No ad SDK available
+      }
+    }
+    console.warn('[Ads] Failed to show native interstitial ad');
+    return false;
   }
 
   // ── Mock ad UI integration ──────────────────────────────────────────────
