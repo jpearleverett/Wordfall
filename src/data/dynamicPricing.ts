@@ -117,7 +117,7 @@ export function getDynamicOffers(
     });
     if (playerLevel >= 10) {
       offers.push({
-        productId: 'gem_pack_medium',
+        productId: 'gems_250',
         discountPercent: 50,
         badge: 'COMEBACK DEAL',
         expiresInHours: 48,
@@ -138,7 +138,7 @@ export function getDynamicOffers(
     });
     if (spending !== 'non_payer') {
       offers.push({
-        productId: 'gem_pack_large',
+        productId: 'gems_500',
         discountPercent: 40,
         badge: 'SPECIAL OFFER',
         expiresInHours: 24,
@@ -159,7 +159,7 @@ export function getDynamicOffers(
     });
     if (playerLevel >= 8) {
       offers.push({
-        productId: 'hint_pack_small',
+        productId: 'hint_bundle_10',
         discountPercent: 20,
         expiresInHours: 72,
         priority: 3,
@@ -178,7 +178,7 @@ export function getDynamicOffers(
       priority: 1,
     });
     offers.push({
-      productId: 'gem_pack_medium',
+      productId: 'gems_250',
       discountPercent: 20,
       expiresInHours: 48,
       priority: 2,
@@ -223,7 +223,7 @@ export function getDynamicOffers(
     });
     if (playerLevel >= 20) {
       offers.push({
-        productId: 'gem_pack_large',
+        productId: 'gems_500',
         discountPercent: 10,
         expiresInHours: 48,
         priority: 3,
