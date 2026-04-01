@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -16,6 +16,8 @@ import {
   SegmentationInput,
 } from '../services/playerSegmentation';
 import { triggerEnergyFullNotification } from '../services/notificationTriggers';
+import { createProgressMethods } from './PlayerProgressContext';
+import { createSocialMethods } from './PlayerSocialContext';
 import { generateReferralCode } from '../data/referralSystem';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -653,60 +655,56 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, [loaded, user]);
 
-  // ── Progress ────────────────────────────────────────────────────────────
+  // ── Data accessor ref (for factory functions that need current data) ──
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const getData = useCallback(() => dataRef.current, []);
+
+  // ── Progress methods (extracted to PlayerProgressContext) ──────────────
+  const progressMethods = useMemo(
+    () => createProgressMethods(setData as any, getData as any),
+    [getData],
+  );
+  const {
+    recordPuzzleComplete,
+    recordDailyComplete,
+    updateStreak,
+    useGraceDay,
+    useStreakShield,
+    updateMissionProgress,
+    claimMissionReward,
+    generateDailyMissions,
+    unlockFeature,
+    checkFeatureUnlocks,
+    markTooltipShown,
+    initWeeklyGoals,
+    updateWeeklyGoalProgress,
+    queueCeremony,
+    popCeremony,
+    recordFailure,
+    needsBreather,
+    checkAchievements,
+    completeAchievement,
+    checkComebackRewards,
+    recordPerformanceMetrics,
+  } = progressMethods;
+
+  // ── Social methods (extracted to PlayerSocialContext) ──────────────────
+  const socialMethods = useMemo(
+    () => createSocialMethods(setData as any, user, getData as any),
+    [user, getData],
+  );
+  const {
+    sendHintGift,
+    sendTileGift,
+    sendChallenge,
+    respondToChallenge,
+  } = socialMethods;
+
+  // ── Progress (remaining) ───────────────────────────────────────────────
 
   const updateProgress = useCallback((updates: Partial<PlayerData>) => {
     setData((prev) => ({ ...prev, ...updates }));
-  }, []);
-
-  const recordPuzzleComplete = useCallback(
-    (level: number, score: number, stars: number, isPerfect: boolean) => {
-      setData((prev) => {
-        const existingStars = prev.starsByLevel[level] ?? 0;
-        const newStarsByLevel = {
-          ...prev.starsByLevel,
-          [level]: Math.max(existingStars, stars),
-        };
-        const totalStars = Object.values(newStarsByLevel).reduce(
-          (sum, s) => sum + s,
-          0,
-        );
-        const highestCompletedLevel = Math.max(prev.highestLevel, level);
-        const nextCurrentLevel = Math.max(prev.currentLevel, level + 1);
-        const activeChapter = getChapterForLevel(nextCurrentLevel) ?? CHAPTERS[CHAPTERS.length - 1];
-        const completedWingIds = Array.from(
-          new Set(
-            CHAPTERS.filter((chapter) => chapter.id < activeChapter.id).map((chapter) => chapter.wingId),
-          ),
-        );
-
-        return {
-          ...prev,
-          totalScore: prev.totalScore + score,
-          puzzlesSolved: prev.puzzlesSolved + 1,
-          perfectSolves: isPerfect ? prev.perfectSolves + 1 : prev.perfectSolves,
-          highestLevel: highestCompletedLevel,
-          currentLevel: nextCurrentLevel,
-          currentChapter: activeChapter.id,
-          starsByLevel: newStarsByLevel,
-          totalStars,
-          restoredWings: Array.from(new Set([...prev.restoredWings, ...completedWingIds])),
-          lastActiveDate: getToday(),
-        };
-      });
-    },
-    [],
-  );
-
-  const recordDailyComplete = useCallback((dateString: string) => {
-    setData((prev) => {
-      if (prev.dailyCompleted.includes(dateString)) return prev;
-      return {
-        ...prev,
-        dailyCompleted: [...prev.dailyCompleted, dateString],
-        lastActiveDate: getToday(),
-      };
-    });
   }, []);
 
   // ── Collections ─────────────────────────────────────────────────────────
@@ -799,70 +797,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // ── Missions ────────────────────────────────────────────────────────────
-
-  const updateMissionProgress = useCallback(
-    (missionId: string, progress: number) => {
-      setData((prev) => ({
-        ...prev,
-        missions: {
-          ...prev.missions,
-          dailyMissions: prev.missions.dailyMissions.map((m) =>
-            m.id === missionId ? { ...m, progress: Math.max(m.progress, progress) } : m,
-          ),
-        },
-      }));
-    },
-    [],
-  );
-
-  const claimMissionReward = useCallback((missionId: string) => {
-    setData((prev) => ({
-      ...prev,
-      missions: {
-        ...prev.missions,
-        dailyMissions: prev.missions.dailyMissions.map((m) =>
-          m.id === missionId ? { ...m, completed: true } : m,
-        ),
-        missionsCompletedToday: prev.missions.missionsCompletedToday + 1,
-      },
-    }));
-  }, []);
-
-  const generateDailyMissions = useCallback(() => {
-    const today = getToday();
-    setData((prev) => {
-      if (prev.missions.lastMissionDate === today) return prev;
-
-      const missionTemplates = [
-        'solve_3_puzzles',
-        'earn_500_score',
-        'get_perfect_solve',
-        'collect_rare_tile',
-        'complete_daily',
-        'solve_without_hints',
-        'earn_3_stars',
-        'play_5_minutes',
-      ];
-
-      // Pick 3 random missions
-      const shuffled = [...missionTemplates].sort(() => Math.random() - 0.5);
-      const selected = shuffled.slice(0, 3);
-
-      return {
-        ...prev,
-        missions: {
-          dailyMissions: selected.map((id) => ({
-            id,
-            progress: 0,
-            completed: false,
-          })),
-          lastMissionDate: today,
-          missionsCompletedToday: 0,
-        },
-      };
-    });
-  }, []);
+  // ── Missions (extracted to PlayerProgressContext) ────────────────────────
 
   // ── Streaks ─────────────────────────────────────────────────────────────
 

@@ -1,12 +1,12 @@
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId, AchievementDef } from '../achievements';
 
 describe('ACHIEVEMENTS data', () => {
-  it('contains 21 achievements (15 standard + 6 hidden)', () => {
-    expect(ACHIEVEMENTS.length).toBe(21);
+  it('contains 20 achievements (14 standard + 6 hidden)', () => {
+    expect(ACHIEVEMENTS.length).toBe(20);
     const hidden = ACHIEVEMENTS.filter(a => a.hidden);
     const standard = ACHIEVEMENTS.filter(a => !a.hidden);
     expect(hidden.length).toBe(6);
-    expect(standard.length).toBe(15);
+    expect(standard.length).toBe(14);
   });
 
   it('every achievement has a valid structure', () => {
