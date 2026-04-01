@@ -78,14 +78,14 @@ export function getAdjustedConfig(
 
 /**
  * Make the board slightly easier (max -1 step from base):
- * - Reduce word count by 1 (floor at 2)
+ * - Reduce word count by 1 (floor at 3)
  * - Reduce max word length by 1 (floor at 3)
  * - Add 1 row (more space to work with)
  */
 function makeEasier(base: BoardConfig): BoardConfig {
   return {
     ...base,
-    wordCount: Math.max(2, base.wordCount - 1),
+    wordCount: Math.max(3, base.wordCount - 1),
     maxWordLength: Math.max(3, base.maxWordLength - 1),
     rows: base.rows + 1,
   };

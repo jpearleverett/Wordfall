@@ -689,14 +689,15 @@ function GameScreenWrapper({ route, navigation }: any) {
 
     // Store completion metadata in route params for GameScreen to pick up
     const eventMultiplierLabel = eventManager.getActiveMultiplierLabel();
-    navigation.setParams({
-      completionData: {
-        isFirstWin,
-        leveledUp,
-        newLevel,
-        difficultyTransition,
-        nextLevelPreview: !isDaily ? {
-          level: newLevel,
+    try {
+      navigation.setParams({
+        completionData: {
+          isFirstWin,
+          leveledUp,
+          newLevel,
+          difficultyTransition,
+          nextLevelPreview: !isDaily ? {
+            level: newLevel,
           difficulty: getDifficultyForLevel(newLevel),
         } : null,
         shareText,
@@ -704,6 +705,11 @@ function GameScreenWrapper({ route, navigation }: any) {
         eventMultiplierLabel,
       },
     });
+    } catch (e) {
+      // SET_PARAMS can fail if the screen is no longer focused (e.g. rapid navigation).
+      // This is a non-fatal warning — the completion data just won't display.
+      console.warn('[handleComplete] setParams failed:', e);
+    }
   }, [params, player, economy, navigation, user]);
 
   const handleNextLevel = useCallback(() => {

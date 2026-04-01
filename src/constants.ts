@@ -242,9 +242,9 @@ export function getLevelConfig(level: number): BoardConfig {
   const isBreather = level > 1 && level % 5 === 0;
   const effectiveLevel = isBreather ? level - 2 : level;
 
-  // Phase 1: Tutorial / Easy (levels 1-5) — gentle ramp from 2 to 3 words
+  // Phase 1: Tutorial / Easy (levels 1-5) — minimum 3 words across all levels
   if (effectiveLevel <= 3) {
-    return { rows: 5, cols: 4, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' };
+    return { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' };
   }
   if (effectiveLevel <= 5) {
     return { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
