@@ -279,7 +279,54 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Members */}
+        {/* Club Cooperative Goal */}
+        {clubGoal && (
+          <>
+            <Text style={styles.sectionTitle}>Club Goal</Text>
+            <ClubGoalCard goal={clubGoal} playerContribution={playerContribution} />
+          </>
+        )}
+
+        {/* Your Contribution */}
+        <Text style={styles.sectionTitle}>Your Contribution</Text>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.contributeCard}
+        >
+          <View style={styles.contributeRow}>
+            <View style={styles.contributeStat}>
+              <Text style={styles.contributeStatValue}>
+                {playerContribution.toLocaleString()}
+              </Text>
+              <Text style={styles.contributeStatLabel}>Contributed</Text>
+            </View>
+            <View style={styles.contributeDivider} />
+            <View style={styles.contributeStat}>
+              <Text style={styles.contributeStatValue}>
+                {player.puzzlesSolved ?? 0}
+              </Text>
+              <Text style={styles.contributeStatLabel}>Puzzles</Text>
+            </View>
+            <View style={styles.contributeDivider} />
+            <View style={styles.contributeStat}>
+              <Text style={styles.contributeStatValue}>
+                {(player.starsByLevel ? Object.values(player.starsByLevel as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0).toLocaleString()}
+              </Text>
+              <Text style={styles.contributeStatLabel}>Stars</Text>
+            </View>
+          </View>
+          <Text style={styles.contributeHint}>
+            Keep playing to help your club reach the goal!
+          </Text>
+        </LinearGradient>
+
+        {/* Club Leaderboard */}
+        <Text style={styles.sectionTitle}>Weekly Rankings</Text>
+        <ClubLeaderboard entries={leaderboardEntries} currentClubId={clubId} />
+
+        {/* Members with Weekly Scores */}
         <Text style={styles.sectionTitle}>Members</Text>
         <LinearGradient
           colors={[...GRADIENTS.surfaceCard] as [string, string]}
@@ -313,7 +360,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                       )}
                     </View>
                     <Text style={styles.memberScore}>
-                      {member.score.toLocaleString()} pts
+                      {member.score.toLocaleString()} pts this week
                     </Text>
                   </View>
                   {member.isOnline && (
@@ -762,6 +809,52 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
+  },
+  contributeCard: {
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.borderMedium,
+    overflow: 'hidden',
+    ...SHADOWS.medium,
+  },
+  contributeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  contributeStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  contributeStatValue: {
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  contributeStatLabel: {
+    fontSize: 11,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  contributeDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: COLORS.borderSubtle,
+  },
+  contributeHint: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   leaveButton: {
     borderWidth: 1,
