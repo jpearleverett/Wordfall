@@ -42,7 +42,7 @@ export function getAdjustedConfig(
   // Average stars below 1.5 OR multiple recent levels with >3 attempts
   if (averageStars < 1.5 || recentMultiAttemptLevels >= 2) {
     const adjusted = makeEasier(baseConfig);
-    console.log(
+    if (__DEV__) console.log(
       `[DifficultyAdjuster] Easing difficulty: avgStars=${averageStars.toFixed(2)}, multiAttemptLevels=${recentMultiAttemptLevels}`,
     );
     return {
@@ -59,7 +59,7 @@ export function getAdjustedConfig(
   // High average stars AND a long streak of 3-star clears
   if (averageStars > 2.5 && consecutiveThreeStars > 5) {
     const adjusted = makeHarder(baseConfig);
-    console.log(
+    if (__DEV__) console.log(
       `[DifficultyAdjuster] Increasing difficulty: avgStars=${averageStars.toFixed(2)}, consecutive3Stars=${consecutiveThreeStars}`,
     );
     return {
@@ -70,7 +70,7 @@ export function getAdjustedConfig(
   }
 
   // ── Sweet spot — no adjustment ──
-  console.log(
+  if (__DEV__) console.log(
     `[DifficultyAdjuster] No adjustment needed: avgStars=${averageStars.toFixed(2)}, consecutive3Stars=${consecutiveThreeStars}`,
   );
   return { config: baseConfig, direction: 'none', reason: 'balanced' };

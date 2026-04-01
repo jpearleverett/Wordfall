@@ -873,6 +873,10 @@ export const AD_CONFIG = {
   MAX_COIN_ADS_PER_DAY: 3,
   /** Minimum cooldown between rewarded ads (ms) */
   REWARDED_COOLDOWN_MS: 30_000, // 30 seconds
+  /** Maximum interstitial ads per day */
+  MAX_INTERSTITIALS_PER_DAY: 5,
+  /** Minimum interval between interstitial ads (ms) */
+  INTERSTITIAL_INTERVAL_MS: 90_000, // 90 seconds
 };
 
 // Economy Tuning — central knobs for balancing the free-to-play economy
