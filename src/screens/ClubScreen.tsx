@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
+import ClubGoalCard from '../components/ClubGoalCard';
+import ClubLeaderboard from '../components/ClubLeaderboard';
+import {
+  generateClubGoal,
+  ActiveClubGoal,
+  ClubLeaderboardEntry,
+} from '../data/clubEvents';
 
 const { width } = Dimensions.get('window');
 
@@ -28,8 +35,11 @@ interface ClubData {
   memberCount: number;
   maxMembers: number;
   weeklyScore: number;
+  tier?: 'bronze' | 'silver' | 'gold' | 'diamond';
   members: ClubMember[];
   recentEmojis: Array<{ userId: string; emoji: string; timestamp: number }>;
+  activeGoal?: ActiveClubGoal | null;
+  leaderboardEntries?: ClubLeaderboardEntry[];
 }
 
 interface ClubScreenProps {
@@ -61,10 +71,58 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         memberCount: clubData.memberCount ?? 0,
         maxMembers: clubData.maxMembers ?? 30,
         weeklyScore: clubData.weeklyScore ?? 0,
+        tier: clubData.tier ?? 'bronze',
         members: clubData.members ?? [],
         recentEmojis: clubData.recentEmojis ?? [],
+        activeGoal: clubData.activeGoal ?? null,
+        leaderboardEntries: clubData.leaderboardEntries ?? [],
       }
     : null;
+
+  // Generate a club goal if none is active (local fallback)
+  const clubGoal = useMemo<ActiveClubGoal | null>(() => {
+    if (!data) return null;
+    if (data.activeGoal) return data.activeGoal;
+    // Generate a fallback goal with mock contributions from members
+    const goal = generateClubGoal(data.tier ?? 'bronze', data.memberCount || 1);
+    // Populate with mock contributions from members for display
+    if (data.members.length > 0) {
+      goal.contributions = data.members.map((m) => ({
+        userId: m.id,
+        displayName: m.name,
+        avatarId: '',
+        amount: Math.floor(m.score * 0.3),
+      }));
+    }
+    return goal;
+  }, [data?.activeGoal, data?.tier, data?.memberCount, data?.members]);
+
+  // Mock leaderboard entries for display when none provided
+  const leaderboardEntries = useMemo<ClubLeaderboardEntry[]>(() => {
+    if (data?.leaderboardEntries && data.leaderboardEntries.length > 0) {
+      return data.leaderboardEntries;
+    }
+    if (!data || !clubId) return [];
+    // Generate mock entries with current club included
+    const mockClubs: ClubLeaderboardEntry[] = [
+      { clubId: 'c1', clubName: 'Word Warriors', clubInitial: 'W', weeklyScore: 45200, memberCount: 28, tier: 'gold', rank: 1 },
+      { clubId: 'c2', clubName: 'Lexicon Lords', clubInitial: 'L', weeklyScore: 38900, memberCount: 25, tier: 'gold', rank: 2 },
+      { clubId: 'c3', clubName: 'Puzzle Pros', clubInitial: 'P', weeklyScore: 32100, memberCount: 22, tier: 'silver', rank: 3 },
+      { clubId: clubId, clubName: data.name, clubInitial: data.name.charAt(0).toUpperCase(), weeklyScore: data.weeklyScore, memberCount: data.memberCount, tier: data.tier ?? 'bronze', rank: 4 },
+      { clubId: 'c5', clubName: 'Brain Squad', clubInitial: 'B', weeklyScore: 18500, memberCount: 18, tier: 'silver', rank: 5 },
+    ];
+    // Re-sort by score and re-assign ranks
+    mockClubs.sort((a, b) => b.weeklyScore - a.weeklyScore);
+    return mockClubs.map((c, i) => ({ ...c, rank: i + 1 }));
+  }, [data?.leaderboardEntries, data?.weeklyScore, clubId]);
+
+  // Compute player's contribution to current goal
+  const playerContribution = useMemo(() => {
+    if (!clubGoal) return 0;
+    // In real Firestore mode, this would come from the user's tracked contribution
+    // For now, derive from player's puzzle progress
+    return player.puzzlesSolved ? Math.min(player.puzzlesSolved * 3, clubGoal.target) : 0;
+  }, [clubGoal, player.puzzlesSolved]);
 
   const renderNoClub = () => (
     <ScrollView
