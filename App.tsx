@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -34,7 +34,7 @@ import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, FONTS, TYPOGRAPHY, STAR_MILESTONES, PERFECT_MILESTONES, MILESTONE_DECORATIONS, SHADOWS } from './src/constants';
+import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
 import { getBreatherConfig } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -43,8 +43,7 @@ import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
 import { PlayerProvider, usePlayer } from './src/contexts/PlayerContext';
 import { soundManager } from './src/services/sound';
 import { setHapticsEnabled } from './src/services/haptics';
-import { ATLAS_PAGES } from './src/data/collections';
-import { generateShareText } from './src/utils/shareGenerator';
+// ATLAS_PAGES and generateShareText moved to useRewardWiring
 import { FeatureUnlockCeremony } from './src/components/FeatureUnlockCeremony';
 import { ModeUnlockCeremony } from './src/components/ModeUnlockCeremony';
 import { AchievementCeremony } from './src/components/AchievementCeremony';
@@ -79,6 +78,10 @@ import {
   getWelcomeBackMessage,
 } from './src/services/playerSegmentation';
 import { firestoreService, FirestoreGift } from './src/services/firestore';
+
+// Extracted modules for decomposition
+import { useRewardWiring, playerStageFromPuzzles } from './src/hooks/useRewardWiring';
+import { useCeremonyQueue } from './src/hooks/useCeremonyQueue';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createStackNavigator();
@@ -372,379 +375,20 @@ function GameScreenWrapper({ route, navigation }: any) {
   const spinsBeforeComplete = useRef(0);
   const [pendingNavAction, setPendingNavAction] = useState<'home' | 'next' | null>(null);
 
+  // Delegate reward wiring to extracted hook
+  const handleCompleteInner = useRewardWiring({
+    player,
+    economy,
+    userId: user?.uid || '',
+    params,
+    navigation,
+  });
+
   const handleComplete = useCallback((stars: number, score: number) => {
     // Track spins before completion to detect if a new one is awarded
     spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
-
-    const level = params.level || 0;
-    const mode = (params.mode || 'classic') as GameMode;
-    const isDaily = params.isDaily || false;
-
-    // Capture pre-complete state for level-up detection
-    const prevLevel = player.currentLevel;
-    const prevHighest = player.highestLevel;
-    const isFirstWin = player.puzzlesSolved === 0;
-
-    // Record puzzle completion in PlayerContext
-    const isPerfect = stars === 3;
-    const boardData = params.board as Board | undefined;
-    const wordsFound = boardData ? boardData.words.length : 0;
-    void analytics.trackPuzzleComplete({
-      level,
-      mode,
-      stars,
-      duration_seconds: 0, // Duration tracked in GameScreen; approximate here
-      hints_used: 0,       // Tracked in GameScreen state
-      undos_used: 0,       // Tracked in GameScreen state
-      words_found: wordsFound,
-      score,
-    });
-    // Also update user properties after completion
-    void analytics.updateUserProperties({
-      player_level: Math.max(level + 1, player.currentLevel),
-      total_puzzles_solved: player.puzzlesSolved + 1,
-      player_stage: playerStageFromPuzzles(player.puzzlesSolved + 1),
-    });
-    player.recordPuzzleComplete(level, score, stars, isPerfect);
-
-    // Capture pre-play mode stats for first-clear detection
-    const prevModePlayed = player.modeStats?.[mode]?.played || 0;
-
-    // Record mode play and advance mode level on win
-    player.recordModePlay(mode, score, true);
-    if (mode !== 'classic') {
-      player.advanceModeLevel(mode);
-    }
-
-    // Reset consecutive failures on success
-    if (player.consecutiveFailures > 0) {
-      player.updateProgress({ consecutiveFailures: 0, lastLevelStars: stars });
-    }
-
-    // Update adaptive difficulty metrics (rolling averages for invisible adjustment)
-    player.recordPerformanceMetrics(level, stars, 0); // completion time tracked in GameScreen
-
-    // Award coins based on difficulty — apply event multipliers
-    const difficulty: Difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
-    const eventMultipliers = eventManager.getEventMultipliers();
-    const baseCoinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
-    const coinReward = Math.round(baseCoinReward * eventMultipliers.coins);
-    economy.addCoins(coinReward);
-
-    // Award gems for perfect clears
-    if (isPerfect) {
-      economy.addGems(ECONOMY.perfectClearGems);
-    }
-
-    // Award library points (apply XP multiplier)
-    economy.addLibraryPoints(Math.round(stars * 5 * eventMultipliers.xp));
-
-    // Update event progress for all active events
-    eventManager.onPuzzleComplete(score, stars, isPerfect);
-    // Persist event progress snapshot to player context
-    player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
-
-    // Handle daily completion
-    if (isDaily) {
-      const today = new Date().toISOString().split('T')[0];
-      player.recordDailyComplete(today);
-      economy.addCoins(ECONOMY.dailyCompleteCoins);
-      economy.addGems(ECONOMY.dailyCompleteGems);
-      player.updateStreak();
-      // Re-schedule streak reminder with updated streak count
-      void triggerStreakReminder(player.streaks.currentStreak + 1);
-      void analytics.trackDailyChallengeComplete(player.streaks.currentStreak + 1);
-      void analytics.logEvent('daily_login', {
-        date: today,
-        streak: player.streaks.currentStreak + 1,
-      });
-    }
-
-    // Check for rare tile drop — apply event multiplier to drop rate
-    const baseDropChance = COLLECTION.rareTileBaseChance
-      + (difficulty === 'hard' || difficulty === 'expert' ? COLLECTION.rareTileHardBonus : 0)
-      + (isPerfect ? COLLECTION.rareTilePerfectBonus : 0);
-    const dropChance = Math.min(baseDropChance * eventMultipliers.rareTileChance, 1);
-    if (Math.random() < dropChance) {
-      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-      const randomLetter = letters[Math.floor(Math.random() * letters.length)];
-      const wasFirstTile = Object.keys(player.collections.rareTiles || {}).length === 0;
-      player.addRareTile(randomLetter);
-      void analytics.logEvent('rare_tile_earned', {
-        letter: randomLetter,
-        difficulty,
-        isPerfect,
-      });
-      if (wasFirstTile) {
-        player.queueCeremony({
-          type: 'first_rare_tile',
-          data: { letter: randomLetter },
-        });
-      }
-    }
-
-    // Check for atlas word collection from the words found (all pages)
-    if (params.board) {
-      const board = params.board as Board;
-
-      // Build local projection of atlas state so we can detect completions
-      // (collectAtlasWord calls setData which is batched — context won't update mid-function)
-      const localAtlas: Record<string, string[]> = {};
-      for (const page of ATLAS_PAGES) {
-        localAtlas[page.id] = [...(player.collections.atlasPages[page.id] || [])];
-      }
-
-      board.words.forEach((wp: any) => {
-        const word = wp.word.toLowerCase();
-        for (const page of ATLAS_PAGES) {
-          if (page.words.includes(word)) {
-            player.collectAtlasWord(page.id, word);
-            if (!localAtlas[page.id].includes(word)) {
-              localAtlas[page.id].push(word);
-            }
-          }
-        }
-      });
-
-      // Check for collection completions using local projection
-      for (const page of ATLAS_PAGES) {
-        const projectedCount = localAtlas[page.id].length;
-        const oldCount = (player.collections.atlasPages[page.id] || []).length;
-        if (projectedCount >= page.words.length && oldCount < page.words.length) {
-          player.queueCeremony({
-            type: 'collection_complete',
-            data: { icon: page.icon, name: page.category, reward: page.reward },
-          });
-        }
-      }
-    }
-
-    // Update mission progress
-    player.missions.dailyMissions.forEach((mission) => {
-      if (mission.completed) return;
-      if (mission.id === 'solve_3_puzzles' || mission.id === 'earn_3_stars') {
-        player.updateMissionProgress(mission.id, mission.progress + 1);
-      }
-      if (mission.id === 'earn_500_score') {
-        player.updateMissionProgress(mission.id, mission.progress + score);
-      }
-      if (mission.id === 'solve_without_hints' && isPerfect) {
-        player.updateMissionProgress(mission.id, mission.progress + 1);
-      }
-      if (mission.id === 'get_perfect_solve' && isPerfect) {
-        player.updateMissionProgress(mission.id, mission.progress + 1);
-      }
-      if (mission.id === 'complete_daily' && isDaily) {
-        player.updateMissionProgress(mission.id, 1);
-      }
-    });
-
-    // Update weekly goal progress
-    player.updateWeeklyGoalProgress('puzzles_solved', 1);
-    player.updateWeeklyGoalProgress('total_score', score);
-    player.updateWeeklyGoalProgress('stars_earned', stars);
-    if (isPerfect) player.updateWeeklyGoalProgress('perfect_solves', 1);
-    if (isDaily) player.updateWeeklyGoalProgress('daily_completed', 1);
-
-    // Detect level-up
-    const newLevel = Math.max(level + 1, prevLevel);
-    const leveledUp = newLevel > prevHighest;
-
-    // Track level milestone in funnel
-    void funnelTracker.trackLevelMilestone(newLevel);
-
-    // Queue level-up ceremony
-    if (leveledUp) {
-      player.queueCeremony({
-        type: 'level_up',
-        data: { newLevel },
-      });
-    }
-
-    // Detect difficulty transition
-    const difficultyTransition = leveledUp ? detectDifficultyTransition(prevHighest, newLevel) : null;
-    if (difficultyTransition) {
-      player.queueCeremony({
-        type: 'difficulty_transition',
-        data: { from: difficultyTransition.from, to: difficultyTransition.to },
-      });
-    }
-
-    // Check feature unlocks based on new level
-    const featureUnlocks = player.checkFeatureUnlocks(newLevel);
-    for (const ceremony of featureUnlocks) {
-      player.queueCeremony(ceremony);
-      if (ceremony.data?.featureId) {
-        void analytics.trackFeatureUnlocked(ceremony.data.featureId, newLevel);
-      }
-    }
-
-    // Check achievements
-    const board2 = params.board as Board | undefined;
-    const maxCombo = board2 ? board2.words.length : 0; // Approximate; actual combo tracked in GameScreen
-    const achievementCeremonies = player.checkAchievements({ maxCombo });
-    for (const ceremony of achievementCeremonies) {
-      player.queueCeremony(ceremony);
-      if (ceremony.data?.achievementId && ceremony.data?.tier) {
-        void analytics.trackAchievementEarned(ceremony.data.achievementId, ceremony.data.tier);
-      }
-    }
-
-    // Auto-unlock modes based on level progression and queue ceremonies
-    for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
-      if (config.unlockLevel <= newLevel && !player.unlockedModes.includes(modeId)) {
-        player.unlockMode(modeId);
-        player.queueCeremony({
-          type: 'mode_unlock',
-          data: {
-            modeId,
-            modeName: config.name,
-            modeIcon: config.icon,
-            modeDescription: config.description,
-            modeColor: config.color,
-          },
-        });
-      }
-    }
-
-    // ── Star milestones (50/100/250/500 total stars) ──
-    const totalStarsNow = player.totalStars + stars;
-    for (const sm of STAR_MILESTONES) {
-      const prevStars = totalStarsNow - stars;
-      if (totalStarsNow >= sm.stars && prevStars < sm.stars) {
-        player.queueCeremony({
-          type: 'star_milestone',
-          data: { stars: sm.stars, reward: sm.reward, name: sm.name, type: sm.type },
-        });
-      }
-    }
-
-    // ── Perfect solve milestones (10/25/50 perfects) ──
-    if (isPerfect) {
-      const perfectCount = player.perfectSolves + 1;
-      for (const pm of PERFECT_MILESTONES) {
-        if (perfectCount === pm.count) {
-          player.queueCeremony({
-            type: 'perfect_milestone',
-            data: { count: pm.count, badge: pm.badge, name: pm.name },
-          });
-        }
-      }
-    }
-
-    // ── Milestone decoration unlocks (every 5 levels) ──
-    if (leveledUp) {
-      for (const md of MILESTONE_DECORATIONS) {
-        if (newLevel >= md.level && prevHighest < md.level) {
-          player.queueCeremony({
-            type: 'decoration_unlock',
-            data: { level: md.level, decoration: md.decoration, name: md.name, icon: md.icon },
-          });
-        }
-      }
-    }
-
-    // ── First mode clear ──
-    if (prevModePlayed === 0 && mode !== 'classic') {
-      const modeConfig = MODE_CONFIGS[mode as keyof typeof MODE_CONFIGS];
-      if (modeConfig) {
-        player.queueCeremony({
-          type: 'first_mode_clear',
-          data: { modeId: mode, modeName: modeConfig.name },
-        });
-      }
-    }
-
-    // Award mystery wheel free spin progress
-    player.awardFreeSpin();
-
-    // Update win streak
-    player.updateWinStreak(true);
-
-    // Send immediate notification for win streak milestones (3/5/7/10/15/20)
-    const newWinStreak = player.winStreak.currentStreak + 1;
-    const winStreakMilestones = [3, 5, 7, 10, 15, 20];
-    if (winStreakMilestones.includes(newWinStreak)) {
-      void triggerWinStreakMilestoneNotification(newWinStreak);
-    }
-
-    // Generate share text
-    const grid = params.board ? (params.board as Board).grid : null;
-    const shareText = grid
-      ? generateShareText(grid, level, stars, score, 0, isDaily)
-      : '';
-
-    // ── Firestore social layer: submit scores + sync profile ──
-    const userId = user?.uid || '';
-    const displayName = player.equippedTitle || 'Player';
-
-    // Submit daily score if this was a daily challenge
-    if (isDaily && userId) {
-      void firestoreService.submitDailyScore(userId, score, stars, level, displayName);
-    }
-
-    // Submit weekly cumulative score
-    if (userId) {
-      void firestoreService.submitWeeklyScore(userId, score, displayName);
-    }
-
-    // Sync player profile on every puzzle complete
-    if (userId) {
-      void firestoreService.syncPlayerProfile(userId, {
-        displayName,
-        level: newLevel,
-        puzzlesSolved: player.puzzlesSolved + 1,
-        totalScore: player.totalScore + score,
-        currentStreak: player.streaks.currentStreak,
-        equippedFrame: player.equippedFrame,
-        equippedTitle: player.equippedTitle,
-      });
-    }
-
-    // Fetch real friend comparison (async — update params when ready)
-    const friendIds = player.friendIds || [];
-    let friendComparison = { beaten: 0, total: 0 };
-    if (firestoreService.isAvailable() && friendIds.length > 0 && userId) {
-      firestoreService
-        .getFriendScores(userId, friendIds)
-        .then((result) => {
-          if (result.total > 0 && navigation.isFocused()) {
-            navigation.setParams({
-              completionData: {
-                isFirstWin,
-                leveledUp,
-                newLevel,
-                difficultyTransition,
-                nextLevelPreview: !isDaily
-                  ? { level: newLevel, difficulty: getDifficultyForLevel(newLevel) }
-                  : null,
-                shareText,
-                friendComparison: result,
-              },
-            });
-          }
-        })
-        .catch(() => {});
-    }
-
-    // Store completion metadata in route params for GameScreen to pick up
-    const eventMultiplierLabel = eventManager.getActiveMultiplierLabel();
-    navigation.setParams({
-      completionData: {
-        isFirstWin,
-        leveledUp,
-        newLevel,
-        difficultyTransition,
-        nextLevelPreview: !isDaily ? {
-          level: newLevel,
-          difficulty: getDifficultyForLevel(newLevel),
-        } : null,
-        shareText,
-        friendComparison,
-        eventMultiplierLabel,
-      },
-    });
-  }, [params, player, economy, navigation, user]);
+    handleCompleteInner(stars, score);
+  }, [handleCompleteInner, player.mysteryWheel.spinsAvailable]);
 
   const handleNextLevel = useCallback(() => {
     try {
@@ -903,8 +547,13 @@ function HomeMainScreen({ route, navigation }: any) {
   const [comebackHints, setComebackHints] = useState(0);
   const welcomeAnim = React.useRef(new Animated.Value(0)).current;
 
-  // Ceremony queue state
-  const [activeCeremony, setActiveCeremony] = useState<CeremonyItem | null>(null);
+  // Ceremony queue (extracted to useCeremonyQueue hook)
+  const { activeCeremony, handleDismissCeremony, processNext: processNextCeremony } = useCeremonyQueue({
+    popCeremony: player.popCeremony,
+    pendingCeremonyCount: player.pendingCeremonies.length,
+    loaded: player.loaded,
+    isBlocked: showWelcomeBack,
+  });
 
   // Pending gifts from Firestore
   const [pendingGifts, setPendingGifts] = useState<FirestoreGift[]>([]);
@@ -919,7 +568,6 @@ function HomeMainScreen({ route, navigation }: any) {
   const prevSpinsRef = React.useRef(player.mysteryWheel.spinsAvailable);
   const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const ceremonyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check for comeback rewards and process ceremonies on mount
   useEffect(() => {
@@ -1004,25 +652,9 @@ function HomeMainScreen({ route, navigation }: any) {
         });
       }
 
-      // Process pending ceremonies
-      if (!showWelcomeBack && player.pendingCeremonies.length > 0) {
-        const next = player.popCeremony();
-        if (next) setActiveCeremony(next);
-      }
+      // Ceremony processing is now handled by useCeremonyQueue hook
     }
   }, [player.loaded]);
-
-  // Process pending ceremonies when new ones are queued (e.g. after handleComplete)
-  useEffect(() => {
-    if (
-      !activeCeremony &&
-      !showWelcomeBack &&
-      player.pendingCeremonies.length > 0
-    ) {
-      const next = player.popCeremony();
-      if (next) setActiveCeremony(next);
-    }
-  }, [player.pendingCeremonies.length, activeCeremony, showWelcomeBack]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -1143,35 +775,7 @@ function HomeMainScreen({ route, navigation }: any) {
     }
   }, [pendingGifts, claimingGift, economy, player]);
 
-  // Track when a ceremony is displayed
-  const ceremonyShownAtRef = useRef<number>(0);
-  useEffect(() => {
-    if (activeCeremony) {
-      ceremonyShownAtRef.current = Date.now();
-      void analytics.trackCeremonyShown(activeCeremony.type);
-    }
-  }, [activeCeremony]);
-
-  // Process next ceremony when current one is dismissed
-  const handleDismissCeremony = useCallback(() => {
-    if (activeCeremony) {
-      const durationMs = Date.now() - ceremonyShownAtRef.current;
-      void analytics.trackCeremonyDismissed(activeCeremony.type, durationMs);
-    }
-    setActiveCeremony(null);
-    // Check for more ceremonies after a short delay
-    ceremonyTimerRef.current = setTimeout(() => {
-      const next = player.popCeremony();
-      if (next) setActiveCeremony(next);
-    }, 300);
-  }, [player, activeCeremony]);
-
-  // Cleanup ceremony timer on unmount
-  useEffect(() => {
-    return () => {
-      if (ceremonyTimerRef.current) clearTimeout(ceremonyTimerRef.current);
-    };
-  }, []);
+  // Ceremony tracking & dismissal now handled by useCeremonyQueue hook
 
   // Convert PlayerContext data to PlayerProgress for HomeScreen
   const progress: PlayerProgress = {
@@ -1494,9 +1098,8 @@ function HomeMainScreen({ route, navigation }: any) {
               onPress={() => {
                 Animated.timing(welcomeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
                   setShowWelcomeBack(false);
-                  // Process ceremonies after welcome-back
-                  const next = player.popCeremony();
-                  if (next) setActiveCeremony(next);
+                  // Process ceremonies after welcome-back (via extracted hook)
+                  processNextCeremony();
                 });
               }}
             >
@@ -1702,12 +1305,7 @@ function HomeMainScreen({ route, navigation }: any) {
   );
 }
 
-function playerStageFromPuzzles(puzzlesSolved: number): 'new' | 'early' | 'established' | 'veteran' {
-  if (puzzlesSolved <= 2) return 'new';
-  if (puzzlesSolved <= 10) return 'early';
-  if (puzzlesSolved <= 30) return 'established';
-  return 'veteran';
-}
+// playerStageFromPuzzles moved to src/hooks/useRewardWiring.ts
 
 // Root app with onboarding check
 function AppContent() {

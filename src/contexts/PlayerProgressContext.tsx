@@ -14,7 +14,8 @@ import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
-import { updatePlayerMetrics, PlayerMetrics } from '../engine/difficultyAdjuster';
+import { updatePlayerMetrics } from '../engine/difficultyAdjuster';
+import { PlayerMetrics } from '../types';
 
 const getToday = (): string => new Date().toISOString().split('T')[0];
 
