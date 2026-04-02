@@ -385,10 +385,10 @@ function GameScreenWrapper({ route, navigation }: any) {
     navigation,
   });
 
-  const handleComplete = useCallback((stars: number, score: number) => {
+  const handleComplete = useCallback((stars: number, score: number, maxCombo: number) => {
     // Track spins before completion to detect if a new one is awarded
     spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
-    handleCompleteInner(stars, score);
+    handleCompleteInner(stars, score, maxCombo);
   }, [handleCompleteInner, player.mysteryWheel.spinsAvailable]);
 
   const handleNextLevel = useCallback(() => {

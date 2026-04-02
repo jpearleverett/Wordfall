@@ -144,7 +144,7 @@ export function useRewardWiring({
   params,
   navigation,
 }: UseRewardWiringParams) {
-  const handleComplete = useCallback((stars: number, score: number) => {
+  const handleComplete = useCallback((stars: number, score: number, maxCombo: number = 0) => {
     const level = params.level || 0;
     const mode = (params.mode || 'classic') as GameMode;
     const isDaily = params.isDaily || false;
@@ -344,9 +344,7 @@ export function useRewardWiring({
       }
     }
 
-    // Check achievements
-    const board2 = params.board as Board | undefined;
-    const maxCombo = board2 ? board2.words.length : 0;
+    // Check achievements (maxCombo is the actual max combo chain from gameplay)
     const achievementCeremonies = player.checkAchievements({ maxCombo });
     for (const ceremony of achievementCeremonies) {
       player.queueCeremony(ceremony);

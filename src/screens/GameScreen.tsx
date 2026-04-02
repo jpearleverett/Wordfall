@@ -48,7 +48,7 @@ interface GameScreenProps {
   mode?: GameMode;
   maxMoves?: number;
   timeLimit?: number;
-  onComplete: (stars: number, score: number) => void;
+  onComplete: (stars: number, score: number, maxCombo: number) => void;
   onNextLevel: () => void;
   onHome: () => void;
   // Completion data (passed from App.tsx wrapper after handleComplete)
@@ -425,10 +425,12 @@ export function GameScreen({
         }
         break;
       case 'streak_shield':
-        // Spend 30 gems, activate streak shield
-        if (economy.spendGems(30)) {
-          player.activateStreakShield?.();
-          accepted = true;
+        // Activate streak shield — only spend gems if method exists
+        if (typeof (player as any).activateStreakShield === 'function') {
+          if (economy.spendGems(30)) {
+            (player as any).activateStreakShield();
+            accepted = true;
+          }
         }
         break;
     }
@@ -758,13 +760,14 @@ export function GameScreen({
       void soundManager.playSound('puzzleComplete');
       const finalScore = state.score;
       const finalStars = stars;
+      const finalMaxCombo = state.maxCombo;
       const timer = setTimeout(() => {
         setShowComplete(true);
-        onCompleteRef.current(finalStars, finalScore);
+        onCompleteRef.current(finalStars, finalScore, finalMaxCombo);
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [state.status, stars, state.score]);
+  }, [state.status, stars, state.score, state.maxCombo]);
 
   // Reset grid height lock when board changes (new puzzle/level)
   useEffect(() => {
