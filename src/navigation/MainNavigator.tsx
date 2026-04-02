@@ -9,6 +9,7 @@ import ModesScreen from '../screens/ModesScreen';
 import CollectionsScreen from '../screens/CollectionsScreen';
 import LibraryScreen from '../screens/LibraryScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ShopScreen from '../screens/ShopScreen';
 import ClubScreen from '../screens/ClubScreen';
@@ -131,7 +132,7 @@ function ProfileMainScreen({ navigation }: any) {
   return (
     <ProfileScreen
       onOpenSettings={() => navigation.navigate('Settings')}
-      onEditProfile={() => navigation.navigate('Settings')}
+      onEditProfile={() => navigation.navigate('EditProfile')}
     />
   );
 }
@@ -140,6 +141,7 @@ export function ProfileStackScreen() {
   return (
     <ProfileStack.Navigator screenOptions={screenOptions}>
       <ProfileStack.Screen name="ProfileMain" component={ProfileMainScreen} />
+      <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} />
       <ProfileStack.Screen name="Club" component={ClubScreen} />
     </ProfileStack.Navigator>
