@@ -15,6 +15,7 @@ import { SkeletonCard } from '../components/common/Skeleton';
 import { usePlayer } from '../contexts/PlayerContext';
 import { Tooltip } from '../components/common/Tooltip';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import { ATLAS_PAGES } from '../data/collections';
 
 const { width } = Dimensions.get('window');
 const TILE_SIZE = (width - 80) / 7;
@@ -75,7 +76,14 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
     return () => clearTimeout(timer);
   }, []);
 
-  const atlasPages = collections?.atlasPages ?? DEFAULT_ATLAS_PAGES;
+  const atlasProgress: Record<string, string[]> = collections?.atlasPages ?? {};
+  const atlasPages = ATLAS_PAGES.map(page => ({
+    id: page.id,
+    name: page.category,
+    icon: page.icon,
+    total: page.words.length,
+    found: (atlasProgress[page.id] ?? []).length,
+  }));
   const collectedTiles: string[] = collections?.rareTiles
     ? Object.keys(collections.rareTiles).filter(l => collections.rareTiles[l] > 0)
     : [];
