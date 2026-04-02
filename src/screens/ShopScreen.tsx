@@ -239,7 +239,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           economy.processPurchase(result.productId);
 
           // Also sync flags to settings for backward compat
-          if (result.productId === 'ad_removal') {
+          if (result.productId === 'ad_removal' || result.productId === 'vip_weekly') {
             settings.updateSetting('adsRemoved', true);
           }
           if (result.productId === 'premium_pass') {
@@ -564,6 +564,82 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             )}
           </View>
         )}
+
+        {/* ── VIP Subscription ───────────────────────────────────────── */}
+        <View style={styles.vipCard}>
+          <LinearGradient
+            colors={['#2a1854', '#1a1042']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <View style={styles.vipGlow} />
+          <View style={styles.vipHeader}>
+            <Text style={styles.vipIcon}>{'\u{1F48E}'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.vipTitle}>VIP WEEKLY</Text>
+              <Text style={styles.vipSubtitle}>The ultimate Wordfall experience</Text>
+            </View>
+            {economy.isVip && (
+              <View style={styles.vipActiveBadge}>
+                <Text style={styles.vipActiveBadgeText}>ACTIVE</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.vipBenefits}>
+            <Text style={styles.vipBenefit}>{'\u2728'} Ad-free experience</Text>
+            <Text style={styles.vipBenefit}>{'\u{1F48E}'} 50 daily gems</Text>
+            <Text style={styles.vipBenefit}>{'\u{1F4A1}'} 3 daily hints</Text>
+            <Text style={styles.vipBenefit}>{'\u{1F5BC}\uFE0F'} Exclusive VIP frame</Text>
+            <Text style={styles.vipBenefit}>{'\u{1F680}'} 2x XP boost</Text>
+          </View>
+          {economy.isVip ? (
+            <View style={styles.vipActions}>
+              <TouchableOpacity
+                style={styles.vipClaimButton}
+                onPress={() => {
+                  const claimed = economy.claimVipDailyRewards();
+                  if (claimed) {
+                    Alert.alert('VIP Rewards Claimed!', 'You received 50 gems and 3 hints.');
+                  } else {
+                    Alert.alert('Already Claimed', 'Come back tomorrow for more VIP rewards!');
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={[COLORS.gold, COLORS.orange]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+                <Text style={styles.vipClaimText}>CLAIM DAILY REWARDS</Text>
+              </TouchableOpacity>
+              <Text style={styles.vipExpiryText}>
+                Renews {new Date(economy.vipExpiresAt).toLocaleDateString()}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.vipSubscribeButton}
+              onPress={() => handlePurchase('vip_weekly')}
+              activeOpacity={0.7}
+              disabled={!!purchasingId}
+            >
+              <LinearGradient
+                colors={[COLORS.purple, '#6a1b9a']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+              {isLoading('vip_weekly') ? (
+                <ActivityIndicator size="small" color={COLORS.textPrimary} />
+              ) : (
+                <Text style={styles.vipSubscribeText}>SUBSCRIBE  $4.99/week</Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* ── Featured Offers ────────────────────────────────────────── */}
         <ScrollView
@@ -969,6 +1045,109 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.display,
     color: COLORS.bg,
+    letterSpacing: 1,
+  },
+
+  // ── VIP card ──────────────────────────────────────────────────────────
+  vipCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.purple + '60',
+    overflow: 'hidden',
+    shadowColor: COLORS.purple,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  vipGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+    backgroundColor: COLORS.purpleGlow,
+  },
+  vipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  vipIcon: {
+    fontSize: 36,
+    marginRight: 12,
+  },
+  vipTitle: {
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 2,
+    textShadowColor: 'rgba(255,215,0,0.4)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  vipSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  vipActiveBadge: {
+    backgroundColor: COLORS.green + '25',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.green + '40',
+  },
+  vipActiveBadgeText: {
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    color: COLORS.green,
+    letterSpacing: 1,
+  },
+  vipBenefits: {
+    marginBottom: 16,
+    gap: 6,
+  },
+  vipBenefit: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.bodySemiBold,
+  },
+  vipActions: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  vipClaimButton: {
+    width: '100%',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  vipClaimText: {
+    fontSize: 15,
+    fontFamily: FONTS.display,
+    color: COLORS.bg,
+    letterSpacing: 1,
+  },
+  vipExpiryText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  vipSubscribeButton: {
+    width: '100%',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  vipSubscribeText: {
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
     letterSpacing: 1,
   },
 

@@ -49,6 +49,12 @@ interface IAPState {
   starterPackExpiresAt: number;
   /** Undo tokens (separate from hint tokens) */
   undoTokens: number;
+  /** Whether the user has an active VIP weekly subscription */
+  isVipSubscriber: boolean;
+  /** VIP subscription expiry timestamp (0 = not active) */
+  vipExpiresAt: number;
+  /** Last date VIP daily rewards were claimed (YYYY-MM-DD) */
+  vipDailyLastClaim: string;
 }
 
 interface EconomyState extends Economy, IAPState {
@@ -89,6 +95,9 @@ interface EconomyContextType extends Economy {
   addUndoTokens: (amount: number) => void;
   spendUndoToken: () => boolean;
   claimDailyValuePackDrip: () => boolean;
+  isVip: boolean;
+  vipExpiresAt: number;
+  claimVipDailyRewards: () => boolean;
 }
 
 const STORAGE_KEY = '@wordfall_economy';
@@ -121,6 +130,9 @@ const DEFAULT_ECONOMY: EconomyState = {
   dailyValuePackLastClaim: '',
   starterPackExpiresAt: Date.now() + STARTER_PACK_WINDOW_MS,
   undoTokens: 5,
+  isVipSubscriber: false,
+  vipExpiresAt: 0,
+  vipDailyLastClaim: '',
 };
 
 /** Calculate how many lives should have refilled since lastRefillTime. */
@@ -171,6 +183,9 @@ const EconomyContext = createContext<EconomyContextType>({
   addUndoTokens: () => {},
   spendUndoToken: () => false,
   claimDailyValuePackDrip: () => false,
+  isVip: false,
+  vipExpiresAt: 0,
+  claimVipDailyRewards: () => false,
 });
 
 export function EconomyProvider({ children }: { children: ReactNode }) {
@@ -470,13 +485,18 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         next.undoTokens += rewards.undoTokens;
       }
 
-      // Set flags (premiumPass, adsRemoved)
+      // Set flags (premiumPass, adsRemoved, vipSubscriber)
       if (rewards.flags) {
         if (rewards.flags.premiumPass) {
           next.isPremiumPassFlag = true;
         }
         if (rewards.flags.adsRemoved) {
           next.isAdFreeFlag = true;
+        }
+        if (rewards.flags.vipSubscriber) {
+          next.isVipSubscriber = true;
+          next.vipExpiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+          next.vipDailyLastClaim = ''; // reset so they can claim today
         }
       }
 
@@ -543,6 +563,36 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return claimed;
   }, []);
 
+  /** Claim today's VIP daily rewards (50 gems + 3 hints). Returns true if claimed. */
+  const claimVipDailyRewards = useCallback((): boolean => {
+    const today = new Date().toISOString().slice(0, 10);
+    let claimed = false;
+
+    setState((prev) => {
+      // Not active or expired or already claimed today
+      if (!prev.isVipSubscriber || prev.vipExpiresAt <= Date.now()) return prev;
+      if (prev.vipDailyLastClaim === today) return prev;
+
+      claimed = true;
+      return {
+        ...prev,
+        vipDailyLastClaim: today,
+        gems: prev.gems + 50,
+        hintTokens: prev.hintTokens + 3,
+        totalEarned: {
+          ...prev.totalEarned,
+          gems: prev.totalEarned.gems + 50,
+          hintTokens: prev.totalEarned.hintTokens + 3,
+        },
+      };
+    });
+
+    return claimed;
+  }, []);
+
+  // Compute active VIP status (subscribed and not expired)
+  const isVipActive = state.isVipSubscriber && state.vipExpiresAt > Date.now();
+
   const currentLives = computeRefilledLives(state.lives).current;
   const nextLifeTime = currentLives < LIVES.max
     ? state.lives.lastRefillTime + LIVES.refillMinutes * 60 * 1000
@@ -575,7 +625,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         refillLives,
         getTimeUntilNextLife,
         processAdReward,
-        isAdFree: state.isAdFreeFlag,
+        isAdFree: state.isAdFreeFlag || isVipActive,
         processPurchase,
         isPremiumPass: state.isPremiumPassFlag,
         dailyValuePackExpiry: state.dailyValuePackExpiry,
@@ -584,6 +634,9 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         addUndoTokens,
         spendUndoToken,
         claimDailyValuePackDrip,
+        isVip: isVipActive,
+        vipExpiresAt: state.vipExpiresAt,
+        claimVipDailyRewards,
       }}
     >
       {children}

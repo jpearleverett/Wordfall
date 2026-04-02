@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -15,6 +15,10 @@ import {
   computeSegments,
   SegmentationInput,
 } from '../services/playerSegmentation';
+import { triggerEnergyFullNotification } from '../services/notificationTriggers';
+import { createProgressMethods } from './PlayerProgressContext';
+import { createSocialMethods } from './PlayerSocialContext';
+import { generateReferralCode } from '../data/referralSystem';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -168,6 +172,13 @@ interface PlayerData {
   // Player Segmentation
   segments: PlayerSegments;
 
+  // Referral
+  referralCode: string;
+  referralCount: number;
+  referredBy: string | null;
+  referredPlayerIds: string[];
+  referralMilestonesClaimed: number[];
+
   // Cloud sync
   lastModified: number;
 }
@@ -277,6 +288,11 @@ interface PlayerContextType extends PlayerData {
 
   // Event Progress
   updateEventProgress: (eventId: string, progress: number, claimedTiers?: string[]) => void;
+
+  // Referral
+  applyReferralCode: (code: string) => boolean;
+  recordReferralSuccess: () => void;
+  claimReferralMilestone: (count: number) => boolean;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -424,6 +440,13 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Player Segmentation
   segments: DEFAULT_SEGMENTS,
 
+  // Referral
+  referralCode: '',
+  referralCount: 0,
+  referredBy: null,
+  referredPlayerIds: [],
+  referralMilestonesClaimed: [],
+
   // Cloud sync
   lastModified: 0,
 };
@@ -480,6 +503,9 @@ const PlayerContext = createContext<PlayerContextType>({
   respondToChallenge: () => {},
   recomputeSegments: () => {},
   updateEventProgress: () => {},
+  applyReferralCode: () => false,
+  recordReferralSuccess: () => {},
+  claimReferralMilestone: () => false,
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -614,66 +640,67 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, [loaded, data.currentLevel]);
 
-  // Recompute player segments on app open (when data finishes loading)
-  useEffect(() => {
-    if (!loaded) return;
-    recomputeSegments();
-  }, [loaded, recomputeSegments]);
+  // NOTE: Segment recomputation useEffect moved below recomputeSegments definition to fix TS2448
 
-  // ── Progress ────────────────────────────────────────────────────────────
+  // Generate referral code on first load if not already set
+  useEffect(() => {
+    if (!loaded || !user) return;
+    setData((prev) => {
+      if (prev.referralCode) return prev; // already generated
+      return { ...prev, referralCode: generateReferralCode(user.uid) };
+    });
+  }, [loaded, user]);
+
+  // ── Data accessor ref (for factory functions that need current data) ──
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const getData = useCallback(() => dataRef.current, []);
+
+  // ── Progress methods (extracted to PlayerProgressContext) ──────────────
+  const progressMethods = useMemo(
+    () => createProgressMethods(setData as any, getData as any),
+    [getData],
+  );
+  const {
+    recordPuzzleComplete,
+    recordDailyComplete,
+    updateStreak,
+    useGraceDay,
+    useStreakShield,
+    updateMissionProgress,
+    claimMissionReward,
+    generateDailyMissions,
+    unlockFeature,
+    checkFeatureUnlocks,
+    markTooltipShown,
+    initWeeklyGoals,
+    updateWeeklyGoalProgress,
+    queueCeremony,
+    popCeremony,
+    recordFailure,
+    needsBreather,
+    checkAchievements,
+    completeAchievement,
+    checkComebackRewards,
+    recordPerformanceMetrics,
+  } = progressMethods;
+
+  // ── Social methods (extracted to PlayerSocialContext) ──────────────────
+  const socialMethods = useMemo(
+    () => createSocialMethods(setData as any, user, getData as any),
+    [user, getData],
+  );
+  const {
+    sendHintGift,
+    sendTileGift,
+    sendChallenge,
+    respondToChallenge,
+  } = socialMethods;
+
+  // ── Progress (remaining) ───────────────────────────────────────────────
 
   const updateProgress = useCallback((updates: Partial<PlayerData>) => {
     setData((prev) => ({ ...prev, ...updates }));
-  }, []);
-
-  const recordPuzzleComplete = useCallback(
-    (level: number, score: number, stars: number, isPerfect: boolean) => {
-      setData((prev) => {
-        const existingStars = prev.starsByLevel[level] ?? 0;
-        const newStarsByLevel = {
-          ...prev.starsByLevel,
-          [level]: Math.max(existingStars, stars),
-        };
-        const totalStars = Object.values(newStarsByLevel).reduce(
-          (sum, s) => sum + s,
-          0,
-        );
-        const highestCompletedLevel = Math.max(prev.highestLevel, level);
-        const nextCurrentLevel = Math.max(prev.currentLevel, level + 1);
-        const activeChapter = getChapterForLevel(nextCurrentLevel) ?? CHAPTERS[CHAPTERS.length - 1];
-        const completedWingIds = Array.from(
-          new Set(
-            CHAPTERS.filter((chapter) => chapter.id < activeChapter.id).map((chapter) => chapter.wingId),
-          ),
-        );
-
-        return {
-          ...prev,
-          totalScore: prev.totalScore + score,
-          puzzlesSolved: prev.puzzlesSolved + 1,
-          perfectSolves: isPerfect ? prev.perfectSolves + 1 : prev.perfectSolves,
-          highestLevel: highestCompletedLevel,
-          currentLevel: nextCurrentLevel,
-          currentChapter: activeChapter.id,
-          starsByLevel: newStarsByLevel,
-          totalStars,
-          restoredWings: Array.from(new Set([...prev.restoredWings, ...completedWingIds])),
-          lastActiveDate: getToday(),
-        };
-      });
-    },
-    [],
-  );
-
-  const recordDailyComplete = useCallback((dateString: string) => {
-    setData((prev) => {
-      if (prev.dailyCompleted.includes(dateString)) return prev;
-      return {
-        ...prev,
-        dailyCompleted: [...prev.dailyCompleted, dateString],
-        lastActiveDate: getToday(),
-      };
-    });
   }, []);
 
   // ── Collections ─────────────────────────────────────────────────────────
@@ -766,184 +793,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // ── Missions ────────────────────────────────────────────────────────────
+  // ── Missions (extracted to PlayerProgressContext) ────────────────────────
 
-  const updateMissionProgress = useCallback(
-    (missionId: string, progress: number) => {
-      setData((prev) => ({
-        ...prev,
-        missions: {
-          ...prev.missions,
-          dailyMissions: prev.missions.dailyMissions.map((m) =>
-            m.id === missionId ? { ...m, progress: Math.max(m.progress, progress) } : m,
-          ),
-        },
-      }));
-    },
-    [],
-  );
-
-  const claimMissionReward = useCallback((missionId: string) => {
-    setData((prev) => ({
-      ...prev,
-      missions: {
-        ...prev.missions,
-        dailyMissions: prev.missions.dailyMissions.map((m) =>
-          m.id === missionId ? { ...m, completed: true } : m,
-        ),
-        missionsCompletedToday: prev.missions.missionsCompletedToday + 1,
-      },
-    }));
-  }, []);
-
-  const generateDailyMissions = useCallback(() => {
-    const today = getToday();
-    setData((prev) => {
-      if (prev.missions.lastMissionDate === today) return prev;
-
-      const missionTemplates = [
-        'solve_3_puzzles',
-        'earn_500_score',
-        'get_perfect_solve',
-        'collect_rare_tile',
-        'complete_daily',
-        'solve_without_hints',
-        'earn_3_stars',
-        'play_5_minutes',
-      ];
-
-      // Pick 3 random missions
-      const shuffled = [...missionTemplates].sort(() => Math.random() - 0.5);
-      const selected = shuffled.slice(0, 3);
-
-      return {
-        ...prev,
-        missions: {
-          dailyMissions: selected.map((id) => ({
-            id,
-            progress: 0,
-            completed: false,
-          })),
-          lastMissionDate: today,
-          missionsCompletedToday: 0,
-        },
-      };
-    });
-  }, []);
-
-  // ── Streaks ─────────────────────────────────────────────────────────────
-
-  const updateStreak = useCallback(() => {
-    const today = getToday();
-    setData((prev) => {
-      const { streaks } = prev;
-      if (streaks.lastPlayDate === today) return prev;
-
-      const lastDate = streaks.lastPlayDate ? new Date(streaks.lastPlayDate) : null;
-      const todayDate = new Date(today);
-      const diffDays = lastDate
-        ? Math.floor(
-            (todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
-          )
-        : 0;
-
-      let newStreak: number;
-      let graceUsed = false;
-      if (diffDays === 1) {
-        // Consecutive day
-        newStreak = streaks.currentStreak + 1;
-      } else if (diffDays === 0) {
-        // Same day
-        newStreak = streaks.currentStreak;
-      } else if (diffDays === 2 && streaks.graceDaysUsed < 1) {
-        // Missed exactly 1 day — auto-apply grace day (GDD: "Missing one day doesn't break streak")
-        newStreak = streaks.currentStreak + 1;
-        graceUsed = true;
-      } else {
-        // Streak broken (missed 2+ days, or no grace day available)
-        newStreak = 1;
-      }
-
-      // Reset grace days when streak breaks (so new streaks get a fresh grace day)
-      const newGraceDaysUsed = graceUsed
-        ? streaks.graceDaysUsed + 1
-        : diffDays >= 3 ? 0 : streaks.graceDaysUsed;
-
-      const newLoginDates = prev.dailyLoginDates.includes(today)
-        ? prev.dailyLoginDates
-        : [...prev.dailyLoginDates, today];
-
-      const loginCycleDay = (newLoginDates.length - 1) % 7 + 1;
-
-      // Check if a streak milestone was just crossed
-      const prevStreak = streaks.currentStreak;
-      let pendingCeremonies = prev.pendingCeremonies;
-      for (const milestone of STREAK.milestones) {
-        if (newStreak >= milestone && prevStreak < milestone) {
-          const reward = STREAK.milestoneRewards[milestone as keyof typeof STREAK.milestoneRewards];
-          pendingCeremonies = [
-            ...pendingCeremonies,
-            {
-              type: 'streak_milestone' as const,
-              data: { streakCount: milestone, reward, badge: (reward as any).cosmetic },
-            },
-          ];
-        }
-      }
-
-      return {
-        ...prev,
-        dailyLoginDates: newLoginDates,
-        loginCycleDay,
-        pendingCeremonies,
-        streaks: {
-          ...streaks,
-          currentStreak: newStreak,
-          bestStreak: Math.max(streaks.bestStreak, newStreak),
-          lastPlayDate: today,
-          graceDaysUsed: newGraceDaysUsed,
-        },
-        lastActiveDate: today,
-      };
-    });
-  }, []);
-
-  const useGraceDay = useCallback((): boolean => {
-    let success = false;
-    setData((prev) => {
-      const { streaks } = prev;
-      if (streaks.graceDaysUsed >= 1) return prev;
-      success = true;
-      return {
-        ...prev,
-        streaks: {
-          ...streaks,
-          graceDaysUsed: streaks.graceDaysUsed + 1,
-          lastPlayDate: getToday(),
-        },
-      };
-    });
-    return success;
-  }, []);
-
-  const useStreakShield = useCallback((): boolean => {
-    let success = false;
-    setData((prev) => {
-      const { streaks } = prev;
-      if (!streaks.streakShieldAvailable) return prev;
-      success = true;
-      return {
-        ...prev,
-        streaks: {
-          ...streaks,
-          streakShieldAvailable: false,
-          lastShieldDate: getToday(),
-          lastPlayDate: getToday(),
-        },
-      };
-    });
-    return success;
-  }, []);
+  // ── Streaks (extracted to PlayerProgressContext) ─────────────────────────
 
   // ── Cosmetics ───────────────────────────────────────────────────────────
 
@@ -976,63 +828,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // ── Gifting ────────────────────────────────────────────────────────────
-
-  const sendHintGift = useCallback((friendId: string): boolean => {
-    const today = getToday();
-    let success = false;
-    setData((prev) => {
-      const resetCount = prev.lastGiftDate !== today ? 0 : prev.hintGiftsSentToday;
-      if (resetCount >= 1) return prev; // Max 1 hint gift per day per GDD
-      success = true;
-      return {
-        ...prev,
-        hintGiftsSentToday: resetCount + 1,
-        lastGiftDate: today,
-      };
-    });
-    // Deliver via Firestore if available
-    if (success && user) {
-      import('../services/firestore').then(({ firestoreService }) => {
-        void firestoreService.sendGift(
-          user.uid,
-          data.equippedTitle || 'A friend',
-          friendId,
-          'hint',
-          1
-        );
-      });
-    }
-    return success;
-  }, [user, data.equippedTitle]);
-
-  const sendTileGift = useCallback((friendId: string, tileLetter: string): boolean => {
-    const today = getToday();
-    let success = false;
-    setData((prev) => {
-      const resetCount = prev.lastGiftDate !== today ? 0 : prev.tileGiftsSentToday;
-      if (resetCount >= 3) return prev; // Max 3 tile gifts per day per GDD
-      success = true;
-      return {
-        ...prev,
-        tileGiftsSentToday: resetCount + 1,
-        lastGiftDate: today,
-      };
-    });
-    // Deliver via Firestore if available
-    if (success && user) {
-      import('../services/firestore').then(({ firestoreService }) => {
-        void firestoreService.sendGift(
-          user.uid,
-          data.equippedTitle || 'A friend',
-          friendId,
-          'tile',
-          1
-        );
-      });
-    }
-    return success;
-  }, [user, data.equippedTitle]);
+  // ── Gifting (extracted to PlayerSocialContext) ──────────────────────────
 
   // ── Library ─────────────────────────────────────────────────────────────
 
@@ -1121,236 +917,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return data.modeLevels[modeId] ?? 1;
   }, [data.modeLevels]);
 
-  // ── Achievements ────────────────────────────────────────────────────────
-
-  const completeAchievement = useCallback((achievementId: string) => {
-    setData((prev) => {
-      if (prev.achievementIds.includes(achievementId)) return prev;
-      return {
-        ...prev,
-        achievementIds: [...prev.achievementIds, achievementId],
-      };
-    });
-  }, []);
-
-  // ── Feature Unlocks ────────────────────────────────────────────────────
-
-  const unlockFeature = useCallback((featureId: string) => {
-    setData((prev) => {
-      if (prev.featuresUnlocked.includes(featureId)) return prev;
-      return {
-        ...prev,
-        featuresUnlocked: [...prev.featuresUnlocked, featureId],
-      };
-    });
-  }, []);
-
-  const checkFeatureUnlocks = useCallback((level: number): CeremonyItem[] => {
-    const ceremonies: CeremonyItem[] = [];
-    for (const feature of FEATURE_UNLOCK_SCHEDULE) {
-      if (feature.unlockLevel <= level && !data.featuresUnlocked.includes(feature.id)) {
-        ceremonies.push({
-          type: 'feature_unlock',
-          data: { ...feature },
-        });
-        setData((prev) => ({
-          ...prev,
-          featuresUnlocked: [...prev.featuresUnlocked, feature.id],
-        }));
-      }
-    }
-    return ceremonies;
-  }, [data.featuresUnlocked]);
-
-  // ── Tooltips ──────────────────────────────────────────────────────────
-
-  const markTooltipShown = useCallback((id: string) => {
-    setData((prev) => {
-      if (prev.tooltipsShown.includes(id)) return prev;
-      return {
-        ...prev,
-        tooltipsShown: [...prev.tooltipsShown, id],
-      };
-    });
-  }, []);
-
-  // ── Weekly Goals ──────────────────────────────────────────────────────
-
-  const initWeeklyGoals = useCallback(() => {
-    setData((prev) => {
-      if (prev.weeklyGoals && !isNewWeek(prev.weeklyGoals.weekStart)) {
-        return prev;
-      }
-      return {
-        ...prev,
-        weeklyGoals: generateWeeklyGoals(),
-        modesPlayedThisWeek: [],
-      };
-    });
-  }, []);
-
-  const updateWeeklyGoalProgress = useCallback((trackingKey: string, value: number) => {
-    setData((prev) => {
-      if (!prev.weeklyGoals) return prev;
-      const updatedGoals = prev.weeklyGoals.goals.map((g) => {
-        if (g.trackingKey !== trackingKey || g.completed) return g;
-        const newProgress = g.progress + value;
-        return {
-          ...g,
-          progress: newProgress,
-          completed: newProgress >= g.target,
-        };
-      });
-      return {
-        ...prev,
-        weeklyGoals: { ...prev.weeklyGoals, goals: updatedGoals },
-      };
-    });
-  }, []);
-
-  // ── Ceremonies ────────────────────────────────────────────────────────
-
-  const queueCeremony = useCallback((ceremony: CeremonyItem) => {
-    setData((prev) => ({
-      ...prev,
-      pendingCeremonies: [...prev.pendingCeremonies, ceremony],
-    }));
-  }, []);
-
-  const popCeremony = useCallback((): CeremonyItem | null => {
-    let ceremony: CeremonyItem | null = null;
-    setData((prev) => {
-      if (prev.pendingCeremonies.length === 0) return prev;
-      ceremony = prev.pendingCeremonies[0];
-      return {
-        ...prev,
-        pendingCeremonies: prev.pendingCeremonies.slice(1),
-      };
-    });
-    return ceremony;
-  }, []);
-
-  // ── Difficulty Pacing ─────────────────────────────────────────────────
-
-  const recordFailure = useCallback((level: number) => {
-    setData((prev) => ({
-      ...prev,
-      failCountByLevel: {
-        ...prev.failCountByLevel,
-        [level]: (prev.failCountByLevel[level] || 0) + 1,
-      },
-      consecutiveFailures: prev.consecutiveFailures + 1,
-    }));
-  }, []);
-
-  const needsBreather = useCallback((): boolean => {
-    return data.consecutiveFailures >= 2 || data.lastLevelStars === 1;
-  }, [data.consecutiveFailures, data.lastLevelStars]);
-
-  // ── Achievement Checking ──────────────────────────────────────────────
-
-  const checkAchievements = useCallback((extraData?: { maxCombo?: number }): CeremonyItem[] => {
-    const ceremonies: CeremonyItem[] = [];
-    const valueMap: Record<string, number> = {
-      word_finder: data.wordsFoundTotal,
-      puzzle_solver: data.puzzlesSolved,
-      perfect_player: data.perfectSolves,
-      high_scorer: data.totalScore,
-      chain_reaction: extraData?.maxCombo || 0,
-      streak_master: data.streaks.currentStreak,
-      daily_devotee: data.dailyCompleted.length,
-      atlas_scholar: Object.keys(data.collections.atlasPages).length,
-      tile_collector: Object.keys(data.collections.rareTiles).length,
-      library_restorer: data.restoredWings.length,
-      mode_explorer: Object.keys(data.modeStats).filter((m) => data.modeStats[m].played > 0).length,
-      speed_demon: data.modeStats.timePressure?.wins || 0,
-      level_climber: data.highestLevel,
-      star_collector: data.totalStars,
-    };
-
-    // Collect all new achievement IDs first, then persist in a single setData call
-    // (calling setData in a loop causes each call to close over stale state)
-    const newAchievementIds: string[] = [];
-
-    for (const achievement of ACHIEVEMENTS) {
-      const value = valueMap[achievement.id] || 0;
-      const tier = getAchievementTier(achievement, value);
-      if (!tier) continue;
-      const tierId = getAchievementTierId(achievement.id, tier);
-      if (data.achievementIds.includes(tierId) || newAchievementIds.includes(tierId)) continue;
-
-      // Add lower tiers first
-      const tierIndex = achievement.tiers.findIndex((t) => t.level === tier);
-      for (const lt of achievement.tiers.slice(0, tierIndex)) {
-        const ltId = getAchievementTierId(achievement.id, lt.level);
-        if (!data.achievementIds.includes(ltId) && !newAchievementIds.includes(ltId)) {
-          newAchievementIds.push(ltId);
-        }
-      }
-
-      newAchievementIds.push(tierId);
-      ceremonies.push({
-        type: 'achievement',
-        data: {
-          id: tierId,
-          icon: achievement.icon,
-          name: achievement.name,
-          description: achievement.description,
-          tier,
-          reward: achievement.tiers[tierIndex].reward,
-        },
-      });
-    }
-
-    if (newAchievementIds.length > 0) {
-      setData((prev) => ({
-        ...prev,
-        achievementIds: [...prev.achievementIds, ...newAchievementIds],
-      }));
-    }
-    return ceremonies;
-  }, [data]);
-
-  // ── Comebacks ───────────────────────────────────────────────────────────
-
-  const checkComebackRewards = useCallback((): string[] => {
-    const today = getToday();
-    const rewards: string[] = [];
-
-    if (!data.lastActiveDate) return rewards;
-
-    const lastActive = new Date(data.lastActiveDate);
-    const todayDate = new Date(today);
-    const daysSinceActive = Math.floor(
-      (todayDate.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24),
-    );
-
-    if (daysSinceActive >= 3 && daysSinceActive < 7) {
-      const rewardId = `comeback_3day_${today}`;
-      if (!data.comebackRewardsClaimed.includes(rewardId)) {
-        rewards.push(rewardId);
-      }
-    } else if (daysSinceActive >= 7 && daysSinceActive < 30) {
-      const rewardId = `comeback_7day_${today}`;
-      if (!data.comebackRewardsClaimed.includes(rewardId)) {
-        rewards.push(rewardId);
-      }
-    } else if (daysSinceActive >= 30) {
-      const rewardId = `comeback_30day_${today}`;
-      if (!data.comebackRewardsClaimed.includes(rewardId)) {
-        rewards.push(rewardId);
-      }
-    }
-
-    if (rewards.length > 0) {
-      setData((prev) => ({
-        ...prev,
-        comebackRewardsClaimed: [...prev.comebackRewardsClaimed, ...rewards],
-      }));
-    }
-
-    return rewards;
-  }, [data.lastActiveDate, data.comebackRewardsClaimed]);
+  // ── Achievements, Feature Unlocks, Tooltips, Weekly Goals, Ceremonies,
+  //    Difficulty Pacing, Achievement Checking, Comebacks
+  //    (all extracted to PlayerProgressContext) ────────────────────────────
 
   // ── Mystery Wheel ──────────────────────────────────────────────────────
 
@@ -1450,6 +1019,44 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ── Referral ──────────────────────────────────────────────────────────
+
+  const applyReferralCode = useCallback((code: string): boolean => {
+    // Prevent self-referral and double-referral
+    let applied = false;
+    setData((prev) => {
+      if (prev.referredBy !== null) return prev; // already referred
+      if (prev.referralCode === code) return prev; // self-referral
+      applied = true;
+      return {
+        ...prev,
+        referredBy: code,
+      };
+    });
+    return applied;
+  }, []);
+
+  const recordReferralSuccess = useCallback(() => {
+    setData((prev) => ({
+      ...prev,
+      referralCount: prev.referralCount + 1,
+    }));
+  }, []);
+
+  const claimReferralMilestone = useCallback((count: number): boolean => {
+    let claimed = false;
+    setData((prev) => {
+      if (prev.referralMilestonesClaimed.includes(count)) return prev;
+      if (prev.referralCount < count) return prev;
+      claimed = true;
+      return {
+        ...prev,
+        referralMilestonesClaimed: [...prev.referralMilestonesClaimed, count],
+      };
+    });
+    return claimed;
+  }, []);
+
   // ── Puzzle Energy ──────────────────────────────────────────────────────
 
   /**
@@ -1507,11 +1114,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Has energy — spend it
       if (energyNow.current > 0) {
         success = true;
+        const newCurrent = energyNow.current - 1;
+        // Schedule a notification for when energy will be full again
+        void triggerEnergyFullNotification(newCurrent, ENERGY.MAX);
         return {
           ...prev,
           puzzleEnergy: {
             ...energyNow,
-            current: energyNow.current - 1,
+            current: newCurrent,
             lastRegenTime: energyNow.current >= ENERGY.MAX
               ? new Date().toISOString()
               : energyNow.lastRegenTime,
@@ -1592,78 +1202,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
   }, [data.puzzleEnergy, computeCurrentEnergy]);
 
-  // ── Adaptive Difficulty Metrics ───────────────────────────────────────
-
-  const recordPerformanceMetrics = useCallback((level: number, stars: number, completionTimeSeconds: number) => {
-    setData((prev) => ({
-      ...prev,
-      performanceMetrics: updatePlayerMetrics(
-        prev.performanceMetrics,
-        level,
-        stars,
-        completionTimeSeconds,
-      ),
-    }));
-  }, []);
-
-
-  // ── Friend Challenges ────────────────────────────────────────────────
-
-  const sendChallenge = useCallback((friendId: string, puzzleData: {
-    score: number;
-    stars: number;
-    time: number;
-    level: number;
-    seed: number;
-    mode: import('../types').GameMode;
-    boardConfig: import('../types').BoardConfig;
-  }) => {
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
-    const challenge: import('../types').FriendChallenge = {
-      id: `challenge_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
-      challengerId: user?.uid ?? 'local_player',
-      challengerName: data.equippedTitle || 'Player',
-      challengerScore: puzzleData.score,
-      challengerStars: puzzleData.stars,
-      challengerTime: puzzleData.time,
-      level: puzzleData.level,
-      seed: puzzleData.seed,
-      mode: puzzleData.mode,
-      boardConfig: puzzleData.boardConfig,
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-      status: 'pending',
-    };
-
-    setData((prev) => ({
-      ...prev,
-      friendChallenges: {
-        ...prev.friendChallenges,
-        sent: [...prev.friendChallenges.sent, challenge],
-      },
-    }));
-
-    return challenge;
-  }, [user, data.equippedTitle]);
-
-  const respondToChallenge = useCallback((challengeId: string, score: number, stars: number) => {
-    setData((prev) => {
-      const updatedReceived = prev.friendChallenges.received.map((c) => {
-        if (c.id === challengeId) {
-          return { ...c, status: 'completed' as const, respondentScore: score, respondentStars: stars };
-        }
-        return c;
-      });
-      return {
-        ...prev,
-        friendChallenges: {
-          ...prev.friendChallenges,
-          received: updatedReceived,
-        },
-      };
-    });
-  }, []);
+  // ── Adaptive Difficulty + Friend Challenges (extracted to PlayerProgressContext / PlayerSocialContext) ──
 
   // ── Player Segmentation ───────────────────────────────────────────────
 
@@ -1701,6 +1240,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return { ...prev, segments };
     });
   }, []);
+
+  // Recompute player segments on app open (when data finishes loading)
+  // (moved here from above to avoid TS2448: block-scoped variable used before declaration)
+  useEffect(() => {
+    if (!loaded) return;
+    recomputeSegments();
+  }, [loaded, recomputeSegments]);
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -1756,6 +1302,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         respondToChallenge,
         recomputeSegments,
         updateEventProgress: updateEventProgressCb,
+        applyReferralCode,
+        recordReferralSuccess,
+        claimReferralMilestone,
       }}
     >
       {children}

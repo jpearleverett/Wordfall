@@ -341,7 +341,12 @@ function createWavDataUri(samples: Int16Array, sampleRate: number): string {
  * Each frequency in spec.freqs is staggered in time (arpeggio-style) so
  * multi-note sounds sweep upward/downward rather than all hitting at once.
  */
-function synthesizeTone(spec: ToneSpec): string {
+/**
+ * Synthesize a rich tone and return raw Int16Array samples.
+ * The expensive DSP math (oscillators, ADSR, harmonics, reverb) happens here.
+ * WAV encoding is a separate step via createWavDataUri().
+ */
+function synthesizeToneSamples(spec: ToneSpec): Int16Array {
   const attack = spec.attack ?? 0.01;
   const decay = spec.decay ?? 0.04;
   const sustainLevel = spec.sustain ?? 0.6;
@@ -462,6 +467,15 @@ function synthesizeTone(spec: ToneSpec): string {
     samples[i] = Math.floor(clamp(output[i]) * 32767);
   }
 
+  return samples;
+}
+
+/**
+ * Synthesize a tone and return a WAV data URI.
+ * Delegates DSP to synthesizeToneSamples(), then wraps in WAV header.
+ */
+function synthesizeTone(spec: ToneSpec): string {
+  const samples = synthesizeToneSamples(spec);
   return createWavDataUri(samples, SAMPLE_RATE);
 }
 
@@ -469,7 +483,11 @@ function synthesizeTone(spec: ToneSpec): string {
  * Synthesize background music progression with sub-bass, chorus detuning,
  * pad-style tones, and smooth crossfade between chords.
  */
-function synthesizeProgression(spec: ProgressionSpec): string {
+/**
+ * Synthesize a music progression and return raw Int16Array samples.
+ * The expensive DSP math (chord synthesis, chorus detuning, sub-bass) happens here.
+ */
+function synthesizeProgressionSamples(spec: ProgressionSpec): Int16Array {
   const volume = spec.volume ?? 0.12;
   const crossfade = 0.15; // seconds of crossfade overlap between chords
 
@@ -541,6 +559,15 @@ function synthesizeProgression(spec: ProgressionSpec): string {
     samples[i] = Math.floor(clamp(softClipped) * 32767);
   }
 
+  return samples;
+}
+
+/**
+ * Synthesize a music progression and return a WAV data URI.
+ * Delegates DSP to synthesizeProgressionSamples(), then wraps in WAV header.
+ */
+function synthesizeProgression(spec: ProgressionSpec): string {
+  const samples = synthesizeProgressionSamples(spec);
   return createWavDataUri(samples, SAMPLE_RATE);
 }
 
@@ -550,12 +577,15 @@ class SoundManager {
   private static instance: SoundManager;
   private sounds: Map<string, any> = new Map(); // AudioPlayer instances (expo-audio) or Audio.Sound (expo-av fallback)
   private soundUris: Map<string, string> = new Map();
+  private synthesisCache: Map<string, Int16Array> = new Map(); // Raw sample buffer cache (avoids re-doing DSP math)
   private currentMusic: any = null;
   private currentTrack: MusicTrack | null = null;
   private sfxVolume: number = 1.0;
   private musicVolume: number = 0.5;
   private muted: boolean = false;
   private initialized: boolean = false;
+  private preWarmed: boolean = false;
+  private preWarmPromise: Promise<void> | null = null;
   private useNewApi: boolean = false;
 
   static getInstance(): SoundManager {
@@ -565,21 +595,112 @@ class SoundManager {
     return SoundManager.instance;
   }
 
+  /**
+   * Get or synthesize raw Int16Array samples for a sound effect.
+   * Caches the raw buffer so DSP math is never repeated.
+   */
+  private getSynthesizedSamples(name: SoundName): Int16Array {
+    const cached = this.synthesisCache.get(name);
+    if (cached) return cached;
+    const samples = synthesizeToneSamples(SOUND_DEFS[name]);
+    this.synthesisCache.set(name, samples);
+    return samples;
+  }
+
+  /**
+   * Get or synthesize raw Int16Array samples for a music track.
+   * Caches the raw buffer so DSP math is never repeated.
+   */
+  private getMusicSynthesizedSamples(track: MusicTrack): Int16Array {
+    const cacheKey = `music:${track}`;
+    const cached = this.synthesisCache.get(cacheKey);
+    if (cached) return cached;
+    const samples = synthesizeProgressionSamples(MUSIC_DEFS[track]);
+    this.synthesisCache.set(cacheKey, samples);
+    return samples;
+  }
+
+  /**
+   * Get a WAV data URI for a sound effect, using cached samples if available.
+   */
   private getSoundUri(name: SoundName): string {
     const cached = this.soundUris.get(name);
     if (cached) return cached;
-    const uri = synthesizeTone(SOUND_DEFS[name]);
+    const samples = this.getSynthesizedSamples(name);
+    const uri = createWavDataUri(samples, SAMPLE_RATE);
     this.soundUris.set(name, uri);
     return uri;
   }
 
+  /**
+   * Get a WAV data URI for a music track, using cached samples if available.
+   */
   private getMusicUri(track: MusicTrack): string {
     const cacheKey = `music:${track}`;
     const cached = this.soundUris.get(cacheKey);
     if (cached) return cached;
-    const uri = synthesizeProgression(MUSIC_DEFS[track]);
+    const samples = this.getMusicSynthesizedSamples(track);
+    const uri = createWavDataUri(samples, SAMPLE_RATE);
     this.soundUris.set(cacheKey, uri);
     return uri;
+  }
+
+  /**
+   * Pre-warm all sound effects and music tracks by synthesizing their samples
+   * and creating WAV URIs in the background. This avoids blocking init() and
+   * prevents first-play delays for music.
+   *
+   * Yields control back to the event loop between each synthesis to avoid
+   * blocking the main thread for too long.
+   */
+  async preWarmAll(): Promise<void> {
+    if (this.preWarmed) return;
+    if (this.preWarmPromise) return this.preWarmPromise;
+
+    this.preWarmPromise = (async () => {
+      try {
+        // Synthesize all sound effect samples + URIs, yielding between each
+        for (const name of Object.keys(SOUND_DEFS) as SoundName[]) {
+          if (!this.synthesisCache.has(name)) {
+            this.getSoundUri(name); // Populates both synthesisCache and soundUris
+            // Yield to event loop so UI stays responsive
+            await new Promise<void>(resolve => setTimeout(resolve, 0));
+          }
+        }
+
+        // Synthesize all music track samples + URIs, yielding between each
+        for (const track of Object.keys(MUSIC_DEFS) as MusicTrack[]) {
+          const cacheKey = `music:${track}`;
+          if (!this.synthesisCache.has(cacheKey)) {
+            this.getMusicUri(track); // Populates both synthesisCache and soundUris
+            await new Promise<void>(resolve => setTimeout(resolve, 0));
+          }
+        }
+
+        // If init has completed and we have the new API, create AudioPlayer
+        // instances for any sounds that don't have players yet
+        if (this.initialized && createAudioPlayerFn && this.useNewApi) {
+          for (const name of Object.keys(SOUND_DEFS) as SoundName[]) {
+            if (!this.sounds.has(name)) {
+              const uri = this.soundUris.get(name);
+              if (uri) {
+                const player = createAudioPlayerFn(uri);
+                player.volume = this.sfxVolume;
+                this.sounds.set(name, player);
+              }
+            }
+          }
+        }
+
+        this.preWarmed = true;
+      } catch (e) {
+        if (__DEV__) console.warn('Sound preWarmAll failed:', e);
+      } finally {
+        this.preWarmPromise = null;
+      }
+    })();
+
+    return this.preWarmPromise;
   }
 
   async init(): Promise<void> {
@@ -587,38 +708,28 @@ class SoundManager {
     loadAudioModule();
     try {
       if (createAudioPlayerFn && setAudioModeFn) {
-        // expo-audio (new API)
+        // expo-audio (new API) — just set audio mode, don't synthesize yet
         this.useNewApi = true;
         await setAudioModeFn({
           playsInSilentMode: true,
           shouldPlayInBackground: false,
           interruptionMode: 'duckOthers',
         });
-        for (const name of Object.keys(SOUND_DEFS) as SoundName[]) {
-          const uri = this.getSoundUri(name);
-          const player = createAudioPlayerFn(uri);
-          player.volume = this.sfxVolume;
-          this.sounds.set(name, player);
-        }
       } else {
-        // expo-av fallback (legacy)
+        // expo-av fallback (legacy) — just set audio mode
         this.useNewApi = false;
         await legacyAudio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
         });
-        await Promise.all(
-          (Object.keys(SOUND_DEFS) as SoundName[]).map(async (name) => {
-            const { sound } = await legacyAudio.Sound.createAsync(
-              { uri: this.getSoundUri(name) },
-              { shouldPlay: false, volume: this.sfxVolume },
-            );
-            this.sounds.set(name, sound);
-          }),
-        );
       }
       this.initialized = true;
+
+      // Kick off background pre-warming so synthesis happens off the init path.
+      // setTimeout(0) defers to the next event loop tick, allowing the app to
+      // render its first frame before heavy DSP work begins.
+      setTimeout(() => this.preWarmAll(), 0);
     } catch (e) {
       console.warn('Sound init failed:', e);
     }
@@ -626,8 +737,38 @@ class SoundManager {
 
   async playSound(name: SoundName): Promise<void> {
     if (this.muted || !this.initialized) return;
-    const player = this.sounds.get(name);
+
+    let player = this.sounds.get(name);
+
+    // If pre-warm hasn't created a player yet, try to create one on-demand
+    // using already-cached URI (skip silently if synthesis hasn't happened)
+    if (!player) {
+      const uri = this.soundUris.get(name);
+      if (!uri) {
+        // Synthesis hasn't completed yet — skip silently rather than blocking
+        return;
+      }
+      try {
+        if (this.useNewApi && createAudioPlayerFn) {
+          player = createAudioPlayerFn(uri);
+          player.volume = this.sfxVolume;
+          this.sounds.set(name, player);
+        } else if (legacyAudio) {
+          const { sound } = await legacyAudio.Sound.createAsync(
+            { uri },
+            { shouldPlay: false, volume: this.sfxVolume },
+          );
+          player = sound;
+          this.sounds.set(name, player);
+        }
+      } catch (e) {
+        if (__DEV__) console.warn(`Failed to create sound player "${name}":`, e);
+        return;
+      }
+    }
+
     if (!player) return;
+
     try {
       if (this.useNewApi) {
         player.volume = this.sfxVolume;

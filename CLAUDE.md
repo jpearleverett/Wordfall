@@ -6,8 +6,9 @@ Wordfall is a gravity-based strategic word puzzle mobile game built with **React
 
 - **Framework:** React Native 0.81.5, Expo ~54.0.0, TypeScript ~5.8.0
 - **Backend:** Firebase (Auth + Firestore + Analytics) — Firestore social layer implemented with graceful offline fallback. Env vars needed for real connectivity
-- **State:** React Context (4 providers) + useReducer for game state + AsyncStorage persistence + Firestore sync when configured
-- **Monetization:** IAP via react-native-iap (14 core + 3 mega bundle products), rewarded + interstitial ads via AdMob (mock fallback), contextual offers wired to triggers, dynamic pricing by segment, regional pricing, season pass
+- **State:** React Context (4 providers + 2 extracted sub-contexts) + useReducer for game state + AsyncStorage persistence + Firestore sync when configured
+- **Testing:** Jest + ts-jest, 12 test files with 274 tests (164 new) covering engine, data, services, utilities
+- **Monetization:** IAP via react-native-iap (15 core + 3 mega bundle products incl. VIP weekly subscription), rewarded + interstitial ads via AdMob (mock fallback), contextual offers wired to all 6 triggers with analytics, dynamic pricing by segment, regional pricing, season pass, cosmetic store
 - **Audio:** `expo-audio` (SDK 54 compatible, `createAudioPlayer` for SFX/music) with `expo-av` fallback
 - **Video:** `expo-video` (SDK 54 compatible, `useVideoPlayer` + `VideoView`) with error boundary fallback
 - **Navigation:** React Navigation (bottom tabs + nested stacks) with progressive tab unlocking
@@ -23,7 +24,7 @@ npx tsc --noEmit       # Type-check (no output files)
 npm install --legacy-peer-deps  # Install deps (legacy flag required for peer dep conflicts)
 ```
 
-There are no test scripts configured yet. There is no linter script in package.json.
+Test scripts: `npm test` (Jest), `npm run test:watch`, `npm run test:coverage`. There is no linter script in package.json.
 
 ## Architecture
 
@@ -32,9 +33,10 @@ There are no test scripts configured yet. There is no linter script in package.j
 ```
 src/
 ├── engine/           # Core game logic (board generation, gravity physics, solver)
-├── hooks/            # useGame (game reducer), useStorage (AsyncStorage)
-├── services/         # Singletons: sound, haptics, analytics, notifications, iap, ads, firestore, eventManager, playerSegmentation, crashReporting, receiptValidation, funnelTracker
-├── contexts/         # AuthContext, EconomyContext, PlayerContext, SettingsContext
+├── hooks/            # useGame (game reducer), useStorage (AsyncStorage), useRewardWiring (extracted), useCeremonyQueue (extracted), useExperiment (A/B testing)
+├── services/         # Singletons: sound, haptics, analytics, notifications, notificationTriggers, iap, ads, firestore, eventManager, playerSegmentation, crashReporting, receiptValidation, funnelTracker, experiments
+├── navigation/       # MainNavigator.tsx (extracted tab/stack definitions)
+├── contexts/         # AuthContext, EconomyContext, PlayerContext, SettingsContext + PlayerProgressContext, PlayerSocialContext (extracted)
 ├── components/       # UI components organized by domain
 │   ├── Grid.tsx, LetterCell.tsx, WordBank.tsx  # Core gameplay
 │   ├── GameHeader.tsx, PuzzleComplete.tsx      # Game UI + post-puzzle celebrations
@@ -50,6 +52,9 @@ src/
 │   ├── MysteryWheel.tsx                         # Gacha spin wheel with weighted segments (surfaced on HomeScreen + post-puzzle)
 │   ├── ContextualOffer.tsx                      # Monetization pressure point modals (6 offer types, wired to triggers)
 │   ├── MockAdModal.tsx                          # Development mock ad experience (5s countdown, claim reward)
+│   ├── ReferralCard.tsx                         # Referral invite card with code copy, share, milestone progress
+│   ├── ClubGoalCard.tsx                         # Club cooperative goal progress with tier thresholds, contributors
+│   ├── ClubLeaderboard.tsx                      # Weekly club rankings with tier badges, reward preview
 │   ├── ChallengeCard.tsx                        # Friend challenge display with accept/result comparison
 │   ├── ReplayViewer.tsx                         # Animated solve sequence step-through with share
 │   ├── SessionEndReminder.tsx                   # Auto-dismissing daily/streak reminder
@@ -60,12 +65,12 @@ src/
 │   ├── economy/      # CurrencyDisplay, ShopItem
 │   ├── modes/        # TimerDisplay, MoveCounter
 │   └── events/       # EventBanner, EventProgress
-├── screens/          # 13 screens (Home, Game, Modes, Collections, Library, Profile, Settings, Shop, Club, Leaderboard, Event, Onboarding, Mastery)
+├── screens/          # 14 screens (Home, Game, Modes, Collections, Library, Profile, Settings, Shop, CosmeticStore, Club, Leaderboard, Event, Onboarding, Mastery)
 ├── config/           # firebase.ts
 ├── data/             # Static game data
 │   ├── chapters.ts, collections.ts, cosmetics.ts, events.ts, missions.ts  # Original data
 │   ├── tutorialBoards.ts    # 3 progressive tutorial boards (A/B/C) + guided steps
-│   ├── achievements.ts      # 21 achievements (15 standard + 6 hidden) with bronze/silver/gold tiers
+│   ├── achievements.ts      # 20 achievements (14 standard + 6 hidden) with bronze/silver/gold tiers
 │   ├── weeklyGoals.ts       # 24 weekly goal templates + generation logic
 │   ├── masteryRewards.ts    # 30-tier season pass reward definitions
 │   ├── sideObjectives.ts    # Par challenges, no-hint streaks, speed runs, theme master
@@ -73,7 +78,9 @@ src/
 │   ├── eventLayers.ts       # Event layering: mini events, win streaks, partner events, weekend blitz
 │   ├── dailyDeals.ts        # 5 rotating daily deals (deterministic by date)
 │   ├── rotatingShop.ts      # 12 cosmetic items on 48-hour rotation windows
-│   ├── shopProducts.ts      # 14 IAP product definitions with rewards, categories, store IDs
+│   ├── shopProducts.ts      # 15 IAP product definitions with rewards, categories, store IDs (incl. VIP weekly subscription)
+│   ├── referralSystem.ts    # Referral code generation, rewards, milestones (3/5/10 referrals)
+│   ├── clubEvents.ts        # 8 club cooperative goal templates with tier rewards
 │   ├── coinShop.ts          # 10 coin-purchasable consumables (hints, boosters, XP boosts, theme rentals)
 │   ├── loginCalendar.ts     # 7-day escalating login calendar rewards
 │   ├── dailyRewardTimers.ts # 4 timed free rewards (coins/hints/spins/chest) on 4-12h intervals
@@ -98,10 +105,16 @@ src/
 
 | File | Purpose |
 |------|---------|
-| `App.tsx` | Entry point wrapped in `ErrorBoundary`. Progressive tab unlocking, nested stack navigators, provider wrappers, full reward/progression/mission wiring, ceremony queue processing (timer refs with proper cleanup), welcome-back modal, feature unlock detection, achievement/weekly goal progress, breather level support, personalized recommendations |
-| `src/types.ts` | ALL type definitions including `FeatureUnlockId`, `WeeklyGoal`, `WeeklyGoalsState`, `CeremonyItem`. Edit here when adding new data structures |
+| `App.tsx` | Entry point (~1,648 lines, decomposed from 2,024). Wrapped in `ErrorBoundary`. Progressive tab unlocking, nested stack navigators, provider wrappers. Reward wiring delegated to `useRewardWiring` hook, ceremony queue to `useCeremonyQueue` hook. Still contains: welcome-back modal, GameScreenWrapper, navigation definitions, feature unlock detection |
+| `src/types.ts` | ALL type definitions including `FeatureUnlockId`, `WeeklyGoal`, `WeeklyGoalsState`, `CeremonyItem`, `ReferralState`, `ReferralMilestone`. Edit here when adding new data structures |
 | `src/constants.ts` | Colors, `GRADIENTS`, `SHADOWS`, difficulty configs, mode configs, scoring, economy, `FEATURE_UNLOCK_SCHEDULE`, `getBreatherConfig()`, `STREAK` milestones, `MILESTONE_DECORATIONS`, `STAR_MILESTONES`, `PERFECT_MILESTONES`, `COLLECTION`, `CLUB`, `COMEBACK`, `ANIM` timing |
-| `src/contexts/PlayerContext.tsx` | Master player data hub: progress, collections (with atlas word mastery + wildcard ceremony), missions, streaks, cosmetics, library (wing completion ceremony), modes, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `wordsFoundTotal`, `modesPlayedThisWeek`, gifting, `mysteryWheel` state, `winStreak` state, `modeLevels` (per-mode level progression). Methods: `unlockFeature`, `checkFeatureUnlocks`, `markTooltipShown`, `initWeeklyGoals`, `updateWeeklyGoalProgress`, `queueCeremony`, `popCeremony`, `recordFailure`, `needsBreather`, `checkAchievements`, `sendHintGift`, `sendTileGift`, `updateMysteryWheel`, `awardFreeSpin`, `updateWinStreak`, `advanceModeLevel`, `getModeLevel`. Ceremonies are queued directly in `setData` callbacks for streak milestones, win streak milestones, word mastery gold, wildcard earned, and wing completion |
+| `src/contexts/PlayerContext.tsx` | Master player data hub (~1,346 lines, decomposed from 1,797). Progress methods delegated to `PlayerProgressContext`, social methods to `PlayerSocialContext`. Core state: progress, collections, missions, streaks, cosmetics, library, modes, comebacks, `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `mysteryWheel`, `winStreak`, `modeLevels`, `referralCode`, `referralCount`, `clubGoal`. API surface unchanged — `usePlayer()` still returns all methods |
+| `src/contexts/PlayerProgressContext.tsx` | Extracted from PlayerContext: 22 progress methods using factory function pattern. Achievement checking, weekly goals, missions, streaks, ceremonies, difficulty pacing, feature unlocks, tooltips, comebacks, performance metrics |
+| `src/contexts/PlayerSocialContext.tsx` | Extracted from PlayerContext: 4 social methods — `sendHintGift`, `sendTileGift`, `sendChallenge`, `respondToChallenge`. Uses factory function with Firestore delivery |
+| `src/hooks/useRewardWiring.ts` | Extracted from App.tsx: ~503-line hook containing ALL post-puzzle reward logic (handleComplete). Coin/gem awards, rare tile drops, atlas collection, mission/weekly goal progress, level-up detection, difficulty transitions, feature unlocks, achievement checks, mode unlocks, milestone ceremonies, mystery wheel, win streak, share text |
+| `src/hooks/useCeremonyQueue.ts` | Extracted from App.tsx: ceremony queue processing with sequential modal display, analytics tracking, 300ms delays between ceremonies, cleanup on unmount. Returns `{ activeCeremony, handleDismissCeremony }` |
+| `src/hooks/useExperiment.ts` | React hook for A/B testing: `useExperiment(experimentId)` returns memoized `{ variant, config, trackExposure }`. Uses AuthContext for deterministic user assignment |
+| `src/navigation/MainNavigator.tsx` | Extracted from App.tsx: tab navigator, stack navigator definitions, TabIcon component, screen registrations |
 | `src/hooks/useGame.ts` | Core game state reducer - handles 15+ game actions including boosters and `GRANT_BOOSTER`. Timer tick for timePressure mode runs here. Computed values (`currentWord`, `remainingWords`, `isValidWord`) cached with `useMemo`. `isDeadEnd` computed via deferred `useEffect` (not in render path) — mode-aware: shrinkingBoard uses `isDeadEndShrinkingBoard` with `wordsUntilShrink`, hints use `getHintShrinkingBoard` for shrink-aware ordering |
 | `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG, freeform path placement (8-directional), and heuristic-first solvability validation (avoids exponential solver calls). Mode-aware: shrinkingBoard adds +2 buffer (1 filler ring), enforces min 3 words and 5×5 grid, places words in interior, uses shrink-aware solver for validation. `generateBoard` accepts optional `mode` parameter — callers MUST pass mode for shrinkingBoard/gravityFlip/noGravity to get correct validation |
 | `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
@@ -131,8 +144,10 @@ src/
 | `src/data/mysteryWheel.ts` | Mystery Wheel system: 10 weighted segments (common→epic), pity system (guaranteed rare+ within 25 spins), mystery box secondary rewards, free spin every 3 puzzles, `SPIN_COST_GEMS=10`, `SPIN_BUNDLE_COST_GEMS=40` for 5-pack. Functions: `spinWheel()`, `openMysteryBox()`, `checkFreeSpin()` |
 | `src/data/eventLayers.ts` | Event layering system enabling multiple simultaneous events: 5 mini event templates (24-48hr overlays), Royal Match-style win streak with 7 tiers (2→20 wins), weekend blitz detection, partner event scaffold (Firestore-ready). Functions: `getMiniEventForDate()`, `isWeekendBlitz()`, `getActiveEventLayers()`, `updateWinStreak()` |
 | `src/services/notifications.ts` | Local + remote push notification service using `expo-notifications`. 9 categories with template interpolation. Permission handling with graceful denial. Android notification channel. Convenience schedulers: `scheduleStreakReminder()` (8 PM), `scheduleDailyChallenge()` (9 AM), `scheduleComebackReminder()` (3 days). Segment-aware scheduling. Remote push: `registerForRemotePush()` gets Expo + device tokens, `sendTokenToServer()` syncs to Firestore, `handleRemoteNotification()` routes incoming payloads |
+| `src/services/notificationTriggers.ts` | Gameplay-event trigger wiring for notifications. 6 trigger functions: `triggerStreakReminder` (wired in App.tsx after streak update), `triggerEnergyFullNotification` (wired in PlayerContext when energy spent), `triggerEventNotification` (wired at app open), `triggerDailyChallengeReminder` (wired at app open), `triggerWinStreakMilestoneNotification` (wired in handleComplete at milestones 3/5/7/10/15/20), `triggerComebackReminder` (wired in AppState handler on background). All scheduling is idempotent (cancels previous before scheduling new) |
+| `src/services/experiments.ts` | A/B testing experiment engine with 6 pre-configured experiments: `onboarding_flow` (4-phase vs 3-phase), `energy_cap` (25/30/35), `hint_rescue_price` (30/50/75 coins), `first_purchase_offer` ($0.99/$1.99/none), `daily_reward_generosity` (1x/1.5x/2x), `mystery_wheel_free_frequency` (5/8/12 puzzles). Deterministic weighted multi-variant assignment via hash. Functions: `getExperiment()`, `getAssignedVariant()`, `getExperimentConfig()`, `isInExperiment()`, `trackExperimentExposure()`. Backward-compatible with existing `analytics.getVariant()` |
 | `src/services/analytics.ts` | Dual-mode analytics: Firebase Analytics when configured, AsyncStorage fallback otherwise. 32+ typed events including `iap_revenue`, `ad_revenue`, `retention_check`, `funnel_step`, `cohort_event`. Methods: `trackRevenue()`, `trackAdRevenue()`, `trackRetention()`, `trackFunnel()`, `trackCohort()`, `getUserProperties()`. User properties, 7-day local event retention, A/B testing via deterministic variant assignment |
-| `src/services/iap.ts` | IAP service via `react-native-iap`. 14 products across bundles/consumables/currency/premium. Mock mode for dev/Expo Go. NativeModules check on init prevents EventEmitter crash when native module isn't linked. Receipt storage, restore purchases, parental control integration. Wire to ShopScreen for real purchase flow |
+| `src/services/iap.ts` | IAP service via `react-native-iap`. 15 products across bundles/consumables/currency/premium/subscription. Mock mode for dev/Expo Go. NativeModules check on init prevents EventEmitter crash when native module isn't linked. Receipt storage, restore purchases, parental control integration. Wire to ShopScreen for real purchase flow |
 | `src/services/ads.ts` | Rewarded + interstitial ads service with AdMob integration + mock fallback. 5 reward types (hint, undo, spin, coins, double). Rewarded: daily cap 10, cooldown 30s. Interstitial: daily cap 5, 90s interval. `showInterstitialAd()`, `canShowInterstitial()`, `interstitialsRemaining()`. Wired into GameScreen (post-fail, post-complete) and ShopScreen |
 | `src/services/firestore.ts` | Firestore social layer: leaderboards (daily/weekly/all-time), friend system (codes, requests), real gifting, player profile sync. Graceful offline fallback — all methods return defaults when Firebase unavailable |
 | `src/services/eventManager.ts` | Live event coordination: active event detection, multiplier calculation (coins/xp/rareTile), progress tracking, reward claiming. Wired into handleComplete for reward multipliers. Persisted via PlayerContext.eventProgress |
@@ -147,7 +162,13 @@ src/
 | `src/data/dynamicPricing.ts` | Segment-based offer personalization. `getDynamicOffers(spending, engagement, playerLevel)` returns 1-3 offers with discounts/badges/expiry. Strategies: non-payer ($0.99 entry), minnow ($1.99-$2.99), dolphin ($4.99-$9.99), whale ($14.99-$29.99 mega bundles), lapsed (70% off win-back). 3 `MEGA_BUNDLES` at $14.99/$19.99/$29.99 |
 | `src/engine/difficultyAdjuster.ts` | Invisible adaptive difficulty. Analyzes rolling 20-puzzle performance. Makes easier when struggling (avgStars < 1.5), harder when cruising (consecutiveThreeStars > 5). Adjustments capped at ±1 step from base config |
 | `src/engine/puzzleGenerator.ts` | Higher-level puzzle generation: themed puzzle sets via word categories, procedural chapter generation beyond level 600 with difficulty scaling |
-| `src/data/shopProducts.ts` | 14 IAP product definitions with store IDs, rewards, categories. Helpers: `getProductById()`, `getProductRewards()`, `getProductsByCategory()` |
+| `src/data/shopProducts.ts` | 15 IAP product definitions with store IDs, rewards, categories (including `vip_weekly` subscription). Helpers: `getProductById()`, `getProductRewards()`, `getProductsByCategory()` |
+| `src/data/referralSystem.ts` | Referral code generation (6-char alphanumeric from user ID hash), reward definitions (referrer: 500 coins + 10 gems, referred: 200 coins + 5 gems + 3 hints), milestone rewards at 3/5/10 referrals (coins, exclusive frame, exclusive title). Functions: `generateReferralCode()`, `getReferralRewards()`, `getClaimableMilestones()`, `getNextMilestone()` |
+| `src/data/clubEvents.ts` | 8 club cooperative goal templates: Word Hunt, Star Chasers, Perfect Together, Chain Masters, Puzzle Marathon, Score Surge, No-Hint Heroes, Combo Frenzy. Each with bronze/silver/gold reward tiers scaled by club tier + member count. Functions: `generateClubGoal()`, `getClubGoalProgress()`, `getReachedTiers()`, `getClubGoalTimeRemaining()`. Club leaderboard types and rank-based reward definitions |
+| `src/screens/CosmeticStoreScreen.tsx` | 886-line cosmetic store with 4 tabs (Themes/Frames/Titles/Decorations). 2-column scrollable grid per tab. Item cards show rarity badge, preview, price/owned/equipped status. Detail modal with buy/equip flow. Purchase checks `canAfford`, spends via economy context, unlocks via player context. Navigable from HomeStack |
+| `src/components/ReferralCard.tsx` | HomeScreen-ready glassmorphism card showing referral code with copy button (expo-clipboard), Share API integration, progress bar toward next milestone, milestone dots row with press-to-claim |
+| `src/components/ClubGoalCard.tsx` | Club goal progress card: gradient surface, progress bar with tier threshold markers, live countdown timer, top 3 contributors, personal contribution bar |
+| `src/components/ClubLeaderboard.tsx` | Weekly club leaderboard: ranked list with trophy/medal emojis, current club highlighted with accent + "YOU" badge, tier badges, reward preview section |
 | `src/data/wordCategories.ts` | 15 themed word categories (nature, food, science, sports, music, etc.) with 30-50 words each for themed puzzle generation |
 | `FIRESTORE_SOCIAL_GUIDE.md` | Implementation guide for real-time social features: Firestore schemas, security rules, Cloud Functions, friend system, gift delivery, club chat, leaderboards, partner events, community goals. Includes 4-phase migration plan and cost estimates |
 | `GAME_DESIGN_DOCUMENT.md` | Full 48KB GDD with 17 sections - the source of truth for features |
@@ -156,7 +177,7 @@ src/
 
 - **Game state:** `useGame` hook with `useReducer` in `GameScreen`. Actions: SELECT_CELL, CLEAR_SELECTION, SUBMIT_WORD, USE_HINT, UNDO_MOVE, NEW_GAME, RESET_COMBO, TICK_TIMER, SHUFFLE_FILLER, FREEZE_COLUMN, PREVIEW_MOVE, USE_BOOSTER, GRANT_HINT, GRANT_UNDO, GRANT_BOOSTER. State includes `frozenColumns`, `previewGrid`, `boosterCounts`, `cascadeMultiplier`, `perfectRun`, `maxCombo`, `history` (for undo — stores `{ grid, words, wordsUntilShrink?, shrinkCount? }`, undo also removes last `solveSequence` entry), `solveSequence` (for replay recording).
 - **Player data:** `PlayerContext` - progress, collections (atlas/tiles/stamps), missions, streaks, cosmetics, library wings, mode stats, achievements, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `mysteryWheel`, `winStreak`, `puzzleEnergy` (session scarcity), `performanceMetrics` (adaptive difficulty), `segments` (player segmentation), `eventProgress` (live event tracking), `friendChallenges` (sent/received challenges), `modeLevels` (per-mode independent level progression, `Record<string, number>`). Methods include `useEnergy`, `refillEnergy`, `recomputeSegments`, `updateEventProgress`, `sendChallenge`, `respondToChallenge`, `recordPerformanceMetrics`, `advanceModeLevel`, `getModeLevel`. Persisted to AsyncStorage + Firestore sync when configured.
-- **Economy:** `EconomyContext` - coins, gems, hintTokens, undoTokens, eventStars, libraryPoints, `isAdFree`, `isPremiumPass`, `starterPackAvailable`, `dailyValuePackExpiry`. Methods: add/spend/check + `processPurchase(productId)` for IAP fulfillment + `processAdReward(rewardType)` for ad rewards. Persisted to AsyncStorage.
+- **Economy:** `EconomyContext` - coins, gems, hintTokens, undoTokens, eventStars, libraryPoints, `isAdFree`, `isPremiumPass`, `isVip` (VIP subscription), `starterPackAvailable`, `dailyValuePackExpiry`, `vipExpiresAt`. Methods: add/spend/check + `processPurchase(productId)` for IAP fulfillment + `processAdReward(rewardType)` for ad rewards + `claimVipDailyRewards()` for VIP daily gem/hint drip. VIP subscribers get: ad-free, 50 daily gems, 3 daily hints, exclusive frame. Persisted to AsyncStorage.
 - **Settings:** `SettingsContext` - volume (SFX + music), haptics, notifications, theme (5 themes), **plus**: parental controls (`spendingLimitEnabled`, `monthlySpendingLimit`, `requirePurchasePin`, `purchasePin`, `monthlySpent`). Persisted to AsyncStorage.
 - **Auth:** `AuthContext` - Firebase anonymous auth with loading state.
 
@@ -165,7 +186,7 @@ src/
 ```
 App.tsx (RootStack)
 ├── MainTabs (Bottom Tab Navigator) — tabs progressively unlocked
-│   ├── Home 🏠 (HomeStack) → HomeMain, Shop, Settings, Game        [always visible]
+│   ├── Home 🏠 (HomeStack) → HomeMain, Shop, CosmeticStore, Settings, Game  [always visible]
 │   ├── Play 🎮 (PlayStack) → Modes, Game, Event, Leaderboard       [always visible]
 │   ├── Collections 💎 (CollectionsStack) → CollectionsMain          [unlocks at level 5]
 │   ├── Library 📚 (LibraryStack) → LibraryMain                     [unlocks at level 8]
@@ -260,11 +281,11 @@ Sound manager calls are wired at every interaction point in `GameScreen.tsx` and
 - Hint/undo → `hintUsed`/`undoUsed` sound
 - Boosters → `buttonPress` sound
 
-**Audio is synthesized at runtime** — `SoundManager` (`src/services/sound.ts`) generates tones and chords programmatically (sine waves via WAV data URIs). Uses `expo-audio` (`createAudioPlayer`) with `expo-av` as fallback, both lazy-loaded via `require()` to avoid deprecation warnings. No `.mp3`/`.wav` asset files needed. Sound effects use `ToneSpec` definitions (frequency arrays + duration), background music uses `ProgressionSpec` (chord progressions looped). All sounds are functional — replace with real assets by swapping `createAudioPlayer(require('./path.mp3'))` calls.
+**Audio is synthesized at runtime with caching** — `SoundManager` (`src/services/sound.ts`) generates tones and chords programmatically (sine waves via WAV data URIs). DSP and WAV encoding are separated: `synthesizeToneSamples()` returns raw `Int16Array` buffers cached in `synthesisCache: Map<string, Int16Array>`, and `createWavDataUri()` wraps them in WAV headers. `preWarmAll()` synthesizes all sounds + music tracks asynchronously on init (yields to event loop between each to avoid blocking). `playSound()` never triggers synthesis — if a sound isn't cached, it skips silently. Uses `expo-audio` (`createAudioPlayer`) with `expo-av` as fallback, both lazy-loaded via `require()`. Sound effects use `ToneSpec` definitions (frequency arrays + ADSR + harmonics + reverb), background music uses `ProgressionSpec` (chord progressions with chorus detuning). Replace with real assets by swapping `createAudioPlayer(require('./path.mp3'))` calls.
 
 ## Reward & Progression Wiring
 
-`App.tsx` `GameScreenWrapper.handleComplete()` handles all post-puzzle rewards:
+`useRewardWiring` hook (extracted from App.tsx, `src/hooks/useRewardWiring.ts`, 503 lines) provides `handleComplete()` for all post-puzzle rewards:
 - Awards coins by difficulty (easy: 50, medium: 100, hard: 200, expert: 400) + star bonuses
 - Awards gems on perfect clear
 - Awards library points (stars * 5)
@@ -310,7 +331,7 @@ Ceremonies (modals) are queued via `player.queueCeremony()` and processed sequen
 Each ceremony renders with animations, rewards display, and dismiss/action buttons. When one is dismissed, the next in the queue fires after 300ms.
 
 **Ceremony trigger locations:**
-- `App.tsx handleComplete()`: level_up, difficulty_transition, feature_unlock, achievement, mode_unlock, collection_complete, star_milestone, perfect_milestone, decoration_unlock, first_rare_tile, first_mode_clear
+- `useRewardWiring.handleComplete()` (extracted from App.tsx): level_up, difficulty_transition, feature_unlock, achievement, mode_unlock, collection_complete, star_milestone, perfect_milestone, decoration_unlock, first_rare_tile, first_mode_clear
 - `PlayerContext.updateStreak()`: streak_milestone
 - `PlayerContext.updateWinStreak()`: win_streak_milestone
 - `PlayerContext.collectAtlasWord()`: word_mastery_gold
@@ -395,7 +416,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - Core gameplay engine (board gen, gravity, solver, word selection)
 - All 10 game mode support with correct mode IDs and auto-unlock
 - Progressive tab navigation: 5 tabs with Collections (level 5) and Library (level 8) gated by `featuresUnlocked`
-- 13 screens (Home, Game, Modes, Collections, Library, Profile, Settings, Shop, Club, Leaderboard, Event, Onboarding, Mastery) — all fully functional
+- 14 screens (Home, Game, Modes, Collections, Library, Profile, Settings, Shop, CosmeticStore, Club, Leaderboard, Event, Onboarding, Mastery) — all fully functional
 - 4 context providers with AsyncStorage persistence
 - Synthesized audio engine with runtime tone generation (SFX + looping background music)
 - Sound manager wired at all interaction points (haptics fully functional)
@@ -431,7 +452,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Difficulty transition ceremony**: `DifficultyTransitionCeremony` with from→to tier badges when crossing easy→medium→hard→expert
 - **Mode unlock ceremonies**: Animated modal when modes unlock via level progression
 - **Feature unlock ceremonies**: Full-screen modal when tabs/features unlock
-- **Achievement system**: 21 achievements (15 standard + 6 hidden) × 3 tiers (bronze/silver/gold) with ceremony modals, profile grid display with colored tier dots. Hidden achievements (`hidden: true`): speed_solver, no_hint_master, combo_king, night_owl, collector_supreme, marathon_player — discoverable through play
+- **Achievement system**: 20 achievements (14 standard + 6 hidden) × 3 tiers (bronze/silver/gold) with ceremony modals, profile grid display with colored tier dots. Hidden achievements (`hidden: true`): speed_solver, no_hint_master, combo_king, night_owl, collector_supreme, marathon_player — discoverable through play
 - **Weekly goals**: 3 goals per week from 24 templates (7 tracking keys), progress tracking, reward tiers, panel on HomeScreen
 - **Streak milestone ceremonies**: Fires at 7/14/30/60/100 day milestones with rewards from `STREAK.milestoneRewards`
 - **Collection completion ceremonies**: Modal when Atlas page or rare tile set completed
@@ -490,24 +511,37 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Solve replay**: Move recording in useGame (solveSequence with grid snapshots). ReplayViewer component exists with animated playback, play/pause/step controls. Emoji grid sharing via replayGenerator. Not currently surfaced on PuzzleComplete (buttons removed for cleaner victory flow); ReplayViewer could be surfaced from Profile/history if desired
 - **Audio asset infrastructure**: Dual-mode sound system — uses `expo-audio` (`createAudioPlayer`) with `expo-av` fallback, both lazy-loaded via `require()`. Loads real .mp3 files from assets/audio/ when present, falls back to synthesized WAV data URIs. LOCAL_AUDIO registry in localAssets.ts
 - **Smooth difficulty curve**: Per-level ramp across 12 phases (not a staircase). Every 5th level is a breather. Breather config drops difficulty ~4 levels back
+- **VIP weekly subscription**: $4.99/week subscription product in `shopProducts.ts`. Benefits: ad-free, 50 daily gems, 3 daily hints, exclusive VIP frame, 2x XP. Economy integration with `isVipSubscriber`, `vipExpiresAt`, `claimVipDailyRewards()`. Prominent VIP card at top of ShopScreen with ACTIVE/SUBSCRIBE states and daily claim button
+- **Cosmetic store**: Full browse/purchase UI in `CosmeticStoreScreen.tsx` (886 lines). 4 tabs for themes/frames/titles/decorations. Item cards with rarity badges, previews, price/status. Detail modal with buy/equip flow. Purchases deduct from economy, unlocks tracked in player context. Navigable from HomeStack
+- **Referral system**: 6-char referral codes generated from user ID hash. Referrer rewards: 500 coins + 10 gems per referral. Referred rewards: 200 coins + 5 gems + 3 hints. Milestones: 3 referrals (1000 coins), 5 (exclusive frame), 10 (exclusive title). `ReferralCard.tsx` glassmorphism component for HomeScreen with code copy, Share API, milestone progress
+- **Club cooperative events**: 8 goal templates (Club Word Hunt, Star Chasers, Perfect Together, Chain Masters, etc.) with bronze/silver/gold reward tiers. Goals scaled by club tier + member count. `ClubGoalCard.tsx` with progress bar, tier markers, live countdown, top 3 contributors. `ClubLeaderboard.tsx` with weekly rankings. ClubScreen enhanced with goal section, contribution stats, rankings
+- **A/B testing experiments**: 6 pre-configured experiments in `experiments.ts`: onboarding flow, energy cap, hint rescue price, first purchase offer, daily reward generosity, mystery wheel frequency. Weighted multi-variant assignment with deterministic hash. `useExperiment()` hook for React components. Exposure tracking via analytics
+- **Push notification triggers (wired)**: 6 gameplay-event triggers in `notificationTriggers.ts`: streak reminder (8 PM after streak update), energy full (scheduled on energy spend), event ending (on app open), daily challenge (9 AM on app open), win streak milestone (immediate at 3/5/7/10/15/20), comeback reminder (3 days after app background). All idempotent scheduling
+- **Contextual offer analytics**: All 6 offer types fire `offer_shown`, `offer_accepted`, `offer_dismissed` analytics events with offerType, level, mode, difficulty properties. `hint_rescue` also checks persistent `player.failCountByLevel` in addition to session fails. `life_refill` triggers when lives=0 on failure. `streak_shield` triggers during gameplay when streak >= 3 and approaching daily reset
+- **Audio caching**: DSP separated from WAV encoding. Raw `Int16Array` sample buffers cached in `synthesisCache` Map. Async `preWarmAll()` synthesizes all sounds + music in background on init, yielding between each. `playSound()` never triggers synthesis — skips silently if uncached
+- **God file decomposition**: App.tsx reduced from 2,024 to 1,648 lines. PlayerContext from 1,797 to 1,346 lines. 5 extracted modules: `useRewardWiring` (503 lines), `useCeremonyQueue` (88 lines), `MainNavigator` (198 lines), `PlayerProgressContext` (597 lines), `PlayerSocialContext` (179 lines). All using factory function pattern to preserve `usePlayer()` API surface
+- **Test suite**: 12 test files with 274 tests (164 new). Coverage: data layer (achievements, weekly goals, mystery wheel, shop products, event layers), engine (difficulty adjuster, board generator, gravity, solver), services (analytics), utilities (share generator), hooks (useGame). Run via `npm test`
 
 ### Needs External Setup
 - **Firebase credentials** — set `EXPO_PUBLIC_FIREBASE_*` env vars to enable Analytics, Firestore social, leaderboards. Without them, all services gracefully fall back to local-only mode
 - **Firebase Cloud Functions URL** — set `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` for server-side receipt validation. Without it, receipts are validated client-side only
 - **Sentry DSN** — set `EXPO_PUBLIC_SENTRY_DSN` for production crash reporting. Without it, crash reporter uses console-only mode
 - **AdMob ad unit IDs** — set `EXPO_PUBLIC_ADMOB_REWARDED_ID` env var. Without it, MockAdModal (simulated 5s countdown) is used for rewarded, instant-resolve for interstitials
-- **App Store / Play Store IAP products** — register 17 product IDs (14 core + 3 mega bundles, prefixed `wordfall_`) in store consoles. Without store config, IAP runs in mock mode
+- **App Store / Play Store IAP products** — register 18 product IDs (15 core incl. VIP weekly subscription + 3 mega bundles, prefixed `wordfall_`) in store consoles. Without store config, IAP runs in mock mode
 - **EAS project ID** — run `eas init` to generate a real project ID (currently placeholder `wordfall-production` in app.json)
 - **Professional audio assets** — place .mp3 files in `assets/audio/` per the README there. Synthesized tones remain as fallback
 
 ### Scaffolded / Needs Work
-- Image assets — app icon and splash screen are placeholder PNGs; HomeScreen JPEGs renamed as .png (no alpha channel)
+- Image assets — app icon and splash screen are placeholder PNGs; HomeScreen JPEGs renamed as .png (no alpha channel). 44MB asset bundle needs optimization (compress to ~15MB via WebP, lazy-load video)
 - Firebase Cloud Functions (server-side scheduled tasks) — see `FIRESTORE_SOCIAL_GUIDE.md`
-- Club chat real-time messaging + auto-kick enforcement (club creation exists in Firestore service, chat needs Cloud Functions)
+- Club chat real-time messaging + auto-kick enforcement (club goal/leaderboard now implemented, but chat needs Cloud Functions)
 - Partner events — cooperative 2-player events. Schema defined in `FIRESTORE_SOCIAL_GUIDE.md`
-- End-to-end testing
-- Deep linking
+- End-to-end testing (unit tests at 12 files/274 tests, but no E2E)
+- Deep linking (needed for referral system to work cross-device)
 - Smart Solve Replay as animated GIF/video (text + emoji replay is implemented; video generation is not)
+- Professional audio assets — synthesized tones are functional but artificial. Place .mp3 files in `assets/audio/` for premium feel
+- Ad mediation SDK — currently AdMob only (or mock). No ironSource/MAX mediation
+- Server-side receipt validation endpoint — client-side fraud detection exists, but real server validation needs Firebase Cloud Function deployment
 
 ## Common Patterns
 
@@ -557,6 +591,22 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 1. Add entry to `WEEKLY_GOAL_TEMPLATES` in `src/data/weeklyGoals.ts` with `trackingKey`, `targetBase`, `description`, `icon`
 2. Ensure `trackingKey` is updated via `player.updateWeeklyGoalProgress(key, value)` in `handleComplete`
 
+### Adding an A/B test experiment
+1. Add experiment to `EXPERIMENTS` array in `src/services/experiments.ts` with `id`, `name`, `variants` (each with weight + config)
+2. In a React component: `const { variant, config, trackExposure } = useExperiment('my_experiment')`
+3. Call `trackExposure()` when the variant is actually shown to the user
+4. Read config values: `const price = config.price ?? 50`
+
+### Adding a referral milestone
+1. Add entry to `REFERRAL_MILESTONES` in `src/data/referralSystem.ts` with `count`, `label`, `icon`, `rewards`
+2. Milestones auto-surface in `ReferralCard.tsx` via `getClaimableMilestones()`
+3. Claim handled by `player.claimReferralMilestone(count)` in PlayerContext
+
+### Adding a club cooperative goal
+1. Add template to `CLUB_GOAL_TEMPLATES` in `src/data/clubEvents.ts` with `id`, `name`, `description`, `icon`, `trackingKey`, `baseTarget`, `duration`, `rewardTiers`
+2. Goal auto-selects via `generateClubGoal()` deterministic rotation
+3. Progress tracked via `getClubGoalProgress(contributions)`
+
 ### Adding sound effects
 - **Synthesized (current approach):** Add a `ToneSpec` entry to `SOUND_DEFS` in `src/services/sound.ts` with frequency array + duration, then add the key to the `SoundName` type
 - **Asset-based (upgrade path):** Replace the WAV-generation logic in `SoundManager.init()` with `createAudioPlayer(require('./path.mp3'))` — all callsites use the same `SoundName` keys and will work immediately
@@ -584,7 +634,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Per-mode level progression**: Each non-classic mode has its own independent level starting at 1, stored in `player.modeLevels: Record<string, number>`. When a player wins in a mode, `advanceModeLevel(mode)` increments that mode's level. `handleSelectMode` uses `getModeLevel(mode)` to get the config via `getLevelConfig(modeLevel)`, giving the same smooth 12-phase difficulty ramp as classic. A level-50 classic player trying shrinkingBoard for the first time starts at shrinkingBoard level 1. Classic mode still uses the global `player.currentLevel`. Daily/weekly have fixed difficulty configs
 - **Mode auto-unlock** happens in `App.tsx` `handleComplete` based on `MODE_CONFIGS[mode].unlockLevel`, with `ModeUnlockCeremony` modal. Key unlock levels per GDD: Cascade=10, Expert=30
 - **Progressive tab unlocking** is controlled by `FEATURE_UNLOCK_SCHEDULE` in constants.ts and `player.featuresUnlocked` array — Collections at level 5, Library at level 8
-- **Ceremony queue** (`player.pendingCeremonies`) is processed in App.tsx via a `useEffect` that watches `player.pendingCeremonies.length` — fires first ceremony immediately when new ones are queued (e.g. after `handleComplete`), chains subsequent ones via `handleDismissCeremony` with 300ms delay. 18 ceremony types fire one at a time. Some ceremonies are queued in `handleComplete` (App.tsx), others directly inside `PlayerContext` `setData()` callbacks
+- **Ceremony queue** (`player.pendingCeremonies`) is processed via `useCeremonyQueue` hook (extracted from App.tsx, `src/hooks/useCeremonyQueue.ts`). Watches `player.pendingCeremonies.length` — fires first ceremony immediately, chains subsequent ones via `handleDismissCeremony` with 300ms delay. 18 ceremony types fire one at a time. Returns `{ activeCeremony, handleDismissCeremony }`. Some ceremonies queued in `useRewardWiring.handleComplete()`, others in `PlayerContext` `setData()` callbacks
 - **Player stage** (`new`/`early`/`established`/`veteran`) is computed from `puzzlesSolved` (0-2/3-10/11-30/31+) and controls HomeScreen section visibility
 - **Breather levels** activate after 2+ consecutive failures via `player.needsBreather()` — `getBreatherConfig(level)` drops difficulty back ~4 levels. Additionally, every 5th level in the normal curve is inherently easier
 - **Tooltips** are tracked in `player.tooltipsShown: string[]` and persist across sessions — each screen checks its ID on mount. Also used for one-time event tracking (e.g. `'first_booster_used'`)
@@ -611,9 +661,10 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Win streak state** persisted in `PlayerContext.winStreak` — tracks `currentStreak`, `bestStreak`, `lastWinDate`, `rewardsClaimed`. Updated via `updateWinStreak(won)`. Milestone ceremonies at 3/5/7/10/15/20 queued directly in `setData`
 - **Event layering** enables multiple simultaneous events — main weekly event + mini events (every ~3 days) + weekend blitz (auto Sat/Sun) + win streak + partner events (Firestore scaffold). Data in `src/data/eventLayers.ts`
 - **Notification service** in `src/services/notifications.ts` is real (not scaffold). Uses `expo-notifications` with permission handling, Android channels, and segment-aware scheduling
-- **Contextual offers** are fully wired to triggers: hint_rescue in GameScreen after 2+ fails, close_finish when 1 word left + stuck/idle, post_puzzle when hints depleted, streak_shield on HomeScreen when streak at risk, booster_pack on hard/expert entry. Max 1 offer per level
+- **Contextual offers** are fully wired to ALL 6 triggers with analytics: hint_rescue (2+ session/persistent fails), life_refill (lives=0 on fail), streak_shield (streak >= 3 + approaching reset), close_finish (1 word left + stuck/idle 15s), post_puzzle (hints depleted on win), booster_pack (hard/expert first entry). Each fires `offer_shown`/`offer_accepted`/`offer_dismissed` analytics events. Max 1 offer per level
 - **Analytics** in `src/services/analytics.ts` is real (not no-op). Dual-mode: Firebase when configured, local AsyncStorage fallback. Includes A/B testing via `getVariant()` with deterministic hash
-- **IAP** in `src/services/iap.ts` uses `react-native-iap`. Mock mode auto-activates in dev/Expo Go. Init checks `NativeModules` for the IAP native module before importing to prevent EventEmitter crash. Parental controls enforced before every purchase via SettingsContext
+- **IAP** in `src/services/iap.ts` uses `react-native-iap`. 15 products (14 core + VIP weekly subscription). Mock mode auto-activates in dev/Expo Go. Init checks `NativeModules` for the IAP native module before importing to prevent EventEmitter crash. Parental controls enforced before every purchase via SettingsContext
+- **VIP subscription** handles `vip_weekly` purchase by setting `isVipSubscriber: true`, `vipExpiresAt` to 7 days from now, resetting daily claim. `isAdFree` includes VIP status. Daily rewards (50 gems + 3 hints) claimed via `claimVipDailyRewards()` with date-based tracking
 - **Ads** in `src/services/ads.ts` supports rewarded + interstitial. AdMob when available, otherwise MockAdModal (5s countdown) for rewarded and instant-resolve for interstitials. `isAdFree` flag in EconomyContext disables all ads. Interstitials have separate daily cap (5) and minimum interval (90s). `AD_CONFIG` in constants.ts has `MAX_INTERSTITIALS_PER_DAY` and `INTERSTITIAL_INTERVAL_MS`
 - **Firestore** in `src/services/firestore.ts` handles all social operations. Every method has try/catch returning defaults on failure. App works identically offline
 - **Puzzle energy** is a soft system (NOT a hard wall). Daily/endless/relax modes are always free. 3 bonus plays after zero energy. Energy display in UI when relevant
@@ -637,6 +688,12 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Regional pricing** uses `detectRegion()` via device locale → `NativeModules`. Falls back to 0.75x "Rest of World" multiplier. Store-side pricing ultimately controlled by App Store/Play Store, but this provides display price formatting
 - **Dynamic pricing** is the monetization personalization layer. `getDynamicOffers()` consulted when showing offers. Lapsed players see 70% off, at-risk see 50% off, whales see VIP mega bundles. Each offer has expiry (24-72h) and priority sorting
 - **Hidden achievements** have `hidden?: boolean` on `AchievementDef`. ProfileScreen should filter these from the visible grid until earned. Discovery through play is the engagement hook
+- **Referral system** — codes are deterministic 6-char alphanumeric from user ID hash (excludes I/O/0/1 for clarity). `applyReferralCode()` prevents self-referral and double-referral. State persisted in PlayerContext: `referralCode`, `referralCount`, `referredBy`, `referredPlayerIds`, `referralMilestonesClaimed`. ReferralCard uses `expo-clipboard` for copy
+- **Club cooperative events** — 8 goal templates with 3/7-day durations. Goals scale by club tier (bronze→diamond multiplier) and member count (10+ adds +50% etc.). Progress aggregated from per-member contributions. Top 3 contributors highlighted. Gold tier rewards include exclusive club frames. `ClubGoalCard` has live countdown timer updating every 60s
+- **A/B testing** — `experiments.ts` uses same `simpleHash` algorithm as `analytics.getVariant()` for consistent hash distribution. Experiments support `targetSegments` filter and `startDate`/`endDate` windows. `useExperiment()` hook memoizes variant assignment per userId. Exposure tracking is separate from assignment for proper intent-to-treat analysis
+- **Notification triggers are idempotent** — each trigger function cancels previous scheduled notifications before scheduling new ones. Streak reminder re-schedules on every streak update. Comeback reminder cancels on app foreground and re-schedules on background. Energy full notification calculated from current energy + regen rate
+- **Cosmetic store** reads data from 4 existing arrays (`COSMETIC_THEMES`, `PROFILE_FRAMES`, `PROFILE_TITLES`, `LIBRARY_DECORATIONS`) cross-referenced with `player.unlockedCosmetics` and equipped state. Items without `cost` show "Earn in-game" instead of buy button. Equipped items show accent glow border
+- **God file decomposition** preserves API surfaces — extracted contexts use factory function pattern (`createProgressMethods(setData, getData)` returns method object). These are called once inside PlayerProvider and spread into context value. Components calling `usePlayer()` see the identical interface. `useRewardWiring` takes player/economy as parameters and returns a stable `handleComplete` callback via `useCallback`
 
 ### Performance Architecture
 - **All tile animations use `useNativeDriver: true`** — animations run on the native thread, not blocking JS. Only animate `transform` and `opacity` (no `borderColor`, `shadowOpacity`, or layout-affecting styles via Animated)
@@ -649,5 +706,6 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Grid sizing is dual-dimension** — `cellSize` uses `Math.min(widthBased, heightBased)` via `maxHeight` prop measured by `onLayout` in GameScreen, preventing grid overflow behind booster buttons on tall boards
 - **Stable layout architecture** — GameScreen uses absolute-positioned overlays for banners (cascade, freeze, idle hint, mode intro) so they never shift the grid. WordArea has fixed height (90px), boosterBar always reserves space. `gridAreaHeight` updates are debounced (2px threshold) to prevent cascading re-renders from sub-pixel layout shifts
 - **Board generation uses heuristic-first validation** — `boardGenerator.ts` checks each word is individually findable via fast DFS before invoking the expensive recursive backtracking solver. This avoids exponential blowup on larger boards (was causing 10+ second hangs on 6×6+ grids)
+- **Audio synthesis is cached and pre-warmed** — `SoundManager.preWarmAll()` runs asynchronously after `init()` via `setTimeout(0)`. Synthesizes all 11 SFX + 3 music tracks in background, yielding between each (`await new Promise(resolve => setTimeout(resolve, 0))`). Raw `Int16Array` sample buffers cached in `synthesisCache` Map, WAV data URIs in `soundUris` Map. `playSound()` returns early if URI not cached — never triggers synthesis on the hot path
 - **When adding new animations**: always use `useNativeDriver: true`, avoid `Animated.loop` on per-tile components, prefer one-shot animations that complete and settle
 - **When modifying tiles**: do NOT add semi-transparent overlay Views or LinearGradients on top of the base tile gradient — these create visible lighter rectangles. Keep tile rendering minimal: base gradient + bottom shadow + letter text

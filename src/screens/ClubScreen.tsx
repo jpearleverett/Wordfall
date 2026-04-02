@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
+import ClubGoalCard from '../components/ClubGoalCard';
+import ClubLeaderboard from '../components/ClubLeaderboard';
+import {
+  generateClubGoal,
+  ActiveClubGoal,
+  ClubLeaderboardEntry,
+} from '../data/clubEvents';
 
 const { width } = Dimensions.get('window');
 
@@ -28,8 +35,11 @@ interface ClubData {
   memberCount: number;
   maxMembers: number;
   weeklyScore: number;
+  tier?: 'bronze' | 'silver' | 'gold' | 'diamond';
   members: ClubMember[];
   recentEmojis: Array<{ userId: string; emoji: string; timestamp: number }>;
+  activeGoal?: ActiveClubGoal | null;
+  leaderboardEntries?: ClubLeaderboardEntry[];
 }
 
 interface ClubScreenProps {
@@ -61,10 +71,58 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         memberCount: clubData.memberCount ?? 0,
         maxMembers: clubData.maxMembers ?? 30,
         weeklyScore: clubData.weeklyScore ?? 0,
+        tier: clubData.tier ?? 'bronze',
         members: clubData.members ?? [],
         recentEmojis: clubData.recentEmojis ?? [],
+        activeGoal: clubData.activeGoal ?? null,
+        leaderboardEntries: clubData.leaderboardEntries ?? [],
       }
     : null;
+
+  // Generate a club goal if none is active (local fallback)
+  const clubGoal = useMemo<ActiveClubGoal | null>(() => {
+    if (!data) return null;
+    if (data.activeGoal) return data.activeGoal;
+    // Generate a fallback goal with mock contributions from members
+    const goal = generateClubGoal(data.tier ?? 'bronze', data.memberCount || 1);
+    // Populate with mock contributions from members for display
+    if (data.members.length > 0) {
+      goal.contributions = data.members.map((m) => ({
+        userId: m.id,
+        displayName: m.name,
+        avatarId: '',
+        amount: Math.floor(m.score * 0.3),
+      }));
+    }
+    return goal;
+  }, [data?.activeGoal, data?.tier, data?.memberCount, data?.members]);
+
+  // Mock leaderboard entries for display when none provided
+  const leaderboardEntries = useMemo<ClubLeaderboardEntry[]>(() => {
+    if (data?.leaderboardEntries && data.leaderboardEntries.length > 0) {
+      return data.leaderboardEntries;
+    }
+    if (!data || !clubId) return [];
+    // Generate mock entries with current club included
+    const mockClubs: ClubLeaderboardEntry[] = [
+      { clubId: 'c1', clubName: 'Word Warriors', clubInitial: 'W', weeklyScore: 45200, memberCount: 28, tier: 'gold', rank: 1 },
+      { clubId: 'c2', clubName: 'Lexicon Lords', clubInitial: 'L', weeklyScore: 38900, memberCount: 25, tier: 'gold', rank: 2 },
+      { clubId: 'c3', clubName: 'Puzzle Pros', clubInitial: 'P', weeklyScore: 32100, memberCount: 22, tier: 'silver', rank: 3 },
+      { clubId: clubId, clubName: data.name, clubInitial: data.name.charAt(0).toUpperCase(), weeklyScore: data.weeklyScore, memberCount: data.memberCount, tier: data.tier ?? 'bronze', rank: 4 },
+      { clubId: 'c5', clubName: 'Brain Squad', clubInitial: 'B', weeklyScore: 18500, memberCount: 18, tier: 'silver', rank: 5 },
+    ];
+    // Re-sort by score and re-assign ranks
+    mockClubs.sort((a, b) => b.weeklyScore - a.weeklyScore);
+    return mockClubs.map((c, i) => ({ ...c, rank: i + 1 }));
+  }, [data?.leaderboardEntries, data?.weeklyScore, clubId]);
+
+  // Compute player's contribution to current goal
+  const playerContribution = useMemo(() => {
+    if (!clubGoal) return 0;
+    // In real Firestore mode, this would come from the user's tracked contribution
+    // For now, derive from player's puzzle progress
+    return player.puzzlesSolved ? Math.min(player.puzzlesSolved * 3, clubGoal.target) : 0;
+  }, [clubGoal, player.puzzlesSolved]);
 
   const renderNoClub = () => (
     <ScrollView
@@ -221,7 +279,54 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Members */}
+        {/* Club Cooperative Goal */}
+        {clubGoal && (
+          <>
+            <Text style={styles.sectionTitle}>Club Goal</Text>
+            <ClubGoalCard goal={clubGoal} playerContribution={playerContribution} />
+          </>
+        )}
+
+        {/* Your Contribution */}
+        <Text style={styles.sectionTitle}>Your Contribution</Text>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.contributeCard}
+        >
+          <View style={styles.contributeRow}>
+            <View style={styles.contributeStat}>
+              <Text style={styles.contributeStatValue}>
+                {playerContribution.toLocaleString()}
+              </Text>
+              <Text style={styles.contributeStatLabel}>Contributed</Text>
+            </View>
+            <View style={styles.contributeDivider} />
+            <View style={styles.contributeStat}>
+              <Text style={styles.contributeStatValue}>
+                {player.puzzlesSolved ?? 0}
+              </Text>
+              <Text style={styles.contributeStatLabel}>Puzzles</Text>
+            </View>
+            <View style={styles.contributeDivider} />
+            <View style={styles.contributeStat}>
+              <Text style={styles.contributeStatValue}>
+                {(player.starsByLevel ? Object.values(player.starsByLevel as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0).toLocaleString()}
+              </Text>
+              <Text style={styles.contributeStatLabel}>Stars</Text>
+            </View>
+          </View>
+          <Text style={styles.contributeHint}>
+            Keep playing to help your club reach the goal!
+          </Text>
+        </LinearGradient>
+
+        {/* Club Leaderboard */}
+        <Text style={styles.sectionTitle}>Weekly Rankings</Text>
+        <ClubLeaderboard entries={leaderboardEntries} currentClubId={clubId} />
+
+        {/* Members with Weekly Scores */}
         <Text style={styles.sectionTitle}>Members</Text>
         <LinearGradient
           colors={[...GRADIENTS.surfaceCard] as [string, string]}
@@ -255,7 +360,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                       )}
                     </View>
                     <Text style={styles.memberScore}>
-                      {member.score.toLocaleString()} pts
+                      {member.score.toLocaleString()} pts this week
                     </Text>
                   </View>
                   {member.isOnline && (
@@ -704,6 +809,52 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
+  },
+  contributeCard: {
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.borderMedium,
+    overflow: 'hidden',
+    ...SHADOWS.medium,
+  },
+  contributeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  contributeStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  contributeStatValue: {
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  contributeStatLabel: {
+    fontSize: 11,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  contributeDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: COLORS.borderSubtle,
+  },
+  contributeHint: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   leaveButton: {
     borderWidth: 1,
