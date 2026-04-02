@@ -28,6 +28,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ShopScreen from './src/screens/ShopScreen';
 import CosmeticStoreScreen from './src/screens/CosmeticStoreScreen';
+import EditProfileScreen from './src/screens/EditProfileScreen';
 import ClubScreen from './src/screens/ClubScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import EventScreen from './src/screens/EventScreen';
@@ -155,7 +156,7 @@ function ProfileMainScreen({ navigation }: any) {
   return (
     <ProfileScreen
       onOpenSettings={() => navigation.navigate('Settings')}
-      onEditProfile={() => navigation.navigate('Settings')}
+      onEditProfile={() => navigation.navigate('EditProfile')}
     />
   );
 }
@@ -165,6 +166,7 @@ function ProfileStackScreen() {
   return (
     <ProfileStack.Navigator screenOptions={screenOptions}>
       <ProfileStack.Screen name="ProfileMain" component={ProfileMainScreen} />
+      <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} />
       <ProfileStack.Screen name="Club" component={ClubScreen} />
     </ProfileStack.Navigator>
