@@ -1439,8 +1439,31 @@ function AppContent() {
                 {...props}
                 onComplete={() => {
                   player.updateProgress({ tutorialComplete: true });
-                  // Unlock default features for new players
-                  player.unlockFeature('tab_play');
+
+                  // Unlock features at current level and queue ceremonies
+                  const level = player.currentLevel || 1;
+                  const featureCeremonies = player.checkFeatureUnlocks(level);
+                  for (const ceremony of featureCeremonies) {
+                    player.queueCeremony(ceremony);
+                  }
+
+                  // Auto-unlock modes at or below current level (mirrors useRewardWiring)
+                  for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
+                    if (config.unlockLevel <= level && !player.unlockedModes.includes(modeId)) {
+                      player.unlockMode(modeId);
+                      player.queueCeremony({
+                        type: 'mode_unlock',
+                        data: {
+                          modeId,
+                          modeName: config.name,
+                          modeIcon: config.icon,
+                          modeDescription: config.description,
+                          modeColor: config.color,
+                        },
+                      });
+                    }
+                  }
+
                   setShowOnboarding(false);
                 }}
               />

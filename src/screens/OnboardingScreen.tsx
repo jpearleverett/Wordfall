@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { VideoBackground } from '../components/common/VideoBackground';
-import { generateTutorialBoard, TUTORIAL_STEPS } from '../data/tutorialBoards';
+import { generateTutorialBoardA, generateTutorialBoardB, generateTutorialBoardC, TUTORIAL_STEPS } from '../data/tutorialBoards';
 import { GameGrid } from '../components/Grid';
 import { CellPosition } from '../types';
 import { TutorialOverlay } from '../components/TutorialOverlay';
@@ -36,8 +36,21 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
   // Tutorial state
   const [tutorialStep, setTutorialStep] = useState(0);
   const [selectedCells, setSelectedCells] = useState<CellPosition[]>([]);
-  const [tutorialBoard, setTutorialBoard] = useState(generateTutorialBoard);
+  const [tutorialBoard, setTutorialBoard] = useState(generateTutorialBoardA);
   const [wordsFound, setWordsFound] = useState(0);
+
+  // Switch tutorial board when the step requires a different board
+  useEffect(() => {
+    const step = TUTORIAL_STEPS[tutorialStep];
+    if (!step?.board) return;
+
+    const prevStep = tutorialStep > 0 ? TUTORIAL_STEPS[tutorialStep - 1] : null;
+    if (prevStep && prevStep.board === step.board) return;
+
+    const generators = { A: generateTutorialBoardA, B: generateTutorialBoardB, C: generateTutorialBoardC };
+    setTutorialBoard(generators[step.board]());
+    setSelectedCells([]);
+  }, [tutorialStep]);
 
   // Track onboarding phase changes
   useEffect(() => {

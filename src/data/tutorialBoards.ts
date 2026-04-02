@@ -177,6 +177,7 @@ export const TUTORIAL_STEPS: TutorialGuideStep[] = [
   },
   {
     message: 'See how letters fall down? Now find DOG!',
+    highlightPositions: [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
     waitForAction: 'word_submitted',
     highlightWord: 'DOG',
     showHandPointer: true,
@@ -194,6 +195,7 @@ export const TUTORIAL_STEPS: TutorialGuideStep[] = [
   },
   {
     message: 'Now find RED.',
+    highlightPositions: [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
     highlightWord: 'RED',
     waitForAction: 'word_submitted',
     showHandPointer: true,
@@ -201,6 +203,7 @@ export const TUTORIAL_STEPS: TutorialGuideStep[] = [
   },
   {
     message: 'Last one! Find ANT to complete the puzzle.',
+    highlightPositions: [{ row: 2, col: 2 }, { row: 2, col: 3 }, { row: 2, col: 4 }],
     highlightWord: 'ANT',
     waitForAction: 'word_submitted',
     showHandPointer: true,
