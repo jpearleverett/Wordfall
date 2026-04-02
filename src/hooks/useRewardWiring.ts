@@ -285,7 +285,7 @@ export function useRewardWiring({
     }
 
     // Update mission progress
-    player.missions.dailyMissions.forEach((mission) => {
+    (player.missions?.dailyMissions ?? []).forEach((mission) => {
       if (mission.completed) return;
       if (mission.id === 'solve_3_puzzles' || mission.id === 'earn_3_stars') {
         player.updateMissionProgress(mission.id, mission.progress + 1);

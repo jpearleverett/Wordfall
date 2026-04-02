@@ -217,6 +217,7 @@ export function GameScreen({
   const completionHandled = useRef(false);
   // hint_rescue: track session fail count for this level (local, resets on mount)
   const sessionFailCount = useRef(0);
+  const failureCountedRef = useRef(false);
   // close_finish: idle timer for "1 word away" scenario
   const closeFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // post_puzzle: track whether to show after completion dismissal
@@ -341,12 +342,17 @@ export function GameScreen({
   // hint_rescue: detect failures and show offer after 2+ fails (session or persistent)
   useEffect(() => {
     if (state.status === 'failed' || state.status === 'timeout') {
-      sessionFailCount.current += 1;
+      if (!failureCountedRef.current) {
+        failureCountedRef.current = true;
+        sessionFailCount.current += 1;
+      }
       const persistentFails = player.failCountByLevel?.[level] ?? 0;
       const totalFails = Math.max(sessionFailCount.current, persistentFails);
       if (totalFails >= 2 && !offerShownThisLevel.current && !activeOffer) {
         showOfferIfAllowed('hint_rescue');
       }
+    } else {
+      failureCountedRef.current = false;
     }
   }, [state.status, activeOffer, showOfferIfAllowed, player.failCountByLevel, level]);
 

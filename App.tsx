@@ -956,7 +956,7 @@ function HomeMainScreen({ route, navigation }: any) {
         setLoading(false);
       }
     }, 50);
-  }, [navigation, economy]);
+  }, [navigation, economy, player]);
 
   const handleReset = useCallback(() => {
     Alert.alert(
