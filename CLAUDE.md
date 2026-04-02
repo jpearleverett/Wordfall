@@ -7,7 +7,7 @@ Wordfall is a gravity-based strategic word puzzle mobile game built with **React
 - **Framework:** React Native 0.81.5, Expo ~54.0.0, TypeScript ~5.8.0
 - **Backend:** Firebase (Auth + Firestore + Analytics) — Firestore social layer implemented with graceful offline fallback. Env vars needed for real connectivity
 - **State:** React Context (4 providers + 2 extracted sub-contexts) + useReducer for game state + AsyncStorage persistence + Firestore sync when configured
-- **Testing:** Jest + ts-jest, 12 test files with 274 tests (164 new) covering engine, data, services, utilities
+- **Testing:** Jest + ts-jest, 12 test files with 277 tests covering engine, data, services, utilities, hooks
 - **Monetization:** IAP via react-native-iap (15 core + 3 mega bundle products incl. VIP weekly subscription), rewarded + interstitial ads via AdMob (mock fallback), contextual offers wired to all 6 triggers with analytics, dynamic pricing by segment, regional pricing, season pass, cosmetic store
 - **Audio:** `expo-audio` (SDK 54 compatible, `createAudioPlayer` for SFX/music) with `expo-av` fallback
 - **Video:** `expo-video` (SDK 54 compatible, `useVideoPlayer` + `VideoView`) with error boundary fallback
@@ -114,13 +114,13 @@ src/
 | `src/hooks/useRewardWiring.ts` | Extracted from App.tsx: ~503-line hook containing ALL post-puzzle reward logic (handleComplete). Coin/gem awards, rare tile drops, atlas collection, mission/weekly goal progress, level-up detection, difficulty transitions, feature unlocks, achievement checks, mode unlocks, milestone ceremonies, mystery wheel, win streak, share text |
 | `src/hooks/useCeremonyQueue.ts` | Extracted from App.tsx: ceremony queue processing with sequential modal display, analytics tracking, 300ms delays between ceremonies, cleanup on unmount. Returns `{ activeCeremony, handleDismissCeremony }` |
 | `src/hooks/useExperiment.ts` | React hook for A/B testing: `useExperiment(experimentId)` returns memoized `{ variant, config, trackExposure }`. Uses AuthContext for deterministic user assignment |
-| `src/navigation/MainNavigator.tsx` | Extracted from App.tsx: tab navigator, stack navigator definitions, TabIcon component, screen registrations |
+| `src/navigation/MainNavigator.tsx` | Extracted from App.tsx: tab navigator, stack navigator definitions, TabIcon component, screen registrations. Contains wrapper components for ProfileScreen (wires settings/edit navigation) and EventScreen (wires play/shop navigation) |
 | `src/hooks/useGame.ts` | Core game state reducer - handles 15+ game actions including boosters and `GRANT_BOOSTER`. Timer tick for timePressure mode runs here. Computed values (`currentWord`, `remainingWords`, `isValidWord`) cached with `useMemo`. `isDeadEnd` computed via deferred `useEffect` (not in render path) — mode-aware: shrinkingBoard uses `isDeadEndShrinkingBoard` with `wordsUntilShrink`, hints use `getHintShrinkingBoard` for shrink-aware ordering |
 | `src/engine/boardGenerator.ts` | Puzzle generation with seeded PRNG, freeform path placement (8-directional), and heuristic-first solvability validation (avoids exponential solver calls). Mode-aware: shrinkingBoard adds +2 buffer (1 filler ring), enforces min 3 words and 5×5 grid, places words in interior, uses shrink-aware solver for validation. `generateBoard` accepts optional `mode` parameter — callers MUST pass mode for shrinkingBoard/gravityFlip/noGravity to get correct validation |
-| `src/engine/gravity.ts` | Column-based gravity physics (letters fall down), frozen column support |
+| `src/engine/gravity.ts` | Column-based gravity physics supporting all 4 directions (down/up/left/right via `applyGravityInDirection`), frozen column support |
 | `src/engine/solver.ts` | 8-directional DFS word finder, recursive backtracking solver, dead-end detection, hint generation. Mode-aware variants: `isSolvable` (standard gravity), `isSolvableGravityFlip` (rotating gravity), `areAllWordsIndependentlyFindable` (noGravity), `isSolvableShrinkingBoard`/`getHintShrinkingBoard`/`isDeadEndShrinkingBoard` (shrinkingBoard — simulates outer ring removal every 2 words, validates ordering survives all shrink phases). `findWordInGrid` supports optional `limit` parameter for early termination. `getHint` uses solution ordering directly without redundant re-solve |
 | `src/components/PuzzleComplete.tsx` | Victory screen with confetti, animated score counter, staggered reveals. **Plus**: `isFirstWin` welcome, `leveledUp` badge, `shareText` with Share API, friend comparison (Firestore when available), "Watch Ad to DOUBLE Rewards" button. Action buttons: Primary "NEXT LEVEL" + secondary row (Home \| Share \| Challenge via `onChallengeFriend`) |
-| `src/components/Grid.tsx` | Column-based grid renderer with gravity layout, responsive sizing via `maxHeight` prop (cell size constrained by both width and available height), drag-to-select via react-native-gesture-handler with drag interpolation for reliable diagonal selection and nearest-center hit testing (gesture objects memoized with `useMemo`, callbacks via refs), frozen column styling, post-gravity moved-cell highlighting. Passes `cellBounds` to `SelectionTrailOverlay` for gravity-aware trail positioning. LetterCell receives no `onPress` — all input handled by grid-level gesture detector |
+| `src/components/Grid.tsx` | Column-based grid renderer with gravity-direction-aware layout (`flex-end` for down, `flex-start` for up, with spacer repositioned accordingly), responsive sizing via `maxHeight` prop, drag-to-select via react-native-gesture-handler with drag interpolation and nearest-center hit testing (gesture objects memoized with `useMemo`, callbacks via refs), frozen column styling, post-gravity moved-cell highlighting. Passes `cellBounds` to `SelectionTrailOverlay`. LetterCell receives no `onPress` — all input handled by grid-level gesture detector |
 | `src/screens/GameScreen.tsx` | Main gameplay screen: green flash, chain popup, score popup, dynamic idle hint, mode intro overlay, boosters, near-miss encouragement. **Plus**: contextual offers wired (hint_rescue after 2+ fails, close_finish at 1 word left, booster_pack on hard/expert entry, post_puzzle when hints depleted), rewarded ad triggers (post-fail hint, post-complete double), MockAdModal overlay. Stable layout with absolute-positioned overlays |
 | `src/components/GameHeader.tsx` | Chrome card header with back button, battery-style progress indicator (auto-sizes to content), cyan score display with animated pop, undo/hint glass buttons with count badges. Progress bar at bottom with glow dot (hidden at 0%). Battery shell is an image asset that stretches to fit the label text |
 | `src/screens/HomeScreen.tsx` | Dynamic home screen with `VideoBackground`, image-based UI, progressive section visibility based on `playerStage` AND `playerSegmentation`. Sections: hero card, streak, daily rewards, Mystery Wheel button (with free spin badge/pulse animation), event banners, weekly goals, missions, recommendations, quick play, pending challenge cards, pending gift banner. Section visibility driven by segment-aware `segmentHomeContent` when available |
@@ -177,7 +177,7 @@ src/
 
 - **Game state:** `useGame` hook with `useReducer` in `GameScreen`. Actions: SELECT_CELL, CLEAR_SELECTION, SUBMIT_WORD, USE_HINT, UNDO_MOVE, NEW_GAME, RESET_COMBO, TICK_TIMER, SHUFFLE_FILLER, FREEZE_COLUMN, PREVIEW_MOVE, USE_BOOSTER, GRANT_HINT, GRANT_UNDO, GRANT_BOOSTER. State includes `frozenColumns`, `previewGrid`, `boosterCounts`, `cascadeMultiplier`, `perfectRun`, `maxCombo`, `history` (for undo — stores `{ grid, words, wordsUntilShrink?, shrinkCount? }`, undo also removes last `solveSequence` entry), `solveSequence` (for replay recording).
 - **Player data:** `PlayerContext` - progress, collections (atlas/tiles/stamps), missions, streaks, cosmetics, library wings, mode stats, achievements, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `mysteryWheel`, `winStreak`, `puzzleEnergy` (session scarcity), `performanceMetrics` (adaptive difficulty), `segments` (player segmentation), `eventProgress` (live event tracking), `friendChallenges` (sent/received challenges), `modeLevels` (per-mode independent level progression, `Record<string, number>`). Methods include `useEnergy`, `refillEnergy`, `recomputeSegments`, `updateEventProgress`, `sendChallenge`, `respondToChallenge`, `recordPerformanceMetrics`, `advanceModeLevel`, `getModeLevel`. Persisted to AsyncStorage + Firestore sync when configured.
-- **Economy:** `EconomyContext` - coins, gems, hintTokens, undoTokens, eventStars, libraryPoints, `isAdFree`, `isPremiumPass`, `isVip` (VIP subscription), `starterPackAvailable`, `dailyValuePackExpiry`, `vipExpiresAt`. Methods: add/spend/check + `processPurchase(productId)` for IAP fulfillment + `processAdReward(rewardType)` for ad rewards + `claimVipDailyRewards()` for VIP daily gem/hint drip. VIP subscribers get: ad-free, 50 daily gems, 3 daily hints, exclusive frame. Persisted to AsyncStorage.
+- **Economy:** `EconomyContext` - coins, gems, hintTokens, undoTokens, `boosterTokens` (`{ wildcardTile, spotlight, smartShuffle }`), eventStars, libraryPoints, `isAdFree`, `isPremiumPass`, `isVip` (VIP subscription), `starterPackAvailable`, `dailyValuePackExpiry`, `vipExpiresAt`. Methods: add/spend/check + `addBoosterToken(type)`/`spendBoosterToken(type)` for persistent booster inventory + `processPurchase(productId)` for IAP fulfillment + `processAdReward(rewardType)` for ad rewards + `claimVipDailyRewards()` for VIP daily gem/hint drip. VIP subscribers get: ad-free, 50 daily gems, 3 daily hints, exclusive frame. Persisted to AsyncStorage.
 - **Settings:** `SettingsContext` - volume (SFX + music), haptics, notifications, theme (5 themes), **plus**: parental controls (`spendingLimitEnabled`, `monthlySpendingLimit`, `requirePurchasePin`, `purchasePin`, `monthlySpent`). Persisted to AsyncStorage.
 - **Auth:** `AuthContext` - Firebase anonymous auth with loading state.
 
@@ -232,11 +232,12 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 - **Near-miss encouragement**: On failure, shows "SO CLOSE!" (1 word away) or "KEEP GOING!" with progress bar and word count, plus prominent retry button
 
 ### Boosters
-Three booster types available during gameplay (first use triggers `first_booster` ceremony):
-- **Spotlight** (👁️): Highlights a word on the board
-- **Wildcard Tile**: Places a wildcard letter that matches any word. Can be placed on empty cells (creates a placeholder cell) — useful in noGravity/shrinkingBoard after words are cleared. Renders as ★ symbol
-- **Spotlight** (👁️): Highlights a word on the board
+Three booster types use **persistent inventory** stored in `economy.boosterTokens` (like hints/undos). New players start with 2 of each. Earned through puzzle rewards, events, coin shop (200 coins each), and the booster_pack contextual offer. First-ever use triggers `first_booster` ceremony:
+- **Wildcard Tile** (★): Places a wildcard letter that matches any word. Can be placed on empty cells — useful in noGravity/shrinkingBoard after words are cleared
+- **Spotlight** (💡): Highlights letters belonging to remaining words on the board
 - **Smart Shuffle** (🔀): Randomizes non-word filler letters on the board, validates with mode-appropriate solver (`areAllWordsIndependentlyFindable` for noGravity/shrinkingBoard, `isSolvableGravityFlip` for gravityFlip, `isSolvable` for standard modes)
+
+GameScreen spends from `economy.spendBoosterToken()` and grants into game state via `GRANT_BOOSTER` action. Game state `boosterCounts` initializes at 0 (economy is the source of truth). Booster shelf on GameScreen shows/hides based on economy token counts.
 
 ### Board Generation
 - Uses Mulberry32 seeded PRNG for reproducible puzzles
@@ -308,6 +309,7 @@ Sound manager calls are wired at every interaction point in `GameScreen.tsx` and
 - **First mode clear**: Captures `prevModePlayed` before `recordModePlay()`, fires `first_mode_clear` for first win in any non-classic mode
 - **Mystery wheel progress**: Calls `player.awardFreeSpin()` — awards a free spin every 8 puzzle completions
 - **Win streak**: Calls `player.updateWinStreak(true)` — increments consecutive win counter, milestones at 3/5/7/10/15/20 queue `win_streak_milestone` ceremony
+- **Seasonal stamp progress**: Awards stamps from the active season album at puzzle milestones (1, 3, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 100, 120, 150, 175, 200, 250, 300, 500 puzzles solved) via `player.collectStamp()`
 - **Share text generation**: Generates Wordle-style emoji grid via `generateShareText()`
 - **Friend comparison**: Generates mock friend score data (Firestore-ready structure)
 - **Failure tracking**: Records failures via `player.recordFailure()` for breather level and dynamic hint support
@@ -332,11 +334,11 @@ Each ceremony renders with animations, rewards display, and dismiss/action butto
 
 **Ceremony trigger locations:**
 - `useRewardWiring.handleComplete()` (extracted from App.tsx): level_up, difficulty_transition, feature_unlock, achievement, mode_unlock, collection_complete, star_milestone, perfect_milestone, decoration_unlock, first_rare_tile, first_mode_clear
+- `PlayerProgressContext.recordPuzzleComplete()`: wing_complete (auto-detected when all chapters in a wing are completed)
 - `PlayerContext.updateStreak()`: streak_milestone
 - `PlayerContext.updateWinStreak()`: win_streak_milestone
 - `PlayerContext.collectAtlasWord()`: word_mastery_gold
 - `PlayerContext.addRareTile()`: wildcard_earned
-- `PlayerContext.restoreWing()`: wing_complete
 - `GameScreen` booster handlers: first_booster (tracked via `tooltipsShown`)
 
 ### Difficulty Curve
@@ -391,7 +393,7 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - **Accent borders**: Highlighted/active items use thin accent-colored borders with matching glow shadow via `SHADOWS.glow(COLORS.accent)`
 
 ### Grid Layout
-- Flex-end columns for gravity visualization (standard modes); `noGravityLayout` prop renders cells at their actual row positions with empty placeholders for null cells (noGravity/shrinkingBoard modes)
+- Gravity-direction-aware columns: `flex-end` for down (default), `flex-start` for up (with spacer below cells), `noGravityLayout` prop renders cells at their actual row positions with empty placeholders for null cells (noGravity/shrinkingBoard modes). Left/right gravity directions show an arrow indicator but use the same column layout
 - Cell touch targets: 44pt minimum
 - Grid padding: 12px, cell gap: 4px
 - Cell size computed dynamically based on column count, screen width, and available height (`Math.min(widthBased, heightBased)` when `maxHeight` prop is provided via `onLayout` measurement)
@@ -428,7 +430,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - 50+ cosmetic items (12 themes, 15 frames, 18 titles, 24 decorations)
 - Economy system with full reward wiring (coins, gems, library points, rare tiles on puzzle complete)
 - Atlas word collection against all 12 pages (10 words each) with per-word mastery counter (duplicates increment mastery, max 5 = gold border)
-- Booster system (Freeze Column, Board Preview, Shuffle Filler) with UI and reducer support
+- Booster system (Wildcard Tile, Spotlight, Smart Shuffle) with persistent economy inventory, UI, and reducer support
 - Visual polish: score popups, confetti, chain celebration with screen shake, button press feedback
 - Invalid word red flash + error haptic on non-adjacent taps
 - Post-gravity cell highlight (cyan trail on shifted cells)
@@ -436,12 +438,12 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - Mode intro banner for non-classic modes
 - Animated WordBank with celebration, glow, and valid-word states
 - Valid word green flash + auto-submit (250ms)
-- Daily login reward UI (7-day cycle on HomeScreen)
+- Daily login reward UI (7-day cycle on HomeScreen) with reward claiming wired to EconomyContext (coins, gems, hints, rare tiles)
 - Welcome-back animated modal with tiered comeback rewards
 - Perfect Solve undo recovery (undo from failed state)
 - Performance-optimized: all tile animations use native driver, no continuous animation loops on idle tiles, expensive solver computations deferred out of render path, gesture objects memoized, computed game values cached with `useMemo`
 - Visual polish pass: clean tile rendering (opaque gradients, no overlay artifacts), auto-sizing battery header, centered booster shelf, booster count badges visible (not clipped)
-- TypeScript compiles with only 2 pre-existing errors in NeonTabBar.tsx
+- TypeScript compiles with only pre-existing LinearGradient typing errors (no logic errors)
 
 #### Player Experience Systems (all complete)
 - **Interactive tutorial**: 4-phase onboarding with 3 progressive tutorial boards: A (4×4, tap to find GO/HI), B (5×4, gravity intro with CAT/DOG), C (5×5, order matters with SUN/RED/ANT gravity dependency). Players learn through guided puzzle play on real GameGrid + TutorialOverlay
@@ -499,8 +501,8 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Error boundary**: Root `ErrorBoundary` wraps entire app tree inside `GestureHandlerRootView`. Catches JS errors, shows synthwave-themed crash screen with Restart button, reports to Sentry via `crashReporter.captureException()`
 - **Crash reporting (Sentry)**: `crashReporting.ts` dynamically imports `@sentry/react-native`. When available + DSN configured (`EXPO_PUBLIC_SENTRY_DSN`), forwards exceptions, messages, breadcrumbs, and user context to Sentry. Falls back to console-only mode gracefully. Global `ErrorUtils` handler captures uncaught errors
 - **Receipt validation**: `receiptValidation.ts` validates IAP receipts server-side via Firebase Cloud Function (`EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL/validateReceipt`). Fraud detection via receipt hash tracking in AsyncStorage (prevents replay attacks). Falls back to client-side trust when server unavailable
-- **Coin shop (coin sinks)**: 10 coin-purchasable consumables in `coinShop.ts` — hints, undos, boosters, 2x XP (30 min), lucky charm (+10% rare tile, 1hr), theme rental (24h). Daily purchase limits per item. Gives players meaningful ways to spend hoarded coins
-- **Login calendar**: 7-day escalating rewards in `loginCalendar.ts` (100 coins → 500 coins + 15 gems + rare tile on day 7). `LoginCalendar.tsx` component: horizontal day circles with pulse animation, claim button, tomorrow's preview
+- **Coin shop (coin sinks)**: 10 coin-purchasable consumables in `coinShop.ts` — hints, undos, boosters, 2x XP (30 min), lucky charm (+10% rare tile, 1hr), theme rental (24h). Daily purchase limits per item. Surfaced in ShopScreen "Spend Coins" section where players can buy hints (100 coins) and undos (250 for 3)
+- **Login calendar**: 7-day escalating rewards in `loginCalendar.ts` (100 coins → 500 coins + 15 gems + rare tile on day 7). Claim button on HomeScreen calls `handleClaimLoginReward` in App.tsx which grants rewards via EconomyContext and advances `loginCycleDay`. `LoginCalendar.tsx` component also available as standalone with horizontal day circles and pulse animation
 - **Daily free reward timers**: 4 timed rewards in `dailyRewardTimers.ts` — free coins (4h), free hint (6h), free spin (8h), bonus chest (12h, random coins/gems). `DailyRewardTimers.tsx` component: 2×2 grid with live countdowns, "READY!" glow pulse, proper interval cleanup
 - **Grand challenges**: 10 multi-day challenges in `grandChallenges.ts` (7-30 days, normal/hard/legendary). Examples: "Century Solver" (100 puzzles in 7d), "Unbreakable" (30-day streak), "Pure Mind" (50 no-hint puzzles). Level-gated: normal=all, hard=15+, legendary=30+
 - **Season/battle pass**: 30-tier pass in `seasonPass.ts`. Free lane: coins/hints/boosters. Premium lane (500 gems / ~$4.99): gems/cosmetics/rare tiles. XP from puzzles/stars/dailies/perfects. 30-day seasons. Tier 30 premium: exclusive `frame_season_champion`
@@ -519,8 +521,8 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Push notification triggers (wired)**: 6 gameplay-event triggers in `notificationTriggers.ts`: streak reminder (8 PM after streak update), energy full (scheduled on energy spend), event ending (on app open), daily challenge (9 AM on app open), win streak milestone (immediate at 3/5/7/10/15/20), comeback reminder (3 days after app background). All idempotent scheduling
 - **Contextual offer analytics**: All 6 offer types fire `offer_shown`, `offer_accepted`, `offer_dismissed` analytics events with offerType, level, mode, difficulty properties. `hint_rescue` also checks persistent `player.failCountByLevel` in addition to session fails. `life_refill` triggers when lives=0 on failure. `streak_shield` triggers during gameplay when streak >= 3 and approaching daily reset
 - **Audio caching**: DSP separated from WAV encoding. Raw `Int16Array` sample buffers cached in `synthesisCache` Map. Async `preWarmAll()` synthesizes all sounds + music in background on init, yielding between each. `playSound()` never triggers synthesis — skips silently if uncached
-- **God file decomposition**: App.tsx reduced from 2,024 to 1,648 lines. PlayerContext from 1,797 to 1,346 lines. 5 extracted modules: `useRewardWiring` (503 lines), `useCeremonyQueue` (88 lines), `MainNavigator` (198 lines), `PlayerProgressContext` (597 lines), `PlayerSocialContext` (179 lines). All using factory function pattern to preserve `usePlayer()` API surface
-- **Test suite**: 12 test files with 274 tests (164 new). Coverage: data layer (achievements, weekly goals, mystery wheel, shop products, event layers), engine (difficulty adjuster, board generator, gravity, solver), services (analytics), utilities (share generator), hooks (useGame). Run via `npm test`
+- **God file decomposition**: App.tsx, PlayerContext decomposed into 5 extracted modules: `useRewardWiring` (post-puzzle rewards), `useCeremonyQueue` (ceremony processing), `MainNavigator` (tab/stack definitions with screen wrappers), `PlayerProgressContext` (22 progress methods), `PlayerSocialContext` (4 social methods). All using factory function pattern to preserve `usePlayer()` API surface
+- **Test suite**: 12 test files with 277 tests. Coverage: data layer (achievements, weekly goals, mystery wheel, shop products, event layers), engine (difficulty adjuster, board generator, gravity, solver), services (analytics), utilities (share generator), hooks (useGame). Run via `npm test`
 
 ### Needs External Setup
 - **Firebase credentials** — set `EXPO_PUBLIC_FIREBASE_*` env vars to enable Analytics, Firestore social, leaderboards. Without them, all services gracefully fall back to local-only mode
@@ -615,7 +617,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 
 - **No energy walls** on core play - ethical F2P design
 - **Hints/undos use persistent inventory** (industry standard like Candy Crush/Royal Match). Tokens come from `economy.hintTokens`/`economy.undoTokens`, NOT per-level allocation. New players start with 5 of each. Earned through puzzle completion, events, daily login, ad watching, shop purchases. GameScreen's `handleHint`/`handleUndo` spend from economy via `GRANT_HINT`/`GRANT_UNDO` reducer actions. Relax mode is exempt (unlimited). Expert/perfectSolve modes disable hints/undos entirely. `hintsUsed` counter in game state tracks per-puzzle usage for star rating
-- **Boosters** (wildcardTile, spotlight, smartShuffle) are per-puzzle consumables tracked in `boosterCounts` (initialized to 1 each at game start). `GRANT_BOOSTER` action adds boosters mid-game (used by booster_pack contextual offer which grants 1 of each for 15 gems). First-ever booster use triggers a `first_booster` ceremony (tracked via `tooltipsShown`)
+- **Boosters** (wildcardTile, spotlight, smartShuffle) use **persistent inventory** stored in `economy.boosterTokens` (like hints/undos). New players start with 2 of each. GameScreen spends from `economy.spendBoosterToken()` and grants into game state via `GRANT_BOOSTER` action. Game state `boosterCounts` initializes at 0 (economy is the source of truth). Booster shelf on GameScreen shows/hides based on economy token counts. `booster_pack` contextual offer grants 1 of each to economy for 15 gems. First-ever booster use triggers a `first_booster` ceremony (tracked via `tooltipsShown`)
 - **Portrait orientation only** (set in app.json)
 - **Dark mode only** - no light theme (5 dark theme variants in cosmetics)
 - **`--legacy-peer-deps` required** for npm install due to React Navigation peer dep conflicts
@@ -643,8 +645,8 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Mastery track** uses `puzzlesSolved * 100` as XP proxy — replace with real XP tracking when needed
 - **Chapters have 15 puzzles each** — 40 chapters × 15 puzzles = 600 total puzzles per GDD
 - **Atlas pages have 10 words each** — within GDD's 8-12 range; duplicates increment per-word mastery counter (max 5 = gold border)
-- **Seasonal stamp albums have 20 stamps each** — 4 seasons per GDD
-- **Rare tile pity timer** guarantees a tile drop within 10 puzzles (`COLLECTION.rareTilePityTimer`)
+- **Seasonal stamp albums have 20 stamps each** — 4 seasons per GDD. Stamps earned at puzzle milestones (1, 3, 5, 10, 15, 20, 30... puzzles solved) during the active season via `player.collectStamp()` in `useRewardWiring`. `getCurrentSeasonAlbum()` returns the active album by date range
+- **Rare tile drop rates** tuned for long-term retention: 4% base, +3% hard/expert, +5% perfect (max ~12%). Pity timer guarantees a drop within 25 puzzles (`COLLECTION.rareTilePityTimer`). Event multipliers can increase the chance further
 - **Rare tile recycling** — 5 duplicate tiles = 1 wildcard tile (`COLLECTION.duplicatesForWildcard`). Crossing the threshold triggers a `wildcard_earned` ceremony
 - **Grace days** limited to 1 per streak, auto-applied in `updateStreak` when exactly 1 day is missed (`diffDays === 2`). `graceDaysUsed` resets to 0 when streak breaks (missed 2+ consecutive days). GDD: "Missing one day doesn't break streak, missing 2 consecutive days resets"
 - **Comeback rewards** at 3/7/30 day absence thresholds (was 3/7/14, fixed to match GDD)
@@ -679,9 +681,9 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Receipt validation** sends `{ receipt, productId, platform }` to `${FIREBASE_FUNCTIONS_URL}/validateReceipt`. Tracks receipt hashes in AsyncStorage (last 500) to detect replay attacks. Falls back to client-side trust on network failure
 - **Orphaned timer cleanup** — all `setTimeout` calls in App.tsx (mystery wheel open, free spin toast, ceremony chain) store IDs in `useRef` and clear in `useEffect` cleanup functions
 - **Console.log guards** — bare `console.log` calls in `difficultyAdjuster.ts` wrapped in `if (__DEV__)`. Services already used `__DEV__` guards
-- **Login calendar** — 7-day cycle tracked in `player.loginCycleDay`. Day 7 is jackpot (500 coins + 15 gems + rare tile). `getNextLoginRewardPreview()` shows tomorrow's reward as retention hook
+- **Login calendar** — 7-day cycle tracked in `player.loginCycleDay`. Day 7 is jackpot (500 coins + 15 gems + rare tile). Claim button on HomeScreen calls `handleClaimLoginReward` in App.tsx which uses `getLoginCalendarDay()` to look up rewards, grants via economy, and advances `loginCycleDay`. `getNextLoginRewardPreview()` shows tomorrow's reward as retention hook
 - **Daily reward timers** — 4 independent timers with different intervals (4h/6h/8h/12h). Timer states stored as `Record<string, number>` (last claimed timestamps). Bonus chest uses weighted random roll (50% coins, 30% gems, 20% combo)
-- **Coin shop** provides meaningful coin sinks — players can spend hoarded coins on hints (100 coins), boosters (200 coins), temporary effects (500-1000 coins). Daily limits prevent exploitation. Categories: boosters, consumables, temporary
+- **Coin shop** surfaced in ShopScreen "Spend Coins" section — players can spend hoarded coins on hints (100 coins / 250 for 3) and undos (100 coins / 250 for 3). Full data layer in `coinShop.ts` also defines boosters (200 coins), 2x XP (500 coins), lucky charm (750 coins), theme rental (1000 coins) with daily purchase limits
 - **Grand challenges** are level-gated multi-day objectives. `generateActiveGrandChallenges(playerLevel)` returns 2 below level 30, 3 at level 30+. Legendary challenges reward exclusive cosmetics
 - **Season pass** rotates every 30 days. `getCurrentSeason()` deterministically computes season ID from date. XP earned passively through play. Premium unlock stored in `SeasonPassState.isPremium`
 - **Seasonal wheels** override standard gacha during season months (Mar-May spring, Jun-Aug summer, etc.). 1-2 exclusive cosmetic rewards per seasonal wheel. `getActiveWheel()` checks current date
@@ -693,7 +695,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **A/B testing** — `experiments.ts` uses same `simpleHash` algorithm as `analytics.getVariant()` for consistent hash distribution. Experiments support `targetSegments` filter and `startDate`/`endDate` windows. `useExperiment()` hook memoizes variant assignment per userId. Exposure tracking is separate from assignment for proper intent-to-treat analysis
 - **Notification triggers are idempotent** — each trigger function cancels previous scheduled notifications before scheduling new ones. Streak reminder re-schedules on every streak update. Comeback reminder cancels on app foreground and re-schedules on background. Energy full notification calculated from current energy + regen rate
 - **Cosmetic store** reads data from 4 existing arrays (`COSMETIC_THEMES`, `PROFILE_FRAMES`, `PROFILE_TITLES`, `LIBRARY_DECORATIONS`) cross-referenced with `player.unlockedCosmetics` and equipped state. Items without `cost` show "Earn in-game" instead of buy button. Equipped items show accent glow border
-- **God file decomposition** preserves API surfaces — extracted contexts use factory function pattern (`createProgressMethods(setData, getData)` returns method object). These are called once inside PlayerProvider and spread into context value. Components calling `usePlayer()` see the identical interface. `useRewardWiring` takes player/economy as parameters and returns a stable `handleComplete` callback via `useCallback`
+- **God file decomposition** preserves API surfaces — extracted contexts use factory function pattern (`createProgressMethods(setData, getData)` returns method object). Components calling `usePlayer()` see the identical interface. `useRewardWiring` takes player/economy as parameters and returns a stable `handleComplete` callback via `useCallback`. `MainNavigator` contains wrapper components (ProfileMainScreen, EventScreenWrapper) that wire navigation props
 
 ### Performance Architecture
 - **All tile animations use `useNativeDriver: true`** — animations run on the native thread, not blocking JS. Only animate `transform` and `opacity` (no `borderColor`, `shadowOpacity`, or layout-affecting styles via Animated)
