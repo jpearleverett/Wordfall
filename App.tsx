@@ -635,6 +635,28 @@ function HomeMainScreen({ route, navigation }: any) {
       player.generateDailyMissions();
       player.initWeeklyGoals();
 
+      // Check for any feature/mode unlocks the player has earned but not yet seen
+      const level = player.currentLevel || 1;
+      const featureCeremonies = player.checkFeatureUnlocks(level);
+      for (const ceremony of featureCeremonies) {
+        player.queueCeremony(ceremony);
+      }
+      for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
+        if (config.unlockLevel <= level && !player.unlockedModes.includes(modeId)) {
+          player.unlockMode(modeId);
+          player.queueCeremony({
+            type: 'mode_unlock',
+            data: {
+              modeId,
+              modeName: config.name,
+              modeIcon: config.icon,
+              modeDescription: config.description,
+              modeColor: config.color,
+            },
+          });
+        }
+      }
+
       // Recompute player segments on session start
       const totalSpendCents = economy.purchaseHistory.reduce(
         (sum: number, p: { amount: number }) => sum + Math.round(p.amount * 100), 0,
