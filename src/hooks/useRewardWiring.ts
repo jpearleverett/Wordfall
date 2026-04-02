@@ -470,6 +470,7 @@ export function useRewardWiring({
     // Fetch real friend comparison (async -- update params when ready)
     const friendIds = player.friendIds || [];
     let friendComparison = { beaten: 0, total: 0 };
+    const eventMultiplierLabel = eventManager.getActiveMultiplierLabel();
     if (firestoreService.isAvailable() && friendIds.length > 0 && userId) {
       firestoreService
         .getFriendScores(userId, friendIds)
@@ -486,6 +487,7 @@ export function useRewardWiring({
                   : null,
                 shareText,
                 friendComparison: result,
+                eventMultiplierLabel,
               },
             });
           }
@@ -494,7 +496,6 @@ export function useRewardWiring({
     }
 
     // Store completion metadata in route params for GameScreen to pick up
-    const eventMultiplierLabel = eventManager.getActiveMultiplierLabel();
     if (navigation.isFocused()) {
       navigation.setParams({
         completionData: {
@@ -512,6 +513,7 @@ export function useRewardWiring({
         },
       });
     }
+
   }, [params, player, economy, navigation, userId]);
 
   return handleComplete;

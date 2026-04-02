@@ -17,7 +17,7 @@ import {
 interface MysteryWheelProps {
   wheelState: MysteryWheelState;
   gems: number;
-  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState }) => void;
+  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: { label: string; icon: string; reward: any } }) => void;
   onBuySpin: (cost: number, count: number) => void;
   onDismiss: () => void;
 }
@@ -76,15 +76,17 @@ export function MysteryWheel({
         useNativeDriver: true,
       }).start();
 
-      // If mystery box, auto-open after delay
+      // If mystery box, open immediately for reward granting, show visually after delay
+      let mysteryBoxReward: { label: string; icon: string; reward: any } | undefined;
       if (segment.reward.mysteryBox) {
+        const boxResult = openMysteryBox();
+        mysteryBoxReward = boxResult;
         setTimeout(() => {
-          const boxResult = openMysteryBox();
           setMysteryBoxResult(boxResult);
         }, 1000);
       }
 
-      onSpin({ segment, updatedState });
+      onSpin({ segment, updatedState, mysteryBoxReward });
     });
   }, [spinning, wheelState, rotateAnim, resultAnim, onSpin]);
 

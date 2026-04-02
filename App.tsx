@@ -140,11 +140,21 @@ function LibraryStackScreen() {
   );
 }
 
+// Profile screen wrapper — wires navigation callbacks for Settings gear and Edit Profile
+function ProfileMainScreen({ navigation }: any) {
+  return (
+    <ProfileScreen
+      onOpenSettings={() => navigation.navigate('Settings')}
+      onEditProfile={() => navigation.navigate('Settings')}
+    />
+  );
+}
+
 // Profile Tab Stack
 function ProfileStackScreen() {
   return (
     <ProfileStack.Navigator screenOptions={screenOptions}>
-      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+      <ProfileStack.Screen name="ProfileMain" component={ProfileMainScreen} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} />
       <ProfileStack.Screen name="Club" component={ClubScreen} />
     </ProfileStack.Navigator>
@@ -697,7 +707,7 @@ function HomeMainScreen({ route, navigation }: any) {
   }, [player.mysteryWheel.spinsAvailable, player.loaded]);
 
   // Mystery Wheel handlers
-  const handleWheelSpin = useCallback(({ segment, updatedState }: { segment: WheelSegment; updatedState: MysteryWheelState }) => {
+  const handleWheelSpin = useCallback(({ segment, updatedState, mysteryBoxReward }: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: { label: string; icon: string; reward: any } }) => {
     // Update wheel state in player context
     player.updateMysteryWheel(updatedState);
 
@@ -712,9 +722,19 @@ function HomeMainScreen({ route, navigation }: any) {
       player.addRareTile(randomLetter);
     }
     if (reward.booster) {
-      // Boosters are per-puzzle consumables — grant via hint tokens as currency.
-      // Players get boosters refreshed each puzzle; wheel boosters grant extra hints.
       economy.addHintTokens(3);
+    }
+
+    // Award mystery box contents if the spin landed on a mystery box
+    if (mysteryBoxReward) {
+      const mbReward = mysteryBoxReward.reward;
+      if (mbReward.coins) economy.addCoins(mbReward.coins);
+      if (mbReward.gems) economy.addGems(mbReward.gems);
+      if (mbReward.hints) economy.addHintTokens(mbReward.hints);
+      if (mbReward.rareTile) {
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+      }
     }
 
     // Queue jackpot ceremony for rare+ results
