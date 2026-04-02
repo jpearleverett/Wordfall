@@ -111,12 +111,22 @@ function HomeStackScreen() {
 }
 
 // Play Tab Stack
+// Event screen wrapper — wires navigation callbacks for Play and Shop buttons
+function EventScreenWrapperNav({ navigation }: any) {
+  return (
+    <EventScreen
+      onPlayEventPuzzle={() => navigation.navigate('Game', { mode: 'classic' })}
+      onOpenEventShop={() => navigation.navigate('Modes')}
+    />
+  );
+}
+
 function PlayStackScreen() {
   return (
     <PlayStack.Navigator screenOptions={screenOptions}>
       <PlayStack.Screen name="Modes" component={ModesScreenWrapper} />
       <PlayStack.Screen name="Game" component={GameScreenWrapper} />
-      <PlayStack.Screen name="Event" component={EventScreen} />
+      <PlayStack.Screen name="Event" component={EventScreenWrapperNav} />
       <PlayStack.Screen name="Leaderboard" component={LeaderboardScreen} />
     </PlayStack.Navigator>
   );
@@ -517,6 +527,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         nextLevelPreview={completionData.nextLevelPreview}
         shareText={completionData.shareText}
         friendComparison={completionData.friendComparison}
+        eventMultiplierLabel={completionData.eventMultiplierLabel}
       />
 
       {/* Post-puzzle spin prompt */}
