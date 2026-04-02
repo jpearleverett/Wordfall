@@ -82,6 +82,7 @@ import { firestoreService, FirestoreGift } from './src/services/firestore';
 // Extracted modules for decomposition
 import { useRewardWiring, playerStageFromPuzzles } from './src/hooks/useRewardWiring';
 import { useCeremonyQueue } from './src/hooks/useCeremonyQueue';
+import { getLoginCalendarDay } from './src/data/loginCalendar';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createStackNavigator();
@@ -982,6 +983,21 @@ function HomeMainScreen({ route, navigation }: any) {
     );
   }, [player]);
 
+  const handleClaimLoginReward = useCallback(() => {
+    const dayReward = getLoginCalendarDay(player.loginCycleDay);
+    const rewards = dayReward.rewards;
+    if (rewards.coins) economy.addCoins(rewards.coins);
+    if (rewards.gems) economy.addGems(rewards.gems);
+    if (rewards.hints) economy.addHintTokens(rewards.hints);
+    if (rewards.rareTile) {
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+    }
+    player.updateProgress({ loginCycleDay: player.loginCycleDay + 1 });
+    Alert.alert('Reward Claimed!', dayReward.label);
+    void analytics.logEvent('login_reward_claimed', { day: player.loginCycleDay });
+  }, [player, economy]);
+
   if (!player.loaded) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -1064,6 +1080,7 @@ function HomeMainScreen({ route, navigation }: any) {
           color: e.type === 'weekend_blitz' ? COLORS.orange : e.type === 'mini' ? COLORS.teal : COLORS.accent,
         }))}
         onOpenEvents={() => navigation.navigate('Play', { screen: 'Event' })}
+        onClaimLoginReward={handleClaimLoginReward}
       />
       {/* Welcome Back Modal */}
       {showWelcomeBack && (

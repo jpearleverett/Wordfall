@@ -150,6 +150,15 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         ),
       );
 
+      // Detect newly completed wings for ceremony queue
+      const newlyRestoredWings = completedWingIds.filter(
+        (wingId) => !prev.restoredWings.includes(wingId),
+      );
+      const wingCeremonies: CeremonyItem[] = newlyRestoredWings.map((wingId) => ({
+        type: 'wing_complete' as const,
+        data: { wingId, wingName: wingId },
+      }));
+
       return {
         ...prev,
         totalScore: prev.totalScore + score,
@@ -161,6 +170,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         starsByLevel: newStarsByLevel,
         totalStars,
         restoredWings: Array.from(new Set([...prev.restoredWings, ...completedWingIds])),
+        pendingCeremonies: [...prev.pendingCeremonies, ...wingCeremonies],
         lastActiveDate: getToday(),
       };
     });

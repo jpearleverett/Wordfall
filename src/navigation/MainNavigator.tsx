@@ -89,13 +89,22 @@ export function createHomeStackScreen(HomeMainScreen: React.ComponentType<any>, 
   };
 }
 
+function EventScreenWrapper({ navigation }: any) {
+  return (
+    <EventScreen
+      onPlayEventPuzzle={() => navigation.navigate('Game', { mode: 'classic' })}
+      onOpenEventShop={() => navigation.navigate('Modes')}
+    />
+  );
+}
+
 export function createPlayStackScreen(ModesScreenWrapper: React.ComponentType<any>, GameScreenWrapper: React.ComponentType<any>) {
   return function PlayStackScreen() {
     return (
       <PlayStack.Navigator screenOptions={screenOptions}>
         <PlayStack.Screen name="Modes" component={ModesScreenWrapper} />
         <PlayStack.Screen name="Game" component={GameScreenWrapper} />
-        <PlayStack.Screen name="Event" component={EventScreen} />
+        <PlayStack.Screen name="Event" component={EventScreenWrapper} />
         <PlayStack.Screen name="Leaderboard" component={LeaderboardScreen} />
       </PlayStack.Navigator>
     );
@@ -118,10 +127,19 @@ export function LibraryStackScreen() {
   );
 }
 
+function ProfileMainScreen({ navigation }: any) {
+  return (
+    <ProfileScreen
+      onOpenSettings={() => navigation.navigate('Settings')}
+      onEditProfile={() => navigation.navigate('Settings')}
+    />
+  );
+}
+
 export function ProfileStackScreen() {
   return (
     <ProfileStack.Navigator screenOptions={screenOptions}>
-      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+      <ProfileStack.Screen name="ProfileMain" component={ProfileMainScreen} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} />
       <ProfileStack.Screen name="Club" component={ClubScreen} />
     </ProfileStack.Navigator>

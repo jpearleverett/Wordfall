@@ -81,9 +81,9 @@ function createInitialState(
     spotlightActive: false,
     spotlightLetters: [],
     boosterCounts: {
-      wildcardTile: 1,
-      spotlight: 1,
-      smartShuffle: 1,
+      wildcardTile: 0,
+      spotlight: 0,
+      smartShuffle: 0,
     },
     lastInvalidTap: null,
     solveSequence: [],

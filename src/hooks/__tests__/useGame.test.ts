@@ -84,12 +84,12 @@ describe('createInitialState', () => {
     expect(state.gravityDirection).toBe('down');
   });
 
-  it('initializes booster counts', () => {
+  it('initializes booster counts at 0 (persistent inventory)', () => {
     const board = makeSimpleBoard();
     const state = createInitialState(board, 1);
-    expect(state.boosterCounts.wildcardTile).toBe(1);
-    expect(state.boosterCounts.spotlight).toBe(1);
-    expect(state.boosterCounts.smartShuffle).toBe(1);
+    expect(state.boosterCounts.wildcardTile).toBe(0);
+    expect(state.boosterCounts.spotlight).toBe(0);
+    expect(state.boosterCounts.smartShuffle).toBe(0);
   });
 });
 
@@ -217,7 +217,9 @@ describe('gameReducer - SUBMIT_WORD', () => {
 describe('gameReducer - USE_HINT', () => {
   it('decrements hints on use', () => {
     const board = makeSimpleBoard();
-    const state = createInitialState(board, 1);
+    let state = createInitialState(board, 1);
+    // Grant a hint token (now comes from persistent economy)
+    state = gameReducer(state, { type: 'GRANT_HINT' });
     const initialHints = state.hintsLeft;
     const newState = gameReducer(state, { type: 'USE_HINT' });
     expect(newState.hintsLeft).toBe(initialHints - 1);
@@ -234,7 +236,9 @@ describe('gameReducer - USE_HINT', () => {
 
   it('marks perfectRun as false', () => {
     const board = makeSimpleBoard();
-    const state = createInitialState(board, 1);
+    let state = createInitialState(board, 1);
+    // Grant a hint token first
+    state = gameReducer(state, { type: 'GRANT_HINT' });
     expect(state.perfectRun).toBe(true);
     const newState = gameReducer(state, { type: 'USE_HINT' });
     expect(newState.perfectRun).toBe(false);
@@ -245,6 +249,8 @@ describe('gameReducer - UNDO_MOVE', () => {
   it('restores previous state', () => {
     const board = makeSimpleBoard();
     let state = createInitialState(board, 1);
+    // Grant an undo token (now comes from persistent economy)
+    state = gameReducer(state, { type: 'GRANT_UNDO' });
     // Find GO
     state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 0, col: 0 } });
     state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 0, col: 1 } });
@@ -390,6 +396,9 @@ describe('gameReducer - SPOTLIGHT_ACTIVATE', () => {
   it('activates spotlight and computes relevant letters', () => {
     const board = makeSimpleBoard();
     let state = createInitialState(board, 1);
+    // Grant a spotlight booster first (now comes from persistent economy)
+    state = gameReducer(state, { type: 'GRANT_BOOSTER', booster: 'spotlight' });
+    expect(state.boosterCounts.spotlight).toBe(1);
     state = gameReducer(state, { type: 'SPOTLIGHT_ACTIVATE' });
     expect(state.spotlightActive).toBe(true);
     expect(state.spotlightLetters.length).toBeGreaterThan(0);

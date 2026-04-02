@@ -343,9 +343,10 @@ export function GameGrid({
                       height: gridHeight,
                     },
                     noGravityLayout && styles.columnNoGravity,
+                    !noGravityLayout && gravityDirection === 'up' && styles.columnGravityUp,
                   ]}
                 >
-                  {!noGravityLayout && <View style={EMPTY_FLEX} />}
+                  {!noGravityLayout && gravityDirection !== 'up' && <View style={EMPTY_FLEX} />}
                   {column.map(({ cell, row, col }) => {
                     if (!cell) {
                       // Empty slot placeholder for noGravity layout
@@ -377,6 +378,7 @@ export function GameGrid({
                       />
                     );
                   })}
+                  {!noGravityLayout && gravityDirection === 'up' && <View style={EMPTY_FLEX} />}
                 </View>
               ))}
             </View>
@@ -470,6 +472,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   columnNoGravity: {
+    justifyContent: 'flex-start',
+  },
+  columnGravityUp: {
     justifyContent: 'flex-start',
   },
   gravityArrowContainer: {
