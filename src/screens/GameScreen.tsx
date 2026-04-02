@@ -408,11 +408,11 @@ export function GameScreen({
         }
         break;
       case 'booster_pack':
-        // Spend 15 gems, grant 1 of each booster
+        // Spend 15 gems, grant 1 of each booster to persistent inventory
         if (economy.spendGems(15)) {
-          grantBooster('wildcardTile');
-          grantBooster('spotlight');
-          grantBooster('smartShuffle');
+          economy.addBoosterToken('wildcardTile');
+          economy.addBoosterToken('spotlight');
+          economy.addBoosterToken('smartShuffle');
           accepted = true;
         }
         break;
@@ -560,7 +560,7 @@ export function GameScreen({
   // Hints/undos use persistent economy tokens (not per-level allocation)
   // Relax mode still uses unlimited per-level allocation
   const hintsAvailable = mode === 'relax' ? state.hintsLeft : economy.hintTokens;
-  const undosAvailable = mode === 'relax' ? state.undosLeft : (state.history.length > 0 ? economy.undoTokens : 0);
+  const undosAvailable = mode === 'relax' ? state.undosLeft : economy.undoTokens;
 
   // Idle hint prompt — use refs to avoid recreating on every state change
   const statusRef = useRef(state.status);
@@ -792,6 +792,7 @@ export function GameScreen({
   }, [useHint, grantHint, level, mode, hintsAvailable, economy]);
 
   const handleUndo = useCallback(() => {
+    if (state.history.length === 0) return;
     if (mode !== 'relax') {
       // Spend from persistent inventory and grant into game state
       if (economy.undoTokens <= 0) return;
@@ -832,7 +833,7 @@ export function GameScreen({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, grantUndo, level, mode, undosAvailable, economy, reduceMotion, undoFlashAnim, undoPulseAnim]);
+  }, [undoMove, grantUndo, level, mode, undosAvailable, economy, reduceMotion, undoFlashAnim, undoPulseAnim, state.history.length]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
@@ -872,33 +873,36 @@ export function GameScreen({
     }
   }, [player]);
 
-  // Booster handlers
+  // Booster handlers — spend from persistent economy inventory
   const handleWildcard = useCallback(() => {
-    if (state.boosterCounts.wildcardTile > 0) {
-      void soundManager.playSound('buttonPress');
-      void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
-      checkFirstBooster();
-      activateWildcard();
-    }
-  }, [activateWildcard, state.boosterCounts.wildcardTile, level, mode, checkFirstBooster]);
+    if ((economy.boosterTokens?.wildcardTile ?? 0) <= 0) return;
+    economy.spendBoosterToken('wildcardTile');
+    grantBooster('wildcardTile');
+    void soundManager.playSound('buttonPress');
+    void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
+    checkFirstBooster();
+    activateWildcard();
+  }, [activateWildcard, economy, grantBooster, level, mode, checkFirstBooster]);
 
   const handleSpotlight = useCallback(() => {
-    if (state.boosterCounts.spotlight > 0) {
-      void soundManager.playSound('buttonPress');
-      void analytics.logEvent('booster_used', { level, mode, booster: 'spotlight' });
-      checkFirstBooster();
-      activateSpotlight();
-    }
-  }, [activateSpotlight, state.boosterCounts.spotlight, level, mode, checkFirstBooster]);
+    if ((economy.boosterTokens?.spotlight ?? 0) <= 0) return;
+    economy.spendBoosterToken('spotlight');
+    grantBooster('spotlight');
+    void soundManager.playSound('buttonPress');
+    void analytics.logEvent('booster_used', { level, mode, booster: 'spotlight' });
+    checkFirstBooster();
+    activateSpotlight();
+  }, [activateSpotlight, economy, grantBooster, level, mode, checkFirstBooster]);
 
   const handleSmartShuffle = useCallback(() => {
-    if (state.boosterCounts.smartShuffle > 0) {
-      void soundManager.playSound('buttonPress');
-      void analytics.logEvent('booster_used', { level, mode, booster: 'smartShuffle' });
-      checkFirstBooster();
-      activateSmartShuffle();
-    }
-  }, [activateSmartShuffle, state.boosterCounts.smartShuffle, level, mode, checkFirstBooster]);
+    if ((economy.boosterTokens?.smartShuffle ?? 0) <= 0) return;
+    economy.spendBoosterToken('smartShuffle');
+    grantBooster('smartShuffle');
+    void soundManager.playSound('buttonPress');
+    void analytics.logEvent('booster_used', { level, mode, booster: 'smartShuffle' });
+    checkFirstBooster();
+    activateSmartShuffle();
+  }, [activateSmartShuffle, economy, grantBooster, level, mode, checkFirstBooster]);
 
   // Format timer — extracted as useCallback to avoid recreation on every render
   const formatTime = useCallback((seconds: number) => {
@@ -938,10 +942,11 @@ export function GameScreen({
     outputRange: [0, 0.3],
   });
 
+  const bt = economy.boosterTokens ?? { wildcardTile: 0, spotlight: 0, smartShuffle: 0 };
   const hasAnyBoosters =
-    state.boosterCounts.wildcardTile > 0 ||
-    state.boosterCounts.spotlight > 0 ||
-    state.boosterCounts.smartShuffle > 0;
+    bt.wildcardTile > 0 ||
+    bt.spotlight > 0 ||
+    bt.smartShuffle > 0;
 
   // Compute spotlight dimmed cells for grid rendering
   const spotlightDimmedSet = useMemo(() => {
@@ -1290,7 +1295,7 @@ export function GameScreen({
           resizeMode="stretch"
         />
         <View style={styles.boosterShelf}>
-          {state.boosterCounts.wildcardTile > 0 && (
+          {bt.wildcardTile > 0 && (
             <Pressable
               style={({ pressed }) => [
                 styles.boosterButton,
@@ -1309,11 +1314,11 @@ export function GameScreen({
               </View>
               <Text style={styles.boosterLabel}>Wildcard</Text>
               <View style={styles.boosterCount}>
-                <Text style={styles.boosterCountText}>{state.boosterCounts.wildcardTile}</Text>
+                <Text style={styles.boosterCountText}>{bt.wildcardTile}</Text>
               </View>
             </Pressable>
           )}
-          {state.boosterCounts.spotlight > 0 && (
+          {bt.spotlight > 0 && (
             <Pressable
               style={({ pressed }) => [
                 styles.boosterButton,
@@ -1332,11 +1337,11 @@ export function GameScreen({
               </View>
               <Text style={styles.boosterLabel}>Spotlight</Text>
               <View style={styles.boosterCount}>
-                <Text style={styles.boosterCountText}>{state.boosterCounts.spotlight}</Text>
+                <Text style={styles.boosterCountText}>{bt.spotlight}</Text>
               </View>
             </Pressable>
           )}
-          {state.boosterCounts.smartShuffle > 0 && (
+          {bt.smartShuffle > 0 && (
             <Pressable
               style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
               onPress={handleSmartShuffle}
@@ -1351,7 +1356,7 @@ export function GameScreen({
               </View>
               <Text style={styles.boosterLabel}>Shuffle</Text>
               <View style={styles.boosterCount}>
-                <Text style={styles.boosterCountText}>{state.boosterCounts.smartShuffle}</Text>
+                <Text style={styles.boosterCountText}>{bt.smartShuffle}</Text>
               </View>
             </Pressable>
           )}

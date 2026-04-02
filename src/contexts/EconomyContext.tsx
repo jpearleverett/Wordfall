@@ -13,6 +13,8 @@ interface Economy {
   hintTokens: number;
   eventStars: number;
   libraryPoints: number;
+  /** Persistent booster token counts */
+  boosterTokens: { wildcardTile: number; spotlight: number; smartShuffle: number };
 }
 
 interface TotalEarned {
@@ -94,6 +96,8 @@ interface EconomyContextType extends Economy {
   undoTokens: number;
   addUndoTokens: (amount: number) => void;
   spendUndoToken: () => boolean;
+  addBoosterToken: (type: 'wildcardTile' | 'spotlight' | 'smartShuffle', amount?: number) => void;
+  spendBoosterToken: (type: 'wildcardTile' | 'spotlight' | 'smartShuffle') => boolean;
   claimDailyValuePackDrip: () => boolean;
   isVip: boolean;
   vipExpiresAt: number;
@@ -111,6 +115,7 @@ const DEFAULT_ECONOMY: EconomyState = {
   hintTokens: 5,
   eventStars: 0,
   libraryPoints: 0,
+  boosterTokens: { wildcardTile: 2, spotlight: 2, smartShuffle: 2 },
   totalEarned: {
     coins: 500,
     gems: 10,
@@ -182,6 +187,8 @@ const EconomyContext = createContext<EconomyContextType>({
   undoTokens: 0,
   addUndoTokens: () => {},
   spendUndoToken: () => false,
+  addBoosterToken: () => {},
+  spendBoosterToken: () => false,
   claimDailyValuePackDrip: () => false,
   isVip: false,
   vipExpiresAt: 0,
@@ -454,6 +461,34 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return success;
   }, []);
 
+  // ── Booster tokens ────────────────────────────────────────────────────────
+
+  const addBoosterToken = useCallback((type: 'wildcardTile' | 'spotlight' | 'smartShuffle', amount = 1) => {
+    setState((prev) => ({
+      ...prev,
+      boosterTokens: {
+        ...prev.boosterTokens,
+        [type]: (prev.boosterTokens?.[type] ?? 0) + amount,
+      },
+    }));
+  }, []);
+
+  const spendBoosterToken = useCallback((type: 'wildcardTile' | 'spotlight' | 'smartShuffle'): boolean => {
+    let success = false;
+    setState((prev) => {
+      const current = prev.boosterTokens?.[type] ?? 0;
+      if (current > 0) {
+        success = true;
+        return {
+          ...prev,
+          boosterTokens: { ...prev.boosterTokens, [type]: current - 1 },
+        };
+      }
+      return prev;
+    });
+    return success;
+  }, []);
+
   // ── IAP purchase processing ───────────────────────────────────────────────
 
   const processPurchase = useCallback((productId: string) => {
@@ -606,6 +641,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         hintTokens: state.hintTokens,
         eventStars: state.eventStars,
         libraryPoints: state.libraryPoints,
+        boosterTokens: state.boosterTokens ?? { wildcardTile: 2, spotlight: 2, smartShuffle: 2 },
         totalEarned: state.totalEarned,
         purchaseHistory: state.purchaseHistory,
         addCoins,
@@ -633,6 +669,8 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         undoTokens: state.undoTokens,
         addUndoTokens,
         spendUndoToken,
+        addBoosterToken,
+        spendBoosterToken,
         claimDailyValuePackDrip,
         isVip: isVipActive,
         vipExpiresAt: state.vipExpiresAt,

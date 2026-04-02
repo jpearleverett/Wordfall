@@ -618,10 +618,10 @@ export const STREAK = {
 
 // Collection
 export const COLLECTION = {
-  rareTilePityTimer: 10, // guaranteed within 10 puzzles
-  rareTileBaseChance: 0.15,
-  rareTileHardBonus: 0.1,
-  rareTilePerfectBonus: 0.15,
+  rareTilePityTimer: 25, // guaranteed within 25 puzzles (was 10)
+  rareTileBaseChance: 0.04, // 4% base chance (was 15%)
+  rareTileHardBonus: 0.03, // +3% for hard/expert (was 10%)
+  rareTilePerfectBonus: 0.05, // +5% for perfect clears (was 15%)
   duplicatesForWildcard: 5,
   giftTilesPerDay: 3,
   atlasMasteryMax: 5, // max mastery level per word (unlocks gold border at max)

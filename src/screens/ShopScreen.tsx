@@ -65,6 +65,24 @@ const GEM_PACKS: ShopItem[] = [
   { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', price: '$9.99', quantity: 500, bestValue: true, iapProductId: 'gems_500' },
 ];
 
+// ─── Coin Shop items (spend coins on consumables) ───────────────────────────
+
+interface CoinShopDisplay {
+  id: string;
+  name: string;
+  icon: string;
+  cost: number;
+  grant: 'hints' | 'undos';
+  amount: number;
+}
+
+const COIN_SHOP_DISPLAY: CoinShopDisplay[] = [
+  { id: 'coin_hint_1', name: '1 Hint', icon: '\u{1F4A1}', cost: 100, grant: 'hints', amount: 1 },
+  { id: 'coin_hint_3', name: '3 Hints', icon: '\u{1F4A1}', cost: 250, grant: 'hints', amount: 3 },
+  { id: 'coin_undo_1', name: '1 Undo', icon: '\u21A9\uFE0F', cost: 100, grant: 'undos', amount: 1 },
+  { id: 'coin_undo_3', name: '3 Undos', icon: '\u21A9\uFE0F', cost: 250, grant: 'undos', amount: 3 },
+];
+
 // ─── Parental controls helper ────────────────────────────────────────────────
 
 interface ParentalCheckResult {
@@ -938,6 +956,41 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           </TouchableOpacity>
         </View>
 
+        {/* ── Coin Shop (spend coins on consumables) ─────────────────── */}
+        <Text style={styles.sectionTitle}>Spend Coins</Text>
+        <View style={styles.coinShopGrid}>
+          {COIN_SHOP_DISPLAY.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.coinShopCard}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (economy.coins < item.cost) {
+                  Alert.alert('Not Enough Coins', `You need ${item.cost} coins for this item.`);
+                  return;
+                }
+                if (economy.spendCoins(item.cost)) {
+                  if (item.grant === 'hints') economy.addHintTokens(item.amount);
+                  else if (item.grant === 'undos') economy.addUndoTokens(item.amount);
+                  Alert.alert('Purchased!', `${item.name} added to your inventory.`);
+                }
+              }}
+            >
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
+              <Text style={styles.coinShopIcon}>{item.icon}</Text>
+              <Text style={styles.coinShopName}>{item.name}</Text>
+              <View style={styles.coinShopPrice}>
+                <Text style={styles.coinShopPriceText}>{'\u{1FA99}'} {item.cost}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* ── Restore Purchases ──────────────────────────────────────── */}
         <TouchableOpacity
           style={styles.restoreButton}
@@ -1453,6 +1506,46 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 40,
+  },
+
+  // ── Coin Shop ──────────────────────────────────────────────────────────
+  coinShopGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    gap: 10,
+    marginBottom: 20,
+  },
+  coinShopCard: {
+    width: (width - 52) / 2,
+    borderRadius: 16,
+    padding: 14,
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  coinShopIcon: {
+    fontSize: 28,
+    marginBottom: 6,
+  },
+  coinShopName: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  coinShopPrice: {
+    backgroundColor: 'rgba(255,215,0,0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  coinShopPriceText: {
+    color: COLORS.gold,
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 

@@ -10,7 +10,7 @@ import {
   PERFECT_MILESTONES,
   MILESTONE_DECORATIONS,
 } from '../constants';
-import { ATLAS_PAGES } from '../data/collections';
+import { ATLAS_PAGES, getCurrentSeasonAlbum } from '../data/collections';
 import { generateShareText } from '../utils/shareGenerator';
 import { eventManager } from '../services/eventManager';
 import { analytics } from '../services/analytics';
@@ -93,6 +93,7 @@ interface PlayerContextLike {
   unlockMode: (modeId: string) => void;
   awardFreeSpin: () => void;
   updateWinStreak: (won: boolean) => void;
+  collectStamp: (albumId: string, stampIndex: number) => void;
 }
 
 interface EconomyContextLike {
@@ -424,6 +425,20 @@ export function useRewardWiring({
 
     // Update win streak
     player.updateWinStreak(true);
+
+    // Award seasonal stamp based on puzzles solved this season
+    const currentAlbum = getCurrentSeasonAlbum();
+    if (currentAlbum) {
+      const puzzleCount = player.puzzlesSolved + 1;
+      // Award stamps at puzzle milestones: 1, 3, 5, 10, 15, 20, 30, 40, 50, 60,
+      // 75, 90, 100, 120, 150, 175, 200, 250, 300, 500
+      const STAMP_MILESTONES = [1, 3, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 100, 120, 150, 175, 200, 250, 300, 500];
+      const stampIndex = STAMP_MILESTONES.indexOf(puzzleCount);
+      if (stampIndex >= 0 && stampIndex < currentAlbum.stamps.length) {
+        player.collectStamp(currentAlbum.id, stampIndex);
+        void analytics.logEvent('stamp_collected', { albumId: currentAlbum.id, stampIndex, puzzleCount });
+      }
+    }
 
     // Generate share text
     const grid = params.board ? (params.board as Board).grid : null;

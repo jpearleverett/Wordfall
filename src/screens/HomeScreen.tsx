@@ -69,6 +69,7 @@ interface HomeScreenProps {
   activeEventBanners?: Array<{ id: string; name: string; icon: string; label: string; color: string }>;
   /** Navigate to event screen */
   onOpenEvents?: () => void;
+  onClaimLoginReward?: () => void;
 }
 
 const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: string }> = {
@@ -113,6 +114,7 @@ export function HomeScreen({
   segmentWelcomeMessage = null,
   activeEventBanners = [],
   onOpenEvents,
+  onClaimLoginReward,
 }: HomeScreenProps) {
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
@@ -745,7 +747,7 @@ export function HomeScreen({
               {/* Claim button for today */}
               <Pressable
                 style={({ pressed }) => [pressed && styles.buttonPressed]}
-                onPress={() => onPlay()}
+                onPress={() => onClaimLoginReward ? onClaimLoginReward() : onPlay()}
               >
                 <LinearGradient
                   colors={GRADIENTS.button.gold}
