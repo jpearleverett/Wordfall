@@ -497,21 +497,23 @@ export function useRewardWiring({
 
     // Store completion metadata in route params for GameScreen to pick up
     const eventMultiplierLabel = eventManager.getActiveMultiplierLabel();
-    navigation.setParams({
-      completionData: {
-        isFirstWin,
-        leveledUp,
-        newLevel,
-        difficultyTransition,
-        nextLevelPreview: !isDaily ? {
-          level: newLevel,
-          difficulty: getDifficultyForLevel(newLevel),
-        } : null,
-        shareText,
-        friendComparison,
-        eventMultiplierLabel,
-      },
-    });
+    if (navigation.isFocused()) {
+      navigation.setParams({
+        completionData: {
+          isFirstWin,
+          leveledUp,
+          newLevel,
+          difficultyTransition,
+          nextLevelPreview: !isDaily ? {
+            level: newLevel,
+            difficulty: getDifficultyForLevel(newLevel),
+          } : null,
+          shareText,
+          friendComparison,
+          eventMultiplierLabel,
+        },
+      });
+    }
   }, [params, player, economy, navigation, userId]);
 
   return handleComplete;

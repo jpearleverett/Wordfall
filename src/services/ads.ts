@@ -110,28 +110,17 @@ class AdManager {
     this.tracking = await loadTracking();
 
     try {
-      // Attempt to load expo-ads-admob
-      const adModule = await import('expo-ads-admob' as string);
-      if (adModule && typeof adModule.setTestDeviceIDAsync === 'function') {
-        await adModule.setTestDeviceIDAsync('EMULATOR');
+      // Attempt react-native-google-mobile-ads
+      const mobileAds = await import('react-native-google-mobile-ads' as string);
+      if (mobileAds && typeof mobileAds.default?.initialize === 'function') {
+        await mobileAds.default.initialize();
         this.useMock = false;
         this.preloadRewardedAd();
-        console.log('[Ads] Native ad module (expo-ads-admob) initialised');
+        console.log('[Ads] Native ad module (react-native-google-mobile-ads) initialised');
       }
     } catch {
-      try {
-        // Attempt react-native-google-mobile-ads as fallback
-        const mobileAds = await import('react-native-google-mobile-ads' as string);
-        if (mobileAds && typeof mobileAds.default?.initialize === 'function') {
-          await mobileAds.default.initialize();
-          this.useMock = false;
-          this.preloadRewardedAd();
-          console.log('[Ads] Native ad module (react-native-google-mobile-ads) initialised');
-        }
-      } catch {
-        this.useMock = true;
-        console.log('[Ads] No ad SDK available — using mock mode');
-      }
+      this.useMock = true;
+      console.log('[Ads] No ad SDK available — using mock mode');
     }
 
     // In mock mode the rewarded ad is always "ready"
@@ -327,30 +316,20 @@ class AdManager {
 
   private async nativeShowInterstitialAd(): Promise<boolean> {
     try {
-      const adModule = await import('expo-ads-admob' as string);
-      if (typeof adModule.AdMobInterstitial?.showAdAsync === 'function') {
-        await adModule.AdMobInterstitial.requestAdAsync();
-        await adModule.AdMobInterstitial.showAdAsync();
-        return true;
+      const mobileAds = await import('react-native-google-mobile-ads' as string);
+      if (mobileAds.InterstitialAd) {
+        return new Promise<boolean>((resolve) => {
+          const ad = mobileAds.InterstitialAd.createForAdRequest(
+            AD_CONFIG.REWARDED_AD_UNIT_ID, // Would use a separate interstitial ID in production
+          );
+          ad.addAdEventListener('closed', () => resolve(true));
+          ad.addAdEventListener('error', () => resolve(false));
+          ad.load();
+          ad.show().catch(() => resolve(false));
+        });
       }
     } catch {
-      // expo-ads-admob not available, try react-native-google-mobile-ads
-      try {
-        const mobileAds = await import('react-native-google-mobile-ads' as string);
-        if (mobileAds.InterstitialAd) {
-          return new Promise<boolean>((resolve) => {
-            const ad = mobileAds.InterstitialAd.createForAdRequest(
-              AD_CONFIG.REWARDED_AD_UNIT_ID, // Would use a separate interstitial ID in production
-            );
-            ad.addAdEventListener('closed', () => resolve(true));
-            ad.addAdEventListener('error', () => resolve(false));
-            ad.load();
-            ad.show().catch(() => resolve(false));
-          });
-        }
-      } catch {
-        // No ad SDK available
-      }
+      // No ad SDK available
     }
     console.warn('[Ads] Failed to show native interstitial ad');
     return false;
@@ -385,25 +364,29 @@ class AdManager {
 
   private async nativeShowRewardedAd(rewardType: AdRewardType): Promise<AdRewardResult> {
     try {
-      // Try expo-ads-admob first
-      const adModule = await import('expo-ads-admob' as string);
-      const result: AdRewardResult = await new Promise<AdRewardResult>((resolve) => {
-        adModule.AdMobRewarded.setAdUnitID(AD_CONFIG.REWARDED_AD_UNIT_ID);
-        adModule.AdMobRewarded.addEventListener('rewarded', () => {
-          resolve({ rewarded: true, rewardType });
+      const mobileAds = await import('react-native-google-mobile-ads' as string);
+      if (mobileAds.RewardedAd) {
+        const result: AdRewardResult = await new Promise<AdRewardResult>((resolve) => {
+          const ad = mobileAds.RewardedAd.createForAdRequest(AD_CONFIG.REWARDED_AD_UNIT_ID);
+          ad.addAdEventListener('rewarded', () => {
+            resolve({ rewarded: true, rewardType });
+          });
+          ad.addAdEventListener('closed', () => {
+            resolve({ rewarded: false, rewardType });
+          });
+          ad.addAdEventListener('error', () => {
+            resolve({ rewarded: false, rewardType });
+          });
+          ad.load();
+          ad.show().catch(() => resolve({ rewarded: false, rewardType }));
         });
-        adModule.AdMobRewarded.addEventListener('adDismissed', () => {
-          resolve({ rewarded: false, rewardType });
-        });
-        adModule.AdMobRewarded.showAdAsync().catch(() => {
-          resolve({ rewarded: false, rewardType });
-        });
-      });
-      this.preloadRewardedAd();
-      return result;
+        this.preloadRewardedAd();
+        return result;
+      }
     } catch {
-      return { rewarded: false, rewardType };
+      // No ad SDK available
     }
+    return { rewarded: false, rewardType };
   }
 
   private async preloadRewardedAd(): Promise<void> {
@@ -412,17 +395,9 @@ class AdManager {
       this.notifyListeners();
       return;
     }
-    try {
-      const adModule = await import('expo-ads-admob' as string);
-      this.rewardedAdReady = false;
-      this.notifyListeners();
-      await adModule.AdMobRewarded.requestAdAsync();
-      this.rewardedAdReady = true;
-      this.notifyListeners();
-    } catch {
-      this.rewardedAdReady = false;
-      this.notifyListeners();
-    }
+    // Preloading requires react-native-google-mobile-ads — skip if unavailable
+    this.rewardedAdReady = true;
+    this.notifyListeners();
   }
 
   // ── Mock implementation ─────────────────────────────────────────────────
