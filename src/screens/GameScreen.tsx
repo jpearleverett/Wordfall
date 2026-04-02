@@ -48,7 +48,7 @@ interface GameScreenProps {
   mode?: GameMode;
   maxMoves?: number;
   timeLimit?: number;
-  onComplete: (stars: number, score: number) => void;
+  onComplete: (stars: number, score: number, maxCombo: number) => void;
   onNextLevel: () => void;
   onHome: () => void;
   // Completion data (passed from App.tsx wrapper after handleComplete)
@@ -59,6 +59,7 @@ interface GameScreenProps {
   nextLevelPreview?: { level: number; difficulty: string } | null;
   shareText?: string;
   friendComparison?: { beaten: number; total: number } | null;
+  eventMultiplierLabel?: string | null;
 }
 
 function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): CellPosition[] {
@@ -141,6 +142,7 @@ export function GameScreen({
   nextLevelPreview = null,
   shareText = '',
   friendComparison = null,
+  eventMultiplierLabel = null,
 }: GameScreenProps) {
   const player = usePlayer();
   const failCount = player.failCountByLevel?.[level] ?? 0;
@@ -214,8 +216,10 @@ export function GameScreen({
   const economy = useEconomy();
   const [activeOffer, setActiveOffer] = useState<OfferType | null>(null);
   const offerShownThisLevel = useRef(false);
+  const completionHandled = useRef(false);
   // hint_rescue: track session fail count for this level (local, resets on mount)
   const sessionFailCount = useRef(0);
+  const failureCountedRef = useRef(false);
   // close_finish: idle timer for "1 word away" scenario
   const closeFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // post_puzzle: track whether to show after completion dismissal
@@ -340,12 +344,17 @@ export function GameScreen({
   // hint_rescue: detect failures and show offer after 2+ fails (session or persistent)
   useEffect(() => {
     if (state.status === 'failed' || state.status === 'timeout') {
-      sessionFailCount.current += 1;
+      if (!failureCountedRef.current) {
+        failureCountedRef.current = true;
+        sessionFailCount.current += 1;
+      }
       const persistentFails = player.failCountByLevel?.[level] ?? 0;
       const totalFails = Math.max(sessionFailCount.current, persistentFails);
       if (totalFails >= 2 && !offerShownThisLevel.current && !activeOffer) {
         showOfferIfAllowed('hint_rescue');
       }
+    } else {
+      failureCountedRef.current = false;
     }
   }, [state.status, activeOffer, showOfferIfAllowed, player.failCountByLevel, level]);
 
@@ -424,10 +433,12 @@ export function GameScreen({
         }
         break;
       case 'streak_shield':
-        // Spend 30 gems, activate streak shield
-        if (economy.spendGems(30)) {
-          player.activateStreakShield?.();
-          accepted = true;
+        // Activate streak shield — only spend gems if method exists
+        if (typeof (player as any).activateStreakShield === 'function') {
+          if (economy.spendGems(30)) {
+            (player as any).activateStreakShield();
+            accepted = true;
+          }
         }
         break;
     }
@@ -595,6 +606,11 @@ export function GameScreen({
     }
   }, [mode]);
 
+  // Track game state in refs so the cleanup can read current values without
+  // adding them as effect dependencies (which caused spurious start/abandon cycles)
+  const gameStateRef = useRef({ status: state.status, foundWords, totalWords, score: state.score });
+  gameStateRef.current = { status: state.status, foundWords, totalWords, score: state.score };
+
   useEffect(() => {
     void soundManager.playMusic(mode === 'timePressure' ? 'tense' : 'gameplay');
     void analytics.logEvent('puzzle_start', {
@@ -608,17 +624,18 @@ export function GameScreen({
 
     return () => {
       void soundManager.playMusic('menu');
-      if (state.status === 'playing') {
+      const gs = gameStateRef.current;
+      if (gs.status === 'playing') {
         void analytics.logEvent('puzzle_abandon', {
           level,
           mode,
-          foundWords,
-          totalWords,
-          score: state.score,
+          foundWords: gs.foundWords,
+          totalWords: gs.totalWords,
+          score: gs.score,
         });
       }
     };
-  }, [mode, level, isDaily, board.words.length, board.config.rows, board.config.cols, state.status, foundWords, totalWords, state.score]);
+  }, [mode, level, isDaily, board.words.length, board.config.rows, board.config.cols]);
 
   // Track post-gravity moved cells
   useEffect(() => {
@@ -740,18 +757,25 @@ export function GameScreen({
     }
   }, [isValidWord, currentWord]);
 
-  // Show completion modal
+  // Show completion modal — use a ref guard to prevent double-firing when
+  // onComplete mutates player/economy state and causes callback reference changes
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
   useEffect(() => {
-    if (state.status === 'won' && !showComplete) {
+    if (state.status === 'won' && !completionHandled.current) {
+      completionHandled.current = true;
       void successHaptic();
       void soundManager.playSound('puzzleComplete');
+      const finalScore = state.score;
+      const finalStars = stars;
+      const finalMaxCombo = state.maxCombo;
       const timer = setTimeout(() => {
         setShowComplete(true);
-        onComplete(stars, state.score);
+        onCompleteRef.current(finalStars, finalScore, finalMaxCombo);
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [state.status, showComplete, onComplete, stars, state.score]);
+  }, [state.status, stars, state.score, state.maxCombo]);
 
   // Reset grid height lock when board changes (new puzzle/level)
   useEffect(() => {
@@ -845,12 +869,14 @@ export function GameScreen({
     );
     newGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
     setShowComplete(false);
+    completionHandled.current = false;
 
     setShowFailed(false);
   }, [board, level, mode, effectiveMaxMoves, effectiveTimeLimit, newGame]);
 
   const handleNextLevel = useCallback(() => {
     setShowComplete(false);
+    completionHandled.current = false;
     // post_puzzle: show hint upsell if player used all free hints
     if (pendingPostPuzzleOffer && !offerShownThisLevel.current) {
       setPendingPostPuzzleOffer(false);
@@ -1381,6 +1407,7 @@ export function GameScreen({
           nextLevelPreview={nextLevelPreview}
           shareText={shareText}
           friendComparison={friendComparison}
+          eventMultiplierLabel={eventMultiplierLabel}
           onNextLevel={handleNextLevel}
           onHome={onHome}
           onRetry={handleRetry}

@@ -37,6 +37,7 @@ interface PuzzleCompleteProps {
   nextLevelPreview?: { level: number; difficulty: string } | null;
   shareText?: string;
   friendComparison?: { beaten: number; total: number } | null;
+  eventMultiplierLabel?: string | null;
   onNextLevel: () => void;
   onHome: () => void;
   onRetry: () => void;
@@ -299,6 +300,7 @@ export function PuzzleComplete({
   nextLevelPreview = null,
   shareText = '',
   friendComparison = null,
+  eventMultiplierLabel = null,
   onNextLevel,
   onHome,
   onRetry,
@@ -644,6 +646,16 @@ export function PuzzleComplete({
                 </Animated.View>
               )}
               {/* Difficulty transition shown via DifficultyTransitionCeremony modal */}
+
+              {/* Event Multiplier Label */}
+              {eventMultiplierLabel && (
+                <Animated.View style={[styles.friendCompare, { opacity: statsAnim, backgroundColor: 'rgba(255, 159, 67, 0.15)' }]}>
+                  <Text style={styles.friendCompareIcon}>{'\u{1F525}'}</Text>
+                  <Text style={[styles.friendCompareText, { color: COLORS.orange }]}>
+                    {eventMultiplierLabel}
+                  </Text>
+                </Animated.View>
+              )}
 
               {/* Friend Score Comparison */}
               {friendComparison && friendComparison.total > 0 && (

@@ -34,22 +34,18 @@ export function useCeremonyQueue({
   const [activeCeremony, setActiveCeremony] = useState<CeremonyItem | null>(null);
   const ceremonyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ceremonyShownAtRef = useRef<number>(0);
+  // Ref to always have the latest popCeremony in setTimeout callbacks
+  const popCeremonyRef = useRef(popCeremony);
+  popCeremonyRef.current = popCeremony;
 
-  // Process pending ceremonies on initial load
+  // Process pending ceremonies when loaded, unblocked, and queue has items.
+  // Single effect prevents race condition where two effects both pop ceremonies.
   useEffect(() => {
-    if (loaded && !isBlocked && pendingCeremonyCount > 0 && !activeCeremony) {
+    if (loaded && !isBlocked && !activeCeremony && pendingCeremonyCount > 0) {
       const next = popCeremony();
       if (next) setActiveCeremony(next);
     }
-  }, [loaded]);
-
-  // Process pending ceremonies when new ones are queued
-  useEffect(() => {
-    if (!activeCeremony && !isBlocked && pendingCeremonyCount > 0) {
-      const next = popCeremony();
-      if (next) setActiveCeremony(next);
-    }
-  }, [pendingCeremonyCount, activeCeremony, isBlocked]);
+  }, [loaded, pendingCeremonyCount, activeCeremony, isBlocked, popCeremony]);
 
   // Track when a ceremony is displayed
   useEffect(() => {
@@ -72,12 +68,12 @@ export function useCeremonyQueue({
       void analytics.trackCeremonyDismissed(activeCeremony.type, durationMs);
     }
     setActiveCeremony(null);
-    // Check for more ceremonies after a short delay
+    // Check for more ceremonies after a short delay (use ref to avoid stale closure)
     ceremonyTimerRef.current = setTimeout(() => {
-      const next = popCeremony();
+      const next = popCeremonyRef.current();
       if (next) setActiveCeremony(next);
     }, 300);
-  }, [popCeremony, activeCeremony]);
+  }, [activeCeremony]);
 
   const processNext = useCallback(() => {
     const next = popCeremony();

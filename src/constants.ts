@@ -238,9 +238,9 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, BoardConfig> = {
 // Inspired by Candy Crush / Royal Match: gradual increase with periodic easy levels
 // instead of a cliff at each difficulty threshold.
 export function getLevelConfig(level: number): BoardConfig {
-  // Breather levels: every 5th level is slightly easier (sawtooth pattern)
+  // Breather levels: every 5th level is easier (sawtooth pattern, drops ~4 levels back)
   const isBreather = level > 1 && level % 5 === 0;
-  const effectiveLevel = isBreather ? level - 2 : level;
+  const effectiveLevel = isBreather ? Math.max(1, level - 4) : level;
 
   // Phase 1: Tutorial / Easy (levels 1-5) — gentle ramp from 2 to 3 words
   if (effectiveLevel <= 3) {
@@ -596,7 +596,7 @@ export const LIVES = {
 export const ENERGY = {
   MAX: 30,
   REGEN_MINUTES: 15,
-  FREE_MODES: ['daily', 'endless', 'relax'] as string[],
+  FREE_MODES: ['daily', 'relax'] as string[],
   BONUS_PLAYS_AFTER_ZERO: 3,
   AD_REFILL_AMOUNT: 5,
   GEM_REFILL_COST: 10,

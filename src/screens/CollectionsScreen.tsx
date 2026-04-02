@@ -75,7 +75,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
     return () => clearTimeout(timer);
   }, []);
 
-  const atlasPages = collections?.atlas ?? DEFAULT_ATLAS_PAGES;
+  const atlasPages = collections?.atlasPages ?? DEFAULT_ATLAS_PAGES;
   const collectedTiles: string[] = collections?.rareTiles
     ? Object.keys(collections.rareTiles).filter(l => collections.rareTiles[l] > 0)
     : [];

@@ -195,7 +195,7 @@ export const EVENT_TEMPLATES: Omit<GameEvent, 'id' | 'startDate' | 'endDate' | '
  * Generate a scheduled event for a given week number (0-indexed, repeats every 12 weeks).
  */
 export function getEventForWeek(weekNumber: number): GameEvent {
-  const templateIndex = weekNumber % EVENT_TEMPLATES.length;
+  const templateIndex = weekNumber % 12; // 12-week rotation cycle
   const template = EVENT_TEMPLATES[templateIndex];
 
   // Calculate start/end dates based on week number relative to a reference date

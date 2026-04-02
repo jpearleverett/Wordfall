@@ -492,6 +492,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         gravityDirection: prevDirection,
         shrinkCount: prevShrinkCount,
         wordsUntilShrink: prevWordsUntilShrink,
+        // Reset temporary booster states since board changed
+        spotlightActive: false,
+        spotlightLetters: [],
+        wildcardMode: false,
+        wildcardCells: [],
       };
     }
 
@@ -597,6 +602,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             ...state,
             board: { ...state.board, grid: newGrid },
             boosterCounts: { ...state.boosterCounts, smartShuffle: state.boosterCounts.smartShuffle - 1 },
+            // Reset spotlight since board letters changed
+            spotlightActive: false,
+            spotlightLetters: [],
           };
         }
       }

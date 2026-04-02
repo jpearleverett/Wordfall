@@ -15,6 +15,7 @@ import { getCurrentEvent } from '../data/events';
 import { EventExclusiveReward } from '../types';
 import { eventManager, ActiveEvent, EventRewardTierDisplay } from '../services/eventManager';
 import { useEconomy } from '../contexts/EconomyContext';
+import { usePlayer } from '../contexts/PlayerContext';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +33,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
   onOpenEventShop: onOpenEventShopProp,
 }) => {
   const economy = useEconomy();
+  const player = usePlayer();
   const onPlayEventPuzzle = onPlayEventPuzzleProp ?? (() => {});
   const onOpenEventShop = onOpenEventShopProp ?? (() => {});
   const [timeRemaining, setTimeRemaining] = useState('');
@@ -90,10 +92,11 @@ const EventScreen: React.FC<EventScreenProps> = ({
         Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
       ]).start();
 
-      // Refresh events
+      // Refresh events and persist claimed state to PlayerContext/AsyncStorage
       setActiveEvents(eventManager.getActiveEvents());
+      player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
     }
-  }, [economy, claimAnim]);
+  }, [economy, claimAnim, player]);
 
   // Get the current event's exclusive reward
   const currentEvent = getCurrentEvent();

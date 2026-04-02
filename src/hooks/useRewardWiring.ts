@@ -144,7 +144,7 @@ export function useRewardWiring({
   params,
   navigation,
 }: UseRewardWiringParams) {
-  const handleComplete = useCallback((stars: number, score: number) => {
+  const handleComplete = useCallback((stars: number, score: number, maxCombo: number = 0) => {
     const level = params.level || 0;
     const mode = (params.mode || 'classic') as GameMode;
     const isDaily = params.isDaily || false;
@@ -285,7 +285,7 @@ export function useRewardWiring({
     }
 
     // Update mission progress
-    player.missions.dailyMissions.forEach((mission) => {
+    (player.missions?.dailyMissions ?? []).forEach((mission) => {
       if (mission.completed) return;
       if (mission.id === 'solve_3_puzzles' || mission.id === 'earn_3_stars') {
         player.updateMissionProgress(mission.id, mission.progress + 1);
@@ -344,9 +344,7 @@ export function useRewardWiring({
       }
     }
 
-    // Check achievements
-    const board2 = params.board as Board | undefined;
-    const maxCombo = board2 ? board2.words.length : 0;
+    // Check achievements (maxCombo is the actual max combo chain from gameplay)
     const achievementCeremonies = player.checkAchievements({ maxCombo });
     for (const ceremony of achievementCeremonies) {
       player.queueCeremony(ceremony);
@@ -472,6 +470,7 @@ export function useRewardWiring({
     // Fetch real friend comparison (async -- update params when ready)
     const friendIds = player.friendIds || [];
     let friendComparison = { beaten: 0, total: 0 };
+    const eventMultiplierLabel = eventManager.getActiveMultiplierLabel();
     if (firestoreService.isAvailable() && friendIds.length > 0 && userId) {
       firestoreService
         .getFriendScores(userId, friendIds)
@@ -488,6 +487,7 @@ export function useRewardWiring({
                   : null,
                 shareText,
                 friendComparison: result,
+                eventMultiplierLabel,
               },
             });
           }
@@ -496,22 +496,24 @@ export function useRewardWiring({
     }
 
     // Store completion metadata in route params for GameScreen to pick up
-    const eventMultiplierLabel = eventManager.getActiveMultiplierLabel();
-    navigation.setParams({
-      completionData: {
-        isFirstWin,
-        leveledUp,
-        newLevel,
-        difficultyTransition,
-        nextLevelPreview: !isDaily ? {
-          level: newLevel,
-          difficulty: getDifficultyForLevel(newLevel),
-        } : null,
-        shareText,
-        friendComparison,
-        eventMultiplierLabel,
-      },
-    });
+    if (navigation.isFocused()) {
+      navigation.setParams({
+        completionData: {
+          isFirstWin,
+          leveledUp,
+          newLevel,
+          difficultyTransition,
+          nextLevelPreview: !isDaily ? {
+            level: newLevel,
+            difficulty: getDifficultyForLevel(newLevel),
+          } : null,
+          shareText,
+          friendComparison,
+          eventMultiplierLabel,
+        },
+      });
+    }
+
   }, [params, player, economy, navigation, userId]);
 
   return handleComplete;

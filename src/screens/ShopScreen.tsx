@@ -214,28 +214,33 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
       // If PIN is required, prompt for it
       if (settings.spendingLimitEnabled && settings.requirePurchasePin && settings.purchasePin) {
-        // Use a simple prompt — in production this would be a custom modal
-        Alert.prompt?.(
-          'Enter Purchase PIN',
-          'A PIN is required for purchases.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Confirm',
-              onPress: (pin?: string) => {
-                if (pin === settings.purchasePin) {
-                  executePurchase(productId);
-                } else {
-                  Alert.alert('Incorrect PIN', 'The PIN you entered is incorrect.');
-                }
+        if (typeof (Alert as any).prompt === 'function') {
+          // iOS: use native prompt with secure text input
+          (Alert as any).prompt(
+            'Enter Purchase PIN',
+            'A PIN is required for purchases.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Confirm',
+                onPress: (pin?: string) => {
+                  if (pin === settings.purchasePin) {
+                    executePurchase(productId);
+                  } else {
+                    Alert.alert('Incorrect PIN', 'The PIN you entered is incorrect.');
+                  }
+                },
               },
-            },
-          ],
-          'secure-text',
-        );
-        // If Alert.prompt is not available (Android), skip PIN check
-        if (!(Alert as any).prompt) {
-          executePurchase(productId);
+            ],
+            'secure-text',
+          );
+        } else {
+          // Android: Alert.prompt not available — block purchase and inform user
+          Alert.alert(
+            'PIN Required',
+            'Parental controls require a PIN to make purchases. Please disable the PIN requirement in Settings, or use an iOS device to enter your PIN.',
+            [{ text: 'OK', style: 'cancel' }],
+          );
         }
         return;
       }

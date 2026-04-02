@@ -111,12 +111,22 @@ function HomeStackScreen() {
 }
 
 // Play Tab Stack
+// Event screen wrapper — wires navigation callbacks for Play and Shop buttons
+function EventScreenWrapperNav({ navigation }: any) {
+  return (
+    <EventScreen
+      onPlayEventPuzzle={() => navigation.navigate('Game', { mode: 'classic' })}
+      onOpenEventShop={() => navigation.navigate('Modes')}
+    />
+  );
+}
+
 function PlayStackScreen() {
   return (
     <PlayStack.Navigator screenOptions={screenOptions}>
       <PlayStack.Screen name="Modes" component={ModesScreenWrapper} />
       <PlayStack.Screen name="Game" component={GameScreenWrapper} />
-      <PlayStack.Screen name="Event" component={EventScreen} />
+      <PlayStack.Screen name="Event" component={EventScreenWrapperNav} />
       <PlayStack.Screen name="Leaderboard" component={LeaderboardScreen} />
     </PlayStack.Navigator>
   );
@@ -140,11 +150,21 @@ function LibraryStackScreen() {
   );
 }
 
+// Profile screen wrapper — wires navigation callbacks for Settings gear and Edit Profile
+function ProfileMainScreen({ navigation }: any) {
+  return (
+    <ProfileScreen
+      onOpenSettings={() => navigation.navigate('Settings')}
+      onEditProfile={() => navigation.navigate('Settings')}
+    />
+  );
+}
+
 // Profile Tab Stack
 function ProfileStackScreen() {
   return (
     <ProfileStack.Navigator screenOptions={screenOptions}>
-      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+      <ProfileStack.Screen name="ProfileMain" component={ProfileMainScreen} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} />
       <ProfileStack.Screen name="Club" component={ClubScreen} />
     </ProfileStack.Navigator>
@@ -385,10 +405,10 @@ function GameScreenWrapper({ route, navigation }: any) {
     navigation,
   });
 
-  const handleComplete = useCallback((stars: number, score: number) => {
+  const handleComplete = useCallback((stars: number, score: number, maxCombo: number) => {
     // Track spins before completion to detect if a new one is awarded
     spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
-    handleCompleteInner(stars, score);
+    handleCompleteInner(stars, score, maxCombo);
   }, [handleCompleteInner, player.mysteryWheel.spinsAvailable]);
 
   const handleNextLevel = useCallback(() => {
@@ -507,6 +527,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         nextLevelPreview={completionData.nextLevelPreview}
         shareText={completionData.shareText}
         friendComparison={completionData.friendComparison}
+        eventMultiplierLabel={completionData.eventMultiplierLabel}
       />
 
       {/* Post-puzzle spin prompt */}
@@ -697,7 +718,7 @@ function HomeMainScreen({ route, navigation }: any) {
   }, [player.mysteryWheel.spinsAvailable, player.loaded]);
 
   // Mystery Wheel handlers
-  const handleWheelSpin = useCallback(({ segment, updatedState }: { segment: WheelSegment; updatedState: MysteryWheelState }) => {
+  const handleWheelSpin = useCallback(({ segment, updatedState, mysteryBoxReward }: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: { label: string; icon: string; reward: any } }) => {
     // Update wheel state in player context
     player.updateMysteryWheel(updatedState);
 
@@ -712,9 +733,19 @@ function HomeMainScreen({ route, navigation }: any) {
       player.addRareTile(randomLetter);
     }
     if (reward.booster) {
-      // Boosters are per-puzzle consumables — grant via hint tokens as currency.
-      // Players get boosters refreshed each puzzle; wheel boosters grant extra hints.
       economy.addHintTokens(3);
+    }
+
+    // Award mystery box contents if the spin landed on a mystery box
+    if (mysteryBoxReward) {
+      const mbReward = mysteryBoxReward.reward;
+      if (mbReward.coins) economy.addCoins(mbReward.coins);
+      if (mbReward.gems) economy.addGems(mbReward.gems);
+      if (mbReward.hints) economy.addHintTokens(mbReward.hints);
+      if (mbReward.rareTile) {
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+      }
     }
 
     // Queue jackpot ceremony for rare+ results
@@ -956,7 +987,7 @@ function HomeMainScreen({ route, navigation }: any) {
         setLoading(false);
       }
     }, 50);
-  }, [navigation, economy]);
+  }, [navigation, economy, player]);
 
   const handleReset = useCallback(() => {
     Alert.alert(
