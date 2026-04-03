@@ -493,6 +493,7 @@ export interface ProfileFrame {
   rarity: 'common' | 'rare' | 'epic' | 'legendary';
   source: string;
   owned: boolean;
+  cost?: { currency: CurrencyType; amount: number } | { coins: number; gems: number };
 }
 
 export interface ProfileTitle {

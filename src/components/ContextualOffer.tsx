@@ -50,6 +50,8 @@ const OFFER_CONFIG: Record<OfferType, {
   accentColor: string;
   priceLabel: string;
 }> = {
+  // TODO: Add expiresInSeconds: 300 FOMO timer (5-minute countdown) to each offer config
+  // and render a visible countdown in the modal UI to create purchase urgency
   hint_rescue: {
     ribbon: 'STUCK?',
     icon: '\u{1F4A1}',
@@ -57,7 +59,7 @@ const OFFER_CONFIG: Record<OfferType, {
     description: 'Get 5 hints to help crack this level. You\'re closer than you think!',
     buttonText: 'GET 5 HINTS',
     accentColor: COLORS.accent,
-    priceLabel: '50 coins',
+    priceLabel: '5 gems',
   },
   life_refill: {
     ribbon: 'OUT OF LIVES',
@@ -75,7 +77,7 @@ const OFFER_CONFIG: Record<OfferType, {
     description: 'Your {streak}-day streak expires tonight. Shield it!',
     buttonText: 'ACTIVATE SHIELD',
     accentColor: COLORS.orange,
-    priceLabel: '500 coins',
+    priceLabel: '30 gems',
   },
   close_finish: {
     ribbon: 'SO CLOSE!',
@@ -84,7 +86,7 @@ const OFFER_CONFIG: Record<OfferType, {
     description: 'You\'re one word from victory! A hint could seal the deal.',
     buttonText: 'GET A HINT',
     accentColor: COLORS.green,
-    priceLabel: '25 coins',
+    priceLabel: '3 gems',
   },
   post_puzzle: {
     ribbon: 'LOW ON HINTS',
@@ -93,7 +95,7 @@ const OFFER_CONFIG: Record<OfferType, {
     description: 'Great solve! Grab hints for the next challenge.',
     buttonText: 'GET 10 HINTS',
     accentColor: COLORS.accent,
-    priceLabel: '80 coins',
+    priceLabel: '10 gems',
   },
   booster_pack: {
     ribbon: 'TOUGH LEVEL AHEAD',
