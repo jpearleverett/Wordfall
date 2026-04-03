@@ -371,10 +371,10 @@ export function GameScreen({
   useEffect(() => {
     if (state.status !== 'playing') return;
     const streaks = player.streaks;
-    if (!streaks || streaks.currentStreak < 3 || streaks.shieldActive) return;
+    if (!streaks || streaks.currentStreak < 3 || streaks.streakShieldAvailable) return;
     // Check if last play was yesterday (streak at risk of expiring today)
-    if (!streaks.lastCompletedDate) return;
-    const lastPlayed = new Date(streaks.lastCompletedDate);
+    if (!streaks.lastPlayDate) return;
+    const lastPlayed = new Date(streaks.lastPlayDate);
     const now = new Date();
     const diffMs = now.getTime() - lastPlayed.getTime();
     const diffHours = diffMs / (1000 * 60 * 60);

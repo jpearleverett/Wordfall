@@ -89,7 +89,7 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
   return (
     <Animated.View style={[styles.container, { transform: [{ scale: scaleAnim }] }]}>
       <LinearGradient
-        colors={GRADIENTS.surfaceCard as unknown as string[]}
+        colors={GRADIENTS.surfaceCard as unknown as readonly [string, string, ...string[]]}
         style={styles.card}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -148,7 +148,7 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
           ]}
         >
           <LinearGradient
-            colors={GRADIENTS.button.primary as unknown as string[]}
+            colors={GRADIENTS.button.primary as unknown as readonly [string, string, ...string[]]}
             style={styles.shareButtonInner}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}

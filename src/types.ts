@@ -376,10 +376,10 @@ export interface DailyMission {
 export interface StreakData {
   currentStreak: number;
   bestStreak: number;
-  lastCompletedDate: string;
+  lastPlayDate: string;
   graceDaysUsed: number;
-  shieldActive: boolean;
-  shieldExpiry?: string;
+  streakShieldAvailable: boolean;
+  lastShieldDate?: string;
 }
 
 export interface WeeklyChallenge {

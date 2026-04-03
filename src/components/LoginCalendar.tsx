@@ -110,7 +110,7 @@ const LoginCalendar: React.FC<LoginCalendarProps> = ({
 
   return (
     <LinearGradient
-      colors={GRADIENTS.surfaceCard as unknown as string[]}
+      colors={GRADIENTS.surfaceCard as unknown as readonly [string, string, ...string[]]}
       style={styles.container}
     >
       <Text style={styles.title}>Daily Login</Text>
@@ -146,7 +146,7 @@ const LoginCalendar: React.FC<LoginCalendarProps> = ({
           ]}
         >
           <LinearGradient
-            colors={GRADIENTS.button.primary as unknown as string[]}
+            colors={GRADIENTS.button.primary as unknown as readonly [string, string, ...string[]]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.claimButtonGradient}

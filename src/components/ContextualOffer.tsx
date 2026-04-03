@@ -36,6 +36,7 @@ interface ContextualOfferProps {
     difficulty?: string;
     wordsRemaining?: number;
     hintsUsed?: number;
+    livesRemaining?: number;
   };
   onAccept: () => void;
   onDismiss: () => void;
