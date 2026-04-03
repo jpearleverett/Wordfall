@@ -40,6 +40,8 @@ interface NormalizedItem {
   equipped: boolean;
   costCurrency?: CurrencyType;
   costAmount?: number;
+  /** Dual-currency cost (e.g. coins + gems) */
+  dualCost?: { coins: number; gems: number };
   source?: string;
   preview?: CosmeticTheme['colors'];
   tabType: TabId;
@@ -100,16 +102,26 @@ function normalizeFrames(
   unlockedCosmetics: string[],
   equippedFrame: string,
 ): NormalizedItem[] {
-  return frames.map((f) => ({
-    id: f.id,
-    name: f.name,
-    description: f.source,
-    rarity: f.rarity,
-    owned: f.id === 'default' || unlockedCosmetics.includes(f.id),
-    equipped: equippedFrame === f.id,
-    source: f.source,
-    tabType: 'frames' as const,
-  }));
+  return frames.map((f) => {
+    // Detect dual-currency cost ({ coins, gems }) vs single-currency ({ currency, amount })
+    const cost = f.cost as any;
+    const isDualCost = cost && typeof cost.coins === 'number' && typeof cost.gems === 'number';
+    const isSingleCost = cost && typeof cost.currency === 'string' && typeof cost.amount === 'number';
+
+    return {
+      id: f.id,
+      name: f.name,
+      description: f.source,
+      rarity: f.rarity,
+      owned: f.id === 'default' || unlockedCosmetics.includes(f.id),
+      equipped: equippedFrame === f.id,
+      source: f.source,
+      costCurrency: isSingleCost ? cost.currency : undefined,
+      costAmount: isSingleCost ? cost.amount : undefined,
+      dualCost: isDualCost ? { coins: cost.coins, gems: cost.gems } : undefined,
+      tabType: 'frames' as const,
+    };
+  });
 }
 
 function normalizeTitles(
