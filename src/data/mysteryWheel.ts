@@ -57,7 +57,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     label: '50 Coins',
     icon: '\u{1FA99}',
     reward: { coins: 50 },
-    weight: 22,
+    weight: 21,
     color: '#cd7f32',
     rarity: 'common',
   },
@@ -141,6 +141,15 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     weight: 3,
     color: '#ff9f43',
     rarity: 'epic',
+  },
+  {
+    id: 'gems_legendary',
+    label: '500 Gems!',
+    icon: '\u{1F48E}\u{1F525}',
+    reward: { gems: 500 },
+    weight: 1,
+    color: '#ff00ff',
+    rarity: 'legendary',
   },
 ];
 
@@ -242,8 +251,21 @@ export function checkFreeSpin(state: MysteryWheelState): MysteryWheelState {
 }
 
 /** Cost to buy a single spin with gems */
-export const SPIN_COST_GEMS = 10;
+export const SPIN_COST_GEMS = 15;
 
 /** Cost to buy a 5-pack of spins with gems (discount) */
-export const SPIN_BUNDLE_COST_GEMS = 40;
+export const SPIN_BUNDLE_COST_GEMS = 60;
 export const SPIN_BUNDLE_COUNT = 5;
+
+/**
+ * Check if the player is eligible for a daily free spin.
+ * Returns true if 24+ hours have passed since the last daily spin.
+ * Pass an empty string or undefined-coerced value for first-time players.
+ */
+export function checkDailyFreeSpin(lastDailySpinDate: string): boolean {
+  if (!lastDailySpinDate) return true;
+  const lastSpin = new Date(lastDailySpinDate).getTime();
+  if (isNaN(lastSpin)) return true;
+  const msIn24Hours = 24 * 60 * 60 * 1000;
+  return Date.now() - lastSpin >= msIn24Hours;
+}

@@ -242,6 +242,56 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     icon: '\u{1F6AB}',
   },
 
+  // ── Whale-Tier Bundles ───────────────────────────────────────────────────
+  {
+    id: 'royal_collection',
+    storeProductId: 'wordfall_royal_collection',
+    name: 'Royal Collection',
+    description: '8000 Coins + 400 Gems + 75 Hints + 30 Undos + 10 of Each Booster + Legendary Frame & Title',
+    fallbackPrice: '$49.99',
+    fallbackPriceAmount: 49.99,
+    category: 'bundles',
+    rewards: {
+      coins: 8000,
+      gems: 400,
+      hintTokens: 75,
+      undoTokens: 30,
+      boosters: [
+        { type: 'wildcardTile', count: 10 },
+        { type: 'spotlight', count: 10 },
+        { type: 'smartShuffle', count: 10 },
+      ],
+      decorations: ['frame_royal_legendary', 'title_royal_collector'],
+    },
+    isNonConsumable: false,
+    originalPrice: '$79.99',
+    icon: '\u{1F451}',
+  },
+  {
+    id: 'ultimate_whale',
+    storeProductId: 'wordfall_ultimate_whale',
+    name: 'Ultimate Whale Pack',
+    description: '20000 Coins + 1000 Gems + 200 Hints + 100 Undos + 25 of Each Booster + 3 Legendary Cosmetics',
+    fallbackPrice: '$99.99',
+    fallbackPriceAmount: 99.99,
+    category: 'bundles',
+    rewards: {
+      coins: 20000,
+      gems: 1000,
+      hintTokens: 200,
+      undoTokens: 100,
+      boosters: [
+        { type: 'wildcardTile', count: 25 },
+        { type: 'spotlight', count: 25 },
+        { type: 'smartShuffle', count: 25 },
+      ],
+      decorations: ['frame_whale_legendary', 'title_whale_supreme', 'theme_whale_exclusive'],
+    },
+    isNonConsumable: false,
+    originalPrice: '$149.99',
+    icon: '\u{1F525}',
+  },
+
   // ── Subscription ────────────────────────────────────────────────────────
   {
     id: 'vip_weekly',

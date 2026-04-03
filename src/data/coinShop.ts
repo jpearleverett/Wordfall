@@ -98,6 +98,38 @@ export const COIN_SHOP_ITEMS: CoinShopItem[] = [
     dailyLimit: 2,
   },
 
+  // ─── Advanced Consumables ────────────────────────────────────────────────────
+  {
+    id: 'coin_premium_hint',
+    name: 'Premium Hint',
+    description: 'Reveals the exact next word to find on the board.',
+    icon: '🔮',
+    costCoins: 250,
+    reward: { type: 'hint', amount: 1, effectId: 'premium_hint' },
+    category: 'consumables',
+    dailyLimit: 3,
+  },
+  {
+    id: 'coin_board_freeze',
+    name: 'Board Freeze',
+    description: 'Prevents shrinking board from shrinking for 1 turn.',
+    icon: '🧊',
+    costCoins: 300,
+    reward: { type: 'temporary_effect', effectId: 'board_freeze', amount: 1 },
+    category: 'consumables',
+    dailyLimit: 2,
+  },
+  {
+    id: 'coin_score_doubler',
+    name: 'Score Doubler',
+    description: 'Doubles your score on the next puzzle completion.',
+    icon: '✨',
+    costCoins: 500,
+    reward: { type: 'temporary_effect', effectId: 'score_doubler', amount: 1 },
+    category: 'consumables',
+    dailyLimit: 1,
+  },
+
   // ─── Temporary Effects ─────────────────────────────────────────────────────
   {
     id: 'coin_double_xp',

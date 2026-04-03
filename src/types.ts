@@ -421,7 +421,9 @@ export type IAPProductId =
   | 'gems_50'
   | 'gems_250'
   | 'gems_500'
-  | 'vip_weekly';
+  | 'vip_weekly'
+  | 'royal_collection'
+  | 'ultimate_whale';
 
 export interface ShopOffer {
   id: string;

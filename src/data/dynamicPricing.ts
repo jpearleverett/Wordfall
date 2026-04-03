@@ -26,6 +26,17 @@ export interface DynamicOffer {
   priority: number;
 }
 
+export interface FlashSale {
+  /** Product ID on sale */
+  productId: string;
+  /** Discount percentage (40-60) */
+  discountPercent: number;
+  /** Display label */
+  label: string;
+  /** ISO date string when the sale expires (end of the day UTC) */
+  expiresAt: string;
+}
+
 // ─── Mega Bundles (for dolphins and whales) ──────────────────────────────────
 
 export const MEGA_BUNDLES: ShopProduct[] = [
@@ -152,7 +163,7 @@ export function getDynamicOffers(
   if (spending === 'non_payer') {
     offers.push({
       productId: 'starter_pack',
-      discountPercent: 30,
+      discountPercent: 50,
       badge: 'BEST VALUE',
       expiresInHours: 72,
       priority: 1,
@@ -208,14 +219,14 @@ export function getDynamicOffers(
   // ── Whales: VIP mega bundles ──
   if (spending === 'whale') {
     offers.push({
-      productId: 'mega_bundle_ultimate',
+      productId: 'ultimate_whale',
       discountPercent: 10,
       badge: 'VIP EXCLUSIVE',
       expiresInHours: 24,
       priority: 1,
     });
     offers.push({
-      productId: 'mega_bundle_diamond',
+      productId: 'royal_collection',
       discountPercent: 15,
       badge: 'VIP DEAL',
       expiresInHours: 24,
@@ -223,7 +234,7 @@ export function getDynamicOffers(
     });
     if (playerLevel >= 20) {
       offers.push({
-        productId: 'gems_500',
+        productId: 'mega_bundle_ultimate',
         discountPercent: 10,
         expiresInHours: 48,
         priority: 3,
@@ -267,4 +278,46 @@ export function getDiscountedPrice(
     discounted: `$${discounted.toFixed(2)}`,
     savings: `${discountPercent}% OFF`,
   };
+}
+
+// ─── Flash Sales ────────────────────────────────────────────────────────────
+
+/**
+ * Rotating daily flash sale — a different product each day of the week with
+ * 40-60% discount, expiring at end of day UTC.
+ * Returns null if something goes wrong (defensive).
+ */
+const FLASH_SALE_ROTATION: { productId: string; label: string; discountPercent: number }[] = [
+  { productId: 'hint_bundle_25', label: 'Hint Flash Sale', discountPercent: 50 },
+  { productId: 'gems_250', label: 'Gem Rush', discountPercent: 40 },
+  { productId: 'chapter_bundle', label: 'Chapter Deal', discountPercent: 55 },
+  { productId: 'undo_bundle_25', label: 'Undo Blowout', discountPercent: 50 },
+  { productId: 'starter_pack', label: 'Starter Flash', discountPercent: 60 },
+  { productId: 'gems_500', label: 'Mega Gem Sale', discountPercent: 45 },
+  { productId: 'royal_collection', label: 'Royal Flash Deal', discountPercent: 40 },
+];
+
+export function getFlashSale(date: Date): FlashSale | null {
+  try {
+    const dayOfWeek = date.getUTCDay(); // 0 (Sun) – 6 (Sat)
+    const rotation = FLASH_SALE_ROTATION[dayOfWeek];
+    if (!rotation) return null;
+
+    // Expires at end of the current UTC day
+    const endOfDay = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      23, 59, 59, 999,
+    ));
+
+    return {
+      productId: rotation.productId,
+      discountPercent: rotation.discountPercent,
+      label: rotation.label,
+      expiresAt: endOfDay.toISOString(),
+    };
+  } catch {
+    return null;
+  }
 }
