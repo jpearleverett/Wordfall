@@ -31,7 +31,7 @@ export function generateShareText(
   const stats = [`Score: ${score}`];
   if (combo > 1) stats.push(`Combo: ${combo}x`);
 
-  return `${header}\n${gridEmojis}\n${stats.join(' | ')}`;
+  return `${header}\n${gridEmojis}\n${stats.join(' | ')}\nCan you beat my score? Download Wordfall!`;
 }
 
 /**
@@ -50,6 +50,27 @@ export function generateStreakCard(
     `Best: ${bestStreak} | Level ${level} | ⭐ ${totalStars}`,
     '',
     '#Wordfall #WordPuzzle',
+    'Join me on Wordfall!',
+  ].join('\n');
+}
+
+/**
+ * Generate a competitive challenge share text for friend challenges.
+ */
+export function generateChallengeShareText(
+  level: number,
+  score: number,
+  stars: number,
+  mode: string,
+): string {
+  const starEmojis = '\u2b50'.repeat(stars);
+  const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
+  return [
+    '\ud83c\udfaf WORDFALL CHALLENGE',
+    `Level ${level} | ${modeLabel} Mode`,
+    `My Score: ${score} ${starEmojis}`,
+    'Think you can beat me?',
+    'Download Wordfall and try!',
   ].join('\n');
 }
 

@@ -13,6 +13,7 @@
 import { notificationManager } from './notifications';
 import { eventManager } from './eventManager';
 import { ENERGY } from '../constants';
+import { StreakData } from '../types';
 
 // ─── 1. Streak Reminder ──────────────────────────────────────────────────────
 
@@ -131,4 +132,60 @@ export async function triggerComebackReminder(): Promise<void> {
  */
 export async function cancelComebackReminder(): Promise<void> {
   await notificationManager.cancel('comeback');
+}
+
+// ─── 7. Streak At Risk ──────────────────────────────────────────────────────
+
+/**
+ * Schedule a streak-at-risk notification if the player has a meaningful streak
+ * (>= 3 days) and hasn't played in 20+ hours. Fires 2 hours after being called.
+ * Call periodically (e.g. on app open or AppState change).
+ *
+ * @param streak - The player's current streak data
+ */
+export async function triggerStreakAtRiskNotification(streak: StreakData): Promise<void> {
+  // Only care about meaningful streaks
+  if (streak.currentStreak < 3) {
+    await notificationManager.cancel('streak_reminder');
+    return;
+  }
+
+  // Check if the last play was 20+ hours ago
+  const lastPlayMs = new Date(streak.lastCompletedDate).getTime();
+  const hoursSinceLastPlay = (Date.now() - lastPlayMs) / (1000 * 60 * 60);
+
+  if (hoursSinceLastPlay < 20) {
+    // Not at risk yet — cancel any pending at-risk notification
+    await notificationManager.cancel('streak_reminder');
+    return;
+  }
+
+  // Schedule a notification 2 hours from now
+  const twoHoursInSeconds = 2 * 60 * 60;
+  await notificationManager.schedule(
+    'streak_reminder',
+    { type: 'timeInterval', seconds: twoHoursInSeconds },
+    { streak: streak.currentStreak },
+  );
+}
+
+// ─── 8. Friend Beat Score ───────────────────────────────────────────────────
+
+/**
+ * Schedule an immediate notification when a friend beats the player's score
+ * on a specific level. Uses the friend_activity notification category.
+ *
+ * @param friendName - Display name of the friend who beat the score
+ * @param level - The level number where the score was beaten
+ */
+export async function triggerFriendBeatScoreNotification(
+  friendName: string,
+  level: number,
+): Promise<void> {
+  // Schedule with a 1-second delay (minimum for time interval triggers)
+  await notificationManager.schedule(
+    'friend_activity',
+    { type: 'timeInterval', seconds: 1 },
+    { friendName, level },
+  );
 }
