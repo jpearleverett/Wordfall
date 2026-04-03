@@ -156,7 +156,7 @@ export function createSocialMethods<T extends PlayerSocialData>(
           // Store under the recipient's challenges subcollection so they can receive it
           const { doc, setDoc, collection: firestoreCollection } = await import('firebase/firestore');
           const { db, isFirebaseConfigured } = await import('../config/firebase');
-          if (!isFirebaseConfigured() || !db) return;
+          if (!isFirebaseConfigured || !db) return;
 
           const challengeRef = doc(firestoreCollection(db, 'users', friendId, 'challenges'), challenge.id);
           await setDoc(challengeRef, {

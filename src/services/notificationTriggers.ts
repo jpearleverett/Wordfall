@@ -151,7 +151,7 @@ export async function triggerStreakAtRiskNotification(streak: StreakData): Promi
   }
 
   // Check if the last play was 20+ hours ago
-  const lastPlayMs = new Date(streak.lastCompletedDate).getTime();
+  const lastPlayMs = new Date(streak.lastPlayDate).getTime();
   const hoursSinceLastPlay = (Date.now() - lastPlayMs) / (1000 * 60 * 60);
 
   if (hoursSinceLastPlay < 20) {
