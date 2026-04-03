@@ -37,8 +37,13 @@
       }
     },
     "production": {
+      "distribution": "store",
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "autoIncrement": "buildNumber"
+      },
+      "android": {
+        "autoIncrement": "versionCode"
       },
       "autoIncrement": true,
       "env": {

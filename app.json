@@ -6,7 +6,17 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "scheme": "wordfall",
+    "primaryColor": "#00d4ff",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/wordfall-production",
+      "enabled": true,
+      "fallbackToCacheTimeout": 30000
+    },
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "cover",
@@ -18,6 +28,18 @@
       "buildNumber": "2",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
+          }
+        ]
       }
     },
     "android": {
@@ -27,7 +49,12 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#060918"
       },
-      "permissions": []
+      "permissions": [
+        "INTERNET",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "SCHEDULE_EXACT_ALARM"
+      ]
     },
     "plugins": [
       "expo-font",
