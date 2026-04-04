@@ -1,8 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import { analytics } from '../services/analytics';
 
 /**
  * Contextual Offer — Monetization pressure point that appears at moments of tension.
@@ -38,6 +39,8 @@ interface ContextualOfferProps {
     hintsUsed?: number;
     livesRemaining?: number;
   };
+  /** Countdown duration in seconds before auto-dismiss (default 300 = 5 min) */
+  expiresInSeconds?: number;
   onAccept: () => void;
   onDismiss: () => void;
 }
@@ -51,8 +54,6 @@ const OFFER_CONFIG: Record<OfferType, {
   accentColor: string;
   priceLabel: string;
 }> = {
-  // TODO: Add expiresInSeconds: 300 FOMO timer (5-minute countdown) to each offer config
-  // and render a visible countdown in the modal UI to create purchase urgency
   hint_rescue: {
     ribbon: 'STUCK?',
     icon: '\u{1F4A1}',
@@ -112,11 +113,15 @@ const OFFER_CONFIG: Record<OfferType, {
 export function ContextualOffer({
   type,
   context,
+  expiresInSeconds = 300,
   onAccept,
   onDismiss,
 }: ContextualOfferProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const [secondsLeft, setSecondsLeft] = useState(expiresInSeconds);
 
   const config = OFFER_CONFIG[type];
 
@@ -128,6 +133,41 @@ export function ContextualOffer({
   if (context?.difficulty) {
     description = description.replace('{difficulty}', context.difficulty);
   }
+
+  // Countdown timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          void analytics.logEvent('offer_expired', { offerType: type });
+          onDismiss();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [type, onDismiss]);
+
+  // Pulse animation when under 60 seconds
+  useEffect(() => {
+    if (secondsLeft > 0 && secondsLeft < 60) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.15, duration: 500, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+        ]),
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [secondsLeft < 60, pulseAnim]);
+
+  // Format seconds as MM:SS
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = secondsLeft % 60;
+  const timerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
   useEffect(() => {
     Animated.parallel([
@@ -153,6 +193,20 @@ export function ContextualOffer({
 
           <Text style={styles.title}>{config.title}</Text>
           <Text style={styles.description}>{description}</Text>
+
+          {/* FOMO countdown timer */}
+          <View style={styles.timerContainer}>
+            <Text style={styles.timerLabel}>Offer expires in</Text>
+            <Animated.Text
+              style={[
+                styles.timerText,
+                secondsLeft < 60 && styles.timerTextUrgent,
+                { transform: [{ scale: pulseAnim }] },
+              ]}
+            >
+              {timerText}
+            </Animated.Text>
+          </View>
 
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
@@ -229,6 +283,26 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 20,
     maxWidth: 260,
+  },
+  timerContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  timerLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  timerText: {
+    color: COLORS.coral,
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    letterSpacing: 2,
+  },
+  timerTextUrgent: {
+    textShadowColor: COLORS.coralGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   button: {
     borderRadius: 14,

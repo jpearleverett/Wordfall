@@ -83,3 +83,76 @@ export function getDailyDeal(date: string): DailyDeal {
 }
 
 export { DEAL_POOL };
+
+// ─── Flash Sale System ─────────────────────────────────────────────────────
+
+export interface FlashSale {
+  /** Product ID from the shop catalog */
+  productId: string;
+  /** Discount percentage (40-60) */
+  discountPercent: number;
+  /** Original price in USD */
+  originalPrice: number;
+  /** Discounted sale price in USD */
+  salePrice: number;
+  /** Display string for original price */
+  originalPriceDisplay: string;
+  /** Display string for sale price */
+  salePriceDisplay: string;
+  /** When the flash sale expires (end of day UTC) */
+  expiresAt: Date;
+}
+
+interface FlashSaleCandidate {
+  productId: string;
+  name: string;
+  priceUSD: number;
+  discountPercent: number;
+}
+
+const FLASH_SALE_CANDIDATES: FlashSaleCandidate[] = [
+  { productId: 'starter_pack', name: 'Starter Pack', priceUSD: 1.99, discountPercent: 50 },
+  { productId: 'adventurer_pack', name: 'Adventurer Pack', priceUSD: 3.99, discountPercent: 40 },
+  { productId: 'explorer_bundle', name: 'Explorer Bundle', priceUSD: 6.99, discountPercent: 45 },
+  { productId: 'hint_bundle_25', name: '25 Hints', priceUSD: 1.99, discountPercent: 50 },
+  { productId: 'undo_bundle_25', name: '25 Undos', priceUSD: 1.99, discountPercent: 50 },
+  { productId: 'gems_250', name: '250 Gems', priceUSD: 4.99, discountPercent: 40 },
+  { productId: 'gems_500', name: '500 Gems', priceUSD: 9.99, discountPercent: 45 },
+  { productId: 'booster_crate', name: 'Booster Crate', priceUSD: 4.99, discountPercent: 50 },
+  { productId: 'champion_pack', name: 'Champion Pack', priceUSD: 14.99, discountPercent: 40 },
+  { productId: 'chapter_bundle', name: 'Chapter Bundle', priceUSD: 2.99, discountPercent: 60 },
+  { productId: 'daily_value_pack', name: 'Daily Value Pack', priceUSD: 0.99, discountPercent: 50 },
+  { productId: 'gems_120', name: '120 Gems', priceUSD: 2.99, discountPercent: 45 },
+];
+
+/**
+ * Returns a deterministic flash sale for a given date.
+ * Rotates daily through the candidate pool with 40-60% discounts.
+ * Uses date-based hashing for determinism.
+ */
+export function getFlashSale(date: Date): FlashSale {
+  const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  let hash = 0;
+  for (let i = 0; i < dateStr.length; i++) {
+    const ch = dateStr.charCodeAt(i);
+    hash = ((hash << 5) - hash + ch) | 0;
+  }
+  const index = Math.abs(hash) % FLASH_SALE_CANDIDATES.length;
+  const candidate = FLASH_SALE_CANDIDATES[index];
+
+  const salePrice = Math.round(candidate.priceUSD * (1 - candidate.discountPercent / 100) * 100) / 100;
+
+  // Expires at end of day UTC
+  const expiresAt = new Date(date);
+  expiresAt.setUTCHours(23, 59, 59, 999);
+
+  return {
+    productId: candidate.productId,
+    discountPercent: candidate.discountPercent,
+    originalPrice: candidate.priceUSD,
+    salePrice,
+    originalPriceDisplay: `$${candidate.priceUSD.toFixed(2)}`,
+    salePriceDisplay: `$${salePrice.toFixed(2)}`,
+    expiresAt,
+  };
+}
