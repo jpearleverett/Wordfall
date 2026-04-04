@@ -22,6 +22,8 @@ import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
 import ReferralCard from '../components/ReferralCard';
+import SeasonalQuestCard from '../components/SeasonalQuestCard';
+import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
 import { usePlayer } from '../contexts/PlayerContext';
 
 interface DailyMissionDisplay {
@@ -272,6 +274,51 @@ export function HomeScreen({
   const showMysteryWheel = hasSegmentContent
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
     : playerStage !== 'new' && onOpenWheel;
+
+  // ── Seasonal Quest ──────────────────────────────────────────────────
+  const seasonalQuest = getCurrentSeasonalQuest();
+  const questState = player.seasonalQuest;
+  const showSeasonalQuest = (playerStage === 'established' || playerStage === 'veteran')
+    && !questState.completedQuestIds.includes(seasonalQuest.id);
+
+  // Auto-initialize quest for the current season if not started
+  useEffect(() => {
+    if (!showSeasonalQuest) return;
+    if (questState.activeQuestId !== seasonalQuest.id && !questState.completedQuestIds.includes(seasonalQuest.id)) {
+      player.updateSeasonalQuest({
+        activeQuestId: seasonalQuest.id,
+        currentStepIndex: 0,
+        stepProgress: 0,
+        seasonId: seasonalQuest.seasonId,
+      });
+    }
+  }, [showSeasonalQuest, questState.activeQuestId, seasonalQuest.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleClaimQuestStep = useCallback(() => {
+    const currentStep = seasonalQuest.steps[questState.currentStepIndex];
+    if (!currentStep) return;
+
+    // Grant step rewards via economy context is not available here;
+    // use player.updateProgress to signal claim, and grant rewards via updateSeasonalQuest
+    // Since we can't access economy directly, we queue a ceremony that triggers reward granting
+    player.queueCeremony({
+      type: 'quest_step_complete',
+      data: {
+        icon: currentStep.icon,
+        title: currentStep.title,
+        description: `${currentStep.rewardCoins} coins + ${currentStep.rewardGems} gems`,
+        questId: seasonalQuest.id,
+        stepIndex: questState.currentStepIndex,
+        rewardCoins: currentStep.rewardCoins,
+        rewardGems: currentStep.rewardGems,
+        rewardExtra: currentStep.rewardExtra,
+      },
+    });
+
+    // Advance to next step
+    const newState = advanceQuestStep(questState, seasonalQuest);
+    player.updateSeasonalQuest(newState);
+  }, [questState, seasonalQuest, player]);
 
   return (
     <View style={styles.container}>
@@ -548,6 +595,15 @@ export function HomeScreen({
               );
             })}
           </LinearGradient>
+        )}
+
+        {/* Seasonal Quest - established+ */}
+        {showSeasonalQuest && questState.activeQuestId && (
+          <SeasonalQuestCard
+            quest={seasonalQuest}
+            state={questState}
+            onClaimStep={handleClaimQuestStep}
+          />
         )}
 
         {/* Weekly Goals - established+ */}

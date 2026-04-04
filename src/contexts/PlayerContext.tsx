@@ -5,6 +5,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { CeremonyItem, PlayerMetrics, PuzzleEnergyState, WeeklyGoalsState } from '../types';
+import { SeasonalQuestState, DEFAULT_SEASONAL_QUEST_STATE } from '../data/seasonalQuests';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
@@ -183,6 +184,9 @@ interface PlayerData {
   // Prestige
   prestige?: import('../types').PrestigeState;
 
+  // Seasonal Quest
+  seasonalQuest: SeasonalQuestState;
+
   // Cloud sync
   lastModified: number;
 }
@@ -297,6 +301,9 @@ interface PlayerContextType extends PlayerData {
   applyReferralCode: (code: string) => boolean;
   recordReferralSuccess: () => void;
   claimReferralMilestone: (count: number) => boolean;
+
+  // Seasonal Quest
+  updateSeasonalQuest: (updates: Partial<SeasonalQuestState>) => void;
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -452,6 +459,9 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   referredPlayerIds: [],
   referralMilestonesClaimed: [],
 
+  // Seasonal Quest
+  seasonalQuest: DEFAULT_SEASONAL_QUEST_STATE,
+
   // Cloud sync
   lastModified: 0,
 };
@@ -511,6 +521,7 @@ const PlayerContext = createContext<PlayerContextType>({
   applyReferralCode: () => false,
   recordReferralSuccess: () => {},
   claimReferralMilestone: () => false,
+  updateSeasonalQuest: () => {},
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -1062,6 +1073,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return claimed;
   }, []);
 
+  // ── Seasonal Quest ────────────────────────────────────────────────────
+
+  const updateSeasonalQuest = useCallback((updates: Partial<SeasonalQuestState>) => {
+    setData((prev) => ({
+      ...prev,
+      seasonalQuest: { ...prev.seasonalQuest, ...updates },
+    }));
+  }, []);
+
   // ── Puzzle Energy ──────────────────────────────────────────────────────
 
   /**
@@ -1310,6 +1330,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         applyReferralCode,
         recordReferralSuccess,
         claimReferralMilestone,
+        updateSeasonalQuest,
       }}
     >
       {children}

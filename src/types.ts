@@ -601,7 +601,8 @@ export interface CeremonyItem {
     | 'word_mastery_gold'
     | 'first_mode_clear'
     | 'wildcard_earned'
-    | 'mastery_tier_up';
+    | 'mastery_tier_up'
+    | 'quest_step_complete';
   data: Record<string, any>;
 }
 

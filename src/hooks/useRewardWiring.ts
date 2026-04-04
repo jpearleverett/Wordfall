@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { Board, CeremonyItem, Difficulty, GameMode } from '../types';
+import { SeasonalQuestState, getCurrentSeasonalQuest } from '../data/seasonalQuests';
 import {
   getLevelConfig,
   ECONOMY,
@@ -78,6 +79,7 @@ interface PlayerContextLike {
   consecutiveFailures: number;
   performanceMetrics: any;
   referralCode: string;
+  seasonalQuest: SeasonalQuestState;
 
   recordPuzzleComplete: (level: number, score: number, stars: number, isPerfect: boolean) => void;
   recordModePlay: (modeId: string, score: number, isWin: boolean) => void;
@@ -88,6 +90,7 @@ interface PlayerContextLike {
   addRareTile: (letter: string, count?: number) => void;
   updateMissionProgress: (missionId: string, progress: number) => void;
   updateWeeklyGoalProgress: (trackingKey: string, value: number) => void;
+  updateSeasonalQuest: (updates: Partial<SeasonalQuestState>) => void;
   updateStreak: () => void;
   recordDailyComplete: (dateString: string) => void;
   queueCeremony: (ceremony: CeremonyItem) => void;
@@ -313,6 +316,29 @@ export function useRewardWiring({
     player.updateWeeklyGoalProgress('stars_earned', stars);
     if (isPerfect) player.updateWeeklyGoalProgress('perfect_solves', 1);
     if (isDaily) player.updateWeeklyGoalProgress('daily_completed', 1);
+
+    // Update seasonal quest progress
+    const questState = player.seasonalQuest;
+    if (questState.activeQuestId) {
+      const currentQuest = getCurrentSeasonalQuest();
+      if (currentQuest.id === questState.activeQuestId && questState.currentStepIndex < currentQuest.steps.length) {
+        const currentStep = currentQuest.steps[questState.currentStepIndex];
+        const trackingKey = currentStep.trackingKey;
+        let increment = 0;
+        if (trackingKey === 'puzzles_solved') increment = 1;
+        else if (trackingKey === 'total_score') increment = score;
+        else if (trackingKey === 'stars_earned') increment = stars;
+        else if (trackingKey === 'perfect_solves' && isPerfect) increment = 1;
+        else if (trackingKey === 'daily_completed' && isDaily) increment = 1;
+        else if (trackingKey === 'words_found') increment = wordsFound;
+        else if (trackingKey === 'modes_played') increment = 1;
+
+        if (increment > 0) {
+          const newProgress = questState.stepProgress + increment;
+          player.updateSeasonalQuest({ stepProgress: newProgress });
+        }
+      }
+    }
 
     // Detect level-up
     const newLevel = Math.max(level + 1, prevLevel);
