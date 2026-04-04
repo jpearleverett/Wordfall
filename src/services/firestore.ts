@@ -153,6 +153,15 @@ export interface FirestoreGift {
   expiresAt: any;
 }
 
+export interface ClubMessage {
+  id: string;
+  userId: string;
+  displayName: string;
+  message: string;
+  timestamp: number;
+  type: 'text';
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 class FirestoreService {
@@ -663,6 +672,64 @@ class FirestoreService {
     } catch (e) {
       console.warn('[Firestore] getClub failed:', e);
       return null;
+    }
+  }
+
+  // ── Club Chat ──────────────────────────────────────────────────────────────
+
+  /**
+   * Send a text message to a club's chat.
+   * Message length is capped at 200 characters.
+   */
+  async sendClubMessage(
+    clubId: string,
+    userId: string,
+    displayName: string,
+    message: string
+  ): Promise<void> {
+    if (!this.enabled || !clubId || !userId) return;
+    try {
+      const trimmedMessage = message.slice(0, 200);
+      if (!trimmedMessage.trim()) return;
+      await addDoc(collection(db, 'clubs', clubId, 'messages'), {
+        userId,
+        displayName,
+        message: trimmedMessage,
+        timestamp: serverTimestamp(),
+        type: 'text',
+      });
+    } catch (e) {
+      console.warn('[Firestore] sendClubMessage failed:', e);
+    }
+  }
+
+  /**
+   * Get recent messages from a club's chat.
+   * Returns messages ordered by most recent first, limited to `limitCount` (default 50).
+   */
+  async getClubMessages(
+    clubId: string,
+    limitCount: number = 50
+  ): Promise<ClubMessage[]> {
+    if (!this.enabled || !clubId) return [];
+    try {
+      const q = query(
+        collection(db, 'clubs', clubId, 'messages'),
+        orderBy('timestamp', 'desc'),
+        firestoreLimit(limitCount)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => ({
+        id: d.id,
+        userId: d.data().userId || '',
+        displayName: d.data().displayName || 'Player',
+        message: d.data().message || '',
+        timestamp: d.data().timestamp?.toMillis?.() ?? d.data().timestamp ?? Date.now(),
+        type: 'text' as const,
+      }));
+    } catch (e) {
+      console.warn('[Firestore] getClubMessages failed:', e);
+      return [];
     }
   }
 
