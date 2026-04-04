@@ -82,6 +82,9 @@ export interface GameState {
   lastInvalidTap: CellPosition | null;
   solveSequence: SolveStep[];
   puzzleStartTime: number;
+  scoreDoubler: boolean;
+  boardFreezeActive: boolean;
+  premiumHintUsed: boolean;
 }
 
 export type GameAction =
@@ -99,7 +102,10 @@ export type GameAction =
   | { type: 'SMART_SHUFFLE' }
   | { type: 'GRANT_HINT' }
   | { type: 'GRANT_UNDO' }
-  | { type: 'GRANT_BOOSTER'; booster: 'wildcardTile' | 'spotlight' | 'smartShuffle' };
+  | { type: 'GRANT_BOOSTER'; booster: 'wildcardTile' | 'spotlight' | 'smartShuffle' }
+  | { type: 'USE_PREMIUM_HINT' }
+  | { type: 'ACTIVATE_SCORE_DOUBLER' }
+  | { type: 'ACTIVATE_BOARD_FREEZE' };
 
 export interface PlayerProgress {
   currentLevel: number;
@@ -598,6 +604,7 @@ export interface MysteryWheelState {
   totalSpins: number;
   lastJackpotSpin: number;
   jackpotPity: number;
+  lastDailySpinDate: string;
 }
 
 // ============ WIN STREAK ============

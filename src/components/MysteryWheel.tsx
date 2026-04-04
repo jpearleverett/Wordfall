@@ -12,12 +12,13 @@ import {
   SPIN_COST_GEMS,
   SPIN_BUNDLE_COST_GEMS,
   SPIN_BUNDLE_COUNT,
+  checkDailyFreeSpin,
 } from '../data/mysteryWheel';
 
 interface MysteryWheelProps {
   wheelState: MysteryWheelState;
   gems: number;
-  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: { label: string; icon: string; reward: any } }) => void;
+  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: { label: string; icon: string; reward: any }; usedDailySpin?: boolean }) => void;
   onBuySpin: (cost: number, count: number) => void;
   onDismiss: () => void;
 }

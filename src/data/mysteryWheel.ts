@@ -143,12 +143,12 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     rarity: 'epic',
   },
   {
-    id: 'gems_legendary',
+    id: 'gems_500_jackpot',
     label: '500 Gems!',
-    icon: '\u{1F48E}\u{1F525}',
+    icon: '\u{1F451}',
     reward: { gems: 500 },
     weight: 1,
-    color: '#ff00ff',
+    color: '#ffd700',
     rarity: 'legendary',
   },
 ];
@@ -250,22 +250,22 @@ export function checkFreeSpin(state: MysteryWheelState): MysteryWheelState {
   };
 }
 
+/**
+ * Check if a daily free spin is available.
+ * Players get one free spin per calendar day (in addition to puzzle-earned spins).
+ *
+ * @param lastDailySpinDate - ISO date string of the last daily spin used (e.g. '2026-04-02')
+ * @returns true if the daily free spin has not yet been used today
+ */
+export function checkDailyFreeSpin(lastDailySpinDate: string): boolean {
+  if (!lastDailySpinDate) return true;
+  const today = new Date().toISOString().split('T')[0];
+  return lastDailySpinDate !== today;
+}
+
 /** Cost to buy a single spin with gems */
 export const SPIN_COST_GEMS = 15;
 
 /** Cost to buy a 5-pack of spins with gems (discount) */
 export const SPIN_BUNDLE_COST_GEMS = 60;
 export const SPIN_BUNDLE_COUNT = 5;
-
-/**
- * Check if the player is eligible for a daily free spin.
- * Returns true if 24+ hours have passed since the last daily spin.
- * Pass an empty string or undefined-coerced value for first-time players.
- */
-export function checkDailyFreeSpin(lastDailySpinDate: string): boolean {
-  if (!lastDailySpinDate) return true;
-  const lastSpin = new Date(lastDailySpinDate).getTime();
-  if (isNaN(lastSpin)) return true;
-  const msIn24Hours = 24 * 60 * 60 * 1000;
-  return Date.now() - lastSpin >= msIn24Hours;
-}

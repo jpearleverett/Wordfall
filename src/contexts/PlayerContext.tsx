@@ -150,6 +150,7 @@ interface PlayerData {
     totalSpins: number;
     lastJackpotSpin: number;
     jackpotPity: number;
+    lastDailySpinDate: string;
   };
 
   // Win Streak (per-session consecutive wins)
@@ -413,6 +414,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
     totalSpins: 0,
     lastJackpotSpin: 0,
     jackpotPity: 25,
+    lastDailySpinDate: '',
   },
 
   // Win Streak

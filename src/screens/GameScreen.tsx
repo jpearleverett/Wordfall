@@ -176,6 +176,9 @@ export function GameScreen({
     activateSpotlight,
     activateSmartShuffle,
     useBooster,
+    usePremiumHint,
+    activateScoreDoubler,
+    activateBoardFreeze,
     currentWord,
     isValidWord,
     isStuck,
@@ -930,6 +933,47 @@ export function GameScreen({
     activateSmartShuffle();
   }, [activateSmartShuffle, economy, grantBooster, level, mode, checkFirstBooster]);
 
+  // ─── Coin Sink Item Handlers ──────────────────────────────────────────────
+  const PREMIUM_HINT_COST = 250;
+  const BOARD_FREEZE_COST = 300;
+  const SCORE_DOUBLER_COST = 500;
+
+  const handlePremiumHint = useCallback(() => {
+    if (economy.coins < PREMIUM_HINT_COST) return;
+    if (!economy.spendCoins(PREMIUM_HINT_COST)) return;
+    usePremiumHint();
+    void soundManager.playSound('hintUsed');
+    void analytics.logEvent('coin_sink_used', { level, mode, item: 'premium_hint', cost: PREMIUM_HINT_COST });
+  }, [economy, usePremiumHint, level, mode]);
+
+  const handleBoardFreeze = useCallback(() => {
+    if (economy.coins < BOARD_FREEZE_COST) return;
+    if (!economy.spendCoins(BOARD_FREEZE_COST)) return;
+    activateBoardFreeze();
+    void soundManager.playSound('buttonPress');
+    void analytics.logEvent('coin_sink_used', { level, mode, item: 'board_freeze', cost: BOARD_FREEZE_COST });
+  }, [economy, activateBoardFreeze, level, mode]);
+
+  const handleScoreDoubler = useCallback(() => {
+    if (economy.coins < SCORE_DOUBLER_COST) return;
+    if (!economy.spendCoins(SCORE_DOUBLER_COST)) return;
+    activateScoreDoubler();
+    void soundManager.playSound('buttonPress');
+    void analytics.logEvent('coin_sink_used', { level, mode, item: 'score_doubler', cost: SCORE_DOUBLER_COST });
+  }, [economy, activateScoreDoubler, level, mode]);
+
+  // Skip level handler (costs 200 coins, advances with 0 stars/rewards)
+  const SKIP_LEVEL_COST = 200;
+  const handleSkipLevel = useCallback(() => {
+    if (economy.coins < SKIP_LEVEL_COST) return;
+    if (!economy.spendCoins(SKIP_LEVEL_COST)) return;
+    void soundManager.playSound('buttonPress');
+    void analytics.logEvent('level_skipped', { level, mode, cost: SKIP_LEVEL_COST });
+    setShowFailed(false);
+    // Call onComplete with 0 stars, 0 score, 0 combo — just advance the level
+    onComplete(0, 0, 0);
+  }, [economy, level, mode, onComplete]);
+
   // Format timer — extracted as useCallback to avoid recreation on every render
   const formatTime = useCallback((seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -969,10 +1013,15 @@ export function GameScreen({
   });
 
   const bt = economy.boosterTokens ?? { wildcardTile: 0, spotlight: 0, smartShuffle: 0 };
+  const hasAnyCoinSinkItems =
+    economy.coins >= PREMIUM_HINT_COST ||
+    (mode === 'shrinkingBoard' && economy.coins >= BOARD_FREEZE_COST) ||
+    economy.coins >= SCORE_DOUBLER_COST;
   const hasAnyBoosters =
     bt.wildcardTile > 0 ||
     bt.spotlight > 0 ||
-    bt.smartShuffle > 0;
+    bt.smartShuffle > 0 ||
+    hasAnyCoinSinkItems;
 
   // Compute spotlight dimmed cells for grid rendering
   const spotlightDimmedSet = useMemo(() => {
@@ -1036,6 +1085,20 @@ export function GameScreen({
         onUndo={handleUndo}
         onBack={onHome}
       />
+
+      {/* Score doubler indicator */}
+      {state.scoreDoubler && state.status === 'playing' && (
+        <View style={styles.scoreDoublerBadge} pointerEvents="none">
+          <Text style={styles.scoreDoublerText}>2X SCORE ACTIVE</Text>
+        </View>
+      )}
+
+      {/* Board freeze indicator */}
+      {state.boardFreezeActive && state.status === 'playing' && mode === 'shrinkingBoard' && (
+        <View style={styles.boardFreezeBadge} pointerEvents="none">
+          <Text style={styles.boardFreezeText}>🧊 FREEZE ACTIVE</Text>
+        </View>
+      )}
 
       {/* Timer/move bars - reserved space so they don't shift layout */}
       {modeConfig.rules.hasTimer && (
@@ -1383,6 +1446,76 @@ export function GameScreen({
               <Text style={styles.boosterLabel}>Shuffle</Text>
               <View style={styles.boosterCount}>
                 <Text style={styles.boosterCountText}>{bt.smartShuffle}</Text>
+              </View>
+            </Pressable>
+          )}
+          {/* ─── Coin Sink Items ─────────────────────────────── */}
+          {economy.coins >= PREMIUM_HINT_COST && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.boosterButton,
+                styles.coinSinkButton,
+                pressed && styles.boosterPressed,
+              ]}
+              onPress={handlePremiumHint}
+            >
+              <LinearGradient
+                colors={['rgba(25, 20, 10, 0.85)', 'rgba(15, 12, 5, 0.90)'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+              />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 215, 0, 0.15)' }]} />
+              <View style={styles.boosterIconWrap}>
+                <Text style={styles.boosterEmoji}>🔍</Text>
+              </View>
+              <Text style={styles.boosterLabel}>P.Hint</Text>
+              <View style={styles.coinSinkCost}>
+                <Text style={styles.coinSinkCostText}>🪙{PREMIUM_HINT_COST}</Text>
+              </View>
+            </Pressable>
+          )}
+          {mode === 'shrinkingBoard' && economy.coins >= BOARD_FREEZE_COST && !state.boardFreezeActive && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.boosterButton,
+                styles.coinSinkButton,
+                pressed && styles.boosterPressed,
+              ]}
+              onPress={handleBoardFreeze}
+            >
+              <LinearGradient
+                colors={['rgba(10, 20, 30, 0.85)', 'rgba(5, 15, 25, 0.90)'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+              />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(0, 212, 255, 0.15)' }]} />
+              <View style={styles.boosterIconWrap}>
+                <Text style={styles.boosterEmoji}>🧊</Text>
+              </View>
+              <Text style={styles.boosterLabel}>Freeze</Text>
+              <View style={styles.coinSinkCost}>
+                <Text style={styles.coinSinkCostText}>🪙{BOARD_FREEZE_COST}</Text>
+              </View>
+            </Pressable>
+          )}
+          {economy.coins >= SCORE_DOUBLER_COST && !state.scoreDoubler && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.boosterButton,
+                styles.coinSinkButton,
+                pressed && styles.boosterPressed,
+              ]}
+              onPress={handleScoreDoubler}
+            >
+              <LinearGradient
+                colors={['rgba(25, 15, 10, 0.85)', 'rgba(18, 10, 5, 0.90)'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+              />
+              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 159, 67, 0.15)' }]} />
+              <View style={styles.boosterIconWrap}>
+                <Text style={styles.boosterEmoji}>2X</Text>
+              </View>
+              <Text style={styles.boosterLabel}>Double</Text>
+              <View style={styles.coinSinkCost}>
+                <Text style={styles.coinSinkCostText}>🪙{SCORE_DOUBLER_COST}</Text>
               </View>
             </Pressable>
           )}
@@ -2078,5 +2211,58 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.accent,
     zIndex: 55,
+  },
+  scoreDoublerBadge: {
+    position: 'absolute' as const,
+    top: 100,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,159,67,0.2)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.orange + '60',
+    zIndex: 20,
+  },
+  scoreDoublerText: {
+    color: COLORS.orange,
+    fontSize: 13,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
+  },
+  boardFreezeBadge: {
+    position: 'absolute' as const,
+    top: 100,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,212,255,0.15)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '60',
+    zIndex: 20,
+  },
+  boardFreezeText: {
+    color: COLORS.accent,
+    fontSize: 13,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
+  },
+  coinSinkButton: {
+    borderColor: COLORS.gold + '40',
+  },
+  coinSinkCost: {
+    position: 'absolute' as const,
+    bottom: -4,
+    alignSelf: 'center',
+    backgroundColor: COLORS.gold + '20',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  coinSinkCostText: {
+    color: COLORS.gold,
+    fontSize: 9,
+    fontFamily: FONTS.bodyBold,
   },
 });

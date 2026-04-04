@@ -12,7 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, FONTS } from '../constants';
+import { COLORS, GRADIENTS, FONTS, SHADOWS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useSettings } from '../contexts/SettingsContext';
@@ -26,8 +26,7 @@ import {
   getRarityColor,
   RotatingItem,
 } from '../data/rotatingShop';
-import { getFlashSale, getDiscountedPrice } from '../data/dynamicPricing';
-import { getProductById } from '../data/shopProducts';
+import { getFlashSale, FlashSale } from '../data/dynamicPricing';
 import { funnelTracker } from '../services/funnelTracker';
 
 const { width } = Dimensions.get('window');
@@ -152,9 +151,50 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   } | null>(null);
 
   // Flash sale
-  const [flashSale] = useState(() => getFlashSale(new Date()));
+  const [flashSale, setFlashSale] = useState<FlashSale | null>(() => getFlashSale(new Date()));
   const [flashCountdown, setFlashCountdown] = useState('');
   const flashPulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Flash sale pulse animation
+  useEffect(() => {
+    if (!flashSale) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flashPulseAnim, {
+          toValue: 1.03,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(flashPulseAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [flashSale, flashPulseAnim]);
+
+  // Flash sale countdown timer
+  useEffect(() => {
+    if (!flashSale) return;
+    const updateCountdown = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(23, 59, 59, 999);
+      const remaining = Math.max(0, midnight.getTime() - now.getTime());
+      const h = Math.floor(remaining / 3600000);
+      const m = Math.floor((remaining % 3600000) / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
+      setFlashCountdown(
+        `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
+      );
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [flashSale]);
 
   // Today's rotating items
   const today = new Date().toISOString().slice(0, 10);
@@ -175,45 +215,6 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       adManager.setMockAdHandler(() => {});
     };
   }, [adsRemoved]);
-
-  // Flash sale countdown + pulse
-  useEffect(() => {
-    if (!flashSale) return;
-    const expiresAt = new Date(flashSale.expiresAt).getTime();
-    const updateFlashCountdown = () => {
-      const remaining = Math.max(0, expiresAt - Date.now());
-      const h = Math.floor(remaining / 3600000);
-      const m = Math.floor((remaining % 3600000) / 60000);
-      const s = Math.floor((remaining % 60000) / 1000);
-      setFlashCountdown(
-        `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
-      );
-    };
-    updateFlashCountdown();
-    const flashTimer = setInterval(updateFlashCountdown, 1000);
-
-    // Pulse animation loop
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(flashPulseAnim, {
-          toValue: 1.03,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(flashPulseAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    pulse.start();
-
-    return () => {
-      clearInterval(flashTimer);
-      pulse.stop();
-    };
-  }, [flashSale, flashPulseAnim]);
 
   // Countdown timer
   useEffect(() => {
@@ -538,58 +539,50 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         showsVerticalScrollIndicator={false}
       >
         {/* ── Flash Sale ─────────────────────────────────────────────── */}
-        {flashSale && (() => {
-          const product = getProductById(flashSale.productId);
-          const basePrice = product?.fallbackPriceAmount ?? 4.99;
-          const pricing = getDiscountedPrice(basePrice, flashSale.discountPercent);
-          const productName = product?.name ?? flashSale.label;
-
-          return (
-            <Animated.View style={{ transform: [{ scale: flashPulseAnim }], marginBottom: 16 }}>
-              <TouchableOpacity
-                style={styles.flashSaleCard}
-                onPress={() => handlePurchase(flashSale.productId)}
-                activeOpacity={0.7}
-                disabled={!!purchasingId}
-              >
-                <LinearGradient
-                  colors={['#4a1508', '#2a0a04', '#1a0502']}
-                  style={StyleSheet.absoluteFill}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                />
-                <View style={styles.flashSaleGlow} />
-
-                {/* Discount badge */}
-                <View style={styles.flashSaleDiscountBadge}>
-                  <Text style={styles.flashSaleDiscountText}>{pricing.savings}</Text>
+        {flashSale && (
+          <Animated.View style={[styles.flashSaleCard, { transform: [{ scale: flashPulseAnim }] }]}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handlePurchase(flashSale.productId)}
+              disabled={!!purchasingId}
+            >
+              <LinearGradient
+                colors={['#3a1a08', '#2a0e04']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
+              <View style={styles.flashSaleGlow} />
+              <View style={styles.flashSaleHeader}>
+                <View style={styles.flashSaleBadge}>
+                  <Text style={styles.flashSaleBadgeText}>
+                    {flashSale.discountPercent}% OFF
+                  </Text>
                 </View>
-
-                <View style={styles.flashSaleContent}>
-                  <Text style={styles.flashSaleIcon}>{product?.icon ?? '\u26A1'}</Text>
-                  <View style={styles.flashSaleInfo}>
-                    <Text style={styles.flashSaleLabel}>FLASH SALE</Text>
-                    <Text style={styles.flashSaleName}>{productName}</Text>
-                    <View style={styles.flashSalePriceRow}>
-                      <Text style={styles.flashSaleOldPrice}>{pricing.original}</Text>
-                      {isLoading(flashSale.productId) ? (
-                        <ActivityIndicator size="small" color={COLORS.coral} />
-                      ) : (
-                        <Text style={styles.flashSaleNewPrice}>{pricing.discounted}</Text>
-                      )}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Timer */}
-                <View style={styles.flashSaleTimerRow}>
+                <View style={styles.flashSaleTimerBadge}>
                   <Text style={styles.flashSaleTimerIcon}>{'\u23F1\uFE0F'}</Text>
-                  <Text style={styles.flashSaleTimerText}>Ends in {flashCountdown}</Text>
+                  <Text style={styles.flashSaleTimerText}>{flashCountdown}</Text>
                 </View>
-              </TouchableOpacity>
-            </Animated.View>
-          );
-        })()}
+              </View>
+              <View style={styles.flashSaleBody}>
+                <Text style={styles.flashSaleIcon}>{flashSale.icon}</Text>
+                <View style={styles.flashSaleInfo}>
+                  <Text style={styles.flashSaleLabel}>FLASH SALE</Text>
+                  <Text style={styles.flashSaleName}>{flashSale.name}</Text>
+                  <Text style={styles.flashSaleDesc}>{flashSale.description}</Text>
+                </View>
+              </View>
+              <View style={styles.flashSalePriceRow}>
+                <Text style={styles.flashSaleOriginalPrice}>{flashSale.originalPrice}</Text>
+                {isLoading(flashSale.productId) ? (
+                  <ActivityIndicator size="small" color={COLORS.orange} />
+                ) : (
+                  <Text style={styles.flashSalePrice}>{flashSale.salePrice}</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
 
         {/* ── Free Rewards (Watch Ads) ──────────────────────────────── */}
         {!adsRemoved && (
@@ -1610,52 +1603,69 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  bottomSpacer: {
-    height: 40,
-  },
-
-  // ── Flash Sale ────────────────────────────────────────────────────────
+  // ── Flash Sale ─────────────────────────────────────────────────────
   flashSaleCard: {
     borderRadius: 20,
-    padding: 18,
-    borderWidth: 1.5,
-    borderColor: COLORS.coral + '80',
     overflow: 'hidden',
-    shadowColor: COLORS.coral,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 12,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.orange + '80',
+    ...SHADOWS.glow(COLORS.orange),
   },
   flashSaleGlow: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 90,
-    backgroundColor: 'rgba(255,107,107,0.12)',
+    height: 100,
+    backgroundColor: 'rgba(255,159,67,0.08)',
   },
-  flashSaleDiscountBadge: {
-    alignSelf: 'flex-start',
+  flashSaleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    marginBottom: 10,
+  },
+  flashSaleBadge: {
     backgroundColor: COLORS.coral,
     borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
   },
-  flashSaleDiscountText: {
-    fontSize: 12,
+  flashSaleBadgeText: {
+    fontSize: 13,
     fontFamily: FONTS.display,
-    color: '#fff',
+    color: COLORS.textPrimary,
     letterSpacing: 1,
   },
-  flashSaleContent: {
+  flashSaleTimerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    backgroundColor: COLORS.orange + '25',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  flashSaleTimerIcon: {
+    fontSize: 13,
+  },
+  flashSaleTimerText: {
+    fontSize: 13,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.orange,
+    fontVariant: ['tabular-nums'] as any,
+  },
+  flashSaleBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
   flashSaleIcon: {
-    fontSize: 40,
+    fontSize: 44,
     marginRight: 14,
   },
   flashSaleInfo: {
@@ -1667,52 +1677,45 @@ const styles = StyleSheet.create({
     color: COLORS.orange,
     letterSpacing: 2,
     marginBottom: 2,
+    textShadowColor: 'rgba(255,159,67,0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   flashSaleName: {
-    fontSize: 18,
+    fontSize: 20,
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
-    marginBottom: 6,
-    textShadowColor: 'rgba(255,107,107,0.3)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    marginBottom: 2,
+  },
+  flashSaleDesc: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 16,
   },
   flashSalePriceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
-  flashSaleOldPrice: {
-    fontSize: 14,
+  flashSaleOriginalPrice: {
+    fontSize: 16,
     color: COLORS.textMuted,
-    textDecorationLine: 'line-through',
+    textDecorationLine: 'line-through' as const,
+    fontFamily: FONTS.bodyMedium,
   },
-  flashSaleNewPrice: {
-    fontSize: 22,
+  flashSalePrice: {
+    fontSize: 28,
     fontFamily: FONTS.display,
-    color: COLORS.coral,
-    textShadowColor: 'rgba(255,107,107,0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-  flashSaleTimerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.coral + '18',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    alignSelf: 'flex-start',
-  },
-  flashSaleTimerIcon: {
-    fontSize: 14,
-  },
-  flashSaleTimerText: {
-    fontSize: 13,
-    fontFamily: FONTS.bodyBold,
     color: COLORS.orange,
-    fontVariant: ['tabular-nums'],
+    textShadowColor: 'rgba(255,159,67,0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+
+  bottomSpacer: {
+    height: 40,
   },
 
   // ── Coin Shop ──────────────────────────────────────────────────────────
