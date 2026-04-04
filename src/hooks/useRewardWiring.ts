@@ -12,6 +12,7 @@ import {
 } from '../constants';
 import { ATLAS_PAGES, getCurrentSeasonAlbum } from '../data/collections';
 import { generateShareText } from '../utils/shareGenerator';
+import { getMasteryTierForXP } from '../data/masteryRewards';
 import { eventManager } from '../services/eventManager';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
@@ -416,6 +417,28 @@ export function useRewardWiring({
           data: { modeId: mode, modeName: modeConfig.name },
         });
       }
+    }
+
+    // Mastery tier-up detection (XP proxy: puzzlesSolved * 100)
+    const prevMasteryXP = (player.puzzlesSolved - 1) * 100;
+    const newMasteryXP = player.puzzlesSolved * 100;
+    const prevMasteryTier = getMasteryTierForXP(prevMasteryXP);
+    const newMasteryTier = getMasteryTierForXP(newMasteryXP);
+    if (newMasteryTier > prevMasteryTier) {
+      player.queueCeremony({
+        type: 'mastery_tier_up',
+        data: { tier: newMasteryTier, icon: '\u{1F3C6}', title: `Mastery Tier ${newMasteryTier}!`, description: "You've reached a new mastery level!" },
+      });
+    }
+
+    // Late-game milestone ceremonies (every 25 levels after level 50)
+    if (leveledUp && newLevel >= 50 && newLevel % 25 === 0) {
+      economy.addCoins(500);
+      economy.addGems(25);
+      player.queueCeremony({
+        type: 'star_milestone',
+        data: { icon: '\u{1F451}', title: `Level ${newLevel} Master!`, description: 'Your dedication is legendary!', rewardLabel: '500 coins + 25 gems' },
+      });
     }
 
     // Award mystery wheel free spin progress

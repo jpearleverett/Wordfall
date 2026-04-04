@@ -1594,6 +1594,17 @@ function AppContent() {
           onDismiss={handleDismissCeremony}
         />
       )}
+      {activeCeremony?.type === 'mastery_tier_up' && (
+        <MilestoneCeremony
+          ribbon="MASTERY"
+          icon={activeCeremony.data.icon}
+          title={activeCeremony.data.title}
+          description={activeCeremony.data.description}
+          accentColor={COLORS.purple}
+          rewardLabel={`Tier ${activeCeremony.data.tier} Rewards`}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
     </View>
   );
 }

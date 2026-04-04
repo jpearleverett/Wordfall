@@ -592,7 +592,8 @@ export interface CeremonyItem {
     | 'wing_complete'
     | 'word_mastery_gold'
     | 'first_mode_clear'
-    | 'wildcard_earned';
+    | 'wildcard_earned'
+    | 'mastery_tier_up';
   data: Record<string, any>;
 }
 

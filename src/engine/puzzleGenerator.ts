@@ -179,6 +179,29 @@ function getDifficultyConfig(difficulty: Difficulty): BoardConfig {
   }
 }
 
+// ─── Procedural Chapter Naming ────────────────────────────────────────────
+
+const CHAPTER_NAME_PREFIXES = [
+  'Twilight', 'Crystal', 'Neon', 'Shadow', 'Golden', 'Mystic', 'Cosmic', 'Ancient', 'Frozen', 'Ember',
+  'Jade', 'Silver', 'Thunder', 'Phantom', 'Celestial', 'Iron', 'Sapphire', 'Crimson', 'Ethereal', 'Obsidian',
+];
+
+const CHAPTER_NAME_SUFFIXES = [
+  'Lexicon', 'Archives', 'Codex', 'Vault', 'Sanctum', 'Chambers', 'Passages', 'Chronicles', 'Enigma', 'Grimoire',
+  'Pinnacle', 'Labyrinth', 'Odyssey', 'Nexus', 'Summit', 'Dominion', 'Horizon', 'Citadel', 'Threshold', 'Meridian',
+];
+
+/**
+ * Generate a deterministic themed name for procedural chapters beyond level 600.
+ * @param chapterNumber - The chapter number (typically 41+)
+ * @returns A formatted chapter name like "Chapter 42: Crystal Archives"
+ */
+export function getProceduralChapterName(chapterNumber: number): string {
+  const prefix = CHAPTER_NAME_PREFIXES[chapterNumber % CHAPTER_NAME_PREFIXES.length];
+  const suffix = CHAPTER_NAME_SUFFIXES[Math.floor(chapterNumber / CHAPTER_NAME_PREFIXES.length) % CHAPTER_NAME_SUFFIXES.length];
+  return `Chapter ${chapterNumber}: ${prefix} ${suffix}`;
+}
+
 // ─── Procedural Chapter Generation ─────────────────────────────────────────
 
 /**
