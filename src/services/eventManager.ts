@@ -275,6 +275,27 @@ class EventManager {
   }
 
   /**
+   * Claim the exclusive reward for an event (e.g., cosmetic frame at Gold tier).
+   * Returns true if successfully claimed, false if already claimed or no progress exists.
+   */
+  claimExclusiveReward(eventId: string): boolean {
+    if (!this.eventProgress[eventId]) {
+      this.eventProgress[eventId] = {
+        progress: 0,
+        claimedTiers: [],
+        startedAt: Date.now(),
+      };
+    }
+
+    if (this.eventProgress[eventId].claimedTiers.includes('exclusive')) {
+      return false;
+    }
+
+    this.eventProgress[eventId].claimedTiers.push('exclusive');
+    return true;
+  }
+
+  /**
    * Check if it's currently a weekend (Saturday/Sunday).
    */
   isWeekendBlitz(): boolean {

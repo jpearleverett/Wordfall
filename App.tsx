@@ -114,9 +114,67 @@ function HomeStackScreen() {
 // Play Tab Stack
 // Event screen wrapper — wires navigation callbacks for Play and Shop buttons
 function EventScreenWrapperNav({ navigation }: any) {
+  const player = usePlayer();
+  const economy = useEconomy();
+
+  const handlePlayEventPuzzle = useCallback(() => {
+    const mode: GameMode = 'classic';
+
+    // Energy check (same pattern as ModesScreenWrapper)
+    const isFreeMode = ENERGY.FREE_MODES.includes(mode);
+    if (!isFreeMode) {
+      const energyInfo = player.getEnergyDisplay();
+      if (energyInfo.current <= 0 && energyInfo.bonusPlaysLeft <= 0) {
+        const minutesUntilNext = Math.ceil(player.getTimeUntilNextEnergy() / 60000);
+        Alert.alert(
+          'Take a Break!',
+          `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
+          [
+            { text: 'Wait', style: 'cancel' },
+            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            {
+              text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
+              onPress: () => {
+                if (economy.spendGems(ENERGY.GEM_REFILL_COST)) {
+                  player.refillEnergy('gems');
+                } else {
+                  Alert.alert('Not Enough Gems', 'Visit the shop to get more gems.');
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
+    }
+
+    player.useEnergy(mode);
+
+    try {
+      const modeLevel = player.currentLevel;
+      let config = getLevelConfig(modeLevel);
+      const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+      config = adjusted.config;
+
+      const seed = Date.now() + modeLevel * 1337;
+      const board = generateBoard(config, seed, mode);
+      const modeConfig = MODE_CONFIGS[mode];
+
+      navigation.navigate('Game', {
+        board,
+        level: modeLevel,
+        mode,
+        maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+        timeLimit: modeConfig.rules.timerSeconds || 0,
+      });
+    } catch (e) {
+      Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+    }
+  }, [player, economy, navigation]);
+
   return (
     <EventScreen
-      onPlayEventPuzzle={() => navigation.navigate('Game', { mode: 'classic' })}
+      onPlayEventPuzzle={handlePlayEventPuzzle}
       onOpenEventShop={() => navigation.navigate('Modes')}
     />
   );

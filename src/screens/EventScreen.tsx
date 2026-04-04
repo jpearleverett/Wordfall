@@ -98,11 +98,34 @@ const EventScreen: React.FC<EventScreenProps> = ({
     }
   }, [economy, claimAnim, player]);
 
+  // Claim the exclusive cosmetic reward (frame/title/decoration) at Gold tier
+  const handleClaimExclusiveReward = useCallback(() => {
+    if (!exclusiveReward || !primaryEvent) return;
+
+    player.unlockCosmetic(exclusiveReward.id);
+    eventManager.claimExclusiveReward(primaryEvent.id);
+
+    Animated.sequence([
+      Animated.timing(claimAnim, { toValue: 1.15, duration: 150, useNativeDriver: true }),
+      Animated.spring(claimAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
+
+    setActiveEvents(eventManager.getActiveEvents());
+    player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
+  }, [exclusiveReward, primaryEvent, player, claimAnim]);
+
   // Get the current event's exclusive reward
   const currentEvent = getCurrentEvent();
   const exclusiveReward: EventExclusiveReward | undefined =
     event?.exclusiveReward ?? currentEvent?.exclusiveReward;
   const isTimeLimited: boolean = event?.isTimeLimited ?? currentEvent?.isTimeLimited ?? false;
+
+  // Exclusive reward claim state
+  const goldTierReached = primaryEvent?.rewards?.find(r => r.tier === 'gold')?.reached ?? false;
+  const exclusiveAlreadyClaimed = exclusiveReward
+    ? player.unlockedCosmetics.includes(exclusiveReward.id)
+    : false;
+  const canClaimExclusive = goldTierReached && !exclusiveAlreadyClaimed && !!exclusiveReward;
 
   // Multiplier display
   const multipliers = eventManager.getEventMultipliers();
@@ -380,15 +403,40 @@ const EventScreen: React.FC<EventScreenProps> = ({
                 </View>
               </View>
             </View>
-            <View style={styles.exclusiveTimerRow}>
-              <Text style={styles.exclusiveTimerIcon}>{'\u{1F525}'}</Text>
-              <Text style={styles.exclusiveTimerText}>
-                Ends in {timeRemaining}
-              </Text>
-            </View>
-            <Text style={styles.exclusiveHint}>
-              Reach the Gold tier to unlock this exclusive reward!
-            </Text>
+            {exclusiveAlreadyClaimed ? (
+              <View style={styles.exclusiveClaimedRow}>
+                <Text style={styles.exclusiveClaimedIcon}>{'\u{2705}'}</Text>
+                <Text style={styles.exclusiveClaimedText}>Claimed! Check your cosmetics.</Text>
+              </View>
+            ) : canClaimExclusive ? (
+              <>
+                <Text style={[styles.exclusiveHint, { color: COLORS.gold }]}>
+                  Gold tier reached! Claim your exclusive reward below.
+                </Text>
+                <TouchableOpacity onPress={handleClaimExclusiveReward} activeOpacity={0.8}>
+                  <LinearGradient
+                    colors={[COLORS.gold, COLORS.rarityEpic] as [string, string]}
+                    style={styles.exclusiveClaimBtn}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <Text style={styles.exclusiveClaimBtnText}>Claim Reward</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.exclusiveTimerRow}>
+                  <Text style={styles.exclusiveTimerIcon}>{'\u{1F525}'}</Text>
+                  <Text style={styles.exclusiveTimerText}>
+                    Ends in {timeRemaining}
+                  </Text>
+                </View>
+                <Text style={styles.exclusiveHint}>
+                  Reach the Gold tier to unlock this exclusive reward!
+                </Text>
+              </>
+            )}
           </LinearGradient>
         )}
 
@@ -787,6 +835,34 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  exclusiveClaimBtn: {
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  exclusiveClaimBtnText: {
+    fontSize: 14,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.bg,
+  },
+  exclusiveClaimedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  exclusiveClaimedIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  exclusiveClaimedText: {
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.green,
   },
 
   // Puzzles
