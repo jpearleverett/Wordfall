@@ -14,6 +14,7 @@ import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { Skeleton, SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import { usePlayer } from '../contexts/PlayerContext';
 import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
+import { PROFILE_FRAMES, COSMETIC_THEMES } from '../data/cosmetics';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
 const { width } = Dimensions.get('window');
@@ -299,7 +300,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* Equipped Cosmetics */}
         <Text style={styles.sectionTitle}>Equipped Cosmetics</Text>
-        <View style={styles.cosmeticsCard}>
+        <TouchableOpacity style={styles.cosmeticsCard} activeOpacity={0.7} onPress={onEditProfile}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
             style={StyleSheet.absoluteFill}
@@ -308,25 +309,34 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           />
           <View style={styles.cosmeticRow}>
             <Text style={styles.cosmeticLabel}>Frame</Text>
-            <Text style={styles.cosmeticValue}>
-              {p.equippedCosmetics.frame ?? 'Default'}
-            </Text>
-          </View>
-          <View style={styles.cosmeticDivider} />
-          <View style={styles.cosmeticRow}>
-            <Text style={styles.cosmeticLabel}>Trail</Text>
-            <Text style={styles.cosmeticValue}>
-              {p.equippedCosmetics.trail ?? 'None'}
-            </Text>
+            <View style={styles.cosmeticValueRow}>
+              <Text style={styles.cosmeticValue}>
+                {PROFILE_FRAMES.find(f => f.id === p.equippedCosmetics.frame)?.name ?? 'Default'}
+              </Text>
+              <Text style={styles.cosmeticChevron}>{'\u203A'}</Text>
+            </View>
           </View>
           <View style={styles.cosmeticDivider} />
           <View style={styles.cosmeticRow}>
             <Text style={styles.cosmeticLabel}>Theme</Text>
-            <Text style={styles.cosmeticValue}>
-              {p.equippedCosmetics.theme ?? 'Default'}
-            </Text>
+            <View style={styles.cosmeticValueRow}>
+              <Text style={styles.cosmeticValue}>
+                {COSMETIC_THEMES.find(t => t.id === p.equippedCosmetics.theme)?.name ?? 'Default'}
+              </Text>
+              <Text style={styles.cosmeticChevron}>{'\u203A'}</Text>
+            </View>
           </View>
-        </View>
+          <View style={styles.cosmeticDivider} />
+          <View style={styles.cosmeticRow}>
+            <Text style={styles.cosmeticLabel}>Title</Text>
+            <View style={styles.cosmeticValueRow}>
+              <Text style={styles.cosmeticValue}>
+                {p.title ?? 'Wordsmith'}
+              </Text>
+              <Text style={styles.cosmeticChevron}>{'\u203A'}</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
 
         {/* Edit Profile Button */}
         <TouchableOpacity style={styles.editButton} onPress={onEditProfile}>
@@ -624,6 +634,16 @@ const styles = StyleSheet.create({
   cosmeticValue: {
     fontSize: 14,
     color: COLORS.textPrimary,
+    fontFamily: FONTS.bodySemiBold,
+  },
+  cosmeticValueRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  cosmeticChevron: {
+    fontSize: 18,
+    color: COLORS.textSecondary,
     fontFamily: FONTS.bodySemiBold,
   },
   cosmeticDivider: {

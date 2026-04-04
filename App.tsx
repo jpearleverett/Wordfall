@@ -666,13 +666,7 @@ function HomeMainScreen({ route, navigation }: any) {
   const [comebackHints, setComebackHints] = useState(0);
   const welcomeAnim = React.useRef(new Animated.Value(0)).current;
 
-  // Ceremony queue (extracted to useCeremonyQueue hook)
-  const { activeCeremony, handleDismissCeremony, processNext: processNextCeremony } = useCeremonyQueue({
-    popCeremony: player.popCeremony,
-    pendingCeremonyCount: player.pendingCeremonies.length,
-    loaded: player.loaded,
-    isBlocked: showWelcomeBack,
-  });
+  // Ceremony queue moved to AppContent level so modals overlay all screens
 
   // Pending gifts from Firestore
   const [pendingGifts, setPendingGifts] = useState<FirestoreGift[]>([]);
@@ -1265,8 +1259,6 @@ function HomeMainScreen({ route, navigation }: any) {
               onPress={() => {
                 Animated.timing(welcomeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
                   setShowWelcomeBack(false);
-                  // Process ceremonies after welcome-back (via extracted hook)
-                  processNextCeremony();
                 });
               }}
             >
@@ -1287,7 +1279,150 @@ function HomeMainScreen({ route, navigation }: any) {
         />
       )}
 
-      {/* Ceremony modals */}
+      {/* Ceremony modals rendered at AppContent level for global overlay */}
+
+      {/* Session end reminder */}
+      {showSessionReminder && (
+        <SessionEndReminder
+          type="daily"
+          message="Don't forget your daily puzzle!"
+          onDismiss={() => setShowSessionReminder(false)}
+        />
+      )}
+    </View>
+  );
+}
+
+// playerStageFromPuzzles moved to src/hooks/useRewardWiring.ts
+
+// Root app with onboarding check
+function AppContent() {
+  const player = usePlayer();
+  const settings = useSettings();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const navigationRef = useRef<NavigationContainerRef<any>>(null);
+  const routeNameRef = useRef<string | undefined>();
+
+  // Ceremony queue — rendered at app level so modals overlay all screens
+  const { activeCeremony, handleDismissCeremony } = useCeremonyQueue({
+    popCeremony: player.popCeremony,
+    pendingCeremonyCount: player.pendingCeremonies.length,
+    loaded: player.loaded,
+    isBlocked: showOnboarding,
+  });
+
+  useEffect(() => {
+    if (!settings.loaded) return;
+    soundManager.setSfxVolume(settings.sfxVolume);
+    soundManager.setMusicVolume(settings.musicVolume);
+    soundManager.setMuted(settings.sfxVolume <= 0 && settings.musicVolume <= 0);
+    setHapticsEnabled(settings.hapticsEnabled);
+  }, [settings.loaded, settings.sfxVolume, settings.musicVolume, settings.hapticsEnabled]);
+
+  useEffect(() => {
+    if (player.loaded && !player.tutorialComplete) {
+      setShowOnboarding(true);
+    }
+  }, [player.loaded, player.tutorialComplete]);
+
+  // Track screen views on navigation state changes
+  const handleNavigationReady = useCallback(() => {
+    const currentRoute = navigationRef.current?.getCurrentRoute();
+    routeNameRef.current = currentRoute?.name;
+    if (currentRoute?.name) {
+      void analytics.trackScreenView(currentRoute.name);
+    }
+  }, []);
+
+  const handleNavigationStateChange = useCallback(() => {
+    const currentRoute = navigationRef.current?.getCurrentRoute();
+    const currentRouteName = currentRoute?.name;
+    const previousRouteName = routeNameRef.current;
+
+    if (currentRouteName && currentRouteName !== previousRouteName) {
+      void analytics.trackScreenView(currentRouteName);
+    }
+    routeNameRef.current = currentRouteName;
+  }, []);
+
+  if (!player.loaded) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={COLORS.accent} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <NavigationContainer
+        ref={navigationRef}
+        onReady={handleNavigationReady}
+        onStateChange={handleNavigationStateChange}
+        theme={{
+          dark: true,
+          colors: {
+            primary: COLORS.accent,
+            background: COLORS.bg,
+            card: COLORS.surface,
+            text: COLORS.textPrimary,
+            border: COLORS.surfaceLight,
+            notification: COLORS.coral,
+          },
+          fonts: {
+            regular: { fontFamily: FONTS.bodyRegular, fontWeight: '400' },
+            medium: { fontFamily: FONTS.bodyMedium, fontWeight: '500' },
+            bold: { fontFamily: FONTS.bodyBold, fontWeight: '700' },
+            heavy: { fontFamily: FONTS.display, fontWeight: '700' },
+          },
+        }}
+      >
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+        <RootStack.Navigator screenOptions={screenOptions}>
+          {showOnboarding ? (
+            <RootStack.Screen name="Onboarding">
+              {(props: any) => (
+                <OnboardingScreen
+                  {...props}
+                  onComplete={() => {
+                    player.updateProgress({ tutorialComplete: true });
+
+                    // Unlock features at current level and queue ceremonies
+                    const level = player.currentLevel || 1;
+                    const featureCeremonies = player.checkFeatureUnlocks(level);
+                    for (const ceremony of featureCeremonies) {
+                      player.queueCeremony(ceremony);
+                    }
+
+                    // Auto-unlock modes at or below current level (mirrors useRewardWiring)
+                    for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
+                      if (config.unlockLevel <= level && !player.unlockedModes.includes(modeId)) {
+                        player.unlockMode(modeId);
+                        player.queueCeremony({
+                          type: 'mode_unlock',
+                          data: {
+                            modeId,
+                            modeName: config.name,
+                            modeIcon: config.icon,
+                            modeDescription: config.description,
+                            modeColor: config.color,
+                          },
+                        });
+                      }
+                    }
+
+                    setShowOnboarding(false);
+                  }}
+                />
+              )}
+            </RootStack.Screen>
+          ) : (
+            <RootStack.Screen name="MainTabs" component={MainTabs} />
+          )}
+        </RootStack.Navigator>
+      </NavigationContainer>
+
+      {/* Ceremony modals — rendered at app level to overlay all screens */}
       {activeCeremony?.type === 'feature_unlock' && (
         <FeatureUnlockCeremony
           icon={activeCeremony.data.icon}
@@ -1459,138 +1594,7 @@ function HomeMainScreen({ route, navigation }: any) {
           onDismiss={handleDismissCeremony}
         />
       )}
-
-      {/* Session end reminder */}
-      {showSessionReminder && (
-        <SessionEndReminder
-          type="daily"
-          message="Don't forget your daily puzzle!"
-          onDismiss={() => setShowSessionReminder(false)}
-        />
-      )}
     </View>
-  );
-}
-
-// playerStageFromPuzzles moved to src/hooks/useRewardWiring.ts
-
-// Root app with onboarding check
-function AppContent() {
-  const player = usePlayer();
-  const settings = useSettings();
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const navigationRef = useRef<NavigationContainerRef<any>>(null);
-  const routeNameRef = useRef<string | undefined>();
-
-  useEffect(() => {
-    if (!settings.loaded) return;
-    soundManager.setSfxVolume(settings.sfxVolume);
-    soundManager.setMusicVolume(settings.musicVolume);
-    soundManager.setMuted(settings.sfxVolume <= 0 && settings.musicVolume <= 0);
-    setHapticsEnabled(settings.hapticsEnabled);
-  }, [settings.loaded, settings.sfxVolume, settings.musicVolume, settings.hapticsEnabled]);
-
-  useEffect(() => {
-    if (player.loaded && !player.tutorialComplete) {
-      setShowOnboarding(true);
-    }
-  }, [player.loaded, player.tutorialComplete]);
-
-  // Track screen views on navigation state changes
-  const handleNavigationReady = useCallback(() => {
-    const currentRoute = navigationRef.current?.getCurrentRoute();
-    routeNameRef.current = currentRoute?.name;
-    if (currentRoute?.name) {
-      void analytics.trackScreenView(currentRoute.name);
-    }
-  }, []);
-
-  const handleNavigationStateChange = useCallback(() => {
-    const currentRoute = navigationRef.current?.getCurrentRoute();
-    const currentRouteName = currentRoute?.name;
-    const previousRouteName = routeNameRef.current;
-
-    if (currentRouteName && currentRouteName !== previousRouteName) {
-      void analytics.trackScreenView(currentRouteName);
-    }
-    routeNameRef.current = currentRouteName;
-  }, []);
-
-  if (!player.loaded) {
-    return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color={COLORS.accent} />
-      </View>
-    );
-  }
-
-  return (
-    <NavigationContainer
-      ref={navigationRef}
-      onReady={handleNavigationReady}
-      onStateChange={handleNavigationStateChange}
-      theme={{
-        dark: true,
-        colors: {
-          primary: COLORS.accent,
-          background: COLORS.bg,
-          card: COLORS.surface,
-          text: COLORS.textPrimary,
-          border: COLORS.surfaceLight,
-          notification: COLORS.coral,
-        },
-        fonts: {
-          regular: { fontFamily: FONTS.bodyRegular, fontWeight: '400' },
-          medium: { fontFamily: FONTS.bodyMedium, fontWeight: '500' },
-          bold: { fontFamily: FONTS.bodyBold, fontWeight: '700' },
-          heavy: { fontFamily: FONTS.display, fontWeight: '700' },
-        },
-      }}
-    >
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
-      <RootStack.Navigator screenOptions={screenOptions}>
-        {showOnboarding ? (
-          <RootStack.Screen name="Onboarding">
-            {(props: any) => (
-              <OnboardingScreen
-                {...props}
-                onComplete={() => {
-                  player.updateProgress({ tutorialComplete: true });
-
-                  // Unlock features at current level and queue ceremonies
-                  const level = player.currentLevel || 1;
-                  const featureCeremonies = player.checkFeatureUnlocks(level);
-                  for (const ceremony of featureCeremonies) {
-                    player.queueCeremony(ceremony);
-                  }
-
-                  // Auto-unlock modes at or below current level (mirrors useRewardWiring)
-                  for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
-                    if (config.unlockLevel <= level && !player.unlockedModes.includes(modeId)) {
-                      player.unlockMode(modeId);
-                      player.queueCeremony({
-                        type: 'mode_unlock',
-                        data: {
-                          modeId,
-                          modeName: config.name,
-                          modeIcon: config.icon,
-                          modeDescription: config.description,
-                          modeColor: config.color,
-                        },
-                      });
-                    }
-                  }
-
-                  setShowOnboarding(false);
-                }}
-              />
-            )}
-          </RootStack.Screen>
-        ) : (
-          <RootStack.Screen name="MainTabs" component={MainTabs} />
-        )}
-      </RootStack.Navigator>
-    </NavigationContainer>
   );
 }
 
