@@ -27,6 +27,7 @@ import {
 } from '../data/rotatingShop';
 import { funnelTracker } from '../services/funnelTracker';
 import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
+import { getFlashSale, FlashSale } from '../data/dynamicPricing';
 import { soundManager } from '../services/sound';
 
 const { width } = Dimensions.get('window');
@@ -146,6 +147,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   const [coinShopConfirmation, setCoinShopConfirmation] = useState<string | null>(null);
   const coinShopConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Flash sale state
+  const flashSale = getFlashSale(new Date());
+  const [flashCountdown, setFlashCountdown] = useState('');
+  const flashTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Today's rotating items
   const today = new Date().toISOString().slice(0, 10);
   const rotatingItems = getCurrentRotatingItems(today);
@@ -184,6 +190,28 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  // Flash sale countdown timer (to midnight)
+  useEffect(() => {
+    if (!flashSale) return;
+    const updateFlashCountdown = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(23, 59, 59, 999);
+      const remaining = Math.max(0, midnight.getTime() - now.getTime());
+      const h = Math.floor(remaining / 3600000);
+      const m = Math.floor((remaining % 3600000) / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
+      setFlashCountdown(
+        `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
+      );
+    };
+    updateFlashCountdown();
+    flashTimerRef.current = setInterval(updateFlashCountdown, 1000);
+    return () => {
+      if (flashTimerRef.current) clearInterval(flashTimerRef.current);
+    };
+  }, [!!flashSale]);
 
   // ── Purchase handler ────────────────────────────────────────────────────
 
@@ -562,6 +590,58 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Flash Sale ──────────────────────────────────────────── */}
+        {flashSale && (
+          <View style={styles.flashSaleCard}>
+            <LinearGradient
+              colors={[COLORS.coral + '30', COLORS.orange + '15', COLORS.surface]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <View style={styles.flashSaleHeader}>
+              <Text style={styles.flashSaleLabel}>{'\u26A1'} FLASH SALE</Text>
+              <View style={styles.flashSaleDiscountBadge}>
+                <Text style={styles.flashSaleDiscountText}>{flashSale.discountPercent}% OFF</Text>
+              </View>
+            </View>
+            <View style={styles.flashSaleBody}>
+              <Text style={styles.flashSaleIcon}>{flashSale.icon}</Text>
+              <View style={styles.flashSaleInfo}>
+                <Text style={styles.flashSaleName}>{flashSale.name}</Text>
+                <Text style={styles.flashSaleDesc}>{flashSale.description}</Text>
+                <View style={styles.flashSalePriceRow}>
+                  <Text style={styles.flashSaleOriginalPrice}>{flashSale.originalPrice}</Text>
+                  <Text style={styles.flashSaleSalePrice}>{flashSale.salePrice}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.flashSaleFooter}>
+              <View style={styles.flashSaleTimer}>
+                <Text style={styles.flashSaleTimerText}>{'\u23F0'} {flashCountdown}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.flashSaleBuyButton}
+                onPress={() => handlePurchase(flashSale.productId)}
+                activeOpacity={0.7}
+                disabled={!!purchasingId}
+              >
+                <LinearGradient
+                  colors={[COLORS.gold, COLORS.orange]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+                {isLoading(flashSale.productId) ? (
+                  <ActivityIndicator size="small" color={COLORS.bg} />
+                ) : (
+                  <Text style={styles.flashSaleBuyText}>BUY NOW {flashSale.salePrice}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* ── Free Rewards (Watch Ads) ──────────────────────────────── */}
         {!adsRemoved && (
           <View style={styles.adSection}>
@@ -1105,6 +1185,150 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             </View>
           );
         })}
+
+        {/* ── Limited Rentals (coin-purchasable cosmetic rentals) ────── */}
+        {(() => {
+          const rentalItems = getCoinShopByCategory('cosmetic_rental');
+          if (rentalItems.length === 0) {
+            // Also check 'temporary' category for cosmetic_rental reward types
+            const tempItems = getCoinShopByCategory('temporary').filter(
+              (item) => item.reward.type === 'cosmetic_rental',
+            );
+            if (tempItems.length === 0) return null;
+            return (
+              <>
+                <Text style={styles.sectionTitle}>{'\u23F0'} Limited Rentals</Text>
+                <Text style={styles.rentalSubtitle}>Temporary boosts for coins</Text>
+                <View style={styles.rentalGrid}>
+                  {tempItems.map((item) => {
+                    const cantAfford = !economy.canAfford('coins', item.costCoins);
+                    const currentDate = new Date().toISOString().slice(0, 10);
+                    const purchases = currentDate === coinShopDate ? coinShopPurchasesToday : {};
+                    const todayCount = purchases[item.id] ?? 0;
+                    const limitReached = item.dailyLimit !== undefined && todayCount >= item.dailyLimit;
+                    const disabled = limitReached || cantAfford;
+                    const durationLabel = item.reward.durationMinutes
+                      ? item.reward.durationMinutes >= 1440
+                        ? `${Math.floor(item.reward.durationMinutes / 1440)} day${Math.floor(item.reward.durationMinutes / 1440) > 1 ? 's' : ''}`
+                        : item.reward.durationMinutes >= 60
+                          ? `${Math.floor(item.reward.durationMinutes / 60)} hour${Math.floor(item.reward.durationMinutes / 60) > 1 ? 's' : ''}`
+                          : `${item.reward.durationMinutes} min`
+                      : '';
+
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[styles.rentalCard, disabled && styles.coinShopCardDisabled]}
+                        activeOpacity={disabled ? 1 : 0.7}
+                        onPress={() => !disabled && handleCoinShopPurchase(item)}
+                      >
+                        <LinearGradient
+                          colors={[...GRADIENTS.surfaceCard]}
+                          style={StyleSheet.absoluteFill}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 0, y: 1 }}
+                        />
+                        <Text style={styles.rentalIcon}>{item.icon}</Text>
+                        <Text style={[styles.rentalName, disabled && styles.coinShopTextDisabled]}>
+                          {item.name}
+                        </Text>
+                        <Text style={[styles.rentalDesc, disabled && styles.coinShopTextDisabled]}>
+                          {item.description}
+                        </Text>
+                        {durationLabel ? (
+                          <View style={styles.rentalDurationBadge}>
+                            <Text style={styles.rentalDurationText}>{'\u23F1'} {durationLabel}</Text>
+                          </View>
+                        ) : null}
+                        <View style={[styles.coinShopPrice, cantAfford && styles.coinShopPriceDisabled]}>
+                          <Text style={[styles.coinShopPriceText, cantAfford && styles.coinShopPriceTextDisabled]}>
+                            {'\u{1FA99}'} {item.costCoins}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.rentalBuyButton, disabled && styles.rentalBuyButtonDisabled]}
+                          onPress={() => !disabled && handleCoinShopPurchase(item)}
+                          activeOpacity={disabled ? 1 : 0.7}
+                          disabled={disabled}
+                        >
+                          <Text style={[styles.rentalBuyText, disabled && styles.rentalBuyTextDisabled]}>
+                            {cantAfford ? "Can't Afford" : limitReached ? 'Limit Reached' : 'Rent'}
+                          </Text>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            );
+          }
+          return (
+            <>
+              <Text style={styles.sectionTitle}>{'\u23F0'} Limited Rentals</Text>
+              <Text style={styles.rentalSubtitle}>Temporary boosts for coins</Text>
+              <View style={styles.rentalGrid}>
+                {rentalItems.map((item) => {
+                  const cantAfford = !economy.canAfford('coins', item.costCoins);
+                  const currentDate = new Date().toISOString().slice(0, 10);
+                  const purchases = currentDate === coinShopDate ? coinShopPurchasesToday : {};
+                  const todayCount = purchases[item.id] ?? 0;
+                  const limitReached = item.dailyLimit !== undefined && todayCount >= item.dailyLimit;
+                  const disabled = limitReached || cantAfford;
+                  const durationLabel = item.reward.durationMinutes
+                    ? item.reward.durationMinutes >= 1440
+                      ? `${Math.floor(item.reward.durationMinutes / 1440)} day${Math.floor(item.reward.durationMinutes / 1440) > 1 ? 's' : ''}`
+                      : item.reward.durationMinutes >= 60
+                        ? `${Math.floor(item.reward.durationMinutes / 60)} hour${Math.floor(item.reward.durationMinutes / 60) > 1 ? 's' : ''}`
+                        : `${item.reward.durationMinutes} min`
+                    : '';
+
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.rentalCard, disabled && styles.coinShopCardDisabled]}
+                      activeOpacity={disabled ? 1 : 0.7}
+                      onPress={() => !disabled && handleCoinShopPurchase(item)}
+                    >
+                      <LinearGradient
+                        colors={[...GRADIENTS.surfaceCard]}
+                        style={StyleSheet.absoluteFill}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                      />
+                      <Text style={styles.rentalIcon}>{item.icon}</Text>
+                      <Text style={[styles.rentalName, disabled && styles.coinShopTextDisabled]}>
+                        {item.name}
+                      </Text>
+                      <Text style={[styles.rentalDesc, disabled && styles.coinShopTextDisabled]}>
+                        {item.description}
+                      </Text>
+                      {durationLabel ? (
+                        <View style={styles.rentalDurationBadge}>
+                          <Text style={styles.rentalDurationText}>{'\u23F1'} {durationLabel}</Text>
+                        </View>
+                      ) : null}
+                      <View style={[styles.coinShopPrice, cantAfford && styles.coinShopPriceDisabled]}>
+                        <Text style={[styles.coinShopPriceText, cantAfford && styles.coinShopPriceTextDisabled]}>
+                          {'\u{1FA99}'} {item.costCoins}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.rentalBuyButton, disabled && styles.rentalBuyButtonDisabled]}
+                        onPress={() => !disabled && handleCoinShopPurchase(item)}
+                        activeOpacity={disabled ? 1 : 0.7}
+                        disabled={disabled}
+                      >
+                        <Text style={[styles.rentalBuyText, disabled && styles.rentalBuyTextDisabled]}>
+                          {cantAfford ? "Can't Afford" : limitReached ? 'Limit Reached' : 'Rent'}
+                        </Text>
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          );
+        })()}
 
         {/* ── Restore Purchases ──────────────────────────────────────── */}
         <TouchableOpacity
@@ -1721,6 +1945,198 @@ const styles = StyleSheet.create({
   },
   coinShopLimitReached: {
     color: COLORS.coral,
+  },
+
+  // ── Flash Sale ──────────────────────────────────────────────────────────
+  flashSaleCard: {
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.coral + '60',
+    overflow: 'hidden',
+    shadowColor: COLORS.coral,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  flashSaleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  flashSaleLabel: {
+    fontSize: 18,
+    fontFamily: FONTS.display,
+    color: COLORS.coral,
+    letterSpacing: 2,
+    textShadowColor: 'rgba(255,107,107,0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  flashSaleDiscountBadge: {
+    backgroundColor: COLORS.coral,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  flashSaleDiscountText: {
+    fontSize: 12,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+  },
+  flashSaleBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  flashSaleIcon: {
+    fontSize: 42,
+    marginRight: 14,
+  },
+  flashSaleInfo: {
+    flex: 1,
+  },
+  flashSaleName: {
+    fontSize: 18,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  flashSaleDesc: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  flashSalePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  flashSaleOriginalPrice: {
+    fontSize: 16,
+    color: COLORS.textMuted,
+    textDecorationLine: 'line-through' as const,
+  },
+  flashSaleSalePrice: {
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    textShadowColor: 'rgba(255,215,0,0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  flashSaleFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  flashSaleTimer: {
+    backgroundColor: COLORS.coral + '20',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  flashSaleTimerText: {
+    fontSize: 14,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.coral,
+    fontVariant: ['tabular-nums' as const],
+  },
+  flashSaleBuyButton: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    overflow: 'hidden',
+    minWidth: 140,
+  },
+  flashSaleBuyText: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    color: COLORS.bg,
+    letterSpacing: 1,
+  },
+
+  // ── Limited Rentals ────────────────────────────────────────────────────
+  rentalSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 12,
+    marginTop: -6,
+  },
+  rentalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  rentalCard: {
+    width: (width - 52) / 2,
+    borderRadius: 16,
+    padding: 14,
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 4,
+  },
+  rentalIcon: {
+    fontSize: 30,
+    marginBottom: 6,
+  },
+  rentalName: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  rentalDesc: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 14,
+  },
+  rentalDurationBadge: {
+    backgroundColor: COLORS.accent + '20',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginBottom: 8,
+  },
+  rentalDurationText: {
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
+  },
+  rentalBuyButton: {
+    backgroundColor: COLORS.gold + '20',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '40',
+  },
+  rentalBuyButtonDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  rentalBuyText: {
+    fontSize: 13,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 0.5,
+  },
+  rentalBuyTextDisabled: {
+    color: COLORS.textMuted,
   },
 });
 

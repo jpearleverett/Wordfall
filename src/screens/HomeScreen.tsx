@@ -17,6 +17,7 @@ import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
 import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
+import { getFlashSale } from '../data/dynamicPricing';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
@@ -245,6 +246,7 @@ export function HomeScreen({
   const totalStars = Object.values(progress.starsByLevel).reduce((a, b) => a + b, 0);
   const dailyDeal = getDailyDeal(today);
   const dealHoursLeft = dailyDeal.availableHours;
+  const flashSale = getFlashSale(new Date());
   const nextMilestone = [7, 14, 30, 60, 100].find((milestone) => milestone > progress.currentStreak) || 100;
   const streakProgress = Math.min(100, (progress.currentStreak / nextMilestone) * 100);
   const currentRewardDay = ((loginCycleDay - 1) % 7) + 1;
@@ -670,6 +672,34 @@ export function HomeScreen({
               </Pressable>
             </View>
           </LinearGradient>
+        )}
+
+        {/* Flash Sale teaser - visible for established+ players when a sale is active */}
+        {flashSale && playerStage !== 'new' && playerStage !== 'early' && (
+          <Pressable
+            onPress={() => onOpenShop?.()}
+            style={({ pressed }) => [pressed && styles.buttonPressed]}
+          >
+            <LinearGradient
+              colors={[COLORS.coral + '25', COLORS.orange + '15', ...GRADIENTS.surfaceCard.slice(1)]}
+              style={[styles.flashSaleTeaser, SHADOWS.medium]}
+            >
+              <View style={styles.flashSaleTeaserRow}>
+                <Text style={styles.flashSaleTeaserIcon}>{'\u26A1'}</Text>
+                <View style={styles.flashSaleTeaserInfo}>
+                  <Text style={styles.flashSaleTeaserTitle}>
+                    Today's Deal: {flashSale.name} - {flashSale.discountPercent}% OFF!
+                  </Text>
+                  <Text style={styles.flashSaleTeaserSubtitle}>
+                    {flashSale.salePrice} (was {flashSale.originalPrice}) — Tap to view in Shop
+                  </Text>
+                </View>
+                <View style={styles.flashSaleTeaserBadge}>
+                  <Text style={styles.flashSaleTeaserBadgeText}>SALE</Text>
+                </View>
+              </View>
+            </LinearGradient>
+          </Pressable>
         )}
 
         {/* 30-day login calendar - hidden for day 1 new players */}
@@ -1486,6 +1516,49 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     letterSpacing: 2,
   },
+  // Flash Sale Teaser
+  flashSaleTeaser: {
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.coral + '40',
+  },
+  flashSaleTeaserRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+  },
+  flashSaleTeaserIcon: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  flashSaleTeaserInfo: {
+    flex: 1,
+  },
+  flashSaleTeaserTitle: {
+    fontSize: 14,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.coral,
+    marginBottom: 2,
+  },
+  flashSaleTeaserSubtitle: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  flashSaleTeaserBadge: {
+    backgroundColor: COLORS.coral,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  flashSaleTeaserBadgeText: {
+    fontSize: 10,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+  },
+
   // Mystery Wheel Button
   mysteryWheelButton: {
     borderRadius: 20,
