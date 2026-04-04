@@ -157,7 +157,7 @@ function EventScreenWrapperNav({ navigation }: any) {
       config = adjusted.config;
 
       const seed = Date.now() + modeLevel * 1337;
-      const board = generateBoard(config, seed, mode);
+      let board = generateBoard(config, seed, mode);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.navigate('Game', {
@@ -167,8 +167,24 @@ function EventScreenWrapperNav({ navigation }: any) {
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
-    } catch (e) {
-      Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+    } catch (e: any) {
+      if (e?.message?.includes('timed out')) {
+        try {
+          const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+          const board = generateBoard(easyConfig, Date.now());
+          const modeConfig = MODE_CONFIGS[mode];
+          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          navigation.navigate('Game', {
+            board, level: player.currentLevel, mode,
+            maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+            timeLimit: modeConfig.rules.timerSeconds || 0,
+          });
+        } catch {
+          Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+        }
+      } else {
+        Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+      }
     }
   }, [player, economy, navigation]);
 
@@ -437,8 +453,24 @@ function ModesScreenWrapper({ navigation }: any) {
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
-    } catch (e) {
-      Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+    } catch (e: any) {
+      if (e?.message?.includes('timed out')) {
+        try {
+          const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+          board = generateBoard(easyConfig, Date.now());
+          const modeConfig = MODE_CONFIGS[mode];
+          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          navigation.navigate('Game', {
+            board, level: modeLevel, mode,
+            maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+            timeLimit: modeConfig.rules.timerSeconds || 0,
+          });
+        } catch {
+          Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+        }
+      } else {
+        Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+      }
     }
   }, [player.currentLevel, navigation, player, economy]);
 
@@ -495,7 +527,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       }
 
       const seed = modeLevel * 1337 + Date.now();
-      const board = generateBoard(config, seed, mode);
+      let board = generateBoard(config, seed, mode);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -506,9 +538,28 @@ function GameScreenWrapper({ route, navigation }: any) {
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
-    } catch (e) {
-      Alert.alert('Error', 'Failed to generate next puzzle.');
-      navigation.goBack();
+    } catch (e: any) {
+      if (e?.message?.includes('timed out')) {
+        try {
+          const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+          const mode = (params.mode || 'classic') as GameMode;
+          const modeLevel = mode === 'classic' ? (params.level || 0) + 1 : player.getModeLevel(mode);
+          const board = generateBoard(easyConfig, Date.now());
+          const modeConfig = MODE_CONFIGS[mode];
+          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          navigation.replace('Game', {
+            board, level: modeLevel, mode, isDaily: false,
+            maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+            timeLimit: modeConfig.rules.timerSeconds || 0,
+          });
+        } catch {
+          Alert.alert('Error', 'Failed to generate next puzzle.');
+          navigation.goBack();
+        }
+      } else {
+        Alert.alert('Error', 'Failed to generate next puzzle.');
+        navigation.goBack();
+      }
     }
   }, [params, navigation, player]);
 
@@ -532,7 +583,7 @@ function GameScreenWrapper({ route, navigation }: any) {
 
       const config = getLevelConfig(nextModeLevel);
       const seed = nextModeLevel * 1337 + Date.now();
-      const board = generateBoard(config, seed, mode);
+      let board = generateBoard(config, seed, mode);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -543,9 +594,26 @@ function GameScreenWrapper({ route, navigation }: any) {
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
-    } catch (e) {
-      Alert.alert('Error', 'Failed to generate next puzzle.');
-      navigation.goBack();
+    } catch (e: any) {
+      if (e?.message?.includes('timed out')) {
+        try {
+          const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+          const board = generateBoard(easyConfig, Date.now());
+          const modeConfig = MODE_CONFIGS[(params.mode || 'classic') as GameMode];
+          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          navigation.replace('Game', {
+            board, level: nextModeLevel, mode: (params.mode || 'classic') as GameMode, isDaily: false,
+            maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+            timeLimit: modeConfig.rules.timerSeconds || 0,
+          });
+        } catch {
+          Alert.alert('Error', 'Failed to generate next puzzle.');
+          navigation.goBack();
+        }
+      } else {
+        Alert.alert('Error', 'Failed to generate next puzzle.');
+        navigation.goBack();
+      }
     }
   }, [params, navigation, player, economy]);
 
@@ -780,10 +848,16 @@ function HomeMainScreen({ route, navigation }: any) {
           currentStreak: player.streaks.currentStreak,
           equippedFrame: player.equippedFrame,
           equippedTitle: player.equippedTitle,
+        }).catch((e: unknown) => {
+          if (__DEV__) console.warn('Firestore profile sync failed:', e);
         });
-        void firestoreService.generateFriendCode(userId);
+        void firestoreService.generateFriendCode(userId).catch((e: unknown) => {
+          if (__DEV__) console.warn('Firestore friend code generation failed:', e);
+        });
         void firestoreService.getPendingGifts(userId).then((gifts) => {
           if (gifts.length > 0) setPendingGifts(gifts);
+        }).catch((e: unknown) => {
+          if (__DEV__) console.warn('Firestore gift check failed:', e);
         });
       }
 
@@ -1074,9 +1148,22 @@ function HomeMainScreen({ route, navigation }: any) {
           const board = generateBoard(config, level * 1337 + Date.now());
           setLoading(false);
           navigation.navigate('Game', { board, level, mode: 'classic', isDaily: false });
-        } catch (e) {
-          Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
-          setLoading(false);
+        } catch (e: any) {
+          if (e?.message?.includes('timed out')) {
+            try {
+              const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+              const board = generateBoard(easyConfig, Date.now());
+              setLoading(false);
+              Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+              navigation.navigate('Game', { board, level: player.currentLevel, mode: 'classic', isDaily: false });
+            } catch {
+              Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+              setLoading(false);
+            }
+          } else {
+            Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+            setLoading(false);
+          }
         }
       }, 50);
     },
@@ -1623,6 +1710,10 @@ export default function App() {
     crashReporter.init();
     analytics.initFirebase();
     funnelTracker.trackStep('app_open');
+
+    return () => {
+      void analytics.destroy();
+    };
   }, []);
 
   if (!fontsLoaded) {
