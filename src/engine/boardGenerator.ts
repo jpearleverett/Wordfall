@@ -436,7 +436,7 @@ export function generateBoard(
     if (board) return board;
   }
 
-  // Last resort: generate a minimal 2-word board
+  // Last resort: generate a minimal 2-word board (always attempted even after timeout)
   const minimalConfig: BoardConfig = {
     rows: 5,
     cols: 5,

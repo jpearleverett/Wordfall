@@ -877,7 +877,10 @@ function HomeMainScreen({ route, navigation }: any) {
         void triggerComebackReminder();
       }
     });
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      analytics.destroy();
+    };
   }, []);
 
   // Auto-open wheel when navigating back from post-puzzle spin prompt

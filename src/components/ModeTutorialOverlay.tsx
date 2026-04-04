@@ -98,7 +98,7 @@ export function ModeTutorialOverlay({ steps, onComplete, visible }: ModeTutorial
     <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
       <Animated.View style={[styles.cardContainer, { transform: [{ translateY: slideAnim }] }]}>
         <LinearGradient
-          colors={GRADIENTS.surfaceCard as unknown as string[]}
+          colors={GRADIENTS.surfaceCard as unknown as readonly [string, string, ...string[]]}
           style={styles.card}
         >
           {/* Step counter */}
@@ -150,7 +150,7 @@ export function ModeTutorialOverlay({ steps, onComplete, visible }: ModeTutorial
             ]}
           >
             <LinearGradient
-              colors={GRADIENTS.button.primary as unknown as string[]}
+              colors={GRADIENTS.button.primary as unknown as readonly [string, string, ...string[]]}
               style={styles.buttonGradient}
             >
               <Text style={styles.buttonText}>

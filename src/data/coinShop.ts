@@ -19,7 +19,7 @@ export interface CoinShopItem {
     durationMinutes?: number;
     effectId?: string;
   };
-  category: 'boosters' | 'consumables' | 'temporary';
+  category: 'boosters' | 'consumables' | 'temporary' | 'cosmetic_rental';
   dailyLimit?: number;
 }
 

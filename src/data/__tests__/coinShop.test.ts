@@ -7,7 +7,7 @@ import {
 
 describe('COIN_SHOP_ITEMS data', () => {
   it('contains exactly 13 items', () => {
-    expect(COIN_SHOP_ITEMS.length).toBe(13);
+    expect(COIN_SHOP_ITEMS.length).toBe(18);
   });
 
   it('every item has required fields', () => {
@@ -17,7 +17,7 @@ describe('COIN_SHOP_ITEMS data', () => {
       expect(item.description).toBeTruthy();
       expect(item.icon).toBeTruthy();
       expect(item.costCoins).toBeGreaterThan(0);
-      expect(['boosters', 'consumables', 'temporary']).toContain(item.category);
+      expect(['boosters', 'consumables', 'temporary', 'cosmetic_rental']).toContain(item.category);
       expect(item.reward).toBeDefined();
       expect(
         ['booster', 'hint', 'undo', 'temporary_effect', 'cosmetic_rental'],
@@ -120,7 +120,8 @@ describe('getCoinShopByCategory', () => {
     const consumables = getCoinShopByCategory('consumables');
     const boosters = getCoinShopByCategory('boosters');
     const temporary = getCoinShopByCategory('temporary');
-    expect(consumables.length + boosters.length + temporary.length).toBe(
+    const cosmeticRentals = getCoinShopByCategory('cosmetic_rental');
+    expect(consumables.length + boosters.length + temporary.length + cosmeticRentals.length).toBe(
       COIN_SHOP_ITEMS.length,
     );
   });
