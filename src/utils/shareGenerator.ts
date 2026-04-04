@@ -11,6 +11,7 @@ export function generateShareText(
   score: number,
   combo: number,
   isDaily: boolean,
+  referralCode?: string,
 ): string {
   const starEmojis = '★'.repeat(stars) + '☆'.repeat(3 - stars);
   const header = isDaily
@@ -31,7 +32,11 @@ export function generateShareText(
   const stats = [`Score: ${score}`];
   if (combo > 1) stats.push(`Combo: ${combo}x`);
 
-  return `${header}\n${gridEmojis}\n${stats.join(' | ')}\nCan you beat my score? Download Wordfall!`;
+  const cta = referralCode
+    ? `Can you beat my score? Download Wordfall!\nJoin me! Use code: ${referralCode}`
+    : 'Can you beat my score? Download Wordfall!';
+
+  return `${header}\n${gridEmojis}\n${stats.join(' | ')}\n${cta}`;
 }
 
 /**

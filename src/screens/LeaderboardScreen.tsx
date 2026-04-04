@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS, getLevelConfig } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useAuth } from '../contexts/AuthContext';
@@ -560,6 +560,27 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                       >
                         {entry.score.toLocaleString()}
                       </Text>
+                      {!isCurrentUser && (
+                        <TouchableOpacity
+                          style={styles.challengeButton}
+                          onPress={() => {
+                            const level = player.currentLevel;
+                            const config = getLevelConfig(level);
+                            player.sendChallenge(entry.id, {
+                              score: player.totalScore > 0 ? Math.floor(player.totalScore * 0.01) : 0,
+                              stars: 0,
+                              time: 0,
+                              level,
+                              seed: Date.now(),
+                              mode: 'classic',
+                              boardConfig: config,
+                            });
+                            Alert.alert('Challenge Sent!', `You challenged ${entry.name}!`);
+                          }}
+                        >
+                          <Text style={styles.challengeButtonText}>{'\u2694\uFE0F'}</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 );
@@ -993,6 +1014,20 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.accentGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
+  },
+  challengeButton: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: COLORS.accent + '20',
+    borderWidth: 1,
+    borderColor: COLORS.accent + '40',
+  },
+  challengeButtonText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
   },
   bottomSpacer: {
     height: 40,

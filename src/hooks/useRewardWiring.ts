@@ -18,6 +18,7 @@ import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
 import {
   triggerStreakReminder,
+  triggerFriendBeatScoreNotification,
 } from '../services/notificationTriggers';
 import { firestoreService } from '../services/firestore';
 
@@ -76,6 +77,7 @@ interface PlayerContextLike {
   friendIds: string[];
   consecutiveFailures: number;
   performanceMetrics: any;
+  referralCode: string;
 
   recordPuzzleComplete: (level: number, score: number, stars: number, isPerfect: boolean) => void;
   recordModePlay: (modeId: string, score: number, isWin: boolean) => void;
@@ -461,10 +463,10 @@ export function useRewardWiring({
       }
     }
 
-    // Generate share text
+    // Generate share text (include referral code for viral growth)
     const grid = params.board ? (params.board as Board).grid : null;
     const shareText = grid
-      ? generateShareText(grid, level, stars, score, 0, isDaily)
+      ? generateShareText(grid, level, stars, score, 0, isDaily, player.referralCode || undefined)
       : '';
 
     // Firestore social layer: submit scores + sync profile
@@ -498,6 +500,13 @@ export function useRewardWiring({
       firestoreService
         .getFriendScores(userId, friendIds)
         .then((result) => {
+          // Notify friends that the player beat their score
+          if (result.beaten > 0) {
+            void triggerFriendBeatScoreNotification(
+              displayName,
+              level,
+            );
+          }
           if (result.total > 0 && navigation.isFocused()) {
             navigation.setParams({
               completionData: {

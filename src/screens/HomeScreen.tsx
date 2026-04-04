@@ -20,6 +20,8 @@ import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
+import ReferralCard from '../components/ReferralCard';
+import { usePlayer } from '../contexts/PlayerContext';
 
 interface DailyMissionDisplay {
   id: string;
@@ -118,6 +120,7 @@ export function HomeScreen({
   onOpenEvents,
   onClaimLoginReward,
 }: HomeScreenProps) {
+  const player = usePlayer();
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
   const wheelPulse = useRef(new Animated.Value(1)).current;
@@ -591,6 +594,18 @@ export function HomeScreen({
             )}
           </LinearGradient>
         )}
+
+        {/* Referral Card - established+ players */}
+        {(playerStage === 'established' || playerStage === 'veteran') && player.referralCode ? (
+          <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+            <ReferralCard
+              referralCode={player.referralCode}
+              referralCount={player.referralCount}
+              milestonesClaimed={player.referralMilestonesClaimed}
+              onClaimMilestone={(count) => player.claimReferralMilestone(count)}
+            />
+          </View>
+        ) : null}
 
         {/* Streak panel - hidden for brand new players */}
         {showStreak && (
