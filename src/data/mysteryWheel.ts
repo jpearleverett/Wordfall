@@ -36,6 +36,7 @@ export interface MysteryWheelState {
   totalSpins: number;
   lastJackpotSpin: number; // Total spin number of last jackpot (for pity)
   jackpotPity: number; // Guaranteed jackpot (rare+) within this many spins
+  lastDailySpinDate: string; // ISO date string (YYYY-MM-DD) of last daily free spin consumed
 }
 
 export const DEFAULT_MYSTERY_WHEEL_STATE: MysteryWheelState = {
@@ -45,6 +46,7 @@ export const DEFAULT_MYSTERY_WHEEL_STATE: MysteryWheelState = {
   totalSpins: 0,
   lastJackpotSpin: 0,
   jackpotPity: 25, // Guaranteed rare+ within 25 spins
+  lastDailySpinDate: '',
 };
 
 /**

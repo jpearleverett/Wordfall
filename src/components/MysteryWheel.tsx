@@ -9,16 +9,16 @@ import {
   WheelSegment,
   spinWheel,
   openMysteryBox,
+  checkDailyFreeSpin,
   SPIN_COST_GEMS,
   SPIN_BUNDLE_COST_GEMS,
   SPIN_BUNDLE_COUNT,
-  checkDailyFreeSpin,
 } from '../data/mysteryWheel';
 
 interface MysteryWheelProps {
   wheelState: MysteryWheelState;
   gems: number;
-  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: { label: string; icon: string; reward: any }; usedDailySpin?: boolean }) => void;
+  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: { label: string; icon: string; reward: any } }) => void;
   onBuySpin: (cost: number, count: number) => void;
   onDismiss: () => void;
 }
@@ -45,14 +45,27 @@ export function MysteryWheel({
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   }, [fadeAnim]);
 
+  const hasDailyFreeSpin = checkDailyFreeSpin(wheelState.lastDailySpinDate);
+  const isDailyFreeSpinOnly = wheelState.spinsAvailable <= 0 && hasDailyFreeSpin;
+
   const handleSpin = useCallback(() => {
-    if (spinning || wheelState.spinsAvailable <= 0) return;
+    const canSpinNow = wheelState.spinsAvailable > 0 || checkDailyFreeSpin(wheelState.lastDailySpinDate);
+    if (spinning || !canSpinNow) return;
 
     setSpinning(true);
     setResult(null);
     setMysteryBoxResult(null);
 
-    const { segment, segmentIndex, updatedState } = spinWheel(wheelState);
+    // If using daily free spin (no puzzle-earned spins), temporarily add 1 so spinWheel works
+    const stateForSpin = wheelState.spinsAvailable <= 0
+      ? { ...wheelState, spinsAvailable: 1 }
+      : wheelState;
+    const { segment, segmentIndex, updatedState: rawUpdatedState } = spinWheel(stateForSpin);
+
+    // If this was a daily free spin, mark the date consumed
+    const updatedState = wheelState.spinsAvailable <= 0
+      ? { ...rawUpdatedState, lastDailySpinDate: new Date().toISOString().split('T')[0] }
+      : rawUpdatedState;
 
     // Calculate rotation: multiple full rotations + land on target segment
     const targetAngle = 360 - (segmentIndex * SEGMENT_ANGLE + SEGMENT_ANGLE / 2);
@@ -103,7 +116,7 @@ export function MysteryWheel({
     outputRange: ['0deg', '360deg'],
   });
 
-  const canSpin = wheelState.spinsAvailable > 0 && !spinning;
+  const canSpin = (wheelState.spinsAvailable > 0 || hasDailyFreeSpin) && !spinning;
   const canBuy1 = gems >= SPIN_COST_GEMS;
   const canBuy5 = gems >= SPIN_BUNDLE_COST_GEMS;
 
@@ -204,12 +217,12 @@ export function MysteryWheel({
             style={styles.spinButton}
           >
             <Text style={styles.spinButtonText}>
-              {spinning ? 'SPINNING...' : `SPIN${wheelState.spinsAvailable > 0 ? ` (${wheelState.spinsAvailable})` : ''}`}
+              {spinning ? 'SPINNING...' : isDailyFreeSpinOnly ? 'DAILY FREE SPIN' : `SPIN${wheelState.spinsAvailable > 0 ? ` (${wheelState.spinsAvailable})` : ''}`}
             </Text>
           </LinearGradient>
         </Pressable>
 
-        {wheelState.spinsAvailable === 0 && !spinning && (
+        {wheelState.spinsAvailable === 0 && !hasDailyFreeSpin && !spinning && (
           <View style={styles.buyRow}>
             <Pressable
               style={({ pressed }) => [!canBuy1 && styles.buttonDisabled, pressed && styles.buttonPressed]}

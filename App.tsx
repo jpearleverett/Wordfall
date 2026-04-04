@@ -56,7 +56,7 @@ import { notificationManager } from './src/services/notifications';
 import { MilestoneCeremony } from './src/components/MilestoneCeremony';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { MysteryWheel } from './src/components/MysteryWheel';
-import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT, checkDailyFreeSpin } from './src/data/mysteryWheel';
+import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT } from './src/data/mysteryWheel';
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
 import ErrorBoundary from './src/components/ErrorBoundary';
@@ -68,7 +68,6 @@ import {
   triggerComebackReminder,
   cancelComebackReminder,
   triggerWinStreakMilestoneNotification,
-  triggerStreakAtRiskNotification,
 } from './src/services/notificationTriggers';
 import { eventManager } from './src/services/eventManager';
 import { getChapterExtended, getLevelConfigExtended } from './src/engine/puzzleGenerator';
@@ -455,6 +454,43 @@ function GameScreenWrapper({ route, navigation }: any) {
     }
   }, [params, navigation, player]);
 
+  const handleSkipLevel = useCallback(() => {
+    const SKIP_COST = 200;
+    if (!economy.spendCoins(SKIP_COST)) return;
+    try {
+      const mode = (params.mode || 'classic') as GameMode;
+      const currentLevel = params.level || 1;
+
+      // Advance past the current level (recordPuzzleComplete sets currentLevel = level + 1)
+      if (mode === 'classic') {
+        player.recordPuzzleComplete(currentLevel, 0, 0, false);
+      } else {
+        player.advanceModeLevel(mode);
+      }
+
+      const nextModeLevel = mode === 'classic'
+        ? currentLevel + 1
+        : player.getModeLevel(mode);
+
+      const config = getLevelConfig(nextModeLevel);
+      const seed = nextModeLevel * 1337 + Date.now();
+      const board = generateBoard(config, seed, mode);
+      const modeConfig = MODE_CONFIGS[mode];
+
+      navigation.replace('Game', {
+        board,
+        level: nextModeLevel,
+        mode,
+        isDaily: false,
+        maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+        timeLimit: modeConfig.rules.timerSeconds || 0,
+      });
+    } catch (e) {
+      Alert.alert('Error', 'Failed to generate next puzzle.');
+      navigation.goBack();
+    }
+  }, [params, navigation, player, economy]);
+
   if (!params.board) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -713,8 +749,6 @@ function HomeMainScreen({ route, navigation }: any) {
         void analytics.endSession('background');
         // Player left — schedule comeback reminder for 3 days from now
         void triggerComebackReminder();
-        // Schedule streak-at-risk notification if streak is active
-        void triggerStreakAtRiskNotification(player.streaks);
       }
     });
     return () => sub.remove();
@@ -1098,7 +1132,6 @@ function HomeMainScreen({ route, navigation }: any) {
         onOpenSettings={() => navigation.navigate('Settings')}
         onOpenWheel={() => setShowMysteryWheel(true)}
         mysteryWheelSpins={player.mysteryWheel.spinsAvailable}
-        dailyFreeSpinAvailable={checkDailyFreeSpin(player.mysteryWheel.lastDailySpinDate)}
         freeSpinToast={freeSpinToast}
         onBuyDeal={(deal) => {
           const canAfford = economy.canAfford(deal.currency, deal.salePrice);

@@ -89,7 +89,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     const text = chatInput.trim();
     if (!text || !clubId) return;
     const userId = user?.uid ?? 'local_user';
-    const displayName = player.displayName ?? 'Player';
+    const displayName = (player as any).displayName ?? player.equippedTitle ?? 'Player';
     setChatInput('');
 
     // Optimistically add to local list
@@ -105,7 +105,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 
     // Send to Firestore (no-op if unavailable)
     await firestoreService.sendClubMessage(clubId, userId, displayName, text);
-  }, [chatInput, clubId, user, player.displayName]);
+  }, [chatInput, clubId, user, (player as any).displayName ?? player.equippedTitle]);
 
   const getRelativeTime = useCallback((timestamp: number): string => {
     const diff = Date.now() - timestamp;
