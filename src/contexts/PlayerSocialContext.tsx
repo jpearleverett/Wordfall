@@ -149,6 +149,27 @@ export function createSocialMethods<T extends PlayerSocialData>(
       },
     }));
 
+    // Persist challenge to Firestore for cross-device delivery
+    if (user) {
+      import('../services/firestore').then(async ({ firestoreService }) => {
+        try {
+          // Store under the recipient's challenges subcollection so they can receive it
+          const { doc, setDoc, collection: firestoreCollection } = await import('firebase/firestore');
+          const { db, isFirebaseConfigured } = await import('../config/firebase');
+          if (!isFirebaseConfigured || !db) return;
+
+          const challengeRef = doc(firestoreCollection(db, 'users', friendId, 'challenges'), challenge.id);
+          await setDoc(challengeRef, {
+            ...challenge,
+            recipientId: friendId,
+          });
+        } catch (e) {
+          // Gracefully fail — challenge is still saved locally
+          if (__DEV__) console.warn('[PlayerSocial] Failed to persist challenge to Firestore:', e);
+        }
+      });
+    }
+
     return challenge;
   };
 

@@ -12,8 +12,8 @@ import {
 } from '../mysteryWheel';
 
 describe('WHEEL_SEGMENTS data', () => {
-  it('has 10 segments', () => {
-    expect(WHEEL_SEGMENTS).toHaveLength(10);
+  it('has 11 segments', () => {
+    expect(WHEEL_SEGMENTS).toHaveLength(11);
   });
 
   it('every segment has required fields', () => {
@@ -246,12 +246,12 @@ describe('checkFreeSpin', () => {
 });
 
 describe('constants', () => {
-  it('SPIN_COST_GEMS is 10', () => {
-    expect(SPIN_COST_GEMS).toBe(10);
+  it('SPIN_COST_GEMS is 15', () => {
+    expect(SPIN_COST_GEMS).toBe(15);
   });
 
-  it('SPIN_BUNDLE_COST_GEMS is 40 (discount from 5 * 10)', () => {
-    expect(SPIN_BUNDLE_COST_GEMS).toBe(40);
+  it('SPIN_BUNDLE_COST_GEMS is 60 (discount from 5 * 15)', () => {
+    expect(SPIN_BUNDLE_COST_GEMS).toBe(60);
     expect(SPIN_BUNDLE_COST_GEMS).toBeLessThan(SPIN_COST_GEMS * SPIN_BUNDLE_COUNT);
   });
 

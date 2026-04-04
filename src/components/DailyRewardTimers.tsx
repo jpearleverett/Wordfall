@@ -126,8 +126,8 @@ const TimerCard = React.memo(function TimerCard({
         <LinearGradient
           colors={
             isReady
-              ? [COLORS.surface, 'rgba(255, 45, 149, 0.15)'] as string[]
-              : GRADIENTS.surfaceCard as unknown as string[]
+              ? [COLORS.surface, 'rgba(255, 45, 149, 0.15)'] as const
+              : GRADIENTS.surfaceCard as unknown as readonly [string, string, ...string[]]
           }
           style={[
             styles.card,

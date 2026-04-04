@@ -82,6 +82,9 @@ export interface GameState {
   lastInvalidTap: CellPosition | null;
   solveSequence: SolveStep[];
   puzzleStartTime: number;
+  scoreDoubler: boolean;
+  boardFreezeActive: boolean;
+  premiumHintUsed: boolean;
 }
 
 export type GameAction =
@@ -99,7 +102,10 @@ export type GameAction =
   | { type: 'SMART_SHUFFLE' }
   | { type: 'GRANT_HINT' }
   | { type: 'GRANT_UNDO' }
-  | { type: 'GRANT_BOOSTER'; booster: 'wildcardTile' | 'spotlight' | 'smartShuffle' };
+  | { type: 'GRANT_BOOSTER'; booster: 'wildcardTile' | 'spotlight' | 'smartShuffle' }
+  | { type: 'USE_PREMIUM_HINT' }
+  | { type: 'ACTIVATE_SCORE_DOUBLER' }
+  | { type: 'ACTIVATE_BOARD_FREEZE' };
 
 export interface PlayerProgress {
   currentLevel: number;
@@ -376,10 +382,10 @@ export interface DailyMission {
 export interface StreakData {
   currentStreak: number;
   bestStreak: number;
-  lastCompletedDate: string;
+  lastPlayDate: string;
   graceDaysUsed: number;
-  shieldActive: boolean;
-  shieldExpiry?: string;
+  streakShieldAvailable: boolean;
+  lastShieldDate?: string;
 }
 
 export interface WeeklyChallenge {
@@ -421,7 +427,9 @@ export type IAPProductId =
   | 'gems_50'
   | 'gems_250'
   | 'gems_500'
-  | 'vip_weekly';
+  | 'vip_weekly'
+  | 'royal_collection'
+  | 'ultimate_whale';
 
 export interface ShopOffer {
   id: string;
@@ -493,6 +501,7 @@ export interface ProfileFrame {
   rarity: 'common' | 'rare' | 'epic' | 'legendary';
   source: string;
   owned: boolean;
+  cost?: { currency: CurrencyType; amount: number } | { coins: number; gems: number };
 }
 
 export interface ProfileTitle {
@@ -595,6 +604,7 @@ export interface MysteryWheelState {
   totalSpins: number;
   lastJackpotSpin: number;
   jackpotPity: number;
+  lastDailySpinDate: string;
 }
 
 // ============ WIN STREAK ============

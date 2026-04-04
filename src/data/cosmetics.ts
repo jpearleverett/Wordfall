@@ -146,6 +146,52 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     owned: false,
     equipped: false,
   },
+  // New coin-purchasable themes
+  {
+    id: 'cherry_blossom',
+    name: 'Cherry Blossom',
+    description: 'Delicate pinks and whites of spring blossoms in full bloom.',
+    colors: { bg: '#1a0a10', surface: '#2a1520', accent: '#ffb7d5', cellDefault: '#3a2030', cellSelected: '#ffb7d5' },
+    cost: { currency: 'coins', amount: 2000 },
+    owned: false,
+    equipped: false,
+  },
+  {
+    id: 'deep_space',
+    name: 'Deep Space',
+    description: 'The vast darkness between galaxies, lit by distant nebulae.',
+    colors: { bg: '#020208', surface: '#0a0a1e', accent: '#7b68ee', cellDefault: '#141428', cellSelected: '#7b68ee' },
+    cost: { currency: 'coins', amount: 4000 },
+    owned: false,
+    equipped: false,
+  },
+  {
+    id: 'underwater',
+    name: 'Underwater',
+    description: 'Sunlight filtering through deep ocean waters.',
+    colors: { bg: '#040e14', surface: '#0a1e28', accent: '#00bcd4', cellDefault: '#102a38', cellSelected: '#00bcd4' },
+    cost: { currency: 'coins', amount: 4000 },
+    owned: false,
+    equipped: false,
+  },
+  {
+    id: 'volcanic_eruption',
+    name: 'Volcanic',
+    description: 'Molten lava flowing through cracks of cooled obsidian.',
+    colors: { bg: '#120404', surface: '#1e0a0a', accent: '#ff4500', cellDefault: '#2e1212', cellSelected: '#ff4500' },
+    cost: { currency: 'coins', amount: 6000 },
+    owned: false,
+    equipped: false,
+  },
+  {
+    id: 'holographic',
+    name: 'Holographic',
+    description: 'Iridescent rainbow shimmer across a dark chrome surface.',
+    colors: { bg: '#0a0a10', surface: '#14142a', accent: '#e0c3fc', cellDefault: '#1e1e38', cellSelected: '#e0c3fc' },
+    cost: { currency: 'coins', amount: 8000 },
+    owned: false,
+    equipped: false,
+  },
 ];
 
 // ── Profile Frames ──────────────────────────────────────────────────────────
@@ -166,6 +212,17 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
   { id: 'legend_frame', name: 'Legend', rarity: 'legendary', source: 'Complete all chapters', owned: false },
   { id: 'season_champion_frame', name: 'Season Champion', rarity: 'legendary', source: 'Win Season Finale event', owned: false },
   { id: 'golden_collector_frame', name: 'Golden Collector', rarity: 'legendary', source: 'Complete Golden Alphabet', owned: false },
+  // Coin-purchasable frames
+  { id: 'starlight_frame', name: 'Starlight', rarity: 'rare', source: 'Cosmetic Store', owned: false, cost: { currency: 'coins', amount: 1500 } },
+  { id: 'inferno_frame', name: 'Inferno', rarity: 'epic', source: 'Cosmetic Store', owned: false, cost: { currency: 'coins', amount: 3000 } },
+  { id: 'aurora_borealis_frame', name: 'Aurora Borealis', rarity: 'legendary', source: 'Cosmetic Store', owned: false, cost: { currency: 'coins', amount: 5000 } },
+  { id: 'crystal_frame', name: 'Crystal', rarity: 'rare', source: 'Cosmetic Store', owned: false, cost: { currency: 'coins', amount: 1500 } },
+  { id: 'obsidian_frame', name: 'Obsidian', rarity: 'epic', source: 'Cosmetic Store', owned: false, cost: { currency: 'coins', amount: 3000 } },
+  { id: 'rainbow_prismatic_frame', name: 'Rainbow Prismatic', rarity: 'legendary', source: 'Cosmetic Store', owned: false, cost: { currency: 'coins', amount: 5000 } },
+  { id: 'steampunk_gears_frame', name: 'Steampunk Gears', rarity: 'rare', source: 'Cosmetic Store', owned: false, cost: { currency: 'coins', amount: 1500 } },
+  { id: 'digital_matrix_frame', name: 'Digital Matrix', rarity: 'epic', source: 'Cosmetic Store', owned: false, cost: { currency: 'coins', amount: 3000 } },
+  { id: 'golden_crown_frame', name: 'Golden Crown', rarity: 'legendary', source: 'Cosmetic Store', owned: false, cost: { coins: 5000, gems: 50 } },
+  { id: 'celestial_halo_frame', name: 'Celestial Halo', rarity: 'legendary', source: 'Cosmetic Store', owned: false, cost: { coins: 5000, gems: 100 } },
 ];
 
 // ── Profile Titles ──────────────────────────────────────────────────────────
@@ -189,6 +246,15 @@ export const PROFILE_TITLES: ProfileTitle[] = [
   { id: 'streak_60_title', title: 'Dedicated', source: '60-day streak', owned: false },
   { id: 'title_grandmaster', title: 'Grandmaster', source: 'Complete all 40 chapters', owned: false },
   { id: 'title_legend', title: 'Legend', source: '100-day streak + all wings', owned: false },
+  // New unlock-based titles
+  { id: 'title_the_unstoppable', title: 'The Unstoppable', source: '10-win streak', owned: false },
+  { id: 'title_word_wizard', title: 'Word Wizard', source: 'Find 200 words', owned: false },
+  { id: 'title_chain_lightning', title: 'Chain Lightning', source: 'Achieve 10x combo', owned: false },
+  { id: 'title_the_scholar', title: 'The Scholar', source: 'Complete all library wings', owned: false },
+  { id: 'title_speed_demon_50', title: 'Speed Demon', source: 'Complete 50 timed puzzles', owned: false },
+  { id: 'title_gem_collector', title: 'Gem Collector', source: 'Spend 500 gems', owned: false },
+  { id: 'title_the_generous', title: 'The Generous', source: 'Send 50 gifts', owned: false },
+  { id: 'title_night_owl', title: 'Night Owl', source: 'Play 100 puzzles after 10pm', owned: false },
 ];
 
 // ── Library Decorations ─────────────────────────────────────────────────────

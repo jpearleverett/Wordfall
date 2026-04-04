@@ -102,6 +102,7 @@ interface EconomyContextType extends Economy {
   isVip: boolean;
   vipExpiresAt: number;
   claimVipDailyRewards: () => boolean;
+  addLives: (count: number) => void;
 }
 
 const STORAGE_KEY = '@wordfall_economy';
@@ -193,6 +194,7 @@ const EconomyContext = createContext<EconomyContextType>({
   isVip: false,
   vipExpiresAt: 0,
   claimVipDailyRewards: () => false,
+  addLives: () => {},
 });
 
 export function EconomyProvider({ children }: { children: ReactNode }) {
@@ -625,6 +627,16 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return claimed;
   }, []);
 
+  const addLives = useCallback((count: number): void => {
+    setState((prev) => ({
+      ...prev,
+      lives: {
+        current: Math.min(prev.lives.current + count, LIVES.max),
+        lastRefillTime: Date.now(),
+      },
+    }));
+  }, []);
+
   // Compute active VIP status (subscribed and not expired)
   const isVipActive = state.isVipSubscriber && state.vipExpiresAt > Date.now();
 
@@ -675,6 +687,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         isVip: isVipActive,
         vipExpiresAt: state.vipExpiresAt,
         claimVipDailyRewards,
+        addLives,
       }}
     >
       {children}

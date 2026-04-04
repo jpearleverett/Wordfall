@@ -40,7 +40,7 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
 
   return (
     <LinearGradient
-      colors={GRADIENTS.tabBar as unknown as string[]}
+      colors={GRADIENTS.tabBar as unknown as readonly [string, string, ...string[]]}
       style={[
         styles.container,
         { paddingBottom: insets.bottom, height: TAB_BAR_HEIGHT + insets.bottom },
@@ -98,7 +98,7 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel}
-              testID={options.tabBarTestID}
+              testID={(options as any).tabBarTestID}
               onPress={onPress}
               onLongPress={onLongPress}
               style={styles.tab}

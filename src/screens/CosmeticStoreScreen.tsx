@@ -260,10 +260,25 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     </View>
   );
 
+  const canAffordItem = useCallback(
+    (item: NormalizedItem): boolean => {
+      if (!item.costCurrency || !item.costAmount) return false;
+      if (item.costCurrency === 'libraryPoints') {
+        return (economy.libraryPoints ?? 0) >= item.costAmount;
+      }
+      return economy.canAfford(item.costCurrency as 'coins' | 'gems', item.costAmount);
+    },
+    [economy],
+  );
+
+  const formatPrice = (amount: number): string => amount.toLocaleString();
+
   const renderItemCard = (item: NormalizedItem) => {
     const rarityColor = RARITY_COLORS[item.rarity] ?? COLORS.rarityCommon;
     const isEquipped = item.equipped;
     const isOwned = item.owned;
+    const hasCost = !!(item.costCurrency && item.costAmount);
+    const affordable = hasCost && !isOwned ? canAffordItem(item) : true;
 
     return (
       <TouchableOpacity
@@ -314,12 +329,14 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
             <View style={styles.ownedBadge}>
               <Text style={styles.ownedText}>{'\u2713'} OWNED</Text>
             </View>
-          ) : item.costCurrency && item.costAmount ? (
-            <View style={styles.priceRow}>
-              <Text style={styles.priceIcon}>
-                {CURRENCY_ICONS[item.costCurrency] ?? '\u{1FA99}'}
+          ) : hasCost ? (
+            <View style={[styles.priceRow, !affordable && styles.priceRowUnaffordable]}>
+              <Text style={[styles.priceIcon, !affordable && styles.priceIconUnaffordable]}>
+                {CURRENCY_ICONS[item.costCurrency!] ?? '\u{1FA99}'}
               </Text>
-              <Text style={styles.priceText}>{item.costAmount}</Text>
+              <Text style={[styles.priceText, !affordable && styles.priceTextUnaffordable]}>
+                {formatPrice(item.costAmount!)}
+              </Text>
             </View>
           ) : (
             <Text style={styles.earnLabel}>Earn in-game</Text>
@@ -417,42 +434,52 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
             )}
 
             {/* Action button */}
-            {isEquipped ? (
-              <View style={styles.equippedButtonDisabled}>
-                <Text style={styles.equippedButtonText}>CURRENTLY EQUIPPED</Text>
-              </View>
-            ) : isOwned ? (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => handleEquip(selectedItem)}
-              >
-                <LinearGradient
-                  colors={[...GRADIENTS.button.primary]}
-                  style={styles.actionButton}
+            {(() => {
+              const canBuy = hasCost && canAffordItem(selectedItem);
+              return isEquipped ? (
+                <View style={styles.equippedButtonDisabled}>
+                  <Text style={styles.equippedButtonText}>CURRENTLY EQUIPPED</Text>
+                </View>
+              ) : isOwned ? (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => handleEquip(selectedItem)}
                 >
-                  <Text style={styles.actionButtonText}>EQUIP</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            ) : hasCost ? (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => handlePurchase(selectedItem)}
-              >
-                <LinearGradient
-                  colors={[...GRADIENTS.button.gold]}
-                  style={styles.actionButton}
+                  <LinearGradient
+                    colors={[...GRADIENTS.button.primary]}
+                    style={styles.actionButton}
+                  >
+                    <Text style={styles.actionButtonText}>EQUIP</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              ) : hasCost && canBuy ? (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => handlePurchase(selectedItem)}
                 >
-                  <Text style={styles.actionButtonTextDark}>
-                    BUY {CURRENCY_ICONS[selectedItem.costCurrency!]}{' '}
-                    {selectedItem.costAmount}
+                  <LinearGradient
+                    colors={[...GRADIENTS.button.gold]}
+                    style={styles.actionButton}
+                  >
+                    <Text style={styles.actionButtonTextDark}>
+                      BUY {CURRENCY_ICONS[selectedItem.costCurrency!]}{' '}
+                      {formatPrice(selectedItem.costAmount!)}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              ) : hasCost && !canBuy ? (
+                <View style={styles.cantAffordButton}>
+                  <Text style={styles.cantAffordButtonText}>
+                    {CURRENCY_ICONS[selectedItem.costCurrency!]}{' '}
+                    {formatPrice(selectedItem.costAmount!)} — Can't Afford
                   </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.earnButton}>
-                <Text style={styles.earnButtonText}>Earn through gameplay</Text>
-              </View>
-            )}
+                </View>
+              ) : (
+                <View style={styles.earnButton}>
+                  <Text style={styles.earnButtonText}>Earn through gameplay</Text>
+                </View>
+              );
+            })()}
           </LinearGradient>
         </View>
       </Modal>
@@ -709,6 +736,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.gold,
   },
+  priceRowUnaffordable: {
+    opacity: 0.5,
+  },
+  priceIconUnaffordable: {
+    opacity: 0.6,
+  },
+  priceTextUnaffordable: {
+    color: COLORS.textMuted,
+  },
   earnLabel: {
     fontFamily: FONTS.bodyMedium,
     fontSize: 11,
@@ -866,6 +902,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.accent,
     letterSpacing: 1,
+  },
+  cantAffordButton: {
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginTop: 8,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.coral + '30',
+    opacity: 0.7,
+  },
+  cantAffordButtonText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 14,
+    color: COLORS.coral,
+    letterSpacing: 0.5,
   },
   earnButton: {
     paddingVertical: 14,

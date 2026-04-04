@@ -88,6 +88,9 @@ function createInitialState(
     lastInvalidTap: null,
     solveSequence: [],
     puzzleStartTime: Date.now(),
+    scoreDoubler: false,
+    boardFreezeActive: false,
+    premiumHintUsed: false,
   };
 }
 
@@ -364,9 +367,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
-      // Score
+      // Score (with optional score doubler)
       const comboLevel = state.combo + 1;
-      const wordScore = calculateScore(matchingWord.word, comboLevel, mode);
+      let wordScore = calculateScore(matchingWord.word, comboLevel, mode);
+      const scoreDoublerConsumed = state.scoreDoubler;
+      if (scoreDoublerConsumed) {
+        wordScore *= 2;
+      }
 
       // Check win condition
       const allFound = newWords.every(w => w.found);
@@ -376,22 +383,29 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Shrinking board: apply shrink after every 2 words
       let newShrinkCount = state.shrinkCount;
       let newWordsUntilShrink = state.wordsUntilShrink - 1;
+      let newBoardFreezeActive = state.boardFreezeActive;
 
       if (mode === 'shrinkingBoard' && !allFound && newWordsUntilShrink <= 0) {
-        // Time to shrink — remove outer ring, no gravity (cells stay in place)
-        const outerRing = getOuterRing(newGrid);
-        if (outerRing.length > 0) {
-          newGrid = removeCells(newGrid, outerRing);
-          newShrinkCount = state.shrinkCount + 1;
+        if (state.boardFreezeActive) {
+          // Board freeze active — skip shrink this turn, consume the freeze
+          newBoardFreezeActive = false;
+          newWordsUntilShrink = 2; // reset countdown without shrinking
+        } else {
+          // Time to shrink — remove outer ring, no gravity (cells stay in place)
+          const outerRing = getOuterRing(newGrid);
+          if (outerRing.length > 0) {
+            newGrid = removeCells(newGrid, outerRing);
+            newShrinkCount = state.shrinkCount + 1;
 
-          // Check if remaining words are still findable (no gravity, so check independently)
-          const remainingWordStrings = newWords.filter(w => !w.found).map(w => w.word);
-          const stillSolvable = areAllWordsIndependentlyFindable(newGrid, remainingWordStrings);
-          if (!stillSolvable) {
-            newStatus = 'failed';
+            // Check if remaining words are still findable (no gravity, so check independently)
+            const remainingWordStrings = newWords.filter(w => !w.found).map(w => w.word);
+            const stillSolvable = areAllWordsIndependentlyFindable(newGrid, remainingWordStrings);
+            if (!stillSolvable) {
+              newStatus = 'failed';
+            }
           }
+          newWordsUntilShrink = 2; // reset countdown
         }
-        newWordsUntilShrink = 2; // reset countdown
       }
 
       // Clean up wildcard if it was used in this word
@@ -429,6 +443,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         spotlightActive: false,
         spotlightLetters: [],
         solveSequence: [...state.solveSequence, solveStep],
+        scoreDoubler: scoreDoublerConsumed ? false : state.scoreDoubler,
+        boardFreezeActive: newBoardFreezeActive,
       };
     }
 
@@ -647,6 +663,44 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'USE_PREMIUM_HINT': {
+      if (state.status !== 'playing') return state;
+
+      const remainingWords = state.board.words
+        .filter(w => !w.found)
+        .map(w => w.word);
+
+      // Premium hint: reveal the exact next word (same as USE_HINT but marked as premium)
+      const hint = state.mode === 'shrinkingBoard'
+        ? getHintShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink)
+        : getHint(state.board.grid, remainingWords);
+      if (!hint) return state;
+
+      return {
+        ...state,
+        selectedCells: hint.positions,
+        selectionDirection: null,
+        premiumHintUsed: true,
+        // Premium hints do not consume hint tokens or count as hintsUsed (no star penalty)
+      };
+    }
+
+    case 'ACTIVATE_SCORE_DOUBLER': {
+      if (state.status !== 'playing') return state;
+      return {
+        ...state,
+        scoreDoubler: true,
+      };
+    }
+
+    case 'ACTIVATE_BOARD_FREEZE': {
+      if (state.status !== 'playing') return state;
+      return {
+        ...state,
+        boardFreezeActive: true,
+      };
+    }
+
     default:
       return state;
   }
@@ -733,6 +787,18 @@ export function useGame(
 
   const useBooster = useCallback((booster: string) => {
     dispatch({ type: 'USE_BOOSTER', booster });
+  }, []);
+
+  const usePremiumHint = useCallback(() => {
+    dispatch({ type: 'USE_PREMIUM_HINT' });
+  }, []);
+
+  const activateScoreDoubler = useCallback(() => {
+    dispatch({ type: 'ACTIVATE_SCORE_DOUBLER' });
+  }, []);
+
+  const activateBoardFreeze = useCallback(() => {
+    dispatch({ type: 'ACTIVATE_BOARD_FREEZE' });
   }, []);
 
   // Get the currently forming word
@@ -822,6 +888,9 @@ export function useGame(
     activateSpotlight,
     activateSmartShuffle,
     useBooster,
+    usePremiumHint,
+    activateScoreDoubler,
+    activateBoardFreeze,
     currentWord,
     isValidWord,
     isStuck,

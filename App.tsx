@@ -454,6 +454,43 @@ function GameScreenWrapper({ route, navigation }: any) {
     }
   }, [params, navigation, player]);
 
+  const handleSkipLevel = useCallback(() => {
+    const SKIP_COST = 200;
+    if (!economy.spendCoins(SKIP_COST)) return;
+    try {
+      const mode = (params.mode || 'classic') as GameMode;
+      const currentLevel = params.level || 1;
+
+      // Advance past the current level (recordPuzzleComplete sets currentLevel = level + 1)
+      if (mode === 'classic') {
+        player.recordPuzzleComplete(currentLevel, 0, 0, false);
+      } else {
+        player.advanceModeLevel(mode);
+      }
+
+      const nextModeLevel = mode === 'classic'
+        ? currentLevel + 1
+        : player.getModeLevel(mode);
+
+      const config = getLevelConfig(nextModeLevel);
+      const seed = nextModeLevel * 1337 + Date.now();
+      const board = generateBoard(config, seed, mode);
+      const modeConfig = MODE_CONFIGS[mode];
+
+      navigation.replace('Game', {
+        board,
+        level: nextModeLevel,
+        mode,
+        isDaily: false,
+        maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+        timeLimit: modeConfig.rules.timerSeconds || 0,
+      });
+    } catch (e) {
+      Alert.alert('Error', 'Failed to generate next puzzle.');
+      navigation.goBack();
+    }
+  }, [params, navigation, player, economy]);
+
   if (!params.board) {
     return (
       <View style={[styles.container, styles.center]}>

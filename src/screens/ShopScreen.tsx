@@ -26,6 +26,8 @@ import {
   RotatingItem,
 } from '../data/rotatingShop';
 import { funnelTracker } from '../services/funnelTracker';
+import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
+import { soundManager } from '../services/sound';
 
 const { width } = Dimensions.get('window');
 
@@ -65,22 +67,12 @@ const GEM_PACKS: ShopItem[] = [
   { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', price: '$9.99', quantity: 500, bestValue: true, iapProductId: 'gems_500' },
 ];
 
-// ─── Coin Shop items (spend coins on consumables) ───────────────────────────
+// ─── Coin Shop categories ────────────────────────────────────────────────────
 
-interface CoinShopDisplay {
-  id: string;
-  name: string;
-  icon: string;
-  cost: number;
-  grant: 'hints' | 'undos';
-  amount: number;
-}
-
-const COIN_SHOP_DISPLAY: CoinShopDisplay[] = [
-  { id: 'coin_hint_1', name: '1 Hint', icon: '\u{1F4A1}', cost: 100, grant: 'hints', amount: 1 },
-  { id: 'coin_hint_3', name: '3 Hints', icon: '\u{1F4A1}', cost: 250, grant: 'hints', amount: 3 },
-  { id: 'coin_undo_1', name: '1 Undo', icon: '\u21A9\uFE0F', cost: 100, grant: 'undos', amount: 1 },
-  { id: 'coin_undo_3', name: '3 Undos', icon: '\u21A9\uFE0F', cost: 250, grant: 'undos', amount: 3 },
+const COIN_SHOP_CATEGORIES: { key: string; label: string }[] = [
+  { key: 'consumables', label: 'Consumables' },
+  { key: 'boosters', label: 'Boosters' },
+  { key: 'temporary', label: 'Temporary Effects' },
 ];
 
 // ─── Parental controls helper ────────────────────────────────────────────────
@@ -147,6 +139,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     rewardType: AdRewardType;
     resolver: (watched: boolean) => void;
   } | null>(null);
+
+  // Coin shop daily purchase tracking (resets each day)
+  const [coinShopPurchasesToday, setCoinShopPurchasesToday] = useState<Record<string, number>>({});
+  const [coinShopDate, setCoinShopDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [coinShopConfirmation, setCoinShopConfirmation] = useState<string | null>(null);
+  const coinShopConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Today's rotating items
   const today = new Date().toISOString().slice(0, 10);
@@ -409,6 +407,80 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     },
     [economy],
   );
+
+  // ── Coin shop purchase handler ──────────────────────────────────────────
+
+  const handleCoinShopPurchase = useCallback(
+    (item: CoinShopItem) => {
+      // Reset daily counts if date changed
+      const currentDate = new Date().toISOString().slice(0, 10);
+      let purchases = coinShopPurchasesToday;
+      if (currentDate !== coinShopDate) {
+        purchases = {};
+        setCoinShopPurchasesToday({});
+        setCoinShopDate(currentDate);
+      }
+
+      // Check daily limit
+      if (!canPurchaseCoinItem(item.id, purchases)) {
+        Alert.alert('Daily Limit Reached', `You've reached the daily purchase limit for ${item.name}.`);
+        return;
+      }
+
+      // Check affordability
+      if (!economy.canAfford('coins', item.costCoins)) {
+        Alert.alert('Not Enough Coins', `You need ${item.costCoins} coins for ${item.name}.`);
+        return;
+      }
+
+      // Spend coins
+      const spent = economy.spendCoins(item.costCoins);
+      if (!spent) return;
+
+      // Grant the item
+      const reward = item.reward;
+      switch (reward.type) {
+        case 'hint':
+          economy.addHintTokens(reward.amount ?? 1);
+          break;
+        case 'undo':
+          economy.addUndoTokens(reward.amount ?? 1);
+          break;
+        case 'booster':
+          if (reward.boosterType) {
+            economy.addBoosterToken(reward.boosterType, reward.amount ?? 1);
+          }
+          break;
+        case 'temporary_effect':
+        case 'cosmetic_rental':
+          // Temporary effects are granted — in a full implementation these would
+          // set a timed flag in PlayerContext. For now, confirm the purchase.
+          break;
+      }
+
+      // Track purchase count for daily limits
+      setCoinShopPurchasesToday((prev) => ({
+        ...prev,
+        [item.id]: (prev[item.id] ?? 0) + 1,
+      }));
+
+      // Play purchase sound
+      void soundManager.playSound('buttonPress');
+
+      // Show brief confirmation
+      setCoinShopConfirmation(item.name);
+      if (coinShopConfirmTimerRef.current) clearTimeout(coinShopConfirmTimerRef.current);
+      coinShopConfirmTimerRef.current = setTimeout(() => setCoinShopConfirmation(null), 1500);
+    },
+    [economy, coinShopPurchasesToday, coinShopDate],
+  );
+
+  // Cleanup coin shop confirm timer
+  useEffect(() => {
+    return () => {
+      if (coinShopConfirmTimerRef.current) clearTimeout(coinShopConfirmTimerRef.current);
+    };
+  }, []);
 
   // ── Render helpers ──────────────────────────────────────────────────────
 
@@ -963,38 +1035,76 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
         {/* ── Coin Shop (spend coins on consumables) ─────────────────── */}
         <Text style={styles.sectionTitle}>Spend Coins</Text>
-        <View style={styles.coinShopGrid}>
-          {COIN_SHOP_DISPLAY.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.coinShopCard}
-              activeOpacity={0.7}
-              onPress={() => {
-                if (economy.coins < item.cost) {
-                  Alert.alert('Not Enough Coins', `You need ${item.cost} coins for this item.`);
-                  return;
-                }
-                if (economy.spendCoins(item.cost)) {
-                  if (item.grant === 'hints') economy.addHintTokens(item.amount);
-                  else if (item.grant === 'undos') economy.addUndoTokens(item.amount);
-                  Alert.alert('Purchased!', `${item.name} added to your inventory.`);
-                }
-              }}
-            >
-              <LinearGradient
-                colors={[...GRADIENTS.surfaceCard]}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-              />
-              <Text style={styles.coinShopIcon}>{item.icon}</Text>
-              <Text style={styles.coinShopName}>{item.name}</Text>
-              <View style={styles.coinShopPrice}>
-                <Text style={styles.coinShopPriceText}>{'\u{1FA99}'} {item.cost}</Text>
+        <Text style={styles.coinShopSubtitle}>
+          {'\u{1FA99}'} {economy.coins.toLocaleString()} coins available
+        </Text>
+
+        {coinShopConfirmation && (
+          <View style={styles.coinShopConfirmBanner}>
+            <Text style={styles.coinShopConfirmText}>
+              {'\u2705'} {coinShopConfirmation} purchased!
+            </Text>
+          </View>
+        )}
+
+        {COIN_SHOP_CATEGORIES.map(({ key, label }) => {
+          const categoryItems = getCoinShopByCategory(key);
+          if (categoryItems.length === 0) return null;
+
+          // Reset purchases if date changed
+          const currentDate = new Date().toISOString().slice(0, 10);
+          const purchases = currentDate === coinShopDate ? coinShopPurchasesToday : {};
+
+          return (
+            <View key={key} style={styles.coinShopCategorySection}>
+              <Text style={styles.coinShopCategoryTitle}>{label}</Text>
+              <View style={styles.coinShopGrid}>
+                {categoryItems.map((item) => {
+                  const todayCount = purchases[item.id] ?? 0;
+                  const limitReached = item.dailyLimit !== undefined && todayCount >= item.dailyLimit;
+                  const cantAfford = !economy.canAfford('coins', item.costCoins);
+                  const disabled = limitReached || cantAfford;
+
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.coinShopCard, disabled && styles.coinShopCardDisabled]}
+                      activeOpacity={disabled ? 1 : 0.7}
+                      onPress={() => !disabled && handleCoinShopPurchase(item)}
+                    >
+                      <LinearGradient
+                        colors={[...GRADIENTS.surfaceCard]}
+                        style={StyleSheet.absoluteFill}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                      />
+                      <Text style={styles.coinShopIcon}>{item.icon}</Text>
+                      <Text style={[styles.coinShopName, disabled && styles.coinShopTextDisabled]}>
+                        {item.name}
+                      </Text>
+                      <Text style={[styles.coinShopDesc, disabled && styles.coinShopTextDisabled]}>
+                        {item.description}
+                      </Text>
+                      <View style={[styles.coinShopPrice, cantAfford && styles.coinShopPriceDisabled]}>
+                        <Text style={[styles.coinShopPriceText, cantAfford && styles.coinShopPriceTextDisabled]}>
+                          {'\u{1FA99}'} {item.costCoins}
+                        </Text>
+                      </View>
+                      {item.dailyLimit !== undefined && (
+                        <Text style={[
+                          styles.coinShopLimit,
+                          limitReached && styles.coinShopLimitReached,
+                        ]}>
+                          {todayCount}/{item.dailyLimit} today
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+            </View>
+          );
+        })}
 
         {/* ── Restore Purchases ──────────────────────────────────────── */}
         <TouchableOpacity
@@ -1514,13 +1624,45 @@ const styles = StyleSheet.create({
   },
 
   // ── Coin Shop ──────────────────────────────────────────────────────────
+  coinShopSubtitle: {
+    color: COLORS.gold,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  coinShopConfirmBanner: {
+    backgroundColor: 'rgba(76,175,80,0.2)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  coinShopConfirmText: {
+    color: COLORS.green,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  coinShopCategorySection: {
+    marginBottom: 16,
+  },
+  coinShopCategoryTitle: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
   coinShopGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     gap: 10,
-    marginBottom: 20,
   },
   coinShopCard: {
     width: (width - 52) / 2,
@@ -1531,6 +1673,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
+  coinShopCardDisabled: {
+    opacity: 0.45,
+  },
   coinShopIcon: {
     fontSize: 28,
     marginBottom: 6,
@@ -1539,7 +1684,18 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 14,
     fontWeight: '600',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  coinShopDesc: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    textAlign: 'center',
     marginBottom: 8,
+    lineHeight: 14,
+  },
+  coinShopTextDisabled: {
+    color: 'rgba(255,255,255,0.35)',
   },
   coinShopPrice: {
     backgroundColor: 'rgba(255,215,0,0.15)',
@@ -1547,10 +1703,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
+  coinShopPriceDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
   coinShopPriceText: {
     color: COLORS.gold,
     fontSize: 13,
     fontWeight: '700',
+  },
+  coinShopPriceTextDisabled: {
+    color: 'rgba(255,255,255,0.35)',
+  },
+  coinShopLimit: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    marginTop: 6,
+  },
+  coinShopLimitReached: {
+    color: COLORS.coral,
   },
 });
 

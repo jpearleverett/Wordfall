@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   StyleSheet,
@@ -12,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
+import { useAuth } from '../contexts/AuthContext';
+import { firestoreService, ClubMessage } from '../services/firestore';
 import ClubGoalCard from '../components/ClubGoalCard';
 import ClubLeaderboard from '../components/ClubLeaderboard';
 import {
@@ -62,6 +65,58 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   const [searchText, setSearchText] = useState('');
   const [createName, setCreateName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+
+  const { user } = useAuth();
+  const [chatMessages, setChatMessages] = useState<ClubMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
+  // Load chat messages on mount when club is available
+  useEffect(() => {
+    if (!clubId) return;
+    let cancelled = false;
+    setChatLoading(true);
+    firestoreService.getClubMessages(clubId, 50).then((messages) => {
+      if (!cancelled) {
+        setChatMessages(messages);
+        setChatLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [clubId]);
+
+  const handleSendMessage = useCallback(async () => {
+    const text = chatInput.trim();
+    if (!text || !clubId) return;
+    const userId = user?.uid ?? 'local_user';
+    const displayName = (player as any).displayName ?? player.equippedTitle ?? 'Player';
+    setChatInput('');
+
+    // Optimistically add to local list
+    const optimisticMessage: ClubMessage = {
+      id: `local_${Date.now()}`,
+      userId,
+      displayName,
+      message: text.slice(0, 200),
+      timestamp: Date.now(),
+      type: 'text',
+    };
+    setChatMessages((prev) => [optimisticMessage, ...prev]);
+
+    // Send to Firestore (no-op if unavailable)
+    await firestoreService.sendClubMessage(clubId, userId, displayName, text);
+  }, [chatInput, clubId, user, (player as any).displayName ?? player.equippedTitle]);
+
+  const getRelativeTime = useCallback((timestamp: number): string => {
+    const diff = Date.now() - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }, []);
 
   const REACTION_EMOJIS = ['👍', '🎉', '🔥', '💪', '⭐', '❤️', '😎', '🏆'];
 
@@ -396,6 +451,81 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             ))}
           </View>
         )}
+
+        {/* Club Chat */}
+        <Text style={styles.sectionTitle}>Club Chat</Text>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.chatCard}
+        >
+          {firestoreService.isAvailable() ? (
+            <>
+              {/* Messages */}
+              <View style={styles.chatMessagesContainer}>
+                {chatLoading ? (
+                  <View style={styles.chatPlaceholder}>
+                    <Text style={styles.chatPlaceholderText}>Loading messages...</Text>
+                  </View>
+                ) : chatMessages.length === 0 ? (
+                  <View style={styles.chatPlaceholder}>
+                    <Text style={styles.chatPlaceholderIcon}>💬</Text>
+                    <Text style={styles.chatPlaceholderText}>No messages yet. Say hello!</Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={chatMessages}
+                    keyExtractor={(item) => item.id}
+                    inverted
+                    style={styles.chatList}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <View style={styles.chatMessageRow}>
+                        <View style={styles.chatMessageBubble}>
+                          <View style={styles.chatMessageHeader}>
+                            <Text style={styles.chatSenderName}>{item.displayName}</Text>
+                            <Text style={styles.chatTimestamp}>{getRelativeTime(item.timestamp)}</Text>
+                          </View>
+                          <Text style={styles.chatMessageText}>{item.message}</Text>
+                        </View>
+                      </View>
+                    )}
+                  />
+                )}
+              </View>
+
+              {/* Input */}
+              <View style={styles.chatInputRow}>
+                <TextInput
+                  style={styles.chatInput}
+                  placeholder="Type a message..."
+                  placeholderTextColor={COLORS.textMuted}
+                  value={chatInput}
+                  onChangeText={setChatInput}
+                  maxLength={200}
+                  returnKeyType="send"
+                  onSubmitEditing={handleSendMessage}
+                />
+                <TouchableOpacity
+                  style={[styles.chatSendBtn, !chatInput.trim() && styles.chatSendBtnDisabled]}
+                  onPress={handleSendMessage}
+                  disabled={!chatInput.trim()}
+                >
+                  <Text style={styles.chatSendBtnText}>Send</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <View style={styles.chatPlaceholder}>
+              <Text style={styles.chatPlaceholderIcon}>🔒</Text>
+              <Text style={styles.chatPlaceholderText}>Club chat requires Firebase</Text>
+              <Text style={styles.chatPlaceholderSubtext}>
+                Set EXPO_PUBLIC_FIREBASE_* env vars to enable
+              </Text>
+            </View>
+          )}
+        </LinearGradient>
 
         {/* Leave Club */}
         <TouchableOpacity style={styles.leaveButton} onPress={onLeaveClub}>
@@ -872,6 +1002,107 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.coralGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 6,
+  },
+  chatCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 20,
+    ...SHADOWS.medium,
+  },
+  chatMessagesContainer: {
+    height: 240,
+  },
+  chatList: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  chatMessageRow: {
+    marginVertical: 4,
+  },
+  chatMessageBubble: {
+    backgroundColor: 'rgba(17, 22, 56, 0.6)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
+  chatMessageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  chatSenderName: {
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
+  },
+  chatTimestamp: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+  },
+  chatMessageText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    lineHeight: 19,
+  },
+  chatInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    gap: 8,
+  },
+  chatInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: COLORS.bgLight,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: COLORS.cellDefault,
+  },
+  chatSendBtn: {
+    backgroundColor: COLORS.accent,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    ...SHADOWS.glow(COLORS.accent),
+  },
+  chatSendBtnDisabled: {
+    opacity: 0.4,
+  },
+  chatSendBtnText: {
+    fontSize: 13,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.bg,
+  },
+  chatPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  chatPlaceholderIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  chatPlaceholderText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  chatPlaceholderSubtext: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
   },
   bottomSpacer: {
     height: 40,

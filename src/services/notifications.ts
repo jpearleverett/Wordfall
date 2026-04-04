@@ -15,6 +15,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { NotificationTriggerInput } from 'expo-notifications';
 
 // expo-notifications crashes in Expo Go since SDK 53.
 // Lazy-load the module and gracefully degrade when unavailable.
@@ -278,7 +279,7 @@ class NotificationManager {
 
       // Build the expo-notifications trigger object
       const channelId = Platform.OS === 'android' ? ANDROID_CHANNEL_ID : undefined;
-      let expoTrigger: Notifications.NotificationTriggerInput;
+      let expoTrigger: NotificationTriggerInput;
 
       if (trigger.type === 'timeInterval') {
         expoTrigger = {

@@ -585,6 +585,19 @@ export const ECONOMY = {
   streakShieldCost: 500, // coins
 };
 
+// Cosmetic & Mode Coin Pricing
+export const COSMETIC_COIN_PRICES: Record<string, number> = {
+  common: 500,
+  rare: 1500,
+  epic: 3000,
+  legendary: 5000,
+};
+
+export const BOOSTER_COIN_COST = 200;
+
+/** Coin cost for entering premium modes (expert, weekly) */
+export const SPECIAL_MODE_ENTRY_COST = 100;
+
 // Lives / Energy
 export const LIVES = {
   max: 5,

@@ -208,14 +208,14 @@ export function getDynamicOffers(
   // ── Whales: VIP mega bundles ──
   if (spending === 'whale') {
     offers.push({
-      productId: 'mega_bundle_ultimate',
+      productId: 'ultimate_whale',
       discountPercent: 10,
       badge: 'VIP EXCLUSIVE',
       expiresInHours: 24,
       priority: 1,
     });
     offers.push({
-      productId: 'mega_bundle_diamond',
+      productId: 'royal_collection',
       discountPercent: 15,
       badge: 'VIP DEAL',
       expiresInHours: 24,
@@ -241,6 +241,116 @@ export function getDynamicOffers(
   });
 
   return offers;
+}
+
+// ─── Flash Sale ─────────────────────────────────────────────────────────────
+
+export interface FlashSale {
+  /** Product to put on flash sale */
+  productId: string;
+  /** Display name */
+  name: string;
+  /** Icon emoji */
+  icon: string;
+  /** Description */
+  description: string;
+  /** Original price string (e.g. "$4.99") */
+  originalPrice: string;
+  /** Original numeric price */
+  originalPriceAmount: number;
+  /** Discount percentage */
+  discountPercent: number;
+  /** Discounted price string */
+  salePrice: string;
+  /** Hours remaining until midnight */
+  hoursRemaining: number;
+}
+
+const FLASH_SALE_POOL: {
+  productId: string;
+  name: string;
+  icon: string;
+  description: string;
+  originalPrice: string;
+  originalPriceAmount: number;
+  discountPercent: number;
+}[] = [
+  {
+    productId: 'starter_pack',
+    name: 'Starter Pack',
+    icon: '\u{1F381}',
+    description: '500 Coins + 50 Gems + 10 Hints + Exclusive Decoration',
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
+    discountPercent: 60,
+  },
+  {
+    productId: 'hint_bundle_50',
+    name: '50 Hints Mega Pack',
+    icon: '\u{1F4A1}',
+    description: '50 Hints to power through any puzzle',
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
+    discountPercent: 40,
+  },
+  {
+    productId: 'gems_250',
+    name: '250 Gems',
+    icon: '\u{1F48E}',
+    description: '250 Gems for cosmetics, spins & more',
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
+    discountPercent: 50,
+  },
+  {
+    productId: 'chapter_bundle',
+    name: 'Chapter Bundle',
+    icon: '\u{1F4D6}',
+    description: 'Theme decoration + 20 gems + 10 hints + Board Preview',
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
+    discountPercent: 35,
+  },
+  {
+    productId: 'gems_500',
+    name: '500 Gems',
+    icon: '\u{1F48E}',
+    description: '500 Gems — the biggest gem pack available',
+    originalPrice: '$9.99',
+    originalPriceAmount: 9.99,
+    discountPercent: 40,
+  },
+];
+
+/**
+ * Deterministically pick a flash sale for a given date.
+ * Returns null roughly 30% of days (no sale).
+ */
+export function getFlashSale(date: Date): FlashSale | null {
+  const dayOfYear =
+    Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
+  // Use day-of-year as seed — deterministic per day
+  const hash = (dayOfYear * 2654435761) >>> 0;
+
+  // ~30% of days have no flash sale
+  if (hash % 10 < 3) return null;
+
+  const index = hash % FLASH_SALE_POOL.length;
+  const item = FLASH_SALE_POOL[index];
+
+  // Calculate hours remaining until midnight
+  const now = date;
+  const midnight = new Date(now);
+  midnight.setHours(23, 59, 59, 999);
+  const hoursRemaining = Math.max(0, Math.ceil((midnight.getTime() - now.getTime()) / 3600000));
+
+  const saleAmount = item.originalPriceAmount * (1 - item.discountPercent / 100);
+
+  return {
+    ...item,
+    salePrice: `$${saleAmount.toFixed(2)}`,
+    hoursRemaining,
+  };
 }
 
 /**

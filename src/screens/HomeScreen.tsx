@@ -44,6 +44,7 @@ interface HomeScreenProps {
   onOpenWheel?: () => void;
   onBuyDeal?: (deal: DailyDeal) => void;
   mysteryWheelSpins?: number;
+  dailyFreeSpinAvailable?: boolean;
   freeSpinToast?: boolean;
   currencies?: {
     coins: number;
@@ -101,6 +102,7 @@ export function HomeScreen({
   onBuyDeal,
   currencies,
   mysteryWheelSpins = 0,
+  dailyFreeSpinAvailable = false,
   freeSpinToast = false,
   currentChapter = 1,
   loginCycleDay = 1,
@@ -181,7 +183,7 @@ export function HomeScreen({
 
   // Pulse animation for wheel button when spins available
   useEffect(() => {
-    if (mysteryWheelSpins > 0) {
+    if (mysteryWheelSpins > 0 || dailyFreeSpinAvailable) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(wheelPulse, {
@@ -201,7 +203,7 @@ export function HomeScreen({
       pulse.start();
       return () => pulse.stop();
     }
-  }, [mysteryWheelSpins, wheelPulse]);
+  }, [mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
 
   // Free spin toast animation
   useEffect(() => {
@@ -438,7 +440,7 @@ export function HomeScreen({
                 end={{ x: 1, y: 1 }}
                 style={[
                   styles.mysteryWheelButton,
-                  mysteryWheelSpins > 0 && styles.mysteryWheelButtonGlow,
+                  (mysteryWheelSpins > 0 || dailyFreeSpinAvailable) && styles.mysteryWheelButtonGlow,
                   SHADOWS.medium,
                 ]}
               >
@@ -448,11 +450,18 @@ export function HomeScreen({
                 <View style={styles.mysteryWheelContent}>
                   <Text style={styles.mysteryWheelTitle}>Mystery Wheel</Text>
                   <Text style={styles.mysteryWheelSubtitle}>
-                    {mysteryWheelSpins > 0
-                      ? `${mysteryWheelSpins} free spin${mysteryWheelSpins !== 1 ? 's' : ''} available!`
-                      : 'Spin for prizes!'}
+                    {dailyFreeSpinAvailable
+                      ? 'Daily free spin ready!'
+                      : mysteryWheelSpins > 0
+                        ? `${mysteryWheelSpins} free spin${mysteryWheelSpins !== 1 ? 's' : ''} available!`
+                        : 'Spin for prizes!'}
                   </Text>
                 </View>
+                {dailyFreeSpinAvailable && (
+                  <View style={styles.dailySpinBadge}>
+                    <Text style={styles.dailySpinBadgeText}>DAILY FREE!</Text>
+                  </View>
+                )}
                 {mysteryWheelSpins > 0 && (
                   <View style={styles.mysteryWheelBadge}>
                     <Text style={styles.mysteryWheelBadgeText}>{mysteryWheelSpins}</Text>
@@ -1513,6 +1522,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontFamily: FONTS.display,
+  },
+  dailySpinBadge: {
+    backgroundColor: COLORS.gold,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  dailySpinBadgeText: {
+    color: COLORS.bg,
+    fontSize: 9,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
   },
   mysteryWheelArrow: {
     color: COLORS.purple,

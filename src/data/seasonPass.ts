@@ -51,7 +51,9 @@ function xpForTier(tier: number): number {
   return Math.round(BASE_XP_PER_TIER * Math.pow(XP_GROWTH_FACTOR, tier - 1));
 }
 
-// ─── 30 Tier Definitions ────────────────────────────────────────────────────
+// ─── 50 Tier Definitions ────────────────────────────────────────────────────
+
+export const MAX_SEASON_TIER = 50;
 
 function isMilestone(tier: number): boolean {
   return tier % 5 === 0;
@@ -59,32 +61,61 @@ function isMilestone(tier: number): boolean {
 
 function buildFreeReward(tier: number): PassReward {
   if (isMilestone(tier)) {
-    // Milestone free rewards are bigger
+    // Milestone free rewards are bigger (coin rewards nerfed ~20% from original)
+    if (tier === 5) return { type: 'coins', amount: 240, label: '240 Coins', icon: '\u{1FA99}' };
     if (tier === 10) return { type: 'booster', amount: 2, label: '2 Boosters', icon: '\u{1F500}' };
-    if (tier === 15) return { type: 'coins', amount: 500, label: '500 Coins', icon: '\u{1FA99}' };
-    if (tier === 20) return { type: 'hints', amount: 10, label: '10 Hints', icon: '\u{1F4A1}' };
-    if (tier === 25) return { type: 'coins', amount: 750, label: '750 Coins', icon: '\u{1FA99}' };
+    if (tier === 15) return { type: 'coins', amount: 400, label: '400 Coins', icon: '\u{1FA99}' };
+    if (tier === 20) return { type: 'hints', amount: 8, label: '8 Hints', icon: '\u{1F4A1}' };
+    if (tier === 25) return { type: 'coins', amount: 600, label: '600 Coins', icon: '\u{1FA99}' };
     if (tier === 30) return { type: 'mystery_box', amount: 1, label: 'Mystery Box', icon: '\u{1F381}' };
-    // tier 5
-    return { type: 'coins', amount: 300, label: '300 Coins', icon: '\u{1FA99}' };
+    if (tier === 35) return { type: 'booster', amount: 3, label: '3 Boosters', icon: '\u{1F500}' };
+    if (tier === 40) return { type: 'hints', amount: 12, label: '12 Hints', icon: '\u{1F4A1}' };
+    if (tier === 45) return { type: 'coins', amount: 800, label: '800 Coins', icon: '\u{1FA99}' };
+    if (tier === 50) return { type: 'mystery_box', amount: 2, label: '2 Mystery Boxes', icon: '\u{1F381}' };
   }
 
-  // Regular tiers alternate between coins, hints, and boosters
+  // Regular tiers alternate between coins, hints, and boosters (~20% nerf on coins)
   const cycle = tier % 3;
   if (cycle === 1) {
-    const amount = 50 + tier * 5;
+    const amount = Math.round((40 + tier * 4) / 5) * 5; // ~20% less than original
     return { type: 'coins', amount, label: `${amount} Coins`, icon: '\u{1FA99}' };
   }
   if (cycle === 2) {
-    const amount = 1 + Math.floor(tier / 10);
+    const amount = 1 + Math.floor(tier / 12);
     return { type: 'hints', amount, label: `${amount} Hint${amount > 1 ? 's' : ''}`, icon: '\u{1F4A1}' };
   }
   return { type: 'booster', amount: 1, label: '1 Booster', icon: '\u{1F500}' };
 }
 
 function buildPremiumReward(tier: number): PassReward {
+  // Tier 50: legendary set (frame + title + decoration)
+  if (tier === 50) {
+    return {
+      type: 'cosmetic',
+      cosmeticId: 'set_season_legend',
+      label: 'Legendary Season Set (Frame + Title + Decoration)',
+      icon: '\u{1F451}',
+    };
+  }
+
+  // Exclusive cosmetics at milestone tiers 10, 20, 30, 40
+  if (tier === 10) {
+    return {
+      type: 'cosmetic',
+      cosmeticId: 'frame_season_bronze',
+      label: 'Season Bronze Frame',
+      icon: '\u{1F3C5}',
+    };
+  }
+  if (tier === 20) {
+    return {
+      type: 'cosmetic',
+      cosmeticId: 'title_season_explorer',
+      label: 'Season Explorer Title',
+      icon: '\u{1F3C5}',
+    };
+  }
   if (tier === 30) {
-    // Max tier: exclusive cosmetic frame
     return {
       type: 'cosmetic',
       cosmeticId: 'frame_season_champion',
@@ -92,21 +123,22 @@ function buildPremiumReward(tier: number): PassReward {
       icon: '\u{1F451}',
     };
   }
+  if (tier === 40) {
+    return {
+      type: 'cosmetic',
+      cosmeticId: 'deco_season_master',
+      label: 'Season Master Decoration',
+      icon: '\u{2728}',
+    };
+  }
 
+  // Premium-exclusive gems at every 5th tier (non-cosmetic milestones)
   if (isMilestone(tier)) {
-    // Milestone premium rewards
-    if (tier === 5) return { type: 'gems', amount: 25, label: '25 Gems', icon: '\u{1F48E}' };
-    if (tier === 10) return { type: 'rare_tile', amount: 1, label: 'Rare Tile', icon: '\u{2B50}' };
-    if (tier === 15) {
-      return {
-        type: 'cosmetic',
-        cosmeticId: 'title_season_explorer',
-        label: 'Season Explorer Title',
-        icon: '\u{1F3C5}',
-      };
-    }
-    if (tier === 20) return { type: 'gems', amount: 50, label: '50 Gems', icon: '\u{1F48E}' };
-    if (tier === 25) return { type: 'rare_tile', amount: 2, label: '2 Rare Tiles', icon: '\u{2B50}' };
+    if (tier === 5) return { type: 'gems', amount: 15, label: '15 Gems', icon: '\u{1F48E}' };
+    if (tier === 15) return { type: 'gems', amount: 20, label: '20 Gems', icon: '\u{1F48E}' };
+    if (tier === 25) return { type: 'gems', amount: 25, label: '25 Gems', icon: '\u{1F48E}' };
+    if (tier === 35) return { type: 'gems', amount: 25, label: '25 Gems', icon: '\u{1F48E}' };
+    if (tier === 45) return { type: 'gems', amount: 30, label: '30 Gems', icon: '\u{1F48E}' };
   }
 
   // Regular premium tiers alternate between gems, cosmetics, and rare tiles
@@ -132,7 +164,7 @@ function buildPremiumReward(tier: number): PassReward {
   return { type: 'gems', amount, label: `${amount} Gems`, icon: '\u{1F48E}' };
 }
 
-export const SEASON_PASS_TIERS: SeasonPassTier[] = Array.from({ length: 30 }, (_, i) => {
+export const SEASON_PASS_TIERS: SeasonPassTier[] = Array.from({ length: MAX_SEASON_TIER }, (_, i) => {
   const level = i + 1;
   return {
     level,
@@ -154,7 +186,7 @@ export function getSeasonPassTier(xp: number): number {
     remaining -= SEASON_PASS_TIERS[i].xpRequired;
     if (remaining < 0) return i; // 0-indexed tier count = tiers completed
   }
-  return 30; // Max tier
+  return MAX_SEASON_TIER; // Max tier
 }
 
 /**
@@ -170,7 +202,7 @@ export function getXPProgress(
     consumed += SEASON_PASS_TIERS[i].xpRequired;
   }
 
-  if (tier >= 30) {
+  if (tier >= MAX_SEASON_TIER) {
     return { current: 0, required: 0, percent: 100 };
   }
 

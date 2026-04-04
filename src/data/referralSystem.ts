@@ -21,15 +21,15 @@ export interface ReferralMilestone {
 
 /** Rewards the referrer receives per successful referral (friend completes 1st puzzle) */
 export const REFERRER_REWARDS = {
-  coins: 500,
-  gems: 10,
+  coins: 1000,
+  gems: 20,
 } as const;
 
 /** Rewards the referred player receives on signup */
 export const REFERRED_REWARDS = {
-  coins: 200,
-  gems: 5,
-  hintTokens: 3,
+  coins: 400,
+  gems: 10,
+  hintTokens: 5,
 } as const;
 
 // ─── Milestones ─────────────────────────────────────────────────────────────
@@ -52,6 +52,18 @@ export const REFERRAL_MILESTONES: ReferralMilestone[] = [
     label: 'The Networker',
     icon: '🌐',
     rewards: { cosmeticId: 'title_networker', cosmeticType: 'title' },
+  },
+  {
+    count: 15,
+    label: 'The Ambassador',
+    icon: '🏅',
+    rewards: { coins: 5000, cosmeticId: 'title_ambassador', cosmeticType: 'title' },
+  },
+  {
+    count: 25,
+    label: 'Referral Champion',
+    icon: '🏆',
+    rewards: { coins: 10000, gems: 200, cosmeticId: 'frame_referral_champion', cosmeticType: 'frame' },
   },
 ];
 
@@ -113,4 +125,29 @@ export function getNextMilestone(
   referralCount: number,
 ): ReferralMilestone | null {
   return REFERRAL_MILESTONES.find((m) => referralCount < m.count) ?? null;
+}
+
+/**
+ * Returns progress information toward the next milestone for UI display.
+ * If all milestones are reached, returns progress as 1 (100%).
+ */
+export function getNextMilestoneProgress(
+  referralCount: number,
+): { current: number; next: number; progress: number } {
+  const nextMilestone = getNextMilestone(referralCount);
+  if (!nextMilestone) {
+    // All milestones reached
+    const lastCount = REFERRAL_MILESTONES[REFERRAL_MILESTONES.length - 1]?.count ?? 0;
+    return { current: referralCount, next: lastCount, progress: 1 };
+  }
+  // Find the previous milestone count (or 0 if this is the first)
+  const milestoneIndex = REFERRAL_MILESTONES.indexOf(nextMilestone);
+  const prevCount = milestoneIndex > 0 ? REFERRAL_MILESTONES[milestoneIndex - 1].count : 0;
+  const range = nextMilestone.count - prevCount;
+  const progressInRange = referralCount - prevCount;
+  return {
+    current: referralCount,
+    next: nextMilestone.count,
+    progress: range > 0 ? Math.min(progressInRange / range, 1) : 0,
+  };
 }
