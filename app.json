@@ -26,6 +26,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.wordfall.app",
       "buildNumber": "2",
+      "associatedDomains": [
+        "applinks:wordfall.app"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
@@ -54,6 +57,18 @@
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
         "SCHEDULE_EXACT_ALARM"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "wordfall"
+            }
+          ],
+          "category": ["DEFAULT", "BROWSABLE"]
+        }
       ]
     },
     "plugins": [

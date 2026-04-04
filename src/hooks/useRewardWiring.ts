@@ -463,7 +463,7 @@ export function useRewardWiring({
       }
     }
 
-    // Generate share text (include referral code for viral growth)
+    // Generate share text (include referral code for viral deep link)
     const grid = params.board ? (params.board as Board).grid : null;
     const shareText = grid
       ? generateShareText(grid, level, stars, score, 0, isDaily, player.referralCode || undefined)

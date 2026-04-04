@@ -4,6 +4,7 @@ import {
   Alert,
   AppState,
   Animated,
+  Linking,
   Pressable,
   SafeAreaView,
   StatusBar,
@@ -61,6 +62,7 @@ import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { funnelTracker } from './src/services/funnelTracker';
+import { parseDeepLink } from './src/utils/deepLinking';
 import {
   triggerStreakReminder,
   triggerEventNotifications,
@@ -1414,6 +1416,72 @@ function AppContent() {
       setShowOnboarding(true);
     }
   }, [player.loaded, player.tutorialComplete]);
+
+  // ── Deep link handling ──────────────────────────────────────────────────
+  const pendingDeepLinkRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!player.loaded) return;
+
+    const handleDeepLink = (url: string | null) => {
+      if (!url) return;
+      try {
+        const data = parseDeepLink(url);
+        switch (data.type) {
+          case 'referral':
+            if (data.referralCode) {
+              const success = player.applyReferralCode(data.referralCode);
+              if (success) {
+                Alert.alert('Welcome!', 'Referral code applied! You received bonus rewards.');
+              }
+            }
+            break;
+          case 'challenge':
+            if (data.challengeId) {
+              // Store challenge ID — navigation will pick it up when ready
+              pendingDeepLinkRef.current = data.challengeId;
+              if (__DEV__) console.log('[DeepLink] Challenge received:', data.challengeId);
+            }
+            break;
+          case 'daily':
+            // Navigate to daily mode when navigation is ready
+            try {
+              (navigationRef.current as any)?.navigate('Play', {
+                screen: 'Game',
+                params: { mode: 'daily' },
+              });
+            } catch {
+              // Navigation may not be ready yet — silently ignore
+            }
+            break;
+          default:
+            break;
+        }
+        if (data.type !== 'unknown') {
+          void analytics.logEvent('deep_link_opened', { type: data.type, url });
+        }
+      } catch {
+        // Never crash on a malformed deep link
+        if (__DEV__) console.warn('[DeepLink] Failed to handle URL:', url);
+      }
+    };
+
+    // Check for initial URL (app was opened via deep link)
+    Linking.getInitialURL()
+      .then(handleDeepLink)
+      .catch(() => {
+        // getInitialURL can fail on some platforms — ignore
+      });
+
+    // Listen for incoming deep links while app is running
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [player.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track screen views on navigation state changes
   const handleNavigationReady = useCallback(() => {

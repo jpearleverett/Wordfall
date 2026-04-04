@@ -12,6 +12,7 @@ import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
 import { getNextMilestone, REFERRAL_MILESTONES } from '../data/referralSystem';
+import { buildReferralLink } from '../utils/deepLinking';
 
 interface ReferralCardProps {
   /** The player's 6-char referral code */
@@ -76,8 +77,9 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
 
   const handleShare = useCallback(async () => {
     try {
+      const link = buildReferralLink(referralCode);
       await Share.share({
-        message: `Join me on Wordfall! Use my referral code ${referralCode} to get 200 coins, 5 gems, and 3 free hints. Let's play!`,
+        message: `Join me on Wordfall! Use my code for free rewards: ${link}`,
       });
     } catch {
       // Share cancelled or unavailable
