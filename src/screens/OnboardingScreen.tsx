@@ -18,6 +18,7 @@ import { GameGrid } from '../components/Grid';
 import { CellPosition } from '../types';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 import { funnelTracker } from '../services/funnelTracker';
+import { removeCellsAndApplyGravity } from '../engine/gravity';
 
 const { width, height } = Dimensions.get('window');
 
@@ -109,8 +110,14 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
 
     // Check if all highlighted cells are selected
     if (step.highlightPositions && newSelected.length >= step.highlightPositions.length) {
-      // Word "found" - advance step
+      // Word "found" - remove cells, apply gravity, then advance step
+      const positions = step.highlightPositions.map(p => ({ row: p.row, col: p.col }));
       setTimeout(() => {
+        // Apply gravity so the tutorial visually demonstrates letters falling
+        setTutorialBoard(prev => ({
+          ...prev,
+          grid: removeCellsAndApplyGravity(prev.grid, positions),
+        }));
         setSelectedCells([]);
         setWordsFound(prev => prev + 1);
         if (tutorialStep < TUTORIAL_STEPS.length - 1) {
