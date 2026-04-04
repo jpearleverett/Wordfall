@@ -33,6 +33,8 @@ import { analytics } from '../services/analytics';
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { adManager, AdRewardType } from '../services/ads';
 import { MockAdModal } from '../components/MockAdModal';
+import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
+import { getModeTutorial } from '../data/modeTutorials';
 
 if (
   Platform.OS === 'android' &&
@@ -203,6 +205,8 @@ export function GameScreen({
   const [showIdleHint, setShowIdleHint] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showModeIntro, setShowModeIntro] = useState(true);
+  const [showModeTutorial, setShowModeTutorial] = useState(false);
+  const modeTutorialSteps = useMemo(() => getModeTutorial(mode), [mode]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const prevFoundWordsRef = useRef(foundWords);
   const [movedCells, setMovedCells] = useState<CellPosition[]>([]);
@@ -596,9 +600,13 @@ export function GameScreen({
     };
   }, [state.selectedCells.length, foundWords, resetIdleTimer]);
 
-  // Hide mode intro after 2 seconds
+  // Show mode tutorial on first play of a mode, or fall back to 2.5s text banner
   useEffect(() => {
-    if (showModeIntro && mode !== 'classic') {
+    if (mode !== 'classic' && modeTutorialSteps && !player.tooltipsShown.includes(`mode_tutorial_${mode}`)) {
+      // First time playing this mode — show interactive tutorial instead of banner
+      setShowModeIntro(false);
+      setShowModeTutorial(true);
+    } else if (showModeIntro && mode !== 'classic') {
       const timer = setTimeout(() => setShowModeIntro(false), 2500);
       return () => clearTimeout(timer);
     } else {
@@ -1451,6 +1459,18 @@ export function GameScreen({
           }}
           onAccept={handleOfferAccept}
           onDismiss={dismissOffer}
+        />
+      )}
+
+      {/* Mode tutorial overlay — shown once per mode on first play */}
+      {showModeTutorial && modeTutorialSteps && (
+        <ModeTutorialOverlay
+          steps={modeTutorialSteps}
+          visible={showModeTutorial}
+          onComplete={() => {
+            setShowModeTutorial(false);
+            player.markTooltipShown(`mode_tutorial_${mode}`);
+          }}
         />
       )}
 
