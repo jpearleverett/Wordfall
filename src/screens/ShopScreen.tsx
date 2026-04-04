@@ -29,6 +29,11 @@ import { funnelTracker } from '../services/funnelTracker';
 import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
 import { getFlashSale, FlashSale } from '../data/dynamicPricing';
 import { soundManager } from '../services/sound';
+import {
+  getVipStreakBonus,
+  getNextVipStreakMilestone,
+  getVipStreakProgress,
+} from '../data/vipBenefits';
 
 const { width } = Dimensions.get('window');
 
@@ -816,6 +821,89 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           )}
         </View>
 
+        {/* ── VIP Streak Bonus (for active subscribers) ─────────────── */}
+        {economy.isVip && (() => {
+          const streakWeeks = (economy as any).vipStreakWeeks ?? 0;
+          const streakBonusClaimed = (economy as any).vipStreakBonusClaimed ?? false;
+          const currentBonus = getVipStreakBonus(streakWeeks);
+          const nextMilestone = getNextVipStreakMilestone(streakWeeks);
+          const progress = getVipStreakProgress(streakWeeks);
+
+          return (
+            <View style={styles.vipStreakCard}>
+              <LinearGradient
+                colors={['#2a1854', '#1a1042']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
+              <View style={styles.vipStreakHeader}>
+                <Text style={styles.vipStreakIcon}>{'\u{1F451}'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.vipStreakTitle}>VIP STREAK</Text>
+                  <Text style={styles.vipStreakWeeks}>
+                    {streakWeeks} {streakWeeks === 1 ? 'week' : 'weeks'} subscribed
+                  </Text>
+                </View>
+                {currentBonus && (
+                  <View style={styles.vipStreakLabelBadge}>
+                    <Text style={styles.vipStreakLabelText}>{currentBonus.label}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Progress bar toward next milestone */}
+              {nextMilestone && (
+                <View style={styles.vipStreakProgressSection}>
+                  <View style={styles.vipStreakProgressBar}>
+                    <View
+                      style={[
+                        styles.vipStreakProgressFill,
+                        { width: `${Math.min(progress.progress * 100, 100)}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.vipStreakProgressText}>
+                    {streakWeeks}/{nextMilestone.weeksRequired} weeks to {nextMilestone.label}
+                  </Text>
+                  <Text style={styles.vipStreakNextReward}>
+                    Next: +{nextMilestone.bonusGems} gems, +{nextMilestone.bonusHints} hints
+                    {nextMilestone.extraReward ? ` + exclusive ${nextMilestone.extraReward.type}` : ''}
+                  </Text>
+                </View>
+              )}
+
+              {/* Claim button when eligible */}
+              {currentBonus && !streakBonusClaimed && (
+                <TouchableOpacity
+                  style={styles.vipStreakClaimButton}
+                  onPress={() => {
+                    Alert.alert(
+                      'VIP Streak Bonus!',
+                      `You earned +${currentBonus.bonusGems} gems and +${currentBonus.bonusHints} hints for being a ${currentBonus.label}!`,
+                    );
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={[COLORS.purple, '#8b5cf6']}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  />
+                  <Text style={styles.vipStreakClaimText}>CLAIM WEEKLY BONUS</Text>
+                </TouchableOpacity>
+              )}
+              {currentBonus && streakBonusClaimed && (
+                <Text style={styles.vipStreakClaimedText}>Weekly bonus claimed</Text>
+              )}
+              {!currentBonus && !nextMilestone && (
+                <Text style={styles.vipStreakClaimedText}>Max VIP tier reached!</Text>
+              )}
+            </View>
+          );
+        })()}
+
         {/* ── Featured Offers ────────────────────────────────────────── */}
         <ScrollView
           horizontal
@@ -1541,6 +1629,93 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     letterSpacing: 1,
+  },
+
+  // ── VIP streak ─────────────────────────────────────────────────────────
+  vipStreakCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.purple + '40',
+    overflow: 'hidden',
+  },
+  vipStreakHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  vipStreakIcon: {
+    fontSize: 28,
+    marginRight: 10,
+  },
+  vipStreakTitle: {
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    color: COLORS.purple,
+    letterSpacing: 1.5,
+  },
+  vipStreakWeeks: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  vipStreakLabelBadge: {
+    backgroundColor: COLORS.purple + '25',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: COLORS.purple + '40',
+  },
+  vipStreakLabelText: {
+    fontSize: 10,
+    fontFamily: FONTS.display,
+    color: COLORS.purpleLight,
+    letterSpacing: 0.5,
+  },
+  vipStreakProgressSection: {
+    marginBottom: 12,
+  },
+  vipStreakProgressBar: {
+    height: 8,
+    backgroundColor: COLORS.cellDefault,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  vipStreakProgressFill: {
+    height: '100%',
+    backgroundColor: COLORS.purple,
+    borderRadius: 4,
+  },
+  vipStreakProgressText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.bodySemiBold,
+  },
+  vipStreakNextReward: {
+    fontSize: 11,
+    color: COLORS.purpleLight,
+    marginTop: 2,
+  },
+  vipStreakClaimButton: {
+    width: '100%',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  vipStreakClaimText: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+  },
+  vipStreakClaimedText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center',
   },
 
   // ── Rotating shop ─────────────────────────────────────────────────────

@@ -180,6 +180,9 @@ interface PlayerData {
   referredPlayerIds: string[];
   referralMilestonesClaimed: number[];
 
+  // Prestige
+  prestige?: import('../types').PrestigeState;
+
   // Cloud sync
   lastModified: number;
 }

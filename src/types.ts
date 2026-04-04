@@ -745,6 +745,20 @@ export interface ReferralMilestone {
   };
 }
 
+// ============ PRESTIGE SYSTEM ============
+export interface PrestigeState {
+  prestigeLevel: number;      // 0 = never prestiged
+  totalPrestiges: number;
+  lastPrestigedAt?: number;   // timestamp
+  permanentBonuses: string[]; // accumulated bonus IDs
+}
+
+// ============ VIP STREAK ============
+export interface VipStreakState {
+  vipStreakWeeks: number;           // consecutive weeks subscribed
+  vipStreakBonusClaimed: boolean;   // claimed this week's streak bonus
+}
+
 // ============ SOLVE REPLAY ============
 export interface SolveStep {
   wordFound: string;
