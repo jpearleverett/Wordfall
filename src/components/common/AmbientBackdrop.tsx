@@ -116,17 +116,17 @@ function TwinklingStar({
 
 function getLocalBg(variant: string) {
   switch (variant) {
-    case 'home': return LOCAL_IMAGES.bgHome;
-    case 'library': return LOCAL_IMAGES.bgLibrary;
-    case 'collections': return LOCAL_IMAGES.bgCollections;
-    case 'profile': return LOCAL_IMAGES.bgProfile;
-    case 'shop': return LOCAL_IMAGES.bgShop;
-    case 'leaderboard': return LOCAL_IMAGES.bgLeaderboard;
-    case 'event': return LOCAL_IMAGES.bgEvent;
-    case 'mastery': return LOCAL_IMAGES.bgMastery;
-    case 'modes': return LOCAL_IMAGES.bgModes;
-    case 'settings': return LOCAL_IMAGES.bgSettings;
-    case 'club': return LOCAL_IMAGES.bgClub;
+    case 'home': return LOCAL_IMAGES.bg1;
+    case 'library': return LOCAL_IMAGES.bg3;
+    case 'collections': return LOCAL_IMAGES.bg3;
+    case 'profile': return LOCAL_IMAGES.bg4;
+    case 'shop': return LOCAL_IMAGES.bg4;
+    case 'leaderboard': return LOCAL_IMAGES.bg2;
+    case 'event': return LOCAL_IMAGES.bg2;
+    case 'mastery': return LOCAL_IMAGES.bg4;
+    case 'modes': return LOCAL_IMAGES.bg2;
+    case 'settings': return LOCAL_IMAGES.bg5;
+    case 'club': return LOCAL_IMAGES.bg5;
     default: return null;
   }
 }

@@ -275,7 +275,7 @@ export function SynthwaveBackdrop({ playerLevel = 1 }: { playerLevel?: number } 
       />
 
       <Image
-        source={LOCAL_IMAGES.bgGameplay}
+        source={LOCAL_IMAGES.bg1}
         style={styles.bgImage}
         resizeMode="cover"
       />

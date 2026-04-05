@@ -406,7 +406,7 @@ export function PuzzleComplete({
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
       <Image
-        source={LOCAL_IMAGES.bgVictory}
+        source={LOCAL_IMAGES.bg3}
         style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
         resizeMode="cover"
       />
