@@ -81,6 +81,7 @@ interface PlayerData {
   dailyCompleted: string[];
   dailyLoginDates: string[];
   loginCycleDay: number;
+  lastLoginRewardClaimDate: string | null;
 
   // Streaks
   streaks: StreakData;
@@ -346,6 +347,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   dailyCompleted: [],
   dailyLoginDates: [],
   loginCycleDay: 1,
+  lastLoginRewardClaimDate: null,
 
   // Streaks
   streaks: {

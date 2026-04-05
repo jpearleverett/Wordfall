@@ -1226,7 +1226,13 @@ function HomeMainScreen({ route, navigation }: any) {
     );
   }, [player]);
 
+  const today = new Date().toISOString().split('T')[0];
+  const claimedLoginToday = player.lastLoginRewardClaimDate === today;
+
   const handleClaimLoginReward = useCallback(() => {
+    const claimDate = new Date().toISOString().split('T')[0];
+    if (player.lastLoginRewardClaimDate === claimDate) return;
+
     const dayReward = getLoginCalendarDay(player.loginCycleDay);
     const rewards = dayReward.rewards;
     if (rewards.coins) economy.addCoins(rewards.coins);
@@ -1236,7 +1242,10 @@ function HomeMainScreen({ route, navigation }: any) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
     }
-    player.updateProgress({ loginCycleDay: player.loginCycleDay + 1 });
+    player.updateProgress({
+      loginCycleDay: player.loginCycleDay + 1,
+      lastLoginRewardClaimDate: claimDate,
+    });
     Alert.alert('Reward Claimed!', dayReward.label);
     void analytics.logEvent('login_reward_claimed', { day: player.loginCycleDay });
   }, [player, economy]);
@@ -1323,6 +1332,7 @@ function HomeMainScreen({ route, navigation }: any) {
           color: e.type === 'weekend_blitz' ? COLORS.orange : e.type === 'mini' ? COLORS.teal : COLORS.accent,
         }))}
         onOpenEvents={() => navigation.navigate('Play', { screen: 'Event' })}
+        claimedLoginToday={claimedLoginToday}
         onClaimLoginReward={handleClaimLoginReward}
       />
       {/* Welcome Back Modal */}
