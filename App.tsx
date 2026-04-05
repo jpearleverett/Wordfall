@@ -34,6 +34,7 @@ import ClubScreen from './src/screens/ClubScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
+import MasteryScreen from './src/screens/MasteryScreen';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
@@ -193,7 +194,7 @@ function EventScreenWrapperNav({ navigation }: any) {
   return (
     <EventScreen
       onPlayEventPuzzle={handlePlayEventPuzzle}
-      onOpenEventShop={() => navigation.navigate('Modes')}
+      onOpenEventShop={() => navigation.navigate('Home', { screen: 'Shop' })}
     />
   );
 }
@@ -233,8 +234,13 @@ function ProfileMainScreen({ navigation }: any) {
     <ProfileScreen
       onOpenSettings={() => navigation.navigate('Settings')}
       onEditProfile={() => navigation.navigate('EditProfile')}
+      onOpenMastery={() => navigation.navigate('Mastery')}
     />
   );
+}
+
+function MasteryScreenWrapper({ navigation }: any) {
+  return <MasteryScreen onBack={() => navigation.goBack()} />;
 }
 
 // Profile Tab Stack
@@ -245,6 +251,7 @@ function ProfileStackScreen() {
       <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} />
       <ProfileStack.Screen name="Club" component={ClubScreen} />
+      <ProfileStack.Screen name="Mastery" component={MasteryScreenWrapper} />
     </ProfileStack.Navigator>
   );
 }
@@ -476,7 +483,7 @@ function ModesScreenWrapper({ navigation }: any) {
     }
   }, [player.currentLevel, navigation, player, economy]);
 
-  return <ModesScreen onSelectMode={handleSelectMode} />;
+  return <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={() => navigation.navigate('Leaderboard')} />;
 }
 
 // Wrapper to pass navigation params to GameScreen with full context wiring
@@ -1390,6 +1397,7 @@ function HomeMainScreen({ route, navigation }: any) {
 // Root app with onboarding check
 function AppContent() {
   const player = usePlayer();
+  const economy = useEconomy();
   const settings = useSettings();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
@@ -1760,6 +1768,31 @@ function AppContent() {
           description={activeCeremony.data.description}
           accentColor={COLORS.purple}
           rewardLabel={`Tier ${activeCeremony.data.tier} Rewards`}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'quest_step_complete' && (
+        <MilestoneCeremony
+          ribbon="QUEST COMPLETE!"
+          icon={activeCeremony.data.icon || '\u2728'}
+          title={activeCeremony.data.title || 'Quest Step Complete!'}
+          description={activeCeremony.data.description}
+          accentColor={COLORS.green}
+          rewardLabel={activeCeremony.data.description}
+          onDismiss={() => {
+            if (activeCeremony.data.rewardCoins) economy.addCoins(activeCeremony.data.rewardCoins);
+            if (activeCeremony.data.rewardGems) economy.addGems(activeCeremony.data.rewardGems);
+            handleDismissCeremony();
+          }}
+        />
+      )}
+      {activeCeremony?.type === 'prestige' && (
+        <MilestoneCeremony
+          ribbon="PRESTIGE!"
+          icon={activeCeremony.data?.icon || '\u{1F31F}'}
+          title={activeCeremony.data?.title || 'Prestige Level Up!'}
+          description={activeCeremony.data?.description || 'You have ascended to a new prestige tier!'}
+          accentColor={COLORS.gold}
           onDismiss={handleDismissCeremony}
         />
       )}

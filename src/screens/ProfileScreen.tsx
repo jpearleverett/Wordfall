@@ -51,6 +51,7 @@ interface ProfileScreenProps {
   player?: any;
   onEditProfile?: () => void;
   onOpenSettings?: () => void;
+  onOpenMastery?: () => void;
 }
 
 const DEFAULT_PLAYER: PlayerData = {
@@ -82,11 +83,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   player: playerProp,
   onEditProfile: onEditProfileProp,
   onOpenSettings: onOpenSettingsProp,
+  onOpenMastery: onOpenMasteryProp,
 }) => {
   const [loading, setLoading] = useState(true);
   const playerContext = usePlayer();
   const onEditProfile = onEditProfileProp ?? (() => {});
   const onOpenSettings = onOpenSettingsProp ?? (() => {});
+  const onOpenMastery = onOpenMasteryProp ?? (() => {});
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 400);
@@ -424,6 +427,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
         </TouchableOpacity>
 
+        {/* Mastery Button */}
+        <TouchableOpacity style={styles.masteryButton} onPress={onOpenMastery} activeOpacity={0.7}>
+          <LinearGradient
+            colors={[COLORS.gold + '25', COLORS.gold + '10'] as [string, string]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
+          <Text style={styles.masteryButtonIcon}>{'\u{1F3C5}'}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.masteryButtonTitle}>Mastery Pass</Text>
+            <Text style={styles.masteryButtonSub}>Earn XP, unlock rewards</Text>
+          </View>
+          <Text style={styles.masteryChevron}>{'\u203A'}</Text>
+        </TouchableOpacity>
+
         {/* Edit Profile Button */}
         <TouchableOpacity style={styles.editButton} onPress={onEditProfile}>
           <LinearGradient
@@ -735,6 +754,36 @@ const styles = StyleSheet.create({
   cosmeticDivider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  masteryButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginTop: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.gold + '30',
+  },
+  masteryButtonIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  masteryButtonTitle: {
+    fontSize: 15,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.gold,
+  },
+  masteryButtonSub: {
+    fontSize: 12,
+    fontFamily: FONTS.body,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  masteryChevron: {
+    fontSize: 22,
+    color: COLORS.gold,
   },
   editButton: {
     borderRadius: 14,

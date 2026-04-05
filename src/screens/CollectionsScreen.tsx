@@ -83,7 +83,10 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
     icon: page.icon,
     total: page.words.length,
     found: (atlasProgress[page.id] ?? []).length,
+    words: page.words,
+    foundWords: atlasProgress[page.id] ?? [],
   }));
+  const [expandedAtlasId, setExpandedAtlasId] = useState<string | null>(null);
   const collectedTiles: string[] = collections?.rareTiles
     ? Object.keys(collections.rareTiles).filter(l => collections.rareTiles[l] > 0)
     : [];
@@ -119,35 +122,52 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
       {atlasPages.map((page: any) => {
         const isComplete = page.found >= page.total;
         return (
-          <TouchableOpacity
-            key={page.id}
-            style={[styles.atlasCard, isComplete && styles.atlasCardComplete]}
-          >
-            <LinearGradient
-              colors={isComplete ? ['#1a2e1a', '#162814'] as const : [...GRADIENTS.surfaceCard]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-            />
-            {isComplete && <View style={styles.completeGlow} />}
-            <Text style={styles.atlasIcon}>{page.icon}</Text>
-            <View style={styles.atlasInfo}>
-              <Text style={[styles.atlasName, isComplete && styles.atlasNameComplete]}>
-                {page.name}
-              </Text>
-              <Text style={styles.atlasProgress}>
-                {page.found} / {page.total} words
-              </Text>
-              {renderProgressBar(
-                page.found,
-                page.total,
-                isComplete ? COLORS.green : COLORS.accent,
+          <React.Fragment key={page.id}>
+            <TouchableOpacity
+              style={[styles.atlasCard, isComplete && styles.atlasCardComplete]}
+              onPress={() => setExpandedAtlasId(expandedAtlasId === page.id ? null : page.id)}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={isComplete ? ['#1a2e1a', '#162814'] as const : [...GRADIENTS.surfaceCard]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
+              {isComplete && <View style={styles.completeGlow} />}
+              <Text style={styles.atlasIcon}>{page.icon}</Text>
+              <View style={styles.atlasInfo}>
+                <Text style={[styles.atlasName, isComplete && styles.atlasNameComplete]}>
+                  {page.name}
+                </Text>
+                <Text style={styles.atlasProgress}>
+                  {page.found} / {page.total} words
+                </Text>
+                {renderProgressBar(
+                  page.found,
+                  page.total,
+                  isComplete ? COLORS.green : COLORS.accent,
+                )}
+              </View>
+              {isComplete && (
+                <Text style={styles.checkmark}>{'\u2713'}</Text>
               )}
-            </View>
-            {isComplete && (
-              <Text style={styles.checkmark}>{'\u2713'}</Text>
+            </TouchableOpacity>
+            {expandedAtlasId === page.id && (
+              <View style={styles.atlasWordList}>
+                {page.words.map((word: string) => {
+                  const isFound = page.foundWords.includes(word);
+                  return (
+                    <View key={word} style={styles.atlasWordChip}>
+                      <Text style={[styles.atlasWordText, !isFound && styles.atlasWordHidden]}>
+                        {isFound ? word.toUpperCase() : '????'}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
             )}
-          </TouchableOpacity>
+          </React.Fragment>
         );
       })}
       <View style={styles.bottomSpacer} />
@@ -721,6 +741,34 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  atlasWordList: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.surface + '60',
+    borderRadius: 12,
+    marginTop: -4,
+    marginBottom: 8,
+  },
+  atlasWordChip: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  atlasWordText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
+    letterSpacing: 1,
+  },
+  atlasWordHidden: {
+    color: COLORS.textMuted,
   },
 });
 

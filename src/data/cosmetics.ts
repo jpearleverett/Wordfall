@@ -192,6 +192,34 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     owned: false,
     equipped: false,
   },
+  // ── Exclusive Rotating Shop themes (purchased with gems via rotating shop) ──
+  {
+    id: 'theme_aurora',
+    name: 'Aurora Borealis (Exclusive)',
+    description: 'Northern lights shimmer across every tile — exclusive rotating shop variant.',
+    colors: { bg: '#0a0e1a', surface: '#151a2e', accent: '#00ffaa', cellDefault: '#1a2538', cellSelected: '#00ffaa' },
+    cost: { currency: 'gems', amount: 200 },
+    owned: false,
+    equipped: false,
+  },
+  {
+    id: 'theme_neon_city',
+    name: 'Neon City (Exclusive)',
+    description: 'Cyberpunk glow on every surface — exclusive rotating shop variant.',
+    colors: { bg: '#0a0a14', surface: '#14142a', accent: '#ff00ff', cellDefault: '#1e1e38', cellSelected: '#ff00ff' },
+    cost: { currency: 'gems', amount: 120 },
+    owned: false,
+    equipped: false,
+  },
+  {
+    id: 'theme_sakura',
+    name: 'Sakura Bloom (Exclusive)',
+    description: 'Petals drift across a warm twilight — exclusive rotating shop variant.',
+    colors: { bg: '#1a0f14', surface: '#2a1a22', accent: '#ff9ecd', cellDefault: '#3a2530', cellSelected: '#ff9ecd' },
+    cost: { currency: 'gems', amount: 130 },
+    owned: false,
+    equipped: false,
+  },
 ];
 
 // ── Profile Frames ──────────────────────────────────────────────────────────
@@ -223,6 +251,10 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
   { id: 'digital_matrix_frame', name: 'Digital Matrix', rarity: 'epic', source: 'Cosmetic Store', owned: false, cost: { currency: 'coins', amount: 3000 } },
   { id: 'golden_crown_frame', name: 'Golden Crown', rarity: 'legendary', source: 'Cosmetic Store', owned: false, cost: { coins: 5000, gems: 50 } },
   { id: 'celestial_halo_frame', name: 'Celestial Halo', rarity: 'legendary', source: 'Cosmetic Store', owned: false, cost: { coins: 5000, gems: 100 } },
+  // ── Exclusive Rotating Shop frames ──
+  { id: 'frame_celestial', name: 'Celestial', rarity: 'epic', source: 'Exclusive Rotating Shop', owned: false },
+  { id: 'frame_dragonscale', name: 'Dragonscale', rarity: 'legendary', source: 'Exclusive Rotating Shop', owned: false },
+  { id: 'frame_frozen_ivy', name: 'Frozen Ivy', rarity: 'rare', source: 'Exclusive Rotating Shop', owned: false },
 ];
 
 // ── Profile Titles ──────────────────────────────────────────────────────────
@@ -255,6 +287,8 @@ export const PROFILE_TITLES: ProfileTitle[] = [
   { id: 'title_gem_collector', title: 'Gem Collector', source: 'Spend 500 gems', owned: false },
   { id: 'title_the_generous', title: 'The Generous', source: 'Send 50 gifts', owned: false },
   { id: 'title_night_owl', title: 'Night Owl', source: 'Play 100 puzzles after 10pm', owned: false },
+  // ── Exclusive Rotating Shop titles ──
+  { id: 'title_wordsmith', title: 'Grand Wordsmith', source: 'Exclusive Rotating Shop', owned: false },
 ];
 
 // ── Library Decorations ─────────────────────────────────────────────────────

@@ -31,12 +31,14 @@ interface ModesScreenProps {
   onSelectMode?: (mode: string) => void;
   unlockedModes?: string[];
   playerLevel?: number;
+  onOpenLeaderboard?: () => void;
 }
 
 const ModesScreen: React.FC<ModesScreenProps> = ({
   onSelectMode: onSelectModeProp,
   unlockedModes: unlockedModesProp,
   playerLevel: playerLevelProp,
+  onOpenLeaderboard,
 }) => {
   const player = usePlayer();
   const onSelectMode = onSelectModeProp ?? ((_mode: string) => {});
@@ -123,7 +125,14 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
     <View style={styles.container}>
       <AmbientBackdrop variant="modes" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>GAME MODES</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>GAME MODES</Text>
+          {onOpenLeaderboard && (
+            <TouchableOpacity style={styles.leaderboardBtn} onPress={onOpenLeaderboard} activeOpacity={0.7}>
+              <Text style={styles.leaderboardBtnText}>{'\u{1F3C6}'} Leaderboard</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <Text style={styles.headerSubtitle}>
           {unlockedModes.length} of {MODES.length} unlocked
         </Text>
@@ -159,6 +168,25 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 16,
     alignItems: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 12,
+  },
+  leaderboardBtn: {
+    backgroundColor: COLORS.gold + '20',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '30',
+  },
+  leaderboardBtnText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.gold,
   },
   headerTitle: {
     fontSize: 28,
