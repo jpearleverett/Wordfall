@@ -11,6 +11,7 @@
  * For iOS: Configure Apple Push Notification service (APNs) in Apple Developer account
  */
 
+import { logger } from '../utils/logger';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
@@ -23,7 +24,7 @@ let Notifications: typeof import('expo-notifications') | null = null;
 try {
   Notifications = require('expo-notifications');
 } catch {
-  console.warn('[Notifications] expo-notifications not available (Expo Go?). Notifications disabled.');
+  logger.warn('[Notifications] expo-notifications not available (Expo Go?). Notifications disabled.');
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -184,7 +185,7 @@ class NotificationManager {
   async init(): Promise<boolean> {
     try {
       if (!Notifications) {
-        console.log('[Notifications] Module not available — running in Expo Go or notifications unsupported');
+        logger.log('[Notifications] Module not available — running in Expo Go or notifications unsupported');
         this.initialized = true;
         this.permissionGranted = false;
         return false;
@@ -192,7 +193,7 @@ class NotificationManager {
 
       // Physical device check -- push tokens are unavailable on simulators
       if (!Device.isDevice) {
-        console.log('[Notifications] Not a physical device, skipping push token registration');
+        logger.log('[Notifications] Not a physical device, skipping push token registration');
         // Still allow local notifications on simulator for dev/testing
       }
 
@@ -209,7 +210,7 @@ class NotificationManager {
       }
 
       if (finalStatus !== 'granted') {
-        console.log('[Notifications] Permission denied by user — notifications disabled');
+        logger.log('[Notifications] Permission denied by user — notifications disabled');
         this.initialized = true;
         this.permissionGranted = false;
         return false;
@@ -225,10 +226,10 @@ class NotificationManager {
             projectId ? { projectId } : undefined,
           );
           this.expoPushToken = tokenData.data;
-          console.log('[Notifications] Push token:', this.expoPushToken);
+          logger.log('[Notifications] Push token:', this.expoPushToken);
         } catch (tokenError) {
           // Push token failure is non-fatal -- local notifications still work
-          console.warn('[Notifications] Failed to get push token (local notifications still work):', tokenError);
+          logger.warn('[Notifications] Failed to get push token (local notifications still work):', tokenError);
         }
       }
 
@@ -236,7 +237,7 @@ class NotificationManager {
       console.log('[Notifications] Initialized successfully');
       return true;
     } catch (error) {
-      console.warn('[Notifications] Init failed:', error);
+      logger.warn('[Notifications] Init failed:', error);
       this.initialized = true; // Mark initialized so we don't retry
       this.permissionGranted = false;
       return false;
@@ -321,7 +322,7 @@ class NotificationManager {
       console.log(`[Notifications] Scheduled (${category}): ${title} — ${body}`);
       return id;
     } catch (error) {
-      console.warn('[Notifications] Schedule failed:', error);
+      logger.warn('[Notifications] Schedule failed:', error);
       return null;
     }
   }
@@ -439,7 +440,7 @@ class NotificationManager {
           ? devicePushTokenData.data
           : JSON.stringify(devicePushTokenData.data);
       } catch (deviceTokenError) {
-        console.warn('[Notifications] Failed to get device push token:', deviceTokenError);
+        logger.warn('[Notifications] Failed to get device push token:', deviceTokenError);
       }
 
       // Store tokens in AsyncStorage
@@ -451,7 +452,7 @@ class NotificationManager {
       console.log('[Notifications] Remote push registered — Expo token:', expoToken);
       return expoToken;
     } catch (error) {
-      console.warn('[Notifications] Failed to register for remote push:', error);
+      logger.warn('[Notifications] Failed to register for remote push:', error);
       return null;
     }
   }
@@ -464,7 +465,7 @@ class NotificationManager {
     try {
       return await AsyncStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
     } catch (error) {
-      console.warn('[Notifications] Failed to read push token:', error);
+      logger.warn('[Notifications] Failed to read push token:', error);
       return null;
     }
   }
@@ -477,7 +478,7 @@ class NotificationManager {
     try {
       const { isFirebaseConfigured } = await import('../config/firebase');
       if (!isFirebaseConfigured) {
-        console.log('[Notifications] Firebase not configured — token not sent to server');
+        logger.log('[Notifications] Firebase not configured — token not sent to server');
         return;
       }
 
@@ -496,7 +497,7 @@ class NotificationManager {
       console.log('[Notifications] Push token sent to server for user:', userId);
     } catch (error) {
       // Silent fallback — remote push is best-effort
-      console.warn('[Notifications] Failed to send token to server:', error);
+      logger.warn('[Notifications] Failed to send token to server:', error);
     }
   }
 

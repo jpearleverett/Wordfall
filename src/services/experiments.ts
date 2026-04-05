@@ -13,6 +13,7 @@
  */
 
 import { analytics } from './analytics';
+import { logger } from '../utils/logger';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -411,7 +412,7 @@ export function trackExperimentExposure(
   });
 
   if (__DEV__) {
-    console.log(
+    logger.log(
       `[Experiments] Exposure: "${experimentId}" variant "${variant.id}" for user ${userId}`,
     );
   }

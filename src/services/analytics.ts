@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils/logger';
 
 // ── Event types ──
 export type AnalyticsEventName =
@@ -149,7 +150,7 @@ class Analytics {
       const { isFirebaseConfigured } = await import('../config/firebase');
 
       if (!isFirebaseConfigured) {
-        console.log('[Analytics] Firebase not configured, using local storage only');
+        logger.log('[Analytics] Firebase not configured, using local storage only');
         this.startAutoFlush();
         return;
       }
@@ -169,9 +170,9 @@ class Analytics {
       this.firestore = { instance: getFirestore(app), collection, addDoc };
       this.useFirebase = true;
 
-      console.log('[Analytics] Firebase Analytics connected');
+      logger.log('[Analytics] Firebase Analytics connected');
     } catch (error) {
-      console.log('[Analytics] Firebase not available, using local storage only');
+      logger.log('[Analytics] Firebase not available, using local storage only');
     }
 
     this.startAutoFlush();
@@ -199,7 +200,7 @@ class Analytics {
         this.state.installTimestamp = Date.now();
       }
     } catch (error) {
-      console.warn('[Analytics] Failed to load state:', error);
+      logger.warn('[Analytics] Failed to load state:', error);
     }
     this.loaded = true;
   }
@@ -208,7 +209,7 @@ class Analytics {
     try {
       await AsyncStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(this.state));
     } catch (error) {
-      console.warn('[Analytics] Failed to persist state:', error);
+      logger.warn('[Analytics] Failed to persist state:', error);
     }
   }
 
@@ -219,7 +220,7 @@ class Analytics {
         return JSON.parse(raw) as StoredEvent[];
       }
     } catch (error) {
-      console.warn('[Analytics] Failed to load events:', error);
+      logger.warn('[Analytics] Failed to load events:', error);
     }
     return [];
   }
@@ -228,7 +229,7 @@ class Analytics {
     try {
       await AsyncStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(events));
     } catch (error) {
-      console.warn('[Analytics] Failed to persist events:', error);
+      logger.warn('[Analytics] Failed to persist events:', error);
     }
   }
 
@@ -237,7 +238,7 @@ class Analytics {
       const raw = await AsyncStorage.getItem(STORAGE_KEY_RETENTION);
       if (raw) return JSON.parse(raw) as RetentionMetrics;
     } catch (error) {
-      console.warn('[Analytics] Failed to load retention:', error);
+      logger.warn('[Analytics] Failed to load retention:', error);
     }
     return { d1: null, d7: null, d30: null, installDate: null, appOpenDates: [] };
   }
@@ -246,7 +247,7 @@ class Analytics {
     try {
       await AsyncStorage.setItem(STORAGE_KEY_RETENTION, JSON.stringify(r));
     } catch (error) {
-      console.warn('[Analytics] Failed to persist retention:', error);
+      logger.warn('[Analytics] Failed to persist retention:', error);
     }
   }
 
@@ -258,7 +259,7 @@ class Analytics {
     if (this.flushTimer) return;
     this.flushTimer = setInterval(() => {
       this.flush().catch(err =>
-        console.warn('[Analytics] Auto-flush failed:', err)
+        logger.warn('[Analytics] Auto-flush failed:', err)
       );
     }, FLUSH_INTERVAL_MS);
   }
@@ -278,7 +279,7 @@ class Analytics {
     if (pruned.length !== events.length) {
       await this.persistEvents(pruned);
       if (__DEV__) {
-        console.log(`[Analytics] Pruned ${events.length - pruned.length} old events`);
+        logger.log(`[Analytics] Pruned ${events.length - pruned.length} old events`);
       }
     }
   }
@@ -318,7 +319,7 @@ class Analytics {
     await this.persistEvents(trimmed);
 
     if (__DEV__) {
-      console.log(`[Analytics] ${event}`, params ?? '');
+      logger.log(`[Analytics] ${event}`, params ?? '');
     }
 
     // Forward to Firebase Analytics if available
@@ -332,7 +333,7 @@ class Analytics {
       } catch (error) {
         // Firebase Analytics logging is best-effort
         if (__DEV__) {
-          console.warn('[Analytics] Firebase logEvent failed:', error);
+          logger.warn('[Analytics] Firebase logEvent failed:', error);
         }
       }
     }
@@ -354,7 +355,7 @@ class Analytics {
     await this.logEvent('session_start', { source });
 
     if (__DEV__) {
-      console.log('[Analytics] session_start', { sessionId: this.state.sessionId, source });
+      logger.log('[Analytics] session_start', { sessionId: this.state.sessionId, source });
     }
   }
 
@@ -375,7 +376,7 @@ class Analytics {
     await this.flush();
 
     if (__DEV__) {
-      console.log('[Analytics] session_end', { reason, durationSeconds });
+      logger.log('[Analytics] session_end', { reason, durationSeconds });
     }
   }
 
@@ -635,7 +636,7 @@ class Analytics {
     }
 
     if (__DEV__) {
-      console.log(`[Analytics] setUserId: ${userId}`);
+      logger.log(`[Analytics] setUserId: ${userId}`);
     }
   }
 
@@ -654,7 +655,7 @@ class Analytics {
     }
 
     if (__DEV__) {
-      console.log(`[Analytics] setUserProperty: ${name}=${value}`);
+      logger.log(`[Analytics] setUserProperty: ${name}=${value}`);
     }
   }
 
@@ -717,7 +718,7 @@ class Analytics {
     });
 
     if (__DEV__) {
-      console.log(`[Analytics] Experiment "${experimentName}" -> variant "${variant}"`);
+      logger.log(`[Analytics] Experiment "${experimentName}" -> variant "${variant}"`);
     }
 
     return variant;
@@ -741,7 +742,7 @@ class Analytics {
     if (!this.useFirebase || !this.firestore) {
       if (__DEV__) {
         const events = await this.loadEvents();
-        console.log(`[Analytics] Local mode — ${events.length} events stored`);
+        logger.log(`[Analytics] Local mode — ${events.length} events stored`);
       }
       return 0;
     }
@@ -775,12 +776,12 @@ class Analytics {
       await this.persistEvents(remaining);
 
       if (__DEV__) {
-        console.log(`[Analytics] Flushed ${flushed} events to Firestore`);
+        logger.log(`[Analytics] Flushed ${flushed} events to Firestore`);
       }
 
       return flushed;
     } catch (error) {
-      console.warn('[Analytics] Firestore flush failed, events retained locally:', error);
+      logger.warn('[Analytics] Firestore flush failed, events retained locally:', error);
       return 0;
     }
   }
@@ -845,7 +846,7 @@ class Analytics {
     try {
       await this.flush();
     } catch (e) {
-      if (__DEV__) console.warn('[Analytics] Final flush on destroy failed:', e);
+      if (__DEV__) logger.warn('[Analytics] Final flush on destroy failed:', e);
     }
   }
 }

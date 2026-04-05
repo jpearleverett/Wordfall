@@ -2,6 +2,7 @@
  * Funnel Tracker — instruments key conversion funnels for analytics.
  */
 import { analytics } from './analytics';
+import { logger } from '../utils/logger';
 
 type FunnelStep =
   | 'app_open' | 'tutorial_start' | 'tutorial_board_a' | 'tutorial_board_b'
@@ -36,7 +37,7 @@ class FunnelTracker {
     });
 
     if (__DEV__) {
-      console.log(`[Funnel] ${step}`, metadata);
+      logger.log(`[Funnel] ${step}`, metadata);
     }
   }
 

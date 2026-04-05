@@ -8,6 +8,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { logger } from '../utils/logger';
 import type { IAPProductId } from '../types';
 import { validateReceipt } from './receiptValidation';
 import {
@@ -129,7 +130,7 @@ class IAPManager {
           },
         );
       } catch (listenerError) {
-        console.warn('[IAP] Failed to set up purchase listeners:', listenerError);
+        logger.warn('[IAP] Failed to set up purchase listeners:', listenerError);
       }
 
       // Load products immediately
@@ -138,10 +139,10 @@ class IAPManager {
       // Process any pending purchases from interrupted sessions
       await this.processPendingPurchases();
 
-      console.log('[IAP] react-native-iap connected');
+      logger.log('[IAP] react-native-iap connected');
     } catch (e) {
       this.useMock = true;
-      console.log('[IAP] react-native-iap not available, using mock mode:', e);
+      logger.log('[IAP] react-native-iap not available, using mock mode:', e);
     }
 
     this.initialized = true;
@@ -208,10 +209,10 @@ class IAPManager {
         return product;
       });
 
-      console.log(`[IAP] Loaded ${products.length} products from store`);
+      logger.log(`[IAP] Loaded ${products.length} products from store`);
       return products;
     } catch (e) {
-      console.warn('[IAP] loadProducts failed, using fallback data:', e);
+      logger.warn('[IAP] loadProducts failed, using fallback data:', e);
       return this.mockLoadProducts();
     }
   }
@@ -293,7 +294,7 @@ class IAPManager {
     await this.init();
 
     if (this.useMock || !this.rniap) {
-      console.log('[IAP] Mock restore — checking stored receipts');
+      logger.log('[IAP] Mock restore — checking stored receipts');
       return this.getStoredNonConsumableResults();
     }
 
@@ -328,7 +329,7 @@ class IAPManager {
 
       return results;
     } catch (e: any) {
-      console.warn('[IAP] Restore failed:', e);
+      logger.warn('[IAP] Restore failed:', e);
       throw new Error(e?.message ?? 'Failed to restore purchases');
     }
   }
@@ -404,7 +405,7 @@ class IAPManager {
       try {
         listener(result);
       } catch (e) {
-        console.warn('[IAP] Listener threw:', e);
+        logger.warn('[IAP] Listener threw:', e);
       }
     }
   }
@@ -461,7 +462,7 @@ class IAPManager {
             }
           }
         } catch (ackError) {
-          console.warn('[IAP] Failed to acknowledge/finish transaction:', ackError);
+          logger.warn('[IAP] Failed to acknowledge/finish transaction:', ackError);
           // Purchase still succeeded from user perspective
         }
       }
@@ -479,7 +480,7 @@ class IAPManager {
       this.resolvePendingPurchase(storeId, successResult);
       this.notifyListeners(successResult);
     } catch (e: any) {
-      console.warn('[IAP] Error handling purchase update:', e);
+      logger.warn('[IAP] Error handling purchase update:', e);
       const errorResult: PurchaseResult = {
         success: false,
         productId: internalId,
@@ -491,7 +492,7 @@ class IAPManager {
   }
 
   private handlePurchaseError(error: any): void {
-    console.warn('[IAP] Purchase error from store:', error);
+    logger.warn('[IAP] Purchase error from store:', error);
 
     const storeId: string | undefined = error?.productId;
     const internalId = storeId ? (storeIdToInternalId(storeId) ?? storeId) : 'unknown';
@@ -567,7 +568,7 @@ class IAPManager {
       const pending: string[] = JSON.parse(stored);
       if (pending.length === 0) return;
 
-      console.log(`[IAP] Processing ${pending.length} pending purchase(s)...`);
+      logger.log(`[IAP] Processing ${pending.length} pending purchase(s)...`);
 
       // Check available purchases to see if any pending ones completed
       const purchases = await this.rniap.getAvailablePurchases();
@@ -580,7 +581,7 @@ class IAPManager {
         }
       }
     } catch (e) {
-      console.warn('[IAP] Failed to process pending purchases:', e);
+      logger.warn('[IAP] Failed to process pending purchases:', e);
     }
   }
 
@@ -600,7 +601,7 @@ class IAPManager {
         await AsyncStorage.setItem(RECEIPTS_STORAGE_KEY, JSON.stringify(receipts));
       }
     } catch (e) {
-      console.warn('[IAP] Failed to store receipt:', e);
+      logger.warn('[IAP] Failed to store receipt:', e);
     }
   }
 
@@ -666,7 +667,7 @@ class IAPManager {
   }
 
   private async mockPurchase(productId: string): Promise<PurchaseResult> {
-    console.log(`[IAP] Mock purchase: ${productId}`);
+    logger.log(`[IAP] Mock purchase: ${productId}`);
 
     // Simulate a 1-second purchase delay
     await new Promise<void>((resolve) => setTimeout(resolve, 1000));

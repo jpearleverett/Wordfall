@@ -11,6 +11,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AD_CONFIG } from '../constants';
+import { logger } from '../utils/logger';
 
 // ── Reward type definitions ────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ async function saveTracking(tracking: AdTracking): Promise<void> {
   try {
     await AsyncStorage.setItem(AD_TRACKING_KEY, JSON.stringify(tracking));
   } catch {
-    console.warn('[Ads] Failed to persist ad tracking');
+    logger.warn('[Ads] Failed to persist ad tracking');
   }
 }
 
@@ -116,11 +117,11 @@ class AdManager {
         await mobileAds.default.initialize();
         this.useMock = false;
         this.preloadRewardedAd();
-        console.log('[Ads] Native ad module (react-native-google-mobile-ads) initialised');
+        logger.log('[Ads] Native ad module (react-native-google-mobile-ads) initialised');
       }
     } catch {
       this.useMock = true;
-      console.log('[Ads] No ad SDK available — using mock mode');
+      logger.log('[Ads] No ad SDK available — using mock mode');
     }
 
     // In mock mode the rewarded ad is always "ready"
@@ -152,20 +153,20 @@ class AdManager {
 
     // Daily cap check
     if (this.tracking.viewCount >= AD_CONFIG.MAX_ADS_PER_DAY) {
-      console.log('[Ads] Daily ad cap reached');
+      logger.log('[Ads] Daily ad cap reached');
       return { rewarded: false, rewardType };
     }
 
     // Coins-specific daily cap (max 3 per day)
     if (rewardType === 'coins_reward' && this.tracking.coinAdCount >= AD_CONFIG.MAX_COIN_ADS_PER_DAY) {
-      console.log('[Ads] Daily coin ad cap reached');
+      logger.log('[Ads] Daily coin ad cap reached');
       return { rewarded: false, rewardType };
     }
 
     // Cooldown check
     const now = Date.now();
     if (now - this.tracking.lastAdTime < AD_CONFIG.REWARDED_COOLDOWN_MS) {
-      console.log('[Ads] Ad cooldown active');
+      logger.log('[Ads] Ad cooldown active');
       return { rewarded: false, rewardType };
     }
 
@@ -276,14 +277,14 @@ class AdManager {
 
     // Daily cap check
     if (this.tracking.interstitialCount >= AD_CONFIG.MAX_INTERSTITIALS_PER_DAY) {
-      console.log('[Ads] Daily interstitial cap reached');
+      logger.log('[Ads] Daily interstitial cap reached');
       return false;
     }
 
     // Minimum interval check
     const now = Date.now();
     if (now - this.tracking.lastInterstitialTime < AD_CONFIG.INTERSTITIAL_INTERVAL_MS) {
-      console.log('[Ads] Interstitial interval not elapsed');
+      logger.log('[Ads] Interstitial interval not elapsed');
       return false;
     }
 
@@ -291,7 +292,7 @@ class AdManager {
 
     if (this.useMock) {
       // Mock mode: resolve immediately (no modal needed for interstitials)
-      console.log('[Ads] Mock interstitial ad shown (instant)');
+      logger.log('[Ads] Mock interstitial ad shown (instant)');
       shown = true;
     } else {
       shown = await this.nativeShowInterstitialAd();
@@ -331,7 +332,7 @@ class AdManager {
     } catch {
       // No ad SDK available
     }
-    console.warn('[Ads] Failed to show native interstitial ad');
+    logger.warn('[Ads] Failed to show native interstitial ad');
     return false;
   }
 
@@ -413,9 +414,9 @@ class AdManager {
     }
 
     // Fallback: simple delay-based simulation (no UI)
-    console.log(`[Ads] Mock rewarded ad showing (reward: ${rewardType})...`);
+    logger.log(`[Ads] Mock rewarded ad showing (reward: ${rewardType})...`);
     await new Promise<void>((r) => setTimeout(r, 2000));
-    console.log('[Ads] Mock rewarded ad completed — granting reward');
+    logger.log('[Ads] Mock rewarded ad completed — granting reward');
     return { rewarded: true, rewardType };
   }
 }

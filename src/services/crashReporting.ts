@@ -4,6 +4,8 @@
  * Uses @sentry/react-native when available, falls back to console-only.
  */
 
+import { logger } from '../utils/logger';
+
 let Sentry: any = null;
 
 // Attempt to load Sentry dynamically — mirrors the pattern used by ads service
@@ -44,15 +46,15 @@ class CrashReporter {
           });
           this.sentryAvailable = true;
           if (__DEV__) {
-            console.log('[CrashReporter] Sentry initialized');
+            logger.log('[CrashReporter] Sentry initialized');
           }
         } catch (e) {
           if (__DEV__) {
-            console.warn('[CrashReporter] Sentry init failed:', e);
+            logger.warn('[CrashReporter] Sentry init failed:', e);
           }
         }
       } else if (__DEV__) {
-        console.log('[CrashReporter] Sentry SDK found but EXPO_PUBLIC_SENTRY_DSN not set — using console fallback');
+        logger.log('[CrashReporter] Sentry SDK found but EXPO_PUBLIC_SENTRY_DSN not set — using console fallback');
       }
     }
 
@@ -68,13 +70,13 @@ class CrashReporter {
     this.initialized = true;
 
     if (__DEV__ && !this.sentryAvailable) {
-      console.log('[CrashReporter] Initialized (console-only mode)');
+      logger.log('[CrashReporter] Initialized (console-only mode)');
     }
   }
 
   captureException(error: Error, context?: Record<string, unknown>): void {
     if (__DEV__) {
-      console.error('[CrashReporter] Exception:', error.message, context);
+      logger.error('[CrashReporter] Exception:', error.message, context);
     }
 
     if (this.sentryAvailable && Sentry) {
