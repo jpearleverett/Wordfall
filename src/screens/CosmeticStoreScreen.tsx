@@ -225,10 +225,14 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         case 'titles':
           player.equipCosmetic('title', item.name);
           break;
+        case 'decorations':
+          setSelectedItem(null);
+          if (navigation) navigation.navigate('Library');
+          return;
       }
       setSelectedItem(null);
     },
-    [player],
+    [player, navigation],
   );
 
   // ── Render helpers ──────────────────────────────────────────────────────
@@ -360,7 +364,9 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     const isEquipped =
       (selectedItem.tabType === 'themes' && player.equippedTheme === selectedItem.id) ||
       (selectedItem.tabType === 'frames' && player.equippedFrame === selectedItem.id) ||
-      (selectedItem.tabType === 'titles' && player.equippedTitle === selectedItem.name);
+      (selectedItem.tabType === 'titles' && player.equippedTitle === selectedItem.name) ||
+      (selectedItem.tabType === 'decorations' &&
+        Object.values(player.placedDecorations ?? {}).includes(selectedItem.id));
 
     const rarityColor = RARITY_COLORS[selectedItem.rarity] ?? COLORS.rarityCommon;
     const hasCost = selectedItem.costCurrency && selectedItem.costAmount;
@@ -449,7 +455,9 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
                     colors={[...GRADIENTS.button.primary]}
                     style={styles.actionButton}
                   >
-                    <Text style={styles.actionButtonText}>EQUIP</Text>
+                    <Text style={styles.actionButtonText}>
+                      {selectedItem.tabType === 'decorations' ? 'PLACE IN LIBRARY' : 'EQUIP'}
+                    </Text>
                   </LinearGradient>
                 </TouchableOpacity>
               ) : hasCost && canBuy ? (

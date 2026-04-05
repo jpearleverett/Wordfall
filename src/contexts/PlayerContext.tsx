@@ -20,6 +20,7 @@ import { triggerEnergyFullNotification } from '../services/notificationTriggers'
 import { createProgressMethods } from './PlayerProgressContext';
 import { createSocialMethods } from './PlayerSocialContext';
 import { generateReferralCode } from '../data/referralSystem';
+import { PROFILE_TITLES } from '../data/cosmetics';
 import {
   canPrestige,
   getPrestigeRewards,
@@ -847,14 +848,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const equipCosmetic = useCallback(
     (type: 'theme' | 'frame' | 'title', id: string) => {
       setData((prev) => {
+        if (type === 'title') {
+          // Title callers pass the display name; look up the real ID for ownership check
+          const titleEntry = PROFILE_TITLES.find((t) => t.title === id);
+          const titleId = titleEntry?.id;
+          if (!titleId) return prev;
+          if (!prev.unlockedCosmetics.includes(titleId) && titleId !== 'title_newcomer') return prev;
+          return { ...prev, equippedTitle: id };
+        }
         if (!prev.unlockedCosmetics.includes(id) && id !== 'default') return prev;
         switch (type) {
           case 'theme':
             return { ...prev, equippedTheme: id };
           case 'frame':
             return { ...prev, equippedFrame: id };
-          case 'title':
-            return { ...prev, equippedTitle: id };
           default:
             return prev;
         }
