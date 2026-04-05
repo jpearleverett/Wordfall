@@ -174,6 +174,9 @@ class NotificationManager {
   private permissionGranted = false;
   private expoPushToken: string | null = null;
   private scheduledIds: Map<string, string> = new Map(); // category -> notification ID
+  private lastRemotePayload: Record<string, unknown> | null = null;
+  private categoryListeners: Map<NotificationCategory, Set<(data: Record<string, unknown>) => void>> = new Map();
+  private responseListenerSubscription: { remove: () => void } | null = null;
 
   /**
    * Initialize notification permissions and token.
@@ -410,9 +413,14 @@ class NotificationManager {
   /**
    * Register for remote push notifications.
    * Gets both Expo push token and device push token, stores in AsyncStorage.
+   * Optionally saves the token to Firestore at `users/{uid}/pushToken`.
+   * Sets up a notification response listener to route tapped notifications.
    * Returns the Expo push token string, or null if unavailable.
+   *
+   * @param userId - Optional Firebase user ID. When provided, the push token
+   *                 is persisted to Firestore for server-sent notifications.
    */
-  async registerForRemotePush(): Promise<string | null> {
+  async registerForRemotePush(userId?: string): Promise<string | null> {
     if (!Notifications) {
       console.log('[Notifications] Module not available — cannot register for remote push');
       return null;
@@ -449,12 +457,78 @@ class NotificationManager {
         await AsyncStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, deviceToken);
       }
 
+      // Save push token to Firestore at users/{uid}/pushToken
+      if (userId) {
+        await this.saveTokenToFirestore(expoToken, userId, deviceToken);
+      }
+
+      // Set up notification response listener (user taps a notification)
+      this.setupResponseListener();
+
       console.log('[Notifications] Remote push registered — Expo token:', expoToken);
       return expoToken;
     } catch (error) {
       logger.warn('[Notifications] Failed to register for remote push:', error);
       return null;
     }
+  }
+
+  /**
+   * Save the push token to Firestore at `users/{uid}/pushToken`.
+   * This path is used by Cloud Functions to send targeted push notifications.
+   */
+  private async saveTokenToFirestore(
+    expoToken: string,
+    userId: string,
+    deviceToken: string | null,
+  ): Promise<void> {
+    try {
+      const { isFirebaseConfigured } = await import('../config/firebase');
+      if (!isFirebaseConfigured) {
+        console.log('[Notifications] Firebase not configured — token not saved to Firestore');
+        return;
+      }
+
+      const { getFirestore, doc, setDoc } = await import('firebase/firestore');
+      const { getApp } = await import('firebase/app');
+
+      const app = getApp();
+      const db = getFirestore(app);
+
+      await setDoc(doc(db, 'users', userId, 'pushToken', 'current'), {
+        expoToken,
+        deviceToken: deviceToken ?? null,
+        platform: Platform.OS,
+        updatedAt: Date.now(),
+      }, { merge: true });
+
+      console.log('[Notifications] Push token saved to Firestore for user:', userId);
+    } catch (error) {
+      // Silent fallback — remote push is best-effort
+      console.warn('[Notifications] Failed to save token to Firestore:', error);
+    }
+  }
+
+  /**
+   * Set up a listener for when the user taps a notification.
+   * Routes the notification payload through handleRemoteNotification.
+   */
+  private setupResponseListener(): void {
+    if (!Notifications) return;
+
+    // Clean up previous listener if any
+    if (this.responseListenerSubscription) {
+      this.responseListenerSubscription.remove();
+    }
+
+    this.responseListenerSubscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+        if (data) {
+          this.handleRemoteNotification(data);
+        }
+      },
+    );
   }
 
   /**
@@ -504,6 +578,11 @@ class NotificationManager {
   /**
    * Handle an incoming remote notification payload.
    * Routes the notification data to the appropriate handler based on category.
+   * Each category triggers specific in-app behavior:
+   * - streak_reminder: navigates the user toward daily puzzle
+   * - friend_activity: triggers social proof display
+   * - event_start: refreshes active events
+   * - comeback: applies comeback bonus rewards
    */
   handleRemoteNotification(data: Record<string, unknown>): void {
     const category = data.category as NotificationCategory | undefined;
@@ -512,14 +591,95 @@ class NotificationManager {
       console.log('[Notifications] Remote notification received:', data);
     }
 
-    // Route based on category if present
-    if (category && NOTIFICATION_TEMPLATES[category]) {
-      console.log(`[Notifications] Handling remote notification category: ${category}`);
+    if (!category) {
+      console.log('[Notifications] Remote notification has no category — ignoring');
+      return;
     }
 
-    // The notification data is available for the app to act on.
-    // Callers can use addForegroundListener / addResponseListener
-    // to react to specific notification payloads in the UI layer.
+    // Route to specific handler based on category
+    switch (category) {
+      case 'streak_reminder': {
+        console.log('[Notifications] Handling streak_reminder — prompting daily play');
+        // The UI layer listens via addResponseListener to navigate to daily puzzle
+        this.lastRemotePayload = { category, ...data };
+        break;
+      }
+      case 'friend_activity': {
+        const friendName = data.friendName as string | undefined;
+        const event = data.event as string | undefined;
+        console.log(`[Notifications] Handling friend_activity — friend: ${friendName}, event: ${event}`);
+        this.lastRemotePayload = { category, ...data };
+        break;
+      }
+      case 'event_starting': {
+        const eventName = data.eventName as string | undefined;
+        console.log(`[Notifications] Handling event_start — event: ${eventName}`);
+        this.lastRemotePayload = { category, ...data };
+        break;
+      }
+      case 'comeback': {
+        console.log('[Notifications] Handling comeback — applying comeback bonus');
+        this.lastRemotePayload = { category, ...data };
+        break;
+      }
+      default: {
+        if (NOTIFICATION_TEMPLATES[category]) {
+          console.log(`[Notifications] Handling remote notification category: ${category}`);
+          this.lastRemotePayload = { category, ...data };
+        } else {
+          console.log(`[Notifications] Unknown remote notification category: ${category}`);
+        }
+        break;
+      }
+    }
+
+    // Notify registered category listeners
+    const listeners = this.categoryListeners.get(category);
+    if (listeners) {
+      for (const listener of listeners) {
+        try {
+          listener(data);
+        } catch (e) {
+          console.warn(`[Notifications] Category listener error for ${category}:`, e);
+        }
+      }
+    }
+  }
+
+  /**
+   * Get the last received remote notification payload.
+   * Useful for handling cold-start deep links from notifications.
+   * Returns null if no remote notification has been received.
+   */
+  getLastRemotePayload(): Record<string, unknown> | null {
+    return this.lastRemotePayload;
+  }
+
+  /**
+   * Clear the last remote payload after it has been consumed.
+   */
+  clearLastRemotePayload(): void {
+    this.lastRemotePayload = null;
+  }
+
+  /**
+   * Register a listener for a specific notification category.
+   * Returns a cleanup function to remove the listener.
+   * Use this to react to specific remote notification types in the UI layer.
+   */
+  addCategoryListener(
+    category: NotificationCategory,
+    callback: (data: Record<string, unknown>) => void,
+  ): { remove: () => void } {
+    if (!this.categoryListeners.has(category)) {
+      this.categoryListeners.set(category, new Set());
+    }
+    this.categoryListeners.get(category)!.add(callback);
+    return {
+      remove: () => {
+        this.categoryListeners.get(category)?.delete(callback);
+      },
+    };
   }
 
   /**

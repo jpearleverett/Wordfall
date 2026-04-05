@@ -169,7 +169,32 @@ export async function triggerStreakAtRiskNotification(streak: StreakData): Promi
   );
 }
 
-// ─── 8. Friend Beat Score ───────────────────────────────────────────────────
+// ─── 8. Social Proof ───────────────────────────────────────────────────────
+
+/**
+ * Schedule an immediate notification when a friend completes a chapter
+ * or achieves a milestone. Provides social proof to encourage the player
+ * to keep playing.
+ *
+ * @param friendName - Display name of the friend
+ * @param event - What the friend did (e.g. "completed Chapter 5", "earned Gold Star prestige")
+ * @param detail - Additional context for the notification body
+ */
+export async function triggerSocialProofNotification(
+  friendName: string,
+  event: string,
+  detail: string,
+): Promise<void> {
+  if (!friendName || !event) return;
+
+  await notificationManager.schedule(
+    'friend_activity',
+    { type: 'timeInterval', seconds: 1 },
+    { friendName, level: detail },
+  );
+}
+
+// ─── 9. Friend Beat Score ───────────────────────────────────────────────────
 
 /**
  * Schedule an immediate notification when a friend beats the player's score

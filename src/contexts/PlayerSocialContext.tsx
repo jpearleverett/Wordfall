@@ -41,6 +41,7 @@ export interface PlayerSocialMethods {
     boardConfig: BoardConfig;
   }) => FriendChallenge;
   respondToChallenge: (challengeId: string, score: number, stars: number) => void;
+  notifyFriendActivity: (friendName: string, event: string, detail: string) => void;
 }
 
 type SetDataFn<T> = (updater: (prev: T) => T) => void;
@@ -191,10 +192,17 @@ export function createSocialMethods<T extends PlayerSocialData>(
     });
   };
 
+  const notifyFriendActivity = (friendName: string, event: string, detail: string): void => {
+    import('../services/notificationTriggers').then(({ triggerSocialProofNotification }) => {
+      void triggerSocialProofNotification(friendName, event, detail);
+    });
+  };
+
   return {
     sendHintGift,
     sendTileGift,
     sendChallenge,
     respondToChallenge,
+    notifyFriendActivity,
   };
 }

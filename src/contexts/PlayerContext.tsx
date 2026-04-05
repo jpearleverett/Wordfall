@@ -20,6 +20,13 @@ import { triggerEnergyFullNotification } from '../services/notificationTriggers'
 import { createProgressMethods } from './PlayerProgressContext';
 import { createSocialMethods } from './PlayerSocialContext';
 import { generateReferralCode } from '../data/referralSystem';
+import {
+  canPrestige,
+  getPrestigeRewards,
+  DEFAULT_PRESTIGE_STATE,
+  PRESTIGE_LEVELS,
+} from '../data/prestigeSystem';
+import { PrestigeState } from '../types';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -182,7 +189,7 @@ interface PlayerData {
   referralMilestonesClaimed: number[];
 
   // Prestige
-  prestige?: import('../types').PrestigeState;
+  prestige: import('../types').PrestigeState;
 
   // Seasonal Quest
   seasonalQuest: SeasonalQuestState;
@@ -304,6 +311,17 @@ interface PlayerContextType extends PlayerData {
 
   // Seasonal Quest
   updateSeasonalQuest: (updates: Partial<SeasonalQuestState>) => void;
+
+  // Social Proof
+  notifyFriendActivity: (friendName: string, event: string, detail: string) => void;
+
+  // Prestige
+  performPrestige: () => boolean;
+  getPrestigeInfo: () => {
+    state: PrestigeState;
+    canPrestige: boolean;
+    nextRewards: import('../data/prestigeSystem').PrestigeLevel | null;
+  };
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -459,6 +477,9 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   referredPlayerIds: [],
   referralMilestonesClaimed: [],
 
+  // Prestige
+  prestige: DEFAULT_PRESTIGE_STATE,
+
   // Seasonal Quest
   seasonalQuest: DEFAULT_SEASONAL_QUEST_STATE,
 
@@ -522,6 +543,13 @@ const PlayerContext = createContext<PlayerContextType>({
   recordReferralSuccess: () => {},
   claimReferralMilestone: () => false,
   updateSeasonalQuest: () => {},
+  notifyFriendActivity: () => {},
+  performPrestige: () => false,
+  getPrestigeInfo: () => ({
+    state: DEFAULT_PRESTIGE_STATE,
+    canPrestige: false,
+    nextRewards: null,
+  }),
 });
 
 // ─── Provider ───────────────────────────────────────────────────────────────
@@ -711,6 +739,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     sendTileGift,
     sendChallenge,
     respondToChallenge,
+    notifyFriendActivity,
   } = socialMethods;
 
   // ── Progress (remaining) ───────────────────────────────────────────────
@@ -1082,6 +1111,69 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  // ── Prestige ───────────────────────────────────────────────────────────
+
+  const performPrestige = useCallback((): boolean => {
+    let success = false;
+    setData((prev) => {
+      const currentPrestige = prev.prestige ?? DEFAULT_PRESTIGE_STATE;
+      if (!canPrestige(prev.currentLevel, currentPrestige.prestigeLevel)) return prev;
+
+      const newPrestigeLevel = currentPrestige.prestigeLevel + 1;
+      const rewards = getPrestigeRewards(newPrestigeLevel);
+      if (!rewards) return prev;
+
+      // Accumulate permanent bonus IDs
+      const newBonusIds = [
+        ...currentPrestige.permanentBonuses,
+        ...rewards.permanentBonuses.map((b) => `${b.type}_${b.value}`),
+      ];
+
+      // Unlock the cosmetic reward
+      const cosmeticId = rewards.cosmeticReward.id;
+      const newUnlockedCosmetics = prev.unlockedCosmetics.includes(cosmeticId)
+        ? prev.unlockedCosmetics
+        : [...prev.unlockedCosmetics, cosmeticId];
+
+      // Queue prestige ceremony
+      const ceremony: CeremonyItem = {
+        type: 'prestige',
+        data: { level: newPrestigeLevel, label: rewards.label, icon: rewards.icon },
+      };
+
+      success = true;
+      return {
+        ...prev,
+        // Reset progress
+        currentLevel: 1,
+        highestLevel: 1,
+        starsByLevel: {},
+        totalStars: 0,
+        currentChapter: 1,
+        modeLevels: {},
+        // Update prestige state
+        prestige: {
+          prestigeLevel: newPrestigeLevel,
+          totalPrestiges: currentPrestige.totalPrestiges + 1,
+          lastPrestigedAt: Date.now(),
+          permanentBonuses: newBonusIds,
+        },
+        // Unlock cosmetic reward
+        unlockedCosmetics: newUnlockedCosmetics,
+        // Queue ceremony
+        pendingCeremonies: [...prev.pendingCeremonies, ceremony],
+      };
+    });
+    return success;
+  }, []);
+
+  const getPrestigeInfo = useCallback(() => {
+    const state = data.prestige ?? DEFAULT_PRESTIGE_STATE;
+    const canDo = canPrestige(data.currentLevel, state.prestigeLevel);
+    const nextRewards = getPrestigeRewards(state.prestigeLevel + 1);
+    return { state, canPrestige: canDo, nextRewards };
+  }, [data.prestige, data.currentLevel]);
+
   // ── Puzzle Energy ──────────────────────────────────────────────────────
 
   /**
@@ -1331,6 +1423,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         recordReferralSuccess,
         claimReferralMilestone,
         updateSeasonalQuest,
+        notifyFriendActivity,
+        performPrestige,
+        getPrestigeInfo,
       }}
     >
       {children}
