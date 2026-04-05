@@ -91,6 +91,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isVa
         getChipStyle(),
         { transform: [{ scale: scaleAnim }] },
       ]}
+      accessibilityLabel={`${wordPlacement.word}, ${wordPlacement.found ? 'found' : 'not found'}`}
     >
       {/* Background gradient + glass edge clipped to chip shape */}
       <View style={styles.chipBackground}>
@@ -172,7 +173,7 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
   }, [currentWord]);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} accessibilityRole="list">
       {/* Current forming word */}
       <View style={styles.currentWordContainer}>
         {currentWord.length > 0 ? (

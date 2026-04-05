@@ -493,7 +493,7 @@ export function PuzzleComplete({
               <Text style={styles.subtitle}>{subtitle}</Text>
 
               {/* Stars with neon burst effects */}
-              <View style={styles.starsRow}>
+              <View style={styles.starsRow} accessibilityLabel={`${stars} out of 3 stars earned`}>
                 <View style={styles.starContainer}>
                   <Star filled={stars >= 1} delay={140} size={44} />
                   <NeonStarBurst active={starsRevealed && stars >= 1} color={COLORS.gold} size={50} />
@@ -517,7 +517,9 @@ export function PuzzleComplete({
               >
                 <ScanLineOverlay opacity={0.02} height={80} />
                 <Text style={styles.scoreLabel}>FINAL SCORE</Text>
-                <AnimatedScore targetScore={score} />
+                <View accessibilityLabel={`Final score: ${score}`}>
+                  <AnimatedScore targetScore={score} />
+                </View>
               </LinearGradient>
 
               <Animated.View

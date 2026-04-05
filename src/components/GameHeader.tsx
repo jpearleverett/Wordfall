@@ -96,6 +96,8 @@ export function GameHeader({
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
             onPress={onBack}
+            accessibilityLabel="Go back"
+            accessibilityHint="Return to the home screen"
           >
             <LinearGradient
               colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'] as [string, string]}
@@ -128,7 +130,7 @@ export function GameHeader({
           </View>
 
           {/* Score with animated pop */}
-          <View style={styles.scoreBlock}>
+          <View style={styles.scoreBlock} accessibilityLabel={`Current score: ${score}`}>
             <Animated.Text
               style={[
                 styles.scoreValue,
@@ -155,6 +157,8 @@ export function GameHeader({
                 ]}
                 onPress={onUndo}
                 disabled={undosLeft <= 0}
+                accessibilityLabel="Undo last move"
+                accessibilityHint={undosLeft > 0 ? `${undosLeft} undos remaining` : 'No undos remaining'}
               >
                 <LinearGradient
                   colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
@@ -179,6 +183,8 @@ export function GameHeader({
                 ]}
                 onPress={onHint}
                 disabled={hintsLeft <= 0}
+                accessibilityLabel="Use hint"
+                accessibilityHint="Reveals the next word to find"
               >
                 <LinearGradient
                   colors={['rgba(255,215,0,0.18)', 'rgba(255,215,0,0.06)'] as [string, string]}
