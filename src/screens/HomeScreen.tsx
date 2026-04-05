@@ -75,6 +75,7 @@ interface HomeScreenProps {
   activeEventBanners?: Array<{ id: string; name: string; icon: string; label: string; color: string }>;
   /** Navigate to event screen */
   onOpenEvents?: () => void;
+  claimedLoginToday?: boolean;
   onClaimLoginReward?: () => void;
 }
 
@@ -121,6 +122,7 @@ export function HomeScreen({
   segmentWelcomeMessage = null,
   activeEventBanners = [],
   onOpenEvents,
+  claimedLoginToday = false,
   onClaimLoginReward,
 }: HomeScreenProps) {
   const player = usePlayer();
@@ -856,17 +858,23 @@ export function HomeScreen({
               </View>
               {/* Claim button for today */}
               <Pressable
-                style={({ pressed }) => [pressed && styles.buttonPressed]}
-                onPress={() => onClaimLoginReward ? onClaimLoginReward() : onPlay()}
+                style={({ pressed }) => [pressed && !claimedLoginToday && styles.buttonPressed]}
+                onPress={() => {
+                  if (claimedLoginToday) return;
+                  onClaimLoginReward ? onClaimLoginReward() : onPlay();
+                }}
+                disabled={claimedLoginToday}
               >
                 <LinearGradient
-                  colors={GRADIENTS.button.gold}
+                  colors={claimedLoginToday ? [COLORS.surface, COLORS.surface] : GRADIENTS.button.gold}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={styles.calendarClaimButton}
+                  style={[styles.calendarClaimButton, claimedLoginToday && { opacity: 0.6 }]}
                 >
                   <Text style={styles.calendarClaimText}>
-                    CLAIM DAY {Math.min(Math.max(loginCycleDay, 1), 30)} REWARD
+                    {claimedLoginToday
+                      ? '✓ REWARD CLAIMED'
+                      : `CLAIM DAY ${Math.min(Math.max(loginCycleDay, 1), 30)} REWARD`}
                   </Text>
                 </LinearGradient>
               </Pressable>
@@ -1057,19 +1065,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroStatValue: {
-    color: COLORS.textPrimary,
+    color: '#ffffff',
     fontSize: 22,
     fontFamily: FONTS.display,
     marginBottom: 3,
-    textShadowColor: 'rgba(255,255,255,0.08)',
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
   heroStatLabel: {
-    color: COLORS.textMuted,
+    color: '#d4b8f0',
     fontSize: 10,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     fontFamily: FONTS.bodyBold,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   playButtonWrapper: {
     position: 'relative',

@@ -36,6 +36,7 @@ export interface PlayerProgressData {
   dailyCompleted: string[];
   dailyLoginDates: string[];
   loginCycleDay: number;
+  lastLoginRewardClaimDate: string | null;
 
   // Streaks
   streaks: {
