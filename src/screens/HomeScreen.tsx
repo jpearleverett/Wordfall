@@ -425,7 +425,7 @@ export function HomeScreen({
               onPress={onDaily}
             >
               <LinearGradient
-                colors={dailyDone ? ['rgba(76,175,80,0.2)', 'rgba(76,175,80,0.08)'] : ['rgba(255,215,0,0.12)', 'rgba(255,159,67,0.06)']}
+                colors={dailyDone ? ['rgba(76,175,80,0.45)', 'rgba(76,175,80,0.30)'] : ['rgba(255,215,0,0.35)', 'rgba(255,159,67,0.25)']}
                 style={[styles.dailyCard, dailyDone && styles.dailyDone]}
               >
                 <View style={styles.dailyContent}>
@@ -457,10 +457,10 @@ export function HomeScreen({
               onPress={onOpenEvents}
             >
               <LinearGradient
-                colors={[eb.color + '20', eb.color + '08'] as [string, string]}
+                colors={[eb.color + '55', eb.color + '35'] as [string, string]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={[styles.eventBanner, { borderColor: eb.color + '40' }]}
+                style={[styles.eventBanner, { borderColor: eb.color + '60' }]}
               >
                 <Text style={styles.eventBannerIcon}>{eb.icon}</Text>
                 <View style={styles.eventBannerInfo}>
@@ -489,7 +489,7 @@ export function HomeScreen({
           >
             <Animated.View style={{ transform: [{ scale: wheelPulse }] }}>
               <LinearGradient
-                colors={['rgba(168,85,247,0.18)', 'rgba(255,215,0,0.10)', 'rgba(168,85,247,0.12)']}
+                colors={['rgba(168,85,247,0.45)', 'rgba(255,215,0,0.30)', 'rgba(168,85,247,0.40)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={[
@@ -1634,18 +1634,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     borderWidth: 1,
-    borderColor: 'rgba(168,85,247,0.25)',
+    borderColor: 'rgba(168,85,247,0.45)',
     gap: 12,
   },
   mysteryWheelButtonGlow: {
-    borderColor: COLORS.purple + '50',
+    borderColor: COLORS.purple + '70',
     ...SHADOWS.glow(COLORS.purple),
   },
   mysteryWheelIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: 'rgba(168,85,247,0.18)',
+    backgroundColor: 'rgba(168,85,247,0.35)',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
