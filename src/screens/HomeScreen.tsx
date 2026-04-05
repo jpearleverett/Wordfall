@@ -869,9 +869,9 @@ export function HomeScreen({
                   colors={claimedLoginToday ? [COLORS.surface, COLORS.surface] : GRADIENTS.button.gold}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.calendarClaimButton, claimedLoginToday && { opacity: 0.6 }]}
+                  style={[styles.calendarClaimButton, claimedLoginToday && { opacity: 0.8 }]}
                 >
-                  <Text style={styles.calendarClaimText}>
+                  <Text style={[styles.calendarClaimText, claimedLoginToday && { color: COLORS.textPrimary }]}>
                     {claimedLoginToday
                       ? '✓ REWARD CLAIMED'
                       : `CLAIM DAY ${Math.min(Math.max(loginCycleDay, 1), 30)} REWARD`}
