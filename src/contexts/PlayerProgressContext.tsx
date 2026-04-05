@@ -431,15 +431,13 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
   };
 
   const popCeremony = (): CeremonyItem | null => {
-    let ceremony: CeremonyItem | null = null;
-    setData((prev) => {
-      if (prev.pendingCeremonies.length === 0) return prev;
-      ceremony = prev.pendingCeremonies[0];
-      return {
-        ...prev,
-        pendingCeremonies: prev.pendingCeremonies.slice(1),
-      };
-    });
+    const current = getData();
+    if (current.pendingCeremonies.length === 0) return null;
+    const ceremony = current.pendingCeremonies[0];
+    setData((prev) => ({
+      ...prev,
+      pendingCeremonies: prev.pendingCeremonies.slice(1),
+    }));
     return ceremony;
   };
 
