@@ -590,10 +590,11 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
+    gap: 10,
   },
   statCard: {
-    width: CARD_WIDTH,
+    width: '31%',
     borderRadius: 14,
     padding: 14,
     alignItems: 'center',
