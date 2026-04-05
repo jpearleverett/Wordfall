@@ -4,6 +4,7 @@ import {
   Alert,
   AppState,
   Animated,
+  Linking,
   Pressable,
   SafeAreaView,
   StatusBar,
@@ -61,6 +62,7 @@ import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { funnelTracker } from './src/services/funnelTracker';
+import { parseDeepLink } from './src/utils/deepLinking';
 import {
   triggerStreakReminder,
   triggerEventNotifications,
@@ -157,7 +159,7 @@ function EventScreenWrapperNav({ navigation }: any) {
       config = adjusted.config;
 
       const seed = Date.now() + modeLevel * 1337;
-      const board = generateBoard(config, seed, mode);
+      let board = generateBoard(config, seed, mode);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.navigate('Game', {
@@ -167,8 +169,24 @@ function EventScreenWrapperNav({ navigation }: any) {
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
-    } catch (e) {
-      Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+    } catch (e: any) {
+      if (e?.message?.includes('timed out')) {
+        try {
+          const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+          const board = generateBoard(easyConfig, Date.now());
+          const modeConfig = MODE_CONFIGS[mode];
+          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          navigation.navigate('Game', {
+            board, level: player.currentLevel, mode,
+            maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+            timeLimit: modeConfig.rules.timerSeconds || 0,
+          });
+        } catch {
+          Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+        }
+      } else {
+        Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+      }
     }
   }, [player, economy, navigation]);
 
@@ -437,8 +455,24 @@ function ModesScreenWrapper({ navigation }: any) {
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
-    } catch (e) {
-      Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+    } catch (e: any) {
+      if (e?.message?.includes('timed out')) {
+        try {
+          const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+          board = generateBoard(easyConfig, Date.now());
+          const modeConfig = MODE_CONFIGS[mode];
+          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          navigation.navigate('Game', {
+            board, level: modeLevel, mode,
+            maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+            timeLimit: modeConfig.rules.timerSeconds || 0,
+          });
+        } catch {
+          Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+        }
+      } else {
+        Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+      }
     }
   }, [player.currentLevel, navigation, player, economy]);
 
@@ -495,7 +529,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       }
 
       const seed = modeLevel * 1337 + Date.now();
-      const board = generateBoard(config, seed, mode);
+      let board = generateBoard(config, seed, mode);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -506,9 +540,28 @@ function GameScreenWrapper({ route, navigation }: any) {
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
-    } catch (e) {
-      Alert.alert('Error', 'Failed to generate next puzzle.');
-      navigation.goBack();
+    } catch (e: any) {
+      if (e?.message?.includes('timed out')) {
+        try {
+          const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+          const mode = (params.mode || 'classic') as GameMode;
+          const modeLevel = mode === 'classic' ? (params.level || 0) + 1 : player.getModeLevel(mode);
+          const board = generateBoard(easyConfig, Date.now());
+          const modeConfig = MODE_CONFIGS[mode];
+          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          navigation.replace('Game', {
+            board, level: modeLevel, mode, isDaily: false,
+            maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+            timeLimit: modeConfig.rules.timerSeconds || 0,
+          });
+        } catch {
+          Alert.alert('Error', 'Failed to generate next puzzle.');
+          navigation.goBack();
+        }
+      } else {
+        Alert.alert('Error', 'Failed to generate next puzzle.');
+        navigation.goBack();
+      }
     }
   }, [params, navigation, player]);
 
@@ -532,7 +585,7 @@ function GameScreenWrapper({ route, navigation }: any) {
 
       const config = getLevelConfig(nextModeLevel);
       const seed = nextModeLevel * 1337 + Date.now();
-      const board = generateBoard(config, seed, mode);
+      let board = generateBoard(config, seed, mode);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -543,9 +596,26 @@ function GameScreenWrapper({ route, navigation }: any) {
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
-    } catch (e) {
-      Alert.alert('Error', 'Failed to generate next puzzle.');
-      navigation.goBack();
+    } catch (e: any) {
+      if (e?.message?.includes('timed out')) {
+        try {
+          const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+          const board = generateBoard(easyConfig, Date.now());
+          const modeConfig = MODE_CONFIGS[(params.mode || 'classic') as GameMode];
+          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          navigation.replace('Game', {
+            board, level: nextModeLevel, mode: (params.mode || 'classic') as GameMode, isDaily: false,
+            maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
+            timeLimit: modeConfig.rules.timerSeconds || 0,
+          });
+        } catch {
+          Alert.alert('Error', 'Failed to generate next puzzle.');
+          navigation.goBack();
+        }
+      } else {
+        Alert.alert('Error', 'Failed to generate next puzzle.');
+        navigation.goBack();
+      }
     }
   }, [params, navigation, player, economy]);
 
@@ -780,10 +850,16 @@ function HomeMainScreen({ route, navigation }: any) {
           currentStreak: player.streaks.currentStreak,
           equippedFrame: player.equippedFrame,
           equippedTitle: player.equippedTitle,
+        }).catch((e: unknown) => {
+          if (__DEV__) console.warn('Firestore profile sync failed:', e);
         });
-        void firestoreService.generateFriendCode(userId);
+        void firestoreService.generateFriendCode(userId).catch((e: unknown) => {
+          if (__DEV__) console.warn('Firestore friend code generation failed:', e);
+        });
         void firestoreService.getPendingGifts(userId).then((gifts) => {
           if (gifts.length > 0) setPendingGifts(gifts);
+        }).catch((e: unknown) => {
+          if (__DEV__) console.warn('Firestore gift check failed:', e);
         });
       }
 
@@ -803,7 +879,10 @@ function HomeMainScreen({ route, navigation }: any) {
         void triggerComebackReminder();
       }
     });
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      analytics.destroy();
+    };
   }, []);
 
   // Auto-open wheel when navigating back from post-puzzle spin prompt
@@ -1074,9 +1153,22 @@ function HomeMainScreen({ route, navigation }: any) {
           const board = generateBoard(config, level * 1337 + Date.now());
           setLoading(false);
           navigation.navigate('Game', { board, level, mode: 'classic', isDaily: false });
-        } catch (e) {
-          Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
-          setLoading(false);
+        } catch (e: any) {
+          if (e?.message?.includes('timed out')) {
+            try {
+              const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
+              const board = generateBoard(easyConfig, Date.now());
+              setLoading(false);
+              Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+              navigation.navigate('Game', { board, level: player.currentLevel, mode: 'classic', isDaily: false });
+            } catch {
+              Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+              setLoading(false);
+            }
+          } else {
+            Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+            setLoading(false);
+          }
         }
       }, 50);
     },
@@ -1324,6 +1416,72 @@ function AppContent() {
       setShowOnboarding(true);
     }
   }, [player.loaded, player.tutorialComplete]);
+
+  // ── Deep link handling ──────────────────────────────────────────────────
+  const pendingDeepLinkRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!player.loaded) return;
+
+    const handleDeepLink = (url: string | null) => {
+      if (!url) return;
+      try {
+        const data = parseDeepLink(url);
+        switch (data.type) {
+          case 'referral':
+            if (data.referralCode) {
+              const success = player.applyReferralCode(data.referralCode);
+              if (success) {
+                Alert.alert('Welcome!', 'Referral code applied! You received bonus rewards.');
+              }
+            }
+            break;
+          case 'challenge':
+            if (data.challengeId) {
+              // Store challenge ID — navigation will pick it up when ready
+              pendingDeepLinkRef.current = data.challengeId;
+              if (__DEV__) console.log('[DeepLink] Challenge received:', data.challengeId);
+            }
+            break;
+          case 'daily':
+            // Navigate to daily mode when navigation is ready
+            try {
+              (navigationRef.current as any)?.navigate('Play', {
+                screen: 'Game',
+                params: { mode: 'daily' },
+              });
+            } catch {
+              // Navigation may not be ready yet — silently ignore
+            }
+            break;
+          default:
+            break;
+        }
+        if (data.type !== 'unknown') {
+          void analytics.logEvent('deep_link_opened', { type: data.type, url });
+        }
+      } catch {
+        // Never crash on a malformed deep link
+        if (__DEV__) console.warn('[DeepLink] Failed to handle URL:', url);
+      }
+    };
+
+    // Check for initial URL (app was opened via deep link)
+    Linking.getInitialURL()
+      .then(handleDeepLink)
+      .catch(() => {
+        // getInitialURL can fail on some platforms — ignore
+      });
+
+    // Listen for incoming deep links while app is running
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [player.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track screen views on navigation state changes
   const handleNavigationReady = useCallback(() => {
@@ -1594,6 +1752,17 @@ function AppContent() {
           onDismiss={handleDismissCeremony}
         />
       )}
+      {activeCeremony?.type === 'mastery_tier_up' && (
+        <MilestoneCeremony
+          ribbon="MASTERY"
+          icon={activeCeremony.data.icon}
+          title={activeCeremony.data.title}
+          description={activeCeremony.data.description}
+          accentColor={COLORS.purple}
+          rewardLabel={`Tier ${activeCeremony.data.tier} Rewards`}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
     </View>
   );
 }
@@ -1612,6 +1781,10 @@ export default function App() {
     crashReporter.init();
     analytics.initFirebase();
     funnelTracker.trackStep('app_open');
+
+    return () => {
+      void analytics.destroy();
+    };
   }, []);
 
   if (!fontsLoaded) {

@@ -12,4 +12,7 @@ module.exports = {
     '^react-native$': '<rootDir>/src/__mocks__/react-native.ts',
     '^@react-native-async-storage/async-storage$': '<rootDir>/src/__mocks__/async-storage.ts',
   },
+  globals: {
+    __DEV__: true,
+  },
 };

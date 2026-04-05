@@ -19,7 +19,7 @@ export interface CoinShopItem {
     durationMinutes?: number;
     effectId?: string;
   };
-  category: 'boosters' | 'consumables' | 'temporary';
+  category: 'boosters' | 'consumables' | 'temporary' | 'cosmetic_rental';
   dailyLimit?: number;
 }
 
@@ -159,6 +159,58 @@ export const COIN_SHOP_ITEMS: CoinShopItem[] = [
     costCoins: 1000,
     reward: { type: 'cosmetic_rental', durationMinutes: 1440, effectId: 'premium_theme_rental' },
     category: 'temporary',
+    dailyLimit: 1,
+  },
+
+  // ─── Cosmetic Rentals & Boosts ──────────────────────────────────────────────
+  {
+    id: 'coin_theme_random',
+    name: 'Random Premium Theme (24h)',
+    description: 'Unlock a random premium theme for 24 hours.',
+    icon: '🎲',
+    costCoins: 800,
+    reward: { type: 'cosmetic_rental', durationMinutes: 1440, effectId: 'random_premium_theme' },
+    category: 'cosmetic_rental',
+    dailyLimit: 1,
+  },
+  {
+    id: 'coin_golden_frame',
+    name: 'Golden Frame (24h)',
+    description: 'Sport an exclusive golden profile frame for 24 hours.',
+    icon: '🖼️',
+    costCoins: 1000,
+    reward: { type: 'cosmetic_rental', durationMinutes: 1440, effectId: 'golden_frame_rental' },
+    category: 'cosmetic_rental',
+    dailyLimit: 1,
+  },
+  {
+    id: 'coin_lucky_boost',
+    name: 'Lucky Boost (1 hr)',
+    description: '+15% rare tile drop chance for the next hour.',
+    icon: '🍀',
+    costCoins: 500,
+    reward: { type: 'temporary_effect', durationMinutes: 60, effectId: 'lucky_boost' },
+    category: 'cosmetic_rental',
+    dailyLimit: 2,
+  },
+  {
+    id: 'coin_double_coins',
+    name: 'Double Coins (30 min)',
+    description: '2x coin earnings from puzzles for 30 minutes.',
+    icon: '🪙',
+    costCoins: 600,
+    reward: { type: 'temporary_effect', durationMinutes: 30, effectId: 'double_coins' },
+    category: 'cosmetic_rental',
+    dailyLimit: 2,
+  },
+  {
+    id: 'coin_vip_experience',
+    name: 'VIP Experience (2 hrs)',
+    description: 'Ad-free gameplay + 2x XP for 2 hours.',
+    icon: '👑',
+    costCoins: 1500,
+    reward: { type: 'temporary_effect', durationMinutes: 120, effectId: 'vip_experience' },
+    category: 'cosmetic_rental',
     dailyLimit: 1,
   },
 ];

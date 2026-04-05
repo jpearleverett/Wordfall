@@ -1,8 +1,10 @@
 import { Grid } from '../types';
+import { buildReferralLink, buildDailyLink } from './deepLinking';
 
 /**
  * Generate a Wordle-style shareable emoji grid from the game state.
  * Filled cells become colored squares, empty cells become dark squares.
+ * When referralCode is provided, includes a referral deep link in the CTA.
  */
 export function generateShareText(
   grid: Grid,
@@ -11,6 +13,7 @@ export function generateShareText(
   score: number,
   combo: number,
   isDaily: boolean,
+  referralCode?: string,
 ): string {
   const starEmojis = '★'.repeat(stars) + '☆'.repeat(3 - stars);
   const header = isDaily
@@ -31,7 +34,8 @@ export function generateShareText(
   const stats = [`Score: ${score}`];
   if (combo > 1) stats.push(`Combo: ${combo}x`);
 
-  return `${header}\n${gridEmojis}\n${stats.join(' | ')}\nCan you beat my score? Download Wordfall!`;
+  const link = referralCode ? buildReferralLink(referralCode) : buildDailyLink();
+  return `${header}\n${gridEmojis}\n${stats.join(' | ')}\nPlay Wordfall! ${link}`;
 }
 
 /**
@@ -62,15 +66,19 @@ export function generateChallengeShareText(
   score: number,
   stars: number,
   mode: string,
+  challengeId?: string,
 ): string {
   const starEmojis = '\u2b50'.repeat(stars);
   const modeLabel = mode.charAt(0).toUpperCase() + mode.slice(1);
+  const link = challengeId
+    ? `wordfall://challenge/${challengeId}`
+    : buildDailyLink();
   return [
     '\ud83c\udfaf WORDFALL CHALLENGE',
     `Level ${level} | ${modeLabel} Mode`,
     `My Score: ${score} ${starEmojis}`,
     'Think you can beat me?',
-    'Download Wordfall and try!',
+    link,
   ].join('\n');
 }
 

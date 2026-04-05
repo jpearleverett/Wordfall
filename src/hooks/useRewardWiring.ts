@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { Board, CeremonyItem, Difficulty, GameMode } from '../types';
+import { SeasonalQuestState, getCurrentSeasonalQuest } from '../data/seasonalQuests';
 import {
   getLevelConfig,
   ECONOMY,
@@ -12,11 +13,13 @@ import {
 } from '../constants';
 import { ATLAS_PAGES, getCurrentSeasonAlbum } from '../data/collections';
 import { generateShareText } from '../utils/shareGenerator';
+import { getMasteryTierForXP } from '../data/masteryRewards';
 import { eventManager } from '../services/eventManager';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
 import {
   triggerStreakReminder,
+  triggerFriendBeatScoreNotification,
 } from '../services/notificationTriggers';
 import { firestoreService } from '../services/firestore';
 
@@ -75,6 +78,8 @@ interface PlayerContextLike {
   friendIds: string[];
   consecutiveFailures: number;
   performanceMetrics: any;
+  referralCode: string;
+  seasonalQuest: SeasonalQuestState;
 
   recordPuzzleComplete: (level: number, score: number, stars: number, isPerfect: boolean) => void;
   recordModePlay: (modeId: string, score: number, isWin: boolean) => void;
@@ -85,6 +90,7 @@ interface PlayerContextLike {
   addRareTile: (letter: string, count?: number) => void;
   updateMissionProgress: (missionId: string, progress: number) => void;
   updateWeeklyGoalProgress: (trackingKey: string, value: number) => void;
+  updateSeasonalQuest: (updates: Partial<SeasonalQuestState>) => void;
   updateStreak: () => void;
   recordDailyComplete: (dateString: string) => void;
   queueCeremony: (ceremony: CeremonyItem) => void;
@@ -311,6 +317,29 @@ export function useRewardWiring({
     if (isPerfect) player.updateWeeklyGoalProgress('perfect_solves', 1);
     if (isDaily) player.updateWeeklyGoalProgress('daily_completed', 1);
 
+    // Update seasonal quest progress
+    const questState = player.seasonalQuest;
+    if (questState.activeQuestId) {
+      const currentQuest = getCurrentSeasonalQuest();
+      if (currentQuest.id === questState.activeQuestId && questState.currentStepIndex < currentQuest.steps.length) {
+        const currentStep = currentQuest.steps[questState.currentStepIndex];
+        const trackingKey = currentStep.trackingKey;
+        let increment = 0;
+        if (trackingKey === 'puzzles_solved') increment = 1;
+        else if (trackingKey === 'total_score') increment = score;
+        else if (trackingKey === 'stars_earned') increment = stars;
+        else if (trackingKey === 'perfect_solves' && isPerfect) increment = 1;
+        else if (trackingKey === 'daily_completed' && isDaily) increment = 1;
+        else if (trackingKey === 'words_found') increment = wordsFound;
+        else if (trackingKey === 'modes_played') increment = 1;
+
+        if (increment > 0) {
+          const newProgress = questState.stepProgress + increment;
+          player.updateSeasonalQuest({ stepProgress: newProgress });
+        }
+      }
+    }
+
     // Detect level-up
     const newLevel = Math.max(level + 1, prevLevel);
     const leveledUp = newLevel > prevHighest;
@@ -418,6 +447,28 @@ export function useRewardWiring({
       }
     }
 
+    // Mastery tier-up detection (XP proxy: puzzlesSolved * 100)
+    const prevMasteryXP = (player.puzzlesSolved - 1) * 100;
+    const newMasteryXP = player.puzzlesSolved * 100;
+    const prevMasteryTier = getMasteryTierForXP(prevMasteryXP);
+    const newMasteryTier = getMasteryTierForXP(newMasteryXP);
+    if (newMasteryTier > prevMasteryTier) {
+      player.queueCeremony({
+        type: 'mastery_tier_up',
+        data: { tier: newMasteryTier, icon: '\u{1F3C6}', title: `Mastery Tier ${newMasteryTier}!`, description: "You've reached a new mastery level!" },
+      });
+    }
+
+    // Late-game milestone ceremonies (every 25 levels after level 50)
+    if (leveledUp && newLevel >= 50 && newLevel % 25 === 0) {
+      economy.addCoins(500);
+      economy.addGems(25);
+      player.queueCeremony({
+        type: 'star_milestone',
+        data: { icon: '\u{1F451}', title: `Level ${newLevel} Master!`, description: 'Your dedication is legendary!', rewardLabel: '500 coins + 25 gems' },
+      });
+    }
+
     // Award mystery wheel free spin progress
     player.awardFreeSpin();
 
@@ -438,10 +489,10 @@ export function useRewardWiring({
       }
     }
 
-    // Generate share text
+    // Generate share text (include referral code for viral deep link)
     const grid = params.board ? (params.board as Board).grid : null;
     const shareText = grid
-      ? generateShareText(grid, level, stars, score, 0, isDaily)
+      ? generateShareText(grid, level, stars, score, 0, isDaily, player.referralCode || undefined)
       : '';
 
     // Firestore social layer: submit scores + sync profile
@@ -475,6 +526,13 @@ export function useRewardWiring({
       firestoreService
         .getFriendScores(userId, friendIds)
         .then((result) => {
+          // Notify friends that the player beat their score
+          if (result.beaten > 0) {
+            void triggerFriendBeatScoreNotification(
+              displayName,
+              level,
+            );
+          }
           if (result.total > 0 && navigation.isFocused()) {
             navigation.setParams({
               completionData: {

@@ -369,12 +369,22 @@ function attemptGenerate(
  * Mode-aware: shrinkingBoard gets +1 row/col, gravityFlip and noGravity
  * use mode-specific solvability validation.
  */
+/** Absolute time limit for board generation to prevent UI hangs */
+const GENERATION_TIMEOUT_MS = 5000;
+
 export function generateBoard(
   config: BoardConfig,
   seed?: number,
   mode?: GameMode
 ): Board {
   const baseSeed = seed ?? Date.now();
+  const startTime = Date.now();
+
+  const checkTimeout = (): void => {
+    if (Date.now() - startTime > GENERATION_TIMEOUT_MS) {
+      throw new Error('Board generation timed out');
+    }
+  };
 
   // shrinkingBoard: add 1 buffer ring (filler perimeter for the initial visual shrink).
   // Words are placed in the interior and the shrink-aware solver validates that
@@ -392,6 +402,7 @@ export function generateBoard(
 
   // Primary attempts with full config
   for (let attempt = 0; attempt < 80; attempt++) {
+    checkTimeout();
     const rng = createRng(baseSeed + attempt * 7919);
     const board = attemptGenerate(effectiveConfig, rng, mode);
     if (board) return board;
@@ -405,6 +416,7 @@ export function generateBoard(
   };
 
   for (let attempt = 0; attempt < 60; attempt++) {
+    checkTimeout();
     const rng = createRng(baseSeed + 1000 + attempt * 7919);
     const board = attemptGenerate(fallbackConfig, rng, mode);
     if (board) return board;
@@ -418,12 +430,13 @@ export function generateBoard(
   };
 
   for (let attempt = 0; attempt < 60; attempt++) {
+    checkTimeout();
     const rng = createRng(baseSeed + 2000 + attempt * 7919);
     const board = attemptGenerate(fallback2Config, rng, mode);
     if (board) return board;
   }
 
-  // Last resort: generate a minimal 2-word board
+  // Last resort: generate a minimal 2-word board (always attempted even after timeout)
   const minimalConfig: BoardConfig = {
     rows: 5,
     cols: 5,
@@ -434,6 +447,7 @@ export function generateBoard(
   };
 
   for (let attempt = 0; attempt < 100; attempt++) {
+    checkTimeout();
     const rng = createRng(baseSeed + 3000 + attempt * 7919);
     const board = attemptGenerate(minimalConfig, rng, mode);
     if (board) return board;

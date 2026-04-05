@@ -57,6 +57,10 @@ interface IAPState {
   vipExpiresAt: number;
   /** Last date VIP daily rewards were claimed (YYYY-MM-DD) */
   vipDailyLastClaim: string;
+  /** Consecutive weeks subscribed to VIP */
+  vipStreakWeeks: number;
+  /** Whether the weekly VIP streak bonus has been claimed this week */
+  vipStreakBonusClaimed: boolean;
 }
 
 interface EconomyState extends Economy, IAPState {
@@ -139,6 +143,8 @@ const DEFAULT_ECONOMY: EconomyState = {
   isVipSubscriber: false,
   vipExpiresAt: 0,
   vipDailyLastClaim: '',
+  vipStreakWeeks: 0,
+  vipStreakBonusClaimed: false,
 };
 
 /** Calculate how many lives should have refilled since lastRefillTime. */

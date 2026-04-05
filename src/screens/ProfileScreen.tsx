@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
@@ -16,6 +17,13 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
 import { PROFILE_FRAMES, COSMETIC_THEMES } from '../data/cosmetics';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import {
+  canPrestige,
+  getPrestigeRewards,
+  getPrestigeMultiplier,
+  getPrestigeSummary,
+  PRESTIGE_LEVELS,
+} from '../data/prestigeSystem';
 
 const { width } = Dimensions.get('window');
 
@@ -190,6 +198,84 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <Text style={styles.titleText}>{p.title}</Text>
           </View>
         </View>
+
+        {/* Prestige Badge (for players who have prestiged) */}
+        {(playerContext as any).prestige?.prestigeLevel > 0 && (() => {
+          const prestigeLevel = (playerContext as any).prestige.prestigeLevel;
+          const prestigeDef = PRESTIGE_LEVELS.find((pl) => pl.level === prestigeLevel);
+          if (!prestigeDef) return null;
+          return (
+            <View style={styles.prestigeBadgeRow}>
+              <LinearGradient
+                colors={['#3d2200', '#1a0e00']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+              <Text style={styles.prestigeBadgeIcon}>{prestigeDef.icon}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.prestigeBadgeLabel}>{prestigeDef.label}</Text>
+                <Text style={styles.prestigeBadgeMultiplier}>
+                  {prestigeDef.xpMultiplier}x XP Multiplier
+                </Text>
+              </View>
+              <Text style={styles.prestigeBadgeCount}>
+                Prestige {prestigeLevel}
+              </Text>
+            </View>
+          );
+        })()}
+
+        {/* Prestige Button (when eligible) */}
+        {canPrestige(p.level, (playerContext as any).prestige?.prestigeLevel ?? 0) && (() => {
+          const nextPrestige = ((playerContext as any).prestige?.prestigeLevel ?? 0) + 1;
+          const nextDef = PRESTIGE_LEVELS.find((pl) => pl.level === nextPrestige);
+          if (!nextDef) return null;
+          const summary = getPrestigeSummary(nextPrestige);
+
+          return (
+            <TouchableOpacity
+              style={styles.prestigeButton}
+              activeOpacity={0.7}
+              onPress={() => {
+                Alert.alert(
+                  `Prestige to ${nextDef.label}?`,
+                  `This will reset your level to 1 but you keep all cosmetics.\n\n` +
+                  `You'll earn:\n` +
+                  `  ${nextDef.icon} ${nextDef.xpMultiplier}x XP multiplier\n` +
+                  `  Exclusive ${nextDef.cosmeticReward.type}\n` +
+                  summary.gains.map((g) => `  ${g}`).join('\n') +
+                  `\n\nThis cannot be undone.`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'PRESTIGE',
+                      style: 'destructive',
+                      onPress: () => {
+                        // Prestige logic would be wired in PlayerContext later
+                        Alert.alert('Coming Soon', 'Prestige system will be fully wired in a future update.');
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <LinearGradient
+                colors={[COLORS.gold, '#b8860b']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+              <Text style={styles.prestigeButtonIcon}>{nextDef.icon}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.prestigeButtonTitle}>PRESTIGE</Text>
+                <Text style={styles.prestigeButtonSub}>
+                  Reset to Level 1 {'\u2022'} Keep cosmetics {'\u2022'} Earn {nextDef.xpMultiplier}x XP {'\u2022'} Unlock {nextDef.label} frame
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })()}
 
         {/* Stats Grid */}
         <Text style={styles.sectionTitle}>Statistics</Text>
@@ -669,6 +755,72 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  // ── Prestige ──────────────────────────────────────────────────────────
+  prestigeBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '40',
+    overflow: 'hidden',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  prestigeBadgeIcon: {
+    fontSize: 28,
+    marginRight: 12,
+  },
+  prestigeBadgeLabel: {
+    fontSize: 15,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 1,
+  },
+  prestigeBadgeMultiplier: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  prestigeBadgeCount: {
+    fontSize: 12,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    opacity: 0.7,
+  },
+  prestigeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 16,
+    overflow: 'hidden',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  prestigeButtonIcon: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  prestigeButtonTitle: {
+    fontSize: 18,
+    fontFamily: FONTS.display,
+    color: COLORS.bg,
+    letterSpacing: 2,
+  },
+  prestigeButtonSub: {
+    fontSize: 10,
+    color: 'rgba(0,0,0,0.7)',
+    fontFamily: FONTS.bodyMedium,
+    marginTop: 2,
   },
 });
 

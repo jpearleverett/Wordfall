@@ -17,9 +17,14 @@ import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
 import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
+import { getFlashSale } from '../data/dynamicPricing';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
+import ReferralCard from '../components/ReferralCard';
+import SeasonalQuestCard from '../components/SeasonalQuestCard';
+import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
+import { usePlayer } from '../contexts/PlayerContext';
 
 interface DailyMissionDisplay {
   id: string;
@@ -118,6 +123,7 @@ export function HomeScreen({
   onOpenEvents,
   onClaimLoginReward,
 }: HomeScreenProps) {
+  const player = usePlayer();
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
   const wheelPulse = useRef(new Animated.Value(1)).current;
@@ -242,6 +248,7 @@ export function HomeScreen({
   const totalStars = Object.values(progress.starsByLevel).reduce((a, b) => a + b, 0);
   const dailyDeal = getDailyDeal(today);
   const dealHoursLeft = dailyDeal.availableHours;
+  const flashSale = getFlashSale(new Date());
   const nextMilestone = [7, 14, 30, 60, 100].find((milestone) => milestone > progress.currentStreak) || 100;
   const streakProgress = Math.min(100, (progress.currentStreak / nextMilestone) * 100);
   const currentRewardDay = ((loginCycleDay - 1) % 7) + 1;
@@ -267,6 +274,51 @@ export function HomeScreen({
   const showMysteryWheel = hasSegmentContent
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
     : playerStage !== 'new' && onOpenWheel;
+
+  // ── Seasonal Quest ──────────────────────────────────────────────────
+  const seasonalQuest = getCurrentSeasonalQuest();
+  const questState = player.seasonalQuest;
+  const showSeasonalQuest = (playerStage === 'established' || playerStage === 'veteran')
+    && !questState.completedQuestIds.includes(seasonalQuest.id);
+
+  // Auto-initialize quest for the current season if not started
+  useEffect(() => {
+    if (!showSeasonalQuest) return;
+    if (questState.activeQuestId !== seasonalQuest.id && !questState.completedQuestIds.includes(seasonalQuest.id)) {
+      player.updateSeasonalQuest({
+        activeQuestId: seasonalQuest.id,
+        currentStepIndex: 0,
+        stepProgress: 0,
+        seasonId: seasonalQuest.seasonId,
+      });
+    }
+  }, [showSeasonalQuest, questState.activeQuestId, seasonalQuest.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleClaimQuestStep = useCallback(() => {
+    const currentStep = seasonalQuest.steps[questState.currentStepIndex];
+    if (!currentStep) return;
+
+    // Grant step rewards via economy context is not available here;
+    // use player.updateProgress to signal claim, and grant rewards via updateSeasonalQuest
+    // Since we can't access economy directly, we queue a ceremony that triggers reward granting
+    player.queueCeremony({
+      type: 'quest_step_complete',
+      data: {
+        icon: currentStep.icon,
+        title: currentStep.title,
+        description: `${currentStep.rewardCoins} coins + ${currentStep.rewardGems} gems`,
+        questId: seasonalQuest.id,
+        stepIndex: questState.currentStepIndex,
+        rewardCoins: currentStep.rewardCoins,
+        rewardGems: currentStep.rewardGems,
+        rewardExtra: currentStep.rewardExtra,
+      },
+    });
+
+    // Advance to next step
+    const newState = advanceQuestStep(questState, seasonalQuest);
+    player.updateSeasonalQuest(newState);
+  }, [questState, seasonalQuest, player]);
 
   return (
     <View style={styles.container}>
@@ -545,6 +597,15 @@ export function HomeScreen({
           </LinearGradient>
         )}
 
+        {/* Seasonal Quest - established+ */}
+        {showSeasonalQuest && questState.activeQuestId && (
+          <SeasonalQuestCard
+            quest={seasonalQuest}
+            state={questState}
+            onClaimStep={handleClaimQuestStep}
+          />
+        )}
+
         {/* Weekly Goals - established+ */}
         {showWeeklyGoals && weeklyGoals && (
           <LinearGradient
@@ -591,6 +652,18 @@ export function HomeScreen({
             )}
           </LinearGradient>
         )}
+
+        {/* Referral Card - established+ players */}
+        {(playerStage === 'established' || playerStage === 'veteran') && player.referralCode ? (
+          <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+            <ReferralCard
+              referralCode={player.referralCode}
+              referralCount={player.referralCount}
+              milestonesClaimed={player.referralMilestonesClaimed}
+              onClaimMilestone={(count) => player.claimReferralMilestone(count)}
+            />
+          </View>
+        ) : null}
 
         {/* Streak panel - hidden for brand new players */}
         {showStreak && (
@@ -655,6 +728,34 @@ export function HomeScreen({
               </Pressable>
             </View>
           </LinearGradient>
+        )}
+
+        {/* Flash Sale teaser - visible for established+ players when a sale is active */}
+        {flashSale && playerStage !== 'new' && playerStage !== 'early' && (
+          <Pressable
+            onPress={() => onOpenShop?.()}
+            style={({ pressed }) => [pressed && styles.buttonPressed]}
+          >
+            <LinearGradient
+              colors={[COLORS.coral + '25', COLORS.orange + '15', ...GRADIENTS.surfaceCard.slice(1)]}
+              style={[styles.flashSaleTeaser, SHADOWS.medium]}
+            >
+              <View style={styles.flashSaleTeaserRow}>
+                <Text style={styles.flashSaleTeaserIcon}>{'\u26A1'}</Text>
+                <View style={styles.flashSaleTeaserInfo}>
+                  <Text style={styles.flashSaleTeaserTitle}>
+                    Today's Deal: {flashSale.name} - {flashSale.discountPercent}% OFF!
+                  </Text>
+                  <Text style={styles.flashSaleTeaserSubtitle}>
+                    {flashSale.salePrice} (was {flashSale.originalPrice}) — Tap to view in Shop
+                  </Text>
+                </View>
+                <View style={styles.flashSaleTeaserBadge}>
+                  <Text style={styles.flashSaleTeaserBadgeText}>SALE</Text>
+                </View>
+              </View>
+            </LinearGradient>
+          </Pressable>
         )}
 
         {/* 30-day login calendar - hidden for day 1 new players */}
@@ -1471,6 +1572,49 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     letterSpacing: 2,
   },
+  // Flash Sale Teaser
+  flashSaleTeaser: {
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.coral + '40',
+  },
+  flashSaleTeaserRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+  },
+  flashSaleTeaserIcon: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  flashSaleTeaserInfo: {
+    flex: 1,
+  },
+  flashSaleTeaserTitle: {
+    fontSize: 14,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.coral,
+    marginBottom: 2,
+  },
+  flashSaleTeaserSubtitle: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  flashSaleTeaserBadge: {
+    backgroundColor: COLORS.coral,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  flashSaleTeaserBadgeText: {
+    fontSize: 10,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+  },
+
   // Mystery Wheel Button
   mysteryWheelButton: {
     borderRadius: 20,

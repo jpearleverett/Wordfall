@@ -27,7 +27,13 @@ import {
 } from '../data/rotatingShop';
 import { funnelTracker } from '../services/funnelTracker';
 import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
+import { getFlashSale, FlashSale } from '../data/dynamicPricing';
 import { soundManager } from '../services/sound';
+import {
+  getVipStreakBonus,
+  getNextVipStreakMilestone,
+  getVipStreakProgress,
+} from '../data/vipBenefits';
 
 const { width } = Dimensions.get('window');
 
@@ -146,6 +152,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   const [coinShopConfirmation, setCoinShopConfirmation] = useState<string | null>(null);
   const coinShopConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Flash sale state
+  const flashSale = getFlashSale(new Date());
+  const [flashCountdown, setFlashCountdown] = useState('');
+  const flashTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Today's rotating items
   const today = new Date().toISOString().slice(0, 10);
   const rotatingItems = getCurrentRotatingItems(today);
@@ -184,6 +195,28 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  // Flash sale countdown timer (to midnight)
+  useEffect(() => {
+    if (!flashSale) return;
+    const updateFlashCountdown = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(23, 59, 59, 999);
+      const remaining = Math.max(0, midnight.getTime() - now.getTime());
+      const h = Math.floor(remaining / 3600000);
+      const m = Math.floor((remaining % 3600000) / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
+      setFlashCountdown(
+        `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
+      );
+    };
+    updateFlashCountdown();
+    flashTimerRef.current = setInterval(updateFlashCountdown, 1000);
+    return () => {
+      if (flashTimerRef.current) clearInterval(flashTimerRef.current);
+    };
+  }, [!!flashSale]);
 
   // ── Purchase handler ────────────────────────────────────────────────────
 
@@ -562,6 +595,58 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Flash Sale ──────────────────────────────────────────── */}
+        {flashSale && (
+          <View style={styles.flashSaleCard}>
+            <LinearGradient
+              colors={[COLORS.coral + '30', COLORS.orange + '15', COLORS.surface]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <View style={styles.flashSaleHeader}>
+              <Text style={styles.flashSaleLabel}>{'\u26A1'} FLASH SALE</Text>
+              <View style={styles.flashSaleDiscountBadge}>
+                <Text style={styles.flashSaleDiscountText}>{flashSale.discountPercent}% OFF</Text>
+              </View>
+            </View>
+            <View style={styles.flashSaleBody}>
+              <Text style={styles.flashSaleIcon}>{flashSale.icon}</Text>
+              <View style={styles.flashSaleInfo}>
+                <Text style={styles.flashSaleName}>{flashSale.name}</Text>
+                <Text style={styles.flashSaleDesc}>{flashSale.description}</Text>
+                <View style={styles.flashSalePriceRow}>
+                  <Text style={styles.flashSaleOriginalPrice}>{flashSale.originalPrice}</Text>
+                  <Text style={styles.flashSaleSalePrice}>{flashSale.salePrice}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.flashSaleFooter}>
+              <View style={styles.flashSaleTimer}>
+                <Text style={styles.flashSaleTimerText}>{'\u23F0'} {flashCountdown}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.flashSaleBuyButton}
+                onPress={() => handlePurchase(flashSale.productId)}
+                activeOpacity={0.7}
+                disabled={!!purchasingId}
+              >
+                <LinearGradient
+                  colors={[COLORS.gold, COLORS.orange]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+                {isLoading(flashSale.productId) ? (
+                  <ActivityIndicator size="small" color={COLORS.bg} />
+                ) : (
+                  <Text style={styles.flashSaleBuyText}>BUY NOW {flashSale.salePrice}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* ── Free Rewards (Watch Ads) ──────────────────────────────── */}
         {!adsRemoved && (
           <View style={styles.adSection}>
@@ -735,6 +820,89 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             </TouchableOpacity>
           )}
         </View>
+
+        {/* ── VIP Streak Bonus (for active subscribers) ─────────────── */}
+        {economy.isVip && (() => {
+          const streakWeeks = (economy as any).vipStreakWeeks ?? 0;
+          const streakBonusClaimed = (economy as any).vipStreakBonusClaimed ?? false;
+          const currentBonus = getVipStreakBonus(streakWeeks);
+          const nextMilestone = getNextVipStreakMilestone(streakWeeks);
+          const progress = getVipStreakProgress(streakWeeks);
+
+          return (
+            <View style={styles.vipStreakCard}>
+              <LinearGradient
+                colors={['#2a1854', '#1a1042']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              />
+              <View style={styles.vipStreakHeader}>
+                <Text style={styles.vipStreakIcon}>{'\u{1F451}'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.vipStreakTitle}>VIP STREAK</Text>
+                  <Text style={styles.vipStreakWeeks}>
+                    {streakWeeks} {streakWeeks === 1 ? 'week' : 'weeks'} subscribed
+                  </Text>
+                </View>
+                {currentBonus && (
+                  <View style={styles.vipStreakLabelBadge}>
+                    <Text style={styles.vipStreakLabelText}>{currentBonus.label}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Progress bar toward next milestone */}
+              {nextMilestone && (
+                <View style={styles.vipStreakProgressSection}>
+                  <View style={styles.vipStreakProgressBar}>
+                    <View
+                      style={[
+                        styles.vipStreakProgressFill,
+                        { width: `${Math.min(progress.progress * 100, 100)}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.vipStreakProgressText}>
+                    {streakWeeks}/{nextMilestone.weeksRequired} weeks to {nextMilestone.label}
+                  </Text>
+                  <Text style={styles.vipStreakNextReward}>
+                    Next: +{nextMilestone.bonusGems} gems, +{nextMilestone.bonusHints} hints
+                    {nextMilestone.extraReward ? ` + exclusive ${nextMilestone.extraReward.type}` : ''}
+                  </Text>
+                </View>
+              )}
+
+              {/* Claim button when eligible */}
+              {currentBonus && !streakBonusClaimed && (
+                <TouchableOpacity
+                  style={styles.vipStreakClaimButton}
+                  onPress={() => {
+                    Alert.alert(
+                      'VIP Streak Bonus!',
+                      `You earned +${currentBonus.bonusGems} gems and +${currentBonus.bonusHints} hints for being a ${currentBonus.label}!`,
+                    );
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={[COLORS.purple, '#8b5cf6']}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  />
+                  <Text style={styles.vipStreakClaimText}>CLAIM WEEKLY BONUS</Text>
+                </TouchableOpacity>
+              )}
+              {currentBonus && streakBonusClaimed && (
+                <Text style={styles.vipStreakClaimedText}>Weekly bonus claimed</Text>
+              )}
+              {!currentBonus && !nextMilestone && (
+                <Text style={styles.vipStreakClaimedText}>Max VIP tier reached!</Text>
+              )}
+            </View>
+          );
+        })()}
 
         {/* ── Featured Offers ────────────────────────────────────────── */}
         <ScrollView
@@ -1106,6 +1274,150 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           );
         })}
 
+        {/* ── Limited Rentals (coin-purchasable cosmetic rentals) ────── */}
+        {(() => {
+          const rentalItems = getCoinShopByCategory('cosmetic_rental');
+          if (rentalItems.length === 0) {
+            // Also check 'temporary' category for cosmetic_rental reward types
+            const tempItems = getCoinShopByCategory('temporary').filter(
+              (item) => item.reward.type === 'cosmetic_rental',
+            );
+            if (tempItems.length === 0) return null;
+            return (
+              <>
+                <Text style={styles.sectionTitle}>{'\u23F0'} Limited Rentals</Text>
+                <Text style={styles.rentalSubtitle}>Temporary boosts for coins</Text>
+                <View style={styles.rentalGrid}>
+                  {tempItems.map((item) => {
+                    const cantAfford = !economy.canAfford('coins', item.costCoins);
+                    const currentDate = new Date().toISOString().slice(0, 10);
+                    const purchases = currentDate === coinShopDate ? coinShopPurchasesToday : {};
+                    const todayCount = purchases[item.id] ?? 0;
+                    const limitReached = item.dailyLimit !== undefined && todayCount >= item.dailyLimit;
+                    const disabled = limitReached || cantAfford;
+                    const durationLabel = item.reward.durationMinutes
+                      ? item.reward.durationMinutes >= 1440
+                        ? `${Math.floor(item.reward.durationMinutes / 1440)} day${Math.floor(item.reward.durationMinutes / 1440) > 1 ? 's' : ''}`
+                        : item.reward.durationMinutes >= 60
+                          ? `${Math.floor(item.reward.durationMinutes / 60)} hour${Math.floor(item.reward.durationMinutes / 60) > 1 ? 's' : ''}`
+                          : `${item.reward.durationMinutes} min`
+                      : '';
+
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[styles.rentalCard, disabled && styles.coinShopCardDisabled]}
+                        activeOpacity={disabled ? 1 : 0.7}
+                        onPress={() => !disabled && handleCoinShopPurchase(item)}
+                      >
+                        <LinearGradient
+                          colors={[...GRADIENTS.surfaceCard]}
+                          style={StyleSheet.absoluteFill}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 0, y: 1 }}
+                        />
+                        <Text style={styles.rentalIcon}>{item.icon}</Text>
+                        <Text style={[styles.rentalName, disabled && styles.coinShopTextDisabled]}>
+                          {item.name}
+                        </Text>
+                        <Text style={[styles.rentalDesc, disabled && styles.coinShopTextDisabled]}>
+                          {item.description}
+                        </Text>
+                        {durationLabel ? (
+                          <View style={styles.rentalDurationBadge}>
+                            <Text style={styles.rentalDurationText}>{'\u23F1'} {durationLabel}</Text>
+                          </View>
+                        ) : null}
+                        <View style={[styles.coinShopPrice, cantAfford && styles.coinShopPriceDisabled]}>
+                          <Text style={[styles.coinShopPriceText, cantAfford && styles.coinShopPriceTextDisabled]}>
+                            {'\u{1FA99}'} {item.costCoins}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.rentalBuyButton, disabled && styles.rentalBuyButtonDisabled]}
+                          onPress={() => !disabled && handleCoinShopPurchase(item)}
+                          activeOpacity={disabled ? 1 : 0.7}
+                          disabled={disabled}
+                        >
+                          <Text style={[styles.rentalBuyText, disabled && styles.rentalBuyTextDisabled]}>
+                            {cantAfford ? "Can't Afford" : limitReached ? 'Limit Reached' : 'Rent'}
+                          </Text>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            );
+          }
+          return (
+            <>
+              <Text style={styles.sectionTitle}>{'\u23F0'} Limited Rentals</Text>
+              <Text style={styles.rentalSubtitle}>Temporary boosts for coins</Text>
+              <View style={styles.rentalGrid}>
+                {rentalItems.map((item) => {
+                  const cantAfford = !economy.canAfford('coins', item.costCoins);
+                  const currentDate = new Date().toISOString().slice(0, 10);
+                  const purchases = currentDate === coinShopDate ? coinShopPurchasesToday : {};
+                  const todayCount = purchases[item.id] ?? 0;
+                  const limitReached = item.dailyLimit !== undefined && todayCount >= item.dailyLimit;
+                  const disabled = limitReached || cantAfford;
+                  const durationLabel = item.reward.durationMinutes
+                    ? item.reward.durationMinutes >= 1440
+                      ? `${Math.floor(item.reward.durationMinutes / 1440)} day${Math.floor(item.reward.durationMinutes / 1440) > 1 ? 's' : ''}`
+                      : item.reward.durationMinutes >= 60
+                        ? `${Math.floor(item.reward.durationMinutes / 60)} hour${Math.floor(item.reward.durationMinutes / 60) > 1 ? 's' : ''}`
+                        : `${item.reward.durationMinutes} min`
+                    : '';
+
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.rentalCard, disabled && styles.coinShopCardDisabled]}
+                      activeOpacity={disabled ? 1 : 0.7}
+                      onPress={() => !disabled && handleCoinShopPurchase(item)}
+                    >
+                      <LinearGradient
+                        colors={[...GRADIENTS.surfaceCard]}
+                        style={StyleSheet.absoluteFill}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                      />
+                      <Text style={styles.rentalIcon}>{item.icon}</Text>
+                      <Text style={[styles.rentalName, disabled && styles.coinShopTextDisabled]}>
+                        {item.name}
+                      </Text>
+                      <Text style={[styles.rentalDesc, disabled && styles.coinShopTextDisabled]}>
+                        {item.description}
+                      </Text>
+                      {durationLabel ? (
+                        <View style={styles.rentalDurationBadge}>
+                          <Text style={styles.rentalDurationText}>{'\u23F1'} {durationLabel}</Text>
+                        </View>
+                      ) : null}
+                      <View style={[styles.coinShopPrice, cantAfford && styles.coinShopPriceDisabled]}>
+                        <Text style={[styles.coinShopPriceText, cantAfford && styles.coinShopPriceTextDisabled]}>
+                          {'\u{1FA99}'} {item.costCoins}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.rentalBuyButton, disabled && styles.rentalBuyButtonDisabled]}
+                        onPress={() => !disabled && handleCoinShopPurchase(item)}
+                        activeOpacity={disabled ? 1 : 0.7}
+                        disabled={disabled}
+                      >
+                        <Text style={[styles.rentalBuyText, disabled && styles.rentalBuyTextDisabled]}>
+                          {cantAfford ? "Can't Afford" : limitReached ? 'Limit Reached' : 'Rent'}
+                        </Text>
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          );
+        })()}
+
         {/* ── Restore Purchases ──────────────────────────────────────── */}
         <TouchableOpacity
           style={styles.restoreButton}
@@ -1317,6 +1629,93 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     letterSpacing: 1,
+  },
+
+  // ── VIP streak ─────────────────────────────────────────────────────────
+  vipStreakCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.purple + '40',
+    overflow: 'hidden',
+  },
+  vipStreakHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  vipStreakIcon: {
+    fontSize: 28,
+    marginRight: 10,
+  },
+  vipStreakTitle: {
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    color: COLORS.purple,
+    letterSpacing: 1.5,
+  },
+  vipStreakWeeks: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  vipStreakLabelBadge: {
+    backgroundColor: COLORS.purple + '25',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: COLORS.purple + '40',
+  },
+  vipStreakLabelText: {
+    fontSize: 10,
+    fontFamily: FONTS.display,
+    color: COLORS.purpleLight,
+    letterSpacing: 0.5,
+  },
+  vipStreakProgressSection: {
+    marginBottom: 12,
+  },
+  vipStreakProgressBar: {
+    height: 8,
+    backgroundColor: COLORS.cellDefault,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  vipStreakProgressFill: {
+    height: '100%',
+    backgroundColor: COLORS.purple,
+    borderRadius: 4,
+  },
+  vipStreakProgressText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.bodySemiBold,
+  },
+  vipStreakNextReward: {
+    fontSize: 11,
+    color: COLORS.purpleLight,
+    marginTop: 2,
+  },
+  vipStreakClaimButton: {
+    width: '100%',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  vipStreakClaimText: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+  },
+  vipStreakClaimedText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center',
   },
 
   // ── Rotating shop ─────────────────────────────────────────────────────
@@ -1721,6 +2120,198 @@ const styles = StyleSheet.create({
   },
   coinShopLimitReached: {
     color: COLORS.coral,
+  },
+
+  // ── Flash Sale ──────────────────────────────────────────────────────────
+  flashSaleCard: {
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.coral + '60',
+    overflow: 'hidden',
+    shadowColor: COLORS.coral,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  flashSaleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  flashSaleLabel: {
+    fontSize: 18,
+    fontFamily: FONTS.display,
+    color: COLORS.coral,
+    letterSpacing: 2,
+    textShadowColor: 'rgba(255,107,107,0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  flashSaleDiscountBadge: {
+    backgroundColor: COLORS.coral,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  flashSaleDiscountText: {
+    fontSize: 12,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+  },
+  flashSaleBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  flashSaleIcon: {
+    fontSize: 42,
+    marginRight: 14,
+  },
+  flashSaleInfo: {
+    flex: 1,
+  },
+  flashSaleName: {
+    fontSize: 18,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  flashSaleDesc: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  flashSalePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  flashSaleOriginalPrice: {
+    fontSize: 16,
+    color: COLORS.textMuted,
+    textDecorationLine: 'line-through' as const,
+  },
+  flashSaleSalePrice: {
+    fontSize: 22,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    textShadowColor: 'rgba(255,215,0,0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  flashSaleFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  flashSaleTimer: {
+    backgroundColor: COLORS.coral + '20',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  flashSaleTimerText: {
+    fontSize: 14,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.coral,
+    fontVariant: ['tabular-nums' as const],
+  },
+  flashSaleBuyButton: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    overflow: 'hidden',
+    minWidth: 140,
+  },
+  flashSaleBuyText: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    color: COLORS.bg,
+    letterSpacing: 1,
+  },
+
+  // ── Limited Rentals ────────────────────────────────────────────────────
+  rentalSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 12,
+    marginTop: -6,
+  },
+  rentalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  rentalCard: {
+    width: (width - 52) / 2,
+    borderRadius: 16,
+    padding: 14,
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 4,
+  },
+  rentalIcon: {
+    fontSize: 30,
+    marginBottom: 6,
+  },
+  rentalName: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  rentalDesc: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 14,
+  },
+  rentalDurationBadge: {
+    backgroundColor: COLORS.accent + '20',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginBottom: 8,
+  },
+  rentalDurationText: {
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
+  },
+  rentalBuyButton: {
+    backgroundColor: COLORS.gold + '20',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '40',
+  },
+  rentalBuyButtonDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  rentalBuyText: {
+    fontSize: 13,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 0.5,
+  },
+  rentalBuyTextDisabled: {
+    color: COLORS.textMuted,
   },
 });
 

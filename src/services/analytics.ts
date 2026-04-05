@@ -838,10 +838,15 @@ class Analytics {
   }
 
   /**
-   * Clean up timers. Call when the app is being destroyed.
+   * Clean up timers and flush remaining events. Call when the app is being destroyed.
    */
-  destroy(): void {
+  async destroy(): Promise<void> {
     this.stopAutoFlush();
+    try {
+      await this.flush();
+    } catch (e) {
+      if (__DEV__) console.warn('[Analytics] Final flush on destroy failed:', e);
+    }
   }
 }
 

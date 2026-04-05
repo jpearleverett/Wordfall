@@ -414,22 +414,51 @@ export interface MasteryReward {
 // ============ MONETIZATION ============
 export type IAPProductId =
   | 'starter_pack'
+  | 'hint_starter'
   | 'hint_bundle_10'
+  | 'hint_bundle_15'
   | 'hint_bundle_25'
   | 'hint_bundle_50'
+  | 'hint_master'
+  | 'hint_legend'
+  | 'undo_starter'
   | 'undo_bundle_10'
+  | 'undo_bundle_15'
   | 'undo_bundle_25'
   | 'undo_bundle_50'
+  | 'undo_master'
+  | 'undo_legend'
   | 'daily_value_pack'
   | 'chapter_bundle'
+  | 'adventurer_pack'
+  | 'explorer_bundle'
+  | 'champion_pack'
+  | 'booster_crate'
   | 'premium_pass'
   | 'ad_removal'
+  | 'gems_30'
   | 'gems_50'
+  | 'gems_120'
+  | 'gems_200'
   | 'gems_250'
+  | 'gems_400'
   | 'gems_500'
-  | 'vip_weekly'
+  | 'gems_1000'
+  | 'coins_500'
+  | 'coins_2000'
+  | 'coins_5000'
+  | 'weekend_warrior'
+  | 'weekly_champion'
+  | 'event_special'
+  | 'season_pass_bundle'
+  | 'quick_boost'
+  | 'power_pack'
+  | 'super_bundle'
+  | 'diamond_collection'
+  | 'platinum_pack'
   | 'royal_collection'
-  | 'ultimate_whale';
+  | 'ultimate_whale'
+  | 'vip_weekly';
 
 export interface ShopOffer {
   id: string;
@@ -592,7 +621,9 @@ export interface CeremonyItem {
     | 'wing_complete'
     | 'word_mastery_gold'
     | 'first_mode_clear'
-    | 'wildcard_earned';
+    | 'wildcard_earned'
+    | 'mastery_tier_up'
+    | 'quest_step_complete';
   data: Record<string, any>;
 }
 
@@ -734,6 +765,20 @@ export interface ReferralMilestone {
     cosmeticId?: string;
     cosmeticType?: 'frame' | 'title';
   };
+}
+
+// ============ PRESTIGE SYSTEM ============
+export interface PrestigeState {
+  prestigeLevel: number;      // 0 = never prestiged
+  totalPrestiges: number;
+  lastPrestigedAt?: number;   // timestamp
+  permanentBonuses: string[]; // accumulated bonus IDs
+}
+
+// ============ VIP STREAK ============
+export interface VipStreakState {
+  vipStreakWeeks: number;           // consecutive weeks subscribed
+  vipStreakBonusClaimed: boolean;   // claimed this week's streak bonus
 }
 
 // ============ SOLVE REPLAY ============
