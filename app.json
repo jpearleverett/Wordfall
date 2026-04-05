@@ -2,6 +2,7 @@
   "expo": {
     "name": "Wordfall",
     "slug": "wordfall",
+    "description": "Discover hidden words, watch them cascade with gravity, and chain reactions for epic combos! A brain-teasing word puzzle with 10 game modes, 600+ puzzles, and endless fun.",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -31,6 +32,9 @@
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [

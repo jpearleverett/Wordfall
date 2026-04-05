@@ -145,7 +145,14 @@ export const LetterCell = React.memo(function LetterCell({
   const outerGlowColor = isValidWord ? COLORS.greenGlow : isSelected ? COLORS.accentGlow : 'transparent';
 
   return (
-    <View pointerEvents="none" style={isSpotlightDimmed ? { opacity: 0.3 } : undefined}>
+    <View
+      pointerEvents="none"
+      style={isSpotlightDimmed ? { opacity: 0.3 } : undefined}
+      accessibilityRole="button"
+      accessibilityLabel={isWildcard ? 'Wildcard' : letter}
+      accessibilityHint="Double tap to select this letter"
+      accessibilityState={{ selected: isSelected }}
+    >
       {/* Selection neon ripple ring — expanding glow that fades */}
       {isSelected && (
         <Animated.View

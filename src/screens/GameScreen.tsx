@@ -19,6 +19,7 @@ import { GameGrid } from '../components/Grid';
 import { WordBank } from '../components/WordBank';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
+import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -216,6 +217,18 @@ export function GameScreen({
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
 
+  // --- Column-stagger gravity animation state (Task 1) ---
+  const columnStaggerAnims = useRef<Animated.Value[]>([]).current;
+  const [staggerActive, setStaggerActive] = useState(false);
+
+  // --- Big word celebration state (Task 2) ---
+  const [bigWordLabel, setBigWordLabel] = useState<string | null>(null);
+  const bigWordAnim = useRef(new Animated.Value(0)).current;
+  const lastSubmittedWordLenRef = useRef(0);
+
+  // --- Tutorial overlay state (Task 4) ---
+  const [tutorialTip, setTutorialTip] = useState<{ id: string; text: string } | null>(null);
+
   // --- Contextual Offer state ---
   const economy = useEconomy();
   const [activeOffer, setActiveOffer] = useState<OfferType | null>(null);
@@ -329,12 +342,12 @@ export function GameScreen({
       if (isStuck) {
         showOfferIfAllowed('close_finish');
       } else {
-        // Start 15s idle timer for close_finish
+        // Start 30s idle timer for close_finish
         closeFinishTimerRef.current = setTimeout(() => {
           if (!offerShownThisLevel.current) {
             showOfferIfAllowed('close_finish');
           }
-        }, 15000);
+        }, 30000);
       }
     }
     return () => {
@@ -361,6 +374,35 @@ export function GameScreen({
       failureCountedRef.current = false;
     }
   }, [state.status, activeOffer, showOfferIfAllowed, player.failCountByLevel, level]);
+
+  // hint_rescue: dead-end detected while player has 0 hint tokens
+  useEffect(() => {
+    if (
+      isStuck &&
+      state.status === 'playing' &&
+      economy.hintTokens === 0 &&
+      mode !== 'relax' &&
+      !offerShownThisLevel.current &&
+      !activeOffer
+    ) {
+      showOfferIfAllowed('hint_rescue');
+    }
+  }, [isStuck, state.status, economy.hintTokens, mode, activeOffer, showOfferIfAllowed]);
+
+  // post_puzzle (restock): show when hint tokens reach 0 mid-gameplay after using a hint
+  useEffect(() => {
+    if (
+      state.status === 'playing' &&
+      state.hintsUsed > 0 &&
+      economy.hintTokens === 0 &&
+      mode !== 'relax' &&
+      remainingWords.length > 0 &&
+      !offerShownThisLevel.current &&
+      !activeOffer
+    ) {
+      showOfferIfAllowed('post_puzzle');
+    }
+  }, [state.status, state.hintsUsed, economy.hintTokens, mode, remainingWords.length, activeOffer, showOfferIfAllowed]);
 
   // life_refill: show when player fails and has no lives remaining
   useEffect(() => {
@@ -645,7 +687,7 @@ export function GameScreen({
     };
   }, [mode, level, isDaily, board.words.length, board.config.rows, board.config.cols]);
 
-  // Track post-gravity moved cells
+  // Track post-gravity moved cells + column-stagger animation (Task 1)
   useEffect(() => {
     if (foundWords > prevFoundWordsRef.current && state.status === 'playing') {
       const previousGrid = state.history[state.history.length - 1]?.grid;
@@ -659,6 +701,44 @@ export function GameScreen({
         movedCells: moved.length,
       });
       setMovedCells(moved);
+
+      // Column-stagger bounce animation (Task 1)
+      if (!reduceMotion && moved.length > 0) {
+        const cols = state.board.grid[0]?.length ?? 0;
+        // Ensure we have enough Animated.Values for each column
+        while (columnStaggerAnims.length < cols) {
+          columnStaggerAnims.push(new Animated.Value(0));
+        }
+        // Determine which columns had moved cells
+        const movedCols = new Set(moved.map(c => c.col));
+        // Reset all column anims
+        columnStaggerAnims.forEach(a => a.setValue(0));
+        // Build staggered spring animations for each column with moved cells
+        const staggerDelay = ANIM.gravityStagger || 40;
+        let colDelay = 0;
+        const animations: Animated.CompositeAnimation[] = [];
+        for (let c = 0; c < cols; c++) {
+          if (movedCols.has(c)) {
+            animations.push(
+              Animated.sequence([
+                Animated.delay(colDelay),
+                Animated.spring(columnStaggerAnims[c], {
+                  toValue: 1,
+                  tension: 120,
+                  friction: 6,
+                  useNativeDriver: true,
+                }),
+              ])
+            );
+            colDelay += staggerDelay;
+          }
+        }
+        setStaggerActive(true);
+        Animated.parallel(animations).start(() => {
+          setStaggerActive(false);
+        });
+      }
+
       const timer = setTimeout(() => setMovedCells([]), 400);
       return () => clearTimeout(timer);
     }
@@ -678,18 +758,62 @@ export function GameScreen({
     }
   }, [state.status, showFailed, level, mode, foundWords, totalWords, state.score]);
 
-  // Score popup when score changes (word found) + particle burst (#1)
+  // Score popup when score changes (word found) + particle burst (#1) + big word celebration (Task 2)
   useEffect(() => {
     const diff = state.score - prevScoreRef.current;
     prevScoreRef.current = state.score;
     if (diff > 0 && state.status === 'playing') {
+      const wordLen = lastSubmittedWordLenRef.current;
       const label = state.combo > 1 ? `+${diff} (${state.combo}x!)` : `+${diff}`;
       setScorePopup({ points: diff, label });
       void wordFoundHaptic();
-      void soundManager.playSound('wordFound');
 
-      // #1 Word-clear particle burst
-      if (!reduceMotion) {
+      // Big word celebration variance (Task 2)
+      if (wordLen >= 7) {
+        void soundManager.playSound('combo');
+        void comboHaptic();
+        // Show "AMAZING!" / "INCREDIBLE!" overlay
+        const labels = ['AMAZING!', 'INCREDIBLE!', 'PHENOMENAL!', 'SPECTACULAR!'];
+        setBigWordLabel(labels[Math.floor(Math.random() * labels.length)]);
+        bigWordAnim.setValue(0);
+        if (!reduceMotion) {
+          // Extra screen shake for 7+ letter words
+          Animated.sequence([
+            Animated.timing(shakeAnim, { toValue: 14, duration: 35, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: -12, duration: 35, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 10, duration: 30, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: -7, duration: 30, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 4, duration: 25, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 0, duration: 25, useNativeDriver: true }),
+          ]).start();
+
+          Animated.sequence([
+            Animated.spring(bigWordAnim, { toValue: 1, friction: 4, tension: 200, useNativeDriver: true }),
+            Animated.delay(800),
+            Animated.timing(bigWordAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+          ]).start(() => setBigWordLabel(null));
+
+          // Extra particle burst for 7+ letter words
+          setClearParticles({ x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 });
+          setTimeout(() => {
+            setClearParticles(null);
+            // Second burst for extra impact
+            setClearParticles({ x: SCREEN_WIDTH / 2 + 20, y: gridAreaHeight / 2 + 40 });
+            setTimeout(() => setClearParticles(null), 500);
+          }, 250);
+        } else {
+          bigWordAnim.setValue(1);
+          setTimeout(() => { bigWordAnim.setValue(0); setBigWordLabel(null); }, 1000);
+        }
+      } else if (wordLen >= 5) {
+        void soundManager.playSound('combo');
+        void soundManager.playSound('wordFound');
+      } else {
+        void soundManager.playSound('wordFound');
+      }
+
+      // #1 Word-clear particle burst (normal words)
+      if (!reduceMotion && wordLen < 7) {
         setClearParticles({ x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 });
         setTimeout(() => setClearParticles(null), 500);
       }
@@ -700,6 +824,9 @@ export function GameScreen({
         setTimeout(() => { scorePopupAnim.setValue(0); setScorePopup(null); }, 800);
         return;
       }
+
+      // Celebration scaling based on word length (Task 2)
+      const popupScale = wordLen >= 7 ? 1.6 : wordLen >= 5 ? 1.3 : 1.0;
 
       scorePopupAnim.setValue(0);
       Animated.sequence([
@@ -743,6 +870,9 @@ export function GameScreen({
             Animated.timing(gridScaleAnim, { toValue: 1.0, duration: 120, useNativeDriver: true }),
           ]).start();
         }
+
+        // Track word length for big word celebration (Task 2)
+        lastSubmittedWordLenRef.current = currentWord.length;
 
         // #2 Gravity ease-out — 300ms per GDD spec (column stagger not supported by LayoutAnimation)
         LayoutAnimation.configureNext({
@@ -1152,11 +1282,16 @@ export function GameScreen({
         />
       )}
 
-      {/* Score popup */}
-      {scorePopup && (
+      {/* Score popup with word-length scaling (Task 2) */}
+      {scorePopup && (() => {
+        const wordLen = lastSubmittedWordLenRef.current;
+        const popupScale = wordLen >= 7 ? 1.6 : wordLen >= 5 ? 1.3 : 1.0;
+        return (
         <Animated.View
           style={[
             styles.scorePopup,
+            wordLen >= 7 && styles.scorePopupBig,
+            wordLen >= 5 && wordLen < 7 && styles.scorePopupMedium,
             {
               opacity: scorePopupAnim.interpolate({
                 inputRange: [0, 0.5, 1, 1.8, 2],
@@ -1172,7 +1307,7 @@ export function GameScreen({
                 {
                   scale: scorePopupAnim.interpolate({
                     inputRange: [0, 0.3, 1, 2],
-                    outputRange: [0.5, 1.2, 1, 0.8],
+                    outputRange: [0.5 * popupScale, 1.2 * popupScale, popupScale, 0.8 * popupScale],
                   }),
                 },
               ],
@@ -1183,9 +1318,37 @@ export function GameScreen({
           <Text style={[
             styles.scorePopupText,
             state.combo > 1 && styles.scorePopupCombo,
+            wordLen >= 7 && styles.scorePopupTextBig,
           ]}>
             {scorePopup.label}
           </Text>
+        </Animated.View>
+        );
+      })()}
+
+      {/* Big word celebration label overlay (Task 2) */}
+      {bigWordLabel && (
+        <Animated.View
+          style={[
+            styles.bigWordOverlay,
+            {
+              opacity: bigWordAnim.interpolate({
+                inputRange: [0, 0.3, 0.8, 1],
+                outputRange: [0, 1, 1, 0],
+              }),
+              transform: [
+                {
+                  scale: bigWordAnim.interpolate({
+                    inputRange: [0, 0.2, 0.5, 1],
+                    outputRange: [0.3, 1.3, 1.0, 0.8],
+                  }),
+                },
+              ],
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={styles.bigWordText}>{bigWordLabel}</Text>
         </Animated.View>
       )}
 
@@ -1283,6 +1446,8 @@ export function GameScreen({
             spotlightDimmedCells={spotlightDimmedSet}
             gravityDirection={mode === 'gravityFlip' ? state.gravityDirection : undefined}
             noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
+            columnStaggerAnims={columnStaggerAnims}
+            staggerActive={staggerActive}
           />
         </Animated.View>
 

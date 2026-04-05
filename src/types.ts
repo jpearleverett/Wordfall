@@ -623,7 +623,8 @@ export interface CeremonyItem {
     | 'first_mode_clear'
     | 'wildcard_earned'
     | 'mastery_tier_up'
-    | 'quest_step_complete';
+    | 'quest_step_complete'
+    | 'prestige';
   data: Record<string, any>;
 }
 

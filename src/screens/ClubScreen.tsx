@@ -22,6 +22,7 @@ import {
   ActiveClubGoal,
   ClubLeaderboardEntry,
 } from '../data/clubEvents';
+import { filterMessage } from '../utils/profanityFilter';
 
 const { width } = Dimensions.get('window');
 
@@ -97,14 +98,14 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       id: `local_${Date.now()}`,
       userId,
       displayName,
-      message: text.slice(0, 200),
+      message: filterMessage(text.slice(0, 200)),
       timestamp: Date.now(),
       type: 'text',
     };
     setChatMessages((prev) => [optimisticMessage, ...prev]);
 
     // Send to Firestore (no-op if unavailable)
-    await firestoreService.sendClubMessage(clubId, userId, displayName, text);
+    await firestoreService.sendClubMessage(clubId, userId, displayName, filterMessage(text));
   }, [chatInput, clubId, user, (player as any).displayName ?? player.equippedTitle]);
 
   const getRelativeTime = useCallback((timestamp: number): string => {

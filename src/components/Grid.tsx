@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useCallback } from 'react';
 import {
+  Animated,
   Image,
   Platform,
   StyleSheet,
@@ -48,6 +49,10 @@ interface GridProps {
   movedCells?: CellPosition[];
   maxHeight?: number;
   isDragging?: boolean;
+  /** Column-stagger gravity bounce Animated.Values (one per column, 0->1) */
+  columnStaggerAnims?: Animated.Value[];
+  /** Whether column stagger animation is currently active */
+  staggerActive?: boolean;
 }
 
 export function GameGrid({
@@ -65,6 +70,8 @@ export function GameGrid({
   maxHeight,
   isDragging = false,
   noGravityLayout = false,
+  columnStaggerAnims = [],
+  staggerActive = false,
 }: GridProps) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -332,19 +339,52 @@ export function GameGrid({
             <View
               ref={gridRef}
               style={gridContainerStyle}
+              accessibilityRole="grid"
+              accessibilityLabel={`Letter grid, ${rows} rows by ${cols} columns`}
             >
-              {columns.map((column, colIndex) => (
-                <View
+              {columns.map((column, colIndex) => {
+                const colAnim = staggerActive && columnStaggerAnims[colIndex] ? columnStaggerAnims[colIndex] : null;
+                const ColumnWrapper = colAnim ? Animated.View : View;
+                const colStyle = colAnim
+                  ? [
+                      styles.column,
+                      {
+                        width: cellSize + CELL_GAP,
+                        height: gridHeight,
+                      },
+                      noGravityLayout && styles.columnNoGravity,
+                      !noGravityLayout && gravityDirection === 'up' && styles.columnGravityUp,
+                      {
+                        transform: [
+                          {
+                            translateY: colAnim.interpolate({
+                              inputRange: [0, 0.5, 1],
+                              outputRange: [-12, 4, 0],
+                            }),
+                          },
+                          {
+                            scale: colAnim.interpolate({
+                              inputRange: [0, 0.4, 0.7, 1],
+                              outputRange: [0.96, 1.03, 0.99, 1],
+                            }),
+                          },
+                        ],
+                      },
+                    ]
+                  : [
+                      styles.column,
+                      {
+                        width: cellSize + CELL_GAP,
+                        height: gridHeight,
+                      },
+                      noGravityLayout && styles.columnNoGravity,
+                      !noGravityLayout && gravityDirection === 'up' && styles.columnGravityUp,
+                    ];
+
+                return (
+                <ColumnWrapper
                   key={colIndex}
-                  style={[
-                    styles.column,
-                    {
-                      width: cellSize + CELL_GAP,
-                      height: gridHeight,
-                    },
-                    noGravityLayout && styles.columnNoGravity,
-                    !noGravityLayout && gravityDirection === 'up' && styles.columnGravityUp,
-                  ]}
+                  style={colStyle as any}
                 >
                   {!noGravityLayout && gravityDirection !== 'up' && <View style={EMPTY_FLEX} />}
                   {column.map(({ cell, row, col }) => {
@@ -379,8 +419,9 @@ export function GameGrid({
                     );
                   })}
                   {!noGravityLayout && gravityDirection === 'up' && <View style={EMPTY_FLEX} />}
-                </View>
-              ))}
+                </ColumnWrapper>
+                );
+              })}
             </View>
           </GestureDetector>
 

@@ -77,6 +77,7 @@
  */
 
 import { db, isFirebaseConfigured } from '../config/firebase';
+import { logger } from '../utils/logger';
 import {
   collection,
   doc,
@@ -198,7 +199,7 @@ class FirestoreService {
         { merge: true }
       );
     } catch (e) {
-      console.warn('[Firestore] syncPlayerProfile failed:', e);
+      logger.warn('[Firestore] syncPlayerProfile failed:', e);
     }
   }
 
@@ -219,7 +220,7 @@ class FirestoreService {
       await setDoc(userRef, { friendCode: code }, { merge: true });
       return code;
     } catch (e) {
-      console.warn('[Firestore] generateFriendCode failed:', e);
+      logger.warn('[Firestore] generateFriendCode failed:', e);
       return userId.slice(0, 8).toUpperCase();
     }
   }
@@ -242,7 +243,7 @@ class FirestoreService {
       const d = snap.docs[0];
       return { userId: d.id, displayName: d.data().displayName || 'Player' };
     } catch (e) {
-      console.warn('[Firestore] findUserByFriendCode failed:', e);
+      logger.warn('[Firestore] findUserByFriendCode failed:', e);
       return null;
     }
   }
@@ -274,7 +275,7 @@ class FirestoreService {
         date: d.data().date,
       }));
     } catch (e) {
-      console.warn('[Firestore] getDailyLeaderboard failed:', e);
+      logger.warn('[Firestore] getDailyLeaderboard failed:', e);
       return [];
     }
   }
@@ -302,7 +303,7 @@ class FirestoreService {
         weekId: d.data().weekId,
       }));
     } catch (e) {
-      console.warn('[Firestore] getWeeklyLeaderboard failed:', e);
+      logger.warn('[Firestore] getWeeklyLeaderboard failed:', e);
       return [];
     }
   }
@@ -328,7 +329,7 @@ class FirestoreService {
         level: d.data().level,
       }));
     } catch (e) {
-      console.warn('[Firestore] getAllTimeLeaderboard failed:', e);
+      logger.warn('[Firestore] getAllTimeLeaderboard failed:', e);
       return [];
     }
   }
@@ -362,7 +363,7 @@ class FirestoreService {
         timestamp: serverTimestamp(),
       });
     } catch (e) {
-      console.warn('[Firestore] submitDailyScore failed:', e);
+      logger.warn('[Firestore] submitDailyScore failed:', e);
     }
   }
 
@@ -389,7 +390,7 @@ class FirestoreService {
         timestamp: serverTimestamp(),
       });
     } catch (e) {
-      console.warn('[Firestore] submitWeeklyScore failed:', e);
+      logger.warn('[Firestore] submitWeeklyScore failed:', e);
     }
   }
 
@@ -416,7 +417,7 @@ class FirestoreService {
         createdAt: d.data().createdAt,
       }));
     } catch (e) {
-      console.warn('[Firestore] getFriends failed:', e);
+      logger.warn('[Firestore] getFriends failed:', e);
       return [];
     }
   }
@@ -444,7 +445,7 @@ class FirestoreService {
         }))
         .filter((f) => f.requestedBy !== userId);
     } catch (e) {
-      console.warn('[Firestore] getPendingFriendRequests failed:', e);
+      logger.warn('[Firestore] getPendingFriendRequests failed:', e);
       return [];
     }
   }
@@ -487,7 +488,7 @@ class FirestoreService {
       });
       return { friendUserId: found.userId, friendName: found.displayName };
     } catch (e) {
-      console.warn('[Firestore] addFriend failed:', e);
+      logger.warn('[Firestore] addFriend failed:', e);
       return null;
     }
   }
@@ -502,7 +503,7 @@ class FirestoreService {
       await updateDoc(ref, { status: 'accepted' });
       return true;
     } catch (e) {
-      console.warn('[Firestore] acceptFriendRequest failed:', e);
+      logger.warn('[Firestore] acceptFriendRequest failed:', e);
       return false;
     }
   }
@@ -548,7 +549,7 @@ class FirestoreService {
       const beaten = allScores.filter((s) => myScore > s).length;
       return { beaten, total: allScores.length };
     } catch (e) {
-      console.warn('[Firestore] getFriendScores failed:', e);
+      logger.warn('[Firestore] getFriendScores failed:', e);
       return { beaten: 0, total: 0 };
     }
   }
@@ -581,7 +582,7 @@ class FirestoreService {
       });
       return true;
     } catch (e) {
-      console.warn('[Firestore] sendGift failed:', e);
+      logger.warn('[Firestore] sendGift failed:', e);
       return false;
     }
   }
@@ -610,7 +611,7 @@ class FirestoreService {
         expiresAt: d.data().expiresAt,
       }));
     } catch (e) {
-      console.warn('[Firestore] getPendingGifts failed:', e);
+      logger.warn('[Firestore] getPendingGifts failed:', e);
       return [];
     }
   }
@@ -625,7 +626,7 @@ class FirestoreService {
       await updateDoc(giftRef, { claimed: true });
       return true;
     } catch (e) {
-      console.warn('[Firestore] claimGift failed:', e);
+      logger.warn('[Firestore] claimGift failed:', e);
       return false;
     }
   }
@@ -655,7 +656,7 @@ class FirestoreService {
       });
       return clubRef.id;
     } catch (e) {
-      console.warn('[Firestore] createClub failed:', e);
+      logger.warn('[Firestore] createClub failed:', e);
       return null;
     }
   }
@@ -670,7 +671,7 @@ class FirestoreService {
       if (!snap.exists()) return null;
       return { id: snap.id, ...snap.data() };
     } catch (e) {
-      console.warn('[Firestore] getClub failed:', e);
+      logger.warn('[Firestore] getClub failed:', e);
       return null;
     }
   }
@@ -699,7 +700,7 @@ class FirestoreService {
         type: 'text',
       });
     } catch (e) {
-      console.warn('[Firestore] sendClubMessage failed:', e);
+      logger.warn('[Firestore] sendClubMessage failed:', e);
     }
   }
 
@@ -728,7 +729,7 @@ class FirestoreService {
         type: 'text' as const,
       }));
     } catch (e) {
-      console.warn('[Firestore] getClubMessages failed:', e);
+      logger.warn('[Firestore] getClubMessages failed:', e);
       return [];
     }
   }
