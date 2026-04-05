@@ -342,12 +342,12 @@ export function GameScreen({
       if (isStuck) {
         showOfferIfAllowed('close_finish');
       } else {
-        // Start 15s idle timer for close_finish
+        // Start 30s idle timer for close_finish
         closeFinishTimerRef.current = setTimeout(() => {
           if (!offerShownThisLevel.current) {
             showOfferIfAllowed('close_finish');
           }
-        }, 15000);
+        }, 30000);
       }
     }
     return () => {
@@ -374,6 +374,35 @@ export function GameScreen({
       failureCountedRef.current = false;
     }
   }, [state.status, activeOffer, showOfferIfAllowed, player.failCountByLevel, level]);
+
+  // hint_rescue: dead-end detected while player has 0 hint tokens
+  useEffect(() => {
+    if (
+      isStuck &&
+      state.status === 'playing' &&
+      economy.hintTokens === 0 &&
+      mode !== 'relax' &&
+      !offerShownThisLevel.current &&
+      !activeOffer
+    ) {
+      showOfferIfAllowed('hint_rescue');
+    }
+  }, [isStuck, state.status, economy.hintTokens, mode, activeOffer, showOfferIfAllowed]);
+
+  // post_puzzle (restock): show when hint tokens reach 0 mid-gameplay after using a hint
+  useEffect(() => {
+    if (
+      state.status === 'playing' &&
+      state.hintsUsed > 0 &&
+      economy.hintTokens === 0 &&
+      mode !== 'relax' &&
+      remainingWords.length > 0 &&
+      !offerShownThisLevel.current &&
+      !activeOffer
+    ) {
+      showOfferIfAllowed('post_puzzle');
+    }
+  }, [state.status, state.hintsUsed, economy.hintTokens, mode, remainingWords.length, activeOffer, showOfferIfAllowed]);
 
   // life_refill: show when player fails and has no lives remaining
   useEffect(() => {
