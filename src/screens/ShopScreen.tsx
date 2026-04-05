@@ -16,6 +16,7 @@ import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useSettings } from '../contexts/SettingsContext';
 import { useEconomy } from '../contexts/EconomyContext';
+import { usePlayer } from '../contexts/PlayerContext';
 import { iapManager, PurchaseResult } from '../services/iap';
 import { adManager, AdRewardType } from '../services/ads';
 import { MockAdModal } from '../components/MockAdModal';
@@ -123,15 +124,18 @@ interface ShopScreenProps {
   onPurchase?: (itemId: string) => void;
   adsRemoved?: boolean;
   premiumPass?: boolean;
+  navigation?: any;
 }
 
 const ShopScreen: React.FC<ShopScreenProps> = ({
   onPurchase: onPurchaseProp,
   adsRemoved: adsRemovedProp,
   premiumPass: premiumPassProp,
+  navigation,
 }) => {
   const settings = useSettings();
   const economy = useEconomy();
+  const player = usePlayer();
   const adsRemoved = adsRemovedProp ?? economy.isAdFree ?? settings.adsRemoved;
   const premiumPass = premiumPassProp ?? economy.isPremiumPass ?? settings.premiumPass;
   const iapAvailable = iapManager.isInitialized();
@@ -431,6 +435,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress: () => {
               const spent = economy.spendGems(item.gemCost);
               if (spent) {
+                player.unlockCosmetic(item.id);
                 Alert.alert('Purchased!', `${item.name} has been added to your collection.`);
               }
             },
@@ -1026,6 +1031,24 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             );
           })}
         </ScrollView>
+
+        {navigation && (
+          <TouchableOpacity
+            style={styles.browseCosmetics}
+            onPress={() => navigation.navigate('CosmeticStore')}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={[COLORS.accent + '18', COLORS.accent + '08'] as [string, string]}
+              style={styles.browseCosmeticsGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.browseCosmeticsText}>{'\u{1F3A8}'} Browse All Cosmetics</Text>
+              <Text style={styles.browseCosmeticsChevron}>{'\u{203A}'}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
 
         {/* ── Hint Bundles ───────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Hint Bundles</Text>
@@ -2312,6 +2335,29 @@ const styles = StyleSheet.create({
   },
   rentalBuyTextDisabled: {
     color: COLORS.textMuted,
+  },
+  browseCosmetics: {
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  browseCosmeticsGradient: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '30',
+  },
+  browseCosmeticsText: {
+    fontSize: 14,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
+  },
+  browseCosmeticsChevron: {
+    fontSize: 20,
+    color: COLORS.accent,
   },
 });
 
