@@ -141,7 +141,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
     return (
       <View style={styles.container}>
         <Image
-          source={LOCAL_IMAGES.bgOnboarding}
+          source={LOCAL_IMAGES.bg1}
           style={[StyleSheet.absoluteFill, { opacity: 0.6 }]}
           resizeMode="cover"
         />
