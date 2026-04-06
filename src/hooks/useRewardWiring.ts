@@ -10,6 +10,8 @@ import {
   STAR_MILESTONES,
   PERFECT_MILESTONES,
   MILESTONE_DECORATIONS,
+  EARLY_GAME_BONUSES,
+  STARTER_PACK_DELAY_PUZZLES,
 } from '../constants';
 import { ATLAS_PAGES, getCurrentSeasonAlbum } from '../data/collections';
 import { generateShareText } from '../utils/shareGenerator';
@@ -79,6 +81,7 @@ interface PlayerContextLike {
   consecutiveFailures: number;
   performanceMetrics: any;
   referralCode: string;
+  featuresUnlocked: string[];
   seasonalQuest: SeasonalQuestState;
 
   recordPuzzleComplete: (level: number, score: number, stars: number, isPerfect: boolean) => void;
@@ -106,6 +109,9 @@ interface EconomyContextLike {
   addCoins: (amount: number) => void;
   addGems: (amount: number) => void;
   addLibraryPoints: (amount: number) => void;
+  addHintTokens: (amount: number) => void;
+  starterPackExpiresAt: number;
+  activateStarterPack: () => void;
 }
 
 interface UseRewardWiringParams {
@@ -127,6 +133,8 @@ export interface CompletionData {
   shareText: string;
   friendComparison: { beaten: number; total: number };
   eventMultiplierLabel?: string;
+  /** Show "come back tomorrow" card for early-game players */
+  showTomorrowPreview: boolean;
 }
 
 /**
@@ -232,12 +240,72 @@ export function useRewardWiring({
       });
     }
 
+    // First-win celebration — outsized reward for the very first puzzle
+    if (isFirstWin) {
+      player.queueCeremony({
+        type: 'first_win',
+        data: { coins: 100, gems: 5, wheelSpins: 1 },
+      });
+    }
+
+    // Early game bonus rewards — surprise rewards at specific levels to
+    // break monotony and teach systems during the first 10 levels
+    const earlyBonus = EARLY_GAME_BONUSES.find(b => b.level === level);
+    if (earlyBonus && !isFirstWin) {
+      // isFirstWin already awards the level-1 bonus via the ceremony above
+      if (earlyBonus.coins) economy.addCoins(earlyBonus.coins);
+      if (earlyBonus.gems) economy.addGems(earlyBonus.gems);
+      if (earlyBonus.hints) economy.addHintTokens(earlyBonus.hints);
+      if (earlyBonus.wheelSpins) {
+        player.updateProgress({
+          mysteryWheel: {
+            ...player.mysteryWheel,
+            spinsAvailable: (player.mysteryWheel?.spinsAvailable ?? 0) + earlyBonus.wheelSpins,
+          },
+        });
+      }
+      if (earlyBonus.coins || earlyBonus.gems || earlyBonus.hints) {
+        player.queueCeremony({
+          type: 'early_bonus',
+          data: {
+            coins: earlyBonus.coins,
+            gems: earlyBonus.gems,
+            hints: earlyBonus.hints,
+            level,
+          },
+        });
+      }
+    }
+    // Award first-win bonus resources (handled separately from ceremony)
+    if (isFirstWin) {
+      economy.addCoins(100);
+      economy.addGems(5);
+      player.updateProgress({
+        mysteryWheel: {
+          ...player.mysteryWheel,
+          spinsAvailable: (player.mysteryWheel?.spinsAvailable ?? 0) + 1,
+        },
+      });
+    }
+
+    // Activate starter pack timer after enough puzzles to understand value
+    const puzzlesAfterThis = player.puzzlesSolved + 1;
+    if (puzzlesAfterThis === STARTER_PACK_DELAY_PUZZLES && economy.starterPackExpiresAt === 0) {
+      economy.activateStarterPack();
+      player.queueCeremony({
+        type: 'starter_pack_unlocked',
+        data: {},
+      });
+    }
+
     // Check for rare tile drop -- apply event multiplier to drop rate
+    // Early game guaranteed rare tile bypasses RNG to create first_rare_tile ceremony early
+    const guaranteedRare = earlyBonus?.guaranteedRareTile === true;
     const baseDropChance = COLLECTION.rareTileBaseChance
       + (difficulty === 'hard' || difficulty === 'expert' ? COLLECTION.rareTileHardBonus : 0)
       + (isPerfect ? COLLECTION.rareTilePerfectBonus : 0);
     const dropChance = Math.min(baseDropChance * eventMultipliers.rareTileChance, 1);
-    if (Math.random() < dropChance) {
+    if (guaranteedRare || Math.random() < dropChance) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       const randomLetter = letters[Math.floor(Math.random() * letters.length)];
       const wasFirstTile = Object.keys(player.collections.rareTiles || {}).length === 0;
@@ -426,12 +494,28 @@ export function useRewardWiring({
 
     // Milestone decoration unlocks (every 5 levels)
     if (leveledUp) {
+      const libraryUnlockLevel = FEATURE_UNLOCK_SCHEDULE.find(f => f.id === 'tab_library')?.unlockLevel ?? 9;
+      const hasLibrary = player.featuresUnlocked.includes('tab_library');
       for (const md of MILESTONE_DECORATIONS) {
         if (newLevel >= md.level && prevHighest < md.level) {
-          player.queueCeremony({
-            type: 'decoration_unlock',
-            data: { level: md.level, decoration: md.decoration, name: md.name, icon: md.icon },
-          });
+          if (!hasLibrary && newLevel < libraryUnlockLevel) {
+            // Library not yet unlocked — show teaser instead of regular decoration ceremony
+            player.queueCeremony({
+              type: 'library_teaser',
+              data: {
+                decoration: md.decoration,
+                name: md.name,
+                icon: md.icon,
+                libraryUnlockLevel,
+                levelsAway: libraryUnlockLevel - newLevel,
+              },
+            });
+          } else {
+            player.queueCeremony({
+              type: 'decoration_unlock',
+              data: { level: md.level, decoration: md.decoration, name: md.name, icon: md.icon },
+            });
+          }
         }
       }
     }
@@ -546,6 +630,7 @@ export function useRewardWiring({
                 shareText,
                 friendComparison: result,
                 eventMultiplierLabel,
+                showTomorrowPreview: puzzlesAfterThis <= 5,
               },
             });
           }
@@ -568,6 +653,7 @@ export function useRewardWiring({
           shareText,
           friendComparison,
           eventMultiplierLabel,
+          showTomorrowPreview: puzzlesAfterThis <= 5,
         },
       });
     }

@@ -26,7 +26,7 @@ interface OnboardingScreenProps {
   onComplete?: () => void;
 }
 
-type Phase = 'welcome' | 'tutorial' | 'celebrate' | 'ready';
+type Phase = 'welcome' | 'tutorial' | 'celebrate' | 'library_preview' | 'ready';
 
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => {} }) => {
   const [phase, setPhase] = useState<Phase>('welcome');
@@ -61,6 +61,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
       void funnelTracker.trackOnboarding('board_a');
     } else if (phase === 'celebrate') {
       void funnelTracker.trackOnboarding('complete');
+    } else if (phase === 'library_preview') {
+      void funnelTracker.trackOnboarding('library_preview');
     }
   }, [phase]);
 
@@ -234,7 +236,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
 
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
-            onPress={() => transitionTo('ready')}
+            onPress={() => transitionTo('library_preview')}
           >
             <LinearGradient
               colors={[COLORS.green, COLORS.teal] as [string, string]}
@@ -243,6 +245,58 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
               style={[styles.startButton, SHADOWS.glow(COLORS.green)]}
             >
               <Text style={styles.startButtonText}>CONTINUE</Text>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  if (phase === 'library_preview') {
+    return (
+      <View style={styles.container}>
+        <Animated.View style={[styles.centerContent, { opacity: fadeAnim }]}>
+          <Animated.View style={[styles.glowCirclePurple, { transform: [{ scale: pulseAnim }] }]} />
+          <Text style={styles.libraryEmoji}>📖</Text>
+          <Text style={styles.libraryTitle}>THE GRAND LIBRARY</Text>
+          <Text style={styles.librarySubtext}>
+            An ancient library has fallen into disrepair.{'\n'}
+            Every puzzle you solve helps restore it.
+          </Text>
+
+          <View style={styles.libraryPreviewCards}>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)'] as [string, string]}
+              style={styles.libraryCard}
+            >
+              <Text style={styles.libraryCardIcon}>🏚️</Text>
+              <Text style={styles.libraryCardLabel}>Now</Text>
+            </LinearGradient>
+            <Text style={styles.libraryArrow}>→</Text>
+            <LinearGradient
+              colors={['rgba(200,77,255,0.12)', 'rgba(200,77,255,0.04)'] as [string, string]}
+              style={styles.libraryCard}
+            >
+              <Text style={styles.libraryCardIcon}>🏛️</Text>
+              <Text style={styles.libraryCardLabel}>Restored</Text>
+            </LinearGradient>
+          </View>
+
+          <Text style={styles.libraryHint}>
+            8 wings to restore. Earn decorations as you level up.
+          </Text>
+
+          <Pressable
+            style={({ pressed }) => [pressed && styles.pressed]}
+            onPress={() => transitionTo('ready')}
+          >
+            <LinearGradient
+              colors={[COLORS.purple, COLORS.accent] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.startButton, SHADOWS.glow(COLORS.purple)]}
+            >
+              <Text style={styles.startButtonText}>I'LL RESTORE IT!</Text>
             </LinearGradient>
           </Pressable>
         </Animated.View>
@@ -520,6 +574,75 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.bodySemiBold,
     flex: 1,
+  },
+  // Library preview phase
+  glowCirclePurple: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: 'rgba(200, 77, 255, 0.25)',
+    shadowColor: '#c84dff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 35,
+  },
+  libraryEmoji: {
+    fontSize: 72,
+    marginBottom: 20,
+  },
+  libraryTitle: {
+    color: COLORS.purple,
+    fontSize: 32,
+    fontFamily: FONTS.display,
+    letterSpacing: 3,
+    marginBottom: 12,
+    textShadowColor: 'rgba(200, 77, 255, 0.6)',
+    textShadowRadius: 16,
+  },
+  librarySubtext: {
+    color: COLORS.textSecondary,
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+    marginBottom: 28,
+    maxWidth: 300,
+  },
+  libraryPreviewCards: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 20,
+  },
+  libraryCard: {
+    width: 110,
+    height: 110,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  libraryCardIcon: {
+    fontSize: 40,
+    marginBottom: 8,
+  },
+  libraryCardLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+  },
+  libraryArrow: {
+    color: COLORS.purple,
+    fontSize: 28,
+    fontFamily: FONTS.display,
+  },
+  libraryHint: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 32,
+    maxWidth: 260,
   },
 });
 

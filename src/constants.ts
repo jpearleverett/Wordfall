@@ -345,7 +345,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Beat the clock',
     icon: '⏱️',
     color: COLORS.orange,
-    unlockLevel: 8,
+    unlockLevel: 12,
     rules: {
       hasTimer: true,
       timerSeconds: 120,
@@ -364,7 +364,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Zero mistakes, no assists',
     icon: '💎',
     color: COLORS.gold,
-    unlockLevel: 12,
+    unlockLevel: 18,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -382,7 +382,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Gravity rotates 90° after each word',
     icon: '🔄',
     color: COLORS.coral,
-    unlockLevel: 10,
+    unlockLevel: 14,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -417,7 +417,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Curated hard puzzle',
     icon: '🏆',
     color: COLORS.purple,
-    unlockLevel: 10,
+    unlockLevel: 16,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -435,7 +435,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Letters stay put — pure word finding',
     icon: '🚀',
     color: COLORS.teal,
-    unlockLevel: 3,
+    unlockLevel: 8,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -482,6 +482,27 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     },
   },
 };
+
+// Early game bonus rewards (awarded on top of normal puzzle rewards)
+export const EARLY_GAME_BONUSES: {
+  level: number;
+  coins?: number;
+  gems?: number;
+  hints?: number;
+  wheelSpins?: number;
+  guaranteedRareTile?: boolean;
+}[] = [
+  { level: 1, coins: 100, gems: 5, wheelSpins: 1 },       // First-win jackpot feeling
+  { level: 2, wheelSpins: 1 },                              // Teach mystery wheel
+  { level: 3, hints: 2 },                                   // Replenish consumables
+  { level: 5, guaranteedRareTile: true },                    // First rare tile ceremony
+  { level: 7, gems: 5 },                                    // Gem injection at weekly goals
+  { level: 10, coins: 200 },                                // End of early game milestone
+];
+
+// Starter pack activation delay — don't start the 72hr timer until player
+// has solved enough puzzles to understand the value of items
+export const STARTER_PACK_DELAY_PUZZLES = 5;
 
 // Scoring
 export const SCORE = {
@@ -761,11 +782,11 @@ export const FEATURE_UNLOCK_SCHEDULE: {
   accentColor: string;
 }[] = [
   { id: 'tab_play', unlockLevel: 1, icon: '▶', title: 'Play', description: 'Access game modes', accentColor: COLORS.accent },
-  { id: 'tab_collections', unlockLevel: 5, icon: '◆', title: 'Collections Unlocked!', description: 'Discover Word Atlas, Rare Tiles, and Seasonal Stamps. Collect them all!', accentColor: COLORS.gold },
-  { id: 'tab_library', unlockLevel: 8, icon: '❏', title: 'The Grand Library!', description: 'Restore 8 wings of the ancient library. Place decorations and build your sanctuary.', accentColor: COLORS.purple },
+  { id: 'tab_collections', unlockLevel: 4, icon: '◆', title: 'Collections Unlocked!', description: 'Discover Word Atlas, Rare Tiles, and Seasonal Stamps. Collect them all!', accentColor: COLORS.gold },
   { id: 'boosters', unlockLevel: 6, icon: '⚡', title: 'Boosters Unlocked!', description: 'Use Freeze, Preview, and Shuffle to gain the edge on tough puzzles.', accentColor: COLORS.teal },
+  { id: 'weekly_goals', unlockLevel: 7, icon: '📋', title: 'Weekly Goals!', description: 'Complete weekly objectives for bonus gems and exclusive rewards.', accentColor: COLORS.green },
+  { id: 'tab_library', unlockLevel: 9, icon: '❏', title: 'The Grand Library!', description: 'Restore 8 wings of the ancient library. Place decorations and build your sanctuary.', accentColor: COLORS.purple },
   { id: 'events', unlockLevel: 10, icon: '🏆', title: 'Events Unlocked!', description: 'Compete in weekly events for exclusive rewards and climb the leaderboards.', accentColor: COLORS.coral },
-  { id: 'weekly_goals', unlockLevel: 5, icon: '📋', title: 'Weekly Goals!', description: 'Complete weekly objectives for bonus gems and exclusive rewards.', accentColor: COLORS.green },
 ];
 
 // Breather difficulty config — drops the player back ~3-4 levels worth of difficulty

@@ -406,6 +406,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   tutorialComplete: false,
   onboardingDay: 1,
   featuresUnlocked: [],
+  onboardingMilestones: [],
 
   // Milestones
   achievementIds: [],

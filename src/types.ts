@@ -624,8 +624,23 @@ export interface CeremonyItem {
     | 'wildcard_earned'
     | 'mastery_tier_up'
     | 'quest_step_complete'
-    | 'prestige';
+    | 'prestige'
+    | 'first_win'
+    | 'early_bonus'
+    | 'library_teaser'
+    | 'starter_pack_unlocked'
+    | 'tomorrow_preview';
   data: Record<string, any>;
+}
+
+// ============ ONBOARDING MILESTONES ============
+export interface OnboardingMilestone {
+  id: string;
+  triggerLevel: number;
+  message: string;
+  ctaLabel: string;
+  action: 'play' | 'play_again' | 'open_wheel' | 'try_mode' | 'open_collections' | 'tease_library';
+  icon: string;
 }
 
 // ============ MYSTERY WHEEL ============

@@ -97,6 +97,8 @@ interface EconomyContextType extends Economy {
   isPremiumPass: boolean;
   dailyValuePackExpiry: number;
   starterPackAvailable: boolean;
+  starterPackExpiresAt: number;
+  activateStarterPack: () => void;
   undoTokens: number;
   addUndoTokens: (amount: number) => void;
   spendUndoToken: () => boolean;
@@ -138,7 +140,7 @@ const DEFAULT_ECONOMY: EconomyState = {
   isPremiumPassFlag: false,
   dailyValuePackExpiry: 0,
   dailyValuePackLastClaim: '',
-  starterPackExpiresAt: Date.now() + STARTER_PACK_WINDOW_MS,
+  starterPackExpiresAt: 0, // Deferred: activated after STARTER_PACK_DELAY_PUZZLES puzzles
   undoTokens: 5,
   isVipSubscriber: false,
   vipExpiresAt: 0,
@@ -191,6 +193,8 @@ const EconomyContext = createContext<EconomyContextType>({
   isPremiumPass: false,
   dailyValuePackExpiry: 0,
   starterPackAvailable: true,
+  starterPackExpiresAt: 0,
+  activateStarterPack: () => {},
   undoTokens: 0,
   addUndoTokens: () => {},
   spendUndoToken: () => false,
@@ -633,6 +637,13 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return claimed;
   }, []);
 
+  const activateStarterPack = useCallback((): void => {
+    setState((prev) => ({
+      ...prev,
+      starterPackExpiresAt: Date.now() + STARTER_PACK_WINDOW_MS,
+    }));
+  }, []);
+
   const addLives = useCallback((count: number): void => {
     setState((prev) => ({
       ...prev,
@@ -684,6 +695,8 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         isPremiumPass: state.isPremiumPassFlag,
         dailyValuePackExpiry: state.dailyValuePackExpiry,
         starterPackAvailable: state.starterPackExpiresAt > Date.now(),
+        starterPackExpiresAt: state.starterPackExpiresAt,
+        activateStarterPack,
         undoTokens: state.undoTokens,
         addUndoTokens,
         spendUndoToken,
