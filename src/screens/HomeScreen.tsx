@@ -25,6 +25,7 @@ import ReferralCard from '../components/ReferralCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
 import { usePlayer } from '../contexts/PlayerContext';
+import { getNextMilestone } from '../data/onboardingMilestones';
 
 interface DailyMissionDisplay {
   id: string;
@@ -248,6 +249,10 @@ export function HomeScreen({
   });
 
   const totalStars = Object.values(progress.starsByLevel).reduce((a, b) => a + b, 0);
+  const nextGuidedMilestone = getNextMilestone(
+    progress.currentLevel,
+    player.onboardingMilestones ?? [],
+  );
   const dailyDeal = getDailyDeal(today);
   const dealHoursLeft = dailyDeal.availableHours;
   const flashSale = getFlashSale(new Date());
@@ -275,7 +280,7 @@ export function HomeScreen({
     : (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0;
   const showMysteryWheel = hasSegmentContent
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
-    : playerStage !== 'new' && onOpenWheel;
+    : (playerStage !== 'new' || (mysteryWheelSpins > 0)) && onOpenWheel;
 
   // ── Seasonal Quest ──────────────────────────────────────────────────
   const seasonalQuest = getCurrentSeasonalQuest();
@@ -440,6 +445,44 @@ export function HomeScreen({
           )}
         </View>
       </Animated.View>
+
+      {/* Guided onboarding milestone banner — shown for first 5 levels */}
+      {nextGuidedMilestone && (
+        <Pressable
+          style={({ pressed }) => [pressed && styles.buttonPressed]}
+          onPress={() => {
+            player.completeOnboardingMilestone(nextGuidedMilestone.id);
+            switch (nextGuidedMilestone.action) {
+              case 'play':
+              case 'play_again':
+              case 'tease_library':
+                onPlay();
+                break;
+              case 'open_wheel':
+                onOpenWheel?.();
+                break;
+              case 'try_mode':
+                // Navigate to play which shows modes list
+                onPlay();
+                break;
+              case 'open_collections':
+                // Collections tab will be visible; just dismiss the banner
+                break;
+            }
+          }}
+        >
+          <LinearGradient
+            colors={['rgba(255,215,0,0.20)', 'rgba(255,159,67,0.10)'] as [string, string]}
+            style={styles.milestoneBanner}
+          >
+            <Text style={styles.milestoneBannerIcon}>{nextGuidedMilestone.icon}</Text>
+            <View style={styles.milestoneBannerContent}>
+              <Text style={styles.milestoneBannerText}>{nextGuidedMilestone.message}</Text>
+              <Text style={styles.milestoneBannerCta}>{nextGuidedMilestone.ctaLabel} →</Text>
+            </View>
+          </LinearGradient>
+        </Pressable>
+      )}
 
       {/* Active Event Banners */}
       {activeEventBanners.length > 0 && (
@@ -666,6 +709,22 @@ export function HomeScreen({
             />
           </View>
         ) : null}
+
+        {/* Come-back-tomorrow hook — early game retention */}
+        {(playerStage === 'new' || playerStage === 'early') && progress.puzzlesSolved >= 3 && !dailyDone && (
+          <LinearGradient
+            colors={['rgba(100,180,255,0.15)', 'rgba(100,180,255,0.05)'] as [string, string]}
+            style={styles.tomorrowCard}
+          >
+            <Text style={styles.tomorrowIcon}>🌟</Text>
+            <View style={styles.tomorrowContent}>
+              <Text style={styles.tomorrowTitle}>Your streak starts now!</Text>
+              <Text style={styles.tomorrowSubtext}>
+                Complete today's Daily Challenge and come back tomorrow to keep it going.
+              </Text>
+            </View>
+          </LinearGradient>
+        )}
 
         {/* Streak panel - hidden for brand new players */}
         {showStreak && (
@@ -1757,5 +1816,64 @@ const styles = StyleSheet.create({
   },
   eventBannerArrow: {
     fontSize: 24,
+  },
+  // Come-back-tomorrow card
+  tomorrowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(100,180,255,0.20)',
+  },
+  tomorrowIcon: {
+    fontSize: 28,
+    marginRight: 14,
+  },
+  tomorrowContent: {
+    flex: 1,
+  },
+  tomorrowTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 2,
+  },
+  tomorrowSubtext: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  // Onboarding milestone banner
+  milestoneBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.25)',
+  },
+  milestoneBannerIcon: {
+    fontSize: 32,
+    marginRight: 14,
+  },
+  milestoneBannerContent: {
+    flex: 1,
+  },
+  milestoneBannerText: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 4,
+  },
+  milestoneBannerCta: {
+    color: COLORS.gold,
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
   },
 });

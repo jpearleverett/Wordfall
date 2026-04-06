@@ -60,6 +60,7 @@ export interface PlayerProgressData {
 
   // Onboarding
   featuresUnlocked: string[];
+  onboardingMilestones: string[]; // completed milestone IDs
 
   // Weekly Goals
   weeklyGoals: WeeklyGoalsState | null;
@@ -108,6 +109,7 @@ export interface PlayerProgressMethods {
   unlockFeature: (featureId: string) => void;
   checkFeatureUnlocks: (level: number) => CeremonyItem[];
   markTooltipShown: (id: string) => void;
+  completeOnboardingMilestone: (id: string) => void;
   initWeeklyGoals: () => void;
   updateWeeklyGoalProgress: (trackingKey: string, value: number) => void;
   queueCeremony: (ceremony: CeremonyItem) => void;
@@ -392,6 +394,16 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     });
   };
 
+  const completeOnboardingMilestone = (id: string): void => {
+    setData((prev) => {
+      if (prev.onboardingMilestones.includes(id)) return prev;
+      return {
+        ...prev,
+        onboardingMilestones: [...prev.onboardingMilestones, id],
+      };
+    });
+  };
+
   const initWeeklyGoals = (): void => {
     setData((prev) => {
       if (prev.weeklyGoals && !isNewWeek(prev.weeklyGoals.weekStart)) {
@@ -592,6 +604,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     unlockFeature,
     checkFeatureUnlocks,
     markTooltipShown,
+    completeOnboardingMilestone,
     initWeeklyGoals,
     updateWeeklyGoalProgress,
     queueCeremony,

@@ -60,16 +60,16 @@ describe('Game Modes Integration', () => {
 
   describe('unlock level ordering', () => {
     it('unlock levels are in ascending or grouped order', () => {
-      // Verify specific unlock levels from GDD
+      // Verify specific unlock levels — redistributed for progressive disclosure
       expect(MODE_CONFIGS.classic.unlockLevel).toBe(1);
       expect(MODE_CONFIGS.daily.unlockLevel).toBe(1);
-      expect(MODE_CONFIGS.noGravity.unlockLevel).toBeLessThanOrEqual(5);
       expect(MODE_CONFIGS.relax.unlockLevel).toBeLessThanOrEqual(5);
-      expect(MODE_CONFIGS.timePressure.unlockLevel).toBeLessThanOrEqual(10);
-      expect(MODE_CONFIGS.gravityFlip.unlockLevel).toBeLessThanOrEqual(12);
-      expect(MODE_CONFIGS.shrinkingBoard.unlockLevel).toBeLessThanOrEqual(12);
-      expect(MODE_CONFIGS.perfectSolve.unlockLevel).toBeLessThanOrEqual(15);
-      expect(MODE_CONFIGS.weekly.unlockLevel).toBeLessThanOrEqual(12);
+      expect(MODE_CONFIGS.shrinkingBoard.unlockLevel).toBeLessThanOrEqual(8);
+      expect(MODE_CONFIGS.noGravity.unlockLevel).toBeLessThanOrEqual(10);
+      expect(MODE_CONFIGS.timePressure.unlockLevel).toBeLessThanOrEqual(15);
+      expect(MODE_CONFIGS.gravityFlip.unlockLevel).toBeLessThanOrEqual(16);
+      expect(MODE_CONFIGS.weekly.unlockLevel).toBeLessThanOrEqual(18);
+      expect(MODE_CONFIGS.perfectSolve.unlockLevel).toBeLessThanOrEqual(20);
       expect(MODE_CONFIGS.expert.unlockLevel).toBe(30);
     });
 

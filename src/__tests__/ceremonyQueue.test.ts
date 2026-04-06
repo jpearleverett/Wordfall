@@ -274,16 +274,16 @@ describe('Ceremony Queue Integration', () => {
       }
     });
 
-    it('collections unlocks at level 5', () => {
+    it('collections unlocks at level 4', () => {
       const collections = FEATURE_UNLOCK_SCHEDULE.find(f => f.id === 'tab_collections');
       expect(collections).toBeDefined();
-      expect(collections!.unlockLevel).toBe(5);
+      expect(collections!.unlockLevel).toBe(4);
     });
 
-    it('library unlocks at level 8', () => {
+    it('library unlocks at level 9', () => {
       const library = FEATURE_UNLOCK_SCHEDULE.find(f => f.id === 'tab_library');
       expect(library).toBeDefined();
-      expect(library!.unlockLevel).toBe(8);
+      expect(library!.unlockLevel).toBe(9);
     });
 
     it('feature IDs are unique', () => {

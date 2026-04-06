@@ -63,6 +63,7 @@ interface GameScreenProps {
   shareText?: string;
   friendComparison?: { beaten: number; total: number } | null;
   eventMultiplierLabel?: string | null;
+  showTomorrowPreview?: boolean;
 }
 
 function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): CellPosition[] {
@@ -146,6 +147,7 @@ export function GameScreen({
   shareText = '',
   friendComparison = null,
   eventMultiplierLabel = null,
+  showTomorrowPreview = false,
 }: GameScreenProps) {
   const player = usePlayer();
   const failCount = player.failCountByLevel?.[level] ?? 0;
@@ -1581,6 +1583,7 @@ export function GameScreen({
           shareText={shareText}
           friendComparison={friendComparison}
           eventMultiplierLabel={eventMultiplierLabel}
+          showTomorrowPreview={showTomorrowPreview}
           onNextLevel={handleNextLevel}
           onHome={onHome}
           onRetry={handleRetry}
