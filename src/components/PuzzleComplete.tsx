@@ -13,7 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
-import { GameMode } from '../types';
+import { GameMode, VictorySummaryItem } from '../types';
 import { usePlayer } from '../contexts/PlayerContext';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { VideoBackground } from './common/VideoBackground';
@@ -47,6 +47,8 @@ interface PuzzleCompleteProps {
   showAdOption?: boolean;
   onChallengeFriend?: () => void;
   showTomorrowPreview?: boolean;
+  summaryItems?: VictorySummaryItem[];
+  onNavigate?: (screen: string) => void;
 }
 
 const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
@@ -311,6 +313,8 @@ export function PuzzleComplete({
   showAdOption = false,
   onChallengeFriend,
   showTomorrowPreview = false,
+  summaryItems = [],
+  onNavigate,
 }: PuzzleCompleteProps) {
   const { height: screenHeight } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -630,26 +634,49 @@ export function PuzzleComplete({
                 )}
               </Animated.View>
 
-              {/* First Win / Level Up / Difficulty Transition */}
+              {/* First Win badge */}
               {isFirstWin && (
                 <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.gold + '20', borderColor: COLORS.gold + '40', opacity: statsAnim }]}>
-                  <Text style={styles.levelUpEmoji}>🎉</Text>
+                  <Text style={styles.levelUpEmoji}>{'\uD83C\uDF89'}</Text>
                   <View>
                     <Text style={[styles.levelUpText, { color: COLORS.gold }]}>WELCOME TO WORDFALL!</Text>
                     <Text style={styles.levelUpSubtext}>Your adventure begins</Text>
                   </View>
                 </Animated.View>
               )}
-              {!isFirstWin && leveledUp && newLevel > 0 && (
-                <Animated.View style={[styles.levelUpBadge, { opacity: statsAnim }]}>
-                  <Text style={styles.levelUpEmoji}>⬆️</Text>
-                  <View>
-                    <Text style={styles.levelUpText}>LEVEL UP!</Text>
-                    <Text style={styles.levelUpSubtext}>You reached Level {newLevel}</Text>
-                  </View>
+
+              {/* Inline summary items — Tier 2 unlocks embedded in victory screen */}
+              {summaryItems.length > 0 && (
+                <Animated.View style={[styles.summarySection, { opacity: statsAnim, transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
+                  {summaryItems.map((item, index) => {
+                    const content = (
+                      <View
+                        key={index}
+                        style={[styles.summaryItem, { backgroundColor: item.accentColor + '15', borderColor: item.accentColor + '30' }]}
+                      >
+                        <Text style={styles.summaryItemIcon}>{item.icon}</Text>
+                        <View style={styles.summaryItemText}>
+                          <Text style={[styles.summaryItemLabel, { color: item.accentColor }]}>{item.label}</Text>
+                          {item.sublabel && <Text style={styles.summaryItemSublabel}>{item.sublabel}</Text>}
+                        </View>
+                        {item.action && (
+                          <View style={[styles.summaryItemCta, { borderColor: item.accentColor + '50' }]}>
+                            <Text style={[styles.summaryItemCtaText, { color: item.accentColor }]}>Claim</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                    if (item.action && onNavigate) {
+                      return (
+                        <Pressable key={index} onPress={() => onNavigate(item.action!.screen)}>
+                          {content}
+                        </Pressable>
+                      );
+                    }
+                    return content;
+                  })}
                 </Animated.View>
               )}
-              {/* Difficulty transition shown via DifficultyTransitionCeremony modal */}
 
               {/* Event Multiplier Label */}
               {eventMultiplierLabel && (
@@ -1066,6 +1093,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: FONTS.bodySemiBold,
     marginTop: 1,
+  },
+  summarySection: {
+    gap: 6,
+    marginBottom: 10,
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1,
+  },
+  summaryItemIcon: {
+    fontSize: 20,
+  },
+  summaryItemText: {
+    flex: 1,
+  },
+  summaryItemLabel: {
+    fontSize: 12,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.5,
+  },
+  summaryItemSublabel: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
+    marginTop: 1,
+  },
+  summaryItemCta: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+  },
+  summaryItemCtaText: {
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.5,
   },
   friendCompare: {
     flexDirection: 'row',

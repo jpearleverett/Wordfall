@@ -52,8 +52,6 @@ import { ModeUnlockCeremony } from './src/components/ModeUnlockCeremony';
 import { AchievementCeremony } from './src/components/AchievementCeremony';
 import { StreakMilestoneCeremony } from './src/components/StreakMilestoneCeremony';
 import { CollectionCompleteCeremony } from './src/components/CollectionCompleteCeremony';
-import { DifficultyTransitionCeremony } from './src/components/DifficultyTransitionCeremony';
-import { LevelUpCeremony } from './src/components/LevelUpCeremony';
 import { notificationManager } from './src/services/notifications';
 import { MilestoneCeremony } from './src/components/MilestoneCeremony';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
@@ -703,6 +701,8 @@ function GameScreenWrapper({ route, navigation }: any) {
         friendComparison={completionData.friendComparison}
         eventMultiplierLabel={completionData.eventMultiplierLabel}
         showTomorrowPreview={completionData.showTomorrowPreview}
+        summaryItems={completionData.summaryItems}
+        onNavigate={(screen: string) => navigation.navigate(screen as never)}
       />
 
       {/* Post-puzzle spin prompt */}
@@ -1642,19 +1642,6 @@ function AppContent() {
           onDismiss={handleDismissCeremony}
         />
       )}
-      {activeCeremony?.type === 'difficulty_transition' && (
-        <DifficultyTransitionCeremony
-          from={activeCeremony.data.from}
-          to={activeCeremony.data.to}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'level_up' && (
-        <LevelUpCeremony
-          newLevel={activeCeremony.data.newLevel}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
       {activeCeremony?.type === 'mystery_wheel_jackpot' && (
         <MilestoneCeremony
           ribbon="JACKPOT!"
@@ -1673,39 +1660,6 @@ function AppContent() {
           title={activeCeremony.data.label || `${activeCeremony.data.streak} Wins!`}
           description={`You won ${activeCeremony.data.streak} puzzles in a row!`}
           accentColor={COLORS.orange}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'star_milestone' && (
-        <MilestoneCeremony
-          ribbon="STAR MILESTONE"
-          icon={'\u{2B50}'}
-          title={`${activeCeremony.data.stars} Stars!`}
-          description={`You earned the ${activeCeremony.data.name}!`}
-          accentColor={COLORS.gold}
-          rewardLabel={activeCeremony.data.name}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'perfect_milestone' && (
-        <MilestoneCeremony
-          ribbon="PERFECT MASTERY"
-          icon={'\u{1F48E}'}
-          title={activeCeremony.data.name}
-          description={`${activeCeremony.data.count} perfect solves! Flawless.`}
-          accentColor={COLORS.purple}
-          rewardLabel={activeCeremony.data.badge}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'decoration_unlock' && (
-        <MilestoneCeremony
-          ribbon="NEW DECORATION"
-          icon={activeCeremony.data.icon}
-          title={activeCeremony.data.name}
-          description={`Reached Level ${activeCeremony.data.level}! A new decoration for your library.`}
-          accentColor={COLORS.teal}
-          buttonText="PLACE IT"
           onDismiss={handleDismissCeremony}
         />
       )}
@@ -1771,17 +1725,6 @@ function AppContent() {
           onDismiss={handleDismissCeremony}
         />
       )}
-      {activeCeremony?.type === 'mastery_tier_up' && (
-        <MilestoneCeremony
-          ribbon="MASTERY"
-          icon={activeCeremony.data.icon}
-          title={activeCeremony.data.title}
-          description={activeCeremony.data.description}
-          accentColor={COLORS.purple}
-          rewardLabel={`Tier ${activeCeremony.data.tier} Rewards`}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
       {activeCeremony?.type === 'quest_step_complete' && (
         <MilestoneCeremony
           ribbon="QUEST COMPLETE!"
@@ -1816,31 +1759,6 @@ function AppContent() {
           accentColor={COLORS.gold}
           rewardLabel={`+${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems`}
           buttonText="AMAZING!"
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'early_bonus' && (
-        <MilestoneCeremony
-          ribbon="BONUS REWARD!"
-          icon={'\u{1F381}'}
-          title="Surprise!"
-          description={[
-            activeCeremony.data.coins && `+${activeCeremony.data.coins} coins`,
-            activeCeremony.data.gems && `+${activeCeremony.data.gems} gems`,
-            activeCeremony.data.hints && `+${activeCeremony.data.hints} hints`,
-          ].filter(Boolean).join(', ') + '!'}
-          accentColor={COLORS.green}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'library_teaser' && (
-        <MilestoneCeremony
-          ribbon="DECORATION EARNED!"
-          icon={activeCeremony.data.icon}
-          title={activeCeremony.data.name}
-          description={`Unlock the Grand Library at Level ${activeCeremony.data.libraryUnlockLevel} to place it! Just ${activeCeremony.data.levelsAway} more level${activeCeremony.data.levelsAway !== 1 ? 's' : ''} to go.`}
-          accentColor={COLORS.purple}
-          buttonText="KEEP GOING"
           onDismiss={handleDismissCeremony}
         />
       )}
