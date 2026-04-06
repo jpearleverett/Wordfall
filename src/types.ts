@@ -633,6 +633,25 @@ export interface CeremonyItem {
   data: Record<string, any>;
 }
 
+// ============ VICTORY SUMMARY ITEMS ============
+// Tier 2 unlocks embedded inline on the victory screen (instead of full-screen ceremony modals)
+export interface VictorySummaryItem {
+  type:
+    | 'level_up'
+    | 'difficulty_transition'
+    | 'mastery_tier_up'
+    | 'star_milestone'
+    | 'perfect_milestone'
+    | 'decoration_unlock'
+    | 'library_teaser'
+    | 'early_bonus';
+  icon: string;
+  label: string;
+  sublabel?: string;
+  accentColor: string;
+  action?: { type: 'navigate'; screen: string };
+}
+
 // ============ ONBOARDING MILESTONES ============
 export interface OnboardingMilestone {
   id: string;

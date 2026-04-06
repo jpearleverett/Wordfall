@@ -13,7 +13,7 @@ import {
   UIManager,
   View,
 } from 'react-native';
-import { Board, CellPosition, GameMode } from '../types';
+import { Board, CellPosition, GameMode, VictorySummaryItem } from '../types';
 import { useGame } from '../hooks/useGame';
 import { GameGrid } from '../components/Grid';
 import { WordBank } from '../components/WordBank';
@@ -64,6 +64,8 @@ interface GameScreenProps {
   friendComparison?: { beaten: number; total: number } | null;
   eventMultiplierLabel?: string | null;
   showTomorrowPreview?: boolean;
+  summaryItems?: VictorySummaryItem[];
+  onNavigate?: (screen: string) => void;
 }
 
 function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): CellPosition[] {
@@ -148,6 +150,8 @@ export function GameScreen({
   friendComparison = null,
   eventMultiplierLabel = null,
   showTomorrowPreview = false,
+  summaryItems = [],
+  onNavigate,
 }: GameScreenProps) {
   const player = usePlayer();
   const failCount = player.failCountByLevel?.[level] ?? 0;
@@ -1584,6 +1588,8 @@ export function GameScreen({
           friendComparison={friendComparison}
           eventMultiplierLabel={eventMultiplierLabel}
           showTomorrowPreview={showTomorrowPreview}
+          summaryItems={summaryItems}
+          onNavigate={onNavigate}
           onNextLevel={handleNextLevel}
           onHome={onHome}
           onRetry={handleRetry}

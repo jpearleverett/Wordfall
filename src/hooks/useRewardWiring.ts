@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
-import { Board, CeremonyItem, Difficulty, GameMode } from '../types';
+import { Board, CeremonyItem, Difficulty, GameMode, VictorySummaryItem } from '../types';
 import { SeasonalQuestState, getCurrentSeasonalQuest } from '../data/seasonalQuests';
 import {
+  COLORS,
   getLevelConfig,
   ECONOMY,
   COLLECTION,
@@ -15,7 +16,7 @@ import {
 } from '../constants';
 import { ATLAS_PAGES, getCurrentSeasonAlbum } from '../data/collections';
 import { generateShareText } from '../utils/shareGenerator';
-import { getMasteryTierForXP } from '../data/masteryRewards';
+import { getMasteryTierForXP, MASTERY_REWARDS } from '../data/masteryRewards';
 import { eventManager } from '../services/eventManager';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
@@ -135,6 +136,8 @@ export interface CompletionData {
   eventMultiplierLabel?: string;
   /** Show "come back tomorrow" card for early-game players */
   showTomorrowPreview: boolean;
+  /** Tier 2 unlocks embedded inline on the victory screen */
+  summaryItems: VictorySummaryItem[];
 }
 
 /**
@@ -240,6 +243,9 @@ export function useRewardWiring({
       });
     }
 
+    // Collect Tier 2 unlocks to embed inline on the victory screen
+    const summaryItems: VictorySummaryItem[] = [];
+
     // First-win celebration — outsized reward for the very first puzzle
     if (isFirstWin) {
       player.queueCeremony({
@@ -268,14 +274,17 @@ export function useRewardWiring({
         });
       }
       if (earlyBonus.coins || earlyBonus.gems || earlyBonus.hints) {
-        player.queueCeremony({
+        const parts = [
+          earlyBonus.coins && `+${earlyBonus.coins} coins`,
+          earlyBonus.gems && `+${earlyBonus.gems} gems`,
+          earlyBonus.hints && `+${earlyBonus.hints} hints`,
+        ].filter(Boolean);
+        summaryItems.push({
           type: 'early_bonus',
-          data: {
-            coins: earlyBonus.coins,
-            gems: earlyBonus.gems,
-            hints: earlyBonus.hints,
-            level,
-          },
+          icon: '\uD83C\uDF81',
+          label: 'Bonus Reward!',
+          sublabel: parts.join(', '),
+          accentColor: COLORS.green,
         });
       }
     }
@@ -418,20 +427,34 @@ export function useRewardWiring({
     // Track level milestone in funnel
     void funnelTracker.trackLevelMilestone(newLevel);
 
-    // Queue level-up ceremony
-    if (leveledUp) {
-      player.queueCeremony({
-        type: 'level_up',
-        data: { newLevel },
-      });
-    }
-
-    // Detect difficulty transition
+    // Embed level-up as summary item with details about what unlocked
     const difficultyTransition = leveledUp ? detectDifficultyTransition(prevHighest, newLevel) : null;
-    if (difficultyTransition) {
-      player.queueCeremony({
-        type: 'difficulty_transition',
-        data: { from: difficultyTransition.from, to: difficultyTransition.to },
+    if (leveledUp) {
+      // Gather what unlocks at this level
+      const unlockDetails: string[] = [];
+      if (difficultyTransition) {
+        unlockDetails.push(`${difficultyTransition.from} \u2192 ${difficultyTransition.to}`);
+      }
+      const featureAtLevel = FEATURE_UNLOCK_SCHEDULE.find(f => f.unlockLevel === newLevel);
+      if (featureAtLevel) {
+        unlockDetails.push(featureAtLevel.title);
+      }
+      for (const [, config] of Object.entries(MODE_CONFIGS)) {
+        if (config.unlockLevel === newLevel) {
+          unlockDetails.push(`${config.name} mode`);
+        }
+      }
+      const decoAtLevel = MILESTONE_DECORATIONS.find(d => d.level === newLevel);
+      if (decoAtLevel) {
+        unlockDetails.push(decoAtLevel.name);
+      }
+
+      summaryItems.push({
+        type: 'level_up',
+        icon: '\u2B06\uFE0F',
+        label: `Level ${newLevel} Reached!`,
+        sublabel: unlockDetails.length > 0 ? unlockDetails.join(' \u2022 ') : undefined,
+        accentColor: COLORS.gold,
       });
     }
 
@@ -475,9 +498,12 @@ export function useRewardWiring({
     for (const sm of STAR_MILESTONES) {
       const prevStars = totalStarsNow - stars;
       if (totalStarsNow >= sm.stars && prevStars < sm.stars) {
-        player.queueCeremony({
+        summaryItems.push({
           type: 'star_milestone',
-          data: { stars: sm.stars, reward: sm.reward, name: sm.name, type: sm.type },
+          icon: '\u2B50',
+          label: `${sm.stars} Stars!`,
+          sublabel: sm.name,
+          accentColor: COLORS.gold,
         });
       }
     }
@@ -487,9 +513,12 @@ export function useRewardWiring({
       const perfectCount = player.perfectSolves + 1;
       for (const pm of PERFECT_MILESTONES) {
         if (perfectCount === pm.count) {
-          player.queueCeremony({
+          summaryItems.push({
             type: 'perfect_milestone',
-            data: { count: pm.count, badge: pm.badge, name: pm.name },
+            icon: '\uD83D\uDC8E',
+            label: pm.name,
+            sublabel: `${pm.count} perfect solves!`,
+            accentColor: COLORS.purple,
           });
         }
       }
@@ -502,21 +531,20 @@ export function useRewardWiring({
       for (const md of MILESTONE_DECORATIONS) {
         if (newLevel >= md.level && prevHighest < md.level) {
           if (!hasLibrary && newLevel < libraryUnlockLevel) {
-            // Library not yet unlocked — show teaser instead of regular decoration ceremony
-            player.queueCeremony({
+            summaryItems.push({
               type: 'library_teaser',
-              data: {
-                decoration: md.decoration,
-                name: md.name,
-                icon: md.icon,
-                libraryUnlockLevel,
-                levelsAway: libraryUnlockLevel - newLevel,
-              },
+              icon: md.icon,
+              label: md.name,
+              sublabel: `Unlock the Library at Level ${libraryUnlockLevel} to place it!`,
+              accentColor: COLORS.purple,
             });
           } else {
-            player.queueCeremony({
+            summaryItems.push({
               type: 'decoration_unlock',
-              data: { level: md.level, decoration: md.decoration, name: md.name, icon: md.icon },
+              icon: md.icon,
+              label: md.name,
+              sublabel: 'New library decoration!',
+              accentColor: COLORS.teal,
             });
           }
         }
@@ -540,19 +568,34 @@ export function useRewardWiring({
     const prevMasteryTier = getMasteryTierForXP(prevMasteryXP);
     const newMasteryTier = getMasteryTierForXP(newMasteryXP);
     if (newMasteryTier > prevMasteryTier) {
-      player.queueCeremony({
+      // Build reward description from mastery data
+      const tierReward = MASTERY_REWARDS.find(r => r.tier === newMasteryTier);
+      const rewardParts: string[] = [];
+      if (tierReward) {
+        if (tierReward.free.coins) rewardParts.push(`${tierReward.free.coins} coins`);
+        if (tierReward.free.gems) rewardParts.push(`${tierReward.free.gems} gems`);
+        if (tierReward.free.hintTokens) rewardParts.push(`${tierReward.free.hintTokens} hints`);
+      }
+      summaryItems.push({
         type: 'mastery_tier_up',
-        data: { tier: newMasteryTier, icon: '\u{1F3C6}', title: `Mastery Tier ${newMasteryTier}!`, description: "You've reached a new mastery level!" },
+        icon: '\uD83C\uDFC6',
+        label: `Mastery Tier ${newMasteryTier}!`,
+        sublabel: rewardParts.length > 0 ? `Claim: ${rewardParts.join(', ')}` : 'Claim your rewards!',
+        accentColor: COLORS.purple,
+        action: { type: 'navigate', screen: 'Mastery' },
       });
     }
 
-    // Late-game milestone ceremonies (every 25 levels after level 50)
+    // Late-game milestone rewards (every 25 levels after level 50)
     if (leveledUp && newLevel >= 50 && newLevel % 25 === 0) {
       economy.addCoins(500);
       economy.addGems(25);
-      player.queueCeremony({
+      summaryItems.push({
         type: 'star_milestone',
-        data: { icon: '\u{1F451}', title: `Level ${newLevel} Master!`, description: 'Your dedication is legendary!', rewardLabel: '500 coins + 25 gems' },
+        icon: '\uD83D\uDC51',
+        label: `Level ${newLevel} Master!`,
+        sublabel: '500 coins + 25 gems',
+        accentColor: COLORS.gold,
       });
     }
 
@@ -634,6 +677,7 @@ export function useRewardWiring({
                 friendComparison: result,
                 eventMultiplierLabel,
                 showTomorrowPreview: puzzlesAfterThis <= 5,
+                summaryItems,
               },
             });
           }
@@ -657,6 +701,7 @@ export function useRewardWiring({
           friendComparison,
           eventMultiplierLabel,
           showTomorrowPreview: puzzlesAfterThis <= 5,
+          summaryItems,
         },
       });
     }
