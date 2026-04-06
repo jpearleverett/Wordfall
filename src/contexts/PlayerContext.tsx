@@ -111,6 +111,7 @@ interface PlayerData {
   // Library
   restoredWings: string[];
   placedDecorations: Record<string, string>;
+  ownedDecorations: string[];
 
   // Modes
   unlockedModes: string[];
@@ -233,6 +234,7 @@ interface PlayerContextType extends PlayerData {
   // Library
   restoreWing: (wingId: string) => void;
   placeDecoration: (slotId: string, decorationId: string) => void;
+  unlockDecoration: (decorationId: string) => void;
 
   // Modes
   unlockMode: (modeId: string) => void;
@@ -397,6 +399,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Library
   restoredWings: [],
   placedDecorations: {},
+  ownedDecorations: [],
 
   // Modes
   unlockedModes: ['classic'],
@@ -516,6 +519,7 @@ const PlayerContext = createContext<PlayerContextType>({
   unlockCosmetic: () => {},
   restoreWing: () => {},
   placeDecoration: () => {},
+  unlockDecoration: () => {},
   unlockMode: () => {},
   recordModePlay: () => {},
   advanceModeLevel: () => {},
@@ -918,6 +922,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const unlockDecoration = useCallback((decorationId: string) => {
+    setData((prev) => {
+      if (prev.ownedDecorations.includes(decorationId)) return prev;
+      return {
+        ...prev,
+        ownedDecorations: [...prev.ownedDecorations, decorationId],
+      };
+    });
+  }, []);
 
   // ── Modes ───────────────────────────────────────────────────────────────
 
@@ -1404,6 +1418,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         unlockCosmetic,
         restoreWing,
         placeDecoration,
+        unlockDecoration,
         unlockMode,
         recordModePlay,
         advanceModeLevel,

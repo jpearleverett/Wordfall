@@ -9,7 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, FONTS, SHADOWS, LIBRARY } from '../constants';
+import { COLORS, GRADIENTS, FONTS, SHADOWS, LIBRARY, MILESTONE_DECORATIONS } from '../constants';
 import { SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import { usePlayer } from '../contexts/PlayerContext';
 import { CHAPTERS } from '../data/chapters';
@@ -48,6 +48,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const decorations = decorationsProp ?? player.placedDecorations;
   const [selectedWing, setSelectedWing] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showDecorationPicker, setShowDecorationPicker] = useState<string | null>(null);
   const [showTooltip, setShowTooltip] = useState(
     !player.tooltipsShown.includes('library_screen')
   );
@@ -279,9 +280,18 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 {selectedWingData.chapters.length} chapters {'\u2022'} {selectedProgress}% restored
               </Text>
             </View>
-            <View style={styles.featureDecorationBadge}>
-              <Text style={styles.featureDecorationBadgeText}>{decorations[selectedWingData.id] ?? '\u{1FA91}'}</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.featureDecorationBadge}
+              onPress={() => {
+                if (player.ownedDecorations.length > 0) {
+                  setShowDecorationPicker(selectedWingData.id);
+                }
+              }}
+            >
+              <Text style={styles.featureDecorationBadgeText}>
+                {MILESTONE_DECORATIONS.find(d => d.decoration === decorations[selectedWingData.id])?.icon ?? '\u{1FA91}'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.featureProgressTrack}>
@@ -296,7 +306,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           <View style={styles.infoCardsRow}>
             <View style={styles.infoCard}>
               <Text style={styles.infoCardLabel}>Decoration slot</Text>
-              <Text style={styles.infoCardValue}>{decorations[selectedWingData.id] ?? 'Empty'}</Text>
+              <Text style={styles.infoCardValue}>
+                {MILESTONE_DECORATIONS.find(d => d.decoration === decorations[selectedWingData.id])?.name ?? 'Empty'}
+              </Text>
             </View>
             <View style={styles.infoCard}>
               <Text style={styles.infoCardLabel}>Required stars</Text>
@@ -352,6 +364,61 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               </View>
             );
           })}
+        </View>
+
+        {/* Decorations Collection */}
+        <View style={styles.decorationsPanel}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <Text style={styles.sectionTitle}>Decorations</Text>
+          <Text style={[styles.featureSubtitle, { marginBottom: 14 }]}>
+            {player.ownedDecorations.length} of {MILESTONE_DECORATIONS.length} collected
+          </Text>
+          <View style={styles.decorationsGrid}>
+            {MILESTONE_DECORATIONS.map((md) => {
+              const owned = player.ownedDecorations.includes(md.decoration);
+              const placedInWing = Object.entries(decorations).find(([, dec]) => dec === md.decoration)?.[0];
+              return (
+                <TouchableOpacity
+                  key={md.decoration}
+                  style={[
+                    styles.decorationItem,
+                    owned && styles.decorationItemOwned,
+                    showDecorationPicker && owned && styles.decorationItemPickable,
+                  ]}
+                  activeOpacity={owned && showDecorationPicker ? 0.7 : 1}
+                  onPress={() => {
+                    if (owned && showDecorationPicker) {
+                      player.placeDecoration(showDecorationPicker, md.decoration);
+                      setShowDecorationPicker(null);
+                    }
+                  }}
+                >
+                  <Text style={[styles.decorationIcon, !owned && { opacity: 0.3 }]}>{md.icon}</Text>
+                  <Text style={[styles.decorationName, !owned && { color: COLORS.textMuted }]}>
+                    {owned ? md.name : `Lvl ${md.level}`}
+                  </Text>
+                  {owned && placedInWing && (
+                    <Text style={styles.decorationPlaced}>
+                      {WING_META[placedInWing]?.icon ?? ''} placed
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {showDecorationPicker && (
+            <TouchableOpacity
+              style={styles.pickerCancelBtn}
+              onPress={() => setShowDecorationPicker(null)}
+            >
+              <Text style={styles.pickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.bottomSpacer} />
@@ -745,6 +812,65 @@ const styles = StyleSheet.create({
   chapterThemeWords: {
     fontSize: 12,
     lineHeight: 18,
+    color: COLORS.textSecondary,
+  },
+  decorationsPanel: {
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginTop: 18,
+    overflow: 'hidden',
+  },
+  decorationsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  decorationItem: {
+    width: '30%',
+    minWidth: 90,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  decorationItemOwned: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,215,0,0.3)',
+  },
+  decorationItemPickable: {
+    borderColor: COLORS.teal,
+    borderWidth: 2,
+  },
+  decorationIcon: {
+    fontSize: 28,
+    marginBottom: 6,
+  },
+  decorationName: {
+    fontSize: 11,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  decorationPlaced: {
+    fontSize: 9,
+    color: COLORS.textMuted,
+    marginTop: 4,
+  },
+  pickerCancelBtn: {
+    alignSelf: 'center',
+    marginTop: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  pickerCancelText: {
+    fontSize: 14,
     color: COLORS.textSecondary,
   },
   bottomSpacer: {

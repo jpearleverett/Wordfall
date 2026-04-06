@@ -531,6 +531,7 @@ export function useRewardWiring({
       for (const md of MILESTONE_DECORATIONS) {
         if (newLevel >= md.level && prevHighest < md.level) {
           if (!hasLibrary && newLevel < libraryUnlockLevel) {
+            player.unlockDecoration(md.decoration);
             summaryItems.push({
               type: 'library_teaser',
               icon: md.icon,
@@ -539,6 +540,7 @@ export function useRewardWiring({
               accentColor: COLORS.purple,
             });
           } else {
+            player.unlockDecoration(md.decoration);
             summaryItems.push({
               type: 'decoration_unlock',
               icon: md.icon,
