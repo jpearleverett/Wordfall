@@ -702,6 +702,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         shareText={completionData.shareText}
         friendComparison={completionData.friendComparison}
         eventMultiplierLabel={completionData.eventMultiplierLabel}
+        showTomorrowPreview={completionData.showTomorrowPreview}
       />
 
       {/* Post-puzzle spin prompt */}
@@ -1804,6 +1805,56 @@ function AppContent() {
           description={activeCeremony.data?.description || 'You have ascended to a new prestige tier!'}
           accentColor={COLORS.gold}
           onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'first_win' && (
+        <MilestoneCeremony
+          ribbon="FIRST VICTORY!"
+          icon={'\u{1F389}'}
+          title="You Did It!"
+          description={`Your first puzzle is complete! +${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems, and a free Mystery Wheel spin!`}
+          accentColor={COLORS.gold}
+          rewardLabel={`+${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems`}
+          buttonText="AMAZING!"
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'early_bonus' && (
+        <MilestoneCeremony
+          ribbon="BONUS REWARD!"
+          icon={'\u{1F381}'}
+          title="Surprise!"
+          description={[
+            activeCeremony.data.coins && `+${activeCeremony.data.coins} coins`,
+            activeCeremony.data.gems && `+${activeCeremony.data.gems} gems`,
+            activeCeremony.data.hints && `+${activeCeremony.data.hints} hints`,
+          ].filter(Boolean).join(', ') + '!'}
+          accentColor={COLORS.green}
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'library_teaser' && (
+        <MilestoneCeremony
+          ribbon="DECORATION EARNED!"
+          icon={activeCeremony.data.icon}
+          title={activeCeremony.data.name}
+          description={`Unlock the Grand Library at Level ${activeCeremony.data.libraryUnlockLevel} to place it! Just ${activeCeremony.data.levelsAway} more level${activeCeremony.data.levelsAway !== 1 ? 's' : ''} to go.`}
+          accentColor={COLORS.purple}
+          buttonText="KEEP GOING"
+          onDismiss={handleDismissCeremony}
+        />
+      )}
+      {activeCeremony?.type === 'starter_pack_unlocked' && (
+        <MilestoneCeremony
+          ribbon="SPECIAL OFFER!"
+          icon={'\u{1F4E6}'}
+          title="Starter Pack Available!"
+          description="A limited-time offer has been unlocked just for you. Check the Shop for great value!"
+          accentColor={COLORS.gold}
+          buttonText="VIEW OFFER"
+          onDismiss={() => {
+            handleDismissCeremony();
+          }}
         />
       )}
     </View>

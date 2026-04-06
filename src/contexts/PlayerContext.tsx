@@ -253,6 +253,9 @@ interface PlayerContextType extends PlayerData {
   // Tooltips
   markTooltipShown: (id: string) => void;
 
+  // Onboarding milestones
+  completeOnboardingMilestone: (id: string) => void;
+
   // Weekly Goals
   initWeeklyGoals: () => void;
   updateWeeklyGoalProgress: (trackingKey: string, value: number) => void;
@@ -522,6 +525,7 @@ const PlayerContext = createContext<PlayerContextType>({
   unlockFeature: () => {},
   checkFeatureUnlocks: () => [],
   markTooltipShown: () => {},
+  completeOnboardingMilestone: () => {},
   initWeeklyGoals: () => {},
   updateWeeklyGoalProgress: () => {},
   queueCeremony: () => {},
@@ -721,6 +725,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     unlockFeature,
     checkFeatureUnlocks,
     markTooltipShown,
+    completeOnboardingMilestone,
     initWeeklyGoals,
     updateWeeklyGoalProgress,
     queueCeremony,
@@ -1408,6 +1413,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         unlockFeature,
         checkFeatureUnlocks,
         markTooltipShown,
+        completeOnboardingMilestone,
         initWeeklyGoals,
         updateWeeklyGoalProgress,
         queueCeremony,

@@ -249,8 +249,11 @@ export function useRewardWiring({
     }
 
     // Early game bonus rewards — surprise rewards at specific levels to
-    // break monotony and teach systems during the first 10 levels
-    const earlyBonus = EARLY_GAME_BONUSES.find(b => b.level === level);
+    // break monotony and teach systems during the first 10 levels.
+    // Use player's classic progression level (not puzzle level) to prevent
+    // double-awarding when playing non-classic modes at overlapping levels.
+    const progressionLevel = mode === 'classic' ? level : -1;
+    const earlyBonus = EARLY_GAME_BONUSES.find(b => b.level === progressionLevel);
     if (earlyBonus && !isFirstWin) {
       // isFirstWin already awards the level-1 bonus via the ceremony above
       if (earlyBonus.coins) economy.addCoins(earlyBonus.coins);

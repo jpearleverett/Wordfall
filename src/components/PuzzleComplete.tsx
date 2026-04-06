@@ -46,6 +46,7 @@ interface PuzzleCompleteProps {
   rewardDoubled?: boolean;
   showAdOption?: boolean;
   onChallengeFriend?: () => void;
+  showTomorrowPreview?: boolean;
 }
 
 const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
@@ -309,6 +310,7 @@ export function PuzzleComplete({
   rewardDoubled = false,
   showAdOption = false,
   onChallengeFriend,
+  showTomorrowPreview = false,
 }: PuzzleCompleteProps) {
   const { height: screenHeight } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -696,6 +698,15 @@ export function PuzzleComplete({
                     <Text style={styles.primaryButtonText}>{isDaily ? 'PLAY ANOTHER MODE' : 'NEXT LEVEL'}</Text>
                   </LinearGradient>
                 </Pressable>
+                {showTomorrowPreview && (
+                  <LinearGradient
+                    colors={['rgba(100,180,255,0.12)', 'rgba(100,180,255,0.04)'] as [string, string]}
+                    style={styles.tomorrowPreview}
+                  >
+                    <Text style={styles.tomorrowPreviewTitle}>Come back tomorrow!</Text>
+                    <Text style={styles.tomorrowPreviewText}>Daily Bonus + Free Mystery Spin await you</Text>
+                  </LinearGradient>
+                )}
                 <View style={styles.secondaryRow}>
                   <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
                     <Text style={styles.secondaryButtonText}>Home</Text>
@@ -1098,6 +1109,26 @@ const styles = StyleSheet.create({
   challengeButtonText: {
     color: COLORS.purple,
     fontFamily: FONTS.display,
+  },
+  tomorrowPreview: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(100,180,255,0.15)',
+  },
+  tomorrowPreviewTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 2,
+  },
+  tomorrowPreviewText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontFamily: FONTS.body,
   },
 });
 
