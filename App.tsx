@@ -702,6 +702,9 @@ function GameScreenWrapper({ route, navigation }: any) {
         eventMultiplierLabel={completionData.eventMultiplierLabel}
         showTomorrowPreview={completionData.showTomorrowPreview}
         summaryItems={completionData.summaryItems}
+        totalCoinsAwarded={completionData.totalCoinsAwarded}
+        totalGemsAwarded={completionData.totalGemsAwarded}
+        nextUnlockPreview={completionData.nextUnlockPreview}
         onNavigate={(screen: string) => navigation.navigate(screen as never)}
       />
 
@@ -1415,7 +1418,7 @@ function AppContent() {
   const routeNameRef = useRef<string | undefined>();
 
   // Ceremony queue — rendered at app level so modals overlay all screens
-  const { activeCeremony, handleDismissCeremony } = useCeremonyQueue({
+  const { activeCeremony, handleDismissCeremony, resetBatchCounter } = useCeremonyQueue({
     popCeremony: player.popCeremony,
     pendingCeremonyCount: player.pendingCeremonies.length,
     loaded: player.loaded,
@@ -1518,9 +1521,14 @@ function AppContent() {
 
     if (currentRouteName && currentRouteName !== previousRouteName) {
       void analytics.trackScreenView(currentRouteName);
+      // Reset ceremony batch counter when returning to home-like screens
+      // so deferred ceremonies from the previous puzzle can be shown
+      if (currentRouteName === 'Home' || currentRouteName === 'HomeMain') {
+        resetBatchCounter();
+      }
     }
     routeNameRef.current = currentRouteName;
-  }, []);
+  }, [resetBatchCounter]);
 
   if (!player.loaded) {
     return (

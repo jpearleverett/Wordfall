@@ -66,6 +66,9 @@ interface GameScreenProps {
   showTomorrowPreview?: boolean;
   summaryItems?: VictorySummaryItem[];
   onNavigate?: (screen: string) => void;
+  totalCoinsAwarded?: number;
+  totalGemsAwarded?: number;
+  nextUnlockPreview?: { icon: string; name: string; unlockLevel: number } | null;
 }
 
 function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): CellPosition[] {
@@ -152,6 +155,9 @@ export function GameScreen({
   showTomorrowPreview = false,
   summaryItems = [],
   onNavigate,
+  totalCoinsAwarded = 0,
+  totalGemsAwarded = 0,
+  nextUnlockPreview = null,
 }: GameScreenProps) {
   const player = usePlayer();
   const failCount = player.failCountByLevel?.[level] ?? 0;
@@ -1590,6 +1596,9 @@ export function GameScreen({
           showTomorrowPreview={showTomorrowPreview}
           summaryItems={summaryItems}
           onNavigate={onNavigate}
+          totalCoinsAwarded={totalCoinsAwarded}
+          totalGemsAwarded={totalGemsAwarded}
+          nextUnlockPreview={nextUnlockPreview}
           onNextLevel={handleNextLevel}
           onHome={onHome}
           onRetry={handleRetry}

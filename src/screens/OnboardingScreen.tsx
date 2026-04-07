@@ -26,7 +26,7 @@ interface OnboardingScreenProps {
   onComplete?: () => void;
 }
 
-type Phase = 'welcome' | 'tutorial' | 'celebrate' | 'library_preview' | 'ready';
+type Phase = 'welcome' | 'tutorial' | 'celebrate';
 
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => {} }) => {
   const [phase, setPhase] = useState<Phase>('welcome');
@@ -37,7 +37,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
   // Tutorial state
   const [tutorialStep, setTutorialStep] = useState(0);
   const [selectedCells, setSelectedCells] = useState<CellPosition[]>([]);
-  const [tutorialBoard, setTutorialBoard] = useState(generateTutorialBoardA);
+  const [tutorialBoard, setTutorialBoard] = useState(generateTutorialBoardB);
   const [wordsFound, setWordsFound] = useState(0);
 
   // Switch tutorial board when the step requires a different board
@@ -61,8 +61,6 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
       void funnelTracker.trackOnboarding('board_a');
     } else if (phase === 'celebrate') {
       void funnelTracker.trackOnboarding('complete');
-    } else if (phase === 'library_preview') {
-      void funnelTracker.trackOnboarding('library_preview');
     }
   }, [phase]);
 
@@ -82,6 +80,15 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
     pulse.start();
     return () => pulse.stop();
   }, [scaleAnim, fadeAnim, pulseAnim]);
+
+  // Auto-advance welcome phase after 3 seconds (tap to skip is also available)
+  useEffect(() => {
+    if (phase !== 'welcome') return;
+    const timer = setTimeout(() => {
+      transitionTo('tutorial');
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const transitionTo = useCallback((nextPhase: Phase) => {
     Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
@@ -238,9 +245,9 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
 
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
-            onPress={() => transitionTo('library_preview')}
+            onPress={onComplete}
             accessibilityRole="button"
-            accessibilityLabel="Continue to library preview"
+            accessibilityLabel="Start playing"
           >
             <LinearGradient
               colors={[COLORS.green, COLORS.teal] as [string, string]}
@@ -248,7 +255,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
               end={{ x: 1, y: 0 }}
               style={[styles.startButton, SHADOWS.glow(COLORS.green)]}
             >
-              <Text style={styles.startButtonText}>CONTINUE</Text>
+              <Text style={styles.startButtonText}>LET'S PLAY!</Text>
             </LinearGradient>
           </Pressable>
         </Animated.View>
@@ -256,102 +263,14 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
     );
   }
 
-  if (phase === 'library_preview') {
-    return (
-      <View style={styles.container}>
-        <Animated.View style={[styles.centerContent, { opacity: fadeAnim }]}>
-          <Animated.View style={[styles.glowCirclePurple, { transform: [{ scale: pulseAnim }] }]} />
-          <Text style={styles.libraryEmoji}>📖</Text>
-          <Text style={styles.libraryTitle}>THE GRAND LIBRARY</Text>
-          <Text style={styles.librarySubtext}>
-            An ancient library has fallen into disrepair.{'\n'}
-            Every puzzle you solve helps restore it.
-          </Text>
-
-          <View style={styles.libraryPreviewCards}>
-            <LinearGradient
-              colors={['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)'] as [string, string]}
-              style={styles.libraryCard}
-            >
-              <Text style={styles.libraryCardIcon}>🏚️</Text>
-              <Text style={styles.libraryCardLabel}>Now</Text>
-            </LinearGradient>
-            <Text style={styles.libraryArrow}>→</Text>
-            <LinearGradient
-              colors={['rgba(200,77,255,0.12)', 'rgba(200,77,255,0.04)'] as [string, string]}
-              style={styles.libraryCard}
-            >
-              <Text style={styles.libraryCardIcon}>🏛️</Text>
-              <Text style={styles.libraryCardLabel}>Restored</Text>
-            </LinearGradient>
-          </View>
-
-          <Text style={styles.libraryHint}>
-            8 wings to restore. Earn decorations as you level up.
-          </Text>
-
-          <Pressable
-            style={({ pressed }) => [pressed && styles.pressed]}
-            onPress={() => transitionTo('ready')}
-            accessibilityRole="button"
-            accessibilityLabel="Continue to start playing"
-          >
-            <LinearGradient
-              colors={[COLORS.purple, COLORS.accent] as [string, string]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.startButton, SHADOWS.glow(COLORS.purple)]}
-            >
-              <Text style={styles.startButtonText}>I'LL RESTORE IT!</Text>
-            </LinearGradient>
-          </Pressable>
-        </Animated.View>
-      </View>
-    );
-  }
-
-  // phase === 'ready'
+  // Library preview and ready phases removed — content moved to first_win ceremony
+  // in useRewardWiring for faster onboarding (player reaches real gameplay sooner).
+  // Fallback: call onComplete (should never reach here with 3-phase flow)
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.centerContent, { opacity: fadeAnim }]}>
-        <Animated.View style={[styles.glowCircleGold, { transform: [{ scale: pulseAnim }] }]} />
-        <Text style={styles.readyEmoji}>🚀</Text>
-        <Text style={styles.readyTitle}>READY!</Text>
-        <Text style={styles.readySubtext}>
-          Earn stars, unlock new modes, collect rare tiles, and restore the Grand Library.
-        </Text>
-
-        <View style={styles.tipCards}>
-          {[
-            { icon: '⬇️', tip: 'Letters fall when you clear words' },
-            { icon: '🧩', tip: 'Word order changes the board' },
-            { icon: '💡', tip: 'Use hints when you get stuck' },
-          ].map((item, i) => (
-            <LinearGradient
-              key={i}
-              colors={GRADIENTS.surfaceCard as [string, string]}
-              style={styles.tipCard}
-            >
-              <Text style={styles.tipIcon}>{item.icon}</Text>
-              <Text style={styles.tipText}>{item.tip}</Text>
-            </LinearGradient>
-          ))}
-        </View>
-
-        <Pressable
-          style={({ pressed }) => [pressed && styles.pressed]}
-          onPress={onComplete}
-          accessibilityRole="button"
-          accessibilityLabel="Start playing Wordfall"
-        >
-          <LinearGradient
-            colors={[...GRADIENTS.button.gold]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.startButton, SHADOWS.glow(COLORS.gold)]}
-          >
-            <Text style={styles.startButtonText}>LET'S GO!</Text>
-          </LinearGradient>
+        <Pressable onPress={onComplete}>
+          <Text style={styles.readyTitle}>Loading...</Text>
         </Pressable>
       </Animated.View>
     </View>

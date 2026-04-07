@@ -495,9 +495,15 @@ export const EARLY_GAME_BONUSES: {
   { level: 1, coins: 100, gems: 5, wheelSpins: 1 },       // First-win jackpot feeling
   { level: 2, wheelSpins: 1 },                              // Teach mystery wheel
   { level: 3, hints: 2 },                                   // Replenish consumables
+  { level: 4, gems: 3, coins: 75 },                         // Collections unlock reward
   { level: 5, guaranteedRareTile: true },                    // First rare tile ceremony
+  { level: 6, hints: 2, coins: 100 },                       // Boosters unlock bonus
   { level: 7, gems: 5 },                                    // Gem injection at weekly goals
+  { level: 8, wheelSpins: 1, coins: 75 },                   // No Gravity unlock treat
+  { level: 9, gems: 3, hints: 1 },                          // Library unlock bonus
   { level: 10, coins: 200 },                                // End of early game milestone
+  { level: 12, gems: 5, coins: 100 },                       // Time Pressure unlock
+  { level: 15, coins: 150, gems: 5 },                       // Mid-game milestone
 ];
 
 // Starter pack activation delay — don't start the 72hr timer until player

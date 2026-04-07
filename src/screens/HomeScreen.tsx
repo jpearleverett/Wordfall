@@ -76,6 +76,8 @@ interface HomeScreenProps {
   activeEventBanners?: Array<{ id: string; name: string; icon: string; label: string; color: string }>;
   /** Navigate to event screen */
   onOpenEvents?: () => void;
+  /** Navigate to library screen */
+  onOpenLibrary?: () => void;
   claimedLoginToday?: boolean;
   onClaimLoginReward?: () => void;
 }
@@ -123,6 +125,7 @@ export function HomeScreen({
   segmentWelcomeMessage = null,
   activeEventBanners = [],
   onOpenEvents,
+  onOpenLibrary,
   claimedLoginToday = false,
   onClaimLoginReward,
 }: HomeScreenProps) {
@@ -265,10 +268,10 @@ export function HomeScreen({
   const hasSegmentContent = segmentHomeContent.length > 0;
   const showStreak = hasSegmentContent
     ? segmentHomeContent.includes('streak')
-    : playerStage !== 'new';
+    : progress.puzzlesSolved >= 1;
   const showDailyRewards = hasSegmentContent
     ? segmentHomeContent.includes('daily_rewards')
-    : playerStage !== 'new';
+    : progress.puzzlesSolved >= 1;
   const showQuickPlay = hasSegmentContent
     ? segmentHomeContent.includes('daily_challenge')
     : playerStage !== 'new' && playerStage !== 'early';
@@ -425,8 +428,8 @@ export function HomeScreen({
             </View>
           </Pressable>
 
-          {/* Daily challenge - show for all except brand new players */}
-          {playerStage !== 'new' && (
+          {/* Daily challenge - show after first puzzle completion */}
+          {progress.puzzlesSolved >= 1 && (
             <Pressable
               style={({ pressed }) => [pressed && styles.buttonPressed]}
               onPress={onDaily}
@@ -471,6 +474,15 @@ export function HomeScreen({
                 break;
               case 'open_collections':
                 // Collections tab will be visible; just dismiss the banner
+                break;
+              case 'open_goals':
+                // Weekly goals are shown on the home screen; just dismiss
+                break;
+              case 'open_library':
+                onOpenLibrary?.();
+                break;
+              case 'open_events':
+                onOpenEvents?.();
                 break;
             }
           }}
@@ -565,6 +577,12 @@ export function HomeScreen({
                 {dailyFreeSpinAvailable && (
                   <View style={styles.dailySpinBadge}>
                     <Text style={styles.dailySpinBadgeText}>DAILY FREE!</Text>
+                  </View>
+                )}
+                {/* First-spin glow — extra prominent badge for players who haven't spun yet */}
+                {mysteryWheelSpins > 0 && (player.mysteryWheel?.totalSpins ?? 0) === 0 && (
+                  <View style={[styles.dailySpinBadge, { backgroundColor: COLORS.gold + 'DD' }]}>
+                    <Text style={styles.dailySpinBadgeText}>NEW!</Text>
                   </View>
                 )}
                 {mysteryWheelSpins > 0 && (
@@ -719,7 +737,7 @@ export function HomeScreen({
         ) : null}
 
         {/* Come-back-tomorrow hook — early game retention */}
-        {(playerStage === 'new' || playerStage === 'early') && progress.puzzlesSolved >= 3 && !dailyDone && (
+        {(playerStage === 'new' || playerStage === 'early') && progress.puzzlesSolved >= 1 && !dailyDone && (
           <LinearGradient
             colors={['rgba(100,180,255,0.15)', 'rgba(100,180,255,0.05)'] as [string, string]}
             style={styles.tomorrowCard}
@@ -759,8 +777,8 @@ export function HomeScreen({
           </LinearGradient>
         )}
 
-        {/* Today's Deal - visible for non-new players */}
-        {playerStage !== 'new' && (
+        {/* Today's Deal - visible after first puzzle */}
+        {progress.puzzlesSolved >= 1 && (
           <LinearGradient
             colors={GRADIENTS.surfaceCard}
             style={[styles.dealPanel, SHADOWS.medium]}
