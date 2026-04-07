@@ -644,12 +644,16 @@ export interface VictorySummaryItem {
     | 'perfect_milestone'
     | 'decoration_unlock'
     | 'library_teaser'
-    | 'early_bonus';
+    | 'early_bonus'
+    | 'mode_unlock'
+    | 'next_unlock_preview';
   icon: string;
   label: string;
   sublabel?: string;
   accentColor: string;
   action?: { type: 'navigate'; screen: string };
+  coinReward?: number;
+  gemReward?: number;
 }
 
 // ============ ONBOARDING MILESTONES ============
@@ -658,7 +662,7 @@ export interface OnboardingMilestone {
   triggerLevel: number;
   message: string;
   ctaLabel: string;
-  action: 'play' | 'play_again' | 'open_wheel' | 'try_mode' | 'open_collections' | 'tease_library';
+  action: 'play' | 'play_again' | 'open_wheel' | 'try_mode' | 'open_collections' | 'tease_library' | 'open_goals' | 'open_library' | 'open_events';
   icon: string;
 }
 

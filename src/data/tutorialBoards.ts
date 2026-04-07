@@ -148,7 +148,50 @@ export interface TutorialGuideStep {
   board?: 'A' | 'B' | 'C';
 }
 
+/**
+ * Streamlined tutorial: 1 board (B), 4 steps.
+ * Teaches both selection and gravity in a single board experience.
+ * Step 1: Find CAT (teaches tap-to-select)
+ * Step 2: Observe gravity (letters fall — dismiss to continue)
+ * Step 3: Find DOG (teaches that gravity creates new opportunities)
+ * Step 4: Celebration (handled by OnboardingScreen phase transition)
+ */
 export const TUTORIAL_STEPS: TutorialGuideStep[] = [
+  {
+    message: 'Tap the letters C, A, T to find the hidden word!',
+    highlightPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }],
+    highlightWord: 'CAT',
+    waitForAction: 'word_submitted',
+    showHandPointer: true,
+    board: 'B',
+  },
+  {
+    message: 'Letters fall down when you clear a word. This is gravity!',
+    waitForAction: 'dismiss',
+    delay: 600,
+    board: 'B',
+  },
+  {
+    message: 'Now find DOG — gravity shifted the letters around!',
+    highlightPositions: [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
+    highlightWord: 'DOG',
+    waitForAction: 'word_submitted',
+    showHandPointer: true,
+    delay: 300,
+    board: 'B',
+  },
+  {
+    message: "You've got it! Every word changes the board. Let's play!",
+    waitForAction: 'dismiss',
+    board: 'B',
+  },
+];
+
+/**
+ * Legacy full tutorial steps (7 steps across 3 boards).
+ * Kept for backward compatibility with tests and any code referencing them.
+ */
+export const LEGACY_TUTORIAL_STEPS: TutorialGuideStep[] = [
   // Tutorial A: Tap to Find
   {
     message: 'Welcome! Tap the letters G, O to spell GO.',

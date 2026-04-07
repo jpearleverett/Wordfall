@@ -49,6 +49,9 @@ interface PuzzleCompleteProps {
   showTomorrowPreview?: boolean;
   summaryItems?: VictorySummaryItem[];
   onNavigate?: (screen: string) => void;
+  totalCoinsAwarded?: number;
+  totalGemsAwarded?: number;
+  nextUnlockPreview?: { icon: string; name: string; unlockLevel: number } | null;
 }
 
 const CONFETTI_SHAPES = ['square', 'rect', 'circle'] as const;
@@ -315,6 +318,9 @@ export function PuzzleComplete({
   showTomorrowPreview = false,
   summaryItems = [],
   onNavigate,
+  totalCoinsAwarded = 0,
+  totalGemsAwarded = 0,
+  nextUnlockPreview = null,
 }: PuzzleCompleteProps) {
   const { height: screenHeight } = useWindowDimensions();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -578,9 +584,9 @@ export function PuzzleComplete({
                     style={styles.rewardChip}
                   >
                     <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.rewardIconImage} resizeMode="contain" />
-                    <Text style={styles.rewardText}>+{coinReward} coins</Text>
+                    <Text style={styles.rewardText}>+{totalCoinsAwarded > 0 ? totalCoinsAwarded : coinReward} coins</Text>
                   </LinearGradient>
-                  {perfectRun && (
+                  {(perfectRun || totalGemsAwarded > 0) && (
                     <LinearGradient
                       colors={['rgba(255,215,0,0.18)', 'rgba(255,159,0,0.12)'] as [string, string, ...string[]]}
                       start={{ x: 0, y: 0 }}
@@ -588,7 +594,7 @@ export function PuzzleComplete({
                       style={styles.rewardChipGold}
                     >
                       <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImage} resizeMode="contain" />
-                      <Text style={styles.rewardTextGold}>+{ECONOMY.perfectClearGems} gems</Text>
+                      <Text style={styles.rewardTextGold}>+{totalGemsAwarded > 0 ? totalGemsAwarded : ECONOMY.perfectClearGems} gems</Text>
                     </LinearGradient>
                   )}
                 </View>
@@ -700,7 +706,47 @@ export function PuzzleComplete({
                 </Animated.View>
               )}
 
-              {/* Next level preview removed — player sees it immediately on tap */}
+              {/* Next Unlock Preview — retention hook showing what's coming soon */}
+              {nextUnlockPreview && (
+                <Animated.View style={[styles.nextUnlockCard, { opacity: statsAnim, transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
+                  <LinearGradient
+                    colors={[
+                      nextUnlockPreview.unlockLevel - level <= 1
+                        ? 'rgba(255,215,0,0.20)'
+                        : 'rgba(168,85,247,0.15)',
+                      nextUnlockPreview.unlockLevel - level <= 1
+                        ? 'rgba(255,159,0,0.10)'
+                        : 'rgba(168,85,247,0.05)',
+                    ] as [string, string]}
+                    style={styles.nextUnlockGradient}
+                  >
+                    <Text style={styles.nextUnlockIcon}>{nextUnlockPreview.icon}</Text>
+                    <View style={styles.nextUnlockInfo}>
+                      <Text style={[
+                        styles.nextUnlockLabel,
+                        nextUnlockPreview.unlockLevel - level <= 1 && { color: COLORS.gold },
+                      ]}>
+                        {nextUnlockPreview.name}
+                      </Text>
+                      <Text style={styles.nextUnlockSublabel}>
+                        {nextUnlockPreview.unlockLevel - level <= 1
+                          ? 'Unlocks NEXT LEVEL!'
+                          : `${nextUnlockPreview.unlockLevel - level} levels away`}
+                      </Text>
+                    </View>
+                    {/* Mini progress bar */}
+                    <View style={styles.nextUnlockBarTrack}>
+                      <View style={[
+                        styles.nextUnlockBarFill,
+                        {
+                          width: `${Math.min(100, (level / nextUnlockPreview.unlockLevel) * 100)}%`,
+                          backgroundColor: nextUnlockPreview.unlockLevel - level <= 1 ? COLORS.gold : COLORS.purple,
+                        },
+                      ]} />
+                    </View>
+                  </LinearGradient>
+                </Animated.View>
+              )}
 
               {/* One More Level Hooks */}
               <OneMoreLevelHooks level={level} stars={stars} statsAnim={statsAnim} />
@@ -1141,6 +1187,47 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: FONTS.display,
     letterSpacing: 0.5,
+  },
+  nextUnlockCard: {
+    marginBottom: 10,
+  },
+  nextUnlockGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(168,85,247,0.25)',
+  },
+  nextUnlockIcon: {
+    fontSize: 22,
+  },
+  nextUnlockInfo: {
+    flex: 1,
+  },
+  nextUnlockLabel: {
+    color: COLORS.purple,
+    fontSize: 12,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.5,
+  },
+  nextUnlockSublabel: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
+    marginTop: 1,
+  },
+  nextUnlockBarTrack: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 2,
+    overflow: 'hidden' as const,
+  },
+  nextUnlockBarFill: {
+    height: '100%' as unknown as number,
+    borderRadius: 2,
   },
   friendCompare: {
     flexDirection: 'row',

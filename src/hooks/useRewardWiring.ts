@@ -138,6 +138,12 @@ export interface CompletionData {
   showTomorrowPreview: boolean;
   /** Tier 2 unlocks embedded inline on the victory screen */
   summaryItems: VictorySummaryItem[];
+  /** Total coins awarded this puzzle (for animated tally) */
+  totalCoinsAwarded: number;
+  /** Total gems awarded this puzzle (for animated tally) */
+  totalGemsAwarded: number;
+  /** Next feature/mode unlock preview for retention hook */
+  nextUnlockPreview: { icon: string; name: string; unlockLevel: number } | null;
 }
 
 /**
@@ -216,9 +222,14 @@ export function useRewardWiring({
     const coinReward = Math.round(baseCoinReward * eventMultipliers.coins);
     economy.addCoins(coinReward);
 
+    // Track total rewards for animated victory tally
+    let totalCoinsAwarded = coinReward;
+    let totalGemsAwarded = 0;
+
     // Award gems for perfect clears
     if (isPerfect) {
       economy.addGems(ECONOMY.perfectClearGems);
+      totalGemsAwarded += ECONOMY.perfectClearGems;
     }
 
     // Award library points (apply XP multiplier)
@@ -234,6 +245,8 @@ export function useRewardWiring({
       player.recordDailyComplete(today);
       economy.addCoins(ECONOMY.dailyCompleteCoins);
       economy.addGems(ECONOMY.dailyCompleteGems);
+      totalCoinsAwarded += ECONOMY.dailyCompleteCoins;
+      totalGemsAwarded += ECONOMY.dailyCompleteGems;
       player.updateStreak();
       void triggerStreakReminder(player.streaks.currentStreak + 1);
       void analytics.trackDailyChallengeComplete(player.streaks.currentStreak + 1);
@@ -247,10 +260,21 @@ export function useRewardWiring({
     const summaryItems: VictorySummaryItem[] = [];
 
     // First-win celebration — outsized reward for the very first puzzle
+    // Includes library teaser content (moved from onboarding for faster first-open flow)
     if (isFirstWin) {
       player.queueCeremony({
         type: 'first_win',
-        data: { coins: 100, gems: 5, wheelSpins: 1 },
+        data: {
+          coins: 100,
+          gems: 5,
+          wheelSpins: 1,
+          libraryTeaser: true,
+          tips: [
+            { icon: '\u2B07\uFE0F', text: 'Letters fall when you clear words' },
+            { icon: '\uD83E\uDDE9', text: 'Word order changes the board' },
+            { icon: '\uD83D\uDCA1', text: 'Use hints when you get stuck' },
+          ],
+        },
       });
     }
 
@@ -262,8 +286,8 @@ export function useRewardWiring({
     const earlyBonus = EARLY_GAME_BONUSES.find(b => b.level === progressionLevel);
     if (earlyBonus && !isFirstWin) {
       // isFirstWin already awards the level-1 bonus via the ceremony above
-      if (earlyBonus.coins) economy.addCoins(earlyBonus.coins);
-      if (earlyBonus.gems) economy.addGems(earlyBonus.gems);
+      if (earlyBonus.coins) { economy.addCoins(earlyBonus.coins); totalCoinsAwarded += earlyBonus.coins; }
+      if (earlyBonus.gems) { economy.addGems(earlyBonus.gems); totalGemsAwarded += earlyBonus.gems; }
       if (earlyBonus.hints) economy.addHintTokens(earlyBonus.hints);
       if (earlyBonus.wheelSpins) {
         player.updateProgress({
@@ -292,6 +316,8 @@ export function useRewardWiring({
     if (isFirstWin) {
       economy.addCoins(100);
       economy.addGems(5);
+      totalCoinsAwarded += 100;
+      totalGemsAwarded += 5;
       player.updateProgress({
         mysteryWheel: {
           ...player.mysteryWheel,
@@ -476,20 +502,35 @@ export function useRewardWiring({
       }
     }
 
-    // Auto-unlock modes based on level progression and queue ceremonies
+    // Auto-unlock modes based on level progression.
+    // Early modes (unlockLevel <= 8) become inline summary items to reduce modal fatigue.
+    // Later modes (unlockLevel > 8) get full-screen ceremony modals.
     for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
       if (config.unlockLevel <= newLevel && !player.unlockedModes.includes(modeId)) {
         player.unlockMode(modeId);
-        player.queueCeremony({
-          type: 'mode_unlock',
-          data: {
-            modeId,
-            modeName: config.name,
-            modeIcon: config.icon,
-            modeDescription: config.description,
-            modeColor: config.color,
-          },
-        });
+        if (config.unlockLevel <= 8) {
+          // Inline on victory screen — less intrusive for early game
+          summaryItems.push({
+            type: 'mode_unlock',
+            icon: config.icon,
+            label: `${config.name} Unlocked!`,
+            sublabel: config.description,
+            accentColor: config.color,
+            action: { type: 'navigate', screen: 'Modes' },
+          });
+        } else {
+          // Full ceremony for premium/later modes
+          player.queueCeremony({
+            type: 'mode_unlock',
+            data: {
+              modeId,
+              modeName: config.name,
+              modeIcon: config.icon,
+              modeDescription: config.description,
+              modeColor: config.color,
+            },
+          });
+        }
       }
     }
 
@@ -621,6 +662,18 @@ export function useRewardWiring({
       }
     }
 
+    // Compute next unlock preview for retention hook on victory screen
+    const nextFeature = FEATURE_UNLOCK_SCHEDULE.find(f => f.unlockLevel > newLevel);
+    const nextModeEntry = Object.entries(MODE_CONFIGS).find(([, c]) => c.unlockLevel > newLevel);
+    const candidates: { icon: string; name: string; unlockLevel: number }[] = [];
+    if (nextFeature) candidates.push({ icon: nextFeature.icon, name: nextFeature.title, unlockLevel: nextFeature.unlockLevel });
+    if (nextModeEntry) candidates.push({ icon: nextModeEntry[1].icon, name: nextModeEntry[1].name, unlockLevel: nextModeEntry[1].unlockLevel });
+    candidates.sort((a, b) => a.unlockLevel - b.unlockLevel);
+    // Show preview only if within 3 levels — don't overwhelm with distant goals
+    const nextUnlockPreview = candidates.length > 0 && candidates[0].unlockLevel - newLevel <= 3
+      ? candidates[0]
+      : null;
+
     // Generate share text (include referral code for viral deep link)
     const grid = params.board ? (params.board as Board).grid : null;
     const shareText = grid
@@ -680,6 +733,9 @@ export function useRewardWiring({
                 eventMultiplierLabel,
                 showTomorrowPreview: puzzlesAfterThis <= 5,
                 summaryItems,
+                totalCoinsAwarded,
+                totalGemsAwarded,
+                nextUnlockPreview,
               },
             });
           }
@@ -704,6 +760,9 @@ export function useRewardWiring({
           eventMultiplierLabel,
           showTomorrowPreview: puzzlesAfterThis <= 5,
           summaryItems,
+          totalCoinsAwarded,
+          totalGemsAwarded,
+          nextUnlockPreview,
         },
       });
     }
