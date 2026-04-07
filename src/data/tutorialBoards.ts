@@ -46,10 +46,19 @@ export function generateTutorialBoardA(): Board {
 
 /**
  * Tutorial B: 5x4 grid, 2 words (CAT, DOG). Introduces gravity.
- * After clearing CAT (top row), letters fall visibly.
+ * CAT is placed in the MIDDLE of the grid (row 2) so that when it's cleared,
+ * letters above it (including D,O,G at row 0) visibly fall down.
+ * After gravity, DOG ends up at row 1.
  *
  * Grid layout:
- *   C  A  T  X
+ *   D  O  G  X
+ *   R  K  W  P
+ *   C  A  T  H
+ *   M  L  F  N
+ *   B  J  Q  S
+ *
+ * After clearing CAT (row 2, cols 0-2) + gravity:
+ *   _  _  _  X
  *   D  O  G  P
  *   R  K  W  H
  *   M  L  F  N
@@ -58,22 +67,22 @@ export function generateTutorialBoardA(): Board {
 export function generateTutorialBoardB(): Board {
   tutorialCellId = 11000;
   const grid: Grid = [
-    [tCell('C'), tCell('A'), tCell('T'), tCell('X')],
-    [tCell('D'), tCell('O'), tCell('G'), tCell('P')],
-    [tCell('R'), tCell('K'), tCell('W'), tCell('H')],
+    [tCell('D'), tCell('O'), tCell('G'), tCell('X')],
+    [tCell('R'), tCell('K'), tCell('W'), tCell('P')],
+    [tCell('C'), tCell('A'), tCell('T'), tCell('H')],
     [tCell('M'), tCell('L'), tCell('F'), tCell('N')],
     [tCell('B'), tCell('J'), tCell('Q'), tCell('S')],
   ];
   const words: WordPlacement[] = [
     {
       word: 'CAT',
-      positions: [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }],
+      positions: [{ row: 2, col: 0 }, { row: 2, col: 1 }, { row: 2, col: 2 }],
       direction: 'horizontal',
       found: false,
     },
     {
       word: 'DOG',
-      positions: [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
+      positions: [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }],
       direction: 'horizontal',
       found: false,
     },
@@ -149,40 +158,39 @@ export interface TutorialGuideStep {
 }
 
 /**
- * Streamlined tutorial: 1 board (B), 4 steps.
+ * Streamlined tutorial: 1 board (B), 3 steps.
  * Teaches both selection and gravity in a single board experience.
- * Step 1: Find CAT (teaches tap-to-select)
- * Step 2: Observe gravity (letters fall — dismiss to continue)
- * Step 3: Find DOG (teaches that gravity creates new opportunities)
- * Step 4: Celebration (handled by OnboardingScreen phase transition)
+ *
+ * Board B layout: CAT is in the middle row (row 2). D,O,G are at row 0.
+ * After clearing CAT, gravity pulls D,O,G down from row 0 to row 1 — a visible drop.
+ * Player then finds DOG at its new post-gravity position (row 1).
+ *
+ * Step 1: Find CAT at row 2 (teaches tap-to-select)
+ * Step 2: Observe gravity (D,O,G fall down — dismiss to continue)
+ * Step 3: Find DOG at row 1 (post-gravity position) → completes tutorial
  */
 export const TUTORIAL_STEPS: TutorialGuideStep[] = [
   {
     message: 'Tap the letters C, A, T to find the hidden word!',
-    highlightPositions: [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }],
+    highlightPositions: [{ row: 2, col: 0 }, { row: 2, col: 1 }, { row: 2, col: 2 }],
     highlightWord: 'CAT',
     waitForAction: 'word_submitted',
     showHandPointer: true,
     board: 'B',
   },
   {
-    message: 'Letters fall down when you clear a word. This is gravity!',
+    message: 'Letters fall down to fill the gap. This is gravity!',
     waitForAction: 'dismiss',
     delay: 600,
     board: 'B',
   },
   {
-    message: 'Now find DOG — gravity shifted the letters around!',
+    message: 'Now find DOG — gravity moved it down!',
     highlightPositions: [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
     highlightWord: 'DOG',
     waitForAction: 'word_submitted',
     showHandPointer: true,
     delay: 300,
-    board: 'B',
-  },
-  {
-    message: "You've got it! Every word changes the board. Let's play!",
-    waitForAction: 'dismiss',
     board: 'B',
   },
 ];
