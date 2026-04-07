@@ -1098,6 +1098,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => handlePurchase('chapter_bundle')}
             activeOpacity={0.7}
             disabled={!!purchasingId}
+            accessibilityRole="button"
+            accessibilityLabel="Buy Chapter Bundle for $2.99: theme decoration, 20 gems, 10 hints, and 1 board preview"
           >
             <LinearGradient
               colors={[...GRADIENTS.surfaceCard]}
@@ -1132,6 +1134,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => handlePurchase('daily_value_pack')}
             activeOpacity={0.7}
             disabled={!!purchasingId}
+            accessibilityRole="button"
+            accessibilityLabel="Buy Daily Value Pack for $0.99: bonus rewards every day for 30 days"
           >
             <LinearGradient
               colors={[...GRADIENTS.surfaceCard]}
@@ -1169,6 +1173,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => !premiumPass && handlePurchase('premium_pass')}
             activeOpacity={premiumPass ? 1 : 0.7}
             disabled={premiumPass || !!purchasingId}
+            accessibilityRole="button"
+            accessibilityLabel={premiumPass ? 'Premium Pass, owned' : 'Buy Premium Pass for $4.99: unlock premium rewards this season'}
           >
             <LinearGradient
               colors={[...GRADIENTS.surfaceCard]}
@@ -1212,6 +1218,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => !adsRemoved && handlePurchase('ad_removal')}
             activeOpacity={adsRemoved ? 1 : 0.7}
             disabled={adsRemoved || !!purchasingId}
+            accessibilityRole="button"
+            accessibilityLabel={adsRemoved ? 'Remove Ads, owned' : 'Buy Remove Ads for $4.99: ad-free experience forever'}
           >
             <LinearGradient
               colors={[...GRADIENTS.surfaceCard]}
