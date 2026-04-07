@@ -148,6 +148,8 @@ export function ModeTutorialOverlay({ steps, onComplete, visible }: ModeTutorial
               styles.button,
               pressed && styles.buttonPressed,
             ]}
+            accessibilityRole="button"
+            accessibilityLabel={isLastStep ? 'Got it, close tutorial' : `Next step, ${currentStep + 1} of ${steps.length}`}
           >
             <LinearGradient
               colors={GRADIENTS.button.primary as unknown as readonly [string, string, ...string[]]}
@@ -169,7 +171,7 @@ export function ModeTutorialOverlay({ steps, onComplete, visible }: ModeTutorial
               }).start(() => {
                 onComplete();
               });
-            }}>
+            }} accessibilityRole="button" accessibilityLabel="Skip mode tutorial">
               <Text style={styles.skipText}>Skip tutorial</Text>
             </Pressable>
           )}
