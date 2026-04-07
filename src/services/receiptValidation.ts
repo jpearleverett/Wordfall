@@ -1,10 +1,9 @@
 /**
  * Receipt validation service.
  *
- * Attempts server-side validation via a Firebase Cloud Function endpoint.
- * Falls back to client-side validation with a warning when the server
- * is unavailable. Includes fraud detection via receipt hash tracking
- * to prevent replay attacks.
+ * In production, server-side validation via Firebase Cloud Functions is REQUIRED.
+ * Client-side fallback is only permitted in __DEV__ mode.
+ * Includes fraud detection via receipt hash tracking to prevent replay attacks.
  */
 
 import { Platform } from 'react-native';
@@ -17,9 +16,71 @@ const FIREBASE_FUNCTIONS_URL =
 
 const RECEIPT_HASH_STORAGE_KEY = '@wordfall_receipt_hashes';
 
+const MAX_RETRY_ATTEMPTS = 3;
+const BASE_RETRY_DELAY_MS = 1000;
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+/** Platform-specific receipt data for Apple App Store */
+export interface AppleReceiptData {
+  platform: 'ios';
+  /** Base64-encoded App Store receipt */
+  receipt: string;
+  productId: string;
+}
+
+/** Platform-specific receipt data for Google Play */
+export interface GooglePlayReceiptData {
+  platform: 'android';
+  /** Purchase token from Google Play */
+  receipt: string;
+  productId: string;
+  /** Package name of the app */
+  packageName?: string;
+}
+
+export type PlatformReceiptData = AppleReceiptData | GooglePlayReceiptData;
+
+/** Response from server-side validation endpoint */
+export interface ServerValidationResponse {
+  valid: boolean;
+  error?: string;
+  /** Product ID confirmed by the store */
+  productId?: string;
+  /** Subscription expiry timestamp (ms since epoch), present for subscriptions */
+  expiresAt?: number;
+  /** Whether this is a trial period */
+  isTrial?: boolean;
+  /** Original transaction ID from the store */
+  transactionId?: string;
+}
+
 export interface ReceiptValidationResult {
   valid: boolean;
   error?: string;
+  /** Subscription expiry timestamp (ms since epoch) */
+  expiresAt?: number;
+  /** Product ID confirmed by the store */
+  productId?: string;
+  /** Whether this is a trial period */
+  isTrial?: boolean;
+  /** Original transaction ID */
+  transactionId?: string;
+}
+
+export interface SubscriptionValidationResult {
+  valid: boolean;
+  error?: string;
+  /** Subscription expiry date as ISO string */
+  expiryDate?: string;
+  /** Subscription expiry timestamp (ms since epoch) */
+  expiresAt?: number;
+  /** Whether the subscription is currently active */
+  isActive: boolean;
+  /** Whether this is a trial period */
+  isTrial?: boolean;
+  /** Whether auto-renew is enabled */
+  autoRenewing?: boolean;
 }
 
 // ── Fraud detection: receipt hash tracking ────────────────────────────────────
@@ -65,11 +126,104 @@ async function saveReceiptHash(hash: string): Promise<void> {
   }
 }
 
+// ── Retry logic ──────────────────────────────────────────────────────────────
+
+/**
+ * Sleep for a given number of milliseconds.
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch with exponential backoff retry.
+ * Retries up to MAX_RETRY_ATTEMPTS times on network errors or 5xx responses.
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+): Promise<Response> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(url, options);
+
+      // Don't retry client errors (4xx) — only server errors (5xx)
+      if (response.ok || (response.status >= 400 && response.status < 500)) {
+        return response;
+      }
+
+      // Server error — retry with backoff
+      lastError = new Error(`Server returned ${response.status}`);
+    } catch (error) {
+      // Network error — retry with backoff
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+
+    // Exponential backoff: 1s, 2s, 4s
+    if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+      const delay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+      await sleep(delay);
+    }
+  }
+
+  throw lastError ?? new Error('All retry attempts exhausted');
+}
+
 // ── Validation ────────────────────────────────────────────────────────────────
 
+/**
+ * Attempt server-side receipt validation with retry logic.
+ * Returns null if server is not configured (only valid in __DEV__).
+ */
+async function serverValidate(
+  receipt: string,
+  productId: string,
+  userId?: string,
+): Promise<ServerValidationResponse | null> {
+  if (!FIREBASE_FUNCTIONS_URL) {
+    return null;
+  }
+
+  const response = await fetchWithRetry(
+    `${FIREBASE_FUNCTIONS_URL}/validateReceipt`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        receipt,
+        productId,
+        platform: Platform.OS,
+        userId,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Unknown error');
+    return {
+      valid: false,
+      error: `Server validation failed (${response.status}): ${errorText}`,
+    };
+  }
+
+  const data: ServerValidationResponse = await response.json();
+  return data;
+}
+
+/**
+ * Validate a purchase receipt.
+ *
+ * - In production: server-side validation is REQUIRED. If the server is
+ *   unavailable or returns an error, the receipt is rejected.
+ * - In __DEV__ mode: falls back to client-side validation (trust receipt)
+ *   when the server is unavailable, with a warning.
+ */
 export async function validateReceipt(
   receipt: string,
   productId: string,
+  userId?: string,
 ): Promise<ReceiptValidationResult> {
   // Fraud detection: check for receipt replay
   const hash = hashReceipt(receipt);
@@ -83,59 +237,91 @@ export async function validateReceipt(
     return { valid: false, error: 'Duplicate receipt — possible replay attack' };
   }
 
-  // Attempt server-side validation if configured
-  if (FIREBASE_FUNCTIONS_URL) {
-    try {
-      const response = await fetch(
-        `${FIREBASE_FUNCTIONS_URL}/validateReceipt`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            receipt,
-            productId,
-            platform: Platform.OS,
-          }),
-        },
-      );
+  // Attempt server-side validation
+  try {
+    const serverResult = await serverValidate(receipt, productId, userId);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.valid) {
-          await saveReceiptHash(hash);
-        }
-        return {
-          valid: !!data.valid,
-          error: data.error,
-        };
+    if (serverResult !== null) {
+      // Server responded — use its result
+      if (serverResult.valid) {
+        await saveReceiptHash(hash);
       }
-
-      // Non-OK response — fall through to client-side validation
-      console.warn(
-        `[ReceiptValidation] Server returned ${response.status} — falling back to client-side validation`,
-      );
-    } catch (error) {
-      // Network error — fall through to client-side validation
-      if (__DEV__) {
-        console.warn(
-          '[ReceiptValidation] Server validation failed (network error) — falling back to client-side validation:',
-          error,
-        );
-      }
+      return {
+        valid: !!serverResult.valid,
+        error: serverResult.error,
+        expiresAt: serverResult.expiresAt,
+        productId: serverResult.productId,
+        isTrial: serverResult.isTrial,
+        transactionId: serverResult.transactionId,
+      };
     }
-  } else {
+
+    // Server not configured (FIREBASE_FUNCTIONS_URL is empty)
     if (__DEV__) {
       console.warn(
-        '[ReceiptValidation] EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL not configured — using client-side validation only',
+        '[ReceiptValidation] EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL not configured — using client-side validation only (__DEV__ mode)',
       );
+      await saveReceiptHash(hash);
+      return { valid: true };
     }
+
+    // Production: no server URL configured — reject
+    return {
+      valid: false,
+      error: 'Server validation unavailable',
+    };
+  } catch (error) {
+    // All retries exhausted
+    if (__DEV__) {
+      console.warn(
+        '[ReceiptValidation] Server validation failed after retries — falling back to client-side validation (__DEV__ mode):',
+        error,
+      );
+      await saveReceiptHash(hash);
+      return { valid: true };
+    }
+
+    // Production: server validation failed — reject the receipt
+    return {
+      valid: false,
+      error: 'Server validation unavailable',
+    };
+  }
+}
+
+/**
+ * Validate a VIP subscription receipt.
+ *
+ * Checks receipt validity and returns subscription status including expiry date.
+ * Uses the same server-required-in-production policy as validateReceipt.
+ */
+export async function validateSubscription(
+  receipt: string,
+  productId: string,
+  userId?: string,
+): Promise<SubscriptionValidationResult> {
+  const result = await validateReceipt(receipt, productId, userId);
+
+  if (!result.valid) {
+    return {
+      valid: false,
+      error: result.error,
+      isActive: false,
+    };
   }
 
-  // Client-side fallback: trust the receipt but record it
-  console.log(
-    '[ReceiptValidation] Client-side validation (server unavailable):',
-    productId,
-  );
-  await saveReceiptHash(hash);
-  return { valid: true };
+  const now = Date.now();
+  const expiresAt = result.expiresAt;
+  const isActive = expiresAt ? expiresAt > now : true; // If no expiry, assume active (dev fallback)
+  const expiryDate = expiresAt ? new Date(expiresAt).toISOString() : undefined;
+
+  return {
+    valid: true,
+    expiryDate,
+    expiresAt,
+    isActive,
+    isTrial: result.isTrial,
+    // autoRenewing is determined server-side and would come from the server response
+    // In __DEV__ fallback mode, this remains undefined
+  };
 }

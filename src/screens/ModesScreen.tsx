@@ -80,6 +80,9 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
         ]}
         onPress={() => accessible && onSelectMode(mode.id)}
         activeOpacity={accessible ? 0.7 : 1}
+        accessibilityRole="button"
+        accessibilityLabel={`${mode.name} mode${accessible ? '' : ', locked'}: ${accessible ? mode.desc : reason}`}
+        accessibilityState={{ disabled: !accessible }}
       >
         {accessible ? (
           <LinearGradient
@@ -128,7 +131,7 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
         <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>GAME MODES</Text>
           {onOpenLeaderboard && (
-            <TouchableOpacity style={styles.leaderboardBtn} onPress={onOpenLeaderboard} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.leaderboardBtn} onPress={onOpenLeaderboard} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Open leaderboard">
               <Text style={styles.leaderboardBtnText}>{'\u{1F3C6}'} Leaderboard</Text>
             </TouchableOpacity>
           )}

@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, View, Image, ImageSourcePropType } from 'react-native';
 
 interface VideoBackgroundProps {
   source: number; // require() asset
@@ -9,6 +9,16 @@ interface VideoBackgroundProps {
    * rendered on top of the video for blending with the UI.
    */
   overlayColor?: string;
+  /**
+   * When true (default), defers video loading until the component is mounted
+   * and shows a static placeholder image in the meantime.
+   */
+  lazy?: boolean;
+  /**
+   * Static image to display while the video is loading (or if video is unavailable).
+   * Falls back to a plain overlay color if not provided.
+   */
+  placeholder?: ImageSourcePropType;
 }
 
 // Lazy-load expo-video to gracefully handle environments where it's unavailable
@@ -32,10 +42,43 @@ function loadVideoModule() {
 }
 
 /**
- * Error boundary that catches crashes from the video player and renders nothing.
+ * Static placeholder shown while video is loading or unavailable.
+ */
+function PlaceholderView({
+  placeholder,
+  opacity = 0.5,
+  overlayColor,
+}: {
+  placeholder?: ImageSourcePropType;
+  opacity?: number;
+  overlayColor?: string;
+}) {
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
+      {placeholder && (
+        <Image
+          source={placeholder}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      )}
+      {overlayColor && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor }]} />
+      )}
+    </View>
+  );
+}
+
+/**
+ * Error boundary that catches crashes from the video player and renders a placeholder.
  */
 class VideoErrorBoundary extends React.Component<
-  { children: React.ReactNode; overlayColor?: string; opacity?: number },
+  {
+    children: React.ReactNode;
+    overlayColor?: string;
+    opacity?: number;
+    placeholder?: ImageSourcePropType;
+  },
   { hasError: boolean }
 > {
   state = { hasError: false };
@@ -50,13 +93,12 @@ class VideoErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
-      // Fallback: just the overlay color, no video
       return (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: this.props.opacity ?? 0.5 }]}>
-          {this.props.overlayColor && (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: this.props.overlayColor }]} />
-          )}
-        </View>
+        <PlaceholderView
+          placeholder={this.props.placeholder}
+          opacity={this.props.opacity}
+          overlayColor={this.props.overlayColor}
+        />
       );
     }
     return this.props.children;
@@ -65,32 +107,62 @@ class VideoErrorBoundary extends React.Component<
 
 /**
  * Full-screen looping video background using expo-video.
- * Wrapped in an error boundary so crashes render a transparent fallback
- * instead of crashing the entire app.
+ * Supports lazy loading: when `lazy` is true (default), the video module
+ * is not loaded until the component mounts, showing a static placeholder
+ * image in the meantime. Wrapped in an error boundary so crashes render
+ * a transparent fallback instead of crashing the entire app.
  */
 function VideoBackgroundInner({
   source,
   opacity = 0.5,
   overlayColor,
+  lazy = true,
+  placeholder,
 }: VideoBackgroundProps) {
+  const [shouldLoad, setShouldLoad] = useState(!lazy);
+
+  useEffect(() => {
+    if (!lazy) return;
+
+    // Defer video loading to after mount so it doesn't block app startup.
+    // Use a small delay to let the initial render settle first.
+    const timer = setTimeout(() => {
+      setShouldLoad(true);
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [lazy]);
+
+  // Show placeholder until we decide to load video
+  if (!shouldLoad) {
+    return (
+      <PlaceholderView
+        placeholder={placeholder}
+        opacity={opacity}
+        overlayColor={overlayColor}
+      />
+    );
+  }
+
   loadVideoModule();
 
   if (!videoAvailable) {
     return (
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
-        {overlayColor && (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor }]} />
-        )}
-      </View>
+      <PlaceholderView
+        placeholder={placeholder}
+        opacity={opacity}
+        overlayColor={overlayColor}
+      />
     );
   }
 
   return (
-    <VideoErrorBoundary overlayColor={overlayColor} opacity={opacity}>
+    <VideoErrorBoundary overlayColor={overlayColor} opacity={opacity} placeholder={placeholder}>
       <VideoBackgroundWithPlayer
         source={source}
         opacity={opacity}
         overlayColor={overlayColor}
+        placeholder={placeholder}
       />
     </VideoErrorBoundary>
   );
@@ -99,22 +171,71 @@ function VideoBackgroundInner({
 /**
  * Inner component that uses the hook — only rendered when expo-video is available.
  * Separated so the hook call is unconditional within this component.
+ * Shows a placeholder image until the video is ready to play.
  */
 function VideoBackgroundWithPlayer({
   source,
   opacity = 0.5,
   overlayColor,
+  placeholder,
 }: VideoBackgroundProps) {
+  const [videoReady, setVideoReady] = useState(false);
+
+  const onStatusChange = useCallback((status: any) => {
+    if (status === 'readyToPlay' || status?.status === 'readyToPlay') {
+      setVideoReady(true);
+    }
+  }, []);
+
   const player = useVideoPlayerHook(source, (p: any) => {
     p.loop = true;
     p.muted = true;
     p.play();
   });
 
+  // Listen for player status changes to know when video is ready
+  useEffect(() => {
+    if (!player) return;
+
+    // Some versions of expo-video emit events; try to subscribe
+    if (player.addListener) {
+      const sub = player.addListener('statusChange', onStatusChange);
+      return () => {
+        if (sub?.remove) sub.remove();
+      };
+    }
+
+    // Fallback: consider video ready after a short delay
+    const timer = setTimeout(() => setVideoReady(true), 500);
+    return () => clearTimeout(timer);
+  }, [player, onStatusChange]);
+
+  // Clean up player on unmount
+  useEffect(() => {
+    return () => {
+      if (player) {
+        try {
+          if (player.pause) player.pause();
+          if (player.release) player.release();
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    };
+  }, [player]);
+
   const VideoView = VideoViewComponent;
 
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
+      {/* Show placeholder until video is ready */}
+      {!videoReady && placeholder && (
+        <Image
+          source={placeholder}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      )}
       <VideoView
         player={player}
         style={StyleSheet.absoluteFill}

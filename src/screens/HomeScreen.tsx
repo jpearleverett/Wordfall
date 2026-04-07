@@ -333,7 +333,7 @@ export function HomeScreen({
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         {onOpenSettings && (
-          <Pressable style={styles.iconButton} onPress={onOpenSettings}>
+          <Pressable style={styles.iconButton} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel="Open settings">
             <Ionicons name="settings-outline" size={22} color={COLORS.textSecondary} />
           </Pressable>
         )}
@@ -363,7 +363,7 @@ export function HomeScreen({
             </>
           )}
           {onOpenShop && (
-            <Pressable onPress={onOpenShop} style={({ pressed }) => [pressed && styles.buttonPressed]}>
+            <Pressable onPress={onOpenShop} style={({ pressed }) => [pressed && styles.buttonPressed]} accessibilityRole="button" accessibilityLabel="Open shop">
               <View style={styles.shopButtonWrapper}>
                 <Image source={LOCAL_IMAGES.shopButton} style={styles.shopButtonImage} resizeMode="contain" />
                 <View style={styles.shopButtonOverlay}>
@@ -410,6 +410,8 @@ export function HomeScreen({
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={() => onPlay()}
+            accessibilityRole="button"
+            accessibilityLabel={`Play level ${progress.currentLevel}`}
           >
             <View style={styles.playButtonWrapper}>
               <Image source={LOCAL_IMAGES.playButton} style={styles.playButtonImage} resizeMode="stretch" />
@@ -428,6 +430,8 @@ export function HomeScreen({
             <Pressable
               style={({ pressed }) => [pressed && styles.buttonPressed]}
               onPress={onDaily}
+              accessibilityRole="button"
+              accessibilityLabel={dailyDone ? 'Daily challenge completed' : "Play today's daily challenge"}
             >
               <LinearGradient
                 colors={dailyDone ? ['rgba(76,175,80,0.45)', 'rgba(76,175,80,0.30)'] : ['rgba(255,215,0,0.35)', 'rgba(255,159,67,0.25)']}
@@ -498,6 +502,8 @@ export function HomeScreen({
               key={eb.id}
               style={({ pressed }) => [pressed && styles.buttonPressed]}
               onPress={onOpenEvents}
+              accessibilityRole="button"
+              accessibilityLabel={`Event: ${eb.name}. Tap to view`}
             >
               <LinearGradient
                 colors={[eb.color + '55', eb.color + '35'] as [string, string]}
@@ -529,6 +535,8 @@ export function HomeScreen({
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={onOpenWheel}
+            accessibilityRole="button"
+            accessibilityLabel={dailyFreeSpinAvailable ? 'Mystery Wheel, daily free spin ready' : mysteryWheelSpins > 0 ? `Mystery Wheel, ${mysteryWheelSpins} spins available` : 'Mystery Wheel, spin for prizes'}
           >
             <Animated.View style={{ transform: [{ scale: wheelPulse }] }}>
               <LinearGradient
@@ -777,6 +785,8 @@ export function HomeScreen({
               <Pressable
                 style={({ pressed }) => [pressed && styles.buttonPressed]}
                 onPress={() => onBuyDeal?.(dailyDeal)}
+                accessibilityRole="button"
+                accessibilityLabel={`Buy ${dailyDeal.name} for ${dailyDeal.salePrice} ${dailyDeal.currency}`}
               >
                 <LinearGradient
                   colors={GRADIENTS.button.gold}
@@ -796,6 +806,8 @@ export function HomeScreen({
           <Pressable
             onPress={() => onOpenShop?.()}
             style={({ pressed }) => [pressed && styles.buttonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Flash sale: ${flashSale.name}, ${flashSale.discountPercent} percent off. Tap to view in shop`}
           >
             <LinearGradient
               colors={[COLORS.coral + '25', COLORS.orange + '15', ...GRADIENTS.surfaceCard.slice(1)]}

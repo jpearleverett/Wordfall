@@ -206,12 +206,15 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             placeholderTextColor={COLORS.textMuted}
             value={searchText}
             onChangeText={setSearchText}
+            accessibilityLabel="Search clubs by name or code"
           />
         </View>
         {searchText.length > 0 && (
           <TouchableOpacity
             onPress={() => onJoinClub(searchText)}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Search and join club"
           >
             <LinearGradient
               colors={[...GRADIENTS.button.primary] as [string, string, ...string[]]}
@@ -245,6 +248,8 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                   setShowCreate(false);
                   setCreateName('');
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel club creation"
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
@@ -258,6 +263,8 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                     onCreateClub(createName.trim());
                   }
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="Create club"
               >
                 <Text style={styles.confirmBtnText}>Create</Text>
               </TouchableOpacity>
@@ -267,6 +274,8 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           <TouchableOpacity
             style={styles.createButton}
             onPress={() => setShowCreate(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Create new club"
           >
             <Text style={styles.createButtonIcon}>+</Text>
             <Text style={styles.createButtonText}>Create New Club</Text>
@@ -317,7 +326,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </LinearGradient>
 
         {/* Club Puzzle */}
-        <TouchableOpacity activeOpacity={0.8}>
+        <TouchableOpacity activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Play today's club puzzle">
           <LinearGradient
             colors={[COLORS.accent + '18', COLORS.accent + '08'] as [string, string]}
             start={{ x: 0, y: 0 }}
@@ -394,7 +403,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             data.members.map((member, index) => (
               <View key={member.id}>
                 {index > 0 && <View style={styles.memberDivider} />}
-                <View style={styles.memberRow}>
+                <View style={styles.memberRow} accessibilityRole="text" accessibilityLabel={`Rank ${index + 1}: ${member.name}, ${member.score.toLocaleString()} points${member.isLeader ? ', club leader' : ''}${member.isOnline ? ', online' : ''}`}>
                   <View style={styles.memberRank}>
                     <Text style={styles.memberRankText}>{index + 1}</Text>
                   </View>
@@ -436,7 +445,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         <Text style={styles.sectionTitle}>Quick Reactions</Text>
         <View style={styles.emojiBar}>
           {REACTION_EMOJIS.map((emoji) => (
-            <TouchableOpacity key={emoji} style={styles.emojiBtn}>
+            <TouchableOpacity key={emoji} style={styles.emojiBtn} accessibilityRole="button" accessibilityLabel={`React with ${emoji}`}>
               <Text style={styles.emojiBtnText}>{emoji}</Text>
             </TouchableOpacity>
           ))}
@@ -507,11 +516,14 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                   maxLength={200}
                   returnKeyType="send"
                   onSubmitEditing={handleSendMessage}
+                  accessibilityLabel="Chat message input"
                 />
                 <TouchableOpacity
                   style={[styles.chatSendBtn, !chatInput.trim() && styles.chatSendBtnDisabled]}
                   onPress={handleSendMessage}
                   disabled={!chatInput.trim()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send message"
                 >
                   <Text style={styles.chatSendBtnText}>Send</Text>
                 </TouchableOpacity>

@@ -544,6 +544,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         onPress={() => handlePurchase(productId)}
         activeOpacity={0.7}
         disabled={!!purchasingId}
+        accessibilityRole="button"
+        accessibilityLabel={`Buy ${item.name} for ${displayPrice}${item.bestValue ? ', best value' : ''}`}
       >
         <LinearGradient
           colors={[...GRADIENTS.surfaceCard]}
@@ -635,6 +637,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 onPress={() => handlePurchase(flashSale.productId)}
                 activeOpacity={0.7}
                 disabled={!!purchasingId}
+                accessibilityRole="button"
+                accessibilityLabel={`Flash sale: Buy now for ${flashSale.salePrice}`}
               >
                 <LinearGradient
                   colors={[COLORS.gold, COLORS.orange]}
@@ -663,6 +667,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               onPress={handleWatchAdForHint}
               activeOpacity={0.7}
               disabled={watchingAd}
+              accessibilityRole="button"
+              accessibilityLabel="Watch ad for 1 free hint"
             >
               <LinearGradient
                 colors={[COLORS.green + '30', COLORS.teal + '20']}
@@ -693,6 +699,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 onPress={handleWatchAdForCoins}
                 activeOpacity={0.7}
                 disabled={watchingAd}
+                accessibilityRole="button"
+                accessibilityLabel={`Watch ad for 50 coins, ${adManager.coinAdsRemaining()} remaining today`}
               >
                 <LinearGradient
                   colors={[COLORS.gold + '30', COLORS.orange + '20']}
@@ -724,6 +732,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 onPress={handleWatchAdForSpin}
                 activeOpacity={0.7}
                 disabled={watchingAd}
+                accessibilityRole="button"
+                accessibilityLabel="Watch ad for mystery wheel spin"
               >
                 <LinearGradient
                   colors={[COLORS.purple + '30', COLORS.accent + '20']}
@@ -791,6 +801,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   }
                 }}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Claim daily VIP rewards: 50 gems and 3 hints"
               >
                 <LinearGradient
                   colors={[COLORS.gold, COLORS.orange]}
@@ -810,6 +822,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               onPress={() => handlePurchase('vip_weekly')}
               activeOpacity={0.7}
               disabled={!!purchasingId}
+              accessibilityRole="button"
+              accessibilityLabel="Subscribe to VIP Weekly for $4.99 per week"
             >
               <LinearGradient
                 colors={[COLORS.purple, '#6a1b9a']}

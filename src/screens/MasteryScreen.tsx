@@ -169,7 +169,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
       {/* Header */}
       <View style={styles.header}>
         {onBack && (
-          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+          <TouchableOpacity style={styles.backButton} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back">
             <Text style={styles.backText}>{'\u2190'}</Text>
           </TouchableOpacity>
         )}
@@ -220,6 +220,8 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
               onPress={handleBuyPremium}
               activeOpacity={0.7}
               disabled={purchasingPass}
+              accessibilityRole="button"
+              accessibilityLabel="Buy premium mastery pass for $4.99"
             >
               <LinearGradient
                 colors={[COLORS.gold, '#e6b800']}
@@ -254,7 +256,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
             </View>
           )}
         </View>
-        <View style={styles.progressBarContainer}>
+        <View style={styles.progressBarContainer} accessibilityRole="progressbar" accessibilityLabel={`Mastery progress: ${tierProgress} of ${tierNeeded} XP`} accessibilityValue={{ min: 0, max: tierNeeded, now: tierProgress }}>
           <View style={styles.progressBarTrack}>
             <LinearGradient
               colors={[COLORS.accent, COLORS.teal]}
