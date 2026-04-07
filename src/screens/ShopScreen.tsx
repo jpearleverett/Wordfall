@@ -1367,6 +1367,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                         style={[styles.rentalCard, disabled && styles.coinShopCardDisabled]}
                         activeOpacity={disabled ? 1 : 0.7}
                         onPress={() => !disabled && handleCoinShopPurchase(item)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${item.name}${durationLabel ? `, ${durationLabel} rental` : ''}, ${item.costCoins} coins${cantAfford ? ', cannot afford' : limitReached ? ', limit reached' : ''}`}
+                        accessibilityState={{ disabled }}
                       >
                         <LinearGradient
                           colors={[...GRADIENTS.surfaceCard]}
@@ -1396,6 +1399,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                           onPress={() => !disabled && handleCoinShopPurchase(item)}
                           activeOpacity={disabled ? 1 : 0.7}
                           disabled={disabled}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Rent ${item.name} for ${item.costCoins} coins${cantAfford ? ', cannot afford' : limitReached ? ', limit reached' : ''}`}
+                          accessibilityState={{ disabled }}
                         >
                           <Text style={[styles.rentalBuyText, disabled && styles.rentalBuyTextDisabled]}>
                             {cantAfford ? "Can't Afford" : limitReached ? 'Limit Reached' : 'Rent'}
@@ -1482,6 +1488,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           onPress={handleRestorePurchases}
           activeOpacity={0.7}
           disabled={restoringPurchases}
+          accessibilityRole="button"
+          accessibilityLabel={restoringPurchases ? 'Restoring purchases, please wait' : 'Restore purchases'}
+          accessibilityState={{ disabled: restoringPurchases }}
         >
           {restoringPurchases ? (
             <ActivityIndicator size="small" color={COLORS.textSecondary} />

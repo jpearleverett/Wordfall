@@ -325,7 +325,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           {selectedWingData.chapters.map((chapter) => {
             const status = getChapterStatus(chapter.id);
             return (
-              <View key={chapter.id} style={styles.chapterCard}>
+              <View key={chapter.id} style={styles.chapterCard} accessibilityRole="text" accessibilityLabel={`${chapter.name} chapter, ${status === 'complete' ? 'complete' : status === 'current' ? 'current' : 'locked'}, ${chapter.puzzleCount} puzzles, ${chapter.difficulty} difficulty, requires ${chapter.requiredStars} stars`}>
                 <View
                   style={[
                     styles.chapterIconWrap,
