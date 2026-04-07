@@ -896,6 +896,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               {currentBonus && !streakBonusClaimed && (
                 <TouchableOpacity
                   style={styles.vipStreakClaimButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Claim VIP streak weekly bonus: ${currentBonus?.bonusGems} gems and ${currentBonus?.bonusHints} hints`}
                   onPress={() => {
                     Alert.alert(
                       'VIP Streak Bonus!',
@@ -935,6 +937,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => handlePurchase('starter_pack')}
             activeOpacity={0.7}
             disabled={!!purchasingId}
+            accessibilityRole="button"
+            accessibilityLabel="Buy Starter Pack: 500 coins, 50 gems, 10 hints, and exclusive decoration for $1.99"
           >
             <LinearGradient
               colors={['#1e2352', '#181d42']}
@@ -969,6 +973,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             onPress={() => handlePurchase('chapter_bundle')}
             activeOpacity={0.7}
             disabled={!!purchasingId}
+            accessibilityRole="button"
+            accessibilityLabel="Buy Weekend Bundle: 100 gems, 3000 coins, and rare frame for $4.99"
           >
             <LinearGradient
               colors={['#251e52', '#1e1842']}
@@ -1019,6 +1025,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 style={[styles.rotatingCard, { borderColor: rarityColor + '60' }]}
                 onPress={() => handleRotatingPurchase(item)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}, ${item.rarity} rarity, ${item.gemCost} gems`}
               >
                 <LinearGradient
                   colors={[rarityColor + '18', rarityColor + '08']}
@@ -1051,6 +1059,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             style={styles.browseCosmetics}
             onPress={() => navigation.navigate('CosmeticStore')}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Browse all cosmetics"
           >
             <LinearGradient
               colors={[COLORS.accent + '18', COLORS.accent + '08'] as [string, string]}
@@ -1276,6 +1286,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                       style={[styles.coinShopCard, disabled && styles.coinShopCardDisabled]}
                       activeOpacity={disabled ? 1 : 0.7}
                       onPress={() => !disabled && handleCoinShopPurchase(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${item.name} for ${item.costCoins} coins${limitReached ? ', daily limit reached' : cantAfford ? ', not enough coins' : ''}`}
+                      accessibilityState={{ disabled }}
                     >
                       <LinearGradient
                         colors={[...GRADIENTS.surfaceCard]}
