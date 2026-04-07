@@ -705,7 +705,15 @@ function GameScreenWrapper({ route, navigation }: any) {
         totalCoinsAwarded={completionData.totalCoinsAwarded}
         totalGemsAwarded={completionData.totalGemsAwarded}
         nextUnlockPreview={completionData.nextUnlockPreview}
-        onNavigate={(screen: string) => navigation.navigate(screen as never)}
+        onNavigate={(screen: string) => {
+          // Some screens (e.g. Mastery) are nested inside Profile tab — navigate via parent
+          try {
+            navigation.navigate(screen as never);
+          } catch {
+            // Fallback: navigate to Profile tab which contains nested screens
+            navigation.navigate('Profile' as never, { screen } as never);
+          }
+        }}
       />
 
       {/* Post-puzzle spin prompt */}

@@ -448,7 +448,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   mysteryWheel: {
     spinsAvailable: 1, // Start with 1 free spin
     puzzlesSinceLastSpin: 0,
-    puzzlesPerFreeSpin: 3,
+    puzzlesPerFreeSpin: 5,
     totalSpins: 0,
     lastJackpotSpin: 0,
     jackpotPity: 25,

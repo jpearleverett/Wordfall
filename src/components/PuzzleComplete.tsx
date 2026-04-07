@@ -706,8 +706,9 @@ export function PuzzleComplete({
                 </Animated.View>
               )}
 
-              {/* Next Unlock Preview — retention hook showing what's coming soon */}
-              {nextUnlockPreview && (
+              {/* Next Unlock Preview — retention hook showing what's coming soon.
+                  Only show when there aren't already many summary items to avoid visual overload. */}
+              {nextUnlockPreview && summaryItems.length < 3 && (
                 <Animated.View style={[styles.nextUnlockCard, { opacity: statsAnim, transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
                   <LinearGradient
                     colors={[

@@ -115,12 +115,23 @@ export const ONBOARDING_MILESTONES: OnboardingMilestone[] = [
 /**
  * Get the next milestone to show for the current player state.
  * Returns null if all milestones are completed or none are available yet.
+ *
+ * Skips milestones the player has clearly outgrown — only shows
+ * the most relevant milestone for the current level, not stale ones
+ * from earlier levels that were never tapped.
  */
 export function getNextMilestone(
   currentLevel: number,
   completedMilestones: string[],
 ): OnboardingMilestone | null {
-  return ONBOARDING_MILESTONES.find(
+  // Filter to milestones whose triggerLevel is reached and not yet completed
+  const eligible = ONBOARDING_MILESTONES.filter(
     (m) => m.triggerLevel <= currentLevel && !completedMilestones.includes(m.id),
-  ) ?? null;
+  );
+  if (eligible.length === 0) return null;
+
+  // Return the milestone closest to (but not exceeding) the current level.
+  // This ensures we show the most relevant/recent milestone, not stale ones
+  // from levels the player already passed without tapping the banner.
+  return eligible[eligible.length - 1];
 }

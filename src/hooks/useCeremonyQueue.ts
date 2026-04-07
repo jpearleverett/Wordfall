@@ -45,9 +45,20 @@ export function useCeremonyQueue({
   const ceremonyShownAtRef = useRef<number>(0);
   // Track ceremonies shown in the current batch to enforce cap
   const batchCountRef = useRef<number>(0);
+  // Track previous pending count to detect new batches (new puzzle completion)
+  const prevPendingCountRef = useRef<number>(0);
   // Ref to always have the latest popCeremony in setTimeout callbacks
   const popCeremonyRef = useRef(popCeremony);
   popCeremonyRef.current = popCeremony;
+
+  // Auto-reset batch counter when new ceremonies are queued (new puzzle completed).
+  // This ensures the cap applies per-puzzle, not across consecutive puzzles.
+  useEffect(() => {
+    if (pendingCeremonyCount > prevPendingCountRef.current && prevPendingCountRef.current === 0) {
+      batchCountRef.current = 0;
+    }
+    prevPendingCountRef.current = pendingCeremonyCount;
+  }, [pendingCeremonyCount]);
 
   // Process pending ceremonies when loaded, unblocked, and queue has items.
   // Single effect prevents race condition where two effects both pop ceremonies.

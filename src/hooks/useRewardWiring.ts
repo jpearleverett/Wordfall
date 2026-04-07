@@ -516,7 +516,6 @@ export function useRewardWiring({
             label: `${config.name} Unlocked!`,
             sublabel: config.description,
             accentColor: config.color,
-            action: { type: 'navigate', screen: 'Modes' },
           });
         } else {
           // Full ceremony for premium/later modes
