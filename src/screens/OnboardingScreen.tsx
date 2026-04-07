@@ -168,6 +168,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
             onPress={() => transitionTo('tutorial')}
+            accessibilityRole="button"
+            accessibilityLabel="Learn to play tutorial"
           >
             <LinearGradient
               colors={[...GRADIENTS.button.primary]}
@@ -179,7 +181,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
             </LinearGradient>
           </Pressable>
 
-          <Pressable style={styles.skipLink} onPress={onComplete}>
+          <Pressable style={styles.skipLink} onPress={onComplete} accessibilityRole="button" accessibilityLabel="Skip tutorial">
             <Text style={styles.skipText}>Skip tutorial</Text>
           </Pressable>
         </Animated.View>
@@ -213,7 +215,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
             />
           )}
           {currentStep?.waitForAction === 'dismiss' && (
-            <TouchableOpacity style={styles.dismissOverlay} onPress={advanceTutorialStep}>
+            <TouchableOpacity style={styles.dismissOverlay} onPress={advanceTutorialStep} accessibilityRole="button" accessibilityLabel="Tap to continue tutorial">
               <Text style={styles.dismissText}>Tap to continue</Text>
             </TouchableOpacity>
           )}
@@ -237,6 +239,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
             onPress={() => transitionTo('library_preview')}
+            accessibilityRole="button"
+            accessibilityLabel="Continue to library preview"
           >
             <LinearGradient
               colors={[COLORS.green, COLORS.teal] as [string, string]}
@@ -289,6 +293,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
             onPress={() => transitionTo('ready')}
+            accessibilityRole="button"
+            accessibilityLabel="Continue to start playing"
           >
             <LinearGradient
               colors={[COLORS.purple, COLORS.accent] as [string, string]}
@@ -335,6 +341,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
         <Pressable
           style={({ pressed }) => [pressed && styles.pressed]}
           onPress={onComplete}
+          accessibilityRole="button"
+          accessibilityLabel="Start playing Wordfall"
         >
           <LinearGradient
             colors={[...GRADIENTS.button.gold]}

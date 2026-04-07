@@ -169,7 +169,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <View style={styles.headerRow}>
           <View style={styles.headerSpacer} />
           <Text style={styles.headerTitle}>PROFILE</Text>
-          <TouchableOpacity style={styles.settingsBtn} onPress={onOpenSettings}>
+          <TouchableOpacity style={styles.settingsBtn} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel="Open settings">
             <Text style={styles.settingsIcon}>{'\u2699\uFE0F'}</Text>
           </TouchableOpacity>
         </View>
@@ -240,6 +240,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <TouchableOpacity
               style={styles.prestigeButton}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Prestige to ${nextDef.label}. Resets level to 1, earns ${nextDef.xpMultiplier}x XP multiplier`}
               onPress={() => {
                 Alert.alert(
                   `Prestige to ${nextDef.label}?`,
@@ -284,7 +286,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <Text style={styles.sectionTitle}>Statistics</Text>
         <View style={styles.statsGrid}>
           {STAT_CARDS.map((stat) => (
-            <View key={stat.key} style={styles.statCard}>
+            <View key={stat.key} style={styles.statCard} accessibilityRole="text" accessibilityLabel={`${stat.label}: ${(p as any)[stat.key]?.toLocaleString?.() ?? 0}`}>
               <LinearGradient
                 colors={[...GRADIENTS.surfaceCard]}
                 style={StyleSheet.absoluteFill}
@@ -324,6 +326,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   styles.achievementCard,
                   highestTier && { borderColor: tierColor + '60' },
                 ]}
+                accessibilityRole="text"
+                accessibilityLabel={`Achievement: ${achievement.name}, ${highestTier ? highestTier + ' tier earned' : 'not yet earned'}`}
               >
                 <LinearGradient
                   colors={[...GRADIENTS.surfaceCard]}
@@ -372,24 +376,30 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <Text style={styles.collectionLabel}>Word Atlas</Text>
             <Text style={styles.collectionPercent}>{p.atlasProgress}%</Text>
           </View>
-          {renderProgressBar(p.atlasProgress, COLORS.accent)}
+          <View accessibilityRole="progressbar" accessibilityLabel={`Word Atlas progress: ${p.atlasProgress} percent`} accessibilityValue={{ min: 0, max: 100, now: p.atlasProgress }}>
+            {renderProgressBar(p.atlasProgress, COLORS.accent)}
+          </View>
 
           <View style={[styles.collectionRow, { marginTop: 14 }]}>
             <Text style={styles.collectionLabel}>Rare Tiles</Text>
             <Text style={styles.collectionPercent}>{p.tilesProgress}%</Text>
           </View>
-          {renderProgressBar(p.tilesProgress, COLORS.gold)}
+          <View accessibilityRole="progressbar" accessibilityLabel={`Rare Tiles progress: ${p.tilesProgress} percent`} accessibilityValue={{ min: 0, max: 100, now: p.tilesProgress }}>
+            {renderProgressBar(p.tilesProgress, COLORS.gold)}
+          </View>
 
           <View style={[styles.collectionRow, { marginTop: 14 }]}>
             <Text style={styles.collectionLabel}>Seasonal Stamps</Text>
             <Text style={styles.collectionPercent}>{p.stampsProgress}%</Text>
           </View>
-          {renderProgressBar(p.stampsProgress, COLORS.purple)}
+          <View accessibilityRole="progressbar" accessibilityLabel={`Seasonal Stamps progress: ${p.stampsProgress} percent`} accessibilityValue={{ min: 0, max: 100, now: p.stampsProgress }}>
+            {renderProgressBar(p.stampsProgress, COLORS.purple)}
+          </View>
         </View>
 
         {/* Equipped Cosmetics */}
         <Text style={styles.sectionTitle}>Equipped Cosmetics</Text>
-        <TouchableOpacity style={styles.cosmeticsCard} activeOpacity={0.7} onPress={onEditProfile}>
+        <TouchableOpacity style={styles.cosmeticsCard} activeOpacity={0.7} onPress={onEditProfile} accessibilityRole="button" accessibilityLabel="Edit equipped cosmetics">
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
             style={StyleSheet.absoluteFill}
@@ -428,7 +438,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </TouchableOpacity>
 
         {/* Mastery Button */}
-        <TouchableOpacity style={styles.masteryButton} onPress={onOpenMastery} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.masteryButton} onPress={onOpenMastery} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Open Mastery Pass">
           <LinearGradient
             colors={[COLORS.gold + '25', COLORS.gold + '10'] as [string, string]}
             style={StyleSheet.absoluteFill}
@@ -444,7 +454,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </TouchableOpacity>
 
         {/* Edit Profile Button */}
-        <TouchableOpacity style={styles.editButton} onPress={onEditProfile}>
+        <TouchableOpacity style={styles.editButton} onPress={onEditProfile} accessibilityRole="button" accessibilityLabel="Edit profile">
           <LinearGradient
             colors={[...GRADIENTS.button.primary]}
             style={StyleSheet.absoluteFill}

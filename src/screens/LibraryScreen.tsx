@@ -222,6 +222,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     ]}
                     activeOpacity={0.85}
                     onPress={() => setSelectedWing(wing.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${wing.name} wing, ${isRestored ? 'restored' : isLocked ? 'locked' : `${shelvesRestored} of ${LIBRARY.shelvesPerWing} shelves restored`}`}
+                    accessibilityState={{ selected: isSelected }}
                   >
                     <Text style={styles.overviewWingIcon}>{wing.icon}</Text>
                     <Text style={[styles.overviewWingName, isSelected && { color: wing.color }, isRestored && { color: COLORS.gold }]}>{wing.name}</Text>
@@ -287,6 +290,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   setShowDecorationPicker(selectedWingData.id);
                 }
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Change decoration for this wing"
             >
               <Text style={styles.featureDecorationBadgeText}>
                 {MILESTONE_DECORATIONS.find(d => d.decoration === decorations[selectedWingData.id])?.icon ?? '\u{1FA91}'}
@@ -397,6 +402,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       setShowDecorationPicker(null);
                     }
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Decoration: ${owned ? md.name : `locked, unlocks at level ${md.level}`}${owned && placedInWing ? ', placed' : ''}`}
                 >
                   <Text style={[styles.decorationIcon, !owned && { opacity: 0.3 }]}>{md.icon}</Text>
                   <Text style={[styles.decorationName, !owned && { color: COLORS.textMuted }]}>
@@ -415,6 +422,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <TouchableOpacity
               style={styles.pickerCancelBtn}
               onPress={() => setShowDecorationPicker(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel decoration selection"
             >
               <Text style={styles.pickerCancelText}>Cancel</Text>
             </TouchableOpacity>

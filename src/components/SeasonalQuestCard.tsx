@@ -81,7 +81,7 @@ const SeasonalQuestCard: React.FC<SeasonalQuestCardProps> = ({
           </View>
 
           {/* Progress bar */}
-          <View style={styles.progressBarBg}>
+          <View style={styles.progressBarBg} accessibilityRole="progressbar" accessibilityLabel={`Quest step progress: ${progress} of ${currentStep.target}`} accessibilityValue={{ min: 0, max: currentStep.target, now: progress }}>
             <LinearGradient
               colors={stepReady ? [COLORS.green, COLORS.teal] : [COLORS.accent, COLORS.purple]}
               start={{ x: 0, y: 0 }}
@@ -111,6 +111,8 @@ const SeasonalQuestCard: React.FC<SeasonalQuestCardProps> = ({
                     current && styles.dotCurrent,
                     current && stepReady && styles.dotReady,
                   ]}
+                  accessibilityRole="text"
+                  accessibilityLabel={`Step ${idx + 1}: ${completed ? 'completed' : current ? (stepReady ? 'ready to claim' : 'in progress') : 'upcoming'}`}
                 >
                   <Text style={styles.dotText}>
                     {completed ? '\u2713' : idx + 1}
@@ -131,6 +133,8 @@ const SeasonalQuestCard: React.FC<SeasonalQuestCardProps> = ({
             style={({ pressed }) => [
               pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
             ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Claim quest step reward: ${currentStep.rewardCoins > 0 ? `${currentStep.rewardCoins} coins` : ''}${currentStep.rewardGems > 0 ? ` ${currentStep.rewardGems} gems` : ''}`}
           >
             <LinearGradient
               colors={GRADIENTS.button.green as unknown as readonly [string, string, ...string[]]}

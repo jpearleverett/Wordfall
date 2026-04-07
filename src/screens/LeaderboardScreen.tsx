@@ -387,6 +387,9 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
               key={tab}
               style={[styles.tab, isActive && styles.tabActive]}
               onPress={() => setActiveTime(tab)}
+              accessibilityRole="tab"
+              accessibilityLabel={`${tab} leaderboard`}
+              accessibilityState={{ selected: isActive }}
             >
               <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
                 {tab}
@@ -429,6 +432,8 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         <TouchableOpacity
           style={styles.addFriendButton}
           onPress={() => setShowAddFriend(!showAddFriend)}
+          accessibilityRole="button"
+          accessibilityLabel={showAddFriend ? 'Cancel adding friend' : 'Add friend'}
         >
           <Text style={styles.addFriendButtonText}>
             {showAddFriend ? 'Cancel' : '+ Add Friend'}
@@ -454,6 +459,8 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             ]}
             onPress={handleAddFriend}
             disabled={addingFriend}
+            accessibilityRole="button"
+            accessibilityLabel="Send friend request"
           >
             {addingFriend ? (
               <ActivityIndicator size="small" color={COLORS.bg} />

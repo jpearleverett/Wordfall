@@ -80,12 +80,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   const renderVolumeControl = (label: string, settingKey: string, value: number) => (
-    <View style={styles.settingRow}>
+    <View style={styles.settingRow} accessibilityRole="adjustable" accessibilityLabel={`${label}: ${value} percent`} accessibilityValue={{ min: 0, max: 100, now: value }}>
       <Text style={styles.settingLabel}>{label}</Text>
       <View style={styles.volumeControl}>
         <TouchableOpacity
           style={styles.volumeBtn}
           onPress={() => handleVolumeChange(settingKey, value, -10)}
+          accessibilityRole="button"
+          accessibilityLabel={`Decrease ${label}`}
         >
           <Text style={styles.volumeBtnText}>-</Text>
         </TouchableOpacity>
@@ -100,6 +102,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <TouchableOpacity
           style={styles.volumeBtn}
           onPress={() => handleVolumeChange(settingKey, value, 10)}
+          accessibilityRole="button"
+          accessibilityLabel={`Increase ${label}`}
         >
           <Text style={styles.volumeBtnText}>+</Text>
         </TouchableOpacity>
@@ -113,6 +117,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <TouchableOpacity
         style={[styles.toggle, value && styles.toggleOn]}
         onPress={() => onUpdateSetting(settingKey, !value)}
+        accessibilityRole="switch"
+        accessibilityLabel={label}
+        accessibilityState={{ checked: value }}
       >
         <View style={[styles.toggleThumb, value && styles.toggleThumbOn]} />
       </TouchableOpacity>
@@ -174,6 +181,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <TouchableOpacity
                 style={styles.themeRow}
                 onPress={() => onUpdateSetting('theme', theme.id)}
+                accessibilityRole="radio"
+                accessibilityLabel={`${theme.name} theme`}
+                accessibilityState={{ selected: selectedTheme === theme.id }}
               >
                 <View
                   style={[styles.themePreview, { backgroundColor: theme.color }]}
@@ -200,12 +210,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
           {isSignedIn ? (
             <>
-              <TouchableOpacity style={styles.actionRow}>
+              <TouchableOpacity style={styles.actionRow} accessibilityRole="button" accessibilityLabel="Link account">
                 <Text style={styles.settingLabel}>Link Account</Text>
                 <Text style={styles.chevron}>{'\u203A'}</Text>
               </TouchableOpacity>
               <View style={styles.divider} />
-              <TouchableOpacity style={styles.actionRow} onPress={confirmSignOut}>
+              <TouchableOpacity style={styles.actionRow} onPress={confirmSignOut} accessibilityRole="button" accessibilityLabel="Sign out">
                 <Text style={[styles.settingLabel, { color: COLORS.coral }]}>
                   Sign Out
                 </Text>
@@ -216,6 +226,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <TouchableOpacity
               style={styles.actionRow}
               onPress={() => onUpdateSetting('isSignedIn', true)}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in"
             >
               <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
                 Sign In
@@ -290,6 +302,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <TouchableOpacity
                 style={styles.volumeBtn}
                 onPress={() => onUpdateSetting('monthlySpendingLimit', Math.max(0, (settings?.monthlySpendingLimit ?? 25) - 5))}
+                accessibilityRole="button"
+                accessibilityLabel="Decrease monthly spending limit"
               >
                 <Text style={styles.volumeBtnText}>-</Text>
               </TouchableOpacity>
@@ -299,6 +313,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <TouchableOpacity
                 style={styles.volumeBtn}
                 onPress={() => onUpdateSetting('monthlySpendingLimit', Math.min(500, (settings?.monthlySpendingLimit ?? 25) + 5))}
+                accessibilityRole="button"
+                accessibilityLabel="Increase monthly spending limit"
               >
                 <Text style={styles.volumeBtnText}>+</Text>
               </TouchableOpacity>
@@ -322,12 +338,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <Text style={styles.settingValue}>{appVersion}</Text>
           </View>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.actionRow}>
+          <TouchableOpacity style={styles.actionRow} accessibilityRole="button" accessibilityLabel="Privacy Policy">
             <Text style={styles.settingLabel}>Privacy Policy</Text>
             <Text style={styles.chevron}>{'\u203A'}</Text>
           </TouchableOpacity>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.actionRow}>
+          <TouchableOpacity style={styles.actionRow} accessibilityRole="button" accessibilityLabel="Terms of Service">
             <Text style={styles.settingLabel}>Terms of Service</Text>
             <Text style={styles.chevron}>{'\u203A'}</Text>
           </TouchableOpacity>
@@ -347,6 +363,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <TouchableOpacity
             style={styles.dangerButton}
             onPress={confirmResetProgress}
+            accessibilityRole="button"
+            accessibilityLabel="Reset progress. This will permanently delete all data"
           >
             <Text style={styles.dangerButtonText}>Reset Progress</Text>
             <Text style={styles.dangerSubtext}>

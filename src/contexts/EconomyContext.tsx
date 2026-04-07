@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext';
 import { LIVES } from '../constants';
 import { AdRewardType, AD_REWARD_VALUES } from '../services/ads';
 import { getProductById, ProductRewards } from '../data/shopProducts';
+import { getVipStreakBonus } from '../data/vipBenefits';
 
 interface Economy {
   coins: number;
@@ -61,6 +62,8 @@ interface IAPState {
   vipStreakWeeks: number;
   /** Whether the weekly VIP streak bonus has been claimed this week */
   vipStreakBonusClaimed: boolean;
+  /** Timestamp of last VIP streak check/increment */
+  vipStreakLastChecked: number;
 }
 
 interface EconomyState extends Economy, IAPState {
@@ -108,6 +111,8 @@ interface EconomyContextType extends Economy {
   isVip: boolean;
   vipExpiresAt: number;
   claimVipDailyRewards: () => boolean;
+  checkVipStreak: () => number;
+  claimVipStreakBonus: () => boolean;
   addLives: (count: number) => void;
 }
 
@@ -147,6 +152,7 @@ const DEFAULT_ECONOMY: EconomyState = {
   vipDailyLastClaim: '',
   vipStreakWeeks: 0,
   vipStreakBonusClaimed: false,
+  vipStreakLastChecked: 0,
 };
 
 /** Calculate how many lives should have refilled since lastRefillTime. */
@@ -204,6 +210,8 @@ const EconomyContext = createContext<EconomyContextType>({
   isVip: false,
   vipExpiresAt: 0,
   claimVipDailyRewards: () => false,
+  checkVipStreak: () => 0,
+  claimVipStreakBonus: () => false,
   addLives: () => {},
 });
 
@@ -610,8 +618,77 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return claimed;
   }, []);
 
+  /** Check and update VIP streak. Increments weekly, resets if lapsed. Returns current streak weeks. */
+  const checkVipStreak = useCallback((): number => {
+    let currentWeeks = 0;
+
+    setState((prev) => {
+      const now = Date.now();
+
+      // If VIP is not active, reset streak
+      if (!prev.isVipSubscriber || prev.vipExpiresAt <= now) {
+        if (prev.vipStreakWeeks === 0 && !prev.vipStreakBonusClaimed) return prev;
+        currentWeeks = 0;
+        return {
+          ...prev,
+          vipStreakWeeks: 0,
+          vipStreakBonusClaimed: false,
+        };
+      }
+
+      // VIP is active — check if 7+ days since last check
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      if (prev.vipStreakLastChecked > 0 && now - prev.vipStreakLastChecked < sevenDaysMs) {
+        currentWeeks = prev.vipStreakWeeks;
+        return prev;
+      }
+
+      // Increment streak
+      const newWeeks = prev.vipStreakWeeks + 1;
+      currentWeeks = newWeeks;
+      return {
+        ...prev,
+        vipStreakWeeks: newWeeks,
+        vipStreakLastChecked: now,
+        vipStreakBonusClaimed: false,
+      };
+    });
+
+    return currentWeeks;
+  }, []);
+
+  /** Claim the VIP streak bonus for the current tier. Returns true if claimed. */
+  const claimVipStreakBonus = useCallback((): boolean => {
+    let claimed = false;
+
+    setState((prev) => {
+      if (prev.vipStreakBonusClaimed) return prev;
+
+      const bonus = getVipStreakBonus(prev.vipStreakWeeks);
+      if (!bonus) return prev;
+
+      claimed = true;
+      return {
+        ...prev,
+        vipStreakBonusClaimed: true,
+        gems: prev.gems + bonus.bonusGems,
+        hintTokens: prev.hintTokens + bonus.bonusHints,
+        totalEarned: {
+          ...prev.totalEarned,
+          gems: prev.totalEarned.gems + bonus.bonusGems,
+          hintTokens: prev.totalEarned.hintTokens + bonus.bonusHints,
+        },
+      };
+    });
+
+    return claimed;
+  }, []);
+
   /** Claim today's VIP daily rewards (50 gems + 3 hints). Returns true if claimed. */
   const claimVipDailyRewards = useCallback((): boolean => {
+    // Ensure streak is up to date before claiming daily rewards
+    checkVipStreak();
+
     const today = new Date().toISOString().slice(0, 10);
     let claimed = false;
 
@@ -635,7 +712,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     });
 
     return claimed;
-  }, []);
+  }, [checkVipStreak]);
 
   const activateStarterPack = useCallback((): void => {
     setState((prev) => ({
@@ -706,6 +783,8 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         isVip: isVipActive,
         vipExpiresAt: state.vipExpiresAt,
         claimVipDailyRewards,
+        checkVipStreak,
+        claimVipStreakBonus,
         addLives,
       }}
     >

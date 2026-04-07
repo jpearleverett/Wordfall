@@ -306,6 +306,8 @@ const EventScreen: React.FC<EventScreenProps> = ({
                       onPress={() => canClaim && handleClaimReward(activeEvent.id, reward.tier)}
                       disabled={!canClaim}
                       activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${reward.tier} tier reward${reward.claimed ? ', claimed' : reward.reached ? ', tap to claim' : ', locked'}`}
                     >
                       <View style={[
                         styles.rewardTierItem,
@@ -413,7 +415,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
                 <Text style={[styles.exclusiveHint, { color: COLORS.gold }]}>
                   Gold tier reached! Claim your exclusive reward below.
                 </Text>
-                <TouchableOpacity onPress={handleClaimExclusiveReward} activeOpacity={0.8}>
+                <TouchableOpacity onPress={handleClaimExclusiveReward} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Claim exclusive reward: ${exclusiveReward?.name}`}>
                   <LinearGradient
                     colors={[COLORS.gold, COLORS.rarityEpic] as [string, string]}
                     style={styles.exclusiveClaimBtn}
@@ -444,7 +446,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
         <View style={styles.puzzlesSection}>
           <View style={styles.puzzlesHeader}>
             <Text style={styles.sectionTitle}>Event Puzzles</Text>
-            <TouchableOpacity onPress={onPlayEventPuzzle} activeOpacity={0.8}>
+            <TouchableOpacity onPress={onPlayEventPuzzle} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Play next event puzzle">
               <LinearGradient
                 colors={[...GRADIENTS.button.primary] as [string, string, ...string[]]}
                 style={styles.playAllBtn}
@@ -458,7 +460,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
         </View>
 
         {/* Event Shop Button */}
-        <TouchableOpacity onPress={onOpenEventShop} activeOpacity={0.8}>
+        <TouchableOpacity onPress={onOpenEventShop} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Open event shop">
           <LinearGradient
             colors={[COLORS.gold + '20', COLORS.gold + '08'] as [string, string]}
             style={styles.shopButton}

@@ -127,6 +127,9 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
               style={[styles.atlasCard, isComplete && styles.atlasCardComplete]}
               onPress={() => setExpandedAtlasId(expandedAtlasId === page.id ? null : page.id)}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${page.name}: ${page.found} of ${page.total} words found${isComplete ? ', complete' : ''}`}
+              accessibilityState={{ expanded: expandedAtlasId === page.id }}
             >
               <LinearGradient
                 colors={isComplete ? ['#1a2e1a', '#162814'] as const : [...GRADIENTS.surfaceCard]}
@@ -249,6 +252,8 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
               <View
                 key={letter}
                 style={[styles.tile, owned ? styles.tileOwned : styles.tileMissing]}
+                accessibilityRole="text"
+                accessibilityLabel={`Letter ${letter}, ${owned ? 'collected' : 'not collected'}`}
               >
                 <Text
                   style={[
@@ -297,6 +302,8 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                 styles.stampCard,
                 stamp.collected ? styles.stampCollected : styles.stampMissing,
               ]}
+              accessibilityRole="text"
+              accessibilityLabel={`Stamp: ${stamp.collected ? stamp.name : 'undiscovered'}, ${stamp.collected ? 'collected' : 'not collected'}`}
             >
               {stamp.collected && (
                 <LinearGradient
@@ -354,6 +361,9 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             key={tab}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
+            accessibilityRole="tab"
+            accessibilityLabel={tab}
+            accessibilityState={{ selected: activeTab === tab }}
           >
             {activeTab === tab && (
               <LinearGradient

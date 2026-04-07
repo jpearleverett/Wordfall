@@ -195,7 +195,7 @@ export function ContextualOffer({
           <Text style={styles.description}>{description}</Text>
 
           {/* FOMO countdown timer */}
-          <View style={styles.timerContainer}>
+          <View style={styles.timerContainer} accessibilityRole="timer" accessibilityLabel={`Offer expires in ${minutes} minutes and ${seconds} seconds`}>
             <Text style={styles.timerLabel}>Offer expires in</Text>
             <Animated.Text
               style={[
@@ -211,6 +211,8 @@ export function ContextualOffer({
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={onAccept}
+            accessibilityRole="button"
+            accessibilityLabel={`${config.buttonText} for ${config.priceLabel}`}
           >
             <LinearGradient
               colors={[config.accentColor, config.accentColor + 'CC']}
@@ -221,7 +223,7 @@ export function ContextualOffer({
             </LinearGradient>
           </Pressable>
 
-          <Pressable style={styles.dismissButton} onPress={onDismiss}>
+          <Pressable style={styles.dismissButton} onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Dismiss offer">
             <Text style={styles.dismissText}>No thanks</Text>
           </Pressable>
         </LinearGradient>

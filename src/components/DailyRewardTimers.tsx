@@ -122,6 +122,8 @@ const TimerCard = React.memo(function TimerCard({
         style={({ pressed }) => [
           pressed && isReady && styles.cardPressed,
         ]}
+        accessibilityRole="button"
+        accessibilityLabel={`${timer.label}: ${isReady ? 'ready to claim, tap to collect' : `available in ${formatCountdown(remaining)}`}`}
       >
         <LinearGradient
           colors={

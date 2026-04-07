@@ -339,7 +339,7 @@ export function GameGrid({
             <View
               ref={gridRef}
               style={gridContainerStyle}
-              accessibilityRole="grid"
+              accessibilityRole="none"
               accessibilityLabel={`Letter grid, ${rows} rows by ${cols} columns`}
             >
               {columns.map((column, colIndex) => {

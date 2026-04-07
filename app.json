@@ -3,6 +3,8 @@
     "name": "Wordfall",
     "slug": "wordfall",
     "description": "Discover hidden words, watch them cascade with gravity, and chain reactions for epic combos! A brain-teasing word puzzle with 10 game modes, 600+ puzzles, and endless fun.",
+    "privacyPolicyUrl": "https://wordfall.app/privacy",
+    "termsOfServiceUrl": "https://wordfall.app/terms",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -45,6 +47,10 @@
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
             "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
           }
         ]
       }
@@ -58,7 +64,9 @@
       },
       "permissions": [
         "INTERNET",
+        "ACCESS_NETWORK_STATE",
         "VIBRATE",
+        "WAKE_LOCK",
         "RECEIVE_BOOT_COMPLETED",
         "SCHEDULE_EXACT_ALARM"
       ],

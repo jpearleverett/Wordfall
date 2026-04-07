@@ -608,6 +608,8 @@ export function PuzzleComplete({
                       marginTop: 8,
                     }, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
                     onPress={onDoubleReward}
+                    accessibilityRole="button"
+                    accessibilityLabel="Watch ad to double rewards"
                   >
                     <Text style={{ color: COLORS.green, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5 }}>
                       {'\uD83C\uDFAC'} Watch Ad to DOUBLE Rewards
@@ -715,6 +717,8 @@ export function PuzzleComplete({
                 <Pressable
                   style={({ pressed }) => [pressed && styles.buttonPressed]}
                   onPress={onNextLevel}
+                  accessibilityRole="button"
+                  accessibilityLabel={isDaily ? 'Play another mode' : 'Next level'}
                 >
                   <LinearGradient
                     colors={GRADIENTS.button.primary as unknown as [string, string, ...string[]]}
@@ -735,7 +739,7 @@ export function PuzzleComplete({
                   </LinearGradient>
                 )}
                 <View style={styles.secondaryRow}>
-                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome}>
+                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome} accessibilityRole="button" accessibilityLabel="Go to home screen">
                     <Text style={styles.secondaryButtonText}>Home</Text>
                   </Pressable>
                   {shareText ? (
@@ -745,6 +749,8 @@ export function PuzzleComplete({
                         Share.share({ message: shareText }).catch(() => {});
                         onShare?.();
                       }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share results"
                     >
                       <Text style={styles.shareButtonText}>Share</Text>
                     </Pressable>
@@ -753,6 +759,8 @@ export function PuzzleComplete({
                     <Pressable
                       style={({ pressed }) => [styles.challengeButton, pressed && styles.buttonPressed]}
                       onPress={onChallengeFriend}
+                      accessibilityRole="button"
+                      accessibilityLabel="Challenge a friend"
                     >
                       <Text style={styles.challengeButtonText}>{'\u2694\uFE0F'} Challenge</Text>
                     </Pressable>
