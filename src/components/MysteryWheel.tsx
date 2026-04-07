@@ -211,6 +211,8 @@ export function MysteryWheel({
           style={({ pressed }) => [!canSpin && styles.buttonDisabled, pressed && styles.buttonPressed]}
           onPress={handleSpin}
           disabled={!canSpin}
+          accessibilityRole="button"
+          accessibilityLabel={spinning ? 'Wheel is spinning' : isDailyFreeSpinOnly ? 'Use daily free spin' : `Spin the wheel${wheelState.spinsAvailable > 0 ? `, ${wheelState.spinsAvailable} spins available` : ''}`}
         >
           <LinearGradient
             colors={canSpin ? GRADIENTS.button.primary : ['#333', '#222']}
@@ -228,6 +230,8 @@ export function MysteryWheel({
               style={({ pressed }) => [!canBuy1 && styles.buttonDisabled, pressed && styles.buttonPressed]}
               onPress={() => handleBuySpin(1)}
               disabled={!canBuy1}
+              accessibilityRole="button"
+              accessibilityLabel={`Buy 1 spin for ${SPIN_COST_GEMS} gems`}
             >
               <View style={styles.buyButton}>
                 <Text style={styles.buyText}>1 Spin</Text>
@@ -238,6 +242,8 @@ export function MysteryWheel({
               style={({ pressed }) => [!canBuy5 && styles.buttonDisabled, pressed && styles.buttonPressed]}
               onPress={() => handleBuySpin(SPIN_BUNDLE_COUNT)}
               disabled={!canBuy5}
+              accessibilityRole="button"
+              accessibilityLabel={`Buy ${SPIN_BUNDLE_COUNT} spins for ${SPIN_BUNDLE_COST_GEMS} gems, 20 percent off`}
             >
               <View style={[styles.buyButton, styles.buyButtonBundle]}>
                 <Text style={styles.buyText}>{SPIN_BUNDLE_COUNT} Spins</Text>
@@ -249,7 +255,7 @@ export function MysteryWheel({
         )}
       </View>
 
-      <Pressable style={styles.closeButton} onPress={onDismiss}>
+      <Pressable style={styles.closeButton} onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Close mystery wheel">
         <Text style={styles.closeText}>Close</Text>
       </Pressable>
     </Animated.View>
