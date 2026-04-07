@@ -653,10 +653,19 @@ export function PuzzleComplete({
                 </Animated.View>
               )}
 
-              {/* Inline summary items — Tier 2 unlocks embedded in victory screen */}
-              {summaryItems.length > 0 && (
+              {/* Inline summary items — limited to 2 most important to keep victory screen clean.
+                  Priority: level_up > early_bonus > difficulty_transition > mode_unlock > everything else */}
+              {summaryItems.length > 0 && (() => {
+                const priorityOrder = ['level_up', 'early_bonus', 'difficulty_transition', 'mode_unlock'];
+                const sorted = [...summaryItems].sort((a, b) => {
+                  const aIdx = priorityOrder.indexOf(a.type);
+                  const bIdx = priorityOrder.indexOf(b.type);
+                  return (aIdx === -1 ? 99 : aIdx) - (bIdx === -1 ? 99 : bIdx);
+                });
+                const limited = sorted.slice(0, 2);
+                return (
                 <Animated.View style={[styles.summarySection, { opacity: statsAnim, transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
-                  {summaryItems.map((item, index) => {
+                  {limited.map((item, index) => {
                     const content = (
                       <View
                         key={index}
@@ -684,7 +693,8 @@ export function PuzzleComplete({
                     return content;
                   })}
                 </Animated.View>
-              )}
+                );
+              })()}
 
               {/* Event Multiplier Label */}
               {eventMultiplierLabel && (

@@ -76,12 +76,30 @@ export function useCeremonyQueue({
     }
   }, [loaded, pendingCeremonyCount, activeCeremony, isBlocked, popCeremony]);
 
-  // Track when a ceremony is displayed
+  // Track when a ceremony is displayed + set auto-dismiss timer
+  const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref to latest handleDismissCeremony for auto-dismiss callback
+  const handleDismissRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     if (activeCeremony) {
       ceremonyShownAtRef.current = Date.now();
       void analytics.trackCeremonyShown(activeCeremony.type);
+
+      // Auto-dismiss Tier 2 ceremonies after their specified duration
+      if (activeCeremony.autoDismissMs) {
+        if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);
+        autoDismissTimerRef.current = setTimeout(() => {
+          handleDismissRef.current();
+        }, activeCeremony.autoDismissMs);
+      }
     }
+    return () => {
+      if (autoDismissTimerRef.current) {
+        clearTimeout(autoDismissTimerRef.current);
+        autoDismissTimerRef.current = null;
+      }
+    };
   }, [activeCeremony]);
 
   // Cleanup ceremony timer on unmount
@@ -92,6 +110,11 @@ export function useCeremonyQueue({
   }, []);
 
   const handleDismissCeremony = useCallback(() => {
+    // Cancel any pending auto-dismiss timer (player tapped to dismiss early)
+    if (autoDismissTimerRef.current) {
+      clearTimeout(autoDismissTimerRef.current);
+      autoDismissTimerRef.current = null;
+    }
     if (activeCeremony) {
       const durationMs = Date.now() - ceremonyShownAtRef.current;
       void analytics.trackCeremonyDismissed(activeCeremony.type, durationMs);
@@ -110,6 +133,9 @@ export function useCeremonyQueue({
       }
     }, 300);
   }, [activeCeremony]);
+
+  // Keep ref in sync so auto-dismiss timer uses latest callback
+  handleDismissRef.current = handleDismissCeremony;
 
   const processNext = useCallback(() => {
     const next = popCeremony();

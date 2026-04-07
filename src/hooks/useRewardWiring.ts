@@ -275,6 +275,7 @@ export function useRewardWiring({
             { icon: '\uD83D\uDCA1', text: 'Use hints when you get stuck' },
           ],
         },
+        autoDismissMs: 4000,  // Tier 2: auto-dismiss, slightly longer for first win
       });
     }
 
@@ -327,13 +328,10 @@ export function useRewardWiring({
     }
 
     // Activate starter pack timer after enough puzzles to understand value
+    // Tier 3: no ceremony — player discovers via Shop screen badge dot
     const puzzlesAfterThis = player.puzzlesSolved + 1;
     if (puzzlesAfterThis === STARTER_PACK_DELAY_PUZZLES && economy.starterPackExpiresAt === 0) {
       economy.activateStarterPack();
-      player.queueCeremony({
-        type: 'starter_pack_unlocked',
-        data: {},
-      });
     }
 
     // Check for rare tile drop -- apply event multiplier to drop rate
@@ -357,6 +355,7 @@ export function useRewardWiring({
         player.queueCeremony({
           type: 'first_rare_tile',
           data: { letter: randomLetter },
+          autoDismissMs: 3000,  // Tier 2: auto-dismiss
         });
       }
     }
@@ -391,6 +390,7 @@ export function useRewardWiring({
           player.queueCeremony({
             type: 'collection_complete',
             data: { icon: page.icon, name: page.category, reward: page.reward },
+            autoDismissMs: 3000,  // Tier 2: auto-dismiss
           });
         }
       }
@@ -484,19 +484,20 @@ export function useRewardWiring({
       });
     }
 
-    // Check feature unlocks based on new level
+    // Check feature unlocks based on new level — Tier 2 (auto-dismiss)
     const featureUnlocks = player.checkFeatureUnlocks(newLevel);
     for (const ceremony of featureUnlocks) {
-      player.queueCeremony(ceremony);
+      player.queueCeremony({ ...ceremony, autoDismissMs: 3000 });
       if (ceremony.data?.featureId) {
         void analytics.trackFeatureUnlocked(ceremony.data.featureId, newLevel);
       }
     }
 
-    // Check achievements (maxCombo is the actual max combo chain from gameplay)
+    // Achievements — demoted to Tier 3 (no ceremony, silent).
+    // The reward/unlock still happens in checkAchievements, we just don't queue modals.
     const achievementCeremonies = player.checkAchievements({ maxCombo });
     for (const ceremony of achievementCeremonies) {
-      player.queueCeremony(ceremony);
+      // Track analytics but don't show a modal — player discovers via Profile/badges
       if (ceremony.data?.achievementId && ceremony.data?.tier) {
         void analytics.trackAchievementEarned(ceremony.data.achievementId, ceremony.data.tier);
       }
@@ -518,7 +519,7 @@ export function useRewardWiring({
             accentColor: config.color,
           });
         } else {
-          // Full ceremony for premium/later modes
+          // Tier 2 ceremony for premium/later modes — auto-dismiss
           player.queueCeremony({
             type: 'mode_unlock',
             data: {
@@ -528,6 +529,7 @@ export function useRewardWiring({
               modeDescription: config.description,
               modeColor: config.color,
             },
+            autoDismissMs: 3000,
           });
         }
       }
@@ -593,15 +595,10 @@ export function useRewardWiring({
       }
     }
 
-    // First mode clear
+    // First mode clear — Tier 3 (silent, no ceremony modal).
+    // Player discovers via profile/achievements. Analytics still tracked.
     if (prevModePlayed === 0 && mode !== 'classic') {
-      const modeConfig = MODE_CONFIGS[mode as keyof typeof MODE_CONFIGS];
-      if (modeConfig) {
-        player.queueCeremony({
-          type: 'first_mode_clear',
-          data: { modeId: mode, modeName: modeConfig.name },
-        });
-      }
+      void analytics.logEvent('first_mode_clear', { mode });
     }
 
     // Mastery tier-up detection (XP proxy: puzzlesSolved * 100)
