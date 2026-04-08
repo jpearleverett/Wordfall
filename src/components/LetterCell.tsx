@@ -21,6 +21,8 @@ interface LetterCellProps {
   isMoved?: boolean;
   isWildcard?: boolean;
   isSpotlightDimmed?: boolean;
+  /** Animated.Value driving gravity fall translateY (pixels, animates to 0) */
+  fallAnim?: Animated.Value;
 }
 
 export const LetterCell = React.memo(function LetterCell({
@@ -34,6 +36,7 @@ export const LetterCell = React.memo(function LetterCell({
   isMoved = false,
   isWildcard = false,
   isSpotlightDimmed = false,
+  fallAnim,
 }: LetterCellProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -144,10 +147,15 @@ export const LetterCell = React.memo(function LetterCell({
   const showOuterGlow = isSelected || isValidWord;
   const outerGlowColor = isValidWord ? COLORS.greenGlow : isSelected ? COLORS.accentGlow : 'transparent';
 
+  const OuterWrapper = fallAnim ? Animated.View : View;
+  const outerStyle = fallAnim
+    ? [isSpotlightDimmed ? { opacity: 0.3 } : undefined, { transform: [{ translateY: fallAnim }] }]
+    : isSpotlightDimmed ? { opacity: 0.3 } : undefined;
+
   return (
-    <View
+    <OuterWrapper
       pointerEvents="none"
-      style={isSpotlightDimmed ? { opacity: 0.3 } : undefined}
+      style={outerStyle as any}
       accessibilityRole="button"
       accessibilityLabel={isWildcard ? 'Wildcard' : letter}
       accessibilityHint="Double tap to select this letter"
@@ -396,7 +404,7 @@ export const LetterCell = React.memo(function LetterCell({
         )}
 
       </Animated.View>
-    </View>
+    </OuterWrapper>
   );
 });
 
