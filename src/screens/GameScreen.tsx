@@ -23,7 +23,7 @@ import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
@@ -71,7 +71,15 @@ interface GameScreenProps {
   nextUnlockPreview?: { icon: string; name: string; unlockLevel: number } | null;
 }
 
-function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): CellPosition[] {
+interface MovedCell {
+  row: number;
+  col: number;
+  cellId: string;
+  /** Positive = fell downward by this many rows */
+  fallRows: number;
+}
+
+function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['grid']): MovedCell[] {
   const previousPositions = new Map<string, CellPosition>();
 
   previousGrid.forEach((row, rowIndex) => {
@@ -82,7 +90,7 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
     });
   });
 
-  const moved: CellPosition[] = [];
+  const moved: MovedCell[] = [];
 
   nextGrid.forEach((row, rowIndex) => {
     row.forEach((cell, colIndex) => {
@@ -90,7 +98,12 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
       const previousPosition = previousPositions.get(cell.id);
       if (!previousPosition) return;
       if (previousPosition.row !== rowIndex || previousPosition.col !== colIndex) {
-        moved.push({ row: rowIndex, col: colIndex });
+        moved.push({
+          row: rowIndex,
+          col: colIndex,
+          cellId: cell.id,
+          fallRows: rowIndex - previousPosition.row,
+        });
       }
     });
   });
@@ -229,9 +242,9 @@ export function GameScreen({
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
 
-  // --- Column-stagger gravity animation state (Task 1) ---
-  const columnStaggerAnims = useRef<Animated.Value[]>([]).current;
-  const [staggerActive, setStaggerActive] = useState(false);
+  // --- Per-tile gravity fall animation state ---
+  const fallAnimMap = useRef(new Map<string, Animated.Value>()).current;
+  const [fallActive, setFallActive] = useState(false);
 
   // --- Big word celebration state (Task 2) ---
   const [bigWordLabel, setBigWordLabel] = useState<string | null>(null);
@@ -699,7 +712,7 @@ export function GameScreen({
     };
   }, [mode, level, isDaily, board.words.length, board.config.rows, board.config.cols]);
 
-  // Track post-gravity moved cells + column-stagger animation (Task 1)
+  // Track post-gravity moved cells + per-tile fall animation
   useEffect(() => {
     if (foundWords > prevFoundWordsRef.current && state.status === 'playing') {
       const previousGrid = state.history[state.history.length - 1]?.grid;
@@ -714,40 +727,67 @@ export function GameScreen({
       });
       setMovedCells(moved);
 
-      // Column-stagger bounce animation (Task 1)
+      // Per-tile gravity fall animation
       if (!reduceMotion && moved.length > 0) {
+        const rows = state.board.grid.length;
         const cols = state.board.grid[0]?.length ?? 0;
-        // Ensure we have enough Animated.Values for each column
-        while (columnStaggerAnims.length < cols) {
-          columnStaggerAnims.push(new Animated.Value(0));
+        // Compute cellStride (same formula as Grid.tsx)
+        const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
+        let cellSize = Math.floor(availableWidth / cols);
+        if (gridAreaHeight > 0) {
+          const frameAllowance = 58;
+          const heightAvail = gridAreaHeight - frameAllowance;
+          const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
+          cellSize = Math.min(cellSize, heightBased);
         }
-        // Determine which columns had moved cells
+        const cellStride = cellSize + CELL_GAP;
+
+        // Stagger delay per column for wave effect
+        const staggerDelay = ANIM.gravityStagger || 30;
         const movedCols = new Set(moved.map(c => c.col));
-        // Reset all column anims
-        columnStaggerAnims.forEach(a => a.setValue(0));
-        // Build staggered spring animations for each column with moved cells
-        const staggerDelay = ANIM.gravityStagger || 40;
-        let colDelay = 0;
+        const colOrder = Array.from(movedCols).sort((a, b) => a - b);
+        const colDelayMap = new Map<number, number>();
+        colOrder.forEach((c, i) => colDelayMap.set(c, i * staggerDelay));
+
         const animations: Animated.CompositeAnimation[] = [];
-        for (let c = 0; c < cols; c++) {
-          if (movedCols.has(c)) {
-            animations.push(
-              Animated.sequence([
-                Animated.delay(colDelay),
-                Animated.spring(columnStaggerAnims[c], {
-                  toValue: 1,
-                  tension: 120,
-                  friction: 6,
-                  useNativeDriver: true,
-                }),
-              ])
-            );
-            colDelay += staggerDelay;
+        for (const cell of moved) {
+          // Get or create Animated.Value for this cell
+          let anim = fallAnimMap.get(cell.cellId);
+          if (!anim) {
+            anim = new Animated.Value(0);
+            fallAnimMap.set(cell.cellId, anim);
           }
+          // Set offset so tile visually appears at old position
+          // fallRows > 0 means tile fell down, so start with negative translateY (above)
+          const offsetPx = -(cell.fallRows * cellStride);
+          anim.setValue(offsetPx);
+
+          const delay = colDelayMap.get(cell.col) ?? 0;
+          // Animate to 0 (final position) with gravity-like feel:
+          // timing for the main fall, then spring for landing bounce
+          animations.push(
+            Animated.sequence([
+              Animated.delay(delay),
+              Animated.spring(anim, {
+                toValue: 0,
+                tension: 180,
+                friction: 12,
+                useNativeDriver: true,
+              }),
+            ])
+          );
         }
-        setStaggerActive(true);
+        setFallActive(true);
         Animated.parallel(animations).start(() => {
-          setStaggerActive(false);
+          setFallActive(false);
+          // Clean up animated values for cells no longer on the grid
+          const activeCellIds = new Set<string>();
+          state.board.grid.forEach(row =>
+            row.forEach(c => { if (c) activeCellIds.add(c.id); })
+          );
+          for (const id of fallAnimMap.keys()) {
+            if (!activeCellIds.has(id)) fallAnimMap.delete(id);
+          }
         });
       }
 
@@ -886,18 +926,6 @@ export function GameScreen({
         // Track word length for big word celebration (Task 2)
         lastSubmittedWordLenRef.current = currentWord.length;
 
-        // #2 Gravity ease-out — 300ms per GDD spec (column stagger not supported by LayoutAnimation)
-        LayoutAnimation.configureNext({
-          duration: ANIM.gravityDuration,
-          update: {
-            type: LayoutAnimation.Types.easeOut,
-            property: LayoutAnimation.Properties.opacity,
-          },
-          delete: {
-            type: LayoutAnimation.Types.easeOut,
-            property: LayoutAnimation.Properties.opacity,
-          },
-        });
         submitWord();
         setShowValidFlash(false);
       }, 250);
@@ -1458,8 +1486,8 @@ export function GameScreen({
             spotlightDimmedCells={spotlightDimmedSet}
             gravityDirection={mode === 'gravityFlip' ? state.gravityDirection : undefined}
             noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
-            columnStaggerAnims={columnStaggerAnims}
-            staggerActive={staggerActive}
+            fallAnimMap={fallAnimMap}
+            fallActive={fallActive}
           />
         </Animated.View>
 

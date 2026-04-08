@@ -49,10 +49,10 @@ interface GridProps {
   movedCells?: CellPosition[];
   maxHeight?: number;
   isDragging?: boolean;
-  /** Column-stagger gravity bounce Animated.Values (one per column, 0->1) */
-  columnStaggerAnims?: Animated.Value[];
-  /** Whether column stagger animation is currently active */
-  staggerActive?: boolean;
+  /** Per-tile gravity fall Animated.Values keyed by cell ID */
+  fallAnimMap?: Map<string, Animated.Value>;
+  /** Whether fall animation is currently active */
+  fallActive?: boolean;
 }
 
 export function GameGrid({
@@ -70,8 +70,8 @@ export function GameGrid({
   maxHeight,
   isDragging = false,
   noGravityLayout = false,
-  columnStaggerAnims = [],
-  staggerActive = false,
+  fallAnimMap,
+  fallActive = false,
 }: GridProps) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -343,46 +343,18 @@ export function GameGrid({
               accessibilityLabel={`Letter grid, ${rows} rows by ${cols} columns`}
             >
               {columns.map((column, colIndex) => {
-                const colAnim = staggerActive && columnStaggerAnims[colIndex] ? columnStaggerAnims[colIndex] : null;
-                const ColumnWrapper = colAnim ? Animated.View : View;
-                const colStyle = colAnim
-                  ? [
-                      styles.column,
-                      {
-                        width: cellSize + CELL_GAP,
-                        height: gridHeight,
-                      },
-                      noGravityLayout && styles.columnNoGravity,
-                      !noGravityLayout && gravityDirection === 'up' && styles.columnGravityUp,
-                      {
-                        transform: [
-                          {
-                            translateY: colAnim.interpolate({
-                              inputRange: [0, 0.5, 1],
-                              outputRange: [-12, 4, 0],
-                            }),
-                          },
-                          {
-                            scale: colAnim.interpolate({
-                              inputRange: [0, 0.4, 0.7, 1],
-                              outputRange: [0.96, 1.03, 0.99, 1],
-                            }),
-                          },
-                        ],
-                      },
-                    ]
-                  : [
-                      styles.column,
-                      {
-                        width: cellSize + CELL_GAP,
-                        height: gridHeight,
-                      },
-                      noGravityLayout && styles.columnNoGravity,
-                      !noGravityLayout && gravityDirection === 'up' && styles.columnGravityUp,
-                    ];
+                const colStyle = [
+                  styles.column,
+                  {
+                    width: cellSize + CELL_GAP,
+                    height: gridHeight,
+                  },
+                  noGravityLayout && styles.columnNoGravity,
+                  !noGravityLayout && gravityDirection === 'up' && styles.columnGravityUp,
+                ];
 
                 return (
-                <ColumnWrapper
+                <View
                   key={colIndex}
                   style={colStyle as any}
                 >
@@ -401,6 +373,7 @@ export function GameGrid({
                     const selIndex = selectedSet.get(key) ?? -1;
                     const isSelected = selIndex >= 0;
                     const isHinted = hintedSet.has(key);
+                    const cellFallAnim = fallActive && fallAnimMap ? fallAnimMap.get(cell.id) : undefined;
 
                     return (
                       <LetterCell
@@ -415,11 +388,12 @@ export function GameGrid({
                         isMoved={movedSet.has(key)}
                         isWildcard={wildcardSet.has(`${row},${col}`)}
                         isSpotlightDimmed={spotlightDimmedCells?.has(`${row},${col}`) || false}
+                        fallAnim={cellFallAnim}
                       />
                     );
                   })}
                   {!noGravityLayout && gravityDirection === 'up' && <View style={EMPTY_FLEX} />}
-                </ColumnWrapper>
+                </View>
                 );
               })}
             </View>
