@@ -220,6 +220,23 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     owned: false,
     equipped: false,
   },
+  // ── Bundle-exclusive themes (IAP purchases) ──
+  {
+    id: 'theme_whale_exclusive',
+    name: 'Whale Exclusive',
+    description: 'A deep ocean palette reserved for the most dedicated supporters.',
+    colors: { bg: '#0a0a1e', surface: '#141432', accent: '#00d4ff', cellDefault: '#1e1e46', cellSelected: '#00d4ff' },
+    owned: false,
+    equipped: false,
+  },
+  {
+    id: 'theme_legendary_neon',
+    name: 'Legendary Neon',
+    description: 'Blazing neon legends — an ultimate reward for true collectors.',
+    colors: { bg: '#0a0014', surface: '#1a0a28', accent: '#ff00e5', cellDefault: '#2a1438', cellSelected: '#ff00e5' },
+    owned: false,
+    equipped: false,
+  },
 ];
 
 // ── Profile Frames ──────────────────────────────────────────────────────────
@@ -255,6 +272,23 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
   { id: 'frame_celestial', name: 'Celestial', rarity: 'epic', source: 'Exclusive Rotating Shop', owned: false },
   { id: 'frame_dragonscale', name: 'Dragonscale', rarity: 'legendary', source: 'Exclusive Rotating Shop', owned: false },
   { id: 'frame_frozen_ivy', name: 'Frozen Ivy', rarity: 'rare', source: 'Exclusive Rotating Shop', owned: false },
+  // ── Bundle-exclusive frames (IAP purchases) ──
+  { id: 'frame_champion_exclusive', name: 'Champion', rarity: 'legendary', source: 'Champion Pack', owned: false },
+  { id: 'frame_royal_legendary', name: 'Royal', rarity: 'legendary', source: 'Royal Collection', owned: false },
+  { id: 'frame_whale_legendary', name: 'Whale', rarity: 'legendary', source: 'Ultimate Whale Pack', owned: false },
+  { id: 'frame_whale_diamond', name: 'Whale Diamond', rarity: 'legendary', source: 'Ultimate Whale Pack', owned: false },
+  { id: 'frame_event_exclusive', name: 'Event Exclusive', rarity: 'epic', source: 'Event Special', owned: false },
+  { id: 'frame_season_exclusive', name: 'Season Exclusive', rarity: 'legendary', source: 'Season Pass Bundle', owned: false },
+  { id: 'frame_super_bundle', name: 'Super Bundle', rarity: 'epic', source: 'Super Bundle', owned: false },
+  { id: 'frame_diamond_epic', name: 'Diamond', rarity: 'epic', source: 'Diamond Collection', owned: false },
+  { id: 'frame_diamond_legendary', name: 'Diamond Elite', rarity: 'legendary', source: 'Diamond Collection', owned: false },
+  { id: 'frame_platinum_epic', name: 'Platinum', rarity: 'epic', source: 'Platinum Pack', owned: false },
+  { id: 'frame_platinum_legendary', name: 'Platinum Elite', rarity: 'legendary', source: 'Platinum Pack', owned: false },
+  { id: 'frame_platinum_mythic', name: 'Platinum Mythic', rarity: 'legendary', source: 'Platinum Pack', owned: false },
+  { id: 'frame_vip_exclusive', name: 'VIP Exclusive', rarity: 'epic', source: 'VIP Weekly', owned: false },
+  { id: 'frame_gold_mega', name: 'Gold Mega', rarity: 'epic', source: 'Gold Mega Bundle', owned: false },
+  { id: 'frame_diamond_mega', name: 'Diamond Mega', rarity: 'legendary', source: 'Diamond Mega Bundle', owned: false },
+  { id: 'frame_legendary_ultimate', name: 'Ultimate Legend', rarity: 'legendary', source: 'Ultimate Bundle', owned: false },
 ];
 
 // ── Profile Titles ──────────────────────────────────────────────────────────
@@ -289,6 +323,14 @@ export const PROFILE_TITLES: ProfileTitle[] = [
   { id: 'title_night_owl', title: 'Night Owl', source: 'Play 100 puzzles after 10pm', owned: false },
   // ── Exclusive Rotating Shop titles ──
   { id: 'title_wordsmith', title: 'Grand Wordsmith', source: 'Exclusive Rotating Shop', owned: false },
+  // ── Bundle-exclusive titles (IAP purchases) ──
+  { id: 'title_royal_collector', title: 'Royal Collector', source: 'Royal Collection', owned: false },
+  { id: 'title_whale_supreme', title: 'Whale Supreme', source: 'Ultimate Whale Pack', owned: false },
+  { id: 'title_season_champion', title: 'Season Champion', source: 'Season Pass Bundle', owned: false },
+  { id: 'title_diamond_collector', title: 'Diamond Collector', source: 'Diamond Collection', owned: false },
+  { id: 'title_platinum_elite', title: 'Platinum Elite', source: 'Platinum Pack', owned: false },
+  { id: 'title_platinum_supreme', title: 'Platinum Supreme', source: 'Platinum Pack', owned: false },
+  { id: 'title_ultimate_solver', title: 'Ultimate Solver', source: 'Ultimate Bundle', owned: false },
 ];
 
 // ── Library Decorations ─────────────────────────────────────────────────────
@@ -338,6 +380,12 @@ export const LIBRARY_DECORATIONS: LibraryDecoration[] = [
   { id: 'fire_sconce', name: 'Fire Sconce', description: 'Eternal flames light the way.', icon: '🔥', type: 'lighting', rarity: 'epic', owned: false, equipped: false },
   { id: 'ocean_globe', name: 'Ocean Globe', description: 'A miniature ocean in a sphere.', icon: '🌊', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
   { id: 'nature_plaque', name: 'Nature Plaque', description: 'Carved from ancient oak.', icon: '🌳', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+
+  // Bundle-exclusive decorations (IAP purchases)
+  { id: 'starter_bookend', name: 'Starter Bookend', description: 'A commemorative bookend for early supporters.', icon: '📚', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'chapter_decoration', name: 'Chapter Decoration', description: 'A decorative chapter marker for your library.', icon: '🔖', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'decoration_whale_trophy', name: 'Whale Trophy', description: 'A legendary trophy for the most dedicated supporters.', icon: '🐋', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'decoration_platinum_exclusive', name: 'Platinum Display', description: 'An exclusive platinum display case.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
