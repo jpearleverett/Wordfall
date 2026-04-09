@@ -458,7 +458,8 @@ export type IAPProductId =
   | 'platinum_pack'
   | 'royal_collection'
   | 'ultimate_whale'
-  | 'vip_weekly';
+  | 'vip_weekly'
+  | 'first_purchase_special';
 
 export interface ShopOffer {
   id: string;

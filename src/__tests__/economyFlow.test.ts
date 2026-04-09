@@ -223,9 +223,14 @@ describe('Economy Flow Integration', () => {
   });
 
   describe('dynamic pricing offers', () => {
-    it('non-payer offers do not exceed 50% discount', () => {
+    it('non-payer offers do not exceed 75% discount (welcome gift is highest)', () => {
       const offers = getDynamicOffers('non_payer', 'regular', 10);
       for (const offer of offers) {
+        expect(offer.discountPercent).toBeLessThanOrEqual(75);
+      }
+      // Non-welcome-gift offers should not exceed 50%
+      const nonWelcome = offers.filter(o => o.productId !== 'first_purchase_special');
+      for (const offer of nonWelcome) {
         expect(offer.discountPercent).toBeLessThanOrEqual(50);
       }
     });

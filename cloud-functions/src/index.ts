@@ -317,3 +317,191 @@ export const rotateClubGoals = functions.pubsub
 
     console.log(`Rotated goals for ${clubsSnap.size} clubs`);
   });
+
+// ─── 6. validateReceipt ──────────────────────────────────────────────────────
+
+/**
+ * HTTPS callable function to validate IAP receipts server-side.
+ * Accepts receipt data from the client and validates against Apple/Google APIs.
+ * Returns validation result including subscription expiry for recurring products.
+ */
+export const validateReceipt = functions.https.onCall(async (data, context) => {
+  // Require authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be logged in to validate receipts.');
+  }
+
+  const { receipt, productId, platform } = data;
+
+  if (!receipt || !productId || !platform) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing receipt, productId, or platform.');
+  }
+
+  const userId = context.auth.uid;
+
+  try {
+    let validationResult: { valid: boolean; expiresAt?: number };
+
+    if (platform === 'ios') {
+      validationResult = await validateAppleReceipt(receipt, productId);
+    } else if (platform === 'android') {
+      validationResult = await validateGoogleReceipt(receipt, productId);
+    } else {
+      throw new functions.https.HttpsError('invalid-argument', `Unsupported platform: ${platform}`);
+    }
+
+    // Log validated purchase to Firestore for analytics
+    if (validationResult.valid) {
+      await db.collection('validatedPurchases').add({
+        userId,
+        productId,
+        platform,
+        validatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: validationResult.expiresAt ?? null,
+      });
+    }
+
+    return validationResult;
+  } catch (error: any) {
+    console.error(`Receipt validation failed for user ${userId}:`, error);
+
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+
+    throw new functions.https.HttpsError('internal', 'Receipt validation failed. Please try again.');
+  }
+});
+
+/**
+ * Validate an Apple App Store receipt.
+ * Tries production endpoint first, falls back to sandbox.
+ */
+async function validateAppleReceipt(
+  receiptData: string,
+  productId: string
+): Promise<{ valid: boolean; expiresAt?: number }> {
+  const sharedSecret = process.env.APPLE_SHARED_SECRET || '';
+
+  const payload = {
+    'receipt-data': receiptData,
+    password: sharedSecret,
+    'exclude-old-transactions': true,
+  };
+
+  // Try production first
+  const prodUrl = 'https://buy.itunes.apple.com/verifyReceipt';
+  const sandboxUrl = 'https://sandbox.itunes.apple.com/verifyReceipt';
+
+  let response = await fetch(prodUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  let result = await response.json();
+
+  // Status 21007 means receipt is from sandbox — retry against sandbox
+  if (result.status === 21007) {
+    response = await fetch(sandboxUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    result = await response.json();
+  }
+
+  if (result.status !== 0) {
+    console.warn(`Apple receipt validation failed with status: ${result.status}`);
+    return { valid: false };
+  }
+
+  // Check that the product ID matches an in_app or latest_receipt_info entry
+  const inApp = result.receipt?.in_app || [];
+  const latestInfo = result.latest_receipt_info || [];
+  const allTransactions = [...inApp, ...latestInfo];
+
+  const matchingTransaction = allTransactions.find(
+    (t: any) => t.product_id === productId
+  );
+
+  if (!matchingTransaction) {
+    return { valid: false };
+  }
+
+  // For subscriptions, check expiry
+  const expiresDateMs = matchingTransaction.expires_date_ms
+    ? parseInt(matchingTransaction.expires_date_ms, 10)
+    : undefined;
+
+  if (expiresDateMs && expiresDateMs < Date.now()) {
+    return { valid: false }; // Subscription expired
+  }
+
+  return { valid: true, expiresAt: expiresDateMs };
+}
+
+/**
+ * Validate a Google Play receipt (purchase token).
+ * Uses the Google Play Developer API via service account.
+ */
+async function validateGoogleReceipt(
+  purchaseToken: string,
+  productId: string
+): Promise<{ valid: boolean; expiresAt?: number }> {
+  // Google Play validation requires the googleapis package or a REST call
+  // with service account credentials. For now, use the REST API directly.
+  const packageName = 'com.wordfall.app';
+
+  // Try as a product purchase first (one-time IAP)
+  try {
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+    });
+    const authClient = await auth.getClient();
+
+    const androidPublisher = google.androidpublisher({ version: 'v3', auth: authClient });
+
+    // Try one-time product validation
+    try {
+      const productResult = await androidPublisher.purchases.products.get({
+        packageName,
+        productId,
+        token: purchaseToken,
+      });
+
+      const purchaseState = productResult.data.purchaseState;
+      // 0 = purchased, 1 = canceled, 2 = pending
+      if (purchaseState === 0) {
+        return { valid: true };
+      }
+      return { valid: false };
+    } catch {
+      // Not a product purchase — try subscription
+    }
+
+    // Try subscription validation
+    try {
+      const subResult = await androidPublisher.purchases.subscriptions.get({
+        packageName,
+        subscriptionId: productId,
+        token: purchaseToken,
+      });
+
+      const expiryTimeMillis = parseInt(subResult.data.expiryTimeMillis || '0', 10);
+      const paymentState = subResult.data.paymentState;
+
+      if (expiryTimeMillis > Date.now() && paymentState !== undefined) {
+        return { valid: true, expiresAt: expiryTimeMillis };
+      }
+      return { valid: false };
+    } catch {
+      return { valid: false };
+    }
+  } catch (error) {
+    // googleapis not available — accept receipt in dev, reject in prod
+    console.error('Google Play validation requires googleapis package:', error);
+    return { valid: false };
+  }
+}

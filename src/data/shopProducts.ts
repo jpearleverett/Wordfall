@@ -50,6 +50,25 @@ export interface ShopProduct {
 // ─── Product definitions ─────────────────────────────────────────────────────
 
 export const SHOP_PRODUCTS: ShopProduct[] = [
+  // ── First Purchase Special (impulse tier) ──────────────────────────────
+  {
+    id: 'first_purchase_special',
+    storeProductId: 'wordfall_first_purchase',
+    name: 'Welcome Gift',
+    description: '200 Coins + 25 Gems + 5 Hints — One-time special!',
+    fallbackPrice: '$0.49',
+    fallbackPriceAmount: 0.49,
+    category: 'bundles',
+    rewards: {
+      coins: 200,
+      gems: 25,
+      hintTokens: 5,
+    },
+    isNonConsumable: true,
+    originalPrice: '$1.99',
+    icon: '🎁',
+  },
+
   // ── Bundles ──────────────────────────────────────────────────────────────
   {
     id: 'starter_pack',
