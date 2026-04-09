@@ -96,11 +96,7 @@
       "expo-video",
       "expo-audio"
     ],
-    "extra": {
-      "eas": {
-        "projectId": "wordfall-production"
-      }
-    },
-    "owner": "wordfall"
+    "extra": {},
+    "owner": "jpearleverett"
   }
 }
