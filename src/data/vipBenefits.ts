@@ -19,6 +19,7 @@ export interface VipStreakBonus {
 // ─── Streak bonus tiers ──────────────────────────────────────────────────────
 
 export const VIP_STREAK_BONUSES: VipStreakBonus[] = [
+  { weeksRequired: 1, label: 'VIP Welcome', bonusGems: 10, bonusHints: 1 },
   { weeksRequired: 2, label: 'Loyal Member', bonusGems: 25, bonusHints: 2 },
   { weeksRequired: 4, label: 'Dedicated VIP', bonusGems: 50, bonusHints: 5, extraReward: { type: 'frame', id: 'vip_silver' } },
   { weeksRequired: 8, label: 'Elite VIP', bonusGems: 100, bonusHints: 10, extraReward: { type: 'frame', id: 'vip_gold' } },

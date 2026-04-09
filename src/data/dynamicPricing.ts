@@ -150,6 +150,16 @@ export function getDynamicOffers(
 
   // ── Non-payers: low-commitment entry point ──
   if (spending === 'non_payer') {
+    // First-purchase impulse offer at $0.49 (shown at level 5-8)
+    if (playerLevel >= 5 && playerLevel <= 15) {
+      offers.push({
+        productId: 'first_purchase_special',
+        discountPercent: 75,
+        badge: 'WELCOME GIFT',
+        expiresInHours: 168, // 7 days
+        priority: 0,
+      });
+    }
     offers.push({
       productId: 'starter_pack',
       discountPercent: 30,

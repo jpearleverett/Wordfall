@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, interpolate } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
@@ -45,32 +46,29 @@ export function GameHeader({
   const modeConfig = MODE_CONFIGS[mode];
   const modeLabel = isDaily ? 'Daily' : mode !== 'classic' ? modeConfig.name : `Lv ${level}`;
   const progress = totalWords > 0 ? (foundWords / totalWords) * 100 : 0;
-  const scoreAnim = useRef(new Animated.Value(1)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const scoreScale = useSharedValue(1);
+  const progressValue = useSharedValue(0);
 
   // Animate score pop on change
   useEffect(() => {
-    Animated.sequence([
-      Animated.timing(scoreAnim, { toValue: 1.15, duration: 80, useNativeDriver: true }),
-      Animated.spring(scoreAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
-    ]).start();
+    scoreScale.value = withSequence(
+      withTiming(1.15, { duration: 80 }),
+      withSpring(1, { damping: 8 }),
+    );
   }, [score]);
 
-  // Animate progress bar smoothly
+  // Animate progress bar smoothly — Reanimated handles layout props on UI thread
   useEffect(() => {
-    Animated.spring(progressAnim, {
-      toValue: progress,
-      friction: 8,
-      tension: 60,
-      useNativeDriver: false,
-    }).start();
+    progressValue.value = withSpring(progress, { damping: 16, stiffness: 60 });
   }, [progress]);
 
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 100],
-    outputRange: ['0%', '100%'],
-    extrapolate: 'clamp',
-  });
+  const scoreStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scoreScale.value }],
+  }));
+
+  const progressBarStyle = useAnimatedStyle(() => ({
+    width: `${interpolate(progressValue.value, [0, 100], [0, 100])}%`,
+  }));
 
   return (
     <View style={[styles.wrapper, { paddingTop: Math.max(insets.top, 6) + 4 }]}>
@@ -134,7 +132,7 @@ export function GameHeader({
             <Animated.Text
               style={[
                 styles.scoreValue,
-                { transform: [{ scale: scoreAnim }] },
+                scoreStyle,
               ]}
             >
               {score.toLocaleString()}
@@ -207,7 +205,7 @@ export function GameHeader({
 
         {/* Animated progress bar */}
         <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: progressWidth as any, backgroundColor: modeConfig.color }]}>
+          <Animated.View style={[styles.progressFill, progressBarStyle, { backgroundColor: modeConfig.color }]}>
             {/* Shimmer on progress fill */}
             <View style={styles.progressShimmer} />
           </Animated.View>
@@ -217,7 +215,7 @@ export function GameHeader({
               style={[
                 styles.progressGlowDot,
                 {
-                  left: progressWidth as any,
+                  left: `${progress}%` as any,
                   backgroundColor: modeConfig.color,
                   shadowColor: modeConfig.color,
                 },

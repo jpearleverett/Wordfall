@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
@@ -20,54 +21,41 @@ export function FeatureUnlockCeremony({
   accentColor = COLORS.accent,
   onDismiss,
 }: FeatureUnlockCeremonyProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.7)).current;
-  const iconAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0.4)).current;
+  const fade = useSharedValue(0);
+  const scale = useSharedValue(0.7);
+  const iconProgress = useSharedValue(0);
+  const glow = useSharedValue(0.4);
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 5,
-          tension: 100,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.spring(iconAnim, {
-        toValue: 1,
-        friction: 4,
-        tension: 120,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    fade.value = withTiming(1, { duration: 300 });
+    scale.value = withSpring(1, { damping: 10, stiffness: 100 });
+    iconProgress.value = withDelay(350, withSpring(1, { damping: 8, stiffness: 120 }));
+    glow.value = withRepeat(
+      withSequence(
+        withTiming(0.8, { duration: 1200 }),
+        withTiming(0.4, { duration: 1200 }),
+      ),
+      -1,
+    );
+  }, []);
 
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: 0.8,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0.4,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, [fadeAnim, scaleAnim, iconAnim, glowAnim]);
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const glowStyle = useAnimatedStyle(() => ({
+    backgroundColor: accentColor + '30',
+    opacity: glow.value,
+  }));
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: interpolate(iconProgress.value, [0, 0.5, 1], [0, 1.3, 1]) },
+      { rotate: `${interpolate(iconProgress.value, [0, 0.5, 1], [0, -10, 0])}deg` },
+    ],
+  }));
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
       <SparkleField count={18} intensity="medium" />
-      <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient
           colors={GRADIENTS.surfaceCard}
           style={styles.cardInner}
@@ -75,10 +63,7 @@ export function FeatureUnlockCeremony({
           <Animated.View
             style={[
               styles.glowCircle,
-              {
-                backgroundColor: accentColor + '30',
-                opacity: glowAnim,
-              },
+              glowStyle,
             ]}
           />
 
@@ -87,22 +72,7 @@ export function FeatureUnlockCeremony({
           <Animated.View
             style={[
               styles.iconContainer,
-              {
-                transform: [
-                  {
-                    scale: iconAnim.interpolate({
-                      inputRange: [0, 0.5, 1],
-                      outputRange: [0, 1.3, 1],
-                    }),
-                  },
-                  {
-                    rotate: iconAnim.interpolate({
-                      inputRange: [0, 0.5, 1],
-                      outputRange: ['0deg', '-10deg', '0deg'],
-                    }),
-                  },
-                ],
-              },
+              iconStyle,
             ]}
           >
             <View style={[styles.iconBg, { backgroundColor: accentColor + '25', borderColor: accentColor + '40' }]}>

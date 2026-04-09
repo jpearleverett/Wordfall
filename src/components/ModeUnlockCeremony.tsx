@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useCallback } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
@@ -21,40 +22,42 @@ export function ModeUnlockCeremony({
   onDismiss,
   onTryNow,
 }: ModeUnlockCeremonyProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.7)).current;
-  const iconAnim = useRef(new Animated.Value(0)).current;
+  const fade = useSharedValue(0);
+  const scale = useSharedValue(0.7);
+  const iconProgress = useSharedValue(0);
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, friction: 6, tension: 100, useNativeDriver: true }),
-      ]),
-      Animated.spring(iconAnim, { toValue: 1, friction: 4, tension: 150, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, scaleAnim, iconAnim]);
+    fade.value = withTiming(1, { duration: 300 });
+    scale.value = withSpring(1, { damping: 12, stiffness: 100 });
+    iconProgress.value = withDelay(350, withSpring(1, { damping: 8, stiffness: 150 }));
+  }, []);
 
-  const dismiss = () => {
-    Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(onDismiss);
-  };
+  const dismiss = useCallback(() => {
+    fade.value = withTiming(0, { duration: 200 }, () => {
+      runOnJS(onDismiss)();
+    });
+  }, [onDismiss]);
+
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: interpolate(iconProgress.value, [0, 1], [0.3, 1]) },
+      { rotate: `${interpolate(iconProgress.value, [0, 0.5, 1], [0, -10, 0])}deg` },
+    ],
+  }));
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
       <SparkleField count={20} intensity="medium" colors={[modeColor, '#fff', COLORS.accent]} />
-      <Animated.View style={[styles.cardOuter, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.cardOuter, cardStyle]}>
         <LinearGradient
           colors={GRADIENTS.surfaceCard}
           style={[styles.card, SHADOWS.strong]}
         >
           <View style={[styles.iconGlow, { backgroundColor: modeColor + '20' }]} />
           <Text style={styles.unlockLabel}>NEW MODE UNLOCKED</Text>
-          <Animated.View style={{
-            transform: [
-              { scale: iconAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
-              { rotate: iconAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['0deg', '-10deg', '0deg'] }) },
-            ],
-          }}>
+          <Animated.View style={iconStyle}>
             <View style={[styles.iconCircle, { borderColor: modeColor + '50', backgroundColor: modeColor + '15' }]}>
               <Text style={styles.icon}>{modeIcon}</Text>
             </View>

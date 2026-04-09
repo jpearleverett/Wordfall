@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
@@ -18,21 +19,27 @@ export function CollectionCompleteCeremony({
   reward,
   onDismiss,
 }: CollectionCompleteCeremonyProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.6)).current;
+  const fadeAnim = useSharedValue(0);
+  const scaleAnim = useSharedValue(0.6);
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 100, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, scaleAnim]);
+    fadeAnim.value = withTiming(1, { duration: 300 });
+    scaleAnim.value = withSpring(1, { damping: 12, stiffness: 100 });
+  }, []);
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+  }));
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleAnim.value }],
+  }));
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
       <SparkleField count={26} intensity="intense" colors={[COLORS.gold, COLORS.accent, COLORS.purple, '#fff']} />
       <CelebrationBurst centerX={180} centerY={200} particleCount={20} />
-      <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>COLLECTION COMPLETE</Text>
           <Text style={styles.icon}>{collectionIcon}</Text>

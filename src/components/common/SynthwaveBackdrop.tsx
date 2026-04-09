@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Dimensions, DimensionValue, Image, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { Dimensions, DimensionValue, Image, StyleSheet, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../constants';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../../utils/localAssets';
@@ -15,7 +16,7 @@ function TwinklingStar({
   left,
   color,
   size,
-  delay,
+  delay: delayMs,
   duration,
 }: {
   top: DimensionValue;
@@ -25,37 +26,40 @@ function TwinklingStar({
   delay: number;
   duration: number;
 }) {
-  const anim = useRef(new Animated.Value(0)).current;
+  const anim = useSharedValue(0);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration, useNativeDriver: true }),
-        Animated.delay(1200),
-      ]),
-    ).start();
-  }, [anim, delay, duration]);
+    anim.value = withDelay(
+      delayMs,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration }),
+          withTiming(0, { duration }),
+          withDelay(1200, withTiming(0, { duration: 0 })),
+        ),
+        -1,
+      ),
+    );
+  }, [delayMs, duration]);
+
+  const starStyle = useAnimatedStyle(() => ({
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+    backgroundColor: color,
+    opacity: interpolate(anim.value, [0, 0.5, 1], [0.08, 0.9, 0.08]),
+    transform: [
+      { scale: interpolate(anim.value, [0, 0.5, 1], [0.3, 1.4, 0.3]) },
+    ],
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: size * 3,
+  }));
 
   return (
     <View pointerEvents="none" style={[styles.absolute, { top, left }]}>
-      <Animated.View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: color,
-          opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.08, 0.9, 0.08] }),
-          transform: [
-            { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 1.4, 0.3] }) },
-          ],
-          shadowColor: color,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.9,
-          shadowRadius: size * 3,
-        }}
-      />
+      <Animated.View style={starStyle} />
     </View>
   );
 }
@@ -153,40 +157,49 @@ function PerspectiveGridFloor() {
 }
 
 function NeonSun() {
-  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const pulse = useSharedValue(0);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: 3500, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0, duration: 3500, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [pulseAnim]);
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 3500 }),
+        withTiming(0, { duration: 3500 }),
+      ),
+      -1,
+    );
+  }, []);
 
   const sunTop = HORIZON_Y - SUN_SIZE * 0.55;
   const sunLeft = (SW - SUN_SIZE) / 2;
 
+  const glowStyle = useAnimatedStyle(() => ({
+    position: 'absolute' as const,
+    top: sunTop - SUN_SIZE * 0.4,
+    left: sunLeft - SUN_SIZE * 0.4,
+    width: SUN_SIZE * 1.8,
+    height: SUN_SIZE * 1.8,
+    borderRadius: SUN_SIZE * 0.9,
+    backgroundColor: 'rgba(255, 45, 149, 0.08)',
+    opacity: interpolate(pulse.value, [0, 1], [0.4, 0.7]),
+    transform: [
+      { scale: interpolate(pulse.value, [0, 1], [0.92, 1.08]) },
+    ],
+  }));
+
+  const reflectionStyle = useAnimatedStyle(() => ({
+    position: 'absolute' as const,
+    top: HORIZON_Y - 1,
+    left: SW * 0.1,
+    right: SW * 0.1,
+    height: SW * 0.06,
+    borderRadius: SW * 0.03,
+    backgroundColor: 'rgba(0, 229, 255, 0.15)',
+    opacity: interpolate(pulse.value, [0, 1], [0.3, 0.6]),
+  }));
+
   return (
     <View pointerEvents="none">
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: sunTop - SUN_SIZE * 0.4,
-          left: sunLeft - SUN_SIZE * 0.4,
-          width: SUN_SIZE * 1.8,
-          height: SUN_SIZE * 1.8,
-          borderRadius: SUN_SIZE * 0.9,
-          backgroundColor: 'rgba(255, 45, 149, 0.08)',
-          opacity: pulseAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.4, 0.7],
-          }),
-          transform: [
-            { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] }) },
-          ],
-        }}
-      />
+      <Animated.View style={glowStyle} />
 
       <Image
         source={LOCAL_IMAGES.neonSun}
@@ -217,21 +230,7 @@ function NeonSun() {
         }}
       />
 
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: HORIZON_Y - 1,
-          left: SW * 0.1,
-          right: SW * 0.1,
-          height: SW * 0.06,
-          borderRadius: SW * 0.03,
-          backgroundColor: 'rgba(0, 229, 255, 0.15)',
-          opacity: pulseAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.3, 0.6],
-          }),
-        }}
-      />
+      <Animated.View style={reflectionStyle} />
     </View>
   );
 }

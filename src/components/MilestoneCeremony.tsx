@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
@@ -33,33 +34,31 @@ export function MilestoneCeremony({
   buttonText = 'AWESOME!',
   onDismiss,
 }: MilestoneCeremonyProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.6)).current;
-  const iconAnim = useRef(new Animated.Value(0)).current;
+  const fade = useSharedValue(0);
+  const scale = useSharedValue(0.6);
+  const iconProgress = useSharedValue(0);
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 100, useNativeDriver: true }),
-      ]),
-      Animated.spring(iconAnim, { toValue: 1, friction: 3, tension: 150, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, scaleAnim, iconAnim]);
+    fade.value = withTiming(1, { duration: 300 });
+    scale.value = withSpring(1, { damping: 10, stiffness: 100 });
+    iconProgress.value = withDelay(350, withSpring(1, { damping: 6, stiffness: 150 }));
+  }, []);
+
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(iconProgress.value, [0, 0.5, 1], [0, 1.4, 1]) }],
+  }));
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
       <SparkleField count={16} intensity="medium" colors={[accentColor, COLORS.gold, '#fff']} />
-      <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: accentColor }]}>{ribbon}</Text>
 
           <Animated.View
-            style={{
-              transform: [
-                { scale: iconAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1.4, 1] }) },
-              ],
-            }}
+            style={iconStyle}
           >
             <View style={[styles.iconBg, { backgroundColor: accentColor + '20', borderColor: accentColor + '40' }]}>
               <Text style={styles.icon}>{icon}</Text>

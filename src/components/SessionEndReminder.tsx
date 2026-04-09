@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useCallback } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 
@@ -10,37 +11,36 @@ interface SessionEndReminderProps {
 }
 
 export function SessionEndReminder({ type, message, onDismiss }: SessionEndReminderProps) {
-  const slideAnim = useRef(new Animated.Value(80)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slide = useSharedValue(80);
+  const fade = useSharedValue(0);
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(slideAnim, { toValue: 0, friction: 7, tension: 80, useNativeDriver: true }),
-      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start();
+    slide.value = withSpring(0, { damping: 14, stiffness: 80 });
+    fade.value = withTiming(1, { duration: 300 });
 
-    // Auto-dismiss after 4 seconds
     const timer = setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(slideAnim, { toValue: 80, duration: 200, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start(() => onDismiss());
+      slide.value = withTiming(80, { duration: 200 });
+      fade.value = withTiming(0, { duration: 200 }, () => {
+        runOnJS(onDismiss)();
+      });
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, [slideAnim, fadeAnim, onDismiss]);
+  }, [onDismiss]);
 
   const icon = type === 'daily' ? '☀️' : '🔥';
   const accentColor = type === 'daily' ? COLORS.gold : COLORS.orange;
+
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: fade.value,
+    transform: [{ translateY: slide.value }],
+  }));
 
   return (
     <Animated.View
       style={[
         styles.container,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        },
+        containerStyle,
       ]}
     >
       <Pressable onPress={onDismiss}>

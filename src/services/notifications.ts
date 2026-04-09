@@ -130,6 +130,23 @@ const NOTIFICATION_TEMPLATES: Record<NotificationCategory, { titles: string[]; b
   },
 };
 
+// ─── Deep-link screen mapping per notification category ──────────────────────
+
+const NOTIFICATION_DEEP_LINKS: Partial<Record<NotificationCategory, string>> = {
+  streak_reminder: 'Home',
+  daily_challenge: 'Daily',
+  event_starting: 'Event',
+  event_ending: 'Event',
+  energy_full: 'Home',
+  comeback: 'Home',
+  mystery_wheel: 'Home',
+};
+
+// ─── Frequency cap ──────────────────────────────────────────────────────────
+
+const MAX_NOTIFICATIONS_PER_DAY = 3;
+const FREQ_CAP_STORAGE_KEY = '@wordfall_notif_freq';
+
 // ─── Storage Keys ────────────────────────────────────────────────────────────
 
 const PUSH_TOKEN_STORAGE_KEY = '@wordfall_push_token';
@@ -257,6 +274,32 @@ class NotificationManager {
   ): Promise<string | null> {
     if (!this.initialized || !this.permissionGranted || !Notifications) return null;
 
+    // Frequency cap: max MAX_NOTIFICATIONS_PER_DAY per day (skip for daily recurring triggers)
+    if (trigger.type === 'timeInterval') {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const stored = await AsyncStorage.getItem(FREQ_CAP_STORAGE_KEY);
+        const freqData: { date: string; count: number } = stored
+          ? JSON.parse(stored)
+          : { date: today, count: 0 };
+
+        if (freqData.date !== today) {
+          freqData.date = today;
+          freqData.count = 0;
+        }
+
+        if (freqData.count >= MAX_NOTIFICATIONS_PER_DAY) {
+          console.log(`[Notifications] Frequency cap reached (${MAX_NOTIFICATIONS_PER_DAY}/day), skipping ${category}`);
+          return null;
+        }
+
+        freqData.count++;
+        await AsyncStorage.setItem(FREQ_CAP_STORAGE_KEY, JSON.stringify(freqData));
+      } catch {
+        // Proceed if storage fails
+      }
+    }
+
     const template = NOTIFICATION_TEMPLATES[category];
     const titleIdx = Math.floor(Math.random() * template.titles.length);
     const bodyIdx = Math.floor(Math.random() * template.bodies.length);
@@ -314,7 +357,11 @@ class NotificationManager {
         content: {
           title,
           body,
-          data: { category },
+          data: {
+            category,
+            screen: NOTIFICATION_DEEP_LINKS[category] ?? 'Home',
+            ...templateVars,
+          },
           sound: 'default',
           ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
         },

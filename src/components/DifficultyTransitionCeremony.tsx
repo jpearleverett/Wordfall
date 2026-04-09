@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
@@ -22,29 +23,32 @@ export function DifficultyTransitionCeremony({
   to,
   onDismiss,
 }: DifficultyTransitionCeremonyProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.6)).current;
-  const arrowAnim = useRef(new Animated.Value(0)).current;
-  const toAnim = useRef(new Animated.Value(0)).current;
+  const fade = useSharedValue(0);
+  const scale = useSharedValue(0.6);
+  const arrow = useSharedValue(0);
+  const toProgress = useSharedValue(0);
 
   const fromMeta = DIFFICULTY_META[from] ?? DIFFICULTY_META.easy;
   const toMeta = DIFFICULTY_META[to] ?? DIFFICULTY_META.medium;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 100, useNativeDriver: true }),
-      ]),
-      Animated.spring(arrowAnim, { toValue: 1, friction: 6, tension: 120, useNativeDriver: true }),
-      Animated.spring(toAnim, { toValue: 1, friction: 4, tension: 150, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, scaleAnim, arrowAnim, toAnim]);
+    fade.value = withTiming(1, { duration: 300 });
+    scale.value = withSpring(1, { damping: 10, stiffness: 100 });
+    arrow.value = withDelay(350, withSpring(1, { damping: 12, stiffness: 120 }));
+    toProgress.value = withDelay(550, withSpring(1, { damping: 8, stiffness: 150 }));
+  }, []);
+
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const arrowStyle = useAnimatedStyle(() => ({ opacity: arrow.value, transform: [{ scale: arrow.value }] }));
+  const toStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(toProgress.value, [0, 0.5, 1], [0, 1.3, 1]) }],
+  }));
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
       <SparkleField count={20} intensity="intense" colors={[toMeta.color, COLORS.gold, '#fff']} />
-      <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: toMeta.color }]}>NEW CHALLENGE TIER</Text>
 
@@ -54,16 +58,12 @@ export function DifficultyTransitionCeremony({
               <Text style={[styles.tierLabel, { color: fromMeta.color }]}>{fromMeta.label}</Text>
             </View>
 
-            <Animated.View style={{ opacity: arrowAnim, transform: [{ scale: arrowAnim }] }}>
+            <Animated.View style={arrowStyle}>
               <Text style={styles.arrow}>{'\u{27A1}\u{FE0F}'}</Text>
             </Animated.View>
 
             <Animated.View
-              style={{
-                transform: [
-                  { scale: toAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1.3, 1] }) },
-                ],
-              }}
+              style={toStyle}
             >
               <View style={[styles.tierBadge, styles.tierBadgeTo, { borderColor: toMeta.color, backgroundColor: toMeta.color + '20' }]}>
                 <Text style={styles.tierIcon}>{toMeta.icon}</Text>

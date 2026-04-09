@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
@@ -11,37 +12,40 @@ interface LevelUpCeremonyProps {
 }
 
 export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.5)).current;
-  const levelAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0.3)).current;
+  const fade = useSharedValue(0);
+  const scale = useSharedValue(0.5);
+  const level = useSharedValue(0);
+  const glow = useSharedValue(0.3);
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 100, useNativeDriver: true }),
-      ]),
-      Animated.spring(levelAnim, { toValue: 1, friction: 3, tension: 180, useNativeDriver: true }),
-    ]).start();
+    fade.value = withTiming(1, { duration: 300 });
+    scale.value = withSpring(1, { damping: 10, stiffness: 100 });
+    level.value = withDelay(350, withSpring(1, { damping: 6, stiffness: 180 }));
+    glow.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 }),
+      ),
+      -1,
+    );
+  }, []);
 
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 0.7, duration: 1000, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.3, duration: 1000, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [fadeAnim, scaleAnim, levelAnim, glowAnim]);
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
+  const levelStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(level.value, [0, 0.5, 1], [0, 1.4, 1]) }],
+  }));
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
       <SparkleField count={24} intensity="intense" colors={[COLORS.gold, COLORS.accent, '#fff']} />
-      <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Animated.View
             style={[
               styles.glowCircle,
-              { opacity: glowAnim },
+              glowStyle,
             ]}
           />
 
@@ -50,16 +54,7 @@ export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
           <Animated.View
             style={[
               styles.levelContainer,
-              {
-                transform: [
-                  {
-                    scale: levelAnim.interpolate({
-                      inputRange: [0, 0.5, 1],
-                      outputRange: [0, 1.4, 1],
-                    }),
-                  },
-                ],
-              },
+              levelStyle,
             ]}
           >
             <LinearGradient

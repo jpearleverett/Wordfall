@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../../constants';
 
@@ -25,27 +26,22 @@ export default function MoveCounter({ current, max, style }: MoveCounterProps) {
   const fraction = max > 0 ? current / max : 0;
   const color = getMoveColor(fraction);
   const glowColor = getMoveGlow(fraction);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useSharedValue(1);
   const prevCurrent = useRef(current);
 
   useEffect(() => {
     if (current !== prevCurrent.current) {
       prevCurrent.current = current;
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 1.2,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          useNativeDriver: true,
-          speed: 24,
-          bounciness: 12,
-        }),
-      ]).start();
+      scaleAnim.value = withSequence(
+        withTiming(1.2, { duration: 100 }),
+        withSpring(1, { damping: 10, stiffness: 150 }),
+      );
     }
-  }, [current, scaleAnim]);
+  }, [current]);
+
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleAnim.value }],
+  }));
 
   // Progress bar width
   const fillWidth = max > 0 ? `${(current / max) * 100}%` : '0%';
@@ -54,7 +50,7 @@ export default function MoveCounter({ current, max, style }: MoveCounterProps) {
     <View style={[styles.container, style]}>
       <View style={styles.labelRow}>
         <Text style={styles.label}>Moves</Text>
-        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <Animated.View style={scaleStyle}>
           <Text
             style={[
               styles.count,

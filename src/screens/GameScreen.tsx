@@ -36,6 +36,7 @@ import { adManager, AdRewardType } from '../services/ads';
 import { MockAdModal } from '../components/MockAdModal';
 import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
 import { getModeTutorial } from '../data/modeTutorials';
+import { PostLossModal } from '../components/PostLossModal';
 
 if (
   Platform.OS === 'android' &&
@@ -961,13 +962,24 @@ export function GameScreen({
     setGridAreaHeight(0);
   }, [board]);
 
-  // Show failed modal
+  // Post-loss modal state
+  const [showPostLoss, setShowPostLoss] = useState(false);
+  const postLossShownRef = useRef(false);
+
+  // Show post-loss modal first (if applicable), then failed modal
   useEffect(() => {
     if ((state.status === 'failed' || state.status === 'timeout') && !showFailed) {
+      // Show post-loss conversion modal if not already shown this level attempt
+      if (!postLossShownRef.current && foundWords > 0 && mode !== 'relax') {
+        postLossShownRef.current = true;
+        const timer = setTimeout(() => setShowPostLoss(true), 400);
+        return () => clearTimeout(timer);
+      }
+      // Otherwise show the normal failed modal
       const timer = setTimeout(() => setShowFailed(true), 400);
       return () => clearTimeout(timer);
     }
-  }, [state.status, showFailed]);
+  }, [state.status, showFailed, foundWords, mode]);
 
   const handleCellPress = useCallback(
     (position: CellPosition) => {
@@ -1681,6 +1693,30 @@ export function GameScreen({
           onComplete={() => {
             setShowModeTutorial(false);
             player.markTooltipShown(`mode_tutorial_${mode}`);
+          }}
+        />
+      )}
+
+      {/* Post-loss conversion modal */}
+      {showPostLoss && (
+        <PostLossModal
+          wordsFound={foundWords}
+          totalWords={totalWords}
+          onWatchAd={() => {
+            setShowPostLoss(false);
+            handleWatchAdForHint();
+          }}
+          onBuyHints={() => {
+            setShowPostLoss(false);
+            // Navigate to shop or trigger IAP for hint_bundle_10
+            if (economy.spendCoins(80)) {
+              economy.addHintTokens(5);
+            }
+            setShowFailed(true);
+          }}
+          onDismiss={() => {
+            setShowPostLoss(false);
+            setShowFailed(true);
           }}
         />
       )}

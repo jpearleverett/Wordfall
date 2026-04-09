@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View, ViewStyle } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View, ViewStyle } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface SkeletonProps {
@@ -10,39 +11,26 @@ interface SkeletonProps {
 }
 
 export function Skeleton({ width, height, borderRadius = 12, style }: SkeletonProps) {
-  const shimmer = useRef(new Animated.Value(0)).current;
+  const shimmer = useSharedValue(0);
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmer, {
-          toValue: 1,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmer, {
-          toValue: 0,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-      ])
+    shimmer.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1200 }),
+        withTiming(0, { duration: 1200 }),
+      ),
+      -1,
     );
-    animation.start();
-    return () => animation.stop();
-  }, [shimmer]);
+  }, []);
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(shimmer.value, [0, 1], [0.3, 0.8]),
+  }));
 
   return (
     <View style={[{ width: width as number, height, borderRadius, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.04)' }, style]}>
       <Animated.View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            opacity: shimmer.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.3, 0.8],
-            }),
-          },
-        ]}
+        style={[StyleSheet.absoluteFill, shimmerStyle]}
       >
         <LinearGradient
           colors={['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string, ...string[]]}

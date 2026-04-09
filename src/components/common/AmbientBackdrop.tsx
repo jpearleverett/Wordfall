@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, DimensionValue, Image, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { DimensionValue, Image, StyleSheet, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../constants';
 import { SynthwaveBackdrop } from './SynthwaveBackdrop';
@@ -30,36 +31,34 @@ function NebulaOrb({
   yOffset: number;
   opacity?: number;
 }) {
-  const anim = useRef(new Animated.Value(0)).current;
+  const anim = useSharedValue(0);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [anim, duration]);
+    anim.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration }),
+        withTiming(0, { duration }),
+      ),
+      -1,
+    );
+  }, [duration]);
+
+  const orbStyle = useAnimatedStyle(() => ({
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+    backgroundColor: color,
+    opacity: interpolate(anim.value, [0, 0.3, 0.7, 1], [opacity * 0.6, opacity, opacity * 0.8, opacity * 0.6]),
+    transform: [
+      { translateX: interpolate(anim.value, [0, 0.5, 1], [-xOffset, xOffset, -xOffset]) },
+      { translateY: interpolate(anim.value, [0, 0.5, 1], [yOffset, -yOffset, yOffset]) },
+      { scale: interpolate(anim.value, [0, 0.5, 1], [0.88, 1.12, 0.88]) },
+    ],
+  }));
 
   return (
     <View pointerEvents="none" style={[styles.orb, { top, left }]}>
-      <Animated.View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: color,
-          opacity: anim.interpolate({
-            inputRange: [0, 0.3, 0.7, 1],
-            outputRange: [opacity * 0.6, opacity, opacity * 0.8, opacity * 0.6],
-          }),
-          transform: [
-            { translateX: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [-xOffset, xOffset, -xOffset] }) },
-            { translateY: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [yOffset, -yOffset, yOffset] }) },
-            { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.88, 1.12, 0.88] }) },
-          ],
-        }}
-      />
+      <Animated.View style={orbStyle} />
     </View>
   );
 }
@@ -69,7 +68,7 @@ function TwinklingStar({
   left,
   color,
   size,
-  delay,
+  delay: delayMs,
   duration,
 }: {
   top: DimensionValue;
@@ -79,37 +78,40 @@ function TwinklingStar({
   delay: number;
   duration: number;
 }) {
-  const anim = useRef(new Animated.Value(0)).current;
+  const anim = useSharedValue(0);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration, useNativeDriver: true }),
-        Animated.delay(1500),
-      ]),
-    ).start();
-  }, [anim, delay, duration]);
+    anim.value = withDelay(
+      delayMs,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration }),
+          withTiming(0, { duration }),
+          withDelay(1500, withTiming(0, { duration: 0 })),
+        ),
+        -1,
+      ),
+    );
+  }, [delayMs, duration]);
+
+  const starStyle = useAnimatedStyle(() => ({
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+    backgroundColor: color,
+    opacity: interpolate(anim.value, [0, 0.5, 1], [0.1, 0.95, 0.1]),
+    transform: [
+      { scale: interpolate(anim.value, [0, 0.5, 1], [0.4, 1.3, 0.4]) },
+    ],
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: size * 2,
+  }));
 
   return (
     <View pointerEvents="none" style={[styles.sparkle, { top, left }]}>
-      <Animated.View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: color,
-          opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.1, 0.95, 0.1] }),
-          transform: [
-            { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 1.3, 0.4] }) },
-          ],
-          shadowColor: color,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.8,
-          shadowRadius: size * 2,
-        }}
-      />
+      <Animated.View style={starStyle} />
     </View>
   );
 }

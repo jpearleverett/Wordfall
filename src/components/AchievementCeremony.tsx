@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
@@ -28,37 +29,35 @@ export function AchievementCeremony({
   reward,
   onDismiss,
 }: AchievementCeremonyProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.6)).current;
-  const badgeAnim = useRef(new Animated.Value(0)).current;
+  const fade = useSharedValue(0);
+  const scale = useSharedValue(0.6);
+  const badge = useSharedValue(0);
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 100, useNativeDriver: true }),
-      ]),
-      Animated.spring(badgeAnim, { toValue: 1, friction: 4, tension: 150, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, scaleAnim, badgeAnim]);
+    fade.value = withTiming(1, { duration: 300 });
+    scale.value = withSpring(1, { damping: 10, stiffness: 100 });
+    badge.value = withDelay(350, withSpring(1, { damping: 8, stiffness: 150 }));
+  }, []);
+
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const badgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(badge.value, [0, 0.6, 1], [0, 1.2, 1]) }],
+  }));
 
   const tierColor = TIER_COLORS[tier];
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
       <SparkleField count={22} intensity="intense" colors={[tierColor, '#fff', COLORS.gold, COLORS.accent]} />
-      <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: tierColor }]}>ACHIEVEMENT UNLOCKED</Text>
 
           <Animated.View
             style={[
               styles.badgeContainer,
-              {
-                transform: [
-                  { scale: badgeAnim.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 1.2, 1] }) },
-                ],
-              },
+              badgeStyle,
             ]}
           >
             <View style={[styles.badge, { borderColor: tierColor, backgroundColor: tierColor + '20' }]}>
@@ -102,6 +101,8 @@ export function AchievementCeremony({
     </Animated.View>
   );
 }
+
+const AnimatedText = Animated.createAnimatedComponent(Text);
 
 const styles = StyleSheet.create({
   overlay: {

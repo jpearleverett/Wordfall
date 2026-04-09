@@ -100,11 +100,13 @@ src/
 - **EAS project ID** — run `eas init` (currently placeholder)
 - **Audio assets** — place .mp3 in `assets/audio/` (synthesized tones as fallback)
 
+## Dev Build Required
+- **Reanimated 4.1.1** installed — requires `npx expo start --dev-client` (Expo Go no longer supported)
+- Build dev client via: `eas build --profile development --platform ios` (or android)
+
 ## Still Needs Work
-- Live club cooperative goal tracking (needs Cloud Functions)
 - iOS Universal Links (custom scheme works, HTTPS needs domain setup)
-- Prestige reset execution in PlayerContext (data + UI complete)
-- Asset optimization (44MB → ~15MB via WebP, lazy-load video)
-- E2E tests (Detox/Maestro — unit/integration coverage is strong)
+- E2E tests (Detox/Maestro — unit/integration coverage is strong with 774+ tests)
 - Professional audio assets to replace synthesized tones
-- Partner events and club chat (schemas defined in FIRESTORE_SOCIAL_GUIDE.md)
+- Deploy Cloud Functions: `cd cloud-functions && firebase deploy --only functions`
+- Deploy Firestore rules: `firebase deploy --only firestore:rules,firestore:indexes`

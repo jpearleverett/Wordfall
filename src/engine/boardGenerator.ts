@@ -150,9 +150,26 @@ function fillEmptyCells(grid: Grid, rng: () => number): void {
  */
 function selectWords(
   config: BoardConfig,
-  rng: () => number
+  rng: () => number,
+  mode?: GameMode
 ): string[] {
-  const pool = getWordsByLength(config.minWordLength, config.maxWordLength);
+  let pool = getWordsByLength(config.minWordLength, config.maxWordLength);
+
+  // Mode-specific word pool filtering
+  if (mode === 'timePressure') {
+    // Prefer shorter words (3-4 letters) for faster spotting under time pressure
+    const shortPool = pool.filter(w => w.length <= 4);
+    if (shortPool.length >= config.wordCount * 3) {
+      pool = shortPool;
+    }
+  } else if (mode === 'expert') {
+    // Prefer longer words (5+) for harder challenge
+    const longPool = pool.filter(w => w.length >= 5);
+    if (longPool.length >= config.wordCount * 3) {
+      pool = longPool;
+    }
+  }
+
   const shuffled = shuffleArray(pool, rng);
   const selected: string[] = [];
   const usedLetters = new Set<string>();
@@ -297,7 +314,7 @@ function attemptGenerate(
   rng: () => number,
   mode?: GameMode
 ): Board | null {
-  const words = selectWords(config, rng);
+  const words = selectWords(config, rng, mode);
   if (words.length < config.wordCount) return null;
 
   const grid = createEmptyGrid(config.rows, config.cols);
@@ -391,14 +408,23 @@ export function generateBoard(
   // at least one clearing order exists where words survive each shrink phase.
   // Edge words get cleared before the shrink that would destroy them.
   // Minimum 3 words so the player sees the shrink mechanic (2 cleared → shrink → solve remaining).
-  const effectiveConfig: BoardConfig = mode === 'shrinkingBoard'
-    ? {
-        ...config,
-        rows: Math.max(config.rows, 5) + 2,
-        cols: Math.max(config.cols, 5) + 2,
-        wordCount: Math.max(config.wordCount, 3),
-      }
-    : config;
+  let effectiveConfig: BoardConfig;
+  if (mode === 'shrinkingBoard') {
+    effectiveConfig = {
+      ...config,
+      rows: Math.max(config.rows, 5) + 2,
+      cols: Math.max(config.cols, 5) + 2,
+      wordCount: Math.max(config.wordCount, 3),
+    };
+  } else if (mode === 'timePressure') {
+    // Wider grid gives more options for quick spotting under time pressure
+    effectiveConfig = {
+      ...config,
+      cols: config.cols + 1,
+    };
+  } else {
+    effectiveConfig = config;
+  }
 
   // Primary attempts with full config
   for (let attempt = 0; attempt < 80; attempt++) {

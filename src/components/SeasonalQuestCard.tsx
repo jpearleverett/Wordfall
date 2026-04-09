@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
 import { SeasonalQuest, SeasonalQuestState, getQuestProgress } from '../data/seasonalQuests';
@@ -15,42 +16,37 @@ const SeasonalQuestCard: React.FC<SeasonalQuestCardProps> = ({
   state,
   onClaimStep,
 }) => {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulse = useSharedValue(1);
   const { currentStep, progress, isComplete } = getQuestProgress(state, quest);
 
   const fillPct = Math.min(100, (progress / currentStep.target) * 100);
   const stepReady = progress >= currentStep.target && !isComplete;
 
-  // Pulse animation when step is claimable
   useEffect(() => {
     if (stepReady) {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.04,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-        ]),
+      pulse.value = withRepeat(
+        withSequence(
+          withTiming(1.04, { duration: 700 }),
+          withTiming(1, { duration: 700 }),
+        ),
+        -1,
       );
-      pulse.start();
-      return () => pulse.stop();
+      return () => cancelAnimation(pulse);
     } else {
-      pulseAnim.setValue(1);
+      pulse.value = 1;
     }
-  }, [stepReady, pulseAnim]);
+  }, [stepReady]);
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+  }));
 
   if (isComplete) {
     return null;
   }
 
   return (
-    <Animated.View style={[styles.container, { transform: [{ scale: pulseAnim }] }]}>
+    <Animated.View style={[styles.container, cardStyle]}>
       <LinearGradient
         colors={GRADIENTS.surfaceCard as unknown as readonly [string, string, ...string[]]}
         style={styles.card}

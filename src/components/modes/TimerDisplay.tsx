@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS } from '../../constants';
 
@@ -35,7 +36,7 @@ export default function TimerDisplay({
   style,
 }: TimerDisplayProps) {
   const [remaining, setRemaining] = useState(totalSeconds);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useSharedValue(1);
   const onTimeUpRef = useRef(onTimeUp);
 
   // Keep callback ref up to date
@@ -71,26 +72,21 @@ export default function TimerDisplay({
   useEffect(() => {
     const fraction = totalSeconds > 0 ? remaining / totalSeconds : 0;
     if (fraction <= 0.25 && remaining > 0 && !paused) {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.15,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-        ]),
+      pulseAnim.value = withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 400 }),
+          withTiming(1, { duration: 400 }),
+        ),
+        -1,
       );
-      pulse.start();
-      return () => pulse.stop();
     } else {
-      pulseAnim.setValue(1);
+      pulseAnim.value = 1;
     }
-  }, [remaining, totalSeconds, paused, pulseAnim]);
+  }, [remaining, totalSeconds, paused]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseAnim.value }],
+  }));
 
   const fraction = totalSeconds > 0 ? remaining / totalSeconds : 0;
   const color = getTimerColor(fraction);
@@ -106,7 +102,7 @@ export default function TimerDisplay({
       style={[
         styles.container,
         style,
-        { transform: [{ scale: pulseAnim }] },
+        pulseStyle,
       ]}
     >
       {/* Outer glow layer */}

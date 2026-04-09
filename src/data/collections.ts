@@ -287,3 +287,75 @@ export function getCurrentSeasonAlbum(): SeasonalAlbum | undefined {
 export function getAtlasPage(id: string): WordAtlasPage | undefined {
   return ATLAS_PAGES.find((page) => page.id === id);
 }
+
+// ── Collection Tier Badges ──────────────────────────────────────────────────
+
+export type CollectionTier = 'none' | 'bronze' | 'silver' | 'gold' | 'platinum';
+
+export interface CollectionTierDef {
+  tier: CollectionTier;
+  percentRequired: number;
+  label: string;
+  icon: string;
+  reward: { coins: number; gems: number; frame?: string; badge?: string };
+}
+
+export const COLLECTION_TIERS: CollectionTierDef[] = [
+  {
+    tier: 'bronze',
+    percentRequired: 25,
+    label: 'Bronze Collector',
+    icon: '🥉',
+    reward: { coins: 500, gems: 15, badge: 'bronze_collector' },
+  },
+  {
+    tier: 'silver',
+    percentRequired: 50,
+    label: 'Silver Collector',
+    icon: '🥈',
+    reward: { coins: 1000, gems: 30, frame: 'collector_silver', badge: 'silver_collector' },
+  },
+  {
+    tier: 'gold',
+    percentRequired: 75,
+    label: 'Gold Collector',
+    icon: '🥇',
+    reward: { coins: 2000, gems: 60, frame: 'collector_gold', badge: 'gold_collector' },
+  },
+  {
+    tier: 'platinum',
+    percentRequired: 100,
+    label: 'Platinum Collector',
+    icon: '💎',
+    reward: { coins: 5000, gems: 150, frame: 'collector_platinum', badge: 'platinum_collector' },
+  },
+];
+
+/**
+ * Calculate overall collection completion percentage.
+ * Counts atlas pages completed + rare tile sets completed.
+ */
+export function getCollectionProgress(
+  atlasPages: Record<string, string[]>,
+  rareTiles: Record<string, number>,
+): { percent: number; tier: CollectionTier } {
+  const totalAtlasWords = ATLAS_PAGES.reduce((sum, p) => sum + p.words.length, 0);
+  const foundAtlasWords = Object.values(atlasPages).reduce((sum, words) => sum + words.length, 0);
+
+  const totalRareTiles = RARE_TILE_SETS.reduce((sum, s) => sum + s.tiles.length, 0);
+  const foundRareTiles = Object.values(rareTiles).reduce((sum, count) => sum + count, 0);
+
+  const total = totalAtlasWords + totalRareTiles;
+  const found = foundAtlasWords + Math.min(foundRareTiles, totalRareTiles);
+
+  const percent = total > 0 ? Math.round((found / total) * 100) : 0;
+
+  let tier: CollectionTier = 'none';
+  for (const t of COLLECTION_TIERS) {
+    if (percent >= t.percentRequired) {
+      tier = t.tier;
+    }
+  }
+
+  return { percent, tier };
+}

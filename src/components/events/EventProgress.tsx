@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../../constants';
 
@@ -21,20 +22,15 @@ export default function EventProgress({
   rewards,
 }: EventProgressProps) {
   const progress = target > 0 ? Math.min(1, current / target) : 0;
-  const widthAnim = useRef(new Animated.Value(0)).current;
+  const progressAnim = useSharedValue(0);
 
   useEffect(() => {
-    Animated.timing(widthAnim, {
-      toValue: progress,
-      duration: 600,
-      useNativeDriver: false,
-    }).start();
-  }, [progress, widthAnim]);
+    progressAnim.value = withTiming(progress, { duration: 600 });
+  }, [progress]);
 
-  const widthInterpolation = widthAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
+  const fillAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: progressAnim.value }],
+  }));
 
   return (
     <View style={styles.container}>
@@ -59,9 +55,8 @@ export default function EventProgress({
           <Animated.View
             style={[
               styles.fillOuter,
-              {
-                width: widthInterpolation,
-              },
+              { width: '100%', transformOrigin: 'left' },
+              fillAnimStyle,
             ]}
           >
             <LinearGradient

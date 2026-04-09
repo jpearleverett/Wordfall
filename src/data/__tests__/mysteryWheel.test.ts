@@ -203,10 +203,10 @@ describe('checkFreeSpin', () => {
     expect(result.spinsAvailable).toBe(state.spinsAvailable);
   });
 
-  it('awards free spin at threshold (8 puzzles)', () => {
+  it('awards free spin at threshold (6 puzzles)', () => {
     const state: MysteryWheelState = {
       ...DEFAULT_MYSTERY_WHEEL_STATE,
-      puzzlesSinceLastSpin: 7, // Will become 8 = puzzlesPerFreeSpin
+      puzzlesSinceLastSpin: 5, // Will become 6 = puzzlesPerFreeSpin
       spinsAvailable: 0,
     };
     const result = checkFreeSpin(state);
@@ -217,7 +217,7 @@ describe('checkFreeSpin', () => {
   it('resets puzzlesSinceLastSpin after awarding spin', () => {
     const state: MysteryWheelState = {
       ...DEFAULT_MYSTERY_WHEEL_STATE,
-      puzzlesSinceLastSpin: 7,
+      puzzlesSinceLastSpin: 5,
     };
     const result = checkFreeSpin(state);
     expect(result.puzzlesSinceLastSpin).toBe(0);
@@ -226,7 +226,7 @@ describe('checkFreeSpin', () => {
   it('accumulates spins if player already has some', () => {
     const state: MysteryWheelState = {
       ...DEFAULT_MYSTERY_WHEEL_STATE,
-      puzzlesSinceLastSpin: 7,
+      puzzlesSinceLastSpin: 5,
       spinsAvailable: 3,
     };
     const result = checkFreeSpin(state);
@@ -236,12 +236,12 @@ describe('checkFreeSpin', () => {
   it('does not award spin at count below threshold', () => {
     const state: MysteryWheelState = {
       ...DEFAULT_MYSTERY_WHEEL_STATE,
-      puzzlesSinceLastSpin: 5,
+      puzzlesSinceLastSpin: 3,
       spinsAvailable: 2,
     };
     const result = checkFreeSpin(state);
     expect(result.spinsAvailable).toBe(2);
-    expect(result.puzzlesSinceLastSpin).toBe(6);
+    expect(result.puzzlesSinceLastSpin).toBe(4);
   });
 });
 
@@ -262,7 +262,7 @@ describe('constants', () => {
   it('DEFAULT_MYSTERY_WHEEL_STATE has correct defaults', () => {
     expect(DEFAULT_MYSTERY_WHEEL_STATE.spinsAvailable).toBe(1);
     expect(DEFAULT_MYSTERY_WHEEL_STATE.puzzlesSinceLastSpin).toBe(0);
-    expect(DEFAULT_MYSTERY_WHEEL_STATE.puzzlesPerFreeSpin).toBe(8);
+    expect(DEFAULT_MYSTERY_WHEEL_STATE.puzzlesPerFreeSpin).toBe(6);
     expect(DEFAULT_MYSTERY_WHEEL_STATE.totalSpins).toBe(0);
     expect(DEFAULT_MYSTERY_WHEEL_STATE.lastJackpotSpin).toBe(0);
     expect(DEFAULT_MYSTERY_WHEEL_STATE.jackpotPity).toBe(25);

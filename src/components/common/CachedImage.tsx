@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, ImageStyle, StyleSheet, View, ViewStyle } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, ImageStyle, StyleSheet, View, ViewStyle } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
 interface CachedImageProps {
   uri: string;
@@ -22,24 +23,24 @@ export function CachedImage({
   fadeIn = true,
   blurRadius = 0,
 }: CachedImageProps) {
-  const opacity = useRef(new Animated.Value(fadeIn ? 0 : 1)).current;
+  const opacity = useSharedValue(fadeIn ? 0 : 1);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (loaded && fadeIn) {
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }).start();
+      opacity.value = withTiming(1, { duration: 800 });
     }
-  }, [loaded, fadeIn, opacity]);
+  }, [loaded, fadeIn]);
+
+  const imageStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
 
   return (
     <View style={[StyleSheet.absoluteFill, style as ViewStyle]} pointerEvents="none">
       <Animated.Image
         source={{ uri }}
-        style={[StyleSheet.absoluteFill, { opacity }]}
+        style={[StyleSheet.absoluteFill, imageStyle]}
         resizeMode="cover"
         blurRadius={blurRadius}
         onLoad={() => setLoaded(true)}

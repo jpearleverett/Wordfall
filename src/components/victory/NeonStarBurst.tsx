@@ -1,12 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Animated, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, cancelAnimation } from 'react-native-reanimated';
 
 interface NeonStarBurstProps {
-  /** Whether the burst animation should play */
   active: boolean;
-  /** Color of the burst lines */
   color?: string;
-  /** Size of the burst radius */
   size?: number;
 }
 
@@ -21,57 +19,38 @@ const NeonStarBurst: React.FC<NeonStarBurstProps> = ({
   color = '#ffb800',
   size = 60,
 }) => {
-  const burstScale = useRef(new Animated.Value(0)).current;
-  const burstOpacity = useRef(new Animated.Value(0)).current;
-  const pulseScale = useRef(new Animated.Value(1)).current;
+  const burstScale = useSharedValue(0);
+  const burstOpacity = useSharedValue(0);
+  const pulseScale = useSharedValue(1);
   const hasBurst = useRef(false);
 
   useEffect(() => {
     if (active && !hasBurst.current) {
       hasBurst.current = true;
 
-      // Reset values
-      burstScale.setValue(0);
-      burstOpacity.setValue(1);
+      burstScale.value = 0;
+      burstOpacity.value = 1;
 
-      // Burst: scale 0->1, opacity 1->0 over 300ms
-      Animated.parallel([
-        Animated.timing(burstScale, {
-          toValue: 1,
-          duration: BURST_DURATION,
-          useNativeDriver: true,
-        }),
-        Animated.timing(burstOpacity, {
-          toValue: 0,
-          duration: BURST_DURATION,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        // After burst, start persistent gentle pulse
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseScale, {
-              toValue: 1.04,
-              duration: PULSE_DURATION / 2,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseScale, {
-              toValue: 1.0,
-              duration: PULSE_DURATION / 2,
-              useNativeDriver: true,
-            }),
-          ]),
-        ).start();
+      burstScale.value = withTiming(1, { duration: BURST_DURATION });
+      burstOpacity.value = withTiming(0, { duration: BURST_DURATION }, () => {
+        pulseScale.value = withRepeat(
+          withSequence(
+            withTiming(1.04, { duration: PULSE_DURATION / 2 }),
+            withTiming(1.0, { duration: PULSE_DURATION / 2 }),
+          ),
+          -1,
+        );
       });
     }
 
     if (!active) {
       hasBurst.current = false;
-      burstScale.setValue(0);
-      burstOpacity.setValue(0);
-      pulseScale.setValue(1);
+      burstScale.value = 0;
+      burstOpacity.value = 0;
+      cancelAnimation(pulseScale);
+      pulseScale.value = 1;
     }
-  }, [active, burstScale, burstOpacity, pulseScale]);
+  }, [active]);
 
   const lines = React.useMemo(() => {
     const result: number[] = [];
@@ -81,27 +60,28 @@ const NeonStarBurst: React.FC<NeonStarBurstProps> = ({
     return result;
   }, []);
 
+  const containerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
+  const burstStyle = useAnimatedStyle(() => ({
+    opacity: burstOpacity.value,
+    transform: [{ scale: burstScale.value }],
+  }));
+
   return (
     <Animated.View
       pointerEvents="none"
       style={[
         styles.container,
-        {
-          width: size * 2,
-          height: size * 2,
-          transform: [{ scale: pulseScale }],
-        },
+        { width: size * 2, height: size * 2 },
+        containerStyle,
       ]}
     >
       <Animated.View
         style={[
           styles.burstContainer,
-          {
-            width: size * 2,
-            height: size * 2,
-            opacity: burstOpacity,
-            transform: [{ scale: burstScale }],
-          },
+          { width: size * 2, height: size * 2 },
+          burstStyle,
         ]}
       >
         {lines.map((angle) => (
