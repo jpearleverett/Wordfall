@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, interpolate } from 'react-native-reanimated';
 import { MATERIALS } from '../../constants';
 
 interface ScanLineOverlayProps {
@@ -24,20 +25,19 @@ const ScanLineOverlay: React.FC<ScanLineOverlayProps> = ({
   height = 400,
   scrollDuration = 4000,
 }) => {
-  const scanLineAnim = useRef(new Animated.Value(0)).current;
+  const scanLineAnim = useSharedValue(0);
 
   useEffect(() => {
     if (!animated) return;
-    const animation = Animated.loop(
-      Animated.timing(scanLineAnim, {
-        toValue: 1,
-        duration: scrollDuration,
-        useNativeDriver: true,
-      }),
+    scanLineAnim.value = withRepeat(
+      withTiming(1, { duration: scrollDuration }),
+      -1,
     );
-    animation.start();
-    return () => animation.stop();
-  }, [animated, scanLineAnim, scrollDuration]);
+  }, [animated, scrollDuration]);
+
+  const scrollStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(scanLineAnim.value, [0, 1], [-10, height]) }],
+  }));
 
   // Generate static scan lines — spaced 3px apart
   const lines = useMemo(() => {
@@ -63,19 +63,7 @@ const ScanLineOverlay: React.FC<ScanLineOverlayProps> = ({
       {lines}
       {animated && (
         <Animated.View
-          style={[
-            styles.scrollingLine,
-            {
-              transform: [
-                {
-                  translateY: scanLineAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-10, height],
-                  }),
-                },
-              ],
-            },
-          ]}
+          style={[styles.scrollingLine, scrollStyle]}
         />
       )}
     </View>

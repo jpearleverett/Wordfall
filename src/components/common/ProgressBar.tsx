@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS } from '../../constants';
 
@@ -35,24 +36,17 @@ export default function ProgressBar({
   animated = true,
 }: ProgressBarProps) {
   const clampedProgress = Math.min(1, Math.max(0, progress));
-  const widthAnim = useRef(new Animated.Value(0)).current;
+  const progressAnim = useSharedValue(0);
 
   useEffect(() => {
-    if (animated) {
-      Animated.timing(widthAnim, {
-        toValue: clampedProgress,
-        duration: 500,
-        useNativeDriver: false,
-      }).start();
-    } else {
-      widthAnim.setValue(clampedProgress);
-    }
-  }, [clampedProgress, animated, widthAnim]);
+    progressAnim.value = animated
+      ? withTiming(clampedProgress, { duration: 500 })
+      : clampedProgress;
+  }, [clampedProgress, animated]);
 
-  const widthInterpolation = widthAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
+  const fillStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: progressAnim.value }],
+  }));
 
   const lighterColor = lighten(color, 0.2);
   const borderRadius = height / 2;
@@ -75,13 +69,15 @@ export default function ProgressBar({
             {
               height,
               borderRadius,
-              width: widthInterpolation,
+              width: '100%',
+              transformOrigin: 'left',
               shadowColor: color,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.7,
               shadowRadius: 8,
               elevation: 4,
             },
+            fillStyle,
           ]}
         >
           <LinearGradient

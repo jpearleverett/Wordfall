@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SHADOWS } from '../../constants';
 
@@ -32,17 +33,19 @@ const NeonProgressBar: React.FC<NeonProgressBarProps> = ({
   showGlowDot = true,
 }) => {
   const clamped = Math.min(1, Math.max(0, progress));
-  const scaleXAnim = useRef(new Animated.Value(0)).current;
+  const scaleXAnim = useSharedValue(0);
 
   useEffect(() => {
-    Animated.spring(scaleXAnim, {
-      toValue: clamped,
-      useNativeDriver: true,
-      damping: 14,
-      stiffness: 120,
-      overshootClamping: false,
-    }).start();
-  }, [clamped, scaleXAnim]);
+    scaleXAnim.value = withSpring(clamped, { damping: 14, stiffness: 120, overshootClamping: false });
+  }, [clamped]);
+
+  const fillAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: scaleXAnim.value }],
+  }));
+
+  const dotAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: scaleXAnim.value }],
+  }));
 
   const lighterColor = lighten(color, 0.3);
   const borderRadius = height / 2;
@@ -70,8 +73,8 @@ const NeonProgressBar: React.FC<NeonProgressBarProps> = ({
             {
               height,
               borderRadius,
-              transform: [{ scaleX: scaleXAnim }],
             },
+            fillAnimStyle,
           ]}
         >
           <LinearGradient
@@ -94,42 +97,13 @@ const NeonProgressBar: React.FC<NeonProgressBarProps> = ({
       </View>
 
       {/* Plasma glow dot at the tip of the fill */}
-      {showGlowDot && clamped > 0 && (
-        <Animated.View
-          style={[
-            styles.glowDot,
-            {
-              width: dotSize,
-              height: dotSize,
-              borderRadius: dotSize / 2,
-              backgroundColor: lighterColor,
-              // Position the dot: translate based on scaleX proportion of track width
-              // We use left: 0 and translateX via the same animated value mapped via layout
-              transform: [
-                {
-                  // We cannot directly know width, so we use a percentage-based approach:
-                  // Place dot in a container that is positioned via the animated scaleX
-                  // Instead, we overlay the dot and use the same animated value for its translateX
-                  // by wrapping differently. Use a simpler approach: absolute position driven by
-                  // an interpolated percentage via a width-tracking wrapper.
-                  scale: 1,
-                },
-              ],
-              ...SHADOWS.neonGlow(lighterColor),
-            },
-          ]}
-        />
-      )}
-
       {/* Dot positioning layer — overlays the track, dot follows fill */}
       {showGlowDot && clamped > 0 && (
         <View style={[styles.dotTrack, { height }]} pointerEvents="none">
           <Animated.View
             style={[
               styles.dotPositioner,
-              {
-                transform: [{ scaleX: scaleXAnim }],
-              },
+              dotAnimStyle,
             ]}
           >
             <View

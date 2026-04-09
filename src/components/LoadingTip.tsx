@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { COLORS, FONTS } from '../constants';
 import { getRandomTip } from '../data/loadingTips';
 
@@ -9,15 +10,15 @@ interface LoadingTipProps {
 
 export function LoadingTip({ playerLevel }: LoadingTipProps) {
   const tip = useMemo(() => getRandomTip(playerLevel), [playerLevel]);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useSharedValue(0);
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
+    fadeAnim.value = withTiming(1, { duration: 600 });
+  }, []);
+
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+  }));
 
   const categoryLabel =
     tip.category === 'gameplay' ? 'TIP' :
@@ -26,7 +27,7 @@ export function LoadingTip({ playerLevel }: LoadingTipProps) {
     'DID YOU KNOW?';
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.container, containerStyle]}>
       <Text style={styles.category}>{categoryLabel}</Text>
       <Text style={styles.text}>{tip.text}</Text>
     </Animated.View>

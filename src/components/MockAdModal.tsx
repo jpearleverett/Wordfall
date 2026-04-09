@@ -7,7 +7,8 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { AdRewardType, AD_REWARD_VALUES } from '../services/ads';
@@ -29,22 +30,21 @@ interface MockAdModalProps {
 
 export function MockAdModal({ rewardType, onComplete }: MockAdModalProps) {
   const [secondsLeft, setSecondsLeft] = useState(AD_DURATION_SECONDS);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useSharedValue(0);
+  const progressAnim = useSharedValue(0);
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-
-    Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: AD_DURATION_SECONDS * 1000,
-      useNativeDriver: false,
-    }).start();
+    fadeAnim.value = withTiming(1, { duration: 200 });
+    progressAnim.value = withTiming(1, { duration: AD_DURATION_SECONDS * 1000 });
   }, []);
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+  }));
+
+  const progressBarStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: progressAnim.value }],
+  }));
 
   useEffect(() => {
     if (secondsLeft <= 0) {
@@ -63,7 +63,7 @@ export function MockAdModal({ rewardType, onComplete }: MockAdModalProps) {
   const isComplete = secondsLeft <= 0;
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
       <View style={styles.card}>
         <LinearGradient
           colors={GRADIENTS.surfaceCard as unknown as [string, string, ...string[]]}
@@ -97,12 +97,8 @@ export function MockAdModal({ rewardType, onComplete }: MockAdModalProps) {
           <Animated.View
             style={[
               styles.progressFill,
-              {
-                width: progressAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
-              },
+              { width: '100%', transformOrigin: 'left' },
+              progressBarStyle,
             ]}
           />
         </View>
