@@ -6,7 +6,7 @@
  */
 
 import { generateBoard, generateDailyBoard } from '../engine/boardGenerator';
-import { findWordInGrid } from '../engine/solver';
+import { findWordInGrid, areAllWordsIndependentlyFindable } from '../engine/solver';
 import { applyGravity, applyGravityInDirection, removeCells } from '../engine/gravity';
 import { gameReducer, createInitialState } from '../hooks/useGame';
 import { BoardConfig, Board, GameMode } from '../types';
@@ -51,6 +51,34 @@ describe('Puzzle Lifecycle Integration', () => {
         const paths = findWordInGrid(board.grid, wp.word, 1);
         expect(paths.length).toBeGreaterThan(0);
       }
+    });
+
+    it('noGravity validation rejects words sharing grid cells', () => {
+      // Craft a grid where two words (CAT, CAN) must share the C and A cells
+      // Grid:  C A T
+      //        X N X
+      //        X X X
+      const grid = [
+        [{ letter: 'C', id: '1' }, { letter: 'A', id: '2' }, { letter: 'T', id: '3' }],
+        [{ letter: 'X', id: '4' }, { letter: 'N', id: '5' }, { letter: 'X', id: '6' }],
+        [{ letter: 'X', id: '7' }, { letter: 'X', id: '8' }, { letter: 'X', id: '9' }],
+      ];
+      // CAT = (0,0)→(0,1)→(0,2), CAN = (0,0)→(0,1)→(1,1)
+      // These share cells (0,0) C and (0,1) A — should be rejected
+      expect(areAllWordsIndependentlyFindable(grid, ['CAT', 'CAN'])).toBe(false);
+    });
+
+    it('noGravity validation accepts words with independent paths', () => {
+      // Grid:  C A T
+      //        C A N
+      //        X X X
+      const grid = [
+        [{ letter: 'C', id: '1' }, { letter: 'A', id: '2' }, { letter: 'T', id: '3' }],
+        [{ letter: 'C', id: '4' }, { letter: 'A', id: '5' }, { letter: 'N', id: '6' }],
+        [{ letter: 'X', id: '7' }, { letter: 'X', id: '8' }, { letter: 'X', id: '9' }],
+      ];
+      // CAT = (0,0)→(0,1)→(0,2), CAN = (1,0)→(1,1)→(1,2) — no overlap
+      expect(areAllWordsIndependentlyFindable(grid, ['CAT', 'CAN'])).toBe(true);
     });
 
     it('word lengths respect config constraints', () => {

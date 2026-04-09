@@ -7,7 +7,7 @@
 
 import { MODE_CONFIGS, getLevelConfig } from '../constants';
 import { generateBoard, generateDailyBoard } from '../engine/boardGenerator';
-import { findWordInGrid } from '../engine/solver';
+import { findWordInGrid, areAllWordsIndependentlyFindable } from '../engine/solver';
 import { GameMode, BoardConfig } from '../types';
 
 const ALL_MODES: GameMode[] = [
@@ -155,6 +155,20 @@ describe('Game Modes Integration', () => {
       for (const wp of board.words) {
         const paths = findWordInGrid(board.grid, wp.word, 1);
         expect(paths.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('noGravity mode words use non-overlapping grid cells', () => {
+      // Test across multiple seeds to catch shared-cell bugs.
+      // areAllWordsIndependentlyFindable verifies a non-overlapping path assignment
+      // exists for all words simultaneously (backtracking search).
+      const config: BoardConfig = {
+        rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'medium',
+      };
+      for (let seed = 0; seed < 20; seed++) {
+        const board = generateBoard(config, seed * 13, 'noGravity');
+        const words = board.words.map(w => w.word);
+        expect(areAllWordsIndependentlyFindable(board.grid, words)).toBe(true);
       }
     });
 

@@ -446,19 +446,66 @@ export function isDeadEndGravityFlip(
 // ============ NO GRAVITY MODE ============
 
 /**
- * Check if all words can be found independently in the grid (no gravity needed).
- * Used for noGravity mode validation.
+ * Check if all words can be found using non-overlapping cell positions.
+ * In noGravity mode, cleared cells become permanent holes (no gravity refill),
+ * so if two words share a grid cell, clearing one makes the other unsolvable.
+ * Uses backtracking to find an assignment of paths where no two words share cells.
  */
 export function areAllWordsIndependentlyFindable(grid: Grid, words: string[]): boolean {
-  return words.every(word => isWordInGrid(grid, word));
+  if (words.length === 0) return true;
+
+  // Find all possible paths for each word
+  const wordPaths = words.map(word => ({
+    word,
+    paths: findWordInGrid(grid, word, 50),
+  }));
+
+  // If any word has no path at all, unsolvable
+  if (wordPaths.some(wp => wp.paths.length === 0)) return false;
+
+  // Sort by fewest paths first (most constrained → better pruning)
+  wordPaths.sort((a, b) => a.paths.length - b.paths.length);
+
+  const budget = { remaining: 10000 };
+  return findNonOverlappingAssignment(wordPaths, 0, new Set<string>(), budget);
+}
+
+/**
+ * Backtracking search for a set of word paths that don't share any grid cells.
+ */
+function findNonOverlappingAssignment(
+  wordPaths: { word: string; paths: CellPosition[][] }[],
+  index: number,
+  usedCells: Set<string>,
+  budget: { remaining: number }
+): boolean {
+  if (index === wordPaths.length) return true;
+  if (budget.remaining <= 0) return false;
+  budget.remaining--;
+
+  const { paths } = wordPaths[index];
+
+  for (const path of paths) {
+    const cellKeys = path.map(p => `${p.row},${p.col}`);
+    if (cellKeys.some(k => usedCells.has(k))) continue;
+
+    // Assign this path
+    for (const key of cellKeys) usedCells.add(key);
+    if (findNonOverlappingAssignment(wordPaths, index + 1, usedCells, budget)) {
+      return true;
+    }
+    // Backtrack
+    for (const key of cellKeys) usedCells.delete(key);
+  }
+
+  return false;
 }
 
 /**
  * Check if the grid still has all remaining words after some removals (noGravity).
- * Since there's no gravity, words never become unfindable due to ordering.
+ * Words must use non-overlapping cells since cleared cells leave permanent holes.
  */
 export function isDeadEndNoGravity(grid: Grid, remainingWords: string[]): boolean {
-  // In no-gravity mode, if a word's letters still exist, it's always findable
   return !areAllWordsIndependentlyFindable(grid, remainingWords);
 }
 
