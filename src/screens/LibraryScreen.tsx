@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Animated,
   View,
@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRoute } from '@react-navigation/native';
 import { COLORS, GRADIENTS, FONTS, SHADOWS, LIBRARY, MILESTONE_DECORATIONS } from '../constants';
 import { SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -43,6 +44,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   decorations: decorationsProp,
 }) => {
   const player = usePlayer();
+  const route = useRoute<any>();
+  const showDecorations = route.params?.showDecorations === true;
   const restoredWings = restoredWingsProp ?? player.restoredWings;
   const currentChapter = currentChapterProp ?? player.currentChapter;
   const decorations = decorationsProp ?? player.placedDecorations;
@@ -52,6 +55,28 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const [showTooltip, setShowTooltip] = useState(
     !player.tooltipsShown.includes('library_screen')
   );
+  const scrollViewRef = useRef<ScrollView>(null);
+  const decorationsPanelY = useRef(0);
+  const hasAutoScrolled = useRef(false);
+
+  const onDecorationsPanelLayout = useCallback((e: { nativeEvent: { layout: { y: number } } }) => {
+    decorationsPanelY.current = e.nativeEvent.layout.y;
+  }, []);
+
+  // Auto-scroll to decorations and open picker when navigating from victory modal
+  useEffect(() => {
+    if (showDecorations && !loading && !hasAutoScrolled.current) {
+      hasAutoScrolled.current = true;
+      const timer = setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: decorationsPanelY.current, animated: true });
+        // Auto-open picker for the first wing without a placed decoration
+        const wingIds = Array.from(new Set(CHAPTERS.map((ch) => ch.wingId)));
+        const emptyWing = wingIds.find(id => !decorations[id]);
+        setShowDecorationPicker(emptyWing || wingIds[0] || null);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [showDecorations, loading, decorations]);
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 350);
@@ -130,6 +155,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         </ScrollView>
       ) : (
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -372,7 +398,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         </View>
 
         {/* Decorations Collection */}
-        <View style={styles.decorationsPanel}>
+        <View style={styles.decorationsPanel} onLayout={onDecorationsPanelLayout}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
             style={StyleSheet.absoluteFill}

@@ -48,7 +48,7 @@ interface PuzzleCompleteProps {
   onChallengeFriend?: () => void;
   showTomorrowPreview?: boolean;
   summaryItems?: VictorySummaryItem[];
-  onNavigate?: (screen: string) => void;
+  onNavigate?: (screen: string, params?: Record<string, unknown>) => void;
   totalCoinsAwarded?: number;
   totalGemsAwarded?: number;
   nextUnlockPreview?: { icon: string; name: string; unlockLevel: number } | null;
@@ -685,7 +685,7 @@ export function PuzzleComplete({
                     );
                     if (item.action && onNavigate) {
                       return (
-                        <Pressable key={index} onPress={() => onNavigate(item.action!.screen)}>
+                        <Pressable key={index} onPress={() => onNavigate(item.action!.screen, item.action!.params)}>
                           {content}
                         </Pressable>
                       );
