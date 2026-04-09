@@ -29,6 +29,7 @@ import {
 import { funnelTracker } from '../services/funnelTracker';
 import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
 import { getFlashSale, FlashSale } from '../data/dynamicPricing';
+import { getProductById } from '../data/shopProducts';
 import { soundManager } from '../services/sound';
 import {
   getVipStreakBonus,
@@ -296,6 +297,19 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           // Use economy.processPurchase for centralized reward fulfilment
           economy.processPurchase(result.productId);
 
+          // Unlock any cosmetics/decorations included in the product
+          const purchasedProduct = getProductById(result.productId);
+          const decos = purchasedProduct?.rewards.decorations;
+          if (decos) {
+            for (const id of decos) {
+              if (id.startsWith('decoration_') || id === 'starter_bookend' || id === 'chapter_decoration') {
+                player.unlockDecoration(id);
+              } else {
+                player.unlockCosmetic(id);
+              }
+            }
+          }
+
           // Also sync flags to settings for backward compat
           if (result.productId === 'ad_removal' || result.productId === 'vip_weekly') {
             settings.updateSetting('adsRemoved', true);
@@ -398,6 +412,18 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         for (const result of results) {
           if (result.success) {
             economy.processPurchase(result.productId);
+            // Unlock any cosmetics/decorations included in the product
+            const restoredProduct = getProductById(result.productId);
+            const restoredDecos = restoredProduct?.rewards.decorations;
+            if (restoredDecos) {
+              for (const id of restoredDecos) {
+                if (id.startsWith('decoration_') || id === 'starter_bookend' || id === 'chapter_decoration') {
+                  player.unlockDecoration(id);
+                } else {
+                  player.unlockCosmetic(id);
+                }
+              }
+            }
             // Sync flags to settings
             if (result.productId === 'ad_removal') {
               settings.updateSetting('adsRemoved', true);
