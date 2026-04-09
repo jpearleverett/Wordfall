@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, cancelAnimation } from 'react-native-reanimated';
 import { COLORS, FONTS, SHADOWS } from '../../constants';
 
 interface NeonStreakFlameProps {
@@ -30,20 +31,65 @@ const TIER_CONFIG = {
   inferno: { height: 56, width: 34, layers: 4, sparkCount: 5, flickerSpeed: 450, flickerMin: 0.65 },
 };
 
+// Extracted spark component — each manages its own shared values (hooks rules)
+function Spark({ delayMs, offsetX, scale, flameWidth, flameHeight }: {
+  delayMs: number;
+  offsetX: number;
+  scale: number;
+  flameWidth: number;
+  flameHeight: number;
+}) {
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withDelay(
+      delayMs,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 100 }),
+          withTiming(0, { duration: 900 }),
+        ),
+        -1,
+      ),
+    );
+    translateY.value = withDelay(
+      delayMs,
+      withRepeat(
+        withSequence(
+          withTiming(0, { duration: 100 }),
+          withTiming(-20 * scale, { duration: 900 }),
+        ),
+        -1,
+      ),
+    );
+    return () => {
+      cancelAnimation(opacity);
+      cancelAnimation(translateY);
+    };
+  }, [delayMs, scale]);
+
+  const sparkStyle = useAnimatedStyle(() => ({
+    position: 'absolute' as const,
+    left: (flameWidth + 12) / 2 + offsetX - 1.5,
+    bottom: flameHeight * 0.6,
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: FLAME_CYAN,
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return <Animated.View style={sparkStyle} />;
+}
+
 const NeonStreakFlame: React.FC<NeonStreakFlameProps> = ({ streakDays, size = 'medium' }) => {
   const tier = getTier(streakDays);
   const config = TIER_CONFIG[tier];
   const scale = SIZE_SCALE[size];
 
-  const flickerAnim = useRef(new Animated.Value(1)).current;
-
-  const sparkAnims = useMemo(() => {
-    return Array.from({ length: config.sparkCount }, () => ({
-      translateY: new Animated.Value(0),
-      opacity: new Animated.Value(0),
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.sparkCount]);
+  const flicker = useSharedValue(1);
 
   const sparkData = useMemo(() => {
     return Array.from({ length: config.sparkCount }, (_, i) => ({
@@ -54,64 +100,15 @@ const NeonStreakFlame: React.FC<NeonStreakFlameProps> = ({ streakDays, size = 'm
 
   // Flicker animation
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(flickerAnim, {
-          toValue: config.flickerMin,
-          duration: config.flickerSpeed / 2,
-          useNativeDriver: true,
-        }),
-        Animated.timing(flickerAnim, {
-          toValue: 1,
-          duration: config.flickerSpeed / 2,
-          useNativeDriver: true,
-        }),
-      ]),
+    flicker.value = withRepeat(
+      withSequence(
+        withTiming(config.flickerMin, { duration: config.flickerSpeed / 2 }),
+        withTiming(1, { duration: config.flickerSpeed / 2 }),
+      ),
+      -1,
     );
-    loop.start();
-    return () => loop.stop();
-  }, [flickerAnim, config.flickerMin, config.flickerSpeed]);
-
-  // Spark animations
-  useEffect(() => {
-    if (sparkAnims.length === 0) return;
-
-    const animations = sparkAnims.map((anim, i) => {
-      const delay = sparkData[i].delay;
-      return Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.parallel([
-            Animated.timing(anim.opacity, {
-              toValue: 1,
-              duration: 100,
-              useNativeDriver: true,
-            }),
-            Animated.timing(anim.translateY, {
-              toValue: 0,
-              duration: 0,
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.parallel([
-            Animated.timing(anim.translateY, {
-              toValue: -20 * scale,
-              duration: 900,
-              useNativeDriver: true,
-            }),
-            Animated.timing(anim.opacity, {
-              toValue: 0,
-              duration: 900,
-              useNativeDriver: true,
-            }),
-          ]),
-        ]),
-      );
-    });
-
-    animations.forEach((a) => a.start());
-    return () => animations.forEach((a) => a.stop());
-  }, [sparkAnims, sparkData, scale]);
+    return () => cancelAnimation(flicker);
+  }, [config.flickerMin, config.flickerSpeed]);
 
   const flameHeight = config.height * scale;
   const flameWidth = config.width * scale;
@@ -124,6 +121,10 @@ const NeonStreakFlame: React.FC<NeonStreakFlameProps> = ({ streakDays, size = 'm
         : tier === 'medium'
           ? SHADOWS.soft
           : {};
+
+  const flickerStyle = useAnimatedStyle(() => ({
+    opacity: flicker.value,
+  }));
 
   const renderFlameLayer = (
     color: string,
@@ -179,26 +180,22 @@ const NeonStreakFlame: React.FC<NeonStreakFlameProps> = ({ streakDays, size = 'm
           {
             width: flameWidth + 12,
             height: flameHeight + 8,
-            opacity: flickerAnim,
           },
+          flickerStyle,
           glowShadow,
         ]}
       >
         {flameLayers}
 
-        {/* Sparks */}
-        {sparkAnims.map((anim, i) => (
-          <Animated.View
+        {/* Sparks — each is its own component to satisfy hooks rules */}
+        {sparkData.map((data, i) => (
+          <Spark
             key={`spark-${i}`}
-            style={[
-              styles.spark,
-              {
-                left: (flameWidth + 12) / 2 + sparkData[i].offsetX - 1.5,
-                bottom: flameHeight * 0.6,
-                opacity: anim.opacity,
-                transform: [{ translateY: anim.translateY }],
-              },
-            ]}
+            delayMs={data.delay}
+            offsetX={data.offsetX}
+            scale={scale}
+            flameWidth={flameWidth}
+            flameHeight={flameHeight}
           />
         ))}
       </Animated.View>
@@ -223,13 +220,6 @@ const styles = StyleSheet.create({
   flameLayer: {
     position: 'absolute',
     alignSelf: 'center',
-  },
-  spark: {
-    position: 'absolute',
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: FLAME_CYAN,
   },
   streakText: {
     fontFamily: FONTS.display,

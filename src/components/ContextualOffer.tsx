@@ -1,9 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { analytics } from '../services/analytics';
+
+const AnimatedText = Animated.createAnimatedComponent(Text);
 
 /**
  * Contextual Offer — Monetization pressure point that appears at moments of tension.
@@ -117,9 +120,9 @@ export function ContextualOffer({
   onAccept,
   onDismiss,
 }: ContextualOfferProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(40)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const fade = useSharedValue(0);
+  const slideY = useSharedValue(40);
+  const pulse = useSharedValue(1);
 
   const [secondsLeft, setSecondsLeft] = useState(expiresInSeconds);
 
@@ -153,16 +156,16 @@ export function ContextualOffer({
   // Pulse animation when under 60 seconds
   useEffect(() => {
     if (secondsLeft > 0 && secondsLeft < 60) {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.15, duration: 500, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-        ]),
+      pulse.value = withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 500 }),
+          withTiming(1, { duration: 500 }),
+        ),
+        -1,
       );
-      pulse.start();
-      return () => pulse.stop();
+      return () => cancelAnimation(pulse);
     }
-  }, [secondsLeft < 60, pulseAnim]);
+  }, [secondsLeft < 60]);
 
   // Format seconds as MM:SS
   const minutes = Math.floor(secondsLeft / 60);
@@ -170,20 +173,22 @@ export function ContextualOffer({
   const timerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, friction: 7, tension: 100, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, slideAnim]);
+    fade.value = withTiming(1, { duration: 250 });
+    slideY.value = withSpring(0, { damping: 14, stiffness: 100 });
+  }, []);
+
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ translateY: slideY.value }] }));
+  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
 
   return (
     <Animated.View
       style={[
         styles.overlay,
-        { opacity: fadeAnim },
+        overlayStyle,
       ]}
     >
-      <Animated.View style={[styles.card, { transform: [{ translateY: slideAnim }] }]}>
+      <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: config.accentColor }]}>{config.ribbon}</Text>
 
@@ -197,15 +202,15 @@ export function ContextualOffer({
           {/* FOMO countdown timer */}
           <View style={styles.timerContainer} accessibilityRole="timer" accessibilityLabel={`Offer expires in ${minutes} minutes and ${seconds} seconds`}>
             <Text style={styles.timerLabel}>Offer expires in</Text>
-            <Animated.Text
+            <AnimatedText
               style={[
                 styles.timerText,
                 secondsLeft < 60 && styles.timerTextUrgent,
-                { transform: [{ scale: pulseAnim }] },
+                pulseStyle,
               ]}
             >
               {timerText}
-            </Animated.Text>
+            </AnimatedText>
           </View>
 
           <Pressable

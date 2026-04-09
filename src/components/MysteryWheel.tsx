@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Easing as RNEasing, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
@@ -33,17 +34,17 @@ export function MysteryWheel({
   onBuySpin,
   onDismiss,
 }: MysteryWheelProps) {
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const resultAnim = useRef(new Animated.Value(0)).current;
+  const rotate = useSharedValue(0);
+  const fade = useSharedValue(0);
+  const resultProgress = useSharedValue(0);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<WheelSegment | null>(null);
   const [mysteryBoxResult, setMysteryBoxResult] = useState<{ label: string; icon: string } | null>(null);
   const currentRotation = useRef(0);
 
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-  }, [fadeAnim]);
+    fade.value = withTiming(1, { duration: 300 });
+  }, []);
 
   const hasDailyFreeSpin = checkDailyFreeSpin(wheelState.lastDailySpinDate);
   const isDailyFreeSpinOnly = wheelState.spinsAvailable <= 0 && hasDailyFreeSpin;
@@ -72,23 +73,22 @@ export function MysteryWheel({
     const fullRotations = 5 + Math.floor(Math.random() * 3); // 5-7 full spins
     const totalRotation = currentRotation.current + fullRotations * 360 + targetAngle - (currentRotation.current % 360);
 
-    Animated.timing(rotateAnim, {
-      toValue: totalRotation,
-      duration: 3500 + Math.random() * 1000,
+    const spinDuration = 3500 + Math.random() * 1000;
+    rotate.value = withTiming(totalRotation, {
+      duration: spinDuration,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
+    }, () => {
+      runOnJS(onSpinComplete)(segment, updatedState, null);
+    });
+
+    // Callback for spin completion
+    function onSpinComplete(_seg: WheelSegment, _state: MysteryWheelState, _mystery: any) {
       currentRotation.current = totalRotation;
       setResult(segment);
       setSpinning(false);
 
       // Show result animation
-      Animated.spring(resultAnim, {
-        toValue: 1,
-        friction: 4,
-        tension: 120,
-        useNativeDriver: true,
-      }).start();
+      resultProgress.value = withSpring(1, { damping: 8, stiffness: 120 });
 
       // If mystery box, open immediately for reward granting, show visually after delay
       let mysteryBoxReward: { label: string; icon: string; reward: any } | undefined;
@@ -101,8 +101,8 @@ export function MysteryWheel({
       }
 
       onSpin({ segment, updatedState, mysteryBoxReward });
-    });
-  }, [spinning, wheelState, rotateAnim, resultAnim, onSpin]);
+    }
+  }, [spinning, wheelState, onSpin]);
 
   const handleBuySpin = useCallback((count: number) => {
     const cost = count === 1 ? SPIN_COST_GEMS : SPIN_BUNDLE_COST_GEMS;
@@ -111,17 +111,20 @@ export function MysteryWheel({
     }
   }, [gems, onBuySpin]);
 
-  const spinRotation = rotateAnim.interpolate({
-    inputRange: [0, 360],
-    outputRange: ['0deg', '360deg'],
-  });
+  const wheelStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotate.value}deg` }],
+  }));
+  const overlayFadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const resultCardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: resultProgress.value }],
+  }));
 
   const canSpin = (wheelState.spinsAvailable > 0 || hasDailyFreeSpin) && !spinning;
   const canBuy1 = gems >= SPIN_COST_GEMS;
   const canBuy5 = gems >= SPIN_BUNDLE_COST_GEMS;
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayFadeStyle]}>
       <SparkleField count={12} intensity="medium" />
 
       <View style={styles.header}>
@@ -136,7 +139,7 @@ export function MysteryWheel({
           <Text style={styles.pointerArrow}>{'\u{25BC}'}</Text>
         </View>
 
-        <Animated.View style={[styles.wheel, { transform: [{ rotate: spinRotation }] }]}>
+        <Animated.View style={[styles.wheel, wheelStyle]}>
           {WHEEL_SEGMENTS.map((seg, i) => {
             const angle = i * SEGMENT_ANGLE;
             return (
@@ -187,7 +190,7 @@ export function MysteryWheel({
 
       {/* Result display */}
       {result && !spinning && (
-        <Animated.View style={[styles.resultCard, { transform: [{ scale: resultAnim }] }]}>
+        <Animated.View style={[styles.resultCard, resultCardStyle]}>
           <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.resultInner}>
             <Text style={styles.resultIcon}>{result.icon}</Text>
             <Text style={[styles.resultLabel, { color: result.color }]}>{result.label}</Text>

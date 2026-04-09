@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Dimensions, DimensionValue, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { Dimensions, DimensionValue, StyleSheet, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../../constants';
 
@@ -19,7 +20,7 @@ function TwinklingStar({
   left,
   color,
   size,
-  delay,
+  delay: delayMs,
   duration,
 }: {
   top: DimensionValue;
@@ -29,39 +30,77 @@ function TwinklingStar({
   delay: number;
   duration: number;
 }) {
-  const anim = useRef(new Animated.Value(0)).current;
+  const anim = useSharedValue(0);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration, useNativeDriver: true }),
-        Animated.delay(1200),
-      ]),
-    ).start();
-  }, [anim, delay, duration]);
+    anim.value = withDelay(
+      delayMs,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration }),
+          withTiming(0, { duration }),
+          withDelay(1200, withTiming(0, { duration: 0 })),
+        ),
+        -1,
+      ),
+    );
+  }, [delayMs, duration]);
+
+  const starStyle = useAnimatedStyle(() => ({
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+    backgroundColor: color,
+    opacity: interpolate(anim.value, [0, 0.5, 1], [0.08, 0.9, 0.08]),
+    transform: [
+      { scale: interpolate(anim.value, [0, 0.5, 1], [0.3, 1.4, 0.3]) },
+    ],
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: size * 3,
+  }));
 
   return (
     <View pointerEvents="none" style={[styles.absolute, { top, left }]}>
-      <Animated.View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: color,
-          opacity: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.08, 0.9, 0.08] }),
-          transform: [
-            { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 1.4, 0.3] }) },
-          ],
-          shadowColor: color,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.9,
-          shadowRadius: size * 3,
-        }}
-      />
+      <Animated.View style={starStyle} />
     </View>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Animated sub-views for BandedSun (use hooks inside own component)
+// ---------------------------------------------------------------------------
+
+import type { SharedValue } from 'react-native-reanimated';
+
+function BandedSunGlowView({ pulse, sunTop, sunLeft }: { pulse: SharedValue<number>; sunTop: number; sunLeft: number }) {
+  const glowStyle = useAnimatedStyle(() => ({
+    position: 'absolute' as const,
+    top: sunTop - SUN_SIZE * 0.4,
+    left: sunLeft - SUN_SIZE * 0.4,
+    width: SUN_SIZE * 1.8,
+    height: SUN_SIZE * 1.8,
+    borderRadius: SUN_SIZE * 0.9,
+    backgroundColor: 'rgba(255, 45, 149, 0.08)',
+    opacity: interpolate(pulse.value, [0, 1], [0.4, 0.7]),
+    transform: [{ scale: interpolate(pulse.value, [0, 1], [0.92, 1.08]) }],
+  }));
+  return <Animated.View style={glowStyle} />;
+}
+
+function BandedSunReflectionView({ pulse }: { pulse: SharedValue<number> }) {
+  const reflectionStyle = useAnimatedStyle(() => ({
+    position: 'absolute' as const,
+    top: HORIZON_Y - 1,
+    left: SW * 0.1,
+    right: SW * 0.1,
+    height: SW * 0.06,
+    borderRadius: SW * 0.03,
+    backgroundColor: 'rgba(0, 229, 255, 0.15)',
+    opacity: interpolate(pulse.value, [0, 1], [0.3, 0.6]),
+  }));
+  return <Animated.View style={reflectionStyle} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,16 +108,17 @@ function TwinklingStar({
 // ---------------------------------------------------------------------------
 
 function BandedSun() {
-  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const pulse = useSharedValue(0);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: 3500, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0, duration: 3500, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [pulseAnim]);
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 3500 }),
+        withTiming(0, { duration: 3500 }),
+      ),
+      -1,
+    );
+  }, []);
 
   const sunTop = HORIZON_Y - SUN_SIZE * 0.55;
   const sunLeft = (SW - SUN_SIZE) / 2;
@@ -130,25 +170,8 @@ function BandedSun() {
 
   return (
     <View pointerEvents="none">
-      {/* Outer glow */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: sunTop - SUN_SIZE * 0.4,
-          left: sunLeft - SUN_SIZE * 0.4,
-          width: SUN_SIZE * 1.8,
-          height: SUN_SIZE * 1.8,
-          borderRadius: SUN_SIZE * 0.9,
-          backgroundColor: 'rgba(255, 45, 149, 0.08)',
-          opacity: pulseAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.4, 0.7],
-          }),
-          transform: [
-            { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] }) },
-          ],
-        }}
-      />
+      {/* Outer glow - uses animated style for pulse */}
+      <BandedSunGlowView pulse={pulse} sunTop={sunTop} sunLeft={sunLeft} />
 
       {/* Sun body with banded slices */}
       <View
@@ -183,21 +206,7 @@ function BandedSun() {
       />
 
       {/* Horizon reflection */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: HORIZON_Y - 1,
-          left: SW * 0.1,
-          right: SW * 0.1,
-          height: SW * 0.06,
-          borderRadius: SW * 0.03,
-          backgroundColor: 'rgba(0, 229, 255, 0.15)',
-          opacity: pulseAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.3, 0.6],
-          }),
-        }}
-      />
+      <BandedSunReflectionView pulse={pulse} />
     </View>
   );
 }
@@ -255,18 +264,32 @@ function MountainSilhouettes() {
 // Flowing Perspective Grid
 // ---------------------------------------------------------------------------
 
+function FlowingHLines({ scroll, totalHeight, scrollDistance, horizontalLines }: {
+  scroll: SharedValue<number>;
+  totalHeight: number;
+  scrollDistance: number;
+  horizontalLines: React.ReactNode[];
+}) {
+  const hStyle = useAnimatedStyle(() => ({
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: totalHeight + scrollDistance,
+    transform: [{ translateY: interpolate(scroll.value, [0, 1], [0, scrollDistance]) }],
+  }));
+  return <Animated.View style={hStyle}>{horizontalLines}</Animated.View>;
+}
+
 function FlowingPerspectiveGrid() {
-  const scrollAnim = useRef(new Animated.Value(0)).current;
+  const scroll = useSharedValue(0);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.timing(scrollAnim, {
-        toValue: 1,
-        duration: 8000,
-        useNativeDriver: true,
-      }),
-    ).start();
-  }, [scrollAnim]);
+    scroll.value = withRepeat(
+      withTiming(1, { duration: 8000 }),
+      -1,
+    );
+  }, []);
 
   const totalHeight = SH - HORIZON_Y;
 
@@ -361,25 +384,7 @@ function FlowingPerspectiveGrid() {
       />
 
       {/* Scrolling horizontal lines */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: totalHeight + scrollDistance,
-          transform: [
-            {
-              translateY: scrollAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, scrollDistance],
-              }),
-            },
-          ],
-        }}
-      >
-        {horizontalLines}
-      </Animated.View>
+      <FlowingHLines scroll={scroll} totalHeight={totalHeight} scrollDistance={scrollDistance} horizontalLines={horizontalLines} />
 
       {verticalLines}
     </View>

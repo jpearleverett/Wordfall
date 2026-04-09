@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../../constants';
 
@@ -11,19 +12,22 @@ interface TooltipProps {
 }
 
 export function Tooltip({ message, visible, onDismiss, position = 'top' }: TooltipProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const fade = useSharedValue(0);
+  const scale = useSharedValue(0.9);
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, friction: 7, tension: 100, useNativeDriver: true }),
-      ]).start();
+      fade.value = withTiming(1, { duration: 250 });
+      scale.value = withSpring(1, { damping: 14, stiffness: 100 });
     } else {
-      Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+      fade.value = withTiming(0, { duration: 150 });
     }
-  }, [visible, fadeAnim, scaleAnim]);
+  }, [visible]);
+
+  const tooltipStyle = useAnimatedStyle(() => ({
+    opacity: fade.value,
+    transform: [{ scale: scale.value }],
+  }));
 
   if (!visible) return null;
 
@@ -32,7 +36,7 @@ export function Tooltip({ message, visible, onDismiss, position = 'top' }: Toolt
       style={[
         styles.container,
         position === 'top' ? styles.positionTop : styles.positionBottom,
-        { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+        tooltipStyle,
       ]}
     >
       <Pressable onPress={onDismiss}>

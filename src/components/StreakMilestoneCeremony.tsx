@@ -1,9 +1,12 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS, STREAK } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+
+const AnimatedText = Animated.createAnimatedComponent(Text);
 
 interface StreakMilestoneCeremonyProps {
   milestone: number;
@@ -11,37 +14,39 @@ interface StreakMilestoneCeremonyProps {
 }
 
 export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMilestoneCeremonyProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.5)).current;
-  const fireAnim = useRef(new Animated.Value(1)).current;
+  const fade = useSharedValue(0);
+  const scale = useSharedValue(0.5);
+  const fire = useSharedValue(1);
 
   const reward = STREAK.milestoneRewards[milestone as keyof typeof STREAK.milestoneRewards] || { coins: 0, gems: 0 };
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }),
-    ]).start();
+    fade.value = withTiming(1, { duration: 300 });
+    scale.value = withSpring(1, { damping: 8, stiffness: 120 });
+    fire.value = withRepeat(
+      withSequence(
+        withTiming(1.15, { duration: 600 }),
+        withTiming(1, { duration: 600 }),
+      ),
+      -1,
+    );
+  }, []);
 
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(fireAnim, { toValue: 1.15, duration: 600, useNativeDriver: true }),
-        Animated.timing(fireAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [fadeAnim, scaleAnim, fireAnim]);
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const fireStyle = useAnimatedStyle(() => ({ transform: [{ scale: fire.value }] }));
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
       <SparkleField count={24} intensity="intense" colors={[COLORS.coral, COLORS.gold, COLORS.orange, '#fff']} />
       <CelebrationBurst centerX={180} centerY={250} particleCount={16} colors={[COLORS.coral, COLORS.gold, COLORS.orange]} />
-      <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>STREAK MILESTONE</Text>
 
-          <Animated.Text style={[styles.fireEmoji, { transform: [{ scale: fireAnim }] }]}>
+          <AnimatedText style={[styles.fireEmoji, fireStyle]}>
             🔥
-          </Animated.Text>
+          </AnimatedText>
 
           <Text style={styles.milestoneCount}>{milestone}</Text>
           <Text style={styles.milestoneLabel}>DAYS</Text>

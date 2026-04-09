@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { TutorialGuideStep } from '../data/tutorialBoards';
@@ -10,69 +11,49 @@ interface TutorialOverlayProps {
 }
 
 export function TutorialOverlay({ step, visible }: TutorialOverlayProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
-  const handAnim = useRef(new Animated.Value(0)).current;
+  const fade = useSharedValue(0);
+  const slide = useSharedValue(20);
+  const hand = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      const delay = step.delay || 0;
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.spring(slideAnim, {
-            toValue: 0,
-            friction: 7,
-            tension: 80,
-            useNativeDriver: true,
-          }),
-        ]).start();
+      const delayMs = step.delay || 0;
+      fade.value = withDelay(delayMs, withTiming(1, { duration: 300 }));
+      slide.value = withDelay(delayMs, withSpring(0, { damping: 14, stiffness: 80 }));
 
-        if (step.showHandPointer) {
-          Animated.loop(
-            Animated.sequence([
-              Animated.timing(handAnim, {
-                toValue: 1,
-                duration: 800,
-                useNativeDriver: true,
-              }),
-              Animated.timing(handAnim, {
-                toValue: 0,
-                duration: 600,
-                useNativeDriver: true,
-              }),
-            ]),
-          ).start();
-        }
-      }, delay);
+      if (step.showHandPointer) {
+        hand.value = withDelay(
+          delayMs,
+          withRepeat(
+            withSequence(
+              withTiming(1, { duration: 800 }),
+              withTiming(0, { duration: 600 }),
+            ),
+            -1,
+          ),
+        );
+      }
     } else {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
+      fade.value = withTiming(0, { duration: 200 });
+      cancelAnimation(hand);
     }
-  }, [visible, step, fadeAnim, slideAnim, handAnim]);
+  }, [visible, step]);
+
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const slideStyle = useAnimatedStyle(() => ({ transform: [{ translateY: slide.value }] }));
+  const handStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: hand.value * -8 }],
+    opacity: 0.5 + hand.value * 0.5,
+  }));
 
   if (!visible) return null;
-
-  const handTranslateY = handAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -8],
-  });
 
   return (
     <Animated.View
       style={[
         styles.container,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        },
+        overlayStyle,
+        slideStyle,
       ]}
       pointerEvents="none"
     >
@@ -85,7 +66,7 @@ export function TutorialOverlay({ step, visible }: TutorialOverlayProps) {
           <Animated.Text
             style={[
               styles.hand,
-              { transform: [{ translateY: handTranslateY }] },
+              handStyle,
             ]}
           >
             👆
