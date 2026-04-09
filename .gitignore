@@ -12,6 +12,7 @@ npm-debug.*
 *.mobileprovision
 *.orig.*
 web-build/
+coverage/
 .DS_Store
 *.tsbuildinfo
 .claude/
