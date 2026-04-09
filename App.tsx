@@ -705,13 +705,20 @@ function GameScreenWrapper({ route, navigation }: any) {
         totalCoinsAwarded={completionData.totalCoinsAwarded}
         totalGemsAwarded={completionData.totalGemsAwarded}
         nextUnlockPreview={completionData.nextUnlockPreview}
-        onNavigate={(screen: string) => {
-          // Some screens (e.g. Mastery) are nested inside Profile tab — navigate via parent
-          try {
+        onNavigate={(screen: string, params?: Record<string, unknown>) => {
+          // Map nested screens to their parent tab for cross-tab navigation
+          const screenRoutes: Record<string, { tab: string; screen: string }> = {
+            Mastery: { tab: 'Profile', screen: 'Mastery' },
+            Library: { tab: 'Library', screen: 'LibraryMain' },
+          };
+          const route = screenRoutes[screen];
+          if (route) {
+            navigation.navigate(route.tab as never, {
+              screen: route.screen,
+              ...(params ? { params } : {}),
+            } as never);
+          } else {
             navigation.navigate(screen as never);
-          } catch {
-            // Fallback: navigate to Profile tab which contains nested screens
-            navigation.navigate('Profile' as never, { screen } as never);
           }
         }}
       />

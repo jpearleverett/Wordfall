@@ -653,7 +653,7 @@ export interface VictorySummaryItem {
   label: string;
   sublabel?: string;
   accentColor: string;
-  action?: { type: 'navigate'; screen: string };
+  action?: { type: 'navigate'; screen: string; params?: Record<string, unknown> };
   coinReward?: number;
   gemReward?: number;
 }

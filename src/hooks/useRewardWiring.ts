@@ -589,6 +589,7 @@ export function useRewardWiring({
               label: md.name,
               sublabel: 'New library decoration!',
               accentColor: COLORS.teal,
+              action: { type: 'navigate', screen: 'Library', params: { showDecorations: true } },
             });
           }
         }
@@ -611,15 +612,16 @@ export function useRewardWiring({
       const tierReward = MASTERY_REWARDS.find(r => r.tier === newMasteryTier);
       const rewardParts: string[] = [];
       if (tierReward) {
-        if (tierReward.free.coins) rewardParts.push(`${tierReward.free.coins} coins`);
-        if (tierReward.free.gems) rewardParts.push(`${tierReward.free.gems} gems`);
-        if (tierReward.free.hintTokens) rewardParts.push(`${tierReward.free.hintTokens} hints`);
+        // Grant mastery tier rewards
+        if (tierReward.free.coins) { economy.addCoins(tierReward.free.coins); rewardParts.push(`${tierReward.free.coins} coins`); }
+        if (tierReward.free.gems) { economy.addGems(tierReward.free.gems); rewardParts.push(`${tierReward.free.gems} gems`); }
+        if (tierReward.free.hintTokens) { economy.addHintTokens(tierReward.free.hintTokens); rewardParts.push(`${tierReward.free.hintTokens} hints`); }
       }
       summaryItems.push({
         type: 'mastery_tier_up',
         icon: '\uD83C\uDFC6',
         label: `Mastery Tier ${newMasteryTier}!`,
-        sublabel: rewardParts.length > 0 ? `Claim: ${rewardParts.join(', ')}` : 'Claim your rewards!',
+        sublabel: rewardParts.length > 0 ? rewardParts.join(', ') : 'View your progress!',
         accentColor: COLORS.purple,
         action: { type: 'navigate', screen: 'Mastery' },
       });
