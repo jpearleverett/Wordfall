@@ -194,6 +194,9 @@ interface PlayerData {
   // Prestige
   prestige: import('../types').PrestigeState;
 
+  // Wing Completion Bonuses
+  completedWingBonuses: string[];
+
   // Seasonal Quest
   seasonalQuest: SeasonalQuestState;
 
@@ -489,6 +492,9 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
 
   // Prestige
   prestige: DEFAULT_PRESTIGE_STATE,
+
+  // Wing Completion Bonuses
+  completedWingBonuses: [],
 
   // Seasonal Quest
   seasonalQuest: DEFAULT_SEASONAL_QUEST_STATE,
@@ -905,6 +911,50 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         pendingCeremonies: [
           ...prev.pendingCeremonies,
           { type: 'wing_complete' as const, data: { wingId, wingName: wingId } },
+        ],
+      };
+    });
+  }, []);
+
+  /**
+   * Check if a wing's chapters are all 3-starred and grant the wing completion bonus.
+   * Awards 1000 coins + 25 gems + queues wing_complete ceremony.
+   */
+  const checkWingCompletion = useCallback((wingId: string) => {
+    setData((prev) => {
+      if (prev.completedWingBonuses.includes(wingId)) return prev;
+
+      // Check if all chapters in this wing have 3 stars
+      const wingChapters = CHAPTERS.filter(ch => ch.wingId === wingId);
+      if (wingChapters.length === 0) return prev;
+
+      let cumulativeLevel = 0;
+      for (const ch of CHAPTERS) {
+        if (ch.wingId === wingId) {
+          // Check all puzzles in this chapter have 3 stars
+          for (let i = 1; i <= ch.puzzleCount; i++) {
+            const levelNum = cumulativeLevel + i;
+            if ((prev.starsByLevel[levelNum] ?? 0) < 3) return prev;
+          }
+        }
+        cumulativeLevel += ch.puzzleCount;
+      }
+
+      // All chapters in wing are 3-starred! Grant bonus.
+      return {
+        ...prev,
+        completedWingBonuses: [...prev.completedWingBonuses, wingId],
+        pendingCeremonies: [
+          ...prev.pendingCeremonies,
+          {
+            type: 'wing_complete' as const,
+            data: {
+              wingId,
+              wingName: wingId.charAt(0).toUpperCase() + wingId.slice(1),
+              bonusCoins: 1000,
+              bonusGems: 25,
+            },
+          },
         ],
       };
     });

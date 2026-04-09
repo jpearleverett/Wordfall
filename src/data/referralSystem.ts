@@ -36,6 +36,12 @@ export const REFERRED_REWARDS = {
 
 export const REFERRAL_MILESTONES: ReferralMilestone[] = [
   {
+    count: 1,
+    label: 'First Friend',
+    icon: '🤝',
+    rewards: { coins: 200, gems: 10 },
+  },
+  {
     count: 3,
     label: 'Social Spark',
     icon: '🔥',

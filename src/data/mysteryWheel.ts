@@ -42,7 +42,7 @@ export interface MysteryWheelState {
 export const DEFAULT_MYSTERY_WHEEL_STATE: MysteryWheelState = {
   spinsAvailable: 1, // Start with 1 free spin as a taste
   puzzlesSinceLastSpin: 0,
-  puzzlesPerFreeSpin: 8,
+  puzzlesPerFreeSpin: 6,
   totalSpins: 0,
   lastJackpotSpin: 0,
   jackpotPity: 25, // Guaranteed rare+ within 25 spins

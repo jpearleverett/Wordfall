@@ -24,8 +24,8 @@ describe('Referral reward constants', () => {
 });
 
 describe('REFERRAL_MILESTONES data', () => {
-  it('has 5 milestones', () => {
-    expect(REFERRAL_MILESTONES.length).toBe(5);
+  it('has 6 milestones', () => {
+    expect(REFERRAL_MILESTONES.length).toBe(6);
   });
 
   it('milestones have ascending counts', () => {
@@ -36,9 +36,9 @@ describe('REFERRAL_MILESTONES data', () => {
     }
   });
 
-  it('milestones are at counts 3, 5, 10, 15, 25', () => {
+  it('milestones are at counts 1, 3, 5, 10, 15, 25', () => {
     const counts = REFERRAL_MILESTONES.map((m) => m.count);
-    expect(counts).toEqual([3, 5, 10, 15, 25]);
+    expect(counts).toEqual([1, 3, 5, 10, 15, 25]);
   });
 
   it('every milestone has required fields', () => {
@@ -103,7 +103,7 @@ describe('getReferralRewards', () => {
 describe('getReferralMilestones', () => {
   it('returns all milestones', () => {
     const milestones = getReferralMilestones();
-    expect(milestones.length).toBe(5);
+    expect(milestones.length).toBe(6);
     expect(milestones).toEqual(REFERRAL_MILESTONES);
   });
 });
@@ -114,32 +114,32 @@ describe('getClaimableMilestones', () => {
     expect(result).toEqual([]);
   });
 
-  it('returns milestone at count 3 when referralCount is 3', () => {
+  it('returns milestones at count 1 and 3 when referralCount is 3', () => {
     const result = getClaimableMilestones(3, []);
-    expect(result.length).toBe(1);
-    expect(result[0].count).toBe(3);
+    expect(result.length).toBe(2);
+    expect(result.map((m) => m.count)).toEqual([1, 3]);
   });
 
   it('returns multiple milestones when count exceeds several thresholds', () => {
     const result = getClaimableMilestones(10, []);
-    expect(result.length).toBe(3); // 3, 5, 10
-    expect(result.map((m) => m.count)).toEqual([3, 5, 10]);
+    expect(result.length).toBe(4); // 1, 3, 5, 10
+    expect(result.map((m) => m.count)).toEqual([1, 3, 5, 10]);
   });
 
   it('excludes already claimed milestones', () => {
-    const result = getClaimableMilestones(10, [3, 5]);
+    const result = getClaimableMilestones(10, [1, 3, 5]);
     expect(result.length).toBe(1);
     expect(result[0].count).toBe(10);
   });
 
   it('returns empty when all reached milestones are claimed', () => {
-    const result = getClaimableMilestones(10, [3, 5, 10]);
+    const result = getClaimableMilestones(10, [1, 3, 5, 10]);
     expect(result).toEqual([]);
   });
 
   it('returns all milestones when count is 25 and none claimed', () => {
     const result = getClaimableMilestones(25, []);
-    expect(result.length).toBe(5);
+    expect(result.length).toBe(6);
   });
 });
 
@@ -147,13 +147,13 @@ describe('getNextMilestone', () => {
   it('returns first milestone when referralCount is 0', () => {
     const next = getNextMilestone(0);
     expect(next).not.toBeNull();
-    expect(next!.count).toBe(3);
+    expect(next!.count).toBe(1);
   });
 
-  it('returns milestone at 5 when referralCount is 3', () => {
-    const next = getNextMilestone(3);
+  it('returns milestone at 3 when referralCount is 1', () => {
+    const next = getNextMilestone(1);
     expect(next).not.toBeNull();
-    expect(next!.count).toBe(5);
+    expect(next!.count).toBe(3);
   });
 
   it('returns milestone at 5 when referralCount is 4', () => {
@@ -175,17 +175,17 @@ describe('getNextMilestone', () => {
 
 describe('getNextMilestoneProgress', () => {
   it('returns progress toward first milestone', () => {
+    const progress = getNextMilestoneProgress(0);
+    expect(progress.current).toBe(0);
+    expect(progress.next).toBe(1);
+    expect(progress.progress).toBe(0);
+  });
+
+  it('returns 100% for first milestone when count is 1', () => {
     const progress = getNextMilestoneProgress(1);
     expect(progress.current).toBe(1);
     expect(progress.next).toBe(3);
-    expect(progress.progress).toBeCloseTo(1 / 3);
-  });
-
-  it('returns 0 progress at start', () => {
-    const progress = getNextMilestoneProgress(0);
-    expect(progress.current).toBe(0);
-    expect(progress.next).toBe(3);
-    expect(progress.progress).toBe(0);
+    expect(progress.progress).toBeCloseTo(0);
   });
 
   it('returns progress between milestones (3 to 5)', () => {
