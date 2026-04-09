@@ -12,14 +12,6 @@
       },
       "ios": {
         "simulator": true
-      },
-      "env": {
-        "EXPO_PUBLIC_FIREBASE_API_KEY": "",
-        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "",
-        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "",
-        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "",
-        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "",
-        "EXPO_PUBLIC_FIREBASE_APP_ID": ""
       }
     },
     "preview": {
@@ -29,14 +21,6 @@
       },
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_FIREBASE_API_KEY": "",
-        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "",
-        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "",
-        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "",
-        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "",
-        "EXPO_PUBLIC_FIREBASE_APP_ID": ""
       }
     },
     "production": {
@@ -48,26 +32,12 @@
       "android": {
         "autoIncrement": "versionCode"
       },
-      "autoIncrement": true,
-      "env": {
-        "EXPO_PUBLIC_FIREBASE_API_KEY": "",
-        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "",
-        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "",
-        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "",
-        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "",
-        "EXPO_PUBLIC_FIREBASE_APP_ID": ""
-      }
+      "autoIncrement": true
     }
   },
   "submit": {
     "production": {
-      "ios": {
-        "appleId": "",
-        "ascAppId": "",
-        "appleTeamId": ""
-      },
       "android": {
-        "serviceAccountKeyPath": "",
         "track": "internal"
       }
     }
