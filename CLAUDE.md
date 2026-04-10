@@ -1,112 +1,114 @@
-# Wordfall - AI Agent Context
+# Wordfall — Agent Context
 
-## Project Overview
+Gravity-based word puzzle (React Native + Expo). Find hidden words on a letter grid; cleared letters fall, creating chain opportunities. 10 modes, 40 authored chapters (~600 puzzles), clubs, VIP, prestige.
 
-Wordfall is a gravity-based word puzzle mobile game (React Native + Expo). Players find hidden words on a letter grid; cleared letters fall via gravity, creating chain opportunities. 10 game modes, 40+ chapters, collections, social features, library meta-game, and full player experience layer.
+**Stack:** Expo SDK 54 (New Architecture), RN 0.81.5, React 19, TypeScript ~5.8, Reanimated 4.1.1 + worklets 0.5.1, Firebase (optional, has offline fallback), Jest (**37 suites, 774 tests**).
 
-- **Stack:** React Native 0.81.5, Expo ~54.0.0, TypeScript ~5.8.0
-- **Backend:** Firebase (Auth + Firestore + Analytics) with graceful offline fallback
-- **State:** React Context (4 providers + 2 extracted sub-contexts) + useReducer + AsyncStorage + Firestore sync
-- **Testing:** Jest + ts-jest, 32 test files, 722+ tests (unit + integration)
-- **Monetization:** 50+ IAP products via react-native-iap, rewarded + interstitial ads (AdMob/mock), contextual offers with FOMO timers, dynamic pricing, flash sales, coin sinks, VIP subscription with streak bonuses, prestige system
-- **Navigation:** React Navigation (bottom tabs + nested stacks) with progressive tab unlocking
-
-For detailed architecture, file descriptions, and implementation notes, see `agent_docs/architecture.md`.
+For detailed architecture see `agent_docs/architecture.md`. For domain/gameplay detail see `agent_docs/domain.md` if it exists; otherwise read `src/constants.ts` and `src/data/`.
 
 ## Commands
 
 ```bash
-npm start                              # Start Expo dev server
-npm run android / ios / web            # Start on platform
-npx tsc --noEmit                       # Type-check (no output files)
-npm test                               # Run 722+ tests (Jest)
-npm install --legacy-peer-deps         # Install deps (legacy flag REQUIRED)
+npx expo start --dev-client            # Metro bundler (Expo Go NOT supported)
+npm run typecheck                      # tsc --noEmit
+npm test                               # jest (774 tests)
+npm install --legacy-peer-deps         # .npmrc sets this by default
+eas build --profile development --platform android  # Rebuild dev client APK (only when native deps change)
 ```
 
-## Key Architecture
+## Critical Files
 
-### Directory Structure
-```
-src/
-  engine/        # Board generation (seeded PRNG, 5s timeout), gravity physics, solver (8-dir DFS)
-  hooks/         # useGame (reducer), useRewardWiring (post-puzzle rewards), useCeremonyQueue, useExperiment
-  services/      # sound, analytics, notifications, iap, ads, firestore, crashReporting, experiments
-  contexts/      # AuthContext, EconomyContext, PlayerContext (+Progress/Social extracted), SettingsContext
-  components/    # Grid, LetterCell, WordBank, ceremonies, ModeTutorialOverlay, SeasonalQuestCard, MysteryWheel, ContextualOffer
-  screens/       # 14 screens: Home, Game, Modes, Collections, Library, Profile, Settings, Shop, CosmeticStore, Club, Leaderboard, Event, Onboarding, Mastery
-  data/          # Static game data: chapters, achievements, shopProducts (50+ IAPs), coinShop (18 items), seasonalQuests, modeTutorials, vipBenefits, prestigeSystem, mysteryWheel, events, etc.
-  utils/         # shareGenerator (deep link CTAs), deepLinking (URL parser), replayGenerator
-  types.ts       # ALL type definitions — edit here when adding new data structures
-  constants.ts   # COLORS, GRADIENTS, SHADOWS, difficulty configs, mode configs, economy, feature unlock schedule
-```
-
-### Critical Files
 | File | Role |
 |------|------|
-| `App.tsx` | Entry point. ErrorBoundary, navigation, deep link handling, ceremony rendering, analytics cleanup |
-| `src/hooks/useRewardWiring.ts` | ALL post-puzzle reward logic: coins/gems, rare tiles, ceremonies, mastery tier-ups, seasonal quest progress, friend notifications, share text |
-| `src/hooks/useGame.ts` | Game state reducer (18+ actions), timer tick, boosters, undo history, dead-end detection |
-| `src/contexts/PlayerContext.tsx` | Master player data: progress, collections, streaks, cosmetics, modes, seasonal quest, prestige state |
-| `src/contexts/EconomyContext.tsx` | Currency, tokens, VIP status/streak, IAP fulfillment, ad rewards |
-| `src/engine/boardGenerator.ts` | Seeded PRNG board gen with 5s timeout, mode-aware validation, 4-tier fallback |
-| `src/screens/GameScreen.tsx` | Gameplay UI: selection, animations, offers, mode tutorials, boosters, coin sinks |
+| `App.tsx` | Entry. ErrorBoundary, provider nesting, navigation, deep links, 25+ ceremony switch |
+| `src/hooks/useGame.ts` | Game reducer (24 actions): selection, submit, hint, undo, boosters, gravity, shrink |
+| `src/hooks/useRewardWiring.ts` | All post-puzzle rewards: coins/gems, rare tiles, ceremonies, mastery, quests |
+| `src/contexts/PlayerContext.tsx` | Master player data (progress, streaks, cosmetics, prestige — fully wired) |
+| `src/contexts/EconomyContext.tsx` | Currency, VIP, IAP fulfillment, ad rewards |
+| `src/engine/boardGenerator.ts` | Seeded PRNG, 5s timeout, 4-tier fallback, mode-aware validation |
+| `src/engine/solver.ts` | 8-dir DFS with step budget + wall-clock timeout |
+| `src/screens/GameScreen.tsx` | Gameplay UI: selection, offers, tutorials, post-loss modal |
+| `src/components/Grid.tsx` | Pan + tap gesture handler. **Uses `.runOnJS(true)` — see gotchas** |
+| `src/types.ts` | ALL type definitions — edit here when adding data structures |
+| `src/constants.ts` | COLORS, GRADIENTS, MODE_CONFIGS, ECONOMY, STREAK, FEATURE_UNLOCK_SCHEDULE |
 
-### State
-- **Game state:** `useGame` reducer — SELECT_CELL, SUBMIT_WORD, USE_HINT, UNDO_MOVE, USE_BOOSTER, etc.
-- **Player data:** `PlayerContext` — progress, collections, streaks, achievements, seasonalQuest, prestige, modeLevels, etc. AsyncStorage + Firestore
-- **Economy:** `EconomyContext` — coins, gems, tokens, VIP streak, isAdFree. AsyncStorage persisted
-- **Settings:** `SettingsContext` — volume, haptics, theme, parental controls. AsyncStorage persisted
+15 screens live in `src/screens/`. Ceremonies, backdrops, effects live in `src/components/{,common,home,victory,effects,game,modes,events,navigation,economy}/`.
 
-## Essential Rules
+**Two cloud functions directories exist**: `cloud-functions/` (club goals, leaderboards, streak reminders, push) and `functions/` (validateReceipt, subscription renewals, club goal progress, inactive member cleanup). Don't confuse them.
 
-### Code Patterns
-- Screens use **default exports**, not named exports
-- All types go in `src/types.ts` — edit there when adding new data structures
-- Tile gradients must be **fully opaque hex** (not rgba) to prevent background bleed-through
-- All animations use `useNativeDriver: true` — never animate layout-affecting properties via Animated
-- No continuous animation loops on idle tiles — only one-shot animations
-- `isDeadEnd` solver runs via deferred `useEffect`, never in render path
-- Grid input handled by grid-level gesture detector — LetterCell has NO `onPress` prop
-- `--legacy-peer-deps` required for all npm install commands
+## Things That Will Bite You
 
-### Adding Features
-- **New ceremony:** Add type to `CeremonyItem['type']` in types.ts, queue via `player.queueCeremony()`, render in App.tsx ceremony switch (use `MilestoneCeremony` for simple types)
-- **New game action:** Add to `GameAction` union in types.ts, handle in `gameReducer` in useGame.ts
-- **New screen:** Create in `src/screens/`, use default export, add to stack navigator in App.tsx
-- **New IAP product:** Add to `SHOP_PRODUCTS` in shopProducts.ts, add ID to `IAPProductId` union in types.ts
+- **Reanimated gesture worklets.** `Gesture.Pan()/.Tap()` callbacks run as worklets on the UI thread by default. If your callback calls React state / reducers / `useRef.current`, add **`.runOnJS(true)`** immediately after the constructor. Without it: `Tried to synchronously call a non-worklet function 'X' on the UI thread` crash. See `Grid.tsx` for the pattern.
+- **`react-native-iap` is removed** from `package.json`. The Gradle build fails on v14 (Nitro Modules peer dep) and v12 (amazon/play flavor ambiguity). `src/services/iap.ts` dynamically imports it with a variable package name and falls back to mock mode when missing. Re-adding requires a config plugin to patch `build.gradle`. Until then, all purchases succeed locally but nothing is charged.
+- **`generateBoard(config, seed, mode)` REQUIRES the `mode` arg** for `shrinkingBoard` / `gravityFlip` / `noGravity`. Each uses a different solvability check.
+- **`isDeadEnd` must run in a deferred `useEffect`**, never in render. It's an expensive DFS.
+- **Tile gradients must be fully opaque hex** (not rgba). rgba causes background bleed-through on the New Architecture.
+- **`LetterCell` has no `onPress` prop.** Input is handled by the grid-level gesture detector.
+- **`--legacy-peer-deps` is the default** (via `.npmrc`). React 19 + RN 0.81 have peer conflicts. Don't remove.
+- **`overrides: { expo-constants: ~18.0.13 }`** in `package.json` forces a single version tree-wide. Removing this brings back the duplicate-dependency `expo doctor` blocker.
+- **`expo.install.exclude`** in `package.json` silences `@types/react` 18 vs 19 and `typescript` version warnings. Don't remove without thinking.
+- **4 files still use the legacy `Animated` API** (intentional — imperative particle systems that don't map to hooks): `effects/ParticleSystem.tsx`, `WordBank.tsx`, `victory/GridDissolveEffect.tsx`, `game/GravityTrailEffect.tsx`. Leave them alone unless you have a measured perf reason.
+- **Metro cache stickiness.** If imports look wrong after a pull: `npx expo start --dev-client --clear`.
+- **`newArchEnabled: true`.** Some old patterns are no-ops (e.g., `setLayoutAnimationEnabledExperimental`). Check before touching view hierarchy code.
 
-### Game Mechanics
-- 10 modes: classic, daily, noGravity, relax, timePressure, gravityFlip, shrinkingBoard, perfectSolve, weekly, expert
-- Per-mode independent level progression via `player.modeLevels`
-- Difficulty: smooth 12-phase per-level ramp, breather every 5th level, invisible adaptive adjustment (±1 step)
-- Hints/undos/boosters use persistent economy inventory, NOT per-level allocation
-- `generateBoard()` MUST receive `mode` param for shrinkingBoard/gravityFlip/noGravity
-- Deep linking: `wordfall://referral/{code}`, `wordfall://challenge/{id}`, `wordfall://daily`
-- 20 ceremony types processed sequentially via `useCeremonyQueue` with 300ms delays
-- Energy system is soft (NOT a hard wall) — ethical F2P design
+## Code Patterns
 
-### Monetization
-- 50+ IAP products ($0.99-$99.99), 18 coin shop items (4 categories incl. cosmetic_rental)
-- Contextual offers: 6 types with 5-min FOMO countdown (`expiresInSeconds` prop)
-- Flash sales: daily rotating via `getFlashSale(date)`, surfaced on ShopScreen + HomeScreen
-- VIP: $4.99/week with streak bonuses at 2/4/8/12/26 weeks
-- Prestige: 5 tiers (Bronze→Legendary), data + UI ready, reset logic needs PlayerContext wiring
+- Screens use **default exports**. Components use named exports.
+- All types go in **`src/types.ts`**.
+- Reanimated: `useSharedValue` + `useAnimatedStyle` + `withTiming`/`withSpring`/`withRepeat`/`withSequence`/`withDelay`. No `useNativeDriver` flag.
+- When adding a **new ceremony**: add to `CeremonyItem['type']` in `types.ts`, queue via `player.queueCeremony()`, render in `App.tsx` ceremony switch. For simple ribbon+icon+text, reuse `MilestoneCeremony`.
+- When adding a **new game action**: add to `GameAction` union in `types.ts`, handle in `gameReducer` in `useGame.ts`.
+- When adding a **new mode**: add to `MODE_CONFIGS` in `constants.ts`, wire reducer logic in `useGame.ts`, add mode-specific validation in `boardGenerator.ts`, add tutorial to `modeTutorials.ts`.
+
+## Dev Client (REQUIRED)
+
+Expo Go is not supported. You need the dev client APK.
+
+```bash
+# Daily: start Metro
+npx expo start --dev-client
+# Open the "Wordfall" custom app on device; press `r` in terminal to reload JS
+
+# Rarely: rebuild native APK (only when adding/removing native deps)
+eas build --profile development --platform android
+# Download APK from the URL EAS prints, install on device
+```
+
+**Termux note:** Local Android builds are impossible in Termux (NDK has no ARM64 host tools). Always use EAS cloud builds. Free tier = 30 builds/month, ~1 per week is enough.
+
+## Branch Strategy
+
+**Never push directly to `main`.** Work on feature branches named `claude/<slug>`:
+
+```bash
+git checkout main && git pull origin main
+git checkout -b claude/<slug>
+# ... edit, test, commit ...
+git push -u origin claude/<slug>
+```
+
+User reviews and merges via GitHub PR. Exception: tiny config-only fixes (package.json, eas.json, .gitignore) that unblock a broken build can go direct to main **only if the user explicitly says so**.
 
 ## Needs External Setup
-- **Firebase credentials** — `EXPO_PUBLIC_FIREBASE_*` env vars (falls back to local-only)
-- **Sentry DSN** — `EXPO_PUBLIC_SENTRY_DSN` (falls back to console)
-- **AdMob IDs** — `EXPO_PUBLIC_ADMOB_REWARDED_ID` (falls back to MockAdModal)
-- **Store IAP products** — register 50+ `wordfall_` prefixed product IDs
-- **EAS project ID** — run `eas init` (currently placeholder)
-- **Audio assets** — place .mp3 in `assets/audio/` (synthesized tones as fallback)
 
-## Dev Build Required
-- **Reanimated 4.1.1** installed — requires `npx expo start --dev-client` (Expo Go no longer supported)
-- Build dev client via: `eas build --profile development --platform ios` (or android)
+| Item | How | Fallback if missing |
+|------|-----|---------------------|
+| Firebase | `EXPO_PUBLIC_FIREBASE_*` env vars | App runs fully offline (AsyncStorage only) |
+| Sentry | `EXPO_PUBLIC_SENTRY_DSN` | Console logging |
+| AdMob | `EXPO_PUBLIC_ADMOB_REWARDED_ID` | `MockAdModal` component |
+| IAP products | Register `wordfall_*` IDs in App Store Connect / Play Console | Mock mode (grants rewards locally, no charge) |
+| Firestore rules + indexes | Create `firebase.json`, then `firebase deploy --only firestore:rules,firestore:indexes` | Rules file exists at `firestore.rules`, indexes at `firestore.indexes.json` — NOT deployed |
+| Cloud Functions | `cd functions && firebase deploy` and `cd cloud-functions && firebase deploy` | Club goals, leaderboards, IAP validation don't run |
+| Audio assets | Drop `.mp3` files in `assets/audio/` | Synthesized tones |
+
+EAS project already configured (`projectId: b6dd187c-d46c-4331-bb15-5c7ffced89b3`, owner `jpearleverett`).
 
 ## Still Needs Work
-- iOS Universal Links (custom scheme works, HTTPS needs domain setup)
-- E2E tests (Detox/Maestro — unit/integration coverage is strong with 774+ tests)
+
+- Re-add `react-native-iap` via config plugin (Gradle variant fix)
+- Create `firebase.json` and deploy Firestore rules + indexes
+- Deploy both `cloud-functions/` and `functions/` directories (or consolidate)
+- iOS Universal Links (scheme works; HTTPS needs domain + apple-app-site-association)
+- E2E tests (Detox/Maestro — unit coverage is strong with 774 tests)
 - Professional audio assets to replace synthesized tones
-- Deploy Cloud Functions: `cd cloud-functions && firebase deploy --only functions`
-- Deploy Firestore rules: `firebase deploy --only firestore:rules,firestore:indexes`
+- FCM credentials for Android push notifications
