@@ -41,7 +41,7 @@ export const LOCAL_IMAGES = {
 // To add a real audio file: place it in assets/audio/ and uncomment
 // the corresponding line below (or add a new entry).
 
-// Audio assets are loaded dynamically at runtime via expo-av's Audio.Sound.createAsync().
+// Audio assets are loaded dynamically at runtime via expo-audio's createAudioPlayer().
 // Place .mp3 files in assets/audio/ and they will be picked up by the sound service.
 // See assets/audio/README.md for the full list of expected audio files.
 // We use an empty registry here — the sound service checks for file existence at runtime.

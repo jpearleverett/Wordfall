@@ -1,7 +1,6 @@
 // Lazy-load audio modules to avoid deprecation warnings and crashes
 let createAudioPlayerFn: any = null;
 let setAudioModeFn: any = null;
-let legacyAudio: any = null;
 let audioModuleLoaded = false;
 
 function loadAudioModule() {
@@ -12,12 +11,7 @@ function loadAudioModule() {
       createAudioPlayerFn = mod.createAudioPlayer;
       setAudioModeFn = mod.setAudioModeAsync;
     } catch {
-      // expo-audio not available — fall back to expo-av
-      try {
-        legacyAudio = require('expo-av').Audio;
-      } catch {
-        // Neither available
-      }
+      // expo-audio not available — sound will be silently disabled
     }
   }
 }
@@ -575,7 +569,7 @@ function synthesizeProgression(spec: ProgressionSpec): string {
 
 class SoundManager {
   private static instance: SoundManager;
-  private sounds: Map<string, any> = new Map(); // AudioPlayer instances (expo-audio) or Audio.Sound (expo-av fallback)
+  private sounds: Map<string, any> = new Map(); // AudioPlayer instances (expo-audio)
   private soundUris: Map<string, string> = new Map();
   private synthesisCache: Map<string, Int16Array> = new Map(); // Raw sample buffer cache (avoids re-doing DSP math)
   private currentMusic: any = null;
@@ -708,7 +702,7 @@ class SoundManager {
     loadAudioModule();
     try {
       if (createAudioPlayerFn && setAudioModeFn) {
-        // expo-audio (new API) — just set audio mode, don't synthesize yet
+        // expo-audio — just set audio mode, don't synthesize yet
         this.useNewApi = true;
         await setAudioModeFn({
           playsInSilentMode: true,
@@ -716,13 +710,8 @@ class SoundManager {
           interruptionMode: 'duckOthers',
         });
       } else {
-        // expo-av fallback (legacy) — just set audio mode
+        // expo-audio not available — sound stays disabled
         this.useNewApi = false;
-        await legacyAudio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: true,
-        });
       }
       this.initialized = true;
 
@@ -753,13 +742,6 @@ class SoundManager {
           player = createAudioPlayerFn(uri);
           player.volume = this.sfxVolume;
           this.sounds.set(name, player);
-        } else if (legacyAudio) {
-          const { sound } = await legacyAudio.Sound.createAsync(
-            { uri },
-            { shouldPlay: false, volume: this.sfxVolume },
-          );
-          player = sound;
-          this.sounds.set(name, player);
         }
       } catch (e) {
         if (__DEV__) console.warn(`Failed to create sound player "${name}":`, e);
@@ -770,16 +752,9 @@ class SoundManager {
     if (!player) return;
 
     try {
-      if (this.useNewApi) {
-        player.volume = this.sfxVolume;
-        player.seekTo(0);
-        player.play();
-      } else {
-        await player.setVolumeAsync(this.sfxVolume);
-        await player.stopAsync();
-        await player.setPositionAsync(0);
-        await player.playAsync();
-      }
+      player.volume = this.sfxVolume;
+      player.seekTo(0);
+      player.play();
     } catch (e) {
       console.warn(`Failed to play sound "${name}":`, e);
     }
@@ -797,12 +772,6 @@ class SoundManager {
         player.loop = true;
         player.play();
         this.currentMusic = player;
-      } else {
-        const { sound } = await legacyAudio.Sound.createAsync(
-          { uri: this.getMusicUri(track) },
-          { shouldPlay: true, isLooping: true, volume: this.musicVolume },
-        );
-        this.currentMusic = sound;
       }
       this.currentTrack = track;
     } catch (e) {
@@ -813,13 +782,8 @@ class SoundManager {
   async stopMusic(): Promise<void> {
     if (this.currentMusic) {
       try {
-        if (this.useNewApi) {
-          this.currentMusic.pause();
-          this.currentMusic.remove();
-        } else {
-          await this.currentMusic.stopAsync();
-          await this.currentMusic.unloadAsync();
-        }
+        this.currentMusic.pause();
+        this.currentMusic.remove();
       } catch (_e) {
         // Silently handle errors during cleanup
       }
@@ -831,22 +795,14 @@ class SoundManager {
   setSfxVolume(vol: number): void {
     this.sfxVolume = Math.max(0, Math.min(1, vol));
     this.sounds.forEach((player) => {
-      if (this.useNewApi) {
-        player.volume = this.sfxVolume;
-      } else {
-        void player.setVolumeAsync(this.sfxVolume);
-      }
+      player.volume = this.sfxVolume;
     });
   }
 
   setMusicVolume(vol: number): void {
     this.musicVolume = Math.max(0, Math.min(1, vol));
     if (this.currentMusic) {
-      if (this.useNewApi) {
-        this.currentMusic.volume = this.musicVolume;
-      } else {
-        void this.currentMusic.setVolumeAsync(this.musicVolume);
-      }
+      this.currentMusic.volume = this.musicVolume;
     }
   }
 
