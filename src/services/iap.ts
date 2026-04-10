@@ -59,9 +59,10 @@ type PurchaseListener = (result: PurchaseResult) => void;
 const RECEIPTS_STORAGE_KEY = '@wordfall_iap_receipts';
 const PENDING_PURCHASES_KEY = '@wordfall_iap_pending';
 
-// Import react-native-iap types for internal use (the module itself is
-// dynamically imported so the app doesn't crash when native code is missing).
-type RNIap = typeof import('react-native-iap');
+// react-native-iap is optional — the module is dynamically imported so the
+// app works without it (mock mode). When the package isn't installed at all,
+// we use `any` for the type to avoid compile-time module resolution errors.
+type RNIap = any;
 
 // ─── Manager class ───────────────────────────────────────────────────────────
 
@@ -105,8 +106,14 @@ class IAPManager {
       }
 
       // Dynamically import react-native-iap to avoid crashes when native
-      // module is not linked (Expo Go, web).
-      const iap: RNIap = await import('react-native-iap');
+      // module is not linked (Expo Go, web) or the package isn't installed.
+      // We use a variable for the package name to prevent Metro/TSC from
+      // trying to statically resolve the module at build time.
+      const rniapModuleName = 'react-native-iap';
+      const iap: RNIap = await import(/* webpackIgnore: true */ rniapModuleName as any).catch(() => null);
+      if (!iap) {
+        throw new Error('react-native-iap package not installed');
+      }
       this.rniap = iap;
 
       // Establish connection to the store
