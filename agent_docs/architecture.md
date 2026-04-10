@@ -1,30 +1,39 @@
 # Wordfall - AI Agent Context
 
+> **NOTE:** This file is a deep-reference companion to `/CLAUDE.md`. CLAUDE.md is the authoritative agent briefing loaded into every session; this file has much more file-by-file detail. Some sections below may be slightly behind current reality — when in conflict, trust CLAUDE.md and the code itself.
+>
+> **Last major update:** April 2026 — Reanimated 4 migration, react-native-iap removal (see below), SDK 54 dev client setup, EAS config.
+
 ## Project Overview
 
-Wordfall is a gravity-based strategic word puzzle mobile game built with **React Native + Expo**. Players find hidden words on a letter grid; when a word is cleared, letters above fall due to gravity, creating chain opportunities. The game features 10 modes, 40 chapters, collections, social features, a library meta-game, and a full player experience layer (interactive tutorial, progressive disclosure, ceremony system, achievements, weekly goals, mastery track, shareable results).
+Wordfall is a gravity-based strategic word puzzle mobile game built with **React Native + Expo**. Players find hidden words on a letter grid; when a word is cleared, letters above fall due to gravity, creating chain opportunities. The game features 10 modes, 40 chapters (~600 authored puzzles + procedural beyond), collections, social features, a library meta-game, and a full player experience layer (interactive tutorial, progressive disclosure, ceremony system, achievements, weekly goals, mastery track, shareable results).
 
-- **Framework:** React Native 0.81.5, Expo ~54.0.0, TypeScript ~5.8.0
-- **Backend:** Firebase (Auth + Firestore + Analytics) — Firestore social layer implemented with graceful offline fallback. Env vars needed for real connectivity
-- **State:** React Context (4 providers + 2 extracted sub-contexts) + useReducer for game state + AsyncStorage persistence + Firestore sync when configured
-- **Testing:** Jest + ts-jest, 32 test files with 722+ tests covering engine, data, services, utilities, hooks, and integration tests (puzzle lifecycle, economy flow, ceremony queue, difficulty curve, game modes)
-- **Monetization:** IAP via react-native-iap (50+ products in shopProducts.ts + 3 mega bundles in dynamicPricing.ts, incl. VIP weekly subscription with streak retention bonuses, whale tiers up to $99.99, full price ladder $0.99-$99.99), rewarded + interstitial ads via AdMob (mock fallback), gem-based contextual offers with 5-minute FOMO countdown timers wired to all 6 triggers with analytics, dynamic pricing by segment with daily flash sales via `getFlashSale()`, regional pricing, season pass, cosmetic store, coin sink rentals
+- **Framework:** React Native 0.81.5, Expo SDK 54 (New Architecture enabled), React 19.1, TypeScript ~5.8
+- **Animations:** `react-native-reanimated 4.1.1` + `react-native-worklets 0.5.1` — 30 components migrated to UI-thread animations; 4 legacy files intentionally remain on the `react-native` Animated API (see Animation System section below)
+- **Gestures:** `react-native-gesture-handler 2.28` — Grid uses `.runOnJS(true)` to run gesture callbacks on JS thread (see Gotchas)
+- **Backend:** Firebase (Auth + Firestore + Functions) — social layer implemented with graceful offline fallback. Env vars needed for real connectivity
+- **State:** React Context (4 providers + 2 extracted sub-contexts) + useReducer for game state + AsyncStorage persistence + debounced Firestore sync when configured
+- **Testing:** Jest + ts-jest, **37 test suites with 774 tests** covering engine, data, services, utilities, hooks, and integration tests (puzzle lifecycle, economy flow, ceremony queue, difficulty curve, game modes)
+- **Monetization:** ⚠️ `react-native-iap` is currently **removed from package.json** due to Gradle build issues (Nitro Modules on v14, amazon/play variant ambiguity on v12). `src/services/iap.ts` dynamically imports it and falls back to mock mode — all purchases succeed locally but nothing is charged. Shop catalogs still live in `shopProducts.ts` (50+ products $0.49-$99.99) and `dynamicPricing.ts` (3 mega bundles). Rewarded + interstitial ads via AdMob (mock fallback), gem-based contextual offers with 5-minute FOMO countdown timers, dynamic pricing by segment with daily flash sales, regional pricing, season pass, cosmetic store, coin sink rentals, **$0.49 first-purchase impulse offer for non-payers**
 - **Audio:** `expo-audio` (SDK 54 compatible, `createAudioPlayer` for SFX/music) with `expo-av` fallback
 - **Video:** `expo-video` (SDK 54 compatible, `useVideoPlayer` + `VideoView`) with error boundary fallback
-- **Navigation:** React Navigation (bottom tabs + nested stacks) with progressive tab unlocking
+- **Navigation:** React Navigation 7 (bottom tabs + nested stacks) with progressive tab unlocking
+- **Dev build required:** Expo Go is NOT supported. Use `npx expo start --dev-client` against a custom APK built via `eas build --profile development --platform android`.
 
 ## Commands
 
 ```bash
-npm start              # Start Expo dev server
-npm run android        # Start on Android
-npm run ios            # Start on iOS
-npm run web            # Start on web
-npx tsc --noEmit       # Type-check (no output files)
-npm install --legacy-peer-deps  # Install deps (legacy flag required for peer dep conflicts)
+npx expo start --dev-client    # Start Metro for the dev client (REQUIRED — Expo Go not supported)
+npm run typecheck              # Type-check (tsc --noEmit, no emit)
+npm test                       # Run 774 tests (Jest)
+npm run test:watch             # Watch mode
+npm run test:coverage          # Coverage report
+npm install --legacy-peer-deps # Install deps (.npmrc sets this flag by default)
+npm run optimize-assets        # Convert PNGs→WebP, compress video (already run; assets now ~24MB)
+eas build --profile development --platform android  # Rebuild dev client APK (only needed when native deps change)
 ```
 
-Test scripts: `npm test` (Jest), `npm run test:watch`, `npm run test:coverage`. There is no linter script in package.json.
+There is no linter script in package.json. TypeScript strict mode is enabled (`tsconfig.json`).
 
 ## Architecture
 
@@ -67,7 +76,7 @@ src/
 │   ├── economy/      # CurrencyDisplay, ShopItem
 │   ├── modes/        # TimerDisplay, MoveCounter
 │   └── events/       # EventBanner, EventProgress
-├── screens/          # 14 screens (Home, Game, Modes, Collections, Library, Profile, Settings, Shop, CosmeticStore, Club, Leaderboard, Event, Onboarding, Mastery)
+├── screens/          # 15 screens (Home, Game, Modes, Collections, Library, Profile, EditProfile, Settings, Shop, CosmeticStore, Club, Leaderboard, Event, Onboarding, Mastery)
 ├── config/           # firebase.ts
 ├── data/             # Static game data
 │   ├── chapters.ts, collections.ts, cosmetics.ts, events.ts, missions.ts  # Original data
@@ -159,7 +168,7 @@ src/
 | `src/services/notificationTriggers.ts` | Gameplay-event trigger wiring for notifications. 8 trigger functions: `triggerStreakReminder` (wired in App.tsx after streak update), `triggerEnergyFullNotification` (wired in PlayerContext when energy spent), `triggerEventNotification` (wired at app open), `triggerDailyChallengeReminder` (wired at app open), `triggerWinStreakMilestoneNotification` (wired in handleComplete at milestones 3/5/7/10/15/20), `triggerComebackReminder` (wired in AppState handler on background), `triggerStreakAtRiskNotification` (wired in AppState background handler — fires when streak >= 1 day and not played today), `triggerFriendBeatScoreNotification` (immediate notification when friend beats score). All scheduling is idempotent (cancels previous before scheduling new) |
 | `src/services/experiments.ts` | A/B testing experiment engine with 6 pre-configured experiments: `onboarding_flow` (4-phase vs 3-phase), `energy_cap` (25/30/35), `hint_rescue_price` (30/50/75 coins), `first_purchase_offer` ($0.99/$1.99/none), `daily_reward_generosity` (1x/1.5x/2x), `mystery_wheel_free_frequency` (5/8/12 puzzles). Deterministic weighted multi-variant assignment via hash. Functions: `getExperiment()`, `getAssignedVariant()`, `getExperimentConfig()`, `isInExperiment()`, `trackExperimentExposure()`. Backward-compatible with existing `analytics.getVariant()` |
 | `src/services/analytics.ts` | Dual-mode analytics: Firebase Analytics when configured, AsyncStorage fallback otherwise. 32+ typed events including `iap_revenue`, `ad_revenue`, `retention_check`, `funnel_step`, `cohort_event`. Methods: `trackRevenue()`, `trackAdRevenue()`, `trackRetention()`, `trackFunnel()`, `trackCohort()`, `getUserProperties()`. User properties, 7-day local event retention, A/B testing via deterministic variant assignment |
-| `src/services/iap.ts` | IAP service via `react-native-iap`. 17 products in shopProducts.ts (+ 3 mega bundles in dynamicPricing.ts = 20 total) across bundles/consumables/currency/premium/subscription/whale. Mock mode for dev/Expo Go. NativeModules check on init prevents EventEmitter crash when native module isn't linked. Receipt storage, restore purchases, parental control integration. Wire to ShopScreen for real purchase flow |
+| `src/services/iap.ts` | IAP service. **`react-native-iap` is currently removed from package.json** — service uses dynamic `import()` with a variable package name so TypeScript/Metro don't try to resolve it at build time. On init, `NativeModules.RNIapModule` check fails, the outer try/catch runs, and the service falls back to **mock mode** (all `purchase()` calls resolve with a local receipt, `Economy` grants rewards, no money changes hands). Products are still listed in `shopProducts.ts` (50+) and `dynamicPricing.ts` (mega bundles). To re-enable real purchases: add `react-native-iap` back with a config plugin that patches `android/app/build.gradle` to resolve the amazon/play product flavor ambiguity |
 | `src/services/ads.ts` | Rewarded + interstitial ads service with AdMob integration + mock fallback. 5 reward types (hint, undo, spin, coins, double). Rewarded: daily cap 10, cooldown 30s. Interstitial: daily cap 5, 90s interval. `showInterstitialAd()`, `canShowInterstitial()`, `interstitialsRemaining()`. Wired into GameScreen (post-fail, post-complete) and ShopScreen |
 | `src/services/firestore.ts` | Firestore social layer: leaderboards (daily/weekly/all-time), friend system (codes, requests), real gifting, player profile sync. Graceful offline fallback — all methods return defaults when Firebase unavailable |
 | `src/services/eventManager.ts` | Live event coordination: active event detection, multiplier calculation (coins/xp/rareTile), progress tracking, reward claiming. Wired into handleComplete for reward multipliers. Persisted via PlayerContext.eventProgress |
@@ -238,7 +247,7 @@ const SomeScreen: React.FC<SomeScreenProps> = ({ data: dataProp }) => {
 - **Green flash overlay**: 200ms on valid word match, before auto-submit (250ms delay)
 - **Chain popup**: Spring-scaled "Nx CHAIN!" with screen shake (3px oscillation)
 - **Score popup**: "+150 (2x!)" springs in, holds 600ms, floats up and fades out
-- **Post-gravity highlight**: Moved cells get a cyan border overlay that fades via opacity over 400ms (uses `useNativeDriver: true`)
+- **Post-gravity highlight**: Moved cells get a cyan border overlay that fades via opacity over 400ms
 - **Idle hint prompt**: Dynamic timer based on fail count (20s default → 15s after 1 failure → 10s after 2+), floats as absolute overlay on grid
 - **Mode intro banner**: 2.5-second absolute overlay on game start for non-classic modes (e.g. "No mistakes allowed!")
 - **Near-miss encouragement**: On failure, shows "SO CLOSE!" (1 word away) or "KEEP GOING!" with progress bar and word count, plus prominent retry button
@@ -397,7 +406,7 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - **Shadow presets**: Use `SHADOWS.soft`, `SHADOWS.medium`, `SHADOWS.strong` from constants. `SHADOWS.glow(color)` for colored glow effects
 - **Glassmorphism cards**: Cards use gradient backgrounds + subtle border + shadow for depth
 - **Letter tiles**: Clean architecture — opaque base gradient (`GRADIENTS.tile.default/selected/valid/hint/frozen`) + bottom shadow gradient for 3D depth. No inner glow, specular highlight, or shimmer overlays (these were removed for visual clarity). Tile gradients must be **fully opaque** hex colors (not rgba) to prevent background bleed-through artifacts
-- **Ambient backdrops**: Most screens use `<AmbientBackdrop variant="library|game|..." />` for floating animated orb backgrounds (10 twinkling stars + 2 nebula orbs, all `useNativeDriver: true`). HomeScreen uses `<VideoBackground>` with `bg-homescreen.mp4` instead
+- **Ambient backdrops**: Most screens use `<AmbientBackdrop variant="library|game|..." />` for floating animated orb backgrounds (12 twinkling stars + 3 nebula orbs via Reanimated UI-thread loops). HomeScreen uses `<SynthwaveHomeBackdrop>` with BandedSun + FlowingPerspectiveGrid + stars (also Reanimated). `SynthwaveBackdrop` (game screen) uses NeonSun + PerspectiveGridFloor + stars
 - **Home screen image assets**: HomeScreen hero card uses image-based UI — `playbutton.png`, `statscard.png` (×3, one per stat), `shopbutton.png` — each with text overlaid via absolute-positioned Views. Hero card container is a plain `View` (no LinearGradient, no border, no glow orbs)
 - **Hero illustrations**: Library screen has decorative `<LibraryHeroIllustration />` component built from Views + gradients (no image assets)
 - **Screen top padding**: All screens use `paddingTop: 60` in their `content` style to clear the status bar / safe area consistently
@@ -412,16 +421,28 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 - Grid has gradient background (`GRADIENTS.grid`), 16px border radius, accent gradient border
 
 ### Animations & Visual Feedback
-All tile animations use `useNativeDriver: true` for native-thread execution. No continuous animation loops run on idle tiles.
-- **Cell selection**: Scale down 0.86 → spring to 1.08 with animated glow border (60ms down, spring up). All native driver
+
+**System:** Migrated to **react-native-reanimated 4.1.1** for UI-thread animations. 30 components use `useSharedValue` + `useAnimatedStyle` + `withTiming`/`withSpring`/`withRepeat`/`withSequence`/`withDelay`/`interpolate`. The 4 exceptions below still use the legacy `Animated` API from `react-native` and are intentionally left alone (imperative particle systems that don't map cleanly to hooks):
+
+- `src/components/effects/ParticleSystem.tsx`
+- `src/components/WordBank.tsx`
+- `src/components/victory/GridDissolveEffect.tsx`
+- `src/components/game/GravityTrailEffect.tsx`
+
+**Gesture rule:** In Reanimated 4, `Gesture.Pan/.Tap()` callbacks auto-run as worklets on the UI thread. `Grid.tsx` uses `.runOnJS(true)` on both `panGesture` and `tapGesture` so callbacks can mutate refs and dispatch to the `useGame` reducer. Without this the app crashes with `Tried to synchronously call a non-worklet function` on the first tile tap.
+
+No continuous animation loops run on idle tiles.
+
+- **Cell selection**: Scale down 0.86 → spring to 1.08 with animated glow border (60ms down, spring up)
 - **Valid word detection**: Cells turn green with checkmarks, green flash overlay (200ms)
-- **Post-gravity cells**: Cyan border overlay fading via opacity over 400ms (native driver)
+- **Post-gravity cells**: Cyan border overlay fading via opacity over 400ms
 - **Score popup**: Springs in, holds 600ms, floats up and fades out. Shows combo multiplier
 - **Chain celebration**: "Nx CHAIN!" popup with spring scale + screen shake (3px, 200ms)
 - **WordBank chips**: Found words scale up 1.22x with spring then settle; `WordChip` wrapped in `React.memo`. No shimmer loop on found chips
-- **Puzzle complete**: 16 confetti particles (8 colors), 12 sparkles, 10 celebration burst particles. Stars pop in with staggered springs, centered via explicit `lineHeight`/`width`/`height` styling. Score counts up from 0 over 800ms (20 steps). Card anchored to bottom of screen (`justifyContent: 'flex-end'`) with `maxHeight: 85%` screen constraint and `ScrollView` for overflow
-- **AmbientBackdrop**: 10 twinkling stars + 2 nebula orbs (all `useNativeDriver: true`). No aurora wave animations
-- **Button press**: All Pressable buttons scale to 0.92-0.97x on press with opacity change
+- **Puzzle complete**: 16 confetti particles (8 colors), 12 sparkles, 10 celebration burst particles. Stars pop in with staggered springs. Score counts up from 0 over 800ms. Card anchored to bottom with `maxHeight: 85%` + `ScrollView` for overflow
+- **AmbientBackdrop / SynthwaveHomeBackdrop**: 10-12 twinkling stars + nebula orbs or banded sun + flowing perspective grid, all migrated to Reanimated `withRepeat`/`withSequence` loops running on UI thread
+- **Ceremonies** (Achievement, LevelUp, Milestone, Streak, FeatureUnlock, ModeUnlock, DifficultyTransition): all migrated to Reanimated — fade overlays, spring card entrances, icon scale pops with `withDelay` for staggered reveals
+- **Button press**: All Pressable buttons scale to 0.92-0.97x on press with opacity change (native Pressable `pressed` state, not Reanimated)
 - **Screen transitions**: Title springs in, buttons slide up with spring physics
 
 ## Implementation Status
@@ -430,7 +451,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - Core gameplay engine (board gen, gravity, solver, word selection)
 - All 10 game mode support with correct mode IDs and auto-unlock
 - Progressive tab navigation: 5 tabs with Collections (level 5) and Library (level 8) gated by `featuresUnlocked`
-- 14 screens (Home, Game, Modes, Collections, Library, Profile, Settings, Shop, CosmeticStore, Club, Leaderboard, Event, Onboarding, Mastery) — all fully functional
+- 15 screens (Home, Game, Modes, Collections, Library, Profile, EditProfile, Settings, Shop, CosmeticStore, Club, Leaderboard, Event, Onboarding, Mastery) — all fully functional
 - 4 context providers with AsyncStorage persistence
 - Synthesized audio engine with runtime tone generation (SFX + looping background music)
 - Sound manager wired at all interaction points (haptics fully functional)
@@ -501,7 +522,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Push notifications (local + remote)**: 9 notification categories using real `expo-notifications`. Local: permission handling, Android channels, segment-aware scheduling, streak reminder (8 PM), daily challenge (9 AM), comeback (3 days). Remote: `registerForRemotePush()` gets Expo + FCM/APNs device tokens, `sendTokenToServer()` syncs to Firestore `users/{uid}/tokens`, `handleRemoteNotification()` routes incoming payloads by category
 - **Contextual offers (wired)**: 6 dismissible offer types wired to real triggers in GameScreen and HomeScreen. hint_rescue (2+ fails), streak_shield (expiring streak), close_finish (1 word away + stuck), post_puzzle (hints depleted), booster_pack (entering hard/expert). Max 1 offer per level
 - **Analytics service (real)**: Dual-mode — Firebase Analytics when configured, AsyncStorage fallback. 32+ typed events tracked across app lifecycle. Revenue tracking (`trackRevenue`, `trackAdRevenue`), retention metrics (`trackRetention` for D1/D7/D30), conversion funnels (`trackFunnel`), cohort analysis (`trackCohort`). User properties (level, stage, payer status). A/B testing via deterministic hash variant assignment
-- **IAP service**: Full `react-native-iap` integration with 20 products (17 in shopProducts.ts + 3 mega bundles in dynamicPricing.ts, including whale tiers at $49.99/$99.99). Mock mode for development. NativeModules check on init prevents EventEmitter crash in Expo Go. Receipt storage, restore purchases, parental control enforcement. Wired into ShopScreen for real purchase flow
+- **IAP service**: ⚠️ `react-native-iap` is currently **removed** from `package.json` due to Gradle build issues (v14 needs Nitro Modules peer dep; v12 has amazon/play product flavor ambiguity). `src/services/iap.ts` uses dynamic import and falls back to mock mode. 50+ products still defined in `shopProducts.ts` + 3 mega bundles in `dynamicPricing.ts`. All purchases succeed locally but nothing is charged. To re-enable, add back via a config plugin that resolves the Gradle variant issue
 - **Rewarded + interstitial ads**: AdMob integration with MockAdModal fallback for dev. Rewarded: 5 reward types, daily cap 10, cooldown 30s. Interstitial: daily cap 5, 90s minimum interval, `showInterstitialAd()` / `canShowInterstitial()`. Wired into GameScreen (post-fail hint, post-complete double rewards) and ShopScreen (coins, mystery spin)
 - **Firestore social layer**: Real leaderboards (daily/weekly/all-time), friend system with codes, real gift delivery, player profile sync. LeaderboardScreen wired to Firestore. All methods gracefully fallback when offline
 - **Mystery Wheel (surfaced)**: Prominent button on HomeScreen for early+ players (3+ puzzles solved) with free spin pulse animation. Post-puzzle spin prompt when free spins available. Full overlay with reward granting via economy context
@@ -534,7 +555,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Contextual offer analytics**: All 6 offer types fire `offer_shown`, `offer_accepted`, `offer_dismissed` analytics events with offerType, level, mode, difficulty properties. `hint_rescue` also checks persistent `player.failCountByLevel` in addition to session fails. `life_refill` triggers when lives=0 on failure. `streak_shield` triggers during gameplay when streak >= 3 and approaching daily reset
 - **Audio caching**: DSP separated from WAV encoding. Raw `Int16Array` sample buffers cached in `synthesisCache` Map. Async `preWarmAll()` synthesizes all sounds + music in background on init, yielding between each. `playSound()` never triggers synthesis — skips silently if uncached
 - **God file decomposition**: App.tsx, PlayerContext decomposed into 5 extracted modules: `useRewardWiring` (post-puzzle rewards), `useCeremonyQueue` (ceremony processing), `MainNavigator` (tab/stack definitions with screen wrappers), `PlayerProgressContext` (22 progress methods), `PlayerSocialContext` (4 social methods). All using factory function pattern to preserve `usePlayer()` API surface
-- **Test suite**: 32 test files with 722+ tests. Coverage: data layer (achievements, weekly goals, mystery wheel, shop products, event layers, coin shop, referrals, daily deals, rotating shop), engine (difficulty adjuster, board generator, gravity, solver), services (analytics, player segmentation), utilities (share generator), hooks (useGame). Integration tests: puzzle lifecycle (30 tests), economy flow (29 tests), ceremony queue (30 tests), difficulty curve (20 tests), game modes (16 tests). Run via `npm test`
+- **Test suite**: 37 test suites with 774 tests. Coverage: data layer (achievements, weekly goals, mystery wheel, shop products, event layers, coin shop, referrals, daily deals, rotating shop, mastery rewards, season pass, club events, grand challenges, dynamic pricing, login calendar, word categories, daily reward timers), engine (difficulty adjuster, board generator, gravity, solver), services (analytics, player segmentation, experiments), utilities (share generator, replay generator), components (profanity filter, haptics, prestige system, logger, loading tips), hooks (useGame). Integration tests: puzzle lifecycle, economy flow, ceremony queue, difficulty curve, game modes. Run via `npm test`
 - **Deep linking**: `wordfall://` scheme configured in app.json with Android intent filters and iOS associated domains placeholder. `deepLinking.ts` parses referral/challenge/daily URLs. App.tsx handles cold-start and warm-start deep links via `Linking` API. Referral links auto-apply codes, challenge links store IDs, daily links navigate to daily mode. All share text includes deep link CTAs
 - **Interactive mode tutorials**: `ModeTutorialOverlay.tsx` shows step-by-step animated tutorial on first play of complex modes (Gravity Flip, Shrinking Board, Time Pressure, Perfect Solve). Persisted via `tooltipsShown` so it shows once per mode. Tutorial data in `modeTutorials.ts`
 - **Seasonal quest lines**: 4 seasonal quests (Spring/Summer/Autumn/Winter) with 5 sequential steps each in `seasonalQuests.ts`. Steps use weekly goal tracking keys (puzzles_solved, stars_earned, etc.). Escalating rewards per step + final reward with exclusive frame. `SeasonalQuestCard.tsx` on HomeScreen for established+ players. Progress tracked in `useRewardWiring` alongside weekly goals
@@ -559,18 +580,23 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Professional audio assets** — place .mp3 files in `assets/audio/` per the README there. Synthesized tones remain as fallback
 
 ### Scaffolded / Needs Work
-- Image assets — app icon and splash screen are placeholder PNGs; HomeScreen JPEGs renamed as .png (no alpha channel). 44MB asset bundle needs optimization (compress to ~15MB via WebP, lazy-load video)
-- Firebase Cloud Functions (server-side scheduled tasks) — see `FIRESTORE_SOCIAL_GUIDE.md`
-- Club chat real-time messaging + auto-kick enforcement (club goal/leaderboard now implemented, but chat needs Cloud Functions)
-- Live club cooperative goal tracking — UI and data exist but progress tracking needs Cloud Functions for real-time multi-member aggregation
-- Partner events — cooperative 2-player events. Schema defined in `FIRESTORE_SOCIAL_GUIDE.md`
-- End-to-end testing (32 test files with 722+ tests including integration tests, but no Detox/Maestro E2E)
-- iOS Universal Links — `associatedDomains` placeholder in app.json needs real domain + apple-app-site-association file for HTTPS deep links. Custom scheme (`wordfall://`) deep linking is fully implemented
-- Smart Solve Replay as animated GIF/video (text + emoji replay is implemented; video generation is not)
-- Prestige system execution — data layer, types, and UI (ProfileScreen button) are complete but the actual reset logic in PlayerContext (reset level, keep cosmetics, apply multiplier) needs wiring
-- Professional audio assets — synthesized tones are functional but artificial. Place .mp3 files in `assets/audio/` for premium feel
-- Ad mediation SDK — currently AdMob only (or mock). No ironSource/MAX mediation
-- Server-side receipt validation endpoint — client-side fraud detection exists, but real server validation needs Firebase Cloud Function deployment
+- **`react-native-iap` is removed** — re-add via config plugin that patches `android/app/build.gradle` to resolve the amazon/play product flavor variant ambiguity
+- **Assets optimized** — already run; `assets/` is now ~24MB (down from 44MB). PNGs converted to WebP, video compressed
+- **Firestore rules + indexes exist but aren't deployed** — `firestore.rules` and `firestore.indexes.json` are at the repo root; need a `firebase.json` referencing them, then `firebase deploy --only firestore:rules,firestore:indexes`
+- **Two cloud function directories exist, neither deployed**:
+  - `cloud-functions/` — club goal tracking, leaderboard updates, push notifications, streak reminders, club goal rotation (5 functions, production-ready)
+  - `functions/` — `validateReceipt`, subscription renewal, club goal progress, auto-kick inactive members (newer; IAP/subscription focused)
+  - Consider consolidating into one directory
+- **Club chat real-time messaging + auto-kick enforcement** (basic chat works; multi-member real-time aggregation needs Cloud Functions deployed)
+- **Partner events** — cooperative 2-player events. Schema defined in `FIRESTORE_SOCIAL_GUIDE.md`
+- **End-to-end testing** (37 test suites with 774 tests including integration tests, but no Detox/Maestro E2E)
+- **iOS Universal Links** — `associatedDomains: applinks:wordfall.app` is configured but needs real domain ownership + apple-app-site-association file. Custom scheme (`wordfall://`) deep linking is fully implemented
+- **Smart Solve Replay as animated GIF/video** — text + emoji replay is implemented; video generation is not
+- **Prestige system is fully wired** — `performPrestige()` in `PlayerContext.tsx` resets level/stars/chapters/modeLevels, unlocks the cosmetic reward, and queues a ceremony. `canPrestige()` gate via `getPrestigeInfo()`. Previously listed as "needs wiring" — this is no longer accurate
+- **Professional audio assets** — synthesized tones are functional but artificial. Place .mp3 files in `assets/audio/` for premium feel
+- **Ad mediation SDK** — currently AdMob only (or mock). No ironSource/MAX mediation
+- **Server-side receipt validation endpoint** — implemented in `functions/src/index.ts` as `validateReceipt`, needs deployment. Set `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` after deployment
+- **Dev client rebuild required for native dep changes** — Expo Go is not supported. `eas build --profile development --platform android` (see CLAUDE.md for the full dev client workflow and Termux notes)
 
 ## Common Patterns
 
@@ -693,7 +719,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Notification service** in `src/services/notifications.ts` is real (not scaffold). Uses `expo-notifications` with permission handling, Android channels, and segment-aware scheduling
 - **Contextual offers** are fully wired to ALL 6 triggers with analytics: hint_rescue (2+ session/persistent fails), life_refill (lives=0 on fail), streak_shield (streak >= 3 + approaching reset), close_finish (1 word left + stuck/idle 15s), post_puzzle (hints depleted on win), booster_pack (hard/expert first entry). Each fires `offer_shown`/`offer_accepted`/`offer_dismissed` analytics events. Max 1 offer per level
 - **Analytics** in `src/services/analytics.ts` is real (not no-op). Dual-mode: Firebase when configured, local AsyncStorage fallback. Includes A/B testing via `getVariant()` with deterministic hash
-- **IAP** in `src/services/iap.ts` uses `react-native-iap`. 20 products total (17 in shopProducts.ts incl. VIP weekly + whale tiers, plus 3 mega bundles in dynamicPricing.ts). Mock mode auto-activates in dev/Expo Go. Init checks `NativeModules` for the IAP native module before importing to prevent EventEmitter crash. Parental controls enforced before every purchase via SettingsContext
+- **IAP** in `src/services/iap.ts`: `react-native-iap` is currently removed. Service falls back to mock mode. 50+ products still defined in `shopProducts.ts` + 3 mega bundles in `dynamicPricing.ts`. Re-adding requires a config plugin to fix the Gradle amazon/play product flavor ambiguity. Parental controls enforced before every purchase via SettingsContext
 - **VIP subscription** handles `vip_weekly` purchase by setting `isVipSubscriber: true`, `vipExpiresAt` to 7 days from now, resetting daily claim. `isAdFree` includes VIP status. Daily rewards (50 gems + 3 hints) claimed via `claimVipDailyRewards()` with date-based tracking
 - **Ads** in `src/services/ads.ts` supports rewarded + interstitial. AdMob when available, otherwise MockAdModal (5s countdown) for rewarded and instant-resolve for interstitials. `isAdFree` flag in EconomyContext disables all ads. Interstitials have separate daily cap (5) and minimum interval (90s). `AD_CONFIG` in constants.ts has `MAX_INTERSTITIALS_PER_DAY` and `INTERSTITIAL_INTERVAL_MS`
 - **Firestore** in `src/services/firestore.ts` handles all social operations. Every method has try/catch returning defaults on failure. App works identically offline
@@ -726,7 +752,8 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **God file decomposition** preserves API surfaces — extracted contexts use factory function pattern (`createProgressMethods(setData, getData)` returns method object). Components calling `usePlayer()` see the identical interface. `useRewardWiring` takes player/economy as parameters and returns a stable `handleComplete` callback via `useCallback`. `MainNavigator` contains wrapper components (ProfileMainScreen, EventScreenWrapper) that wire navigation props
 
 ### Performance Architecture
-- **All tile animations use `useNativeDriver: true`** — animations run on the native thread, not blocking JS. Only animate `transform` and `opacity` (no `borderColor`, `shadowOpacity`, or layout-affecting styles via Animated)
+- **Reanimated 4 animations run on UI thread by default** — `useSharedValue` + `useAnimatedStyle` don't need a `useNativeDriver` flag. The few remaining legacy `Animated` API components (ParticleSystem, WordBank, GridDissolveEffect, GravityTrailEffect) run on the JS thread; they're particle effects that don't block gameplay, left intentionally
+- **`.runOnJS(true)` required on gestures whose callbacks call JS** (refs, reducers, props). Grid.tsx uses this on both pan and tap. Without it the app crashes with `Tried to synchronously call a non-worklet function` on the first interaction
 - **No continuous animation loops on idle tiles** — only selected/moved tiles run short one-shot animations. Idle tiles have zero overlay layers (no innerGlow, specular, shimmer)
 - **`isDeadEnd` solver is deferred** — runs via `setTimeout` in a `useEffect` after words are found, not synchronously in the render path. The solver's recursive DFS is too expensive for per-render execution
 - **`findWordInGrid` supports a `limit` parameter** — pass `limit=1` when only existence matters (hint, dead-end check) to avoid finding all occurrences
@@ -736,6 +763,7 @@ All tile animations use `useNativeDriver: true` for native-thread execution. No 
 - **Grid sizing is dual-dimension** — `cellSize` uses `Math.min(widthBased, heightBased)` via `maxHeight` prop measured by `onLayout` in GameScreen, preventing grid overflow behind booster buttons on tall boards
 - **Stable layout architecture** — GameScreen uses absolute-positioned overlays for banners (cascade, freeze, idle hint, mode intro) so they never shift the grid. WordArea has fixed height (90px), boosterBar always reserves space. `gridAreaHeight` updates are debounced (2px threshold) to prevent cascading re-renders from sub-pixel layout shifts
 - **Board generation uses heuristic-first validation** — `boardGenerator.ts` checks each word is individually findable via fast DFS before invoking the expensive recursive backtracking solver. This avoids exponential blowup on larger boards (was causing 10+ second hangs on 6×6+ grids)
-- **Audio synthesis is cached and pre-warmed** — `SoundManager.preWarmAll()` runs asynchronously after `init()` via `setTimeout(0)`. Synthesizes all 11 SFX + 3 music tracks in background, yielding between each (`await new Promise(resolve => setTimeout(resolve, 0))`). Raw `Int16Array` sample buffers cached in `synthesisCache` Map, WAV data URIs in `soundUris` Map. `playSound()` returns early if URI not cached — never triggers synthesis on the hot path
-- **When adding new animations**: always use `useNativeDriver: true`, avoid `Animated.loop` on per-tile components, prefer one-shot animations that complete and settle
+- **Audio synthesis is cached and pre-warmed** — `SoundManager.preWarmAll()` runs asynchronously after `init()` via `setTimeout(0)`. Synthesizes all 11 SFX + 3 music tracks in background, yielding between each. Raw `Int16Array` sample buffers cached, WAV data URIs in `soundUris` Map. `playSound()` returns early if URI not cached — never triggers synthesis on the hot path
+- **FlatLists in EditProfileScreen and ClubScreen** use `removeClippedSubviews`, `initialNumToRender`, `maxToRenderPerBatch`, `windowSize` for perf
+- **When adding new animations**: use `useSharedValue`/`useAnimatedStyle` (Reanimated), prefer `withSpring`/`withTiming` over `withRepeat` on per-element components, extract dynamically-sized particle arrays into their own sub-components (hooks rules)
 - **When modifying tiles**: do NOT add semi-transparent overlay Views or LinearGradients on top of the base tile gradient — these create visible lighter rectangles. Keep tile rendering minimal: base gradient + bottom shadow + letter text
