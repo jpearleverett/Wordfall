@@ -490,6 +490,10 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                     inverted
                     style={styles.chatList}
                     showsVerticalScrollIndicator={false}
+                    removeClippedSubviews={true}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
                     renderItem={({ item }) => (
                       <View style={styles.chatMessageRow}>
                         <View style={styles.chatMessageBubble}>
