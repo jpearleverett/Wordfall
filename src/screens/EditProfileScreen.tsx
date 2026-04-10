@@ -293,6 +293,10 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.horizontalList}
           scrollEnabled
+          removeClippedSubviews={true}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={5}
         />
 
         {/* Profile Titles */}
@@ -362,6 +366,10 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.horizontalList}
           scrollEnabled
+          removeClippedSubviews={true}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={5}
         />
 
         <View style={styles.bottomSpacer} />

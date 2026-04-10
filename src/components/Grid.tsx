@@ -214,6 +214,7 @@ export function GameGrid({
 
   const composedGesture = useMemo(() => {
     const panGesture = Gesture.Pan()
+      .runOnJS(true)
       .minDistance(0)
       .onBegin((e) => {
         isDraggingRef.current = true;
@@ -276,6 +277,7 @@ export function GameGrid({
       });
 
     const tapGesture = Gesture.Tap()
+      .runOnJS(true)
       .onEnd((e) => {
         const cell = hitTestCell(e.x, e.y);
         if (cell) {
