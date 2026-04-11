@@ -1599,11 +1599,13 @@ export function GameScreen({
 
       {/* Word bank - above grid */}
       <View style={styles.wordArea}>
-        <WordBank
-          words={state.board.words}
-          currentWord={currentWord}
-          isValidWord={isValidWord}
-        />
+        <React.Profiler id="WordBank" onRender={profilerOnRender}>
+          <WordBank
+            words={state.board.words}
+            currentWord={currentWord}
+            isValidWord={isValidWord}
+          />
+        </React.Profiler>
       </View>
 
       {/* Grid area */}
