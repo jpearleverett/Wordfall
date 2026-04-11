@@ -9,6 +9,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import { perfCountCellRender } from '../utils/perfInstrument';
 
 // ── Pre-computed style constants (module scope so tuples share a single reference) ─
 const BODY_COLORS_VALID: [string, string, string, string, string] = ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
@@ -57,6 +58,9 @@ export const LetterCell = React.memo(function LetterCell({
   isSpotlightDimmed = false,
   fallAnim,
 }: LetterCellProps) {
+  // Dev-only: count how many LetterCell renders happen per Grid commit.
+  // If memoization is working we expect ~1 render per tap.
+  perfCountCellRender();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const movedAnim = useRef(new Animated.Value(0)).current;

@@ -90,12 +90,22 @@ export function profilerOnRender(
   _commitTime: number,
 ): void {
   if (!PERF_ENABLED) return;
+
+  // When Grid commits, flush the LetterCell render count so we can see how
+  // many cells actually re-rendered during this commit. If memoization is
+  // working, this should be 0-2 on a typical tap.
+  let cellCountSuffix = '';
+  if (id === 'Grid') {
+    const cells = perfGetAndResetCellCount();
+    cellCountSuffix = ` cells=${cells}`;
+  }
+
   if (actualDuration >= RENDER_THRESHOLD_MS) {
     // eslint-disable-next-line no-console
     console.log(
       `[perf:render] ${id} ${phase}: actual=${actualDuration.toFixed(
         1,
-      )}ms base=${baseDuration.toFixed(1)}ms`,
+      )}ms base=${baseDuration.toFixed(1)}ms${cellCountSuffix}`,
     );
   }
 
@@ -143,6 +153,25 @@ export function perfDragEnd(): void {
   );
   dragStartAt = null;
   dragDispatchCount = 0;
+}
+
+// ── Cell render counter ────────────────────────────────────────────────
+// Counts LetterCell renders between Grid commits so we can see if React.memo
+// is actually working. If memoization is effective, we expect 0-2 cells to
+// re-render per tap. If 10+ re-render, the memoization is broken somewhere.
+
+let cellRenderCount = 0;
+
+export function perfCountCellRender(): void {
+  if (!PERF_ENABLED) return;
+  cellRenderCount += 1;
+}
+
+export function perfGetAndResetCellCount(): number {
+  if (!PERF_ENABLED) return 0;
+  const n = cellRenderCount;
+  cellRenderCount = 0;
+  return n;
 }
 
 // ── Reducer timing ───────────────────────────────────────────────────────
