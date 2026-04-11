@@ -18,6 +18,7 @@ import { LetterCell } from './LetterCell';
 import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import SelectionTrailOverlay from './game/SelectionTrailOverlay';
+import { perfDragStart, perfDragDispatch, perfDragEnd } from '../utils/perfInstrument';
 
 // Extracted constants to avoid creating new objects on every render
 const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]];
@@ -232,11 +233,13 @@ function GameGridImpl({
         isDraggingRef.current = true;
         lastDragCellRef.current = null;
         lastDragPosRef.current = { x: e.x, y: e.y };
+        perfDragStart();
         onDragStartRef.current?.();
         const cell = hitTestCell(e.x, e.y);
         if (cell) {
           const key = `${cell.row},${cell.col}`;
           lastDragCellRef.current = key;
+          perfDragDispatch();
           onCellPressRef.current(cell);
         }
       })
@@ -259,6 +262,7 @@ function GameGridImpl({
                 const midKey = `${midCell.row},${midCell.col}`;
                 if (midKey !== lastDragCellRef.current) {
                   lastDragCellRef.current = midKey;
+                  perfDragDispatch();
                   onCellPressRef.current(midCell);
                 }
               }
@@ -272,6 +276,7 @@ function GameGridImpl({
           const key = `${cell.row},${cell.col}`;
           if (key !== lastDragCellRef.current) {
             lastDragCellRef.current = key;
+            perfDragDispatch();
             onCellPressRef.current(cell);
           }
         }
@@ -280,6 +285,7 @@ function GameGridImpl({
         isDraggingRef.current = false;
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
+        perfDragEnd();
         onDragEndRef.current?.();
       })
       .onFinalize(() => {

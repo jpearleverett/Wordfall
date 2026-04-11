@@ -27,6 +27,7 @@ import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTEN
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
+import { profilerOnRender, perfMark } from '../utils/perfInstrument';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { analytics } from '../services/analytics';
@@ -1020,6 +1021,10 @@ export function GameScreen({
   const lastTapFeedbackAt = useRef(0);
   const handleCellPress = useCallback(
     (position: CellPosition) => {
+      // Dev-only: mark the start of a tap so we can measure how long it takes
+      // to reach the React commit phase (the moment the user sees visual
+      // feedback). profilerOnRender reads this mark on the GameScreen commit.
+      perfMark('tap');
       resetIdleTimer();
       const now = Date.now();
       if (now - lastTapFeedbackAt.current > 40) {
@@ -1230,6 +1235,7 @@ export function GameScreen({
   });
 
   return (
+    <React.Profiler id="GameScreen" onRender={profilerOnRender}>
     <Animated.View style={shakeContainerStyle}>
     <SafeAreaView style={styles.container}>
       <AmbientBackdrop variant="game" />
@@ -1528,24 +1534,26 @@ export function GameScreen({
 
         {/* Grid wrapper with scale animations (#3 letter pop, #4 undo pulse) */}
         <Animated.View style={gridScaleStyle}>
-          <GameGrid
-            grid={state.board.grid}
-            selectedCells={state.selectedCells}
-            hintedCells={isValidWord ? state.selectedCells : EMPTY_CELL_ARRAY}
-            onCellPress={handleCellPress}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            validWord={showValidFlash}
-            movedCells={mode === 'noGravity' ? EMPTY_CELL_ARRAY : movedCells}
-            maxHeight={gridAreaHeight}
-            isDragging={isDragging}
-            wildcardCells={state.wildcardCells}
-            spotlightDimmedCells={spotlightDimmedSet}
-            gravityDirection={mode === 'gravityFlip' ? state.gravityDirection : undefined}
-            noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
-            fallAnimMap={fallAnimMap}
-            fallActive={fallActive}
-          />
+          <React.Profiler id="Grid" onRender={profilerOnRender}>
+            <GameGrid
+              grid={state.board.grid}
+              selectedCells={state.selectedCells}
+              hintedCells={isValidWord ? state.selectedCells : EMPTY_CELL_ARRAY}
+              onCellPress={handleCellPress}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              validWord={showValidFlash}
+              movedCells={mode === 'noGravity' ? EMPTY_CELL_ARRAY : movedCells}
+              maxHeight={gridAreaHeight}
+              isDragging={isDragging}
+              wildcardCells={state.wildcardCells}
+              spotlightDimmedCells={spotlightDimmedSet}
+              gravityDirection={mode === 'gravityFlip' ? state.gravityDirection : undefined}
+              noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
+              fallAnimMap={fallAnimMap}
+              fallActive={fallActive}
+            />
+          </React.Profiler>
         </Animated.View>
 
         {/* #1 Word-clear particles */}
@@ -1860,6 +1868,7 @@ export function GameScreen({
       )}
     </SafeAreaView>
     </Animated.View>
+    </React.Profiler>
   );
 }
 
