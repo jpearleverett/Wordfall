@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import { useDeferredMount } from '../utils/perfInstrument';
 
 interface LevelUpCeremonyProps {
   newLevel: number;
@@ -16,6 +17,7 @@ export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
   const scale = useSharedValue(0.5);
   const level = useSharedValue(0);
   const glow = useSharedValue(0.3);
+  const decorationsMounted = useDeferredMount(200);
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
@@ -39,7 +41,9 @@ export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
-      <SparkleField count={24} intensity="intense" colors={[COLORS.gold, COLORS.accent, '#fff']} />
+      {decorationsMounted && (
+        <SparkleField count={24} intensity="intense" colors={[COLORS.gold, COLORS.accent, '#fff']} />
+      )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Animated.View

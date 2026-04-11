@@ -4,6 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, wit
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
+import { useDeferredMount } from '../utils/perfInstrument';
 
 /**
  * General-purpose milestone ceremony for celebrations that don't need
@@ -38,6 +39,11 @@ export function MilestoneCeremony({
   const scale = useSharedValue(0.6);
   const iconProgress = useSharedValue(0);
 
+  // Defer the SparkleField until ~200ms after mount — see useDeferredMount
+  // in perfInstrument.ts. Lets the card pop in fast and the decorations
+  // follow a frame or two later.
+  const decorationsMounted = useDeferredMount(200);
+
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
     scale.value = withSpring(1, { damping: 10, stiffness: 100 });
@@ -52,7 +58,9 @@ export function MilestoneCeremony({
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
-      <SparkleField count={16} intensity="medium" colors={[accentColor, COLORS.gold, '#fff']} />
+      {decorationsMounted && (
+        <SparkleField count={16} intensity="medium" colors={[accentColor, COLORS.gold, '#fff']} />
+      )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: accentColor }]}>{ribbon}</Text>

@@ -4,6 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, wit
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
+import { useDeferredMount } from '../utils/perfInstrument';
 
 interface DifficultyTransitionCeremonyProps {
   from: string;
@@ -27,6 +28,7 @@ export function DifficultyTransitionCeremony({
   const scale = useSharedValue(0.6);
   const arrow = useSharedValue(0);
   const toProgress = useSharedValue(0);
+  const decorationsMounted = useDeferredMount(200);
 
   const fromMeta = DIFFICULTY_META[from] ?? DIFFICULTY_META.easy;
   const toMeta = DIFFICULTY_META[to] ?? DIFFICULTY_META.medium;
@@ -47,7 +49,9 @@ export function DifficultyTransitionCeremony({
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
-      <SparkleField count={20} intensity="intense" colors={[toMeta.color, COLORS.gold, '#fff']} />
+      {decorationsMounted && (
+        <SparkleField count={20} intensity="intense" colors={[toMeta.color, COLORS.gold, '#fff']} />
+      )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: toMeta.color }]}>NEW CHALLENGE TIER</Text>

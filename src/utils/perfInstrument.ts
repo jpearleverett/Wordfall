@@ -155,6 +155,25 @@ export function perfDragEnd(): void {
   dragDispatchCount = 0;
 }
 
+// ── Deferred mount hook ─────────────────────────────────────────────────
+// Returns `true` after the specified delay, allowing a component to defer
+// rendering of heavy decorative sub-trees (SparkleField, CelebrationBurst,
+// confetti particles, video backgrounds) until after the main content has
+// already committed. This is a progressive-disclosure trick that cuts
+// ceremony / modal mount time by 100-150ms because the first commit only
+// has to build the card, not the decorations.
+
+import { useEffect, useState } from 'react';
+
+export function useDeferredMount(delayMs = 200): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), delayMs);
+    return () => clearTimeout(t);
+  }, [delayMs]);
+  return mounted;
+}
+
 // ── Cell render counter ────────────────────────────────────────────────
 // Counts LetterCell renders between Grid commits so we can see if React.memo
 // is actually working. If memoization is effective, we expect 0-2 cells to

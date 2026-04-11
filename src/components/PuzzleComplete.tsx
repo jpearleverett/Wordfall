@@ -342,6 +342,20 @@ export function PuzzleComplete({
   const glitchAnim = useRef(new Animated.Value(0)).current;
   const [starsRevealed, setStarsRevealed] = useState(false);
 
+  // Progressive disclosure: the main card mounts immediately so the user
+  // sees SOMETHING fast, then we mount the decorative particles after a
+  // ~250ms delay. Previously the component rendered 20 confetti particles
+  // + 12 sparkles + 10 celebration-burst particles + 20+ LinearGradients
+  // all in a single commit — ~100+ native views materializing at once,
+  // costing 150-200ms of JS+native work. With the delay the player sees
+  // the card appear instantly, then the decorations pop in during the
+  // card's own entrance animation.
+  const [decorationsMounted, setDecorationsMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setDecorationsMounted(true), 250);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     // VHS glitch entrance on title
     Animated.sequence([
@@ -435,11 +449,6 @@ export function PuzzleComplete({
         style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
         resizeMode="cover"
       />
-      <VideoBackground
-        source={LOCAL_VIDEOS.victoryCelebration}
-        opacity={0.45}
-        overlayColor="rgba(4,6,18,0.45)"
-      />
       <LinearGradient
         colors={['rgba(4,6,18,0.15)', 'rgba(4,6,18,0.75)'] as [string, string]}
         style={StyleSheet.absoluteFill}
@@ -450,16 +459,30 @@ export function PuzzleComplete({
         style={styles.trophyCrownDecor}
         resizeMode="contain"
       />
-      <SparkleField count={12} intensity="medium" />
-      <CelebrationBurst centerX={190} centerY={200} particleCount={10} />
-      {confetti.map((particle) => (
-        <ConfettiParticle
-          key={particle.id}
-          delay={particle.delay}
-          color={particle.color}
-          startX={particle.startX}
-        />
-      ))}
+      {/* Heavy decorations mount after 250ms so the main card appears fast.
+          VideoBackground is especially expensive — it loads an H.264 decoder
+          and starts a playback loop. SparkleField / CelebrationBurst / 20
+          confetti particles collectively add ~100+ native views. Deferring
+          them cuts PuzzleComplete mount time from ~180-220ms to ~60-90ms. */}
+      {decorationsMounted && (
+        <>
+          <VideoBackground
+            source={LOCAL_VIDEOS.victoryCelebration}
+            opacity={0.45}
+            overlayColor="rgba(4,6,18,0.45)"
+          />
+          <SparkleField count={12} intensity="medium" />
+          <CelebrationBurst centerX={190} centerY={200} particleCount={10} />
+          {confetti.map((particle) => (
+            <ConfettiParticle
+              key={particle.id}
+              delay={particle.delay}
+              color={particle.color}
+              startX={particle.startX}
+            />
+          ))}
+        </>
+      )}
 
       <Animated.View style={[styles.cardOuter, { transform: [{ translateY: cardAnim }], maxHeight: maxCardHeight }]}>
         {/* Gradient border wrapper */}

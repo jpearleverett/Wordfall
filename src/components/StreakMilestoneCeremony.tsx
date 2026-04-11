@@ -4,6 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, wit
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS, STREAK } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
+import { useDeferredMount } from '../utils/perfInstrument';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
 const AnimatedText = Animated.createAnimatedComponent(Text);
@@ -17,6 +18,7 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.5);
   const fire = useSharedValue(1);
+  const decorationsMounted = useDeferredMount(200);
 
   const reward = STREAK.milestoneRewards[milestone as keyof typeof STREAK.milestoneRewards] || { coins: 0, gems: 0 };
 
@@ -38,8 +40,12 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
-      <SparkleField count={24} intensity="intense" colors={[COLORS.coral, COLORS.gold, COLORS.orange, '#fff']} />
-      <CelebrationBurst centerX={180} centerY={250} particleCount={16} colors={[COLORS.coral, COLORS.gold, COLORS.orange]} />
+      {decorationsMounted && (
+        <SparkleField count={24} intensity="intense" colors={[COLORS.coral, COLORS.gold, COLORS.orange, '#fff']} />
+      )}
+      {decorationsMounted && (
+        <CelebrationBurst centerX={180} centerY={250} particleCount={16} colors={[COLORS.coral, COLORS.gold, COLORS.orange]} />
+      )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>STREAK MILESTONE</Text>
