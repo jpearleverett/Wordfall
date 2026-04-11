@@ -4,6 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } fr
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
+import { useDeferredMount } from '../utils/perfInstrument';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface CollectionCompleteCeremonyProps {
@@ -21,6 +22,7 @@ export function CollectionCompleteCeremony({
 }: CollectionCompleteCeremonyProps) {
   const fadeAnim = useSharedValue(0);
   const scaleAnim = useSharedValue(0.6);
+  const decorationsMounted = useDeferredMount(200);
 
   useEffect(() => {
     fadeAnim.value = withTiming(1, { duration: 300 });
@@ -37,8 +39,12 @@ export function CollectionCompleteCeremony({
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
-      <SparkleField count={26} intensity="intense" colors={[COLORS.gold, COLORS.accent, COLORS.purple, '#fff']} />
-      <CelebrationBurst centerX={180} centerY={200} particleCount={20} />
+      {decorationsMounted && (
+        <SparkleField count={26} intensity="intense" colors={[COLORS.gold, COLORS.accent, COLORS.purple, '#fff']} />
+      )}
+      {decorationsMounted && (
+        <CelebrationBurst centerX={180} centerY={200} particleCount={20} />
+      )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>COLLECTION COMPLETE</Text>

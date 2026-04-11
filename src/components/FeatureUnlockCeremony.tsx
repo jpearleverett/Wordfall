@@ -4,6 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, wit
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
+import { useDeferredMount } from '../utils/perfInstrument';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface FeatureUnlockCeremonyProps {
@@ -25,6 +26,7 @@ export function FeatureUnlockCeremony({
   const scale = useSharedValue(0.7);
   const iconProgress = useSharedValue(0);
   const glow = useSharedValue(0.4);
+  const decorationsMounted = useDeferredMount(200);
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
@@ -54,7 +56,9 @@ export function FeatureUnlockCeremony({
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
-      <SparkleField count={18} intensity="medium" />
+      {decorationsMounted && (
+        <SparkleField count={18} intensity="medium" />
+      )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient
           colors={GRADIENTS.surfaceCard}

@@ -4,6 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, wit
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
+import { useDeferredMount } from '../utils/perfInstrument';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 
 interface AchievementCeremonyProps {
@@ -32,6 +33,7 @@ export function AchievementCeremony({
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.6);
   const badge = useSharedValue(0);
+  const decorationsMounted = useDeferredMount(200);
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
@@ -49,7 +51,9 @@ export function AchievementCeremony({
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
-      <SparkleField count={22} intensity="intense" colors={[tierColor, '#fff', COLORS.gold, COLORS.accent]} />
+      {decorationsMounted && (
+        <SparkleField count={22} intensity="intense" colors={[tierColor, '#fff', COLORS.gold, COLORS.accent]} />
+      )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: tierColor }]}>ACHIEVEMENT UNLOCKED</Text>
