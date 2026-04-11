@@ -25,7 +25,7 @@ interface GameHeaderProps {
   onBack: () => void;
 }
 
-export function GameHeader({
+export const GameHeader = React.memo(function GameHeader({
   level,
   score,
   combo,
@@ -226,7 +226,7 @@ export function GameHeader({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrapper: {
