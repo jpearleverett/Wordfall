@@ -126,13 +126,13 @@ class IAPManager {
       // (e.g. running in Expo Go where the JS package exists but native code doesn't).
       try {
         this.purchaseUpdateSubscription = iap.purchaseUpdatedListener(
-          (purchase) => {
+          (purchase: any) => {
             void this.handlePurchaseUpdate(purchase);
           },
         );
 
         this.purchaseErrorSubscription = iap.purchaseErrorListener(
-          (error) => {
+          (error: any) => {
             this.handlePurchaseError(error);
           },
         );
@@ -197,7 +197,7 @@ class IAPManager {
         return this.mockLoadProducts();
       }
 
-      const products: IAPProduct[] = storeProducts.map((sp) => {
+      const products: IAPProduct[] = storeProducts.map((sp: any) => {
         const shopProduct = getProductByStoreId(sp.id);
         const product: IAPProduct = {
           productId: sp.id,

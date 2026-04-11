@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
   Image,
@@ -9,6 +9,32 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+
+// ── Pre-computed style constants (module scope so tuples share a single reference) ─
+const BODY_COLORS_VALID: [string, string, string, string, string] = ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
+const BODY_COLORS_SELECTED_HINT: [string, string, string, string, string] = ['#fff0b3', '#ffe580', '#ffd24d', '#ffb800', '#cc9200'];
+const BODY_COLORS_SELECTED: [string, string, string, string, string] = ['#ff8fd0', '#ff6eb8', '#ff2d95', '#e91e8c', '#b8147a'];
+const BODY_COLORS_WILDCARD = [...GRADIENTS.tile.wildcard] as [string, string, ...string[]];
+const BODY_COLORS_DEFAULT: [string, string, string, string, string] = ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'];
+
+const HIGHLIGHT_VALID: [string, string] = ['rgba(200,255,230,0.65)', 'rgba(0,255,135,0.0)'];
+const HIGHLIGHT_SELECTED_HINT: [string, string] = ['rgba(255,245,200,0.65)', 'rgba(255,184,0,0.0)'];
+const HIGHLIGHT_SELECTED: [string, string] = ['rgba(255,210,240,0.60)', 'rgba(255,45,149,0.0)'];
+const HIGHLIGHT_DEFAULT: [string, string] = ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.0)'];
+
+const BOTTOM_SHADOW_COLORS = ['transparent', 'transparent', 'rgba(0,0,0,0.22)', 'rgba(0,0,0,0.50)'] as [string, string, ...string[]];
+const EDGE_GLOSS_COLORS = ['rgba(255,255,255,0.06)', 'transparent', 'transparent', 'rgba(255,255,255,0.03)'] as [string, string, ...string[]];
+
+const DEFAULT_BORDER_COLOR = 'rgba(200, 77, 255, 0.40)';
+
+const GRADIENT_START_02_0 = { x: 0.2, y: 0 };
+const GRADIENT_END_08_1 = { x: 0.8, y: 1 };
+const GRADIENT_START_05_0 = { x: 0.5, y: 0 };
+const GRADIENT_END_05_055 = { x: 0.5, y: 0.55 };
+const GRADIENT_START_05_035 = { x: 0.5, y: 0.35 };
+const GRADIENT_END_05_1 = { x: 0.5, y: 1 };
+const GRADIENT_START_0_0 = { x: 0, y: 0 };
+const GRADIENT_END_1_1 = { x: 1, y: 1 };
 
 interface LetterCellProps {
   letter: string;
@@ -114,35 +140,46 @@ export const LetterCell = React.memo(function LetterCell({
   const borderRadius = size * 0.20;
   const insetBR = Math.max(borderRadius - 2, 2);
 
-  const getBodyColors = (): [string, string, ...string[]] => {
-    if (isValidWord) return ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
-    if (isSelected && isHinted) return ['#fff0b3', '#ffe580', '#ffd24d', '#ffb800', '#cc9200'];
-    if (isSelected) return ['#ff8fd0', '#ff6eb8', '#ff2d95', '#e91e8c', '#b8147a'];
-    if (isWildcard) return [...GRADIENTS.tile.wildcard] as [string, string, ...string[]];
-    return ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'];
-  };
+  // Memoize all style tuples/colors — only recompute when the boolean state flags change.
+  const {
+    bodyColors,
+    topHighlightColors,
+    borderColor,
+    shadowColor,
+  } = useMemo(() => {
+    let body: [string, string, ...string[]];
+    if (isValidWord) body = BODY_COLORS_VALID;
+    else if (isSelected && isHinted) body = BODY_COLORS_SELECTED_HINT;
+    else if (isSelected) body = BODY_COLORS_SELECTED;
+    else if (isWildcard) body = BODY_COLORS_WILDCARD;
+    else body = BODY_COLORS_DEFAULT;
 
-  const getTopHighlightColors = (): [string, string] => {
-    if (isValidWord) return ['rgba(200,255,230,0.65)', 'rgba(0,255,135,0.0)'];
-    if (isSelected && isHinted) return ['rgba(255,245,200,0.65)', 'rgba(255,184,0,0.0)'];
-    if (isSelected) return ['rgba(255,210,240,0.60)', 'rgba(255,45,149,0.0)'];
-    return ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.0)'];
-  };
+    let highlight: [string, string];
+    if (isValidWord) highlight = HIGHLIGHT_VALID;
+    else if (isSelected && isHinted) highlight = HIGHLIGHT_SELECTED_HINT;
+    else if (isSelected) highlight = HIGHLIGHT_SELECTED;
+    else highlight = HIGHLIGHT_DEFAULT;
 
-  const getBorderColor = () => {
-    if (isValidWord) return COLORS.green;
-    if (isSelected && isHinted) return COLORS.gold;
-    if (isSelected) return COLORS.accent;
-    if (isWildcard) return COLORS.gold;
-    return 'rgba(200, 77, 255, 0.40)';
-  };
+    let border: string;
+    if (isValidWord) border = COLORS.green;
+    else if (isSelected && isHinted) border = COLORS.gold;
+    else if (isSelected) border = COLORS.accent;
+    else if (isWildcard) border = COLORS.gold;
+    else border = DEFAULT_BORDER_COLOR;
 
-  const getShadowColor = () => {
-    if (isValidWord) return COLORS.green;
-    if (isSelected) return COLORS.accent;
-    if (isWildcard) return COLORS.gold;
-    return COLORS.purple;
-  };
+    let shadow: string;
+    if (isValidWord) shadow = COLORS.green;
+    else if (isSelected) shadow = COLORS.accent;
+    else if (isWildcard) shadow = COLORS.gold;
+    else shadow = COLORS.purple;
+
+    return {
+      bodyColors: body,
+      topHighlightColors: highlight,
+      borderColor: border,
+      shadowColor: shadow,
+    };
+  }, [isValidWord, isSelected, isHinted, isWildcard]);
 
   const showOuterGlow = isSelected || isValidWord;
   const outerGlowColor = isValidWord ? COLORS.greenGlow : isSelected ? COLORS.accentGlow : 'transparent';
@@ -251,10 +288,10 @@ export const LetterCell = React.memo(function LetterCell({
             width: size,
             height: size,
             borderRadius,
-            borderColor: getBorderColor(),
+            borderColor,
             borderWidth: isSelected || isValidWord ? 2 : isWildcard ? 1.5 : 1,
             transform: [{ scale: scaleAnim }],
-            shadowColor: getShadowColor(),
+            shadowColor,
             shadowOpacity: (isSelected || isValidWord) ? 0.8 : 0.5,
             shadowRadius: (isSelected || isValidWord) ? 16 : 8,
             shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 8 : 4 },
@@ -263,16 +300,16 @@ export const LetterCell = React.memo(function LetterCell({
         ]}
       >
         <LinearGradient
-          colors={getBodyColors()}
-          start={{ x: 0.2, y: 0 }}
-          end={{ x: 0.8, y: 1 }}
+          colors={bodyColors}
+          start={GRADIENT_START_02_0}
+          end={GRADIENT_END_08_1}
           style={[StyleSheet.absoluteFillObject, { borderRadius: insetBR }]}
         />
 
         <LinearGradient
-          colors={getTopHighlightColors()}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 0.55 }}
+          colors={topHighlightColors}
+          start={GRADIENT_START_05_0}
+          end={GRADIENT_END_05_055}
           style={{
             position: 'absolute',
             top: 0,
@@ -299,9 +336,9 @@ export const LetterCell = React.memo(function LetterCell({
         />
 
         <LinearGradient
-          colors={['transparent', 'transparent', 'rgba(0,0,0,0.22)', 'rgba(0,0,0,0.50)'] as [string, string, ...string[]]}
-          start={{ x: 0.5, y: 0.35 }}
-          end={{ x: 0.5, y: 1 }}
+          colors={BOTTOM_SHADOW_COLORS}
+          start={GRADIENT_START_05_035}
+          end={GRADIENT_END_05_1}
           style={{
             position: 'absolute',
             bottom: 0,
@@ -327,9 +364,9 @@ export const LetterCell = React.memo(function LetterCell({
         />
 
         <LinearGradient
-          colors={['rgba(255,255,255,0.06)', 'transparent', 'transparent', 'rgba(255,255,255,0.03)'] as [string, string, ...string[]]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          colors={EDGE_GLOSS_COLORS}
+          start={GRADIENT_START_0_0}
+          end={GRADIENT_END_1_1}
           style={{
             ...StyleSheet.absoluteFillObject,
             borderRadius: insetBR,

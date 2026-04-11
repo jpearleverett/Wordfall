@@ -42,14 +42,14 @@ const styles = StyleSheet.create({
   },
   category: {
     fontSize: 11,
-    fontFamily: FONTS.bold,
+    fontFamily: FONTS.bodyBold,
     color: COLORS.cyan,
     letterSpacing: 2,
     marginBottom: 8,
   },
   text: {
     fontSize: 14,
-    fontFamily: FONTS.regular,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 20,

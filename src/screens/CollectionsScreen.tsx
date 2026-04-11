@@ -769,7 +769,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.borderMedium,
   },
   atlasWordText: {
     fontSize: 12,

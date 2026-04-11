@@ -104,6 +104,7 @@ interface PlayerContextLike {
   awardFreeSpin: () => void;
   updateWinStreak: (won: boolean) => void;
   collectStamp: (albumId: string, stampIndex: number) => void;
+  unlockDecoration: (decorationId: string) => void;
 }
 
 interface EconomyContextLike {
