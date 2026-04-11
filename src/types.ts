@@ -89,6 +89,13 @@ export interface GameState {
 
 export type GameAction =
   | { type: 'SELECT_CELL'; position: CellPosition }
+  /**
+   * Batched form of SELECT_CELL. The reducer applies the positions in order,
+   * producing a single new state object regardless of how many cells were
+   * crossed. Used by the Grid pan handler's requestAnimationFrame batcher
+   * so rapid drags don't commit N times per frame.
+   */
+  | { type: 'SELECT_CELLS'; positions: CellPosition[] }
   | { type: 'CLEAR_SELECTION' }
   | { type: 'SUBMIT_WORD' }
   | { type: 'USE_HINT' }

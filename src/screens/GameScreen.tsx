@@ -28,6 +28,7 @@ import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 import { profilerOnRender, perfMark } from '../utils/perfInstrument';
+import { useStableCallback } from '../utils/hooks';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { analytics } from '../services/analytics';
@@ -38,6 +39,8 @@ import { MockAdModal } from '../components/MockAdModal';
 import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
 import { getModeTutorial } from '../data/modeTutorials';
 import { PostLossModal } from '../components/PostLossModal';
+import { GameFlashes } from './game/GameFlashes';
+import { GameBanners } from './game/GameBanners';
 
 if (
   Platform.OS === 'android' &&
@@ -367,6 +370,7 @@ export function GameScreen({
   const {
     state,
     selectCell,
+    selectCells,
     clearSelection,
     submitWord,
     useHint,
@@ -1187,28 +1191,53 @@ export function GameScreen({
   // compete with gesture frame processing. Throttling to 40ms max frequency
   // keeps the initial tap feedback crisp while dragging feels smooth.
   const lastTapFeedbackAt = useRef(0);
-  const handleCellPress = useCallback(
-    (position: CellPosition) => {
-      // Dev-only: mark the start of a tap so we can measure how long it takes
-      // to reach the React commit phase (the moment the user sees visual
-      // feedback). profilerOnRender reads this mark on the GameScreen commit.
-      perfMark('tap');
-      resetIdleTimer();
-      const now = Date.now();
-      if (now - lastTapFeedbackAt.current > 40) {
-        lastTapFeedbackAt.current = now;
-        void tapHaptic();
-        void soundManager.playSound('tap');
-      }
-      // Adjacency is handled by the reducer — non-adjacent taps start a new selection
-      // Wildcard placement mode is also handled by the reducer via SELECT_CELL
-      selectCell(position);
-    },
-    [selectCell, resetIdleTimer]
-  );
+  // handleCellPress / handleCellsPress are declared with useStableCallback
+  // rather than useCallback. Grid is wrapped in React.memo and compares its
+  // props shallowly; if these callbacks changed identity on every GameScreen
+  // render (e.g. because resetIdleTimer's deps churn), Grid would re-render
+  // every tap even though its internal gesture handler already reads the
+  // latest callback via a ref. Stabilising identity here lets Grid's memo
+  // bail out for the whole 49-cell subtree on every tap.
+  const handleCellPress = useStableCallback((position: CellPosition) => {
+    // Dev-only: mark the start of a tap so we can measure how long it takes
+    // to reach the React commit phase.
+    perfMark('tap');
+    resetIdleTimer();
+    const now = Date.now();
+    if (now - lastTapFeedbackAt.current > 40) {
+      lastTapFeedbackAt.current = now;
+      void tapHaptic();
+      void soundManager.playSound('tap');
+    }
+    // Adjacency is handled by the reducer — non-adjacent taps start a new selection.
+    // Wildcard placement mode is also handled by the reducer via SELECT_CELL.
+    selectCell(position);
+  });
 
-  const handleDragStart = useCallback(() => setIsDragging(true), []);
-  const handleDragEnd = useCallback(() => setIsDragging(false), []);
+  // Batched drag-crossing handler. The Grid pan gesture enqueues every cell
+  // crossed during a single animation frame and calls this once per frame.
+  // Feedback side-effects (haptic, sound, idle-reset) fire once per batch
+  // rather than once per cell — a 7-cell diagonal swipe should feel like
+  // one smooth selection, not seven stacked clicks. Reducer dispatch is a
+  // single SELECT_CELLS action producing one new state object.
+  const handleCellsPress = useStableCallback((positions: CellPosition[]) => {
+    if (positions.length === 0) return;
+    perfMark('tap');
+    resetIdleTimer();
+    const now = Date.now();
+    if (now - lastTapFeedbackAt.current > 40) {
+      lastTapFeedbackAt.current = now;
+      void tapHaptic();
+      void soundManager.playSound('tap');
+    }
+    selectCells(positions);
+  });
+
+  const handleDragStart = useStableCallback(() => setIsDragging(true));
+  const handleDragEnd = useStableCallback(() => setIsDragging(false));
+
+  // Placeholder stable-callback declarations — actual wrappers defined
+  // below, after handleHint/handleWatchAdForHint are declared.
 
   const handleHint = useCallback(() => {
     if (mode !== 'relax') {
@@ -1281,6 +1310,26 @@ export function GameScreen({
     setShowFailed(false);
   }, [board, level, mode, effectiveMaxMoves, effectiveTimeLimit, newGame]);
 
+  // ── Stable-identity wrappers for callbacks passed to memoized children ──
+  // These wrappers have identity that never changes across renders, so
+  // React.memo comparisons on GameBanners / GameHUD / GameOverlays succeed
+  // and those subtrees do NOT re-reconcile on every SELECT_CELL tap.
+  // Each wrapper internally calls the latest closure (see useStableCallback).
+  const stableHandleUndo = useStableCallback(() => {
+    handleUndo();
+  });
+  const stableHandleRetry = useStableCallback(() => {
+    handleRetry();
+  });
+  const stableHandleIdleHintBannerTap = useStableCallback(() => {
+    setShowIdleHint(false);
+    handleHint();
+  });
+  const stableHandleAdHintBannerTap = useStableCallback(() => {
+    setShowIdleHint(false);
+    void handleWatchAdForHint();
+  });
+
   const handleNextLevel = useCallback(() => {
     setShowComplete(false);
     completionHandled.current = false;
@@ -1307,7 +1356,11 @@ export function GameScreen({
   }, [player]);
 
   // Booster handlers — spend from persistent economy inventory
-  const handleWildcard = useCallback(() => {
+  // Booster handlers use useStableCallback (not useCallback) so their
+  // identity is stable across renders. Otherwise they'd be recreated on
+  // every economy change (which is most renders), defeating BoosterBarMemo's
+  // React.memo compare and making the booster bar re-render with every tap.
+  const handleWildcard = useStableCallback(() => {
     if ((economy.boosterTokens?.wildcardTile ?? 0) <= 0) return;
     economy.spendBoosterToken('wildcardTile');
     grantBooster('wildcardTile');
@@ -1315,9 +1368,9 @@ export function GameScreen({
     void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
     checkFirstBooster();
     activateWildcard();
-  }, [activateWildcard, economy, grantBooster, level, mode, checkFirstBooster]);
+  });
 
-  const handleSpotlight = useCallback(() => {
+  const handleSpotlight = useStableCallback(() => {
     if ((economy.boosterTokens?.spotlight ?? 0) <= 0) return;
     economy.spendBoosterToken('spotlight');
     grantBooster('spotlight');
@@ -1325,9 +1378,9 @@ export function GameScreen({
     void analytics.logEvent('booster_used', { level, mode, booster: 'spotlight' });
     checkFirstBooster();
     activateSpotlight();
-  }, [activateSpotlight, economy, grantBooster, level, mode, checkFirstBooster]);
+  });
 
-  const handleSmartShuffle = useCallback(() => {
+  const handleSmartShuffle = useStableCallback(() => {
     if ((economy.boosterTokens?.smartShuffle ?? 0) <= 0) return;
     economy.spendBoosterToken('smartShuffle');
     grantBooster('smartShuffle');
@@ -1335,38 +1388,12 @@ export function GameScreen({
     void analytics.logEvent('booster_used', { level, mode, booster: 'smartShuffle' });
     checkFirstBooster();
     activateSmartShuffle();
-  }, [activateSmartShuffle, economy, grantBooster, level, mode, checkFirstBooster]);
-
-  // Escalating chain scale based on combo count
-  const chainTargetScale = state.combo >= 6 ? 1.5 : state.combo >= 4 ? 1.2 : 1;
-  const chainScale = chainAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.5, chainTargetScale],
   });
 
-  // Escalating chain color and style
-  const chainBgColor = state.combo >= 6
-    ? 'rgba(168, 85, 247, 0.95)'   // Purple for 6+
-    : state.combo >= 4
-    ? 'rgba(255, 215, 0, 0.95)'    // Gold for 4-5
-    : 'rgba(255, 45, 149, 0.95)';   // Pink for 2-3
-
-  const chainShadowColor = state.combo >= 6
-    ? COLORS.purple
-    : state.combo >= 4
-    ? COLORS.gold
-    : COLORS.accent;
-
-  const chainBorderColor = state.combo >= 6
-    ? 'rgba(200, 140, 255, 0.5)'
-    : state.combo >= 4
-    ? 'rgba(255, 230, 100, 0.5)'
-    : 'rgba(255,255,255,0.3)';
-
-  const validFlashOpacity = validFlashAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.3],
-  });
+  // NOTE: chainScale/chainBgColor/chainShadowColor/chainBorderColor and the
+  // valid/invalid flash opacities were previously computed here. They moved
+  // to GameFlashes (src/screens/game/GameFlashes.tsx) as part of the
+  // per-tap re-render decomposition — see that file for the memoized subtree.
 
   const bt = economy.boosterTokens ?? { wildcardTile: 0, spotlight: 0, smartShuffle: 0 };
   const hasAnyBoosters =
@@ -1389,11 +1416,6 @@ export function GameScreen({
     });
     return dimmed;
   }, [state.spotlightActive, state.spotlightLetters, state.board.grid]);
-
-  const invalidFlashOpacity = invalidFlashAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.25],
-  });
 
   return (
     <React.Profiler id="GameScreen" onRender={profilerOnRender}>
@@ -1450,152 +1472,27 @@ export function GameScreen({
       />
 
 
-      {/* Chain celebration */}
-      {chainVisible && (
-        <Animated.View style={[
-          styles.chainPopup,
-          {
-            backgroundColor: chainBgColor,
-            shadowColor: chainShadowColor,
-            borderColor: chainBorderColor,
-            opacity: chainAnim,
-            transform: [{ scale: chainScale }],
-          },
-        ]}>
-          <Text style={[
-            styles.chainText,
-            state.combo >= 6 && { fontSize: 40, letterSpacing: 6 },
-            state.combo >= 4 && state.combo < 6 && { fontSize: 36, letterSpacing: 5.5 },
-          ]}>
-            {state.combo}x CHAIN!
-          </Text>
-        </Animated.View>
-      )}
+      {/* Chain celebrations, valid/invalid flash, score popup, big word
+          celebration — all extracted into a single memoized subtree so
+          this branch doesn't re-reconcile on every SELECT_CELL. All
+          Animated.Values are ref-stable and compared referentially by
+          React.memo; the primitive props only change on word submit /
+          combo increment. */}
+      <GameFlashes
+        chainVisible={chainVisible}
+        combo={state.combo}
+        showValidFlash={showValidFlash}
+        showInvalidFlash={showInvalidFlash}
+        scorePopup={scorePopup}
+        lastSubmittedWordLen={lastSubmittedWordLenRef.current}
+        bigWordLabel={bigWordLabel}
+        chainAnim={chainAnim}
+        validFlashAnim={validFlashAnim}
+        invalidFlashAnim={invalidFlashAnim}
+        scorePopupAnim={scorePopupAnim}
+        bigWordAnim={bigWordAnim}
+      />
 
-      {/* Chain combo neon pulse overlay — escalates with combo count */}
-      {chainVisible && state.combo >= 3 && (
-        <Animated.View
-          style={[
-            styles.neonPulseOverlay,
-            {
-              borderColor: state.combo >= 4 ? COLORS.cyan : COLORS.accent,
-              opacity: chainAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0, 0.6, 0],
-              }),
-            },
-          ]}
-          pointerEvents="none"
-        />
-      )}
-
-      {/* VHS glitch overlay for 4x+ chains */}
-      {chainVisible && state.combo >= 4 && (
-        <Animated.View
-          style={[
-            styles.vhsGlitchOverlay,
-            {
-              opacity: chainAnim.interpolate({
-                inputRange: [0, 0.3, 0.5, 0.7, 1],
-                outputRange: [0, 0.12, 0, 0.08, 0],
-              }),
-              transform: [{
-                translateX: chainAnim.interpolate({
-                  inputRange: [0, 0.2, 0.25, 0.45, 0.5, 1],
-                  outputRange: [0, 4, -3, 2, -1, 0],
-                }),
-              }],
-            },
-          ]}
-          pointerEvents="none"
-        />
-      )}
-
-      {/* Valid word green flash overlay */}
-      {showValidFlash && (
-        <Animated.View
-          style={[styles.validFlashOverlay, { opacity: validFlashOpacity }]}
-          pointerEvents="none"
-        />
-      )}
-
-      {/* Invalid word red flash overlay */}
-      {showInvalidFlash && (
-        <Animated.View
-          style={[styles.invalidFlashOverlay, { opacity: invalidFlashOpacity }]}
-          pointerEvents="none"
-        />
-      )}
-
-      {/* Score popup with word-length scaling (Task 2) */}
-      {scorePopup && (() => {
-        const wordLen = lastSubmittedWordLenRef.current;
-        const popupScale = wordLen >= 7 ? 1.6 : wordLen >= 5 ? 1.3 : 1.0;
-        return (
-        <Animated.View
-          style={[
-            styles.scorePopup,
-            wordLen >= 7 && styles.scorePopupBig,
-            wordLen >= 5 && wordLen < 7 && styles.scorePopupMedium,
-            {
-              opacity: scorePopupAnim.interpolate({
-                inputRange: [0, 0.5, 1, 1.8, 2],
-                outputRange: [0, 1, 1, 1, 0],
-              }),
-              transform: [
-                {
-                  translateY: scorePopupAnim.interpolate({
-                    inputRange: [0, 1, 2],
-                    outputRange: [20, 0, -40],
-                  }),
-                },
-                {
-                  scale: scorePopupAnim.interpolate({
-                    inputRange: [0, 0.3, 1, 2],
-                    outputRange: [0.5 * popupScale, 1.2 * popupScale, popupScale, 0.8 * popupScale],
-                  }),
-                },
-              ],
-            },
-          ]}
-          pointerEvents="none"
-        >
-          <Text style={[
-            styles.scorePopupText,
-            state.combo > 1 && styles.scorePopupCombo,
-            wordLen >= 7 && styles.scorePopupTextBig,
-          ]}>
-            {scorePopup.label}
-          </Text>
-        </Animated.View>
-        );
-      })()}
-
-      {/* Big word celebration label overlay (Task 2) */}
-      {bigWordLabel && (
-        <Animated.View
-          style={[
-            styles.bigWordOverlay,
-            {
-              opacity: bigWordAnim.interpolate({
-                inputRange: [0, 0.3, 0.8, 1],
-                outputRange: [0, 1, 1, 0],
-              }),
-              transform: [
-                {
-                  scale: bigWordAnim.interpolate({
-                    inputRange: [0, 0.2, 0.5, 1],
-                    outputRange: [0.3, 1.3, 1.0, 0.8],
-                  }),
-                },
-              ],
-            },
-          ]}
-          pointerEvents="none"
-        >
-          <Text style={styles.bigWordText}>{bigWordLabel}</Text>
-        </Animated.View>
-      )}
 
       {/* Word bank - above grid */}
       <View style={styles.wordArea}>
@@ -1610,70 +1507,28 @@ export function GameScreen({
 
       {/* Grid area */}
       <View style={styles.gridArea} onLayout={handleGridLayout}>
-        {/* Floating banners - absolute overlay, don't affect grid sizing */}
+        {/* Floating banners - absolute overlay, don't affect grid sizing.
+            Memoized subtree: all its conditions are derived from non-per-tap
+            state (mode, gravityDirection, wildcardMode, hintsAvailable,
+            isStuck, undosLeft). When selectedCells changes, GameBanners'
+            React.memo bails out and this entire subtree is skipped. */}
         <View style={styles.bannerOverlay} pointerEvents="box-none">
-          {mode === 'gravityFlip' && state.gravityDirection !== 'down' && (
-            <View style={styles.cascadeBar}>
-              <Text style={styles.cascadeText}>
-                🔄 Gravity: {state.gravityDirection === 'right' ? '→' : state.gravityDirection === 'up' ? '↑' : '←'}
-              </Text>
-            </View>
-          )}
-          {mode === 'shrinkingBoard' && state.wordsUntilShrink === 1 && state.status === 'playing' && (
-            <View style={[styles.cascadeBar, { borderColor: COLORS.coral }]}>
-              <Text style={[styles.cascadeText, { color: COLORS.coral }]}>
-                🔻 SHRINKING IN 1 WORD
-              </Text>
-            </View>
-          )}
-          {state.wildcardMode && (
-            <View style={[styles.cascadeBar, { borderColor: COLORS.gold }]}>
-              <Text style={[styles.cascadeText, { color: COLORS.gold }]}>
-                ★ Tap a cell to place wildcard
-              </Text>
-            </View>
-          )}
-          {showIdleHint && hintsAvailable > 0 && state.status === 'playing' && (
-            <Pressable
-              style={styles.idleHintBanner}
-              onPress={() => { setShowIdleHint(false); handleHint(); }}
-            >
-              <Text style={styles.idleHintText}>
-                Need help? Tap here or press 💡 for a hint
-              </Text>
-            </Pressable>
-          )}
-          {/* When hints are depleted, offer ad-for-hint during gameplay */}
-          {showIdleHint && hintsAvailable === 0 && state.status === 'playing' && !economy.isAdFree && adManager.canShowAd('hint_reward') && (
-            <Pressable
-              style={styles.adHintBanner}
-              onPress={() => { setShowIdleHint(false); handleWatchAdForHint(); }}
-            >
-              <Text style={styles.adHintBannerText}>
-                {'\uD83C\uDFAC'} Out of hints — watch ad for +1 hint
-              </Text>
-            </Pressable>
-          )}
-          {isStuck && state.status === 'playing' && state.undosLeft > 0 && (
-            <Pressable
-              style={styles.stuckBanner}
-              onPress={handleUndo}
-            >
-              <Text style={styles.stuckText}>
-                Stuck? Tap here to undo your last move
-              </Text>
-            </Pressable>
-          )}
-          {isStuck && state.status === 'playing' && state.undosLeft <= 0 && (
-            <Pressable
-              style={[styles.stuckBanner, styles.stuckBannerRetry]}
-              onPress={handleRetry}
-            >
-              <Text style={styles.stuckText}>
-                No moves left — tap to retry this puzzle
-              </Text>
-            </Pressable>
-          )}
+          <GameBanners
+            mode={mode}
+            gravityDirection={state.gravityDirection}
+            wordsUntilShrink={state.wordsUntilShrink}
+            wildcardMode={state.wildcardMode}
+            status={state.status}
+            showIdleHint={showIdleHint}
+            hintsAvailable={hintsAvailable}
+            canShowAdHint={!economy.isAdFree && adManager.canShowAd('hint_reward')}
+            isStuck={isStuck}
+            undosLeft={state.undosLeft}
+            onIdleHintTap={stableHandleIdleHintBannerTap}
+            onAdHintTap={stableHandleAdHintBannerTap}
+            onUndoTap={stableHandleUndo}
+            onRetryTap={stableHandleRetry}
+          />
         </View>
 
         {/* Grid wrapper with scale animations (#3 letter pop, #4 undo pulse) */}
@@ -1684,6 +1539,7 @@ export function GameScreen({
               selectedCells={state.selectedCells}
               hintedCells={isValidWord ? state.selectedCells : EMPTY_CELL_ARRAY}
               onCellPress={handleCellPress}
+              onCellsPress={handleCellsPress}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               validWord={showValidFlash}
