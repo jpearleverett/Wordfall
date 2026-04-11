@@ -55,7 +55,7 @@ interface GridProps {
   fallActive?: boolean;
 }
 
-export function GameGrid({
+function GameGridImpl({
   grid,
   selectedCells,
   hintedCells = [],
@@ -315,6 +315,23 @@ export function GameGrid({
     styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 21 }
   ], [gridWidth, gridHeight]);
 
+  // Build a single stable column style per gravity config to avoid per-column allocations inside the map loop.
+  const columnStyle = useMemo(() => {
+    const base = [
+      styles.column,
+      { width: cellSize + CELL_GAP, height: gridHeight },
+    ] as any[];
+    if (noGravityLayout) base.push(styles.columnNoGravity);
+    else if (gravityDirection === 'up') base.push(styles.columnGravityUp);
+    return base;
+  }, [cellSize, gridHeight, noGravityLayout, gravityDirection]);
+
+  // Empty-slot placeholder style (only used by noGravityLayout), memoized to share reference.
+  const emptySlotStyle = useMemo(
+    () => ({ width: cellSize, height: cellSize, margin: CELL_GAP / 2 }),
+    [cellSize],
+  );
+
   return (
     <View style={styles.shadowWrap}>
       <View style={outerGlowStyle} />
@@ -344,22 +361,8 @@ export function GameGrid({
               accessibilityRole="none"
               accessibilityLabel={`Letter grid, ${rows} rows by ${cols} columns`}
             >
-              {columns.map((column, colIndex) => {
-                const colStyle = [
-                  styles.column,
-                  {
-                    width: cellSize + CELL_GAP,
-                    height: gridHeight,
-                  },
-                  noGravityLayout && styles.columnNoGravity,
-                  !noGravityLayout && gravityDirection === 'up' && styles.columnGravityUp,
-                ];
-
-                return (
-                <View
-                  key={colIndex}
-                  style={colStyle as any}
-                >
+              {columns.map((column, colIndex) => (
+                <View key={colIndex} style={columnStyle}>
                   {!noGravityLayout && gravityDirection !== 'up' && <View style={EMPTY_FLEX} />}
                   {column.map(({ cell, row, col }) => {
                     if (!cell) {
@@ -367,7 +370,7 @@ export function GameGrid({
                       return (
                         <View
                           key={`empty-${row}-${col}`}
-                          style={{ width: cellSize, height: cellSize, margin: CELL_GAP / 2 }}
+                          style={emptySlotStyle}
                         />
                       );
                     }
@@ -396,8 +399,7 @@ export function GameGrid({
                   })}
                   {!noGravityLayout && gravityDirection === 'up' && <View style={EMPTY_FLEX} />}
                 </View>
-                );
-              })}
+              ))}
             </View>
           </GestureDetector>
 
@@ -429,6 +431,8 @@ export function GameGrid({
     </View>
   );
 }
+
+export const GameGrid = React.memo(GameGridImpl);
 
 const styles = StyleSheet.create({
   shadowWrap: {

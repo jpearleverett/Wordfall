@@ -112,6 +112,11 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
   return moved;
 }
 
+// Shared empty Set so memoized consumers (GameGrid) don't re-render when spotlight is inactive.
+const EMPTY_CELL_KEY_SET: Set<string> = new Set();
+// Shared empty array reference — passed to GameGrid props to preserve React.memo equality.
+const EMPTY_CELL_ARRAY: CellPosition[] = [];
+
 // --- Word-Clear Particle Pop ---
 const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', '#ff9100'];
 
@@ -238,6 +243,23 @@ export function GameScreen({
   const prevFoundWordsRef = useRef(foundWords);
   const [movedCells, setMovedCells] = useState<CellPosition[]>([]);
   const [clearParticles, setClearParticles] = useState<{ x: number; y: number } | null>(null);
+  // Tracks transient setTimeout handles (particle bursts, score popups, etc.) so they can be cleared on unmount.
+  const pendingTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const trackTimeout = useCallback(
+    (fn: () => void, ms: number): ReturnType<typeof setTimeout> => {
+      const handle = setTimeout(() => {
+        pendingTimeoutsRef.current.delete(handle);
+        fn();
+      }, ms);
+      pendingTimeoutsRef.current.add(handle);
+      return handle;
+    },
+    [],
+  );
+  useEffect(() => () => {
+    pendingTimeoutsRef.current.forEach(clearTimeout);
+    pendingTimeoutsRef.current.clear();
+  }, []);
   const gridScaleAnim = useRef(new Animated.Value(1)).current;
   const undoFlashAnim = useRef(new Animated.Value(0)).current;
   const [showUndoFlash, setShowUndoFlash] = useState(false);
@@ -327,7 +349,7 @@ export function GameScreen({
   const showOfferIfAllowed = useCallback((type: OfferType) => {
     if (offerShownThisLevel.current || activeOffer) return false;
     offerShownThisLevel.current = true;
-    setTimeout(() => {
+    trackTimeout(() => {
       setActiveOffer(type);
       void analytics.logEvent('offer_shown', {
         offerType: type,
@@ -337,7 +359,7 @@ export function GameScreen({
       });
     }, 750);
     return true;
-  }, [activeOffer, level, mode, difficulty]);
+  }, [activeOffer, level, mode, difficulty, trackTimeout]);
 
   // booster_pack: show on first entry to a hard/expert level
   useEffect(() => {
@@ -556,7 +578,7 @@ export function GameScreen({
     if (reduceMotion) {
       // Skip animation, just show briefly then hide
       chainAnim.setValue(1);
-      setTimeout(() => {
+      trackTimeout(() => {
         chainAnim.setValue(0);
         setChainVisible(false);
       }, ANIM.chainPopupDuration);
@@ -848,15 +870,15 @@ export function GameScreen({
 
           // Extra particle burst for 7+ letter words
           setClearParticles({ x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 });
-          setTimeout(() => {
+          trackTimeout(() => {
             setClearParticles(null);
             // Second burst for extra impact
             setClearParticles({ x: SCREEN_WIDTH / 2 + 20, y: gridAreaHeight / 2 + 40 });
-            setTimeout(() => setClearParticles(null), 500);
+            trackTimeout(() => setClearParticles(null), 500);
           }, 250);
         } else {
           bigWordAnim.setValue(1);
-          setTimeout(() => { bigWordAnim.setValue(0); setBigWordLabel(null); }, 1000);
+          trackTimeout(() => { bigWordAnim.setValue(0); setBigWordLabel(null); }, 1000);
         }
       } else if (wordLen >= 5) {
         void soundManager.playSound('combo');
@@ -868,13 +890,13 @@ export function GameScreen({
       // #1 Word-clear particle burst (normal words)
       if (!reduceMotion && wordLen < 7) {
         setClearParticles({ x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 });
-        setTimeout(() => setClearParticles(null), 500);
+        trackTimeout(() => setClearParticles(null), 500);
       }
 
       if (reduceMotion) {
         // Skip score popup animation, just show briefly
         scorePopupAnim.setValue(1);
-        setTimeout(() => { scorePopupAnim.setValue(0); setScorePopup(null); }, 800);
+        trackTimeout(() => { scorePopupAnim.setValue(0); setScorePopup(null); }, 800);
         return;
       }
 
@@ -993,6 +1015,9 @@ export function GameScreen({
     [selectCell, resetIdleTimer]
   );
 
+  const handleDragStart = useCallback(() => setIsDragging(true), []);
+  const handleDragEnd = useCallback(() => setIsDragging(false), []);
+
   const handleHint = useCallback(() => {
     if (mode !== 'relax') {
       // Spend from persistent inventory and grant into game state
@@ -1072,11 +1097,11 @@ export function GameScreen({
       setPendingPostPuzzleOffer(false);
       showOfferIfAllowed('post_puzzle');
       // Still proceed to next level after a brief delay for the offer to appear
-      setTimeout(() => onNextLevel(), 100);
+      trackTimeout(() => onNextLevel(), 100);
     } else {
       onNextLevel();
     }
-  }, [onNextLevel, pendingPostPuzzleOffer, showOfferIfAllowed]);
+  }, [onNextLevel, pendingPostPuzzleOffer, showOfferIfAllowed, trackTimeout]);
 
   // First-booster ceremony (fires once ever, tracked via tooltipsShown)
   const checkFirstBooster = useCallback(() => {
@@ -1164,9 +1189,10 @@ export function GameScreen({
     bt.spotlight > 0 ||
     bt.smartShuffle > 0;
 
-  // Compute spotlight dimmed cells for grid rendering
+  // Compute spotlight dimmed cells for grid rendering.
+  // Returns a shared empty Set when inactive so GameGrid's memoized props stay referentially stable.
   const spotlightDimmedSet = useMemo(() => {
-    if (!state.spotlightActive) return new Set<string>();
+    if (!state.spotlightActive) return EMPTY_CELL_KEY_SET;
     const relevant = new Set(state.spotlightLetters);
     const dimmed = new Set<string>();
     state.board.grid.forEach((row, r) => {
@@ -1486,12 +1512,12 @@ export function GameScreen({
           <GameGrid
             grid={state.board.grid}
             selectedCells={state.selectedCells}
-            hintedCells={isValidWord ? state.selectedCells : []}
+            hintedCells={isValidWord ? state.selectedCells : EMPTY_CELL_ARRAY}
             onCellPress={handleCellPress}
-            onDragStart={() => setIsDragging(true)}
-            onDragEnd={() => setIsDragging(false)}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
             validWord={showValidFlash}
-            movedCells={mode === 'noGravity' ? [] : movedCells}
+            movedCells={mode === 'noGravity' ? EMPTY_CELL_ARRAY : movedCells}
             maxHeight={gridAreaHeight}
             isDragging={isDragging}
             wildcardCells={state.wildcardCells}

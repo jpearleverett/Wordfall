@@ -25,19 +25,24 @@ const SelectionTrailOverlay: React.FC<SelectionTrailOverlayProps> = ({
   selectedCells,
   cellBounds,
 }) => {
+  // Build O(1) lookup map from cellBounds, rebuilt only when bounds change
+  const boundsMap = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    for (const b of cellBounds) {
+      map.set(`${b.row},${b.col}`, { x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    }
+    return map;
+  }, [cellBounds]);
+
   const elements = useMemo(() => {
     if (selectedCells.length === 0) return { lines: [], dots: [] };
 
-    // Look up the actual visual center of a cell from cellBounds
-    const getCellCenter = (row: number, col: number): { x: number; y: number } | null => {
-      const bound = cellBounds.find(b => b.row === row && b.col === col);
-      if (!bound) return null;
-      return { x: bound.x + bound.w / 2, y: bound.y + bound.h / 2 };
-    };
-
-    const dots = [];
+    const dots: { key: string; x: number; y: number }[] = [];
+    const centers: ({ x: number; y: number } | null)[] = [];
     for (let index = 0; index < selectedCells.length; index++) {
-      const center = getCellCenter(selectedCells[index].row, selectedCells[index].col);
+      const c = selectedCells[index];
+      const center = boundsMap.get(`${c.row},${c.col}`) ?? null;
+      centers.push(center);
       if (!center) continue;
       dots.push({
         key: `dot-${index}`,
@@ -46,10 +51,10 @@ const SelectionTrailOverlay: React.FC<SelectionTrailOverlayProps> = ({
       });
     }
 
-    const lines = [];
+    const lines: { key: string; width: number; midX: number; midY: number; angle: number }[] = [];
     for (let i = 0; i < selectedCells.length - 1; i++) {
-      const from = getCellCenter(selectedCells[i].row, selectedCells[i].col);
-      const to = getCellCenter(selectedCells[i + 1].row, selectedCells[i + 1].col);
+      const from = centers[i];
+      const to = centers[i + 1];
       if (!from || !to) continue;
 
       const dx = to.x - from.x;
@@ -69,7 +74,7 @@ const SelectionTrailOverlay: React.FC<SelectionTrailOverlayProps> = ({
     }
 
     return { lines, dots };
-  }, [selectedCells, cellBounds]);
+  }, [selectedCells, boundsMap]);
 
   if (selectedCells.length === 0) return null;
 

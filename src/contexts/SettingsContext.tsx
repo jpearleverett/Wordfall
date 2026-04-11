@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type ThemeOption = 'dark' | 'midnight' | 'ocean' | 'forest' | 'sunset';
@@ -102,18 +102,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(DEFAULT_SETTINGS);
   }, []);
 
-  return (
-    <SettingsContext.Provider
-      value={{
-        ...settings,
-        updateSetting,
-        resetSettings,
-        loaded,
-      }}
-    >
-      {children}
-    </SettingsContext.Provider>
+  const value = useMemo(
+    () => ({
+      ...settings,
+      updateSetting,
+      resetSettings,
+      loaded,
+    }),
+    [settings, updateSetting, resetSettings, loaded],
   );
+
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 
 export const useSettings = () => useContext(SettingsContext);

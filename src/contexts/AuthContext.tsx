@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, ReactNode } from 'react';
 import { auth, isFirebaseConfigured } from '../config/firebase';
 import { signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
 
@@ -43,26 +43,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const signOutUser = async () => {
+  const signOutUser = useCallback(async () => {
     try {
       await auth.signOut();
     } catch (e) {
       console.warn('Sign out failed:', e);
     }
-  };
+  }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        isAnonymous: user?.isAnonymous ?? true,
-        signOut: signOutUser,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+      isAnonymous: user?.isAnonymous ?? true,
+      signOut: signOutUser,
+    }),
+    [user, loading, signOutUser],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);
