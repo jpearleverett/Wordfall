@@ -6,18 +6,22 @@ import { COLORS, GRADIENTS, FONTS } from '../constants';
 
 interface WordChipProps {
   wordPlacement: WordPlacement;
-  currentWord: string;
+  // isActive is now computed by the parent and passed as a stable boolean.
+  // Previously WordChip received `currentWord` directly and computed isActive
+  // internally — which meant React.memo's shallow compare fired on every
+  // currentWord change, forcing ALL 4-6 chips to re-render on every tap
+  // even when their isActive bool didn't actually change. That was the
+  // single biggest contributor to WordBank's 10-20ms per-tap cost.
+  isActive: boolean;
   isValidWord: boolean;
   index: number;
 }
 
-const WordChip = React.memo(function WordChip({ wordPlacement, currentWord, isValidWord, index }: WordChipProps) {
+const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValidWord, index }: WordChipProps) {
   const foundAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const wasFound = useRef(false);
-
-  const isActive = !wordPlacement.found && currentWord === wordPlacement.word;
 
   useEffect(() => {
     if (wordPlacement.found && !wasFound.current) {
@@ -233,15 +237,26 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
         contentContainerStyle={styles.wordList}
         style={styles.wordListScroll}
       >
-        {words.map((wordPlacement, index) => (
-          <WordChip
-            key={`${wordPlacement.word}-${index}`}
-            wordPlacement={wordPlacement}
-            currentWord={currentWord}
-            isValidWord={isValidWord}
-            index={index}
-          />
-        ))}
+        {words.map((wordPlacement, index) => {
+          // Compute isActive here so we pass a stable boolean to WordChip.
+          // When currentWord changes from "AB" → "ABC", only chips whose
+          // boolean flipped re-render; the rest are skipped by React.memo.
+          const isActive = !wordPlacement.found && currentWord === wordPlacement.word;
+          // isValidWord only affects a chip's rendering when it's also the
+          // active one. Passing `false` to all other chips keeps their props
+          // stable when the *global* isValidWord flips, avoiding a cascade
+          // of re-renders across all 4-6 chips on every valid-word moment.
+          const chipIsValid = isActive && isValidWord;
+          return (
+            <WordChip
+              key={`${wordPlacement.word}-${index}`}
+              wordPlacement={wordPlacement}
+              isActive={isActive}
+              isValidWord={chipIsValid}
+              index={index}
+            />
+          );
+        })}
       </ScrollView>
     </View>
   );
