@@ -118,6 +118,174 @@ const EMPTY_CELL_KEY_SET: Set<string> = new Set();
 // Shared empty array reference — passed to GameGrid props to preserve React.memo equality.
 const EMPTY_CELL_ARRAY: CellPosition[] = [];
 
+// Pure helper — module scope so memoized sub-components can reach it.
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ── Memoized booster bar ────────────────────────────────────────────────
+// Extracted so it doesn't re-render on every cell tap. Booster counts change
+// only when a booster is spent; wildcardMode / spotlightActive change only
+// on booster activation. None of them depend on selectedCells, so wrapping
+// in React.memo means this whole subtree is skipped during gameplay taps.
+interface BoosterBarMemoProps {
+  wildcardCount: number;
+  spotlightCount: number;
+  shuffleCount: number;
+  wildcardMode: boolean;
+  spotlightActive: boolean;
+  hasAnyBoosters: boolean;
+  isPlaying: boolean;
+  onWildcard: () => void;
+  onSpotlight: () => void;
+  onSmartShuffle: () => void;
+}
+const BoosterBarMemo = React.memo(function BoosterBarMemo({
+  wildcardCount,
+  spotlightCount,
+  shuffleCount,
+  wildcardMode,
+  spotlightActive,
+  hasAnyBoosters,
+  isPlaying,
+  onWildcard,
+  onSpotlight,
+  onSmartShuffle,
+}: BoosterBarMemoProps) {
+  return (
+    <View style={[
+      styles.boosterBar,
+      !(hasAnyBoosters && isPlaying) && styles.boosterBarHidden,
+    ]}>
+      <Image
+        source={LOCAL_IMAGES.shelfBooster}
+        style={styles.boosterShelfImage}
+        resizeMode="stretch"
+      />
+      <View style={styles.boosterShelf}>
+        {wildcardCount > 0 && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.boosterButton,
+              wildcardMode && styles.boosterActive,
+              pressed && styles.boosterPressed,
+            ]}
+            onPress={onWildcard}
+          >
+            <LinearGradient
+              colors={['rgba(25, 15, 50, 0.85)', 'rgba(15, 8, 35, 0.90)'] as [string, string]}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+            />
+            <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 215, 0, 0.20)' }]} />
+            <View style={styles.boosterIconWrap}>
+              <Text style={styles.boosterEmoji}>★</Text>
+            </View>
+            <Text style={styles.boosterLabel}>Wildcard</Text>
+            <View style={styles.boosterCount}>
+              <Text style={styles.boosterCountText}>{wildcardCount}</Text>
+            </View>
+          </Pressable>
+        )}
+        {spotlightCount > 0 && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.boosterButton,
+              spotlightActive && styles.boosterActive,
+              pressed && styles.boosterPressed,
+            ]}
+            onPress={onSpotlight}
+          >
+            <LinearGradient
+              colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+            />
+            <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 215, 0, 0.18)' }]} />
+            <View style={styles.boosterIconWrap}>
+              <Text style={styles.boosterEmoji}>💡</Text>
+            </View>
+            <Text style={styles.boosterLabel}>Spotlight</Text>
+            <View style={styles.boosterCount}>
+              <Text style={styles.boosterCountText}>{spotlightCount}</Text>
+            </View>
+          </Pressable>
+        )}
+        {shuffleCount > 0 && (
+          <Pressable
+            style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
+            onPress={onSmartShuffle}
+          >
+            <LinearGradient
+              colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
+              style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
+            />
+            <View style={[styles.boosterGlow, { backgroundColor: 'rgba(168, 85, 247, 0.20)' }]} />
+            <View style={styles.boosterIconWrap}>
+              <Text style={styles.boosterEmoji}>🔀</Text>
+            </View>
+            <Text style={styles.boosterLabel}>Shuffle</Text>
+            <View style={styles.boosterCount}>
+              <Text style={styles.boosterCountText}>{shuffleCount}</Text>
+            </View>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+});
+
+// ── Memoized timer/moves bars ──────────────────────────────────────────
+// These only need to update when the tick fires or moves increment — never
+// on cell taps. Separating them means GameScreen's tap-driven re-renders
+// don't touch this subtree.
+interface TimerMovesBarsProps {
+  hasTimer: boolean;
+  hasMoveLimit: boolean;
+  timeRemaining: number;
+  moves: number;
+  maxMoves: number;
+}
+const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
+  hasTimer,
+  hasMoveLimit,
+  timeRemaining,
+  moves,
+  maxMoves,
+}: TimerMovesBarsProps) {
+  return (
+    <>
+      {hasTimer && (
+        <View style={[
+          styles.timerBar,
+          timeRemaining <= 30 && timeRemaining > 0 && styles.timerBarDanger,
+          timeRemaining <= 0 && styles.barHidden,
+        ]}>
+          <Text style={[
+            styles.timerText,
+            timeRemaining <= 30 && styles.timerTextDanger,
+          ]}>
+            ⏱ {formatTime(timeRemaining)}
+          </Text>
+        </View>
+      )}
+      {hasMoveLimit && maxMoves > 0 && (
+        <View style={[
+          styles.moveBar,
+          moves >= maxMoves - 1 && styles.moveBarDanger,
+        ]}>
+          <Text style={[
+            styles.moveText,
+            moves >= maxMoves - 1 && styles.moveTextDanger,
+          ]}>
+            Moves: {moves}/{maxMoves}
+          </Text>
+        </View>
+      )}
+    </>
+  );
+});
+
 // --- Word-Clear Particle Pop ---
 const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', '#ff9100'];
 
@@ -1169,13 +1337,6 @@ export function GameScreen({
     activateSmartShuffle();
   }, [activateSmartShuffle, economy, grantBooster, level, mode, checkFirstBooster]);
 
-  // Format timer — extracted as useCallback to avoid recreation on every render
-  const formatTime = useCallback((seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }, []);
-
   // Escalating chain scale based on combo count
   const chainTargetScale = state.combo >= 6 ? 1.5 : state.combo >= 4 ? 1.2 : 1;
   const chainScale = chainAnim.interpolate({
@@ -1278,34 +1439,15 @@ export function GameScreen({
         onBack={onHome}
       />
 
-      {/* Timer/move bars - reserved space so they don't shift layout */}
-      {modeConfig.rules.hasTimer && (
-        <View style={[
-          styles.timerBar,
-          state.timeRemaining <= 30 && state.timeRemaining > 0 && styles.timerBarDanger,
-          state.timeRemaining <= 0 && styles.barHidden,
-        ]}>
-          <Text style={[
-            styles.timerText,
-            state.timeRemaining <= 30 && styles.timerTextDanger,
-          ]}>
-            ⏱ {formatTime(state.timeRemaining)}
-          </Text>
-        </View>
-      )}
-      {modeConfig.rules.hasMoveLimit && effectiveMaxMoves > 0 && (
-        <View style={[
-          styles.moveBar,
-          state.moves >= effectiveMaxMoves - 1 && styles.moveBarDanger,
-        ]}>
-          <Text style={[
-            styles.moveText,
-            state.moves >= effectiveMaxMoves - 1 && styles.moveTextDanger,
-          ]}>
-            Moves: {state.moves}/{effectiveMaxMoves}
-          </Text>
-        </View>
-      )}
+      {/* Timer/move bars — extracted to a memoized sub-component so they only
+          re-render on tick / move-increment, not on every cell tap. */}
+      <TimerMovesBarsMemo
+        hasTimer={modeConfig.rules.hasTimer ?? false}
+        hasMoveLimit={modeConfig.rules.hasMoveLimit ?? false}
+        timeRemaining={state.timeRemaining}
+        moves={state.moves}
+        maxMoves={effectiveMaxMoves}
+      />
 
 
       {/* Chain celebration */}
@@ -1587,85 +1729,20 @@ export function GameScreen({
         )}
       </View>
 
-      {/* Booster bar - custom icon assets on metallic shelf */}
-      <View style={[
-        styles.boosterBar,
-        !(hasAnyBoosters && state.status === 'playing') && styles.boosterBarHidden,
-      ]}>
-        {/* Metallic shelf asset */}
-        <Image
-          source={LOCAL_IMAGES.shelfBooster}
-          style={styles.boosterShelfImage}
-          resizeMode="stretch"
-        />
-        <View style={styles.boosterShelf}>
-          {bt.wildcardTile > 0 && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.boosterButton,
-                state.wildcardMode && styles.boosterActive,
-                pressed && styles.boosterPressed,
-              ]}
-              onPress={handleWildcard}
-            >
-              <LinearGradient
-                colors={['rgba(25, 15, 50, 0.85)', 'rgba(15, 8, 35, 0.90)'] as [string, string]}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-              />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 215, 0, 0.20)' }]} />
-              <View style={styles.boosterIconWrap}>
-                <Text style={styles.boosterEmoji}>★</Text>
-              </View>
-              <Text style={styles.boosterLabel}>Wildcard</Text>
-              <View style={styles.boosterCount}>
-                <Text style={styles.boosterCountText}>{bt.wildcardTile}</Text>
-              </View>
-            </Pressable>
-          )}
-          {bt.spotlight > 0 && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.boosterButton,
-                state.spotlightActive && styles.boosterActive,
-                pressed && styles.boosterPressed,
-              ]}
-              onPress={handleSpotlight}
-            >
-              <LinearGradient
-                colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-              />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 215, 0, 0.18)' }]} />
-              <View style={styles.boosterIconWrap}>
-                <Text style={styles.boosterEmoji}>💡</Text>
-              </View>
-              <Text style={styles.boosterLabel}>Spotlight</Text>
-              <View style={styles.boosterCount}>
-                <Text style={styles.boosterCountText}>{bt.spotlight}</Text>
-              </View>
-            </Pressable>
-          )}
-          {bt.smartShuffle > 0 && (
-            <Pressable
-              style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
-              onPress={handleSmartShuffle}
-            >
-              <LinearGradient
-                colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
-                style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-              />
-              <View style={[styles.boosterGlow, { backgroundColor: 'rgba(168, 85, 247, 0.20)' }]} />
-              <View style={styles.boosterIconWrap}>
-                <Text style={styles.boosterEmoji}>🔀</Text>
-              </View>
-              <Text style={styles.boosterLabel}>Shuffle</Text>
-              <View style={styles.boosterCount}>
-                <Text style={styles.boosterCountText}>{bt.smartShuffle}</Text>
-              </View>
-            </Pressable>
-          )}
-        </View>
-      </View>
+      {/* Booster bar — extracted to a memoized sub-component so it doesn't
+          re-render on every cell tap (it has no dependency on selectedCells). */}
+      <BoosterBarMemo
+        wildcardCount={bt.wildcardTile}
+        spotlightCount={bt.spotlight}
+        shuffleCount={bt.smartShuffle}
+        wildcardMode={state.wildcardMode}
+        spotlightActive={state.spotlightActive}
+        hasAnyBoosters={hasAnyBoosters}
+        isPlaying={state.status === 'playing'}
+        onWildcard={handleWildcard}
+        onSpotlight={handleSpotlight}
+        onSmartShuffle={handleSmartShuffle}
+      />
 
       {/* Completion overlay */}
       {showComplete && (
