@@ -2,21 +2,21 @@
 
 > **NOTE:** This file is a deep-reference companion to `/CLAUDE.md`. CLAUDE.md is the authoritative agent briefing loaded into every session; this file has much more file-by-file detail. Some sections below may be slightly behind current reality — when in conflict, trust CLAUDE.md and the code itself.
 >
-> **Last major update:** April 2026 — Reanimated 4 migration, react-native-iap removal (see below), SDK 54 dev client setup, EAS config.
+> **Last major update:** April 2026 — Expo SDK 55 upgrade (RN 0.83.4, React 19.2, Reanimated 4.2.1, worklets 0.7.2), expo-av removed, entry point modernized to `index.js`, `newArchEnabled` removed from app.json (now mandatory and forbidden in schema).
 
 ## Project Overview
 
 Wordfall is a gravity-based strategic word puzzle mobile game built with **React Native + Expo**. Players find hidden words on a letter grid; when a word is cleared, letters above fall due to gravity, creating chain opportunities. The game features 10 modes, 40 chapters (~600 authored puzzles + procedural beyond), collections, social features, a library meta-game, and a full player experience layer (interactive tutorial, progressive disclosure, ceremony system, achievements, weekly goals, mastery track, shareable results).
 
-- **Framework:** React Native 0.81.5, Expo SDK 54 (New Architecture enabled), React 19.1, TypeScript ~5.8
-- **Animations:** `react-native-reanimated 4.1.1` + `react-native-worklets 0.5.1` — 30 components migrated to UI-thread animations; 4 legacy files intentionally remain on the `react-native` Animated API (see Animation System section below)
-- **Gestures:** `react-native-gesture-handler 2.28` — Grid uses `.runOnJS(true)` to run gesture callbacks on JS thread (see Gotchas)
+- **Framework:** React Native 0.83.4, Expo SDK 55 (New Architecture only — bridgeless mode mandatory; Old Arch was deleted from RN 0.83), React 19.2, TypeScript ~5.8
+- **Animations:** `react-native-reanimated 4.2.1` + `react-native-worklets 0.7.2` — 30 components migrated to UI-thread animations; 4 legacy files intentionally remain on the `react-native` Animated API (see Animation System section below). Babel plugin is `react-native-worklets/plugin` (must be last in `babel.config.js`)
+- **Gestures:** `react-native-gesture-handler 2.30` — Grid uses `.runOnJS(true)` to run gesture callbacks on JS thread (see Gotchas)
 - **Backend:** Firebase (Auth + Firestore + Functions) — social layer implemented with graceful offline fallback. Env vars needed for real connectivity
 - **State:** React Context (4 providers + 2 extracted sub-contexts) + useReducer for game state + AsyncStorage persistence + debounced Firestore sync when configured
 - **Testing:** Jest + ts-jest, **37 test suites with 774 tests** covering engine, data, services, utilities, hooks, and integration tests (puzzle lifecycle, economy flow, ceremony queue, difficulty curve, game modes)
 - **Monetization:** ⚠️ `react-native-iap` is currently **removed from package.json** due to Gradle build issues (Nitro Modules on v14, amazon/play variant ambiguity on v12). `src/services/iap.ts` dynamically imports it and falls back to mock mode — all purchases succeed locally but nothing is charged. Shop catalogs still live in `shopProducts.ts` (50+ products $0.49-$99.99) and `dynamicPricing.ts` (3 mega bundles). Rewarded + interstitial ads via AdMob (mock fallback), gem-based contextual offers with 5-minute FOMO countdown timers, dynamic pricing by segment with daily flash sales, regional pricing, season pass, cosmetic store, coin sink rentals, **$0.49 first-purchase impulse offer for non-payers**
-- **Audio:** `expo-audio` (SDK 54 compatible, `createAudioPlayer` for SFX/music) with `expo-av` fallback
-- **Video:** `expo-video` (SDK 54 compatible, `useVideoPlayer` + `VideoView`) with error boundary fallback
+- **Audio:** `expo-audio` only (`createAudioPlayer` for SFX/music). `expo-av` was removed in SDK 55 — the legacy fallback path in `src/services/sound.ts` was deleted as part of the upgrade
+- **Video:** `expo-video` (`useVideoPlayer` + `VideoView`) with error boundary fallback
 - **Navigation:** React Navigation 7 (bottom tabs + nested stacks) with progressive tab unlocking
 - **Dev build required:** Expo Go is NOT supported. Use `npx expo start --dev-client` against a custom APK built via `eas build --profile development --platform android`.
 
@@ -303,7 +303,7 @@ Sound manager calls are wired at every interaction point in `GameScreen.tsx` and
 - Hint/undo → `hintUsed`/`undoUsed` sound
 - Boosters → `buttonPress` sound
 
-**Audio is synthesized at runtime with caching** — `SoundManager` (`src/services/sound.ts`) generates tones and chords programmatically (sine waves via WAV data URIs). DSP and WAV encoding are separated: `synthesizeToneSamples()` returns raw `Int16Array` buffers cached in `synthesisCache: Map<string, Int16Array>`, and `createWavDataUri()` wraps them in WAV headers. `preWarmAll()` synthesizes all sounds + music tracks asynchronously on init (yields to event loop between each to avoid blocking). `playSound()` never triggers synthesis — if a sound isn't cached, it skips silently. Uses `expo-audio` (`createAudioPlayer`) with `expo-av` as fallback, both lazy-loaded via `require()`. Sound effects use `ToneSpec` definitions (frequency arrays + ADSR + harmonics + reverb), background music uses `ProgressionSpec` (chord progressions with chorus detuning). Replace with real assets by swapping `createAudioPlayer(require('./path.mp3'))` calls.
+**Audio is synthesized at runtime with caching** — `SoundManager` (`src/services/sound.ts`) generates tones and chords programmatically (sine waves via WAV data URIs). DSP and WAV encoding are separated: `synthesizeToneSamples()` returns raw `Int16Array` buffers cached in `synthesisCache: Map<string, Int16Array>`, and `createWavDataUri()` wraps them in WAV headers. `preWarmAll()` synthesizes all sounds + music tracks asynchronously on init (yields to event loop between each to avoid blocking). `playSound()` never triggers synthesis — if a sound isn't cached, it skips silently. Uses `expo-audio` (`createAudioPlayer`), lazy-loaded via `require()`. (`expo-av` fallback was removed in the SDK 55 upgrade.) Sound effects use `ToneSpec` definitions (frequency arrays + ADSR + harmonics + reverb), background music uses `ProgressionSpec` (chord progressions with chorus detuning). Replace with real assets by swapping `createAudioPlayer(require('./path.mp3'))` calls.
 
 ## Reward & Progression Wiring
 
@@ -422,7 +422,7 @@ The UI uses a premium mobile game aesthetic with these patterns applied consiste
 
 ### Animations & Visual Feedback
 
-**System:** Migrated to **react-native-reanimated 4.1.1** for UI-thread animations. 30 components use `useSharedValue` + `useAnimatedStyle` + `withTiming`/`withSpring`/`withRepeat`/`withSequence`/`withDelay`/`interpolate`. The 4 exceptions below still use the legacy `Animated` API from `react-native` and are intentionally left alone (imperative particle systems that don't map cleanly to hooks):
+**System:** Migrated to **react-native-reanimated 4.2.1** + **react-native-worklets 0.7.2** for UI-thread animations. 30 components use `useSharedValue` + `useAnimatedStyle` + `withTiming`/`withSpring`/`withRepeat`/`withSequence`/`withDelay`/`interpolate`. The 4 exceptions below still use the legacy `Animated` API from `react-native` and are intentionally left alone (imperative particle systems that don't map cleanly to hooks):
 
 - `src/components/effects/ParticleSystem.tsx`
 - `src/components/WordBank.tsx`
@@ -544,7 +544,7 @@ No continuous animation loops run on idle tiles.
 - **Dynamic pricing by segment**: `dynamicPricing.ts` personalizes offers per spending/engagement segment. Non-payers see $0.99 starters, whales see $29.99 VIP mega bundles, lapsed players get 70% off win-back deals. 3 `MEGA_BUNDLES` ($14.99/$19.99/$29.99) with generous rewards
 - **Friend challenges**: Create/send/respond to async puzzle challenges. ChallengeCard on HomeScreen. Side-by-side result comparison. Share via React Native Share API
 - **Solve replay**: Move recording in useGame (solveSequence with grid snapshots). ReplayViewer component exists with animated playback, play/pause/step controls. Emoji grid sharing via replayGenerator. Not currently surfaced on PuzzleComplete (buttons removed for cleaner victory flow); ReplayViewer could be surfaced from Profile/history if desired
-- **Audio asset infrastructure**: Dual-mode sound system — uses `expo-audio` (`createAudioPlayer`) with `expo-av` fallback, both lazy-loaded via `require()`. Loads real .mp3 files from assets/audio/ when present, falls back to synthesized WAV data URIs. LOCAL_AUDIO registry in localAssets.ts
+- **Audio asset infrastructure**: `expo-audio` (`createAudioPlayer`) lazy-loaded via `require()`. Loads real .mp3 files from assets/audio/ when present, falls back to synthesized WAV data URIs. LOCAL_AUDIO registry in localAssets.ts. (Pre-SDK-55 had an `expo-av` fallback; that path was deleted when SDK 55 dropped expo-av.)
 - **Smooth difficulty curve**: Per-level ramp across 12 phases (not a staircase). Every 5th level is a breather. Breather config drops difficulty ~4 levels back
 - **VIP weekly subscription**: $4.99/week subscription product in `shopProducts.ts`. Benefits: ad-free, 50 daily gems, 3 daily hints, exclusive VIP frame, 2x XP. Economy integration with `isVipSubscriber`, `vipExpiresAt`, `claimVipDailyRewards()`. Prominent VIP card at top of ShopScreen with ACTIVE/SUBSCRIBE states and daily claim button. VIP streak retention bonuses at 2/4/8/12/26 weeks with escalating gems/hints/exclusive cosmetics via `vipBenefits.ts`. Purple-themed streak card on ShopScreen with progress bar and claim button
 - **Cosmetic store**: Full browse/purchase UI in `CosmeticStoreScreen.tsx` (886 lines). 4 tabs for themes/frames/titles/decorations. Item cards with rarity badges, previews, price/status. Detail modal with buy/equip flow. Purchases deduct from economy, unlocks tracked in player context. Navigable from HomeStack
