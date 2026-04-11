@@ -417,12 +417,15 @@ function ModesScreenWrapper({ navigation }: any) {
     // Spend energy (free modes handled internally — returns true immediately)
     player.useEnergy(mode);
 
+    // Declared outside the try so the catch-block fallback path can reassign them.
+    let board: Board | undefined;
+    let modeLevel = 0;
+
     try {
       void analytics.logEvent('mode_started', {
         modeId,
         playerLevel: player.currentLevel,
       });
-      let board: Board;
 
       if (mode === 'daily') {
         const today = new Date().toISOString().split('T')[0];
@@ -439,7 +442,7 @@ function ModesScreenWrapper({ navigation }: any) {
 
       // Each mode has its own independent level progression.
       // Classic uses the global player level; all other modes track their own.
-      const modeLevel = mode === 'classic'
+      modeLevel = mode === 'classic'
         ? player.currentLevel
         : player.getModeLevel(mode);
 
@@ -573,6 +576,8 @@ function GameScreenWrapper({ route, navigation }: any) {
   const handleSkipLevel = useCallback(() => {
     const SKIP_COST = 200;
     if (!economy.spendCoins(SKIP_COST)) return;
+    // Hoisted so the timeout-fallback catch can reuse the same target level.
+    let nextModeLevel = 0;
     try {
       const mode = (params.mode || 'classic') as GameMode;
       const currentLevel = params.level || 1;
@@ -584,7 +589,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         player.advanceModeLevel(mode);
       }
 
-      const nextModeLevel = mode === 'classic'
+      nextModeLevel = mode === 'classic'
         ? currentLevel + 1
         : player.getModeLevel(mode);
 

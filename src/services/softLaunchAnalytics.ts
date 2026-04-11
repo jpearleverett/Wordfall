@@ -4,7 +4,15 @@
  * monetization, and game balance before global launch.
  */
 
-import { trackEvent, trackUserProperty } from './analytics';
+import { analytics } from './analytics';
+
+const trackEvent = (event: string, params?: Record<string, unknown>): void => {
+  void analytics.logEvent(event, params);
+};
+
+const trackUserProperty = (name: string, value: string): void => {
+  void analytics.setUserProperty(name, value);
+};
 
 // ─── Retention Funnel Events ─────────────────────────────────────────────────
 

@@ -1301,7 +1301,7 @@ const styles = StyleSheet.create({
   tomorrowPreviewText: {
     color: COLORS.textSecondary,
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.bodyRegular,
   },
 });
 

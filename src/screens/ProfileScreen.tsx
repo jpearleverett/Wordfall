@@ -788,7 +788,7 @@ const styles = StyleSheet.create({
   },
   masteryButtonSub: {
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textMuted,
     marginTop: 2,
   },

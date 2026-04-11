@@ -32,7 +32,7 @@ export function PostLossModal({
   const [timeLeft, setTimeLeft] = useState(Math.ceil(AUTO_DISMISS_MS / 1000));
 
   useEffect(() => {
-    analytics.track('offer_shown', { type: 'post_loss', wordsFound, totalWords });
+    void analytics.logEvent('offer_shown', { offer_type: 'post_loss', words_found: wordsFound, total_words: totalWords });
 
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
@@ -55,17 +55,17 @@ export function PostLossModal({
   }, [onDismiss]);
 
   const handleWatchAd = useCallback(() => {
-    analytics.track('offer_accepted', { type: 'post_loss', action: 'watch_ad' });
+    void analytics.logEvent('offer_accepted', { offer_type: 'post_loss', action: 'watch_ad' });
     onWatchAd();
   }, [onWatchAd]);
 
   const handleBuyHints = useCallback(() => {
-    analytics.track('offer_accepted', { type: 'post_loss', action: 'buy_hints' });
+    void analytics.logEvent('offer_accepted', { offer_type: 'post_loss', action: 'buy_hints' });
     onBuyHints();
   }, [onBuyHints]);
 
   const handleDismiss = useCallback(() => {
-    analytics.track('offer_dismissed', { type: 'post_loss' });
+    void analytics.logEvent('offer_dismissed', { offer_type: 'post_loss' });
     onDismiss();
   }, [onDismiss]);
 
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     width: '85%',
     borderRadius: 20,
     overflow: 'hidden',
-    ...SHADOWS.large,
+    ...SHADOWS.strong,
   },
   gradient: {
     padding: 24,

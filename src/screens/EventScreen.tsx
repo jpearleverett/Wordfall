@@ -98,6 +98,13 @@ const EventScreen: React.FC<EventScreenProps> = ({
     }
   }, [economy, claimAnim, player]);
 
+  // Get the current event's exclusive reward (must be declared before the claim callback
+  // that closes over it, otherwise TS flags a "used before declaration" error).
+  const currentEvent = getCurrentEvent();
+  const exclusiveReward: EventExclusiveReward | undefined =
+    event?.exclusiveReward ?? currentEvent?.exclusiveReward;
+  const isTimeLimited: boolean = event?.isTimeLimited ?? currentEvent?.isTimeLimited ?? false;
+
   // Claim the exclusive cosmetic reward (frame/title/decoration) at Gold tier
   const handleClaimExclusiveReward = useCallback(() => {
     if (!exclusiveReward || !primaryEvent) return;
@@ -113,12 +120,6 @@ const EventScreen: React.FC<EventScreenProps> = ({
     setActiveEvents(eventManager.getActiveEvents());
     player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
   }, [exclusiveReward, primaryEvent, player, claimAnim]);
-
-  // Get the current event's exclusive reward
-  const currentEvent = getCurrentEvent();
-  const exclusiveReward: EventExclusiveReward | undefined =
-    event?.exclusiveReward ?? currentEvent?.exclusiveReward;
-  const isTimeLimited: boolean = event?.isTimeLimited ?? currentEvent?.isTimeLimited ?? false;
 
   // Exclusive reward claim state
   const goldTierReached = primaryEvent?.rewards?.find(r => r.tier === 'gold')?.reached ?? false;

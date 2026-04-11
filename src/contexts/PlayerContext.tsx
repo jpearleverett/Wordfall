@@ -122,6 +122,7 @@ interface PlayerData {
   tutorialComplete: boolean;
   onboardingDay: number;
   featuresUnlocked: string[];
+  onboardingMilestones: string[]; // completed milestone IDs
 
   // Milestones
   achievementIds: string[];

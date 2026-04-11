@@ -342,7 +342,7 @@ export function getCollectionProgress(
   const totalAtlasWords = ATLAS_PAGES.reduce((sum, p) => sum + p.words.length, 0);
   const foundAtlasWords = Object.values(atlasPages).reduce((sum, words) => sum + words.length, 0);
 
-  const totalRareTiles = RARE_TILE_SETS.reduce((sum, s) => sum + s.tiles.length, 0);
+  const totalRareTiles = RARE_TILE_SETS.reduce((sum, s) => sum + s.letters.length, 0);
   const foundRareTiles = Object.values(rareTiles).reduce((sum, count) => sum + count, 0);
 
   const total = totalAtlasWords + totalRareTiles;
