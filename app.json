@@ -9,7 +9,6 @@
     "userInterfaceStyle": "dark",
     "scheme": "wordfall",
     "primaryColor": "#00d4ff",
-    "newArchEnabled": true,
     "runtimeVersion": {
       "policy": "appVersion"
     },
