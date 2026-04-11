@@ -68,46 +68,52 @@ export const LetterCell = React.memo(function LetterCell({
   const overchargeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Batch all three selection animations into ONE Animated.parallel so
+    // only a single native animation config crosses the JS→native bridge.
+    // Previously these were three separate .start() calls, each serializing
+    // its own config — with 5-12 cells changing state at once during a chain
+    // clear, that was 15-36 bridge messages and ~15-40ms of bridge overhead
+    // blocking the JS thread per clear.
     if (isSelected) {
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 0.86,
-          duration: 60,
+      rippleAnim.setValue(0);
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(scaleAnim, {
+            toValue: 0.86,
+            duration: 60,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleAnim, {
+            toValue: 1.08,
+            friction: 3.5,
+            tension: 260,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 120,
           useNativeDriver: true,
         }),
-        Animated.spring(scaleAnim, {
-          toValue: 1.08,
-          friction: 3.5,
-          tension: 260,
+        Animated.timing(rippleAnim, {
+          toValue: 1,
+          duration: 300,
           useNativeDriver: true,
         }),
       ]).start();
-
-      Animated.timing(glowAnim, {
-        toValue: 1,
-        duration: 120,
-        useNativeDriver: true,
-      }).start();
-
-      // Selection neon ripple — expanding glow ring
-      rippleAnim.setValue(0);
-      Animated.timing(rippleAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
     } else {
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 6,
-        useNativeDriver: true,
-      }).start();
-
-      Animated.timing(glowAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }).start();
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 6,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
   }, [isSelected, scaleAnim, glowAnim, rippleAnim]);
 
