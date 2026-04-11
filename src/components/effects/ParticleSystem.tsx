@@ -17,13 +17,17 @@ function DiamondSparkle({ size, color, top, left, delay, duration }: SparkleProp
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
         Animated.timing(anim, { toValue: 1, duration: duration * 0.4, useNativeDriver: true }),
         Animated.timing(anim, { toValue: 0, duration: duration * 0.6, useNativeDriver: true }),
       ]),
-    ).start();
+    );
+    animation.start();
+    return () => {
+      animation.stop();
+    };
   }, [anim, delay, duration]);
 
   const halfSize = size / 2;
@@ -97,20 +101,34 @@ function RisingParticle({ color, startX, startY, size, delay, duration }: Rising
   const sway = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.parallel([
-          Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
-          Animated.loop(
-            Animated.sequence([
-              Animated.timing(sway, { toValue: 1, duration: 600 + Math.random() * 400, useNativeDriver: true }),
-              Animated.timing(sway, { toValue: -1, duration: 600 + Math.random() * 400, useNativeDriver: true }),
-            ]),
-          ),
-        ]),
+    // Used by CelebrationBurst — this is a ONE-SHOT burst, not a persistent
+    // effect. The previous implementation wrapped the rise in Animated.loop
+    // AND nested another Animated.loop for sway, producing two infinite
+    // animations per particle with no cleanup. Every ceremony / word solve
+    // would accumulate dozens of them and never release them.
+    //
+    // Now: run the rise once, and run the sway as a finite sequence timed to
+    // complete before the particle fades. Both are stopped on unmount.
+    const swayCycles = Math.ceil(duration / 1000);
+    const swayAnimations: Animated.CompositeAnimation[] = [];
+    for (let i = 0; i < swayCycles; i++) {
+      swayAnimations.push(
+        Animated.timing(sway, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(sway, { toValue: -1, duration: 600, useNativeDriver: true }),
+      );
+    }
+
+    const animation = Animated.sequence([
+      Animated.delay(delay),
+      Animated.parallel([
+        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
+        Animated.sequence(swayAnimations),
       ]),
-    ).start();
+    ]);
+    animation.start();
+    return () => {
+      animation.stop();
+    };
   }, [anim, delay, duration, sway]);
 
   return (
@@ -148,13 +166,17 @@ export function ShimmerEffect({ width, height, color = 'rgba(255,255,255,0.08)',
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
         Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
         Animated.delay(1000),
       ]),
-    ).start();
+    );
+    animation.start();
+    return () => {
+      animation.stop();
+    };
   }, [anim, delay, duration]);
 
   return (
@@ -194,13 +216,17 @@ function ImageSparkle({
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
         Animated.timing(anim, { toValue: 1, duration: duration * 0.4, useNativeDriver: true }),
         Animated.timing(anim, { toValue: 0, duration: duration * 0.6, useNativeDriver: true }),
       ]),
-    ).start();
+    );
+    animation.start();
+    return () => {
+      animation.stop();
+    };
   }, [anim, delay, duration]);
 
   return (
@@ -242,11 +268,20 @@ const SPARKLE_COLORS = [
   COLORS.teal,
 ];
 
+// Hard cap on particles. Every ceremony used to pass counts of 18–26, which
+// with DiamondSparkle's looping animation × 5+ ceremonies queued back-to-back
+// meant 100+ infinite UI-thread animations running concurrently. Ceremonies
+// are transient — users glance at them for <3s — so a smaller, tighter field
+// reads just as celebratory while keeping the animation driver light.
+const MAX_SPARKLES = 10;
+const MAX_IMAGE_SPARKLES = 3;
+
 export function SparkleField({
   count = 20,
   colors = SPARKLE_COLORS,
   intensity = 'subtle',
 }: SparkleFieldProps) {
+  count = Math.min(count, MAX_SPARKLES);
   const sizeRange = intensity === 'intense' ? [4, 12] : intensity === 'medium' ? [3, 8] : [2, 6];
 
   const sparkles = useMemo(
@@ -263,11 +298,11 @@ export function SparkleField({
     [count, colors, intensity],
   );
 
-  // Add some image-based sparkles for intense fields
+  // Add some image-based sparkles for intense fields (capped)
   const imageSparkles = useMemo(
     () =>
       intensity === 'intense'
-        ? Array.from({ length: Math.max(3, Math.floor(count / 6)) }, (_, i) => ({
+        ? Array.from({ length: Math.min(MAX_IMAGE_SPARKLES, Math.max(2, Math.floor(count / 6))) }, (_, i) => ({
             id: `img_${i}`,
             size: sizeRange[1] + 4 + Math.random() * 6,
             top: `${10 + ((i * 29 + 3) % 75)}%` as DimensionValue,
@@ -314,15 +349,18 @@ interface CelebrationBurstProps {
   colors?: string[];
 }
 
+const MAX_BURST_PARTICLES = 12;
+
 export function CelebrationBurst({
   centerX = 180,
   centerY = 300,
   particleCount = 24,
   colors = SPARKLE_COLORS,
 }: CelebrationBurstProps) {
+  const cappedCount = Math.min(particleCount, MAX_BURST_PARTICLES);
   const particles = useMemo(
     () =>
-      Array.from({ length: particleCount }, (_, i) => ({
+      Array.from({ length: cappedCount }, (_, i) => ({
         id: i,
         color: colors[i % colors.length],
         startX: centerX + (Math.random() - 0.5) * 120,
@@ -331,7 +369,7 @@ export function CelebrationBurst({
         delay: Math.random() * 600,
         duration: 1800 + Math.random() * 1200,
       })),
-    [centerX, centerY, particleCount, colors],
+    [centerX, centerY, cappedCount, colors],
   );
 
   return (
@@ -354,12 +392,16 @@ export function PulsingGlowRing({ size, color, pulseScale = 1.15 }: GlowRingProp
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(anim, { toValue: 1, duration: 1400, useNativeDriver: true }),
         Animated.timing(anim, { toValue: 0, duration: 1400, useNativeDriver: true }),
       ]),
-    ).start();
+    );
+    animation.start();
+    return () => {
+      animation.stop();
+    };
   }, [anim]);
 
   return (

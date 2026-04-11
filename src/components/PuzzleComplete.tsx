@@ -67,7 +67,27 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
   const fallDur = useMemo(() => 2200 + Math.random() * 900, []);
 
   useEffect(() => {
-    Animated.sequence([
+    // Previously the sway ran as Animated.loop(...) (infinite) nested inside a
+    // one-shot parallel sequence. When the fall animation finished after ~2.5s,
+    // the outer sequence was "done" from JS's perspective, but the inner
+    // infinite sway loop kept running on the UI thread forever. With 40
+    // confetti per PuzzleComplete, that was 40 infinite animation drivers
+    // churning for as long as the modal was open — the single biggest cause
+    // of the "ceremony animations feel slow and laggy" symptom.
+    //
+    // Now: run the sway as a finite Animated.sequence sized to the fall
+    // duration. Both animations complete together, the particle rests, and
+    // the driver frees up.
+    const swayCycles = Math.ceil(fallDur / (swayDur * 2));
+    const swaySteps: Animated.CompositeAnimation[] = [];
+    for (let i = 0; i < swayCycles; i++) {
+      swaySteps.push(
+        Animated.timing(swayAnim, { toValue: 1, duration: swayDur, useNativeDriver: true }),
+        Animated.timing(swayAnim, { toValue: -1, duration: swayDur, useNativeDriver: true }),
+      );
+    }
+
+    const animation = Animated.sequence([
       Animated.delay(delay),
       Animated.parallel([
         Animated.timing(anim, {
@@ -75,22 +95,13 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
           duration: fallDur,
           useNativeDriver: true,
         }),
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(swayAnim, {
-              toValue: 1,
-              duration: swayDur,
-              useNativeDriver: true,
-            }),
-            Animated.timing(swayAnim, {
-              toValue: -1,
-              duration: swayDur,
-              useNativeDriver: true,
-            }),
-          ]),
-        ),
+        Animated.sequence(swaySteps),
       ]),
-    ]).start();
+    ]);
+    animation.start();
+    return () => {
+      animation.stop();
+    };
   }, [anim, delay, swayAnim, fallDur, swayDur]);
 
   const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [-80, 560] });
@@ -397,9 +408,11 @@ export function PuzzleComplete({
   const difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
   const coinReward = ECONOMY.puzzleCompleteCoins[difficulty] + stars * ECONOMY.starBonus;
 
+  // 20 confetti is plenty visually — 40 was overkill and doubled the number
+  // of concurrent Animated drivers during the puzzle-complete celebration.
   const confetti = useMemo(
     () =>
-      Array.from({ length: 40 }, (_, index) => ({
+      Array.from({ length: 20 }, (_, index) => ({
         id: index,
         delay: Math.random() * 500,
         color: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
