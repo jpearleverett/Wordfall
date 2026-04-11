@@ -274,28 +274,39 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     syncFromFirestore();
   }, [user, loaded]);
 
-  // Persist whenever state changes
+  // Debounce persistence. Economy state churns many times per puzzle (currency,
+  // life tick, booster counts, etc.) — writing to AsyncStorage + Firestore on
+  // every mutation would JSON.stringify the full state blob 50+ times per game,
+  // blocking the JS thread. Batch to one write per second of quiet.
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!loaded) return;
 
-    const persist = async () => {
-      try {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      } catch (e) {
-        console.warn('Failed to save economy to AsyncStorage:', e);
-      }
-
-      if (user) {
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      (async () => {
         try {
-          const docRef = doc(db, 'users', user.uid, 'economy', 'current');
-          await setDoc(docRef, state, { merge: true });
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch (e) {
-          console.warn('Failed to sync economy to Firestore:', e);
+          console.warn('Failed to save economy to AsyncStorage:', e);
         }
+        if (user) {
+          try {
+            const docRef = doc(db, 'users', user.uid, 'economy', 'current');
+            await setDoc(docRef, state, { merge: true });
+          } catch (e) {
+            console.warn('Failed to sync economy to Firestore:', e);
+          }
+        }
+      })();
+    }, 1000);
+
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
       }
     };
-
-    persist();
   }, [state, loaded, user]);
 
   const addCoins = useCallback((amount: number) => {

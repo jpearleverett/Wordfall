@@ -97,6 +97,10 @@ const RootStack = createStackNavigator();
 const screenOptions = {
   headerShown: false,
   cardStyle: { backgroundColor: COLORS.bg },
+  // Freeze screens that are pushed behind the current one. Without this, every
+  // previous screen keeps running its backdrop animations, setIntervals, and
+  // effects in the background — a 5-screen stack = 5x animation load.
+  freezeOnBlur: true,
 };
 
 // Home Tab Stack
@@ -326,6 +330,11 @@ function MainTabs() {
       tabBar={(props) => <NeonTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        // Freeze inactive tabs so their timers, animations, and effects pause.
+        // This is the single biggest perf win in a multi-tab app — without it
+        // every tab keeps running its AmbientBackdrop reanimated loops, video
+        // backgrounds, and setInterval timers in the background.
+        freezeOnBlur: true,
         tabBarActiveTintColor: COLORS.accent,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarLabelStyle: {

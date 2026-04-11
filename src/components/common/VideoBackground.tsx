@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, View, Image, ImageSourcePropType } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 
 interface VideoBackgroundProps {
   source: number; // require() asset
@@ -180,6 +181,7 @@ function VideoBackgroundWithPlayer({
   placeholder,
 }: VideoBackgroundProps) {
   const [videoReady, setVideoReady] = useState(false);
+  const isFocused = useIsFocused();
 
   const onStatusChange = useCallback((status: any) => {
     if (status === 'readyToPlay' || status?.status === 'readyToPlay') {
@@ -192,6 +194,22 @@ function VideoBackgroundWithPlayer({
     p.muted = true;
     p.play();
   });
+
+  // Pause/resume the video when the screen loses/gains focus. A looping video
+  // decodes H.264/VP9 every frame on the GPU — leaving it running on inactive
+  // screens in the stack is a big drain even at reduced opacity.
+  useEffect(() => {
+    if (!player) return;
+    try {
+      if (isFocused) {
+        if (player.play) player.play();
+      } else {
+        if (player.pause) player.pause();
+      }
+    } catch {
+      // Ignore — some player versions don't expose play/pause safely
+    }
+  }, [player, isFocused]);
 
   // Listen for player status changes to know when video is ready
   useEffect(() => {

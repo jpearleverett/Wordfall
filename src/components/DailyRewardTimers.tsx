@@ -44,35 +44,24 @@ interface TimerCardProps {
   timer: DailyRewardTimer;
   lastClaimed: number;
   onClaim: (timerId: string) => void;
+  /** A monotonically increasing counter driven by a single parent interval.
+   *  Each tick causes the card to recompute `remaining`. One shared interval
+   *  instead of one-per-card avoids spawning N parallel 1-second timers. */
+  tick: number;
 }
 
 const TimerCard = React.memo(function TimerCard({
   timer,
   lastClaimed,
   onClaim,
+  tick,
 }: TimerCardProps) {
-  const [remaining, setRemaining] = useState(() =>
-    getTimeRemaining(timer.id, lastClaimed)
-  );
+  // Recompute on every parent tick — cheap (just a subtraction).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _tick = tick;
+  const remaining = getTimeRemaining(timer.id, lastClaimed);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const isReady = remaining <= 0;
-
-  // Countdown tick — updates every second while not ready
-  useEffect(() => {
-    if (isReady) return;
-
-    const interval = setInterval(() => {
-      const next = getTimeRemaining(timer.id, lastClaimed);
-      setRemaining(next);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [timer.id, lastClaimed, isReady]);
-
-  // Re-sync remaining when lastClaimed changes (e.g. after claiming)
-  useEffect(() => {
-    setRemaining(getTimeRemaining(timer.id, lastClaimed));
-  }, [timer.id, lastClaimed]);
 
   // Pulse animation when ready to claim
   useEffect(() => {
@@ -166,6 +155,15 @@ const DailyRewardTimers: React.FC<DailyRewardTimersProps> = ({
   timerStates,
   onClaim,
 }) => {
+  // Single shared tick. Previously each TimerCard span up its own 1-second
+  // interval — with N=5 cards that's 5 parallel intervals and 5 re-renders per
+  // second. Now one interval drives all children.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Free Rewards</Text>
@@ -176,6 +174,7 @@ const DailyRewardTimers: React.FC<DailyRewardTimersProps> = ({
             timer={timer}
             lastClaimed={timerStates[timer.id] ?? 0}
             onClaim={onClaim}
+            tick={tick}
           />
         ))}
       </View>

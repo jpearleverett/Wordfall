@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { DimensionValue, Image, StyleSheet, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useIsFocused } from '@react-navigation/native';
 import { COLORS } from '../../constants';
 import { SynthwaveBackdrop } from './SynthwaveBackdrop';
 import { VideoBackground } from './VideoBackground';
@@ -134,11 +135,16 @@ function getLocalBg(variant: string) {
 }
 
 export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
+  // Gate animated children on focus. When the screen is not focused, render a
+  // static version (just bg image + gradients) so we don't burn CPU/GPU running
+  // 3 nebula orbs + 12 twinkling stars on every inactive screen in the stack/tabs.
+  const isFocused = useIsFocused();
+
   if (variant === 'game') {
-    return <SynthwaveBackdrop />;
+    return <SynthwaveBackdrop focused={isFocused} />;
   }
   if (variant === 'home') {
-    return <SynthwaveHomeBackdrop />;
+    return <SynthwaveHomeBackdrop focused={isFocused} />;
   }
 
   const localBg = getLocalBg(variant);
@@ -188,48 +194,52 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
         />
       )}
 
-      <NebulaOrb
-        color="rgba(255, 45, 149, 0.35)"
-        size={300}
-        top="-10%"
-        left="55%"
-        duration={7000}
-        xOffset={14}
-        yOffset={16}
-        opacity={0.45}
-      />
-      <NebulaOrb
-        color="rgba(200, 77, 255, 0.30)"
-        size={250}
-        top="20%"
-        left="-15%"
-        duration={8200}
-        xOffset={18}
-        yOffset={20}
-        opacity={0.38}
-      />
-      <NebulaOrb
-        color="rgba(0, 229, 255, 0.20)"
-        size={200}
-        top="60%"
-        left="70%"
-        duration={9000}
-        xOffset={12}
-        yOffset={14}
-        opacity={0.28}
-      />
+      {isFocused && (
+        <>
+          <NebulaOrb
+            color="rgba(255, 45, 149, 0.35)"
+            size={300}
+            top="-10%"
+            left="55%"
+            duration={7000}
+            xOffset={14}
+            yOffset={16}
+            opacity={0.45}
+          />
+          <NebulaOrb
+            color="rgba(200, 77, 255, 0.30)"
+            size={250}
+            top="20%"
+            left="-15%"
+            duration={8200}
+            xOffset={18}
+            yOffset={20}
+            opacity={0.38}
+          />
+          <NebulaOrb
+            color="rgba(0, 229, 255, 0.20)"
+            size={200}
+            top="60%"
+            left="70%"
+            duration={9000}
+            xOffset={12}
+            yOffset={14}
+            opacity={0.28}
+          />
 
-      {stars.map((star) => (
-        <TwinklingStar
-          key={star.id}
-          top={star.top}
-          left={star.left}
-          color={star.color}
-          size={star.size}
-          delay={star.delay}
-          duration={star.duration}
-        />
-      ))}
+          {stars.map((star) => (
+            <TwinklingStar
+              key={star.id}
+              top={star.top}
+              left={star.left}
+              color={star.color}
+              size={star.size}
+              delay={star.delay}
+              duration={star.duration}
+            />
+          ))}
+        </>
+      )}
 
       <LinearGradient
         colors={['transparent', 'rgba(10,0,21,0.5)'] as [string, string]}

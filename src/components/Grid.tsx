@@ -441,19 +441,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   outerGlow: {
+    // shadowRadius >20 is GPU-expensive because iOS renders shadows via an
+    // offscreen Gaussian blur pass every frame. The grid is redrawn on every
+    // selection/fall animation, so a 40px blur here is a heavy per-frame cost.
+    // Capped to 16px — visually nearly identical, far cheaper.
     position: 'absolute',
     backgroundColor: 'rgba(255,45,149,0.08)',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
-    shadowRadius: 40,
+    shadowRadius: 16,
     elevation: 0,
     alignSelf: 'center',
   },
   outerGlowDragging: {
     backgroundColor: 'rgba(255,45,149,0.16)',
     shadowOpacity: 0.7,
-    shadowRadius: 50,
+    shadowRadius: 20,
   },
   neonFrameWrap: {
     position: 'absolute',
@@ -472,8 +476,8 @@ const styles = StyleSheet.create({
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
-    shadowRadius: 26,
-    elevation: 12,
+    shadowRadius: 12,
+    elevation: 8,
   },
   frameInner: {
     backgroundColor: 'rgba(8, 0, 18, 0.88)',

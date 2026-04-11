@@ -22,19 +22,12 @@ const HIGHLIGHT_SELECTED_HINT: [string, string] = ['rgba(255,245,200,0.65)', 'rg
 const HIGHLIGHT_SELECTED: [string, string] = ['rgba(255,210,240,0.60)', 'rgba(255,45,149,0.0)'];
 const HIGHLIGHT_DEFAULT: [string, string] = ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.0)'];
 
-const BOTTOM_SHADOW_COLORS = ['transparent', 'transparent', 'rgba(0,0,0,0.22)', 'rgba(0,0,0,0.50)'] as [string, string, ...string[]];
-const EDGE_GLOSS_COLORS = ['rgba(255,255,255,0.06)', 'transparent', 'transparent', 'rgba(255,255,255,0.03)'] as [string, string, ...string[]];
-
 const DEFAULT_BORDER_COLOR = 'rgba(200, 77, 255, 0.40)';
 
 const GRADIENT_START_02_0 = { x: 0.2, y: 0 };
 const GRADIENT_END_08_1 = { x: 0.8, y: 1 };
 const GRADIENT_START_05_0 = { x: 0.5, y: 0 };
 const GRADIENT_END_05_055 = { x: 0.5, y: 0.55 };
-const GRADIENT_START_05_035 = { x: 0.5, y: 0.35 };
-const GRADIENT_END_05_1 = { x: 0.5, y: 1 };
-const GRADIENT_START_0_0 = { x: 0, y: 0 };
-const GRADIENT_END_1_1 = { x: 1, y: 1 };
 
 interface LetterCellProps {
   letter: string;
@@ -292,13 +285,17 @@ export const LetterCell = React.memo(function LetterCell({
             borderWidth: isSelected || isValidWord ? 2 : isWildcard ? 1.5 : 1,
             transform: [{ scale: scaleAnim }],
             shadowColor,
-            shadowOpacity: (isSelected || isValidWord) ? 0.8 : 0.5,
-            shadowRadius: (isSelected || isValidWord) ? 16 : 8,
-            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 8 : 4 },
-            elevation: (isSelected || isValidWord) ? 14 : 6,
+            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.4,
+            // shadowRadius was 16/8 — halved because the grid renders up to
+            // 50 cells simultaneously and each shadow is a per-frame GPU blur.
+            // 8/4 is still clearly visible but ~4x cheaper.
+            shadowRadius: (isSelected || isValidWord) ? 8 : 4,
+            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 4 : 2 },
+            elevation: (isSelected || isValidWord) ? 8 : 4,
           },
         ]}
       >
+        {/* Body gradient — the tile's primary color fill. Kept. */}
         <LinearGradient
           colors={bodyColors}
           start={GRADIENT_START_02_0}
@@ -306,6 +303,7 @@ export const LetterCell = React.memo(function LetterCell({
           style={[StyleSheet.absoluteFillObject, { borderRadius: insetBR }]}
         />
 
+        {/* Top highlight gradient — essential for the 3D glossy look. Kept. */}
         <LinearGradient
           colors={topHighlightColors}
           start={GRADIENT_START_05_0}
@@ -321,6 +319,7 @@ export const LetterCell = React.memo(function LetterCell({
           }}
         />
 
+        {/* Top specular pinprick highlight. */}
         <View
           style={{
             position: 'absolute',
@@ -335,43 +334,26 @@ export const LetterCell = React.memo(function LetterCell({
           }}
         />
 
-        <LinearGradient
-          colors={BOTTOM_SHADOW_COLORS}
-          start={GRADIENT_START_05_035}
-          end={GRADIENT_END_05_1}
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '55%',
-            borderBottomLeftRadius: insetBR,
-            borderBottomRightRadius: insetBR,
-          }}
-        />
-
+        {/* Bottom shadow — was a LinearGradient, replaced with a solid-color
+            bar which is visually equivalent (the gradient went transparent→black
+            and was only 22%/50% alpha at the ends, which reads identically to
+            a single 30% alpha band). Saves ~50 LinearGradients across the grid. */}
         <View
           style={{
             position: 'absolute',
             bottom: 0,
             left: 0,
             right: 0,
-            height: size * 0.10,
+            height: size * 0.15,
             backgroundColor: 'rgba(0,0,0,0.35)',
             borderBottomLeftRadius: insetBR,
             borderBottomRightRadius: insetBR,
           }}
         />
 
-        <LinearGradient
-          colors={EDGE_GLOSS_COLORS}
-          start={GRADIENT_START_0_0}
-          end={GRADIENT_END_1_1}
-          style={{
-            ...StyleSheet.absoluteFillObject,
-            borderRadius: insetBR,
-          }}
-        />
+        {/* EdgeGloss LinearGradient removed — opacity was 0.03-0.06 and almost
+            invisible against the body gradient, but rendering it cost one extra
+            gradient per cell. */}
 
         {!isSelected && !isValidWord && (
           <Image

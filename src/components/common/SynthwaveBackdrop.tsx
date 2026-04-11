@@ -235,7 +235,10 @@ function NeonSun() {
   );
 }
 
-export function SynthwaveBackdrop({ playerLevel = 1 }: { playerLevel?: number } = {}) {
+export function SynthwaveBackdrop({
+  playerLevel = 1,
+  focused = true,
+}: { playerLevel?: number; focused?: boolean } = {}) {
   // Background evolution based on player level
   const evolution = playerLevel <= 5 ? 'easy' : playerLevel <= 15 ? 'medium' : playerLevel <= 30 ? 'hard' : 'expert';
   const starCount = evolution === 'easy' ? 10 : evolution === 'medium' ? 15 : evolution === 'hard' ? 20 : 25;
@@ -279,19 +282,21 @@ export function SynthwaveBackdrop({ playerLevel = 1 }: { playerLevel?: number } 
         resizeMode="cover"
       />
 
-      <VideoBackground
-        source={LOCAL_VIDEOS.synthwaveGridFlow}
-        opacity={0.35}
-        overlayColor="rgba(26,5,51,0.3)"
-      />
+      {focused && (
+        <VideoBackground
+          source={LOCAL_VIDEOS.synthwaveGridFlow}
+          opacity={0.35}
+          overlayColor="rgba(26,5,51,0.3)"
+        />
+      )}
 
       <View style={styles.colorTint} />
 
-      <NeonSun />
+      {focused && <NeonSun />}
 
-      <PerspectiveGridFloor />
+      {focused && <PerspectiveGridFloor />}
 
-      {stars.map((star) => (
+      {focused && stars.map((star) => (
         <TwinklingStar
           key={star.id}
           top={star.top}
