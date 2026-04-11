@@ -17,7 +17,6 @@ import { Grid as GridType, CellPosition, GravityDirection } from '../types';
 import { LetterCell } from './LetterCell';
 import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import ScanLineOverlay from './common/ScanLineOverlay';
 import SelectionTrailOverlay from './game/SelectionTrailOverlay';
 
 // Extracted constants to avoid creating new objects on every render
@@ -185,12 +184,23 @@ function GameGridImpl({
   const lastDragPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
 
+  // Keep the latest cellBounds + cellSize in refs so hitTestCell and the
+  // gesture handler can read them without being re-created on every grid
+  // change. Rebuilding the composed gesture tears down the native handler
+  // and is expensive — we want it built ONCE on mount.
+  const cellBoundsRef = useRef(cellBounds);
+  cellBoundsRef.current = cellBounds;
+  const cellSizeRef = useRef(cellSize);
+  cellSizeRef.current = cellSize;
+
   // Hit test using exact cell size (not cell + gap) for precise boundary detection.
-  // Uses nearest-center tiebreaking for taps in gap space.
+  // Uses nearest-center tiebreaking for taps in gap space. Stable — reads bounds
+  // from the ref so changing the grid doesn't invalidate the gesture handler.
   const hitTestCell = useCallback((absX: number, absY: number): CellPosition | null => {
     let bestDist = Infinity;
     let bestCell: CellPosition | null = null;
-    for (const b of cellBounds) {
+    const bounds = cellBoundsRef.current;
+    for (const b of bounds) {
       const cx = b.x + b.w / 2;
       const cy = b.y + b.h / 2;
       // Check if within the full cell+gap area first (coarse filter)
@@ -203,7 +213,7 @@ function GameGridImpl({
       }
     }
     return bestCell;
-  }, [cellBounds]);
+  }, []);
 
   const onCellPressRef = useRef(onCellPress);
   onCellPressRef.current = onCellPress;
@@ -212,6 +222,8 @@ function GameGridImpl({
   const onDragEndRef = useRef(onDragEnd);
   onDragEndRef.current = onDragEnd;
 
+  // Built once on mount. The empty dep array is intentional — the callbacks
+  // read from refs, so the gesture handler never needs to be rebuilt.
   const composedGesture = useMemo(() => {
     const panGesture = Gesture.Pan()
       .runOnJS(true)
@@ -235,7 +247,7 @@ function GameGridImpl({
           const dx = e.x - prev.x;
           const dy = e.y - prev.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          const halfCell = (cellSize + CELL_GAP) / 2;
+          const halfCell = (cellSizeRef.current + CELL_GAP) / 2;
           if (dist > halfCell) {
             const steps = Math.ceil(dist / halfCell);
             for (let s = 1; s < steps; s++) {
@@ -286,7 +298,8 @@ function GameGridImpl({
       });
 
     return Gesture.Race(panGesture, tapGesture);
-  }, [hitTestCell]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const framePad = 3;
   const outerWidth = gridWidth + framePad * 2;
@@ -351,8 +364,11 @@ function GameGridImpl({
         style={neonFrameStyle}
       >
         <View style={frameInnerStyle}>
-          {/* CRT scan line overlay inside the grid frame */}
-          <ScanLineOverlay opacity={0.03} height={gridHeight} animated scrollDuration={4000} />
+          {/* ScanLineOverlay removed from the grid. It rendered ~130 static
+              View elements (one per scan line) plus a withRepeat scroll loop
+              inside the grid frame — and the grid re-reconciles all of those
+              on every selection change. At opacity 0.03 the effect is barely
+              visible anyway, and the cost on every grid render is significant. */}
 
           <GestureDetector gesture={composedGesture}>
             <View

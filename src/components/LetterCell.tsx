@@ -177,15 +177,27 @@ export const LetterCell = React.memo(function LetterCell({
   const showOuterGlow = isSelected || isValidWord;
   const outerGlowColor = isValidWord ? COLORS.greenGlow : isSelected ? COLORS.accentGlow : 'transparent';
 
-  const OuterWrapper = fallAnim ? Animated.View : View;
-  const outerStyle = fallAnim
-    ? [isSpotlightDimmed ? { opacity: 0.3 } : undefined, { transform: [{ translateY: fallAnim }] }]
-    : isSpotlightDimmed ? { opacity: 0.3 } : undefined;
+  // CRITICAL: always use Animated.View, never swap between View and Animated.View
+  // based on props. A component-type swap forces React to unmount the entire
+  // cell subtree (12+ native views per cell) and remount a fresh one. When
+  // fallActive toggles (on every word clear), the old code swapped all 50
+  // cells between View and Animated.View — 50 × full-subtree remounts per word.
+  // That was the single biggest cause of chain-clear lag on the puzzle screen.
+  //
+  // When fallAnim is undefined the transform is simply omitted and Animated.View
+  // behaves identically to a plain View. The tiny cost of always using
+  // Animated.View is trivial compared to the remount storm.
+  const outerStyle = useMemo(() => {
+    const s: any = {};
+    if (isSpotlightDimmed) s.opacity = 0.3;
+    if (fallAnim) s.transform = [{ translateY: fallAnim }];
+    return s;
+  }, [isSpotlightDimmed, fallAnim]);
 
   return (
-    <OuterWrapper
+    <Animated.View
       pointerEvents="none"
-      style={outerStyle as any}
+      style={outerStyle}
       accessibilityRole="button"
       accessibilityLabel={isWildcard ? 'Wildcard' : letter}
       accessibilityHint="Double tap to select this letter"
@@ -423,7 +435,7 @@ export const LetterCell = React.memo(function LetterCell({
         )}
 
       </Animated.View>
-    </OuterWrapper>
+    </Animated.View>
   );
 });
 

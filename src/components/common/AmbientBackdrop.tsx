@@ -141,7 +141,40 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
   const isFocused = useIsFocused();
 
   if (variant === 'game') {
-    return <SynthwaveBackdrop focused={isFocused} />;
+    // Game screen gets a STATIC backdrop — just the sky gradient + bg image.
+    // Previously this rendered SynthwaveBackdrop with a looping H.264 video,
+    // an animated NeonSun, a scrolling perspective grid, and 10-25 twinkling
+    // stars all running continuously during gameplay. The player never sees
+    // any of it — the grid + UI chrome cover it — but the GPU was decoding
+    // and compositing all of it on every frame, eating the budget that
+    // should have gone to smooth drag/tap animations.
+    return (
+      <View pointerEvents="none" style={styles.container}>
+        <LinearGradient
+          colors={['#050008', '#0d0020', '#1a0533', '#2a0845', '#1a0533', '#0d0020'] as [string, string, ...string[]]}
+          locations={[0, 0.15, 0.3, 0.42, 0.55, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <Image
+          source={LOCAL_IMAGES.bg1}
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            width: '100%',
+            height: '100%',
+            opacity: 0.5,
+          }}
+          resizeMode="cover"
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(10,0,21,0.75)'] as [string, string]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.bottomFade}
+        />
+      </View>
+    );
   }
   if (variant === 'home') {
     return <SynthwaveHomeBackdrop focused={isFocused} />;
