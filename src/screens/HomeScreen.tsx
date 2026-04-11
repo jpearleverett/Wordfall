@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Image,
@@ -251,16 +251,31 @@ export function HomeScreen({
     outputRange: [48, 0],
   });
 
-  const totalStars = Object.values(progress.starsByLevel).reduce((a, b) => a + b, 0);
-  const nextGuidedMilestone = getNextMilestone(
-    progress.currentLevel,
-    player.onboardingMilestones ?? [],
+  // Memoize derived values. HomeScreen re-renders on every player/economy state
+  // change (level up, coin change, ceremony, etc.), and without memoization each
+  // re-render re-reduces starsByLevel (O(n) on every render), re-creates Date
+  // objects, and re-runs getDailyDeal/getFlashSale.
+  const totalStars = useMemo(
+    () => Object.values(progress.starsByLevel).reduce((a, b) => a + b, 0),
+    [progress.starsByLevel],
   );
-  const dailyDeal = getDailyDeal(today);
+  const nextGuidedMilestone = useMemo(
+    () => getNextMilestone(progress.currentLevel, player.onboardingMilestones ?? []),
+    [progress.currentLevel, player.onboardingMilestones],
+  );
+  const dailyDeal = useMemo(() => getDailyDeal(today), [today]);
   const dealHoursLeft = dailyDeal.availableHours;
-  const flashSale = getFlashSale(new Date());
-  const nextMilestone = [7, 14, 30, 60, 100].find((milestone) => milestone > progress.currentStreak) || 100;
-  const streakProgress = Math.min(100, (progress.currentStreak / nextMilestone) * 100);
+  // getFlashSale reads the current time — recompute on mount only. The flash
+  // sale window is a coarse bucket, not per-second.
+  const flashSale = useMemo(() => getFlashSale(new Date()), []);
+  const nextMilestone = useMemo(
+    () => [7, 14, 30, 60, 100].find((milestone) => milestone > progress.currentStreak) || 100,
+    [progress.currentStreak],
+  );
+  const streakProgress = useMemo(
+    () => Math.min(100, (progress.currentStreak / nextMilestone) * 100),
+    [progress.currentStreak, nextMilestone],
+  );
   const currentRewardDay = ((loginCycleDay - 1) % 7) + 1;
 
   // Progressive disclosure flags

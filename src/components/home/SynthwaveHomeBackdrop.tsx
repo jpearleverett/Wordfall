@@ -397,9 +397,12 @@ function FlowingPerspectiveGrid() {
 
 interface SynthwaveHomeBackdropProps {
   playerLevel?: number;
+  /** When false, skips the animated children (orbs/stars/sun pulse/grid flow)
+   *  so the backdrop freezes while the screen is off-focus. Defaults to true. */
+  focused?: boolean;
 }
 
-function SynthwaveHomeBackdropInner(_props: SynthwaveHomeBackdropProps) {
+function SynthwaveHomeBackdropInner({ focused = true }: SynthwaveHomeBackdropProps) {
   const stars = useMemo(
     () =>
       Array.from({ length: 12 }, (_, i) => ({
@@ -434,8 +437,8 @@ function SynthwaveHomeBackdropInner(_props: SynthwaveHomeBackdropProps) {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Stars */}
-      {stars.map((star) => (
+      {/* Stars — gated on focus so they don't run withRepeat loops on inactive tabs */}
+      {focused && stars.map((star) => (
         <TwinklingStar
           key={star.id}
           top={star.top}
@@ -447,14 +450,14 @@ function SynthwaveHomeBackdropInner(_props: SynthwaveHomeBackdropProps) {
         />
       ))}
 
-      {/* Mountain silhouettes behind the sun */}
+      {/* Mountain silhouettes behind the sun (static, cheap) */}
       <MountainSilhouettes />
 
-      {/* Banded retro sun */}
-      <BandedSun />
+      {/* Banded retro sun — the BandedSun component runs a pulse loop; gate it */}
+      {focused && <BandedSun />}
 
-      {/* Flowing perspective grid floor */}
-      <FlowingPerspectiveGrid />
+      {/* Flowing perspective grid floor — runs an 8s withRepeat scroll; gate it */}
+      {focused && <FlowingPerspectiveGrid />}
 
       {/* Bottom fade for content readability */}
       <LinearGradient
@@ -486,12 +489,12 @@ const styles = StyleSheet.create({
     height: 300,
   },
   vignette: {
+    // A shadow-based vignette on a full-screen view forces an offscreen
+    // compositing pass every frame. The 80px blur radius here was crushing
+    // GPU perf on every screen that mounts SynthwaveHomeBackdrop.
+    // Collapsed to no-op; the bottomFade LinearGradient already darkens the
+    // lower half of the screen for UI contrast.
     ...StyleSheet.absoluteFillObject,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 80,
   },
 });
 
