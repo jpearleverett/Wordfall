@@ -831,11 +831,19 @@ export function useGame(
       return;
     }
 
+    // Dead-end solvers are expensive DFS passes over the grid. Each effect
+    // re-run schedules a timer; when multiple grid changes fire back-to-back
+    // (a chain of word clears) the cleanup cancels the previous timer so only
+    // the most recent run executes. 500ms of quiet before we pay the cost
+    // keeps chain-solve animations smooth. The player doesn't need an instant
+    // "stuck" indicator — they need a responsive UI while the chain plays.
+    const DEBOUNCE_MS = 500;
+
     // shrinkingBoard: use shrink-aware dead-end detection
     if (mode === 'shrinkingBoard') {
       const timer = setTimeout(() => {
         setIsStuck(isDeadEndShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink));
-      }, 100);
+      }, DEBOUNCE_MS);
       return () => clearTimeout(timer);
     }
 
@@ -843,7 +851,7 @@ export function useGame(
     if (mode === 'noGravity') {
       const timer = setTimeout(() => {
         setIsStuck(isDeadEndNoGravity(state.board.grid, remainingWords));
-      }, 100);
+      }, DEBOUNCE_MS);
       return () => clearTimeout(timer);
     }
 
@@ -851,14 +859,14 @@ export function useGame(
     if (mode === 'gravityFlip') {
       const timer = setTimeout(() => {
         setIsStuck(isDeadEndGravityFlip(state.board.grid, remainingWords, state.gravityDirection, state.moves));
-      }, 100);
+      }, DEBOUNCE_MS);
       return () => clearTimeout(timer);
     }
 
     // Standard dead-end detection
     const timer = setTimeout(() => {
       setIsStuck(isDeadEnd(state.board.grid, remainingWords));
-    }, 100);
+    }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [foundWords, state.status, state.board.grid, remainingWords, mode, state.gravityDirection, state.moves, state.wordsUntilShrink]);
 

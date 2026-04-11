@@ -551,6 +551,15 @@ export function GameScreen({
     transform: [{ scale: Animated.multiply(gridScaleAnim, undoPulseAnim) }],
   }), [gridScaleAnim, undoPulseAnim]);
 
+  // Memoize the root shake container style so the Animated.View ref stays
+  // stable across the thousands of re-renders a puzzle triggers (one per
+  // cell selection). The shakeAnim ref is stable so the style needs only
+  // to be computed once.
+  const shakeContainerStyle = useMemo(
+    () => [styles.container, { transform: [{ translateX: shakeAnim }] }],
+    [shakeAnim],
+  );
+
   // Stable onLayout callback — uses ref to lock on first measurement and prevent re-renders
   const handleGridLayout = useCallback((e: { nativeEvent: { layout: { height: number } } }) => {
     const h = e.nativeEvent.layout.height;
@@ -1003,11 +1012,21 @@ export function GameScreen({
     }
   }, [state.status, showFailed, foundWords, mode]);
 
+  // Throttle tap feedback (haptic + sound) during drags. A fast diagonal drag
+  // crosses 8+ cells in ~0.5s; firing a haptic impact + audio load-and-play for
+  // each creates a blur of vibration and stacks up JNI bridge calls that
+  // compete with gesture frame processing. Throttling to 40ms max frequency
+  // keeps the initial tap feedback crisp while dragging feels smooth.
+  const lastTapFeedbackAt = useRef(0);
   const handleCellPress = useCallback(
     (position: CellPosition) => {
       resetIdleTimer();
-      void tapHaptic();
-      void soundManager.playSound('tap');
+      const now = Date.now();
+      if (now - lastTapFeedbackAt.current > 40) {
+        lastTapFeedbackAt.current = now;
+        void tapHaptic();
+        void soundManager.playSound('tap');
+      }
       // Adjacency is handled by the reducer — non-adjacent taps start a new selection
       // Wildcard placement mode is also handled by the reducer via SELECT_CELL
       selectCell(position);
@@ -1211,7 +1230,7 @@ export function GameScreen({
   });
 
   return (
-    <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
+    <Animated.View style={shakeContainerStyle}>
     <SafeAreaView style={styles.container}>
       <AmbientBackdrop variant="game" />
       {/* Mode intro banner - absolute overlay so it doesn't shift layout */}
