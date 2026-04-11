@@ -62,60 +62,35 @@ export const LetterCell = React.memo(function LetterCell({
   // If memoization is working we expect ~1 render per tap.
   perfCountCellRender();
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
   const movedAnim = useRef(new Animated.Value(0)).current;
-  const rippleAnim = useRef(new Animated.Value(0)).current;
-  const overchargeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Batch all three selection animations into ONE Animated.parallel so
-    // only a single native animation config crosses the JS→native bridge.
-    // Previously these were three separate .start() calls, each serializing
-    // its own config — with 5-12 cells changing state at once during a chain
-    // clear, that was 15-36 bridge messages and ~15-40ms of bridge overhead
-    // blocking the JS thread per clear.
+    // One Animated.start() call per selection change. Scale pop is the only
+    // active feedback now — the decorative rings (ripple/overcharge/glow)
+    // were removed because their mount/unmount dominated the native commit
+    // phase when multiple cells changed state at once.
     if (isSelected) {
-      rippleAnim.setValue(0);
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(scaleAnim, {
-            toValue: 0.86,
-            duration: 60,
-            useNativeDriver: true,
-          }),
-          Animated.spring(scaleAnim, {
-            toValue: 1.08,
-            friction: 3.5,
-            tension: 260,
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 120,
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 0.86,
+          duration: 60,
           useNativeDriver: true,
         }),
-        Animated.timing(rippleAnim, {
-          toValue: 1,
-          duration: 300,
+        Animated.spring(scaleAnim, {
+          toValue: 1.08,
+          friction: 3.5,
+          tension: 260,
           useNativeDriver: true,
         }),
       ]).start();
     } else {
-      Animated.parallel([
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 6,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 6,
+        useNativeDriver: true,
+      }).start();
     }
-  }, [isSelected, scaleAnim, glowAnim, rippleAnim]);
+  }, [isSelected, scaleAnim]);
 
   useEffect(() => {
     if (isMoved) {
@@ -127,18 +102,6 @@ export const LetterCell = React.memo(function LetterCell({
       }).start();
     }
   }, [isMoved, movedAnim]);
-
-  // Valid word "overcharge" — brief glow surge
-  useEffect(() => {
-    if (isValidWord) {
-      overchargeAnim.setValue(1);
-      Animated.timing(overchargeAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [isValidWord, overchargeAnim]);
 
   const borderRadius = size * 0.20;
   const insetBR = Math.max(borderRadius - 2, 2);
@@ -184,9 +147,6 @@ export const LetterCell = React.memo(function LetterCell({
     };
   }, [isValidWord, isSelected, isHinted, isWildcard]);
 
-  const showOuterGlow = isSelected || isValidWord;
-  const outerGlowColor = isValidWord ? COLORS.greenGlow : isSelected ? COLORS.accentGlow : 'transparent';
-
   // CRITICAL: always use Animated.View, never swap between View and Animated.View
   // based on props. A component-type swap forces React to unmount the entire
   // cell subtree (12+ native views per cell) and remount a fresh one. When
@@ -213,71 +173,23 @@ export const LetterCell = React.memo(function LetterCell({
       accessibilityHint="Double tap to select this letter"
       accessibilityState={{ selected: isSelected }}
     >
-      {/* Selection neon ripple ring — expanding glow that fades */}
-      {isSelected && (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: -8,
-            left: -8,
-            right: -8,
-            bottom: -8,
-            borderRadius: borderRadius + 8,
-            borderWidth: 2,
-            borderColor: COLORS.accent,
-            opacity: rippleAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.8, 0],
-            }),
-            transform: [
-              { scale: rippleAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] }) },
-            ],
-          }}
-        />
-      )}
-
-      {/* Valid word overcharge — brief glow surge */}
-      {isValidWord && (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: -10,
-            left: -10,
-            right: -10,
-            bottom: -10,
-            borderRadius: borderRadius + 10,
-            backgroundColor: COLORS.greenGlow,
-            opacity: overchargeAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 0.6],
-            }),
-            transform: [
-              { scale: overchargeAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) },
-            ],
-          }}
-        />
-      )}
-
-      {showOuterGlow && (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: -6,
-            left: -6,
-            right: -6,
-            bottom: -6,
-            borderRadius: borderRadius + 6,
-            backgroundColor: outerGlowColor,
-            opacity: glowAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 0.5],
-            }),
-          }}
-        />
-      )}
+      {/* Decorative overlay rings removed:
+       *  - ripple ring (isSelected)
+       *  - overcharge glow (isValidWord)
+       *  - outer glow (isSelected || isValidWord)
+       *
+       * Each was a separate Animated.View that mounted/unmounted on
+       * state changes. With N selected cells changing state at once
+       * (valid-word drag, chain clear), that's 2-3N native view
+       * allocations per commit, dominating the native commit phase
+       * that the profiler traces showed as ~30-50ms per tap.
+       *
+       * The main body below already provides strong visual feedback
+       * (scale pop, border color swap, shadow color/radius swap) for
+       * all three states, so the rings were decorative, not essential.
+       * Dropping them was the single biggest lever left for cutting
+       * tap-to-commit latency.
+       */}
 
       {isMoved && (
         <Animated.View
