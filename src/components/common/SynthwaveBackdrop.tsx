@@ -395,11 +395,11 @@ const styles = StyleSheet.create({
     height: 300,
   },
   vignette: {
+    // shadowRadius: 80 on a full-screen View was forcing an 80-pixel Gaussian
+    // blur compositing pass over the entire screen every single frame. This
+    // was eating an enormous amount of GPU budget during gameplay. The
+    // bottomFade LinearGradient already darkens the lower half of the screen
+    // for contrast — no need for a shadow-based vignette on top of that.
     ...StyleSheet.absoluteFillObject,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 80,
   },
 });

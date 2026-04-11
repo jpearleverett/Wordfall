@@ -15,6 +15,7 @@ import {
 import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
 import { findWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
+import { instrumentReducer } from '../utils/perfInstrument';
 
 const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
 
@@ -716,8 +717,12 @@ export function useGame(
   maxMoves: number = 0,
   timeLimit: number = 0,
 ) {
+  // Wrap gameReducer in a perf-instrumented version. In dev mode this logs
+  // any action that takes >= 1ms so we can see if the reducer is the lag
+  // source. In production it returns the raw reducer untouched.
+  const timedReducer = useMemo(() => instrumentReducer(gameReducer), []);
   const [state, dispatch] = useReducer(
-    gameReducer,
+    timedReducer,
     createInitialState(initialBoard, level, mode, maxMoves, timeLimit)
   );
 
