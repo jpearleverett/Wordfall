@@ -163,7 +163,6 @@ async function setupAndroidChannel(): Promise<void> {
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#00d4ff',
-      sound: 'default',
     });
   }
 }
