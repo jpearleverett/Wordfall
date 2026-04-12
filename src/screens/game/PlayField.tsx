@@ -16,6 +16,7 @@ import { WordBank } from '../../components/WordBank';
 import { useGameStore, useGameDispatch } from '../../stores/gameStore';
 import { CellPosition, GameMode, GravityDirection } from '../../types';
 import { CELL_GAP, MAX_GRID_WIDTH, COLORS } from '../../constants';
+import { matchesWord } from '../../hooks/useGame';
 import { profilerOnRender, perfMark, perfDragStart, perfDragEnd } from '../../utils/perfInstrument';
 import { tapHaptic } from '../../services/haptics';
 import { soundManager } from '../../services/sound';
@@ -85,7 +86,13 @@ function PlayFieldImpl({
 
   const remainingWordSet = useMemo(() => buildRemainingWordSet(words), [words]);
 
-  const isValidWord = selectedCells.length > 0 && remainingWordSet.has(currentWord);
+  // Wildcard-aware validity check — when wildcards are active, fall back to
+  // matchesWord which skips letter comparison for wildcard cell positions.
+  const isValidWord = useMemo(() => {
+    if (selectedCells.length === 0) return false;
+    if (wildcardCells.length === 0) return remainingWordSet.has(currentWord);
+    return words.some(w => !w.found && matchesWord(currentWord, w.word, selectedCells, wildcardCells));
+  }, [selectedCells, currentWord, wildcardCells, words, remainingWordSet]);
 
   // ── Notify GameScreen of valid-word / selection changes ────────────────
   useEffect(() => {
@@ -179,15 +186,31 @@ function ConnectedWordBankImpl() {
   const selectedCells = useGameStore(s => s.selectedCells);
   const grid = useGameStore(s => s.board.grid);
   const words = useGameStore(s => s.board.words);
+  const wildcardCells = useGameStore(s => s.wildcardCells);
 
+  const wildcardSet = useMemo(
+    () => new Set(wildcardCells.map(c => `${c.row},${c.col}`)),
+    [wildcardCells],
+  );
+
+  // Display word: show ★ for wildcard cell positions
   const currentWord = useMemo(
-    () => selectedCells.map(({ row, col }) => grid[row]?.[col]?.letter ?? '').join(''),
-    [grid, selectedCells],
+    () => selectedCells.map(({ row, col }) => {
+      if (wildcardSet.has(`${row},${col}`)) return '★';
+      return grid[row]?.[col]?.letter ?? '';
+    }).join(''),
+    [grid, selectedCells, wildcardSet],
   );
 
   const remainingWordSet = useMemo(() => buildRemainingWordSet(words), [words]);
 
-  const isValidWord = selectedCells.length > 0 && remainingWordSet.has(currentWord);
+  // Wildcard-aware validity: use raw letters + matchesWord for wildcard comparison
+  const isValidWord = useMemo(() => {
+    if (selectedCells.length === 0) return false;
+    if (wildcardCells.length === 0) return remainingWordSet.has(currentWord);
+    const rawWord = selectedCells.map(({ row, col }) => grid[row]?.[col]?.letter ?? '').join('');
+    return words.some(w => !w.found && matchesWord(rawWord, w.word, selectedCells, wildcardCells));
+  }, [selectedCells, currentWord, grid, wildcardCells, words, remainingWordSet]);
 
   return (
     <View style={styles.wordArea}>
