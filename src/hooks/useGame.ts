@@ -203,83 +203,106 @@ function getOuterRing(grid: Grid): CellPosition[] {
   return ring;
 }
 
+/**
+ * Pure selection step. Given a state and a newly-pressed position, returns
+ * the next state. Extracted so both SELECT_CELL and SELECT_CELLS (batched)
+ * can apply the same logic without duplication. Preserves exact semantics
+ * of the original SELECT_CELL case so existing tests continue to pass.
+ */
+function applySelectionStep(state: GameState, position: CellPosition): GameState {
+  if (state.status !== 'playing') return state;
+  const { selectedCells, selectionDirection, board } = state;
+
+  // If in wildcard placement mode, allow placing on empty cells too
+  if (state.wildcardMode) {
+    // For empty cells, create a placeholder cell so the wildcard has something to render
+    let newGrid = board.grid;
+    if (!board.grid[position.row]?.[position.col]) {
+      newGrid = board.grid.map(r => [...r]);
+      newGrid[position.row][position.col] = {
+        id: `wildcard-${position.row}-${position.col}`,
+        letter: '*',
+      };
+    }
+    return {
+      ...state,
+      board: { ...board, grid: newGrid },
+      wildcardMode: false,
+      wildcardCells: [position],
+      boosterCounts: { ...state.boosterCounts, wildcardTile: state.boosterCounts.wildcardTile - 1 },
+    };
+  }
+
+  if (!board.grid[position.row]?.[position.col]) return state;
+
+  // If tapping an already selected cell, deselect from that point
+  const existingIndex = selectedCells.findIndex(
+    c => c.row === position.row && c.col === position.col
+  );
+  if (existingIndex >= 0) {
+    const newSelected = selectedCells.slice(0, existingIndex);
+    return {
+      ...state,
+      selectedCells: newSelected,
+      selectionDirection: newSelected.length < 2 ? null : selectionDirection,
+      lastInvalidTap: null,
+    };
+  }
+
+  // If no cells selected, start selection
+  if (selectedCells.length === 0) {
+    return {
+      ...state,
+      selectedCells: [position],
+      selectionDirection: null,
+      lastInvalidTap: null,
+    };
+  }
+
+  // Check adjacency to last selected cell
+  const lastCell = selectedCells[selectedCells.length - 1];
+  const { adjacent, direction: newDir } = areAdjacent(
+    lastCell,
+    position,
+    selectionDirection
+  );
+
+  if (!adjacent) {
+    return {
+      ...state,
+      selectedCells: [position],
+      selectionDirection: null,
+      lastInvalidTap: position,
+    };
+  }
+
+  const newSelected = [...selectedCells, position];
+  return {
+    ...state,
+    selectedCells: newSelected,
+    selectionDirection: newDir,
+    lastInvalidTap: null,
+  };
+}
+
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'SELECT_CELL': {
-      if (state.status !== 'playing') return state;
-      const { position } = action;
-      const { selectedCells, selectionDirection, board } = state;
+      return applySelectionStep(state, action.position);
+    }
 
-      // If in wildcard placement mode, allow placing on empty cells too
-      if (state.wildcardMode) {
-        // For empty cells, create a placeholder cell so the wildcard has something to render
-        let newGrid = board.grid;
-        if (!board.grid[position.row]?.[position.col]) {
-          newGrid = board.grid.map(r => [...r]);
-          newGrid[position.row][position.col] = {
-            id: `wildcard-${position.row}-${position.col}`,
-            letter: '*',
-          };
-        }
-        return {
-          ...state,
-          board: { ...board, grid: newGrid },
-          wildcardMode: false,
-          wildcardCells: [position],
-          boosterCounts: { ...state.boosterCounts, wildcardTile: state.boosterCounts.wildcardTile - 1 },
-        };
+    case 'SELECT_CELLS': {
+      // Batched selection from the Grid pan handler. The handler collects
+      // cell crossings during a single animation frame and dispatches them
+      // once here, producing one new state object regardless of how many
+      // cells were traversed. Semantics are identical to N back-to-back
+      // SELECT_CELL dispatches.
+      if (action.positions.length === 0) return state;
+      let next = state;
+      for (let i = 0; i < action.positions.length; i++) {
+        next = applySelectionStep(next, action.positions[i]);
       }
-
-      if (!board.grid[position.row]?.[position.col]) return state;
-
-      // If tapping an already selected cell, deselect from that point
-      const existingIndex = selectedCells.findIndex(
-        c => c.row === position.row && c.col === position.col
-      );
-      if (existingIndex >= 0) {
-        const newSelected = selectedCells.slice(0, existingIndex);
-        return {
-          ...state,
-          selectedCells: newSelected,
-          selectionDirection: newSelected.length < 2 ? null : selectionDirection,
-          lastInvalidTap: null,
-        };
-      }
-
-      // If no cells selected, start selection
-      if (selectedCells.length === 0) {
-        return {
-          ...state,
-          selectedCells: [position],
-          selectionDirection: null,
-          lastInvalidTap: null,
-        };
-      }
-
-      // Check adjacency to last selected cell
-      const lastCell = selectedCells[selectedCells.length - 1];
-      const { adjacent, direction: newDir } = areAdjacent(
-        lastCell,
-        position,
-        selectionDirection
-      );
-
-      if (!adjacent) {
-        return {
-          ...state,
-          selectedCells: [position],
-          selectionDirection: null,
-          lastInvalidTap: position,
-        };
-      }
-
-      const newSelected = [...selectedCells, position];
-      return {
-        ...state,
-        selectedCells: newSelected,
-        selectionDirection: newDir,
-        lastInvalidTap: null,
-      };
+      return next;
     }
 
     case 'CLEAR_SELECTION':
@@ -746,6 +769,14 @@ export function useGame(
     dispatch({ type: 'SELECT_CELL', position });
   }, []);
 
+  // Batched selection dispatch — used by the Grid pan handler's
+  // requestAnimationFrame batcher to commit all cells crossed during a
+  // single frame in one reducer pass.
+  const selectCells = useCallback((positions: CellPosition[]) => {
+    if (positions.length === 0) return;
+    dispatch({ type: 'SELECT_CELLS', positions });
+  }, []);
+
   const clearSelection = useCallback(() => {
     dispatch({ type: 'CLEAR_SELECTION' });
   }, []);
@@ -889,6 +920,7 @@ export function useGame(
   return {
     state,
     selectCell,
+    selectCells,
     clearSelection,
     submitWord,
     useHint: useHintAction,

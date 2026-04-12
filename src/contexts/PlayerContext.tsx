@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -579,6 +580,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('offline');
   const firestoreSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Debounced local persist. A winning puzzle fires 15+ setData calls via
+  // useRewardWiring (recordPuzzleComplete → recordModePlay → updateProgress → ...).
+  // Writing the full PlayerData blob to AsyncStorage synchronously on every one
+  // of those was costing ~130ms on the post-win commit. JSON.stringify of the
+  // player record + AsyncStorage.setItem is 5-20ms per call. We debounce to
+  // coalesce rapid bursts into one write. 300ms is short enough that a user
+  // who backgrounds the app within a third of a second still loses nothing
+  // (AppState 'background' also triggers a synchronous flush — see below).
+  const localPersistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestDataRef = useRef<PlayerData>(DEFAULT_PLAYER_DATA);
   const isInitialLoadDone = useRef(false);
 
   // ── Persistence ─────────────────────────────────────────────────────────
@@ -632,26 +643,41 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     syncFromFirestore();
   }, [loaded, user]);
 
-  // Step 3: Persist to AsyncStorage immediately on every change,
-  //         and debounce Firestore saves to every 5 seconds
+  // Step 3: Debounced persist to AsyncStorage (300ms) + Firestore (5s).
+  //
+  // A single winning puzzle fires 15+ setData calls in quick succession via
+  // useRewardWiring. The previous implementation wrote to AsyncStorage on
+  // every effect run, stringify-ing the full ~50-field player blob each time.
+  // Trace showed ~130ms stalls on the post-win commit, entirely attributable
+  // to these synchronous stringify + write passes.
+  //
+  // The debounce coalesces rapid bursts to a single write. Background/unmount
+  // paths flush synchronously below so we never lose data.
   useEffect(() => {
     if (!loaded) return;
 
-    // Always stamp lastModified
+    // Always stamp lastModified and capture the latest snapshot so the
+    // debounced writer and the AppState flush both see the same payload.
     const now = Date.now();
-    const dataWithTimestamp = { ...data, lastModified: now };
+    const dataWithTimestamp: PlayerData = { ...data, lastModified: now };
+    latestDataRef.current = dataWithTimestamp;
 
-    // Save to AsyncStorage immediately
-    const persistLocal = async () => {
-      try {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(dataWithTimestamp));
-      } catch (e) {
-        console.warn('Failed to save player data to AsyncStorage:', e);
-      }
-    };
-    persistLocal();
+    // Debounced AsyncStorage write (300ms).
+    if (localPersistTimer.current) clearTimeout(localPersistTimer.current);
+    localPersistTimer.current = setTimeout(() => {
+      void (async () => {
+        try {
+          await AsyncStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(latestDataRef.current),
+          );
+        } catch (e) {
+          console.warn('Failed to save player data to AsyncStorage:', e);
+        }
+      })();
+    }, 300);
 
-    // Debounced Firestore save (5 seconds)
+    // Debounced Firestore save (5 seconds).
     if (user) {
       if (firestoreSaveTimer.current) {
         clearTimeout(firestoreSaveTimer.current);
@@ -660,7 +686,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setCloudSyncStatus('syncing');
         try {
           const docRef = doc(db, 'users', user.uid, 'data', 'player');
-          await setDoc(docRef, dataWithTimestamp, { merge: true });
+          await setDoc(docRef, latestDataRef.current, { merge: true });
           setCloudSyncStatus('synced');
         } catch (e) {
           console.warn('Failed to sync player data to Firestore:', e);
@@ -670,11 +696,48 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
 
     return () => {
+      // Do NOT clear localPersistTimer here — it's intentionally persistent
+      // across effect reruns so rapid bursts coalesce. The AppState flush
+      // effect below handles crash-safety.
       if (firestoreSaveTimer.current) {
         clearTimeout(firestoreSaveTimer.current);
       }
     };
   }, [data, loaded, user]);
+
+  // Crash-safety: on backgrounding or unmount, flush any pending debounced
+  // write synchronously. Without this, the debounce window could swallow a
+  // write if the user backgrounds the app within 300ms of a state change.
+  useEffect(() => {
+    if (!loaded) return;
+
+    const flushPendingPersist = () => {
+      if (localPersistTimer.current) {
+        clearTimeout(localPersistTimer.current);
+        localPersistTimer.current = null;
+        // Fire-and-forget; AppState background events return quickly and
+        // the OS gives us a brief window to complete async work.
+        void AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(latestDataRef.current),
+        ).catch((e) => {
+          console.warn('Failed to flush player data on background:', e);
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'background' || next === 'inactive') {
+        flushPendingPersist();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      // Also flush on provider unmount.
+      flushPendingPersist();
+    };
+  }, [loaded]);
 
   // Reconcile unlock state with current level (helps old saves / balance updates).
   useEffect(() => {

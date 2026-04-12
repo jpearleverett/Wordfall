@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -279,21 +280,23 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   // every mutation would JSON.stringify the full state blob 50+ times per game,
   // blocking the JS thread. Batch to one write per second of quiet.
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestStateRef = useRef(state);
   useEffect(() => {
+    latestStateRef.current = state;
     if (!loaded) return;
 
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     persistTimerRef.current = setTimeout(() => {
       (async () => {
         try {
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(latestStateRef.current));
         } catch (e) {
           console.warn('Failed to save economy to AsyncStorage:', e);
         }
         if (user) {
           try {
             const docRef = doc(db, 'users', user.uid, 'economy', 'current');
-            await setDoc(docRef, state, { merge: true });
+            await setDoc(docRef, latestStateRef.current, { merge: true });
           } catch (e) {
             console.warn('Failed to sync economy to Firestore:', e);
           }
@@ -301,13 +304,38 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       })();
     }, 1000);
 
-    return () => {
+    // Intentionally no cleanup here — we want the timer to persist across
+    // rapid state changes so writes coalesce. Background/unmount flush below.
+  }, [state, loaded, user]);
+
+  // Crash-safety: flush any pending write on backgrounding or unmount.
+  useEffect(() => {
+    if (!loaded) return;
+
+    const flushPendingPersist = () => {
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
         persistTimerRef.current = null;
+        void AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(latestStateRef.current),
+        ).catch((e) => {
+          console.warn('Failed to flush economy on background:', e);
+        });
       }
     };
-  }, [state, loaded, user]);
+
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'background' || next === 'inactive') {
+        flushPendingPersist();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      flushPendingPersist();
+    };
+  }, [loaded]);
 
   const addCoins = useCallback((amount: number) => {
     setState((prev) => ({

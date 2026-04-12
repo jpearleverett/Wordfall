@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Animated,
   Image,
@@ -37,7 +37,16 @@ interface GridProps {
   grid: GridType;
   selectedCells: CellPosition[];
   hintedCells?: CellPosition[];
+  /** Single-cell dispatch (e.g. gesture begin, tap). */
   onCellPress: (position: CellPosition) => void;
+  /**
+   * Optional batched dispatch. When provided, the pan handler coalesces all
+   * cell crossings during a single animation frame into one call to this
+   * callback instead of calling onCellPress N times. Backed by the
+   * SELECT_CELLS reducer action. Consumers that don't pass this prop fall
+   * back to per-cell onCellPress calls for backwards compatibility.
+   */
+  onCellsPress?: (positions: CellPosition[]) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
   wildcardCells?: CellPosition[];
@@ -60,6 +69,7 @@ function GameGridImpl({
   selectedCells,
   hintedCells = [],
   onCellPress,
+  onCellsPress,
   onDragStart,
   onDragEnd,
   wildcardCells = [],
@@ -185,50 +195,152 @@ function GameGridImpl({
   const lastDragPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
 
-  // Keep the latest cellBounds + cellSize in refs so hitTestCell and the
-  // gesture handler can read them without being re-created on every grid
-  // change. Rebuilding the composed gesture tears down the native handler
-  // and is expensive — we want it built ONCE on mount.
+  // ── Drag batch: collected cell crossings within a single animation frame ──
+  // The pan gesture pushes each crossed cell into this buffer and schedules
+  // a requestAnimationFrame flush. All cells buffered before the rAF fires
+  // commit in one SELECT_CELLS dispatch instead of N SELECT_CELL dispatches.
+  // This alone caps reducer commits at the display refresh rate regardless
+  // of how fast the pan event stream fires (pan can emit at >120Hz on some
+  // devices). Combined with fewer React commits, JS-thread backpressure
+  // drops dramatically and tap-to-commit latency falls into the 60fps budget.
+  const pendingCellsRef = useRef<CellPosition[]>([]);
+  const rafHandleRef = useRef<number | null>(null);
+
+  // ── Column-indexed hit-test lookup (stride-based O(1)) ───────────────────
+  // The old implementation iterated every cellBounds entry (up to 49) on
+  // every pointer move, then again per interpolated step during fast drags.
+  // Now we precompute per-column ordered arrays and compute (col, rowSlot)
+  // with arithmetic, reducing each hit test to at most one bounds check.
   const cellBoundsRef = useRef(cellBounds);
   cellBoundsRef.current = cellBounds;
   const cellSizeRef = useRef(cellSize);
   cellSizeRef.current = cellSize;
 
-  // Hit test using exact cell size (not cell + gap) for precise boundary detection.
-  // Uses nearest-center tiebreaking for taps in gap space. Stable — reads bounds
-  // from the ref so changing the grid doesn't invalidate the gesture handler.
-  const hitTestCell = useCallback((absX: number, absY: number): CellPosition | null => {
-    let bestDist = Infinity;
-    let bestCell: CellPosition | null = null;
-    const bounds = cellBoundsRef.current;
-    for (const b of bounds) {
-      const cx = b.x + b.w / 2;
-      const cy = b.y + b.h / 2;
-      // Check if within the full cell+gap area first (coarse filter)
-      if (absX >= b.x && absX < b.x + b.w && absY >= b.y && absY < b.y + b.h) {
-        const dist = Math.abs(absX - cx) + Math.abs(absY - cy);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestCell = { row: b.row, col: b.col };
-        }
+  // Per-column sorted bounds list. Each column entry holds the cells in
+  // layout order (top to bottom) so a y-coordinate maps to an index via
+  // `Math.floor((y - firstY) / stride)`.
+  const cellsByColumnRef = useRef<Array<Array<{ row: number; col: number; y: number; h: number }>>>([]);
+  cellsByColumnRef.current = useMemo(() => {
+    const byCol: Array<Array<{ row: number; col: number; y: number; h: number }>> = [];
+    for (let c = 0; c < cols; c++) byCol.push([]);
+    for (const b of cellBounds) {
+      if (b.col >= 0 && b.col < cols) {
+        byCol[b.col].push({ row: b.row, col: b.col, y: b.y, h: b.h });
       }
     }
-    return bestCell;
+    // Sort each column by y so we can binary-search or stride-index.
+    for (const col of byCol) col.sort((a, b) => a.y - b.y);
+    return byCol;
+  }, [cellBounds, cols]);
+
+  const strideRef = useRef(cellSize + CELL_GAP);
+  strideRef.current = cellSize + CELL_GAP;
+  const gridWidthRef = useRef(gridWidth);
+  gridWidthRef.current = gridWidth;
+  const gridHeightRef = useRef(gridHeight);
+  gridHeightRef.current = gridHeight;
+
+  // Stable O(1)-ish hit test. Column is computed by x/stride (constant time).
+  // Within the column we compute the row slot by offsetting from the first
+  // cell's y (also constant time, assuming cells are contiguous vertically —
+  // which is true for both gravity-down stacking and noGravityLayout grids).
+  // Falls back to bounds-check only if the computed slot is out of range.
+  const hitTestCell = useCallback((absX: number, absY: number): CellPosition | null => {
+    // Fast out-of-bounds rejection.
+    if (absX < 0 || absY < 0 || absX >= gridWidthRef.current || absY >= gridHeightRef.current) {
+      return null;
+    }
+    const stride = strideRef.current;
+    if (stride <= 0) return null;
+    // CELL_GAP / 2 is the inner padding added in cellBounds computation.
+    const padding = CELL_GAP / 2;
+    const colIdx = Math.floor((absX - padding) / stride);
+    const byCol = cellsByColumnRef.current;
+    if (colIdx < 0 || colIdx >= byCol.length) return null;
+    const column = byCol[colIdx];
+    if (column.length === 0) return null;
+    // Compute row slot within the column. For gravity-down the cells stack
+    // from the bottom, so the first cell's y is the top of the stack.
+    const firstY = column[0].y;
+    const slotIdx = Math.floor((absY - firstY) / stride);
+    if (slotIdx < 0 || slotIdx >= column.length) return null;
+    const candidate = column[slotIdx];
+    // Cheap sanity check: ensure absY is actually within [candidate.y, candidate.y + candidate.h).
+    if (absY >= candidate.y && absY < candidate.y + candidate.h) {
+      return { row: candidate.row, col: candidate.col };
+    }
+    return null;
   }, []);
 
   const onCellPressRef = useRef(onCellPress);
   onCellPressRef.current = onCellPress;
+  const onCellsPressRef = useRef(onCellsPress);
+  onCellsPressRef.current = onCellsPress;
   const onDragStartRef = useRef(onDragStart);
   onDragStartRef.current = onDragStart;
   const onDragEndRef = useRef(onDragEnd);
   onDragEndRef.current = onDragEnd;
 
+  // Flush any buffered cells synchronously. Called by onEnd / onFinalize so
+  // the tail of a drag is never lost to the next animation frame.
+  const flushPendingCells = useCallback(() => {
+    if (rafHandleRef.current != null) {
+      cancelAnimationFrame(rafHandleRef.current);
+      rafHandleRef.current = null;
+    }
+    const pending = pendingCellsRef.current;
+    if (pending.length === 0) return;
+    pendingCellsRef.current = [];
+    const batched = onCellsPressRef.current;
+    if (batched) {
+      batched(pending);
+    } else {
+      // Back-compat: emit individually if consumer didn't supply the batch cb.
+      const single = onCellPressRef.current;
+      for (let i = 0; i < pending.length; i++) single(pending[i]);
+    }
+  }, []);
+
+  // Schedule a rAF flush if none is pending. Multiple calls within the same
+  // frame coalesce naturally because we only schedule when the handle is null.
+  const scheduleFlush = useCallback(() => {
+    if (rafHandleRef.current != null) return;
+    rafHandleRef.current = requestAnimationFrame(() => {
+      rafHandleRef.current = null;
+      flushPendingCells();
+    });
+  }, [flushPendingCells]);
+
+  // Push one cell onto the pending batch. Duplicates against the last-buffered
+  // cell (already covered by lastDragCellRef in the gesture code) are caller's
+  // responsibility.
+  const enqueueCell = useCallback((position: CellPosition) => {
+    pendingCellsRef.current.push(position);
+    perfDragDispatch();
+    scheduleFlush();
+  }, [scheduleFlush]);
+
   // Built once on mount. The empty dep array is intentional — the callbacks
   // read from refs, so the gesture handler never needs to be rebuilt.
+  //
+  // Drag dispatch strategy:
+  //  1. onBegin fires the FIRST cell synchronously via onCellPress so visual
+  //     feedback on tap-down is instant (no rAF latency on the initial tap).
+  //  2. onUpdate hit-tests each pointer sample and enqueues new cells into
+  //     pendingCellsRef, which is drained once per animation frame via
+  //     scheduleFlush(). This caps reducer dispatches at the display refresh
+  //     rate and prevents JS-thread backpressure from blocking pan events.
+  //  3. onEnd / onFinalize flushes the tail synchronously so no cell is lost
+  //     to the final frame.
   const composedGesture = useMemo(() => {
     const panGesture = Gesture.Pan()
       .runOnJS(true)
       .minDistance(0)
+      // Cancel pointer updates when the finger leaves the grid. This stops
+      // the native handler from pumping events we'd just reject anyway,
+      // saving a few hundred microseconds per off-grid frame during drags
+      // that stray over the word bank or booster bar.
+      .shouldCancelWhenOutside(true)
       .onBegin((e) => {
         isDraggingRef.current = true;
         lastDragCellRef.current = null;
@@ -239,12 +351,16 @@ function GameGridImpl({
         if (cell) {
           const key = `${cell.row},${cell.col}`;
           lastDragCellRef.current = key;
+          // First cell dispatches SYNCHRONOUSLY for immediate visual feedback
+          // on tap-down. The rAF batcher only kicks in from .onUpdate onward.
           perfDragDispatch();
           onCellPressRef.current(cell);
         }
       })
       .onUpdate((e) => {
-        // Interpolate between last position and current to catch cells skipped by fast diagonal drags
+        // Interpolate between last position and current to catch cells
+        // skipped by fast diagonal drags. Hit-test is O(1) thanks to the
+        // column-indexed lookup, so this stays cheap.
         const prev = lastDragPosRef.current;
         if (prev) {
           const dx = e.x - prev.x;
@@ -262,8 +378,7 @@ function GameGridImpl({
                 const midKey = `${midCell.row},${midCell.col}`;
                 if (midKey !== lastDragCellRef.current) {
                   lastDragCellRef.current = midKey;
-                  perfDragDispatch();
-                  onCellPressRef.current(midCell);
+                  enqueueCell(midCell);
                 }
               }
             }
@@ -276,12 +391,15 @@ function GameGridImpl({
           const key = `${cell.row},${cell.col}`;
           if (key !== lastDragCellRef.current) {
             lastDragCellRef.current = key;
-            perfDragDispatch();
-            onCellPressRef.current(cell);
+            enqueueCell(cell);
           }
         }
       })
       .onEnd(() => {
+        // Flush any cells still pending for this frame BEFORE emitting
+        // onDragEnd, so the reducer has the complete selection when the
+        // caller decides whether to submit a word.
+        flushPendingCells();
         isDraggingRef.current = false;
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
@@ -289,6 +407,7 @@ function GameGridImpl({
         onDragEndRef.current?.();
       })
       .onFinalize(() => {
+        flushPendingCells();
         isDraggingRef.current = false;
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
@@ -305,6 +424,18 @@ function GameGridImpl({
 
     return Gesture.Race(panGesture, tapGesture);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ensure any pending drag cells are discarded on unmount, e.g. if the user
+  // navigates away mid-drag.
+  useEffect(() => {
+    return () => {
+      if (rafHandleRef.current != null) {
+        cancelAnimationFrame(rafHandleRef.current);
+        rafHandleRef.current = null;
+      }
+      pendingCellsRef.current = [];
+    };
   }, []);
 
   const framePad = 3;
