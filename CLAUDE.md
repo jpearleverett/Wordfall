@@ -2,7 +2,7 @@
 
 Gravity-based word puzzle (React Native + Expo). Find hidden words on a letter grid; cleared letters fall, creating chain opportunities. 10 modes, 40 authored chapters (~600 puzzles), clubs, VIP, prestige.
 
-**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, Firebase (optional, has offline fallback), Jest (**37 suites, 774 tests**).
+**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**37 suites, 779 tests**).
 
 For detailed architecture see `agent_docs/architecture.md`. For domain/gameplay detail see `agent_docs/domain.md` if it exists; otherwise read `src/constants.ts` and `src/data/`.
 
@@ -11,7 +11,7 @@ For detailed architecture see `agent_docs/architecture.md`. For domain/gameplay 
 ```bash
 npx expo start --dev-client            # Metro bundler (Expo Go NOT supported)
 npm run typecheck                      # tsc --noEmit
-npm test                               # jest (774 tests)
+npm test                               # jest (779 tests)
 npm install --legacy-peer-deps         # .npmrc sets this by default
 EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  # Rebuild dev client APK (Termux requires the env var)
 ```
@@ -21,18 +21,24 @@ EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  
 | File | Role |
 |------|------|
 | `App.tsx` | Entry. ErrorBoundary, provider nesting, navigation, deep links, 25+ ceremony switch |
-| `src/hooks/useGame.ts` | Game reducer (24 actions): selection, submit, hint, undo, boosters, gravity, shrink |
+| `src/hooks/useGame.ts` | Game store factory (zustand + redux middleware wrapping 24-action reducer). Returns store instance + stable action dispatchers. **No `state` return — consumers use selectors.** |
+| `src/stores/gameStore.ts` | Zustand store factory, `GameStoreContext`, `useGameStore` selector hook, `useGameDispatch`, 25+ pre-built selectors (`selectStatus`, `selectScore`, etc.) |
+| `src/screens/game/PlayField.tsx` | Grid + selection rendering. Subscribes to per-tap state (`selectedCells`) via zustand selectors so GameScreen doesn't re-render on taps. |
+| `src/screens/game/ConnectedWordBank` | (exported from PlayField.tsx) WordBank with store-driven `currentWord`/`isValidWord`. Rendered above grid area. |
+| `src/screens/game/GameFlashes.tsx` | Memoized subtree: chain popup, neon pulse, VHS glitch, valid/invalid flash, score popup, big-word label. Animated.Values passed by stable ref. |
+| `src/screens/game/GameBanners.tsx` | Memoized subtree: 7 conditional banners (gravity, shrink, wildcard, idle hint, ad hint, stuck ×2). |
 | `src/hooks/useRewardWiring.ts` | All post-puzzle rewards: coins/gems, rare tiles, ceremonies, mastery, quests |
-| `src/contexts/PlayerContext.tsx` | Master player data (progress, streaks, cosmetics, prestige — fully wired) |
-| `src/contexts/EconomyContext.tsx` | Currency, VIP, IAP fulfillment, ad rewards |
+| `src/contexts/PlayerContext.tsx` | Master player data. **Persistence is debounced** (300ms coalesce + AppState flush). |
+| `src/contexts/EconomyContext.tsx` | Currency, VIP, IAP fulfillment. **Persistence is debounced** (1s coalesce + AppState flush). |
 | `src/engine/boardGenerator.ts` | Seeded PRNG, 5s timeout, 4-tier fallback, mode-aware validation |
 | `src/engine/solver.ts` | 8-dir DFS with step budget + wall-clock timeout |
-| `src/screens/GameScreen.tsx` | Gameplay UI: selection, offers, tutorials, post-loss modal |
-| `src/components/Grid.tsx` | Pan + tap gesture handler. **Uses `.runOnJS(true)` — see gotchas** |
+| `src/screens/GameScreen.tsx` | Gameplay UI: offers, tutorials, post-loss modal. **Does NOT subscribe to `selectedCells`** — reads coarse state via ~20 zustand selectors. |
+| `src/components/Grid.tsx` | Pan + tap gesture handler. O(1) column-indexed hit test. `.shouldCancelWhenOutside(true)`. **Uses `.runOnJS(true)` — see gotchas.** |
+| `src/utils/hooks.ts` | `useStableCallback` — stable-identity callback wrapper (useEvent RFC polyfill). Used for all props passed to memoized children. |
 | `src/types.ts` | ALL type definitions — edit here when adding data structures |
 | `src/constants.ts` | COLORS, GRADIENTS, MODE_CONFIGS, ECONOMY, STREAK, FEATURE_UNLOCK_SCHEDULE |
 
-15 screens live in `src/screens/`. Ceremonies, backdrops, effects live in `src/components/{,common,home,victory,effects,game,modes,events,navigation,economy}/`.
+15 screens live in `src/screens/`. Game sub-components live in `src/screens/game/` (PlayField, GameFlashes, GameBanners). Ceremonies, backdrops, effects live in `src/components/{,common,home,victory,effects,game,modes,events,navigation,economy}/`.
 
 **Two cloud functions directories exist**: `cloud-functions/` (club goals, leaderboards, streak reminders, push) and `functions/` (validateReceipt, subscription renewals, club goal progress, inactive member cleanup). Don't confuse them.
 
@@ -41,7 +47,7 @@ EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  
 - **Reanimated gesture worklets.** `Gesture.Pan()/.Tap()` callbacks run as worklets on the UI thread by default. If your callback calls React state / reducers / `useRef.current`, add **`.runOnJS(true)`** immediately after the constructor. Without it: `Tried to synchronously call a non-worklet function 'X' on the UI thread` crash. See `Grid.tsx` for the pattern.
 - **`react-native-iap` is removed** from `package.json`. The Gradle build fails on v14 (Nitro Modules peer dep) and v12 (amazon/play flavor ambiguity). `src/services/iap.ts` dynamically imports it with a variable package name and falls back to mock mode when missing. Re-adding requires a config plugin to patch `build.gradle`. Until then, all purchases succeed locally but nothing is charged.
 - **`expo-av` is REMOVED in SDK 55.** Replaced by `expo-audio` (SFX/music) and `expo-video`. Don't reintroduce — the package is discontinued and won't autolink. `src/services/sound.ts` uses `expo-audio` only; the legacy fallback was deleted.
-- **Babel plugin: `react-native-worklets/plugin`, NOT `react-native-reanimated/plugin`.** SDK 55 / Reanimated 4.2 moved the plugin to the worklets package. It must be the **last** plugin in `babel.config.js`. Wrong plugin → `_WORKLET is not defined` at runtime.
+- **Babel config: React Compiler + worklets plugin.** `babel.config.js` enables React Compiler via `babel-preset-expo`'s `'react-compiler'` option (scoped to `src/`) AND has `react-native-worklets/plugin` as the **last plugin**. The worklets plugin MUST stay last or you get `_WORKLET is not defined` at runtime. Do not remove the compiler config — it auto-memoizes all components in `src/`.
 - **`generateBoard(config, seed, mode)` REQUIRES the `mode` arg** for `shrinkingBoard` / `gravityFlip` / `noGravity`. Each uses a different solvability check.
 - **`isDeadEnd` must run in a deferred `useEffect`**, never in render. It's an expensive DFS.
 - **Tile gradients must be fully opaque hex** (not rgba). rgba causes background bleed-through on the New Architecture.
@@ -63,7 +69,9 @@ EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  
 - All types go in **`src/types.ts`**.
 - Reanimated: `useSharedValue` + `useAnimatedStyle` + `withTiming`/`withSpring`/`withRepeat`/`withSequence`/`withDelay`. No `useNativeDriver` flag.
 - When adding a **new ceremony**: add to `CeremonyItem['type']` in `types.ts`, queue via `player.queueCeremony()`, render in `App.tsx` ceremony switch. For simple ribbon+icon+text, reuse `MilestoneCeremony`.
-- When adding a **new game action**: add to `GameAction` union in `types.ts`, handle in `gameReducer` in `useGame.ts`.
+- When adding a **new game action**: add to `GameAction` union in `types.ts`, handle in `gameReducer` in `useGame.ts`. The reducer is wrapped by zustand's `redux` middleware — no separate zustand action needed.
+- **Game state lives in a zustand store**, not `useReducer`. `useGame()` creates the store and returns it + action dispatchers. Consumers read state via `useStore(store, selector)` or `useGameStore(selector)` (from context). **Never return full `state` from `useGame`** — that defeats the selector-based optimization. Add new selectors in `src/stores/gameStore.ts`.
+- **`useStableCallback`** (from `src/utils/hooks.ts`) is the standard way to pass callbacks to memoized children. It gives a stable identity across renders while always calling the latest closure. Use it instead of `useCallback` when deps would churn.
 - When adding a **new mode**: add to `MODE_CONFIGS` in `constants.ts`, wire reducer logic in `useGame.ts`, add mode-specific validation in `boardGenerator.ts`, add tutorial to `modeTutorials.ts`.
 
 ## Dev Client (REQUIRED)
@@ -119,6 +127,7 @@ EAS project already configured (`projectId: b6dd187c-d46c-4331-bb15-5c7ffced89b3
 - Create `firebase.json` and deploy Firestore rules + indexes
 - Deploy both `cloud-functions/` and `functions/` directories (or consolidate)
 - iOS Universal Links (scheme works; HTTPS needs domain + apple-app-site-association)
-- E2E tests (Detox/Maestro — unit coverage is strong with 774 tests)
+- E2E tests (Detox/Maestro — unit coverage is strong with 779 tests)
 - Professional audio assets to replace synthesized tones
 - FCM credentials for Android push notifications
+- Context selectors for PlayerContext/EconomyContext (narrow subscriptions via `useSyncExternalStore` — plan exists in `/.claude/plans/kind-weaving-hoare.md` Phase 4)
