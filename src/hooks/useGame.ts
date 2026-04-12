@@ -14,7 +14,7 @@ import {
   SolveStep,
 } from '../types';
 import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
-import { findWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard } from '../engine/solver';
+import { findWordInGrid, isWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 import { instrumentReducer } from '../utils/perfInstrument';
 import { createGameStore, GameStore } from '../stores/gameStore';
@@ -131,8 +131,9 @@ function areAdjacent(
 
 /**
  * Check if a word matches, accounting for wildcard cells.
+ * Exported for reuse in PlayField's wildcard-aware validity check.
  */
-function matchesWord(
+export function matchesWord(
   selectedWord: string,
   targetWord: string,
   selectedCells: CellPosition[],
@@ -633,13 +634,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           }
         }
 
-        // Verify solvability using mode-appropriate solver
-        const shuffleValid = (state.mode === 'noGravity' || state.mode === 'shrinkingBoard')
-          ? areAllWordsIndependentlyFindable(newGrid, remainingWords)
-          : state.mode === 'gravityFlip'
-            ? isSolvableGravityFlip(newGrid, remainingWords, state.gravityDirection)
-            : isSolvable(newGrid, remainingWords);
-        if (shuffleValid) {
+        // Word-path cells were preserved, so the original solve order is still
+        // valid. Just verify every remaining word is still findable (it always
+        // will be since we only changed non-word cells). This replaces the
+        // expensive mode-specific solvability check that could false-negative
+        // when the solver found spurious paths through newly-shuffled letters.
+        if (remainingWords.every(w => isWordInGrid(newGrid, w))) {
           return {
             ...state,
             board: { ...state.board, grid: newGrid },
