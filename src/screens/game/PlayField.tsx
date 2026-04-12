@@ -121,17 +121,6 @@ function PlayFieldImpl({
 
   return (
     <>
-      {/* Word bank - above grid */}
-      <View style={styles.wordArea}>
-        <React.Profiler id="WordBank" onRender={profilerOnRender}>
-          <WordBank
-            words={words}
-            currentWord={currentWord}
-            isValidWord={isValidWord}
-          />
-        </React.Profiler>
-      </View>
-
       {/* Grid wrapper with scale animations */}
       <Animated.View style={gridScaleStyle}>
         <React.Profiler id="Grid" onRender={profilerOnRender}>
@@ -160,6 +149,45 @@ function PlayFieldImpl({
 }
 
 export const PlayField = React.memo(PlayFieldImpl);
+
+/**
+ * ConnectedWordBank — reads selection-derived state from the zustand store
+ * and renders WordBank. Placed in GameScreen's layout ABOVE the gridArea so
+ * it appears in the correct visual position. Only re-renders when the
+ * selected word or word-found state changes (per-tap for selection, per-word
+ * for found status).
+ */
+function ConnectedWordBankImpl() {
+  const selectedCells = useGameStore(s => s.selectedCells);
+  const grid = useGameStore(s => s.board.grid);
+  const words = useGameStore(s => s.board.words);
+
+  const currentWord = useMemo(
+    () => selectedCells.map(({ row, col }) => grid[row]?.[col]?.letter ?? '').join(''),
+    [grid, selectedCells],
+  );
+
+  const isValidWord = useMemo(() => {
+    if (selectedCells.length === 0) return false;
+    return words.some(
+      w => !w.found && w.word === currentWord && w.word.length === currentWord.length,
+    );
+  }, [words, currentWord, selectedCells.length]);
+
+  return (
+    <View style={styles.wordArea}>
+      <React.Profiler id="WordBank" onRender={profilerOnRender}>
+        <WordBank
+          words={words}
+          currentWord={currentWord}
+          isValidWord={isValidWord}
+        />
+      </React.Profiler>
+    </View>
+  );
+}
+
+export const ConnectedWordBank = React.memo(ConnectedWordBankImpl);
 
 const styles = StyleSheet.create({
   wordArea: {

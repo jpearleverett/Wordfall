@@ -41,7 +41,7 @@ import { getModeTutorial } from '../data/modeTutorials';
 import { PostLossModal } from '../components/PostLossModal';
 import { GameFlashes } from './game/GameFlashes';
 import { GameBanners } from './game/GameBanners';
-import { PlayField } from './game/PlayField';
+import { PlayField, ConnectedWordBank } from './game/PlayField';
 
 if (
   Platform.OS === 'android' &&
@@ -1483,8 +1483,31 @@ export function GameScreen({
       />
 
 
-      {/* Grid area */}
+      {/* Word bank — reads selection state from the zustand store directly.
+          Renders above the grid area in its original layout position. */}
+      <ConnectedWordBank />
+
+      {/* Grid area — onLayout measures the available space for Grid sizing */}
       <View style={styles.gridArea} onLayout={handleGridLayout}>
+        {/* PlayField — subscribes to per-tap selection state (selectedCells,
+            grid, wildcardCells). GameScreen does NOT subscribe to
+            selectedCells, so cell taps only re-render PlayField +
+            ConnectedWordBank, not the full GameScreen parent. */}
+        <PlayField
+          mode={mode}
+          onCellInteraction={resetIdleTimer}
+          onValidWordChange={handleValidWordChange}
+          onSelectionLengthChange={handleSelectionLengthChange}
+          gridAreaHeight={gridAreaHeight}
+          gridScaleStyle={gridScaleStyle}
+          showValidFlash={showValidFlash}
+          spotlightDimmedSet={spotlightDimmedSet}
+          fallAnimMap={fallAnimMap}
+          fallActive={fallActive}
+          movedCells={movedCells}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
+        />
         {/* Floating banners - absolute overlay, don't affect grid sizing.
             Memoized subtree: all its conditions are derived from non-per-tap
             state (mode, gravityDirection, wildcardMode, hintsAvailable,
@@ -1508,25 +1531,6 @@ export function GameScreen({
             onRetryTap={stableHandleRetry}
           />
         </View>
-
-        {/* PlayField — subscribes to per-tap selection state (selectedCells,
-            grid, words, wildcardCells). GameScreen does NOT subscribe to
-            selectedCells, so cell taps only re-render this ~50-line subtree. */}
-        <PlayField
-          mode={mode}
-          onCellInteraction={resetIdleTimer}
-          onValidWordChange={handleValidWordChange}
-          onSelectionLengthChange={handleSelectionLengthChange}
-          gridAreaHeight={gridAreaHeight}
-          gridScaleStyle={gridScaleStyle}
-          showValidFlash={showValidFlash}
-          spotlightDimmedSet={spotlightDimmedSet}
-          fallAnimMap={fallAnimMap}
-          fallActive={fallActive}
-          movedCells={movedCells}
-          isDragging={isDragging}
-          setIsDragging={setIsDragging}
-        />
 
         {/* #1 Word-clear particles */}
         {clearParticles && (
