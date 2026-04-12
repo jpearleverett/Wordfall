@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -95,22 +95,64 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     const timer = setTimeout(() => setLoading(false), 400);
     return () => clearTimeout(timer);
   }, []);
-  const contextPlayer = {
-    level: playerContext.currentLevel,
-    title: playerContext.equippedTitle,
-    puzzlesSolved: playerContext.puzzlesSolved,
-    totalStars: playerContext.totalStars,
-    bestStreak: playerContext.streaks.bestStreak,
-    perfectSolves: playerContext.perfectSolves,
-    totalScore: playerContext.totalScore,
-    badges: playerContext.achievementIds.map((id: string) => ({ id, name: id, icon: '\u{1F3C5}' })),
-    equippedCosmetics: {
-      frame: playerContext.equippedFrame,
-      theme: playerContext.equippedTheme,
-    },
-  };
-  const p: PlayerData = { ...DEFAULT_PLAYER, ...contextPlayer, ...playerProp };
-  const initial = p.name.charAt(0).toUpperCase();
+  const achievementIdsSet = useMemo(
+    () => new Set(playerContext.achievementIds),
+    [playerContext.achievementIds],
+  );
+  const achievementsViewData = useMemo(
+    () =>
+      ACHIEVEMENTS.map((achievement: AchievementDef) => {
+        const earnedLevels = achievement.tiers
+          .filter((tier) => achievementIdsSet.has(`${achievement.id}_${tier.level}`))
+          .map((tier) => tier.level);
+        const highestTier = earnedLevels[earnedLevels.length - 1] ?? null;
+        const tierColor = highestTier === 'gold' ? COLORS.gold
+          : highestTier === 'silver' ? '#c0c0c0'
+          : highestTier === 'bronze' ? '#cd7f32'
+          : 'rgba(255,255,255,0.15)';
+
+        return {
+          achievement,
+          highestTier,
+          tierColor,
+          earnedLevels,
+        };
+      }),
+    [achievementIdsSet],
+  );
+  const contextPlayer = useMemo(
+    () => ({
+      level: playerContext.currentLevel,
+      title: playerContext.equippedTitle,
+      puzzlesSolved: playerContext.puzzlesSolved,
+      totalStars: playerContext.totalStars,
+      bestStreak: playerContext.streaks.bestStreak,
+      perfectSolves: playerContext.perfectSolves,
+      totalScore: playerContext.totalScore,
+      badges: playerContext.achievementIds.map((id: string) => ({ id, name: id, icon: '\u{1F3C5}' })),
+      equippedCosmetics: {
+        frame: playerContext.equippedFrame,
+        theme: playerContext.equippedTheme,
+      },
+    }),
+    [
+      playerContext.currentLevel,
+      playerContext.equippedTitle,
+      playerContext.puzzlesSolved,
+      playerContext.totalStars,
+      playerContext.streaks.bestStreak,
+      playerContext.perfectSolves,
+      playerContext.totalScore,
+      playerContext.achievementIds,
+      playerContext.equippedFrame,
+      playerContext.equippedTheme,
+    ],
+  );
+  const p: PlayerData = useMemo(
+    () => ({ ...DEFAULT_PLAYER, ...contextPlayer, ...playerProp }),
+    [contextPlayer, playerProp],
+  );
+  const initial = useMemo(() => p.name.charAt(0).toUpperCase(), [p.name]);
 
   const renderProgressBar = (progress: number, color: string) => (
     <View style={styles.progressBarBg}>
@@ -307,18 +349,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           Achievements ({playerContext.achievementIds.length}/{ACHIEVEMENTS.length * 3})
         </Text>
         <View style={styles.achievementsGrid}>
-          {ACHIEVEMENTS.map((achievement: AchievementDef) => {
-            const earnedTiers = achievement.tiers.filter(t =>
-              playerContext.achievementIds.includes(`${achievement.id}_${t.level}`)
-            );
-            const highestTier = earnedTiers.length > 0
-              ? earnedTiers[earnedTiers.length - 1].level
-              : null;
-            const tierColor = highestTier === 'gold' ? COLORS.gold
-              : highestTier === 'silver' ? '#c0c0c0'
-              : highestTier === 'bronze' ? '#cd7f32'
-              : 'rgba(255,255,255,0.15)';
-
+          {achievementsViewData.map(({ achievement, highestTier, tierColor, earnedLevels }) => {
             return (
               <View
                 key={achievement.id}
@@ -342,7 +373,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <Text style={styles.achievementName} numberOfLines={1}>{achievement.name}</Text>
                 <View style={styles.tierDots}>
                   {achievement.tiers.map(t => {
-                    const earned = playerContext.achievementIds.includes(`${achievement.id}_${t.level}`);
+                    const earned = earnedLevels.includes(t.level);
                     const dotColor = t.level === 'gold' ? COLORS.gold
                       : t.level === 'silver' ? '#c0c0c0' : '#cd7f32';
                     return (

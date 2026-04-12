@@ -4,9 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, wit
 import { LinearGradient } from 'expo-linear-gradient';
 import { useIsFocused } from '@react-navigation/native';
 import { COLORS } from '../../constants';
-import { SynthwaveBackdrop } from './SynthwaveBackdrop';
-import { VideoBackground } from './VideoBackground';
-import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../../utils/localAssets';
+import { LOCAL_IMAGES } from '../../utils/localAssets';
 import SynthwaveHomeBackdrop from '../home/SynthwaveHomeBackdrop';
 
 interface AmbientBackdropProps {

@@ -49,6 +49,10 @@ interface PlayFieldProps {
   setIsDragging: (v: boolean) => void;
 }
 
+function buildRemainingWordSet(words: Array<{ word: string; found: boolean }>): Set<string> {
+  return new Set(words.filter((word) => !word.found).map((word) => word.word));
+}
+
 function PlayFieldImpl({
   mode,
   onCellInteraction,
@@ -79,12 +83,9 @@ function PlayFieldImpl({
     [grid, selectedCells],
   );
 
-  const isValidWord = useMemo(() => {
-    if (selectedCells.length === 0) return false;
-    return words.some(
-      w => !w.found && w.word === currentWord && w.word.length === currentWord.length,
-    );
-  }, [words, currentWord, selectedCells.length]);
+  const remainingWordSet = useMemo(() => buildRemainingWordSet(words), [words]);
+
+  const isValidWord = selectedCells.length > 0 && remainingWordSet.has(currentWord);
 
   // ── Notify GameScreen of valid-word / selection changes ────────────────
   useEffect(() => {
@@ -116,6 +117,22 @@ function PlayFieldImpl({
     [dispatch, onCellInteraction],
   );
 
+  const handleCellsPress = useCallback(
+    (positions: CellPosition[]) => {
+      if (positions.length === 0) return;
+      perfMark('tap');
+      onCellInteraction?.();
+      const now = Date.now();
+      if (now - lastTapFeedbackAt.current > 40) {
+        lastTapFeedbackAt.current = now;
+        void tapHaptic();
+        void soundManager.playSound('tap');
+      }
+      dispatch({ type: 'SELECT_CELLS', positions });
+    },
+    [dispatch, onCellInteraction],
+  );
+
   const handleDragStart = useCallback(() => setIsDragging(true), [setIsDragging]);
   const handleDragEnd = useCallback(() => setIsDragging(false), [setIsDragging]);
 
@@ -129,6 +146,7 @@ function PlayFieldImpl({
             selectedCells={selectedCells}
             hintedCells={isValidWord ? selectedCells : EMPTY_CELL_ARRAY}
             onCellPress={handleCellPress}
+            onCellsPress={handleCellsPress}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             validWord={showValidFlash}
@@ -167,12 +185,9 @@ function ConnectedWordBankImpl() {
     [grid, selectedCells],
   );
 
-  const isValidWord = useMemo(() => {
-    if (selectedCells.length === 0) return false;
-    return words.some(
-      w => !w.found && w.word === currentWord && w.word.length === currentWord.length,
-    );
-  }, [words, currentWord, selectedCells.length]);
+  const remainingWordSet = useMemo(() => buildRemainingWordSet(words), [words]);
+
+  const isValidWord = selectedCells.length > 0 && remainingWordSet.has(currentWord);
 
   return (
     <View style={styles.wordArea}>

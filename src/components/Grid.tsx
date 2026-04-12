@@ -263,6 +263,8 @@ function GameGridImpl({
 
   const onCellPressRef = useRef(onCellPress);
   onCellPressRef.current = onCellPress;
+  const onCellsPressRef = useRef(onCellsPress);
+  onCellsPressRef.current = onCellsPress;
   const onDragStartRef = useRef(onDragStart);
   onDragStartRef.current = onDragStart;
   const onDragEndRef = useRef(onDragEnd);
@@ -307,7 +309,14 @@ function GameGridImpl({
         // Interpolate between last position and current to catch cells
         // skipped by fast diagonal drags. Hit-test is O(1) thanks to the
         // column-indexed lookup, so this stays cheap.
+        const crossedCells: CellPosition[] = [];
         const prev = lastDragPosRef.current;
+        const enqueueCell = (cell: CellPosition) => {
+          const key = `${cell.row},${cell.col}`;
+          if (key === lastDragCellRef.current) return;
+          lastDragCellRef.current = key;
+          crossedCells.push(cell);
+        };
         if (prev) {
           const dx = e.x - prev.x;
           const dy = e.y - prev.y;
@@ -321,12 +330,7 @@ function GameGridImpl({
               const my = prev.y + dy * t;
               const midCell = hitTestCell(mx, my);
               if (midCell) {
-                const midKey = `${midCell.row},${midCell.col}`;
-                if (midKey !== lastDragCellRef.current) {
-                  lastDragCellRef.current = midKey;
-                  perfDragDispatch();
-                  onCellPressRef.current(midCell);
-                }
+                enqueueCell(midCell);
               }
             }
           }
@@ -335,11 +339,15 @@ function GameGridImpl({
 
         const cell = hitTestCell(e.x, e.y);
         if (cell) {
-          const key = `${cell.row},${cell.col}`;
-          if (key !== lastDragCellRef.current) {
-            lastDragCellRef.current = key;
-            perfDragDispatch();
-            onCellPressRef.current(cell);
+          enqueueCell(cell);
+        }
+
+        if (crossedCells.length > 0) {
+          perfDragDispatch();
+          if (onCellsPressRef.current) {
+            onCellsPressRef.current(crossedCells);
+          } else {
+            crossedCells.forEach((crossedCell) => onCellPressRef.current(crossedCell));
           }
         }
       })
