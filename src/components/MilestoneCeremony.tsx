@@ -46,8 +46,8 @@ export function MilestoneCeremony({
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 10, stiffness: 100 });
-    iconProgress.value = withDelay(350, withSpring(1, { damping: 6, stiffness: 150 }));
+    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
+    iconProgress.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 200 }));
   }, []);
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));

@@ -24,7 +24,7 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 8, stiffness: 120 });
+    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
     fire.value = withRepeat(
       withSequence(
         withTiming(1.15, { duration: 600 }),

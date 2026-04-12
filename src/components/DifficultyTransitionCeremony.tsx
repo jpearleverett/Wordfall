@@ -35,9 +35,9 @@ export function DifficultyTransitionCeremony({
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 10, stiffness: 100 });
-    arrow.value = withDelay(350, withSpring(1, { damping: 12, stiffness: 120 }));
-    toProgress.value = withDelay(550, withSpring(1, { damping: 8, stiffness: 150 }));
+    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
+    arrow.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 180 }));
+    toProgress.value = withDelay(350, withSpring(1, { damping: 14, stiffness: 200 }));
   }, []);
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
