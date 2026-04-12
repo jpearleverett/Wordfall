@@ -13,10 +13,10 @@ import {
   UIManager,
   View,
 } from 'react-native';
+import { useStore } from 'zustand';
 import { Board, CellPosition, GameMode, VictorySummaryItem } from '../types';
 import { useGame } from '../hooks/useGame';
-import { GameGrid } from '../components/Grid';
-import { WordBank } from '../components/WordBank';
+import { GameStoreContext } from '../stores/gameStore';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import { TutorialOverlay } from '../components/TutorialOverlay';
@@ -26,8 +26,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import { tapHaptic, wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
-import { profilerOnRender, perfMark } from '../utils/perfInstrument';
+import { wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
+import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useEconomy } from '../contexts/EconomyContext';
@@ -41,6 +41,7 @@ import { getModeTutorial } from '../data/modeTutorials';
 import { PostLossModal } from '../components/PostLossModal';
 import { GameFlashes } from './game/GameFlashes';
 import { GameBanners } from './game/GameBanners';
+import { PlayField } from './game/PlayField';
 
 if (
   Platform.OS === 'android' &&
@@ -116,10 +117,8 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
   return moved;
 }
 
-// Shared empty Set so memoized consumers (GameGrid) don't re-render when spotlight is inactive.
+// Shared empty Set so memoized consumers (PlayField's GameGrid) don't re-render when spotlight is inactive.
 const EMPTY_CELL_KEY_SET: Set<string> = new Set();
-// Shared empty array reference — passed to GameGrid props to preserve React.memo equality.
-const EMPTY_CELL_ARRAY: CellPosition[] = [];
 
 // Pure helper — module scope so memoized sub-components can reach it.
 function formatTime(seconds: number): string {
@@ -368,10 +367,7 @@ export function GameScreen({
     : 0;
 
   const {
-    state,
-    selectCell,
-    selectCells,
-    clearSelection,
+    store,
     submitWord,
     useHint,
     undoMove,
@@ -382,9 +378,6 @@ export function GameScreen({
     activateWildcard,
     activateSpotlight,
     activateSmartShuffle,
-    useBooster,
-    currentWord,
-    isValidWord,
     isStuck,
     stars,
     foundWords,
@@ -392,6 +385,30 @@ export function GameScreen({
     remainingWords,
     solveSequence,
   } = useGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
+
+  // ── Narrow zustand selectors — GameScreen only re-renders when these
+  //    coarse slices change (per word/action, NOT per cell tap). ─────────
+  const status = useStore(store, s => s.status);
+  const score = useStore(store, s => s.score);
+  const combo = useStore(store, s => s.combo);
+  const maxCombo = useStore(store, s => s.maxCombo);
+  const moves = useStore(store, s => s.moves);
+  const hintsLeft = useStore(store, s => s.hintsLeft);
+  const hintsUsed = useStore(store, s => s.hintsUsed);
+  const undosLeft = useStore(store, s => s.undosLeft);
+  const timeRemaining = useStore(store, s => s.timeRemaining);
+  const grid = useStore(store, s => s.board.grid);
+  const words = useStore(store, s => s.board.words);
+  const history = useStore(store, s => s.history);
+  const wildcardMode = useStore(store, s => s.wildcardMode);
+  const spotlightActive = useStore(store, s => s.spotlightActive);
+  const spotlightLetters = useStore(store, s => s.spotlightLetters);
+  const gravityDirection = useStore(store, s => s.gravityDirection);
+  const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
+  const perfectRun = useStore(store, s => s.perfectRun);
+  const lastInvalidTap = useStore(store, s => s.lastInvalidTap);
+  const boardFreezeActive = useStore(store, s => s.boardFreezeActive);
+  const scoreDoubler = useStore(store, s => s.scoreDoubler);
 
   const [showComplete, setShowComplete] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
@@ -406,7 +423,7 @@ export function GameScreen({
   const [showInvalidFlash, setShowInvalidFlash] = useState(false);
   const scorePopupAnim = useRef(new Animated.Value(0)).current;
   const [scorePopup, setScorePopup] = useState<{ points: number; label: string } | null>(null);
-  const prevScoreRef = useRef(state.score);
+  const prevScoreRef = useRef(score);
   const [showIdleHint, setShowIdleHint] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showModeIntro, setShowModeIntro] = useState(true);
@@ -554,7 +571,7 @@ export function GameScreen({
       closeFinishTimerRef.current = null;
     }
     if (
-      state.status === 'playing' &&
+      status === 'playing' &&
       remainingWords.length === 1 &&
       !offerShownThisLevel.current &&
       !activeOffer
@@ -577,11 +594,11 @@ export function GameScreen({
         closeFinishTimerRef.current = null;
       }
     };
-  }, [remainingWords, isStuck, state.status, activeOffer, showOfferIfAllowed]);
+  }, [remainingWords, isStuck, status, activeOffer, showOfferIfAllowed]);
 
   // hint_rescue: detect failures and show offer after 2+ fails (session or persistent)
   useEffect(() => {
-    if (state.status === 'failed' || state.status === 'timeout') {
+    if (status === 'failed' || status === 'timeout') {
       if (!failureCountedRef.current) {
         failureCountedRef.current = true;
         sessionFailCount.current += 1;
@@ -594,13 +611,13 @@ export function GameScreen({
     } else {
       failureCountedRef.current = false;
     }
-  }, [state.status, activeOffer, showOfferIfAllowed, player.failCountByLevel, level]);
+  }, [status, activeOffer, showOfferIfAllowed, player.failCountByLevel, level]);
 
   // hint_rescue: dead-end detected while player has 0 hint tokens
   useEffect(() => {
     if (
       isStuck &&
-      state.status === 'playing' &&
+      status === 'playing' &&
       economy.hintTokens === 0 &&
       mode !== 'relax' &&
       !offerShownThisLevel.current &&
@@ -608,13 +625,13 @@ export function GameScreen({
     ) {
       showOfferIfAllowed('hint_rescue');
     }
-  }, [isStuck, state.status, economy.hintTokens, mode, activeOffer, showOfferIfAllowed]);
+  }, [isStuck, status, economy.hintTokens, mode, activeOffer, showOfferIfAllowed]);
 
   // post_puzzle (restock): show when hint tokens reach 0 mid-gameplay after using a hint
   useEffect(() => {
     if (
-      state.status === 'playing' &&
-      state.hintsUsed > 0 &&
+      status === 'playing' &&
+      hintsUsed > 0 &&
       economy.hintTokens === 0 &&
       mode !== 'relax' &&
       remainingWords.length > 0 &&
@@ -623,20 +640,20 @@ export function GameScreen({
     ) {
       showOfferIfAllowed('post_puzzle');
     }
-  }, [state.status, state.hintsUsed, economy.hintTokens, mode, remainingWords.length, activeOffer, showOfferIfAllowed]);
+  }, [status, hintsUsed, economy.hintTokens, mode, remainingWords.length, activeOffer, showOfferIfAllowed]);
 
   // life_refill: show when player fails and has no lives remaining
   useEffect(() => {
-    if ((state.status === 'failed' || state.status === 'timeout') && economy.lives === 0) {
+    if ((status === 'failed' || status === 'timeout') && economy.lives === 0) {
       if (!offerShownThisLevel.current && !activeOffer) {
         showOfferIfAllowed('life_refill');
       }
     }
-  }, [state.status, economy.lives, activeOffer, showOfferIfAllowed]);
+  }, [status, economy.lives, activeOffer, showOfferIfAllowed]);
 
   // streak_shield: show when player has an active streak at risk during gameplay
   useEffect(() => {
-    if (state.status !== 'playing') return;
+    if (status !== 'playing') return;
     const streaks = player.streaks;
     if (!streaks || streaks.currentStreak < 3 || streaks.streakShieldAvailable) return;
     // Check if last play was yesterday (streak at risk of expiring today)
@@ -649,14 +666,14 @@ export function GameScreen({
     if (diffHours >= 20 && !offerShownThisLevel.current && !activeOffer) {
       showOfferIfAllowed('streak_shield');
     }
-  }, [state.status, player.streaks, activeOffer, showOfferIfAllowed]);
+  }, [status, player.streaks, activeOffer, showOfferIfAllowed]);
 
   // post_puzzle: flag when puzzle won with hint tokens depleted
   useEffect(() => {
-    if (state.status === 'won' && economy.hintTokens === 0 && mode !== 'relax') {
+    if (status === 'won' && economy.hintTokens === 0 && mode !== 'relax') {
       setPendingPostPuzzleOffer(true);
     }
-  }, [state.status, economy.hintTokens, mode]);
+  }, [status, economy.hintTokens, mode]);
 
   const handleOfferAccept = useCallback(() => {
     if (!activeOffer) return;
@@ -768,7 +785,7 @@ export function GameScreen({
     }
 
     // Screen shake for chain — escalates with combo count
-    const isLongShake = state.combo >= 6;
+    const isLongShake = combo >= 6;
     const shakeSequence = isLongShake
       ? Animated.sequence([
           Animated.timing(shakeAnim, { toValue: 12, duration: 40, useNativeDriver: true }),
@@ -803,19 +820,19 @@ export function GameScreen({
         useNativeDriver: true,
       }),
     ]).start(() => setChainVisible(false));
-  }, [chainAnim, shakeAnim, state.combo, reduceMotion]);
+  }, [chainAnim, shakeAnim, combo, reduceMotion]);
 
   // Show chain celebration on combo > 1
   useEffect(() => {
-    if (state.combo > 1 && state.status === 'playing') {
+    if (combo > 1 && status === 'playing') {
       showChainCelebration();
       void analytics.logEvent('chain_count', {
         level,
         mode,
-        combo: state.combo,
+        combo: combo,
       });
     }
-  }, [state.combo, state.status, showChainCelebration, level, mode]);
+  }, [combo, status, showChainCelebration, level, mode]);
 
   // Invalid word flash animation
   const showInvalidFlashAnim = useCallback(() => {
@@ -839,20 +856,20 @@ export function GameScreen({
 
   // Trigger invalid flash when a non-adjacent cell is tapped
   useEffect(() => {
-    if (state.lastInvalidTap) {
+    if (lastInvalidTap) {
       showInvalidFlashAnim();
     }
-  }, [state.lastInvalidTap, showInvalidFlashAnim]);
+  }, [lastInvalidTap, showInvalidFlashAnim]);
 
   // Hints/undos use persistent economy tokens (not per-level allocation)
   // Relax mode still uses unlimited per-level allocation
-  const hintsAvailable = mode === 'relax' ? state.hintsLeft : economy.hintTokens;
-  const undosAvailable = mode === 'relax' ? state.undosLeft : economy.undoTokens;
+  const hintsAvailable = mode === 'relax' ? hintsLeft : economy.hintTokens;
+  const undosAvailable = mode === 'relax' ? undosLeft : economy.undoTokens;
 
   // Idle hint prompt — use refs to avoid recreating on every state change
-  const statusRef = useRef(state.status);
+  const statusRef = useRef(status);
   const hintsAvailableRef = useRef(hintsAvailable);
-  statusRef.current = state.status;
+  statusRef.current = status;
   hintsAvailableRef.current = hintsAvailable;
 
   const resetIdleTimer = useCallback(() => {
@@ -865,12 +882,15 @@ export function GameScreen({
     }
   }, [idleHintDelay]);
 
+  // Selection-length changes (per-tap) are notified by PlayField via
+  // onSelectionLengthChange callback, which calls resetIdleTimer. The
+  // foundWords dependency (per-word) also resets the idle timer.
   useEffect(() => {
     resetIdleTimer();
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
-  }, [state.selectedCells.length, foundWords, resetIdleTimer]);
+  }, [foundWords, resetIdleTimer]);
 
   // Show mode tutorial on first play of a mode, or fall back to 2.5s text banner
   useEffect(() => {
@@ -888,8 +908,8 @@ export function GameScreen({
 
   // Track game state in refs so the cleanup can read current values without
   // adding them as effect dependencies (which caused spurious start/abandon cycles)
-  const gameStateRef = useRef({ status: state.status, foundWords, totalWords, score: state.score });
-  gameStateRef.current = { status: state.status, foundWords, totalWords, score: state.score };
+  const gameStateRef = useRef({ status: status, foundWords, totalWords, score: score });
+  gameStateRef.current = { status: status, foundWords, totalWords, score: score };
 
   useEffect(() => {
     void soundManager.playMusic(mode === 'timePressure' ? 'tense' : 'gameplay');
@@ -919,10 +939,10 @@ export function GameScreen({
 
   // Track post-gravity moved cells + per-tile fall animation
   useEffect(() => {
-    if (foundWords > prevFoundWordsRef.current && state.status === 'playing') {
-      const previousGrid = state.history[state.history.length - 1]?.grid;
+    if (foundWords > prevFoundWordsRef.current && status === 'playing') {
+      const previousGrid = history[history.length - 1]?.grid;
       const moved = previousGrid
-        ? getMovedCellPositions(previousGrid, state.board.grid)
+        ? getMovedCellPositions(previousGrid, grid)
         : [];
       void soundManager.playSound('gravity');
       void analytics.logEvent('gravity_interaction', {
@@ -934,8 +954,8 @@ export function GameScreen({
 
       // Per-tile gravity fall animation
       if (!reduceMotion && moved.length > 0) {
-        const rows = state.board.grid.length;
-        const cols = state.board.grid[0]?.length ?? 0;
+        const rows = grid.length;
+        const cols = grid[0]?.length ?? 0;
         // Compute cellStride (same formula as Grid.tsx)
         const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
         let cellSize = Math.floor(availableWidth / cols);
@@ -987,7 +1007,7 @@ export function GameScreen({
           setFallActive(false);
           // Clean up animated values for cells no longer on the grid
           const activeCellIds = new Set<string>();
-          state.board.grid.forEach(row =>
+          grid.forEach(row =>
             row.forEach(c => { if (c) activeCellIds.add(c.id); })
           );
           for (const id of fallAnimMap.keys()) {
@@ -1000,28 +1020,28 @@ export function GameScreen({
       return () => clearTimeout(timer);
     }
     prevFoundWordsRef.current = foundWords;
-  }, [foundWords, state.status]);
+  }, [foundWords, status]);
 
   useEffect(() => {
-    if ((state.status === 'failed' || state.status === 'timeout') && showFailed) {
+    if ((status === 'failed' || status === 'timeout') && showFailed) {
       void analytics.logEvent('puzzle_fail', {
         level,
         mode,
-        reason: state.status,
+        reason: status,
         foundWords,
         totalWords,
-        score: state.score,
+        score: score,
       });
     }
-  }, [state.status, showFailed, level, mode, foundWords, totalWords, state.score]);
+  }, [status, showFailed, level, mode, foundWords, totalWords, score]);
 
   // Score popup when score changes (word found) + particle burst (#1) + big word celebration (Task 2)
   useEffect(() => {
-    const diff = state.score - prevScoreRef.current;
-    prevScoreRef.current = state.score;
-    if (diff > 0 && state.status === 'playing') {
+    const diff = score - prevScoreRef.current;
+    prevScoreRef.current = score;
+    if (diff > 0 && status === 'playing') {
       const wordLen = lastSubmittedWordLenRef.current;
-      const label = state.combo > 1 ? `+${diff} (${state.combo}x!)` : `+${diff}`;
+      const label = combo > 1 ? `+${diff} (${combo}x!)` : `+${diff}`;
       setScorePopup({ points: diff, label });
       void wordFoundHaptic();
 
@@ -1101,12 +1121,20 @@ export function GameScreen({
         }),
       ]).start(() => setScorePopup(null));
     }
-  }, [state.score]);
+  }, [score]);
 
-  // Green flash + auto-submit when a valid word is selected
-  // #3 letter pop (grid scale pulse) + #2 gravity bounce + #5 reduceMotion
-  useEffect(() => {
-    if (isValidWord && currentWord.length >= 3) {
+  // Green flash + auto-submit when a valid word is selected.
+  // Driven by PlayField's onValidWordChange callback (not a direct subscription
+  // to selectedCells, which would defeat the per-tap optimization).
+  const validFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleValidWordChange = useStableCallback((isValid: boolean, wordLength: number) => {
+    // Clean up any pending auto-submit timer from a previous valid state
+    if (validFlashTimerRef.current) {
+      clearTimeout(validFlashTimerRef.current);
+      validFlashTimerRef.current = null;
+    }
+
+    if (isValid && wordLength >= 3) {
       // Show green flash (skip animation if reduceMotion)
       setShowValidFlash(true);
       if (!reduceMotion) {
@@ -1118,7 +1146,8 @@ export function GameScreen({
         }).start();
       }
 
-      const timer = setTimeout(() => {
+      validFlashTimerRef.current = setTimeout(() => {
+        validFlashTimerRef.current = null;
         // #3 Grid scale pop: 1.0 -> 0.97 -> 1.0 around submit
         if (!reduceMotion) {
           gridScaleAnim.setValue(1);
@@ -1129,36 +1158,45 @@ export function GameScreen({
         }
 
         // Track word length for big word celebration (Task 2)
-        lastSubmittedWordLenRef.current = currentWord.length;
+        lastSubmittedWordLenRef.current = wordLength;
 
         submitWord();
         setShowValidFlash(false);
       }, 250);
-      return () => clearTimeout(timer);
     } else {
       setShowValidFlash(false);
     }
-  }, [isValidWord, currentWord]);
+  });
+
+  // Clean up valid flash timer on unmount
+  useEffect(() => () => {
+    if (validFlashTimerRef.current) clearTimeout(validFlashTimerRef.current);
+  }, []);
+
+  // Callback for PlayField selection length changes — resets idle timer
+  const handleSelectionLengthChange = useStableCallback((_length: number) => {
+    resetIdleTimer();
+  });
 
   // Show completion modal — use a ref guard to prevent double-firing when
   // onComplete mutates player/economy state and causes callback reference changes
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
   useEffect(() => {
-    if (state.status === 'won' && !completionHandled.current) {
+    if (status === 'won' && !completionHandled.current) {
       completionHandled.current = true;
       void successHaptic();
       void soundManager.playSound('puzzleComplete');
-      const finalScore = state.score;
+      const finalScore = score;
       const finalStars = stars;
-      const finalMaxCombo = state.maxCombo;
+      const finalMaxCombo = maxCombo;
       const timer = setTimeout(() => {
         setShowComplete(true);
         onCompleteRef.current(finalStars, finalScore, finalMaxCombo);
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [state.status, stars, state.score, state.maxCombo]);
+  }, [status, stars, score, maxCombo]);
 
   // Reset grid height lock when board changes (new puzzle/level)
   useEffect(() => {
@@ -1172,7 +1210,7 @@ export function GameScreen({
 
   // Show post-loss modal first (if applicable), then failed modal
   useEffect(() => {
-    if ((state.status === 'failed' || state.status === 'timeout') && !showFailed) {
+    if ((status === 'failed' || status === 'timeout') && !showFailed) {
       // Show post-loss conversion modal if not already shown this level attempt
       if (!postLossShownRef.current && foundWords > 0 && mode !== 'relax') {
         postLossShownRef.current = true;
@@ -1183,61 +1221,11 @@ export function GameScreen({
       const timer = setTimeout(() => setShowFailed(true), 400);
       return () => clearTimeout(timer);
     }
-  }, [state.status, showFailed, foundWords, mode]);
+  }, [status, showFailed, foundWords, mode]);
 
-  // Throttle tap feedback (haptic + sound) during drags. A fast diagonal drag
-  // crosses 8+ cells in ~0.5s; firing a haptic impact + audio load-and-play for
-  // each creates a blur of vibration and stacks up JNI bridge calls that
-  // compete with gesture frame processing. Throttling to 40ms max frequency
-  // keeps the initial tap feedback crisp while dragging feels smooth.
-  const lastTapFeedbackAt = useRef(0);
-  // handleCellPress / handleCellsPress are declared with useStableCallback
-  // rather than useCallback. Grid is wrapped in React.memo and compares its
-  // props shallowly; if these callbacks changed identity on every GameScreen
-  // render (e.g. because resetIdleTimer's deps churn), Grid would re-render
-  // every tap even though its internal gesture handler already reads the
-  // latest callback via a ref. Stabilising identity here lets Grid's memo
-  // bail out for the whole 49-cell subtree on every tap.
-  const handleCellPress = useStableCallback((position: CellPosition) => {
-    // Dev-only: mark the start of a tap so we can measure how long it takes
-    // to reach the React commit phase.
-    perfMark('tap');
-    resetIdleTimer();
-    const now = Date.now();
-    if (now - lastTapFeedbackAt.current > 40) {
-      lastTapFeedbackAt.current = now;
-      void tapHaptic();
-      void soundManager.playSound('tap');
-    }
-    // Adjacency is handled by the reducer — non-adjacent taps start a new selection.
-    // Wildcard placement mode is also handled by the reducer via SELECT_CELL.
-    selectCell(position);
-  });
-
-  // Batched drag-crossing handler. The Grid pan gesture enqueues every cell
-  // crossed during a single animation frame and calls this once per frame.
-  // Feedback side-effects (haptic, sound, idle-reset) fire once per batch
-  // rather than once per cell — a 7-cell diagonal swipe should feel like
-  // one smooth selection, not seven stacked clicks. Reducer dispatch is a
-  // single SELECT_CELLS action producing one new state object.
-  const handleCellsPress = useStableCallback((positions: CellPosition[]) => {
-    if (positions.length === 0) return;
-    perfMark('tap');
-    resetIdleTimer();
-    const now = Date.now();
-    if (now - lastTapFeedbackAt.current > 40) {
-      lastTapFeedbackAt.current = now;
-      void tapHaptic();
-      void soundManager.playSound('tap');
-    }
-    selectCells(positions);
-  });
-
-  const handleDragStart = useStableCallback(() => setIsDragging(true));
-  const handleDragEnd = useStableCallback(() => setIsDragging(false));
-
-  // Placeholder stable-callback declarations — actual wrappers defined
-  // below, after handleHint/handleWatchAdForHint are declared.
+  // Cell press/drag handlers now live inside PlayField — GameScreen no longer
+  // subscribes to per-tap selection state. PlayField notifies GameScreen of
+  // relevant changes via onCellInteraction / onValidWordChange callbacks.
 
   const handleHint = useCallback(() => {
     if (mode !== 'relax') {
@@ -1252,7 +1240,7 @@ export function GameScreen({
   }, [useHint, grantHint, level, mode, hintsAvailable, economy]);
 
   const handleUndo = useCallback(() => {
-    if (state.history.length === 0) return;
+    if (history.length === 0) return;
     if (mode !== 'relax') {
       // Spend from persistent inventory and grant into game state
       if (economy.undoTokens <= 0) return;
@@ -1293,7 +1281,7 @@ export function GameScreen({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, grantUndo, level, mode, undosAvailable, economy, reduceMotion, undoFlashAnim, undoPulseAnim, state.history.length]);
+  }, [undoMove, grantUndo, level, mode, undosAvailable, economy, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
@@ -1404,10 +1392,10 @@ export function GameScreen({
   // Compute spotlight dimmed cells for grid rendering.
   // Returns a shared empty Set when inactive so GameGrid's memoized props stay referentially stable.
   const spotlightDimmedSet = useMemo(() => {
-    if (!state.spotlightActive) return EMPTY_CELL_KEY_SET;
-    const relevant = new Set(state.spotlightLetters);
+    if (!spotlightActive) return EMPTY_CELL_KEY_SET;
+    const relevant = new Set(spotlightLetters);
     const dimmed = new Set<string>();
-    state.board.grid.forEach((row, r) => {
+    grid.forEach((row, r) => {
       row.forEach((cell, c) => {
         if (cell && !relevant.has(cell.letter)) {
           dimmed.add(`${r},${c}`);
@@ -1415,9 +1403,10 @@ export function GameScreen({
       });
     });
     return dimmed;
-  }, [state.spotlightActive, state.spotlightLetters, state.board.grid]);
+  }, [spotlightActive, spotlightLetters, grid]);
 
   return (
+    <GameStoreContext.Provider value={store}>
     <React.Profiler id="GameScreen" onRender={profilerOnRender}>
     <Animated.View style={shakeContainerStyle}>
     <SafeAreaView style={styles.container}>
@@ -1445,9 +1434,9 @@ export function GameScreen({
 
       <GameHeader
         level={level}
-        score={state.score}
-        combo={state.combo}
-        moves={state.moves}
+        score={score}
+        combo={combo}
+        moves={moves}
         hintsLeft={hintsAvailable}
         undosLeft={undosAvailable}
         foundWords={foundWords}
@@ -1455,7 +1444,7 @@ export function GameScreen({
         isDaily={isDaily}
         mode={mode}
         maxMoves={effectiveMaxMoves}
-        timeRemaining={state.timeRemaining}
+        timeRemaining={timeRemaining}
         onHint={handleHint}
         onUndo={handleUndo}
         onBack={onHome}
@@ -1466,8 +1455,8 @@ export function GameScreen({
       <TimerMovesBarsMemo
         hasTimer={modeConfig.rules.hasTimer ?? false}
         hasMoveLimit={modeConfig.rules.hasMoveLimit ?? false}
-        timeRemaining={state.timeRemaining}
-        moves={state.moves}
+        timeRemaining={timeRemaining}
+        moves={moves}
         maxMoves={effectiveMaxMoves}
       />
 
@@ -1480,7 +1469,7 @@ export function GameScreen({
           combo increment. */}
       <GameFlashes
         chainVisible={chainVisible}
-        combo={state.combo}
+        combo={combo}
         showValidFlash={showValidFlash}
         showInvalidFlash={showInvalidFlash}
         scorePopup={scorePopup}
@@ -1494,17 +1483,6 @@ export function GameScreen({
       />
 
 
-      {/* Word bank - above grid */}
-      <View style={styles.wordArea}>
-        <React.Profiler id="WordBank" onRender={profilerOnRender}>
-          <WordBank
-            words={state.board.words}
-            currentWord={currentWord}
-            isValidWord={isValidWord}
-          />
-        </React.Profiler>
-      </View>
-
       {/* Grid area */}
       <View style={styles.gridArea} onLayout={handleGridLayout}>
         {/* Floating banners - absolute overlay, don't affect grid sizing.
@@ -1515,15 +1493,15 @@ export function GameScreen({
         <View style={styles.bannerOverlay} pointerEvents="box-none">
           <GameBanners
             mode={mode}
-            gravityDirection={state.gravityDirection}
-            wordsUntilShrink={state.wordsUntilShrink}
-            wildcardMode={state.wildcardMode}
-            status={state.status}
+            gravityDirection={gravityDirection}
+            wordsUntilShrink={wordsUntilShrink}
+            wildcardMode={wildcardMode}
+            status={status}
             showIdleHint={showIdleHint}
             hintsAvailable={hintsAvailable}
             canShowAdHint={!economy.isAdFree && adManager.canShowAd('hint_reward')}
             isStuck={isStuck}
-            undosLeft={state.undosLeft}
+            undosLeft={undosLeft}
             onIdleHintTap={stableHandleIdleHintBannerTap}
             onAdHintTap={stableHandleAdHintBannerTap}
             onUndoTap={stableHandleUndo}
@@ -1531,30 +1509,24 @@ export function GameScreen({
           />
         </View>
 
-        {/* Grid wrapper with scale animations (#3 letter pop, #4 undo pulse) */}
-        <Animated.View style={gridScaleStyle}>
-          <React.Profiler id="Grid" onRender={profilerOnRender}>
-            <GameGrid
-              grid={state.board.grid}
-              selectedCells={state.selectedCells}
-              hintedCells={isValidWord ? state.selectedCells : EMPTY_CELL_ARRAY}
-              onCellPress={handleCellPress}
-              onCellsPress={handleCellsPress}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              validWord={showValidFlash}
-              movedCells={mode === 'noGravity' ? EMPTY_CELL_ARRAY : movedCells}
-              maxHeight={gridAreaHeight}
-              isDragging={isDragging}
-              wildcardCells={state.wildcardCells}
-              spotlightDimmedCells={spotlightDimmedSet}
-              gravityDirection={mode === 'gravityFlip' ? state.gravityDirection : undefined}
-              noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
-              fallAnimMap={fallAnimMap}
-              fallActive={fallActive}
-            />
-          </React.Profiler>
-        </Animated.View>
+        {/* PlayField — subscribes to per-tap selection state (selectedCells,
+            grid, words, wildcardCells). GameScreen does NOT subscribe to
+            selectedCells, so cell taps only re-render this ~50-line subtree. */}
+        <PlayField
+          mode={mode}
+          onCellInteraction={resetIdleTimer}
+          onValidWordChange={handleValidWordChange}
+          onSelectionLengthChange={handleSelectionLengthChange}
+          gridAreaHeight={gridAreaHeight}
+          gridScaleStyle={gridScaleStyle}
+          showValidFlash={showValidFlash}
+          spotlightDimmedSet={spotlightDimmedSet}
+          fallAnimMap={fallAnimMap}
+          fallActive={fallActive}
+          movedCells={movedCells}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
+        />
 
         {/* #1 Word-clear particles */}
         {clearParticles && (
@@ -1593,10 +1565,10 @@ export function GameScreen({
         wildcardCount={bt.wildcardTile}
         spotlightCount={bt.spotlight}
         shuffleCount={bt.smartShuffle}
-        wildcardMode={state.wildcardMode}
-        spotlightActive={state.spotlightActive}
+        wildcardMode={wildcardMode}
+        spotlightActive={spotlightActive}
         hasAnyBoosters={hasAnyBoosters}
-        isPlaying={state.status === 'playing'}
+        isPlaying={status === 'playing'}
         onWildcard={handleWildcard}
         onSpotlight={handleSpotlight}
         onSmartShuffle={handleSmartShuffle}
@@ -1605,14 +1577,14 @@ export function GameScreen({
       {/* Completion overlay */}
       {showComplete && (
         <PuzzleComplete
-          score={state.score}
-          moves={state.moves}
+          score={score}
+          moves={moves}
           stars={stars}
-          combo={state.maxCombo}
+          combo={maxCombo}
           level={level}
           isDaily={isDaily}
           mode={mode}
-          perfectRun={state.perfectRun}
+          perfectRun={perfectRun}
           isFirstWin={isFirstWin}
           leveledUp={leveledUp}
           newLevel={newLevel}
@@ -1635,7 +1607,7 @@ export function GameScreen({
           showAdOption={!economy.isAdFree && adManager.canShowAd('double_reward')}
           onChallengeFriend={() => {
             const challenge = player.sendChallenge('friend', {
-              score: state.score,
+              score: score,
               stars,
               time: solveSequence.length > 0 ? solveSequence[solveSequence.length - 1].timestamp : 0,
               level,
@@ -1645,7 +1617,7 @@ export function GameScreen({
             });
             const challengeText = [
               `I challenge you to beat my score on Wordfall Level ${level}!`,
-              `My score: ${state.score.toLocaleString()} | ${'*'.repeat(stars)}`,
+              `My score: ${score.toLocaleString()} | ${'*'.repeat(stars)}`,
               `Challenge code: ${challenge.id}`,
               '',
               '#Wordfall #Challenge',
@@ -1664,7 +1636,7 @@ export function GameScreen({
             levelNumber: level,
             difficulty,
             wordsRemaining: remainingWords.length,
-            hintsUsed: state.hintsUsed,
+            hintsUsed: hintsUsed,
             streakDays: player.streaks?.currentStreak ?? 0,
             livesRemaining: economy.lives,
           }}
@@ -1724,7 +1696,7 @@ export function GameScreen({
             ) : foundWords > 0 ? (
               <>
                 <Text style={styles.failedTitle}>
-                  {state.status === 'timeout' ? '⏱ TIME\'S UP!' : 'KEEP GOING!'}
+                  {status === 'timeout' ? '⏱ TIME\'S UP!' : 'KEEP GOING!'}
                 </Text>
                 <Text style={styles.failedSubtext}>
                   You found {foundWords} of {totalWords} words. You're making progress!
@@ -1733,10 +1705,10 @@ export function GameScreen({
             ) : (
               <>
                 <Text style={styles.failedTitle}>
-                  {state.status === 'timeout' ? '⏱ TIME\'S UP!' : '❌ PUZZLE FAILED'}
+                  {status === 'timeout' ? '⏱ TIME\'S UP!' : '❌ PUZZLE FAILED'}
                 </Text>
                 <Text style={styles.failedSubtext}>
-                  {state.status === 'timeout'
+                  {status === 'timeout'
                     ? 'You ran out of time. Try again?'
                     : mode === 'perfectSolve'
                       ? 'Perfect mode requires zero mistakes.'
@@ -1757,7 +1729,7 @@ export function GameScreen({
               </View>
             )}
             <View style={styles.failedStats}>
-              <Text style={styles.failedStat}>Score: {state.score}</Text>
+              <Text style={styles.failedStat}>Score: {score}</Text>
             </View>
             <View style={styles.failedButtons}>
               <Pressable
@@ -1767,7 +1739,7 @@ export function GameScreen({
                 <Text style={styles.retryButtonText}>TRY AGAIN</Text>
               </Pressable>
               {/* Watch ad for a free hint — shown after failure when player has no hints */}
-              {!economy.isAdFree && adManager.canShowAd('hint_reward') && state.hintsLeft === 0 && (
+              {!economy.isAdFree && adManager.canShowAd('hint_reward') && hintsLeft === 0 && (
                 <Pressable
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={handleWatchAdForHint}
@@ -1775,7 +1747,7 @@ export function GameScreen({
                   <Text style={styles.adHintButtonText}>{'\uD83C\uDFAC'} Watch Ad for Free Hint</Text>
                 </Pressable>
               )}
-              {state.undosLeft > 0 && state.history.length > 0 && (
+              {undosLeft > 0 && history.length > 0 && (
                 <Pressable
                   style={({ pressed }) => [styles.undoRecoverButton, pressed && styles.buttonPressed]}
                   onPress={handleUndo}
@@ -1804,6 +1776,7 @@ export function GameScreen({
     </SafeAreaView>
     </Animated.View>
     </React.Profiler>
+    </GameStoreContext.Provider>
   );
 }
 

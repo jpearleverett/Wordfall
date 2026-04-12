@@ -1,4 +1,5 @@
-import { useReducer, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useStore } from 'zustand';
 import {
   GameState,
   GameAction,
@@ -16,6 +17,7 @@ import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApply
 import { findWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 import { instrumentReducer } from '../utils/perfInstrument';
+import { createGameStore, GameStore } from '../stores/gameStore';
 
 const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
 
@@ -740,185 +742,166 @@ export function useGame(
   maxMoves: number = 0,
   timeLimit: number = 0,
 ) {
-  // Wrap gameReducer in a perf-instrumented version. In dev mode this logs
-  // any action that takes >= 1ms so we can see if the reducer is the lag
-  // source. In production it returns the raw reducer untouched.
-  const timedReducer = useMemo(() => instrumentReducer(gameReducer), []);
-  const [state, dispatch] = useReducer(
-    timedReducer,
-    createInitialState(initialBoard, level, mode, maxMoves, timeLimit)
+  // Create a zustand store wrapping the existing gameReducer. Created once on
+  // mount — subsequent puzzles are loaded via NEW_GAME dispatch which resets
+  // the store state without recreating the store instance.
+  const store = useMemo(
+    () => createGameStore(initialBoard, level, mode, maxMoves, timeLimit),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // Timer for timed modes
-  const statusRef = useRef(state.status);
-  statusRef.current = state.status;
+  // ── Narrow selectors for effects that need reactive reads ────────────
+  const status = useStore(store, s => s.status);
+  const timeRemaining = useStore(store, s => s.timeRemaining);
+  const grid = useStore(store, s => s.board.grid);
+  const words = useStore(store, s => s.board.words);
+  const gravityDirection = useStore(store, s => s.gravityDirection);
+  const moves = useStore(store, s => s.moves);
+  const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
+  const hintsUsed = useStore(store, s => s.hintsUsed);
 
-  useEffect(() => {
-    if (mode !== 'timePressure' || state.status !== 'playing' || state.timeRemaining <= 0) return;
-
-    const interval = setInterval(() => {
-      if (statusRef.current === 'playing') {
-        dispatch({ type: 'TICK_TIMER' });
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [mode, state.status]);
-
-  const selectCell = useCallback((position: CellPosition) => {
-    dispatch({ type: 'SELECT_CELL', position });
-  }, []);
-
-  // Batched selection dispatch — used by the Grid pan handler's
-  // requestAnimationFrame batcher to commit all cells crossed during a
-  // single frame in one reducer pass.
-  const selectCells = useCallback((positions: CellPosition[]) => {
-    if (positions.length === 0) return;
-    dispatch({ type: 'SELECT_CELLS', positions });
-  }, []);
-
-  const clearSelection = useCallback(() => {
-    dispatch({ type: 'CLEAR_SELECTION' });
-  }, []);
-
-  const submitWord = useCallback(() => {
-    dispatch({ type: 'SUBMIT_WORD' });
-  }, []);
-
-  const useHintAction = useCallback(() => {
-    dispatch({ type: 'USE_HINT' });
-  }, []);
-
-  const undoMove = useCallback(() => {
-    dispatch({ type: 'UNDO_MOVE' });
-  }, []);
-
-  const grantHint = useCallback(() => {
-    dispatch({ type: 'GRANT_HINT' });
-  }, []);
-
-  const grantUndo = useCallback(() => {
-    dispatch({ type: 'GRANT_UNDO' });
-  }, []);
-
-  const grantBooster = useCallback((booster: 'wildcardTile' | 'spotlight' | 'smartShuffle') => {
-    dispatch({ type: 'GRANT_BOOSTER', booster });
-  }, []);
-
-  const newGame = useCallback((board: Board, newLevel: number, newMode?: GameMode, newMaxMoves?: number, newTimeLimit?: number) => {
-    dispatch({ type: 'NEW_GAME', board, level: newLevel, mode: newMode, maxMoves: newMaxMoves, timeRemaining: newTimeLimit });
-  }, []);
-
-  const activateWildcard = useCallback(() => {
-    dispatch({ type: 'USE_BOOSTER', booster: 'wildcardTile' });
-  }, []);
-
-  const activateSpotlight = useCallback(() => {
-    dispatch({ type: 'USE_BOOSTER', booster: 'spotlight' });
-  }, []);
-
-  const activateSmartShuffle = useCallback(() => {
-    dispatch({ type: 'USE_BOOSTER', booster: 'smartShuffle' });
-  }, []);
-
-  const useBooster = useCallback((booster: string) => {
-    dispatch({ type: 'USE_BOOSTER', booster });
-  }, []);
-
-  const usePremiumHint = useCallback(() => {
-    dispatch({ type: 'USE_PREMIUM_HINT' });
-  }, []);
-
-  const activateScoreDoubler = useCallback(() => {
-    dispatch({ type: 'ACTIVATE_SCORE_DOUBLER' });
-  }, []);
-
-  const activateBoardFreeze = useCallback(() => {
-    dispatch({ type: 'ACTIVATE_BOARD_FREEZE' });
-  }, []);
-
-  // Get the currently forming word
-  const currentWord = useMemo(
-    () => getSelectedWord(state.board.grid, state.selectedCells),
-    [state.board.grid, state.selectedCells]
-  );
-
-  // Cache remaining words
+  // ── Derived (changes per word, not per tap) ──────────────────────────
+  const foundWords = useMemo(() => words.filter(w => w.found).length, [words]);
+  const totalWords = words.length;
   const remainingWords = useMemo(
-    () => state.board.words.filter(w => !w.found).map(w => w.word),
-    [state.board.words]
+    () => words.filter(w => !w.found).map(w => w.word),
+    [words],
   );
+  const solveSequence = useStore(store, s => s.solveSequence);
 
-  // Check if current selection matches a target word (wildcard-aware)
-  const isValidWord = useMemo(() => {
-    if (state.selectedCells.length === 0) return false;
-    return state.board.words.some(
-      w => !w.found && matchesWord(currentWord, w.word, state.selectedCells, state.wildcardCells)
-    );
-  }, [remainingWords, currentWord, state.selectedCells, state.wildcardCells]);
-
-  // Compute isStuck lazily — mode-aware
-  const [isStuck, setIsStuck] = useState(false);
-  const foundWords = state.board.words.filter(w => w.found).length;
-
-  useEffect(() => {
-    if (state.status !== 'playing' || remainingWords.length === 0) {
-      setIsStuck(false);
-      return;
-    }
-
-    // Dead-end solvers are expensive DFS passes over the grid. Each effect
-    // re-run schedules a timer; when multiple grid changes fire back-to-back
-    // (a chain of word clears) the cleanup cancels the previous timer so only
-    // the most recent run executes. 500ms of quiet before we pay the cost
-    // keeps chain-solve animations smooth. The player doesn't need an instant
-    // "stuck" indicator — they need a responsive UI while the chain plays.
-    const DEBOUNCE_MS = 500;
-
-    // shrinkingBoard: use shrink-aware dead-end detection
-    if (mode === 'shrinkingBoard') {
-      const timer = setTimeout(() => {
-        setIsStuck(isDeadEndShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink));
-      }, DEBOUNCE_MS);
-      return () => clearTimeout(timer);
-    }
-
-    // noGravity: just check if all words still exist in grid
-    if (mode === 'noGravity') {
-      const timer = setTimeout(() => {
-        setIsStuck(isDeadEndNoGravity(state.board.grid, remainingWords));
-      }, DEBOUNCE_MS);
-      return () => clearTimeout(timer);
-    }
-
-    // gravityFlip mode: use rotating gravity dead-end detection
-    if (mode === 'gravityFlip') {
-      const timer = setTimeout(() => {
-        setIsStuck(isDeadEndGravityFlip(state.board.grid, remainingWords, state.gravityDirection, state.moves));
-      }, DEBOUNCE_MS);
-      return () => clearTimeout(timer);
-    }
-
-    // Standard dead-end detection
-    const timer = setTimeout(() => {
-      setIsStuck(isDeadEnd(state.board.grid, remainingWords));
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [foundWords, state.status, state.board.grid, remainingWords, mode, state.gravityDirection, state.moves, state.wordsUntilShrink]);
-
-  // Calculate stars
-  const totalWords = state.board.words.length;
+  // ── Stars ────────────────────────────────────────────────────────────
   const stars =
-    state.status === 'won'
-      ? state.hintsUsed === 0 && state.moves <= totalWords
+    status === 'won'
+      ? hintsUsed === 0 && moves <= totalWords
         ? 3
-        : state.hintsUsed <= 1 && state.moves <= totalWords + 1
+        : hintsUsed <= 1 && moves <= totalWords + 1
         ? 2
         : 1
       : 0;
 
+  // ── Timer for timed modes ────────────────────────────────────────────
+  useEffect(() => {
+    if (mode !== 'timePressure' || status !== 'playing' || timeRemaining <= 0) return;
+
+    const interval = setInterval(() => {
+      if (store.getState().status === 'playing') {
+        store.dispatch({ type: 'TICK_TIMER' });
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [mode, status, timeRemaining <= 0, store]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── isStuck (debounced DFS — mode-aware) ─────────────────────────────
+  const [isStuck, setIsStuck] = useState(false);
+
+  useEffect(() => {
+    if (status !== 'playing' || remainingWords.length === 0) {
+      setIsStuck(false);
+      return;
+    }
+
+    const DEBOUNCE_MS = 500;
+
+    if (mode === 'shrinkingBoard') {
+      const timer = setTimeout(() => {
+        setIsStuck(isDeadEndShrinkingBoard(grid, remainingWords, wordsUntilShrink));
+      }, DEBOUNCE_MS);
+      return () => clearTimeout(timer);
+    }
+
+    if (mode === 'noGravity') {
+      const timer = setTimeout(() => {
+        setIsStuck(isDeadEndNoGravity(grid, remainingWords));
+      }, DEBOUNCE_MS);
+      return () => clearTimeout(timer);
+    }
+
+    if (mode === 'gravityFlip') {
+      const timer = setTimeout(() => {
+        setIsStuck(isDeadEndGravityFlip(grid, remainingWords, gravityDirection, moves));
+      }, DEBOUNCE_MS);
+      return () => clearTimeout(timer);
+    }
+
+    const timer = setTimeout(() => {
+      setIsStuck(isDeadEnd(grid, remainingWords));
+    }, DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [foundWords, status, grid, remainingWords, mode, gravityDirection, moves, wordsUntilShrink]);
+
+  // ── Action dispatchers (all stable — store.dispatch never changes) ───
+  const selectCell = useCallback((position: CellPosition) => {
+    store.dispatch({ type: 'SELECT_CELL', position });
+  }, [store]);
+
+  const selectCells = useCallback((positions: CellPosition[]) => {
+    if (positions.length === 0) return;
+    store.dispatch({ type: 'SELECT_CELLS', positions });
+  }, [store]);
+
+  const clearSelection = useCallback(() => {
+    store.dispatch({ type: 'CLEAR_SELECTION' });
+  }, [store]);
+
+  const submitWord = useCallback(() => {
+    store.dispatch({ type: 'SUBMIT_WORD' });
+  }, [store]);
+
+  const useHintAction = useCallback(() => {
+    store.dispatch({ type: 'USE_HINT' });
+  }, [store]);
+
+  const undoMove = useCallback(() => {
+    store.dispatch({ type: 'UNDO_MOVE' });
+  }, [store]);
+
+  const grantHint = useCallback(() => {
+    store.dispatch({ type: 'GRANT_HINT' });
+  }, [store]);
+
+  const grantUndo = useCallback(() => {
+    store.dispatch({ type: 'GRANT_UNDO' });
+  }, [store]);
+
+  const grantBooster = useCallback((booster: 'wildcardTile' | 'spotlight' | 'smartShuffle') => {
+    store.dispatch({ type: 'GRANT_BOOSTER', booster });
+  }, [store]);
+
+  const newGame = useCallback((board: Board, newLevel: number, newMode?: GameMode, newMaxMoves?: number, newTimeLimit?: number) => {
+    store.dispatch({ type: 'NEW_GAME', board, level: newLevel, mode: newMode, maxMoves: newMaxMoves, timeRemaining: newTimeLimit });
+  }, [store]);
+
+  const activateWildcard = useCallback(() => {
+    store.dispatch({ type: 'USE_BOOSTER', booster: 'wildcardTile' });
+  }, [store]);
+
+  const activateSpotlight = useCallback(() => {
+    store.dispatch({ type: 'USE_BOOSTER', booster: 'spotlight' });
+  }, [store]);
+
+  const activateSmartShuffle = useCallback(() => {
+    store.dispatch({ type: 'USE_BOOSTER', booster: 'smartShuffle' });
+  }, [store]);
+
+  const useBooster = useCallback((booster: string) => {
+    store.dispatch({ type: 'USE_BOOSTER', booster });
+  }, [store]);
+
+  const usePremiumHint = useCallback(() => {
+    store.dispatch({ type: 'USE_PREMIUM_HINT' });
+  }, [store]);
+
+  const activateScoreDoubler = useCallback(() => {
+    store.dispatch({ type: 'ACTIVATE_SCORE_DOUBLER' });
+  }, [store]);
+
+  const activateBoardFreeze = useCallback(() => {
+    store.dispatch({ type: 'ACTIVATE_BOARD_FREEZE' });
+  }, [store]);
+
   return {
-    state,
+    store,
     selectCell,
     selectCells,
     clearSelection,
@@ -936,14 +919,11 @@ export function useGame(
     usePremiumHint,
     activateScoreDoubler,
     activateBoardFreeze,
-    currentWord,
-    isValidWord,
     isStuck,
     stars,
     foundWords,
     totalWords,
     remainingWords,
-    lastInvalidTap: state.lastInvalidTap,
-    solveSequence: state.solveSequence,
+    solveSequence,
   };
 }

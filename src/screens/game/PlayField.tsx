@@ -24,6 +24,11 @@ interface PlayFieldProps {
   mode: GameMode;
   /** Callback so GameScreen can reset idle hint timer on cell press */
   onCellInteraction?: () => void;
+  /** Callback fired when isValidWord or currentWord changes (lets GameScreen
+   *  trigger flash/auto-submit without subscribing to selectedCells). */
+  onValidWordChange?: (isValid: boolean, wordLength: number) => void;
+  /** Callback fired when selection length changes (for idle-hint timer reset). */
+  onSelectionLengthChange?: (length: number) => void;
   /** Grid area height from layout */
   gridAreaHeight: number;
   /** Pass the grid scale animation from GameScreen (Animated.Value, stable ref) */
@@ -47,6 +52,8 @@ interface PlayFieldProps {
 function PlayFieldImpl({
   mode,
   onCellInteraction,
+  onValidWordChange,
+  onSelectionLengthChange,
   gridAreaHeight,
   gridScaleStyle,
   showValidFlash,
@@ -78,6 +85,15 @@ function PlayFieldImpl({
       w => !w.found && w.word === currentWord && w.word.length === currentWord.length,
     );
   }, [words, currentWord, selectedCells.length]);
+
+  // ── Notify GameScreen of valid-word / selection changes ────────────────
+  useEffect(() => {
+    onValidWordChange?.(isValidWord, currentWord.length);
+  }, [isValidWord, currentWord.length, onValidWordChange]);
+
+  useEffect(() => {
+    onSelectionLengthChange?.(selectedCells.length);
+  }, [selectedCells.length, onSelectionLengthChange]);
 
   // ── Shared empty array for stable prop identity ───────────────────────
   const EMPTY_CELL_ARRAY = useMemo<CellPosition[]>(() => [], []);
