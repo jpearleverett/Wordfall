@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback } from 'react';
 import {
   Animated,
   Image,
@@ -195,17 +195,6 @@ function GameGridImpl({
   const lastDragPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
 
-  // ── Drag batch: collected cell crossings within a single animation frame ──
-  // The pan gesture pushes each crossed cell into this buffer and schedules
-  // a requestAnimationFrame flush. All cells buffered before the rAF fires
-  // commit in one SELECT_CELLS dispatch instead of N SELECT_CELL dispatches.
-  // This alone caps reducer commits at the display refresh rate regardless
-  // of how fast the pan event stream fires (pan can emit at >120Hz on some
-  // devices). Combined with fewer React commits, JS-thread backpressure
-  // drops dramatically and tap-to-commit latency falls into the 60fps budget.
-  const pendingCellsRef = useRef<CellPosition[]>([]);
-  const rafHandleRef = useRef<number | null>(null);
-
   // ── Column-indexed hit-test lookup (stride-based O(1)) ───────────────────
   // The old implementation iterated every cellBounds entry (up to 49) on
   // every pointer move, then again per interpolated step during fast drags.
@@ -274,64 +263,23 @@ function GameGridImpl({
 
   const onCellPressRef = useRef(onCellPress);
   onCellPressRef.current = onCellPress;
-  const onCellsPressRef = useRef(onCellsPress);
-  onCellsPressRef.current = onCellsPress;
   const onDragStartRef = useRef(onDragStart);
   onDragStartRef.current = onDragStart;
   const onDragEndRef = useRef(onDragEnd);
   onDragEndRef.current = onDragEnd;
 
-  // Flush any buffered cells synchronously. Called by onEnd / onFinalize so
-  // the tail of a drag is never lost to the next animation frame.
-  const flushPendingCells = useCallback(() => {
-    if (rafHandleRef.current != null) {
-      cancelAnimationFrame(rafHandleRef.current);
-      rafHandleRef.current = null;
-    }
-    const pending = pendingCellsRef.current;
-    if (pending.length === 0) return;
-    pendingCellsRef.current = [];
-    const batched = onCellsPressRef.current;
-    if (batched) {
-      batched(pending);
-    } else {
-      // Back-compat: emit individually if consumer didn't supply the batch cb.
-      const single = onCellPressRef.current;
-      for (let i = 0; i < pending.length; i++) single(pending[i]);
-    }
-  }, []);
-
-  // Schedule a rAF flush if none is pending. Multiple calls within the same
-  // frame coalesce naturally because we only schedule when the handle is null.
-  const scheduleFlush = useCallback(() => {
-    if (rafHandleRef.current != null) return;
-    rafHandleRef.current = requestAnimationFrame(() => {
-      rafHandleRef.current = null;
-      flushPendingCells();
-    });
-  }, [flushPendingCells]);
-
-  // Push one cell onto the pending batch. Duplicates against the last-buffered
-  // cell (already covered by lastDragCellRef in the gesture code) are caller's
-  // responsibility.
-  const enqueueCell = useCallback((position: CellPosition) => {
-    pendingCellsRef.current.push(position);
-    perfDragDispatch();
-    scheduleFlush();
-  }, [scheduleFlush]);
-
   // Built once on mount. The empty dep array is intentional — the callbacks
   // read from refs, so the gesture handler never needs to be rebuilt.
   //
-  // Drag dispatch strategy:
-  //  1. onBegin fires the FIRST cell synchronously via onCellPress so visual
-  //     feedback on tap-down is instant (no rAF latency on the initial tap).
-  //  2. onUpdate hit-tests each pointer sample and enqueues new cells into
-  //     pendingCellsRef, which is drained once per animation frame via
-  //     scheduleFlush(). This caps reducer dispatches at the display refresh
-  //     rate and prevents JS-thread backpressure from blocking pan events.
-  //  3. onEnd / onFinalize flushes the tail synchronously so no cell is lost
-  //     to the final frame.
+  // NOTE on rAF batching: an earlier version deferred pan onUpdate dispatches
+  // to requestAnimationFrame, intending to cap commits at the display refresh
+  // rate. In practice this ADDED ~16ms of latency per cell because React
+  // renders still take 50-100ms (way above one frame), so the rAF wait was
+  // pure overhead with no batching benefit. Reverted to synchronous dispatch
+  // which matches the pre-optimization behavior. The SELECT_CELLS action and
+  // onCellsPress plumbing still exist in useGame.ts and Grid's props so they
+  // can be re-enabled once per-commit render time drops below 16ms (via a
+  // full PlayArea extraction — Phase 2D in the optimization plan).
   const composedGesture = useMemo(() => {
     const panGesture = Gesture.Pan()
       .runOnJS(true)
@@ -351,8 +299,6 @@ function GameGridImpl({
         if (cell) {
           const key = `${cell.row},${cell.col}`;
           lastDragCellRef.current = key;
-          // First cell dispatches SYNCHRONOUSLY for immediate visual feedback
-          // on tap-down. The rAF batcher only kicks in from .onUpdate onward.
           perfDragDispatch();
           onCellPressRef.current(cell);
         }
@@ -378,7 +324,8 @@ function GameGridImpl({
                 const midKey = `${midCell.row},${midCell.col}`;
                 if (midKey !== lastDragCellRef.current) {
                   lastDragCellRef.current = midKey;
-                  enqueueCell(midCell);
+                  perfDragDispatch();
+                  onCellPressRef.current(midCell);
                 }
               }
             }
@@ -391,15 +338,12 @@ function GameGridImpl({
           const key = `${cell.row},${cell.col}`;
           if (key !== lastDragCellRef.current) {
             lastDragCellRef.current = key;
-            enqueueCell(cell);
+            perfDragDispatch();
+            onCellPressRef.current(cell);
           }
         }
       })
       .onEnd(() => {
-        // Flush any cells still pending for this frame BEFORE emitting
-        // onDragEnd, so the reducer has the complete selection when the
-        // caller decides whether to submit a word.
-        flushPendingCells();
         isDraggingRef.current = false;
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
@@ -407,7 +351,6 @@ function GameGridImpl({
         onDragEndRef.current?.();
       })
       .onFinalize(() => {
-        flushPendingCells();
         isDraggingRef.current = false;
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
@@ -424,18 +367,6 @@ function GameGridImpl({
 
     return Gesture.Race(panGesture, tapGesture);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Ensure any pending drag cells are discarded on unmount, e.g. if the user
-  // navigates away mid-drag.
-  useEffect(() => {
-    return () => {
-      if (rafHandleRef.current != null) {
-        cancelAnimationFrame(rafHandleRef.current);
-        rafHandleRef.current = null;
-      }
-      pendingCellsRef.current = [];
-    };
   }, []);
 
   const framePad = 3;
