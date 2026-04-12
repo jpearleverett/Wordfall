@@ -21,8 +21,8 @@ export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 10, stiffness: 100 });
-    level.value = withDelay(350, withSpring(1, { damping: 6, stiffness: 180 }));
+    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
+    level.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 220 }));
     glow.value = withRepeat(
       withSequence(
         withTiming(0.7, { duration: 1000 }),

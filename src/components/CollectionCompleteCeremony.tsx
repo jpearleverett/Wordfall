@@ -26,7 +26,7 @@ export function CollectionCompleteCeremony({
 
   useEffect(() => {
     fadeAnim.value = withTiming(1, { duration: 300 });
-    scaleAnim.value = withSpring(1, { damping: 12, stiffness: 100 });
+    scaleAnim.value = withSpring(1, { damping: 15, stiffness: 180 });
   }, []);
 
   const overlayStyle = useAnimatedStyle(() => ({
