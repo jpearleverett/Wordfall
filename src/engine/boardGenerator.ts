@@ -416,12 +416,6 @@ export function generateBoard(
       cols: Math.max(config.cols, 5) + 2,
       wordCount: Math.max(config.wordCount, 3),
     };
-  } else if (mode === 'timePressure') {
-    // Wider grid gives more options for quick spotting under time pressure
-    effectiveConfig = {
-      ...config,
-      cols: config.cols + 1,
-    };
   } else {
     effectiveConfig = config;
   }
