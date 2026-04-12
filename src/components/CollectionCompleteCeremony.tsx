@@ -22,7 +22,7 @@ export function CollectionCompleteCeremony({
 }: CollectionCompleteCeremonyProps) {
   const fadeAnim = useSharedValue(0);
   const scaleAnim = useSharedValue(0.6);
-  const decorationsMounted = useDeferredMount(200);
+  const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
     fadeAnim.value = withTiming(1, { duration: 300 });

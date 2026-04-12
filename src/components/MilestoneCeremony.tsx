@@ -42,7 +42,7 @@ export function MilestoneCeremony({
   // Defer the SparkleField until ~200ms after mount — see useDeferredMount
   // in perfInstrument.ts. Lets the card pop in fast and the decorations
   // follow a frame or two later.
-  const decorationsMounted = useDeferredMount(200);
+  const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });

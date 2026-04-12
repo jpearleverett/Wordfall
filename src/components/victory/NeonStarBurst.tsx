@@ -38,7 +38,7 @@ const NeonStarBurst: React.FC<NeonStarBurstProps> = ({
             withTiming(1.04, { duration: PULSE_DURATION / 2 }),
             withTiming(1.0, { duration: PULSE_DURATION / 2 }),
           ),
-          -1,
+          6,
         );
       });
     }

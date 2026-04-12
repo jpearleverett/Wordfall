@@ -28,7 +28,7 @@ export function DifficultyTransitionCeremony({
   const scale = useSharedValue(0.6);
   const arrow = useSharedValue(0);
   const toProgress = useSharedValue(0);
-  const decorationsMounted = useDeferredMount(200);
+  const decorationsMounted = useDeferredMount(280);
 
   const fromMeta = DIFFICULTY_META[from] ?? DIFFICULTY_META.easy;
   const toMeta = DIFFICULTY_META[to] ?? DIFFICULTY_META.medium;
