@@ -62,6 +62,8 @@ interface GridProps {
   fallAnimMap?: Map<string, Animated.Value>;
   /** Whether fall animation is currently active */
   fallActive?: boolean;
+  /** When true, all grid positions become tappable (for wildcard placement on empty cells) */
+  wildcardMode?: boolean;
 }
 
 function GameGridImpl({
@@ -82,6 +84,7 @@ function GameGridImpl({
   noGravityLayout = false,
   fallAnimMap,
   fallActive = false,
+  wildcardMode = false,
 }: GridProps) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -230,6 +233,10 @@ function GameGridImpl({
   gridHeightRef.current = gridHeight;
   const noGravityLayoutRef = useRef(noGravityLayout);
   noGravityLayoutRef.current = noGravityLayout;
+  const wildcardModeRef = useRef(wildcardMode);
+  wildcardModeRef.current = wildcardMode;
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
   // Stable hit test. Column is computed by x/stride (constant time).
   // For gravity-down grids, cells are contiguous so we use stride-based O(1)
@@ -245,6 +252,18 @@ function GameGridImpl({
     if (stride <= 0) return null;
     // CELL_GAP / 2 is the inner padding added in cellBounds computation.
     const padding = CELL_GAP / 2;
+
+    // In wildcard placement mode, any grid position is tappable — even empty
+    // cells — so the reducer can create a placeholder wildcard cell there.
+    if (wildcardModeRef.current) {
+      const colIdx = Math.floor((absX - padding) / stride);
+      const rowIdx = Math.floor(absY / stride);
+      if (colIdx >= 0 && colIdx < cellsByColumnRef.current.length && rowIdx >= 0 && rowIdx < rowsRef.current) {
+        return { row: rowIdx, col: colIdx };
+      }
+      return null;
+    }
+
     const colIdx = Math.floor((absX - padding) / stride);
     const byCol = cellsByColumnRef.current;
     if (colIdx < 0 || colIdx >= byCol.length) return null;

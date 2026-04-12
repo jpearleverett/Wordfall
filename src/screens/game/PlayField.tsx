@@ -76,6 +76,7 @@ function PlayFieldImpl({
   const grid = useGameStore(s => s.board.grid);
   const words = useGameStore(s => s.board.words);
   const wildcardCells = useGameStore(s => s.wildcardCells);
+  const wildcardMode = useGameStore(s => s.wildcardMode);
   const gravityDirection = useGameStore(s => s.gravityDirection);
 
   // ── Derived state ─────────────────────────────────────────────────────
@@ -166,6 +167,7 @@ function PlayFieldImpl({
             noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
             fallAnimMap={fallAnimMap}
             fallActive={fallActive}
+            wildcardMode={wildcardMode}
           />
         </React.Profiler>
       </Animated.View>
