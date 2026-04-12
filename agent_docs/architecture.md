@@ -12,8 +12,9 @@ Wordfall is a gravity-based strategic word puzzle mobile game built with **React
 - **Animations:** `react-native-reanimated 4.2.1` + `react-native-worklets 0.7.2` — 30 components migrated to UI-thread animations; 4 legacy files intentionally remain on the `react-native` Animated API (see Animation System section below). Babel plugin is `react-native-worklets/plugin` (must be last in `babel.config.js`)
 - **Gestures:** `react-native-gesture-handler 2.30` — Grid uses `.runOnJS(true)` to run gesture callbacks on JS thread (see Gotchas)
 - **Backend:** Firebase (Auth + Firestore + Functions) — social layer implemented with graceful offline fallback. Env vars needed for real connectivity
-- **State:** React Context (4 providers + 2 extracted sub-contexts) + useReducer for game state + AsyncStorage persistence + debounced Firestore sync when configured
-- **Testing:** Jest + ts-jest, **37 test suites with 774 tests** covering engine, data, services, utilities, hooks, and integration tests (puzzle lifecycle, economy flow, ceremony queue, difficulty curve, game modes)
+- **State:** React Context (4 providers + 2 extracted sub-contexts) + **zustand** store for game state (wraps existing reducer via `redux` middleware, enables per-component selector subscriptions so GameScreen doesn't re-render on every cell tap) + AsyncStorage persistence (debounced: 300ms for PlayerContext, 1s for EconomyContext, with AppState background/unmount flush) + Firestore sync when configured
+- **Build plugins:** **React Compiler** enabled via `babel-preset-expo` `'react-compiler'` option (scoped to `src/`), auto-memoizes all components. `react-native-worklets/plugin` must remain **last** in plugins array
+- **Testing:** Jest + ts-jest, **37 test suites with 779 tests** covering engine, data, services, utilities, hooks, and integration tests (puzzle lifecycle, economy flow, ceremony queue, difficulty curve, game modes)
 - **Monetization:** ⚠️ `react-native-iap` is currently **removed from package.json** due to Gradle build issues (Nitro Modules on v14, amazon/play variant ambiguity on v12). `src/services/iap.ts` dynamically imports it and falls back to mock mode — all purchases succeed locally but nothing is charged. Shop catalogs still live in `shopProducts.ts` (50+ products $0.49-$99.99) and `dynamicPricing.ts` (3 mega bundles). Rewarded + interstitial ads via AdMob (mock fallback), gem-based contextual offers with 5-minute FOMO countdown timers, dynamic pricing by segment with daily flash sales, regional pricing, season pass, cosmetic store, coin sink rentals, **$0.49 first-purchase impulse offer for non-payers**
 - **Audio:** `expo-audio` only (`createAudioPlayer` for SFX/music). `expo-av` was removed in SDK 55 — the legacy fallback path in `src/services/sound.ts` was deleted as part of the upgrade
 - **Video:** `expo-video` (`useVideoPlayer` + `VideoView`) with error boundary fallback
@@ -25,7 +26,7 @@ Wordfall is a gravity-based strategic word puzzle mobile game built with **React
 ```bash
 npx expo start --dev-client    # Start Metro for the dev client (REQUIRED — Expo Go not supported)
 npm run typecheck              # Type-check (tsc --noEmit, no emit)
-npm test                       # Run 774 tests (Jest)
+npm test                       # Run 779 tests (Jest)
 npm run test:watch             # Watch mode
 npm run test:coverage          # Coverage report
 npm install --legacy-peer-deps # Install deps (.npmrc sets this flag by default)
@@ -42,7 +43,8 @@ There is no linter script in package.json. TypeScript strict mode is enabled (`t
 ```
 src/
 ├── engine/           # Core game logic (board generation, gravity physics, solver)
-├── hooks/            # useGame (game reducer), useStorage (AsyncStorage), useRewardWiring (extracted), useCeremonyQueue (extracted), useExperiment (A/B testing)
+├── hooks/            # useGame (zustand store factory + actions), useStorage (AsyncStorage), useRewardWiring (extracted), useCeremonyQueue (extracted), useExperiment (A/B testing)
+├── stores/           # gameStore.ts (zustand store, context, selectors for game state)
 ├── services/         # Singletons: sound, haptics, analytics, notifications, notificationTriggers, iap, ads, firestore, eventManager, playerSegmentation, crashReporting, receiptValidation, funnelTracker, experiments
 ├── navigation/       # MainNavigator.tsx (extracted tab/stack definitions)
 ├── contexts/         # AuthContext, EconomyContext, PlayerContext, SettingsContext + PlayerProgressContext, PlayerSocialContext (extracted)
@@ -77,6 +79,7 @@ src/
 │   ├── modes/        # TimerDisplay, MoveCounter
 │   └── events/       # EventBanner, EventProgress
 ├── screens/          # 15 screens (Home, Game, Modes, Collections, Library, Profile, EditProfile, Settings, Shop, CosmeticStore, Club, Leaderboard, Event, Onboarding, Mastery)
+│   └── game/         # PlayField.tsx (Grid+ConnectedWordBank), GameFlashes.tsx, GameBanners.tsx — extracted from GameScreen for render isolation
 ├── config/           # firebase.ts
 ├── data/             # Static game data
 │   ├── chapters.ts, collections.ts, cosmetics.ts, events.ts, missions.ts  # Original data
@@ -196,9 +199,11 @@ src/
 
 ### State Management
 
-- **Game state:** `useGame` hook with `useReducer` in `GameScreen`. Actions: SELECT_CELL, CLEAR_SELECTION, SUBMIT_WORD, USE_HINT, UNDO_MOVE, NEW_GAME, RESET_COMBO, TICK_TIMER, SHUFFLE_FILLER, FREEZE_COLUMN, PREVIEW_MOVE, USE_BOOSTER, GRANT_HINT, GRANT_UNDO, GRANT_BOOSTER, USE_PREMIUM_HINT, ACTIVATE_SCORE_DOUBLER, ACTIVATE_BOARD_FREEZE. State includes `frozenColumns`, `previewGrid`, `boosterCounts`, `cascadeMultiplier`, `perfectRun`, `maxCombo`, `scoreDoubler` (2x next word score), `boardFreezeActive` (skip next shrink), `premiumHintUsed`, `history` (for undo — stores `{ grid, words, wordsUntilShrink?, shrinkCount? }`, undo also removes last `solveSequence` entry), `solveSequence` (for replay recording).
-- **Player data:** `PlayerContext` - progress, collections (atlas/tiles/stamps), missions, streaks, cosmetics, library wings, mode stats, achievements, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `mysteryWheel`, `winStreak`, `puzzleEnergy` (session scarcity), `performanceMetrics` (adaptive difficulty), `segments` (player segmentation), `eventProgress` (live event tracking), `friendChallenges` (sent/received challenges), `modeLevels` (per-mode independent level progression), `seasonalQuest` (seasonal quest line state), `prestige` (prestige level/bonuses). Methods include `useEnergy`, `refillEnergy`, `recomputeSegments`, `updateEventProgress`, `sendChallenge`, `respondToChallenge`, `recordPerformanceMetrics`, `advanceModeLevel`, `getModeLevel`, `updateSeasonalQuest`. Persisted to AsyncStorage + Firestore sync when configured.
-- **Economy:** `EconomyContext` - coins, gems, hintTokens, undoTokens, `boosterTokens` (`{ wildcardTile, spotlight, smartShuffle }`), eventStars, libraryPoints, `isAdFree`, `isPremiumPass`, `isVip` (VIP subscription), `starterPackAvailable`, `dailyValuePackExpiry`, `vipExpiresAt`, `vipStreakWeeks`, `vipStreakBonusClaimed`. Methods: add/spend/check + `addLives(count)` for lives refill + `addBoosterToken(type)`/`spendBoosterToken(type)` for persistent booster inventory + `processPurchase(productId)` for IAP fulfillment + `processAdReward(rewardType)` for ad rewards + `claimVipDailyRewards()` for VIP daily gem/hint drip. VIP subscribers get: ad-free, 50 daily gems, 3 daily hints, exclusive frame, streak bonuses at 2/4/8/12/26 weeks. Persisted to AsyncStorage.
+- **Game state:** `useGame` hook creates a **zustand store** via `createGameStore()` (in `src/stores/gameStore.ts`) which wraps the existing `gameReducer` using zustand's `redux` middleware. The reducer is unchanged and battle-tested (37 tests). `useGame` returns `{ store, ...actionDispatchers, isStuck, stars, foundWords, totalWords, remainingWords }` — **it does NOT return `state`**. Consumers read state via `useStore(store, selector)` for narrow subscriptions. Actions: SELECT_CELL, SELECT_CELLS (batched), CLEAR_SELECTION, SUBMIT_WORD, USE_HINT, UNDO_MOVE, NEW_GAME, RESET_COMBO, TICK_TIMER, USE_BOOSTER, GRANT_HINT, GRANT_UNDO, GRANT_BOOSTER, USE_PREMIUM_HINT, ACTIVATE_SCORE_DOUBLER, ACTIVATE_BOARD_FREEZE. GameScreen subscribes to ~20 coarse selectors (status, score, combo, etc.) that change per-word, NOT per-tap. PlayField subscribes to `selectedCells` (per-tap). This separation is the primary latency optimization.
+- **Store context:** `GameStoreContext` in `src/stores/gameStore.ts` passes the store down the tree. `useGameStore(selector)` is the convenience hook for child components. `useGameDispatch()` returns the stable dispatch function. Pre-built selectors (`selectStatus`, `selectScore`, etc.) are exported for reuse.
+- **Stable callbacks:** `useStableCallback` (from `src/utils/hooks.ts`) wraps callbacks whose deps churn frequently (e.g. `handleHint` depends on `economy`). It returns a function with stable identity that always calls the latest closure. Used for all props passed to memoized children (Grid, BoosterBarMemo, GameBanners, GameFlashes).
+- **Player data:** `PlayerContext` - progress, collections (atlas/tiles/stamps), missions, streaks, cosmetics, library wings, mode stats, achievements, comebacks, **plus**: `featuresUnlocked`, `weeklyGoals`, `pendingCeremonies`, `tooltipsShown`, `failCountByLevel`, `consecutiveFailures`, `mysteryWheel`, `winStreak`, `puzzleEnergy` (session scarcity), `performanceMetrics` (adaptive difficulty), `segments` (player segmentation), `eventProgress` (live event tracking), `friendChallenges` (sent/received challenges), `modeLevels` (per-mode independent level progression), `seasonalQuest` (seasonal quest line state), `prestige` (prestige level/bonuses). Methods include `useEnergy`, `refillEnergy`, `recomputeSegments`, `updateEventProgress`, `sendChallenge`, `respondToChallenge`, `recordPerformanceMetrics`, `advanceModeLevel`, `getModeLevel`, `updateSeasonalQuest`. **Persisted to AsyncStorage with 300ms debounce** (coalesces rapid reward-wiring bursts) + AppState background/unmount flush for crash safety + Firestore sync when configured.
+- **Economy:** `EconomyContext` - coins, gems, hintTokens, undoTokens, `boosterTokens` (`{ wildcardTile, spotlight, smartShuffle }`), eventStars, libraryPoints, `isAdFree`, `isPremiumPass`, `isVip` (VIP subscription), `starterPackAvailable`, `dailyValuePackExpiry`, `vipExpiresAt`, `vipStreakWeeks`, `vipStreakBonusClaimed`. Methods: add/spend/check + `addLives(count)` for lives refill + `addBoosterToken(type)`/`spendBoosterToken(type)` for persistent booster inventory + `processPurchase(productId)` for IAP fulfillment + `processAdReward(rewardType)` for ad rewards + `claimVipDailyRewards()` for VIP daily gem/hint drip. VIP subscribers get: ad-free, 50 daily gems, 3 daily hints, exclusive frame, streak bonuses at 2/4/8/12/26 weeks. **Persisted to AsyncStorage with 1s debounce** + AppState flush.
 - **Settings:** `SettingsContext` - volume (SFX + music), haptics, notifications, theme (5 themes), **plus**: parental controls (`spendingLimitEnabled`, `monthlySpendingLimit`, `requirePurchasePin`, `purchasePin`, `monthlySpent`). Persisted to AsyncStorage.
 - **Auth:** `AuthContext` - Firebase anonymous auth with loading state.
 
@@ -441,7 +446,7 @@ No continuous animation loops run on idle tiles.
 - **WordBank chips**: Found words scale up 1.22x with spring then settle; `WordChip` wrapped in `React.memo`. No shimmer loop on found chips
 - **Puzzle complete**: 16 confetti particles (8 colors), 12 sparkles, 10 celebration burst particles. Stars pop in with staggered springs. Score counts up from 0 over 800ms. Card anchored to bottom with `maxHeight: 85%` + `ScrollView` for overflow
 - **AmbientBackdrop / SynthwaveHomeBackdrop**: 10-12 twinkling stars + nebula orbs or banded sun + flowing perspective grid, all migrated to Reanimated `withRepeat`/`withSequence` loops running on UI thread
-- **Ceremonies** (Achievement, LevelUp, Milestone, Streak, FeatureUnlock, ModeUnlock, DifficultyTransition): all migrated to Reanimated — fade overlays, spring card entrances, icon scale pops with `withDelay` for staggered reveals
+- **Ceremonies** (Achievement, LevelUp, Milestone, Streak, FeatureUnlock, ModeUnlock, DifficultyTransition, CollectionComplete): all migrated to Reanimated — fade overlays + crisp spring card entrances (damping 14-15, stiffness 180-220) + icon scale pops with `withDelay(200)` for fast stagger. Decoration infinite loops capped to finite repeats (3-6 iterations). `useDeferredMount(280)` defers sparkles/particles until after card commits
 - **Button press**: All Pressable buttons scale to 0.92-0.97x on press with opacity change (native Pressable `pressed` state, not Reanimated)
 - **Screen transitions**: Title springs in, buttons slide up with spring physics
 
@@ -555,7 +560,7 @@ No continuous animation loops run on idle tiles.
 - **Contextual offer analytics**: All 6 offer types fire `offer_shown`, `offer_accepted`, `offer_dismissed` analytics events with offerType, level, mode, difficulty properties. `hint_rescue` also checks persistent `player.failCountByLevel` in addition to session fails. `life_refill` triggers when lives=0 on failure. `streak_shield` triggers during gameplay when streak >= 3 and approaching daily reset
 - **Audio caching**: DSP separated from WAV encoding. Raw `Int16Array` sample buffers cached in `synthesisCache` Map. Async `preWarmAll()` synthesizes all sounds + music in background on init, yielding between each. `playSound()` never triggers synthesis — skips silently if uncached
 - **God file decomposition**: App.tsx, PlayerContext decomposed into 5 extracted modules: `useRewardWiring` (post-puzzle rewards), `useCeremonyQueue` (ceremony processing), `MainNavigator` (tab/stack definitions with screen wrappers), `PlayerProgressContext` (22 progress methods), `PlayerSocialContext` (4 social methods). All using factory function pattern to preserve `usePlayer()` API surface
-- **Test suite**: 37 test suites with 774 tests. Coverage: data layer (achievements, weekly goals, mystery wheel, shop products, event layers, coin shop, referrals, daily deals, rotating shop, mastery rewards, season pass, club events, grand challenges, dynamic pricing, login calendar, word categories, daily reward timers), engine (difficulty adjuster, board generator, gravity, solver), services (analytics, player segmentation, experiments), utilities (share generator, replay generator), components (profanity filter, haptics, prestige system, logger, loading tips), hooks (useGame). Integration tests: puzzle lifecycle, economy flow, ceremony queue, difficulty curve, game modes. Run via `npm test`
+- **Test suite**: 37 test suites with 779 tests. Coverage: data layer (achievements, weekly goals, mystery wheel, shop products, event layers, coin shop, referrals, daily deals, rotating shop, mastery rewards, season pass, club events, grand challenges, dynamic pricing, login calendar, word categories, daily reward timers), engine (difficulty adjuster, board generator, gravity, solver), services (analytics, player segmentation, experiments), utilities (share generator, replay generator), components (profanity filter, haptics, prestige system, logger, loading tips), hooks (useGame). Integration tests: puzzle lifecycle, economy flow, ceremony queue, difficulty curve, game modes. Run via `npm test`
 - **Deep linking**: `wordfall://` scheme configured in app.json with Android intent filters and iOS associated domains placeholder. `deepLinking.ts` parses referral/challenge/daily URLs. App.tsx handles cold-start and warm-start deep links via `Linking` API. Referral links auto-apply codes, challenge links store IDs, daily links navigate to daily mode. All share text includes deep link CTAs
 - **Interactive mode tutorials**: `ModeTutorialOverlay.tsx` shows step-by-step animated tutorial on first play of complex modes (Gravity Flip, Shrinking Board, Time Pressure, Perfect Solve). Persisted via `tooltipsShown` so it shows once per mode. Tutorial data in `modeTutorials.ts`
 - **Seasonal quest lines**: 4 seasonal quests (Spring/Summer/Autumn/Winter) with 5 sequential steps each in `seasonalQuests.ts`. Steps use weekly goal tracking keys (puzzles_solved, stars_earned, etc.). Escalating rewards per step + final reward with exclusive frame. `SeasonalQuestCard.tsx` on HomeScreen for established+ players. Progress tracked in `useRewardWiring` alongside weekly goals
@@ -589,7 +594,7 @@ No continuous animation loops run on idle tiles.
   - Consider consolidating into one directory
 - **Club chat real-time messaging + auto-kick enforcement** (basic chat works; multi-member real-time aggregation needs Cloud Functions deployed)
 - **Partner events** — cooperative 2-player events. Schema defined in `FIRESTORE_SOCIAL_GUIDE.md`
-- **End-to-end testing** (37 test suites with 774 tests including integration tests, but no Detox/Maestro E2E)
+- **End-to-end testing** (37 test suites with 779 tests including integration tests, but no Detox/Maestro E2E)
 - **iOS Universal Links** — `associatedDomains: applinks:wordfall.app` is configured but needs real domain ownership + apple-app-site-association file. Custom scheme (`wordfall://`) deep linking is fully implemented
 - **Smart Solve Replay as animated GIF/video** — text + emoji replay is implemented; video generation is not
 - **Prestige system is fully wired** — `performPrestige()` in `PlayerContext.tsx` resets level/stars/chapters/modeLevels, unlocks the cosmetic reward, and queues a ceremony. `canPrestige()` gate via `getPrestigeInfo()`. Previously listed as "needs wiring" — this is no longer accurate
@@ -752,18 +757,46 @@ No continuous animation loops run on idle tiles.
 - **God file decomposition** preserves API surfaces — extracted contexts use factory function pattern (`createProgressMethods(setData, getData)` returns method object). Components calling `usePlayer()` see the identical interface. `useRewardWiring` takes player/economy as parameters and returns a stable `handleComplete` callback via `useCallback`. `MainNavigator` contains wrapper components (ProfileMainScreen, EventScreenWrapper) that wire navigation props
 
 ### Performance Architecture
-- **Reanimated 4 animations run on UI thread by default** — `useSharedValue` + `useAnimatedStyle` don't need a `useNativeDriver` flag. The few remaining legacy `Animated` API components (ParticleSystem, WordBank, GridDissolveEffect, GravityTrailEffect) run on the JS thread; they're particle effects that don't block gameplay, left intentionally
-- **`.runOnJS(true)` required on gestures whose callbacks call JS** (refs, reducers, props). Grid.tsx uses this on both pan and tap. Without it the app crashes with `Tried to synchronously call a non-worklet function` on the first interaction
-- **No continuous animation loops on idle tiles** — only selected/moved tiles run short one-shot animations. Idle tiles have zero overlay layers (no innerGlow, specular, shimmer)
-- **`isDeadEnd` solver is deferred** — runs via `setTimeout` in a `useEffect` after words are found, not synchronously in the render path. The solver's recursive DFS is too expensive for per-render execution
-- **`findWordInGrid` supports a `limit` parameter** — pass `limit=1` when only existence matters (hint, dead-end check) to avoid finding all occurrences
-- **Gesture objects memoized** — Grid.tsx wraps gesture creation in `useMemo` with callback refs, per React Native Gesture Handler best practices
-- **Computed game values cached** — `currentWord`, `remainingWords`, `isValidWord` all use `useMemo` in `useGame` hook
-- **Timer interval stable** — timePressure timer `useEffect` only depends on `mode` and `state.status`, not `state.timeRemaining`, using a ref to check status inside the interval
-- **Grid sizing is dual-dimension** — `cellSize` uses `Math.min(widthBased, heightBased)` via `maxHeight` prop measured by `onLayout` in GameScreen, preventing grid overflow behind booster buttons on tall boards
-- **Stable layout architecture** — GameScreen uses absolute-positioned overlays for banners (cascade, freeze, idle hint, mode intro) so they never shift the grid. WordArea has fixed height (90px), boosterBar always reserves space. `gridAreaHeight` updates are debounced (2px threshold) to prevent cascading re-renders from sub-pixel layout shifts
-- **Board generation uses heuristic-first validation** — `boardGenerator.ts` checks each word is individually findable via fast DFS before invoking the expensive recursive backtracking solver. This avoids exponential blowup on larger boards (was causing 10+ second hangs on 6×6+ grids)
-- **Audio synthesis is cached and pre-warmed** — `SoundManager.preWarmAll()` runs asynchronously after `init()` via `setTimeout(0)`. Synthesizes all 11 SFX + 3 music tracks in background, yielding between each. Raw `Int16Array` sample buffers cached, WAV data URIs in `soundUris` Map. `playSound()` returns early if URI not cached — never triggers synthesis on the hot path
-- **FlatLists in EditProfileScreen and ClubScreen** use `removeClippedSubviews`, `initialNumToRender`, `maxToRenderPerBatch`, `windowSize` for perf
-- **When adding new animations**: use `useSharedValue`/`useAnimatedStyle` (Reanimated), prefer `withSpring`/`withTiming` over `withRepeat` on per-element components, extract dynamically-sized particle arrays into their own sub-components (hooks rules)
-- **When modifying tiles**: do NOT add semi-transparent overlay Views or LinearGradients on top of the base tile gradient — these create visible lighter rectangles. Keep tile rendering minimal: base gradient + bottom shadow + letter text
+
+**Render isolation (zustand):**
+- **GameScreen does NOT subscribe to `selectedCells`** — it reads ~20 coarse zustand selectors (status, score, combo, moves, etc.) that change per-word, not per-tap. When a cell is tapped, only PlayField + ConnectedWordBank re-render (~15-30ms), not the full 2500-line GameScreen.
+- **PlayField** (`src/screens/game/PlayField.tsx`) subscribes to per-tap state (`selectedCells`, `board.grid`, `board.words`, `wildcardCells`, `gravityDirection`) and renders Grid. ~50 lines, re-renders on every tap — that's correct and expected.
+- **ConnectedWordBank** (exported from PlayField.tsx) subscribes to `selectedCells`, `board.grid`, `board.words` and renders WordBank above the grid area. Re-renders per-tap for the forming-word display.
+- **GameFlashes** (`src/screens/game/GameFlashes.tsx`) — 7 overlay blocks (chain popup, neon pulse, VHS glitch, valid/invalid flash, score popup, big-word label) extracted as `React.memo`. Receives Animated.Values by stable ref + primitive props. Memo bails out on every tap.
+- **GameBanners** (`src/screens/game/GameBanners.tsx`) — 7 conditional banners extracted as `React.memo`. All callbacks via `useStableCallback`.
+- **`useStableCallback`** (`src/utils/hooks.ts`) — stable-identity callback wrapper (useEvent RFC polyfill). Used for ALL props passed to memoized children so their memo compare succeeds.
+
+**React Compiler:**
+- Enabled via `babel-preset-expo` `'react-compiler'` option in `babel.config.js`, scoped to `src/`. Auto-memoizes all components and hooks, reducing manual `React.memo`/`useMemo`/`useCallback` burden. Works alongside explicit memoization — they're complementary.
+
+**Persistence debounce:**
+- **PlayerContext** debounces AsyncStorage writes with a 300ms coalesce window. `useRewardWiring` fires 15+ setter calls on puzzle complete — without debounce, each would trigger a synchronous `JSON.stringify` + `AsyncStorage.setItem` of the full PlayerData blob. AppState listener flushes pending writes on background/inactive.
+- **EconomyContext** debounces at 1s (same pattern).
+
+**Grid gesture & hit-test:**
+- **O(1) column-indexed hit test** — precomputed per-column sorted bounds arrays, stride-based row slot lookup. Was O(49) linear scan per pointer sample.
+- **`.shouldCancelWhenOutside(true)`** on the pan gesture — stops pointer events when finger leaves grid.
+- **Gesture built once on mount** — `useMemo(() => ..., [])` with callback refs so changing the grid doesn't tear down the native handler.
+- **`.runOnJS(true)` required** on gestures whose callbacks call JS (refs, dispatch). Without it: crash on first interaction.
+
+**Ceremony animations:**
+- All 8 ceremony components use **Reanimated 4 springs with high damping** (damping 14-15, stiffness 180-220) for crisp pop, not wobbly settle. Cascade delays at 200ms.
+- **PuzzleComplete** entrance is a parallel staggered sequence (card spring friction 12 + ribbon/stats/actions with timing fades at 150/220/300ms delays). Settles in ~500ms total.
+- **Decoration infinite loops capped** — sparkle `Animated.loop({ iterations: 3 })`, glow `withRepeat(n, 3-6)`, star pulse `withRepeat(n, 6)`. No truly infinite animation drivers.
+- **Deferred decoration mounting** — all ceremonies use `useDeferredMount(280)` so the card commits first, decorations (sparkles, confetti, burst particles) mount 280ms later.
+
+**Remaining architecture (unchanged):**
+- **Reanimated 4 animations run on UI thread by default** — `useSharedValue` + `useAnimatedStyle` don't need `useNativeDriver`
+- **No continuous animation loops on idle tiles** — only selected/moved tiles run short one-shot animations
+- **`isDeadEnd` solver is deferred** — debounced 500ms via `setTimeout` in `useEffect`, never in render
+- **`findWordInGrid` supports a `limit` parameter** — pass `limit=1` when only existence matters
+- **Gesture objects memoized** — `useMemo` with callback refs
+- **Computed game values cached** — `currentWord`, `remainingWords`, `isValidWord` use `useMemo` in PlayField (selection-derived) and `useGame` (word-derived)
+- **Timer interval stable** — depends on `mode` and `status`, not `timeRemaining`
+- **Grid sizing is dual-dimension** — `cellSize` uses `Math.min(widthBased, heightBased)` via `maxHeight` prop
+- **Stable layout architecture** — absolute-positioned overlays for banners, fixed-height WordArea, reserved boosterBar space
+- **Board generation uses heuristic-first validation**
+- **Audio synthesis is cached and pre-warmed**
+- **FlatLists** use `removeClippedSubviews`, `initialNumToRender`, etc.
+- **When adding new animations**: use Reanimated, prefer `withSpring`/`withTiming` over `withRepeat`, use **high damping (14+)** for ceremonies
+- **When modifying tiles**: do NOT add semi-transparent overlay Views
