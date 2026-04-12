@@ -228,12 +228,14 @@ function GameGridImpl({
   gridWidthRef.current = gridWidth;
   const gridHeightRef = useRef(gridHeight);
   gridHeightRef.current = gridHeight;
+  const noGravityLayoutRef = useRef(noGravityLayout);
+  noGravityLayoutRef.current = noGravityLayout;
 
-  // Stable O(1)-ish hit test. Column is computed by x/stride (constant time).
-  // Within the column we compute the row slot by offsetting from the first
-  // cell's y (also constant time, assuming cells are contiguous vertically —
-  // which is true for both gravity-down stacking and noGravityLayout grids).
-  // Falls back to bounds-check only if the computed slot is out of range.
+  // Stable hit test. Column is computed by x/stride (constant time).
+  // For gravity-down grids, cells are contiguous so we use stride-based O(1)
+  // slot indexing. For noGravityLayout grids (noGravity / shrinkingBoard),
+  // cleared cells leave gaps, so we derive the target row directly from
+  // the y-coordinate and scan the (small) column array.
   const hitTestCell = useCallback((absX: number, absY: number): CellPosition | null => {
     // Fast out-of-bounds rejection.
     if (absX < 0 || absY < 0 || absX >= gridWidthRef.current || absY >= gridHeightRef.current) {
@@ -248,8 +250,26 @@ function GameGridImpl({
     if (colIdx < 0 || colIdx >= byCol.length) return null;
     const column = byCol[colIdx];
     if (column.length === 0) return null;
-    // Compute row slot within the column. For gravity-down the cells stack
-    // from the bottom, so the first cell's y is the top of the stack.
+
+    if (noGravityLayoutRef.current) {
+      // In noGravityLayout, cells sit at y = row * stride. Cleared cells
+      // leave gaps so the column array is NOT contiguous. Derive the target
+      // row directly from the y-coordinate and scan for a match.
+      const targetRow = Math.floor(absY / stride);
+      for (let i = 0; i < column.length; i++) {
+        const c = column[i];
+        if (c.row === targetRow) {
+          if (absY >= c.y && absY < c.y + c.h) {
+            return { row: c.row, col: c.col };
+          }
+          return null;
+        }
+        if (c.row > targetRow) return null; // Past it (sorted), no match
+      }
+      return null;
+    }
+
+    // Gravity-down: cells are contiguous, stride-based O(1) slot indexing.
     const firstY = column[0].y;
     const slotIdx = Math.floor((absY - firstY) / stride);
     if (slotIdx < 0 || slotIdx >= column.length) return null;
