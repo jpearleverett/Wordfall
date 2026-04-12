@@ -105,6 +105,9 @@
       "expo-audio",
       "expo-asset"
     ],
+    "experiments": {
+      "reactCompiler": true
+    },
     "extra": {
       "eas": {
         "projectId": "b6dd187c-d46c-4331-bb15-5c7ffced89b3"
