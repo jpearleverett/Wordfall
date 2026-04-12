@@ -26,7 +26,7 @@ export function ModeUnlockCeremony({
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.7);
   const iconProgress = useSharedValue(0);
-  const decorationsMounted = useDeferredMount(200);
+  const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });

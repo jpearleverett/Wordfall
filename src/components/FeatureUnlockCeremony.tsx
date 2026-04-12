@@ -26,7 +26,7 @@ export function FeatureUnlockCeremony({
   const scale = useSharedValue(0.7);
   const iconProgress = useSharedValue(0);
   const glow = useSharedValue(0.4);
-  const decorationsMounted = useDeferredMount(200);
+  const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
@@ -37,7 +37,7 @@ export function FeatureUnlockCeremony({
         withTiming(0.8, { duration: 1200 }),
         withTiming(0.4, { duration: 1200 }),
       ),
-      -1,
+      3,
     );
   }, []);
 

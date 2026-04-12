@@ -23,6 +23,7 @@ function DiamondSparkle({ size, color, top, left, delay, duration }: SparkleProp
         Animated.timing(anim, { toValue: 1, duration: duration * 0.4, useNativeDriver: true }),
         Animated.timing(anim, { toValue: 0, duration: duration * 0.6, useNativeDriver: true }),
       ]),
+      { iterations: 3 },
     );
     animation.start();
     return () => {
@@ -222,6 +223,7 @@ function ImageSparkle({
         Animated.timing(anim, { toValue: 1, duration: duration * 0.4, useNativeDriver: true }),
         Animated.timing(anim, { toValue: 0, duration: duration * 0.6, useNativeDriver: true }),
       ]),
+      { iterations: 3 },
     );
     animation.start();
     return () => {
@@ -273,8 +275,8 @@ const SPARKLE_COLORS = [
 // meant 100+ infinite UI-thread animations running concurrently. Ceremonies
 // are transient — users glance at them for <3s — so a smaller, tighter field
 // reads just as celebratory while keeping the animation driver light.
-const MAX_SPARKLES = 10;
-const MAX_IMAGE_SPARKLES = 3;
+const MAX_SPARKLES = 8;
+const MAX_IMAGE_SPARKLES = 2;
 
 export function SparkleField({
   count = 20,
@@ -397,6 +399,7 @@ export function PulsingGlowRing({ size, color, pulseScale = 1.15 }: GlowRingProp
         Animated.timing(anim, { toValue: 1, duration: 1400, useNativeDriver: true }),
         Animated.timing(anim, { toValue: 0, duration: 1400, useNativeDriver: true }),
       ]),
+      { iterations: 4 },
     );
     animation.start();
     return () => {

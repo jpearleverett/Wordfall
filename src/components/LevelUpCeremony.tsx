@@ -17,7 +17,7 @@ export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
   const scale = useSharedValue(0.5);
   const level = useSharedValue(0);
   const glow = useSharedValue(0.3);
-  const decorationsMounted = useDeferredMount(200);
+  const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
@@ -28,7 +28,7 @@ export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
         withTiming(0.7, { duration: 1000 }),
         withTiming(0.3, { duration: 1000 }),
       ),
-      -1,
+      3,
     );
   }, []);
 

@@ -18,7 +18,7 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.5);
   const fire = useSharedValue(1);
-  const decorationsMounted = useDeferredMount(200);
+  const decorationsMounted = useDeferredMount(280);
 
   const reward = STREAK.milestoneRewards[milestone as keyof typeof STREAK.milestoneRewards] || { coins: 0, gems: 0 };
 
@@ -30,7 +30,7 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
         withTiming(1.15, { duration: 600 }),
         withTiming(1, { duration: 600 }),
       ),
-      -1,
+      5,
     );
   }, []);
 
