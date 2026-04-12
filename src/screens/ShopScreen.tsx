@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,52 @@ import {
 } from '../data/vipBenefits';
 
 const { width } = Dimensions.get('window');
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+function formatCountdown(msRemaining: number): string {
+  const remaining = Math.max(0, msRemaining);
+  const hours = Math.floor(remaining / 3600000);
+  const minutes = Math.floor((remaining % 3600000) / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000);
+  return `${hours.toString().padStart(2, '0')}:${minutes
+    .toString()
+    .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+const LiveCountdownText = React.memo(function LiveCountdownText({
+  style,
+  prefix = '',
+  targetTime,
+  untilMidnight = false,
+}: {
+  style: any;
+  prefix?: string;
+  targetTime?: number;
+  untilMidnight?: boolean;
+}) {
+  const getText = useCallback(() => {
+    if (untilMidnight) {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(23, 59, 59, 999);
+      return formatCountdown(midnight.getTime() - now.getTime());
+    }
+
+    return formatCountdown((targetTime ?? Date.now()) - Date.now());
+  }, [targetTime, untilMidnight]);
+
+  const [text, setText] = useState(() => getText());
+
+  useEffect(() => {
+    setText(getText());
+    const interval = setInterval(() => {
+      setText(getText());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [getText]);
+
+  return <Text style={style}>{prefix}{text}</Text>;
+});
 
 // ─── Static item data ────────────────────────────────────────────────────────
 
@@ -140,12 +186,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   const adsRemoved = adsRemovedProp ?? economy.isAdFree ?? settings.adsRemoved;
   const premiumPass = premiumPassProp ?? economy.isPremiumPass ?? settings.premiumPass;
   const iapAvailable = iapManager.isInitialized();
+  const featuredExpiryAtRef = useRef(Date.now() + DAY_IN_MS);
 
-  const [countdown, setCountdown] = useState('23:59:59');
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [watchingAd, setWatchingAd] = useState(false);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [mockAdState, setMockAdState] = useState<{
     rewardType: AdRewardType;
     resolver: (watched: boolean) => void;
@@ -158,14 +203,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   const coinShopConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Flash sale state
-  const flashSale = getFlashSale(new Date());
-  const [flashCountdown, setFlashCountdown] = useState('');
-  const flashTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flashSale = useMemo(() => getFlashSale(new Date()), []);
 
   // Today's rotating items
-  const today = new Date().toISOString().slice(0, 10);
-  const rotatingItems = getCurrentRotatingItems(today);
-  const rotatingHoursLeft = getTimeRemainingHours(today);
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const rotatingItems = useMemo(() => getCurrentRotatingItems(today), [today]);
+  const rotatingHoursLeft = useMemo(() => getTimeRemainingHours(today), [today]);
 
   // Initialise IAP + Ads
   useEffect(() => {
@@ -181,47 +224,6 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       adManager.setMockAdHandler(() => {});
     };
   }, [adsRemoved]);
-
-  // Countdown timer
-  useEffect(() => {
-    const endTime = Date.now() + 24 * 60 * 60 * 1000;
-    timerRef.current = setInterval(() => {
-      const remaining = Math.max(0, endTime - Date.now());
-      const hours = Math.floor(remaining / 3600000);
-      const minutes = Math.floor((remaining % 3600000) / 60000);
-      const seconds = Math.floor((remaining % 60000) / 1000);
-      setCountdown(
-        `${hours.toString().padStart(2, '0')}:${minutes
-          .toString()
-          .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`,
-      );
-    }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
-
-  // Flash sale countdown timer (to midnight)
-  useEffect(() => {
-    if (!flashSale) return;
-    const updateFlashCountdown = () => {
-      const now = new Date();
-      const midnight = new Date(now);
-      midnight.setHours(23, 59, 59, 999);
-      const remaining = Math.max(0, midnight.getTime() - now.getTime());
-      const h = Math.floor(remaining / 3600000);
-      const m = Math.floor((remaining % 3600000) / 60000);
-      const s = Math.floor((remaining % 60000) / 1000);
-      setFlashCountdown(
-        `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
-      );
-    };
-    updateFlashCountdown();
-    flashTimerRef.current = setInterval(updateFlashCountdown, 1000);
-    return () => {
-      if (flashTimerRef.current) clearInterval(flashTimerRef.current);
-    };
-  }, [!!flashSale]);
 
   // ── Purchase handler ────────────────────────────────────────────────────
 
@@ -656,7 +658,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             </View>
             <View style={styles.flashSaleFooter}>
               <View style={styles.flashSaleTimer}>
-                <Text style={styles.flashSaleTimerText}>{'\u23F0'} {flashCountdown}</Text>
+                <LiveCountdownText
+                  prefix={'\u23F0 '}
+                  style={styles.flashSaleTimerText}
+                  untilMidnight
+                />
               </View>
               <TouchableOpacity
                 style={styles.flashSaleBuyButton}
@@ -990,7 +996,10 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               )}
             </View>
             <View style={styles.timerContainer}>
-              <Text style={styles.timerText}>{countdown}</Text>
+              <LiveCountdownText
+                style={styles.timerText}
+                targetTime={featuredExpiryAtRef.current}
+              />
             </View>
           </TouchableOpacity>
 
@@ -1026,7 +1035,10 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               )}
             </View>
             <View style={[styles.timerContainer, { backgroundColor: COLORS.purple + '30' }]}>
-              <Text style={[styles.timerText, { color: COLORS.purple }]}>{countdown}</Text>
+              <LiveCountdownText
+                style={[styles.timerText, { color: COLORS.purple }]}
+                targetTime={featuredExpiryAtRef.current}
+              />
             </View>
           </TouchableOpacity>
         </ScrollView>

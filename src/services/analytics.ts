@@ -103,6 +103,7 @@ const STORAGE_KEY_RETENTION = '@wordfall_analytics_retention_v2';
 const MAX_LOCAL_EVENTS = 5000;
 const FLUSH_INTERVAL_MS = 60_000;
 const EVENT_RETENTION_DAYS = 7;
+const EVENT_PERSIST_DEBOUNCE_MS = 1500;
 
 // ── Deterministic hash for A/B testing ──
 function simpleHash(str: string): number {
@@ -131,6 +132,11 @@ class Analytics {
   private firebaseAnalytics: any = null;
   private firestore: any = null;
   private useFirebase = false;
+  private bufferedEvents: StoredEvent[] = [];
+  private eventsLoaded = false;
+  private eventsDirty = false;
+  private eventsPersistTimer: ReturnType<typeof setTimeout> | null = null;
+  private eventsPersistPromise: Promise<void> = Promise.resolve();
 
   static getInstance(): Analytics {
     if (!Analytics.instance) {
@@ -213,24 +219,67 @@ class Analytics {
     }
   }
 
-  private async loadEvents(): Promise<StoredEvent[]> {
+  private async ensureEventsLoaded(): Promise<void> {
+    if (this.eventsLoaded) return;
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY_EVENTS);
       if (raw) {
-        return JSON.parse(raw) as StoredEvent[];
+        this.bufferedEvents = JSON.parse(raw) as StoredEvent[];
       }
     } catch (error) {
       logger.warn('[Analytics] Failed to load events:', error);
     }
-    return [];
+    this.eventsLoaded = true;
   }
 
-  private async persistEvents(events: StoredEvent[]): Promise<void> {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(events));
-    } catch (error) {
-      logger.warn('[Analytics] Failed to persist events:', error);
+  private async loadEvents(): Promise<StoredEvent[]> {
+    await this.ensureEventsLoaded();
+    return this.bufferedEvents;
+  }
+
+  private scheduleEventsPersist(delayMs: number = EVENT_PERSIST_DEBOUNCE_MS): void {
+    if (this.eventsPersistTimer) {
+      clearTimeout(this.eventsPersistTimer);
     }
+    this.eventsPersistTimer = setTimeout(() => {
+      this.eventsPersistTimer = null;
+      void this.persistEventsNow();
+    }, delayMs);
+  }
+
+  private async persistEventsNow(): Promise<void> {
+    await this.ensureEventsLoaded();
+    if (!this.eventsDirty) return;
+
+    const snapshot = [...this.bufferedEvents];
+    this.eventsDirty = false;
+
+    const persist = async () => {
+      try {
+        await AsyncStorage.setItem(STORAGE_KEY_EVENTS, JSON.stringify(snapshot));
+      } catch (error) {
+        this.eventsDirty = true;
+        logger.warn('[Analytics] Failed to persist events:', error);
+      }
+    };
+
+    this.eventsPersistPromise = this.eventsPersistPromise.then(persist, persist);
+    await this.eventsPersistPromise;
+
+    if (this.eventsDirty && !this.eventsPersistTimer) {
+      this.scheduleEventsPersist(0);
+    }
+  }
+
+  private async persistEvents(events: StoredEvent[], immediate: boolean = true): Promise<void> {
+    await this.ensureEventsLoaded();
+    this.bufferedEvents = events;
+    this.eventsDirty = true;
+    if (immediate) {
+      await this.persistEventsNow();
+      return;
+    }
+    this.scheduleEventsPersist();
   }
 
   private async loadRetention(): Promise<RetentionMetrics> {
@@ -294,6 +343,7 @@ class Analytics {
 
   async logEvent(event: AnalyticsEventName | string, params?: EventParams): Promise<void> {
     await this.ensureLoaded();
+    await this.ensureEventsLoaded();
 
     // Auto-open a session when events start firing outside a session
     if (!this.state.sessionId && event !== 'session_start' && event !== 'session_end') {
@@ -309,14 +359,12 @@ class Analytics {
       sessionId: this.state.sessionId,
     };
 
-    // Store locally
-    const events = await this.loadEvents();
-    events.push(storedEvent);
-    // Cap local storage
-    const trimmed = events.length > MAX_LOCAL_EVENTS
-      ? events.slice(events.length - MAX_LOCAL_EVENTS)
-      : events;
-    await this.persistEvents(trimmed);
+    this.bufferedEvents.push(storedEvent);
+    if (this.bufferedEvents.length > MAX_LOCAL_EVENTS) {
+      this.bufferedEvents = this.bufferedEvents.slice(this.bufferedEvents.length - MAX_LOCAL_EVENTS);
+    }
+    this.eventsDirty = true;
+    this.scheduleEventsPersist();
 
     if (__DEV__) {
       logger.log(`[Analytics] ${event}`, params ?? '');
@@ -674,9 +722,29 @@ class Analytics {
     is_payer?: boolean;
     total_spend?: number;
   }): Promise<void> {
-    for (const [key, value] of Object.entries(props)) {
-      if (value !== undefined) {
-        await this.setUserProperty(key, String(value));
+    await this.ensureLoaded();
+
+    const nextProps = Object.entries(props).filter(([, value]) => value !== undefined);
+    if (nextProps.length === 0) return;
+
+    for (const [key, value] of nextProps) {
+      this.state.userProperties[key] = String(value);
+    }
+
+    await this.persistState();
+
+    if (this.useFirebase && this.firebaseAnalytics) {
+      try {
+        this.firebaseAnalytics.setUserProperties(
+          this.firebaseAnalytics.instance,
+          Object.fromEntries(nextProps.map(([key, value]) => [key, String(value)])),
+        );
+      } catch (_) { /* best effort */ }
+    }
+
+    if (__DEV__) {
+      for (const [key, value] of nextProps) {
+        logger.log(`[Analytics] setUserProperty: ${key}=${String(value)}`);
       }
     }
   }
@@ -735,19 +803,20 @@ class Analytics {
 
   async flush(): Promise<number> {
     await this.ensureLoaded();
+    await this.ensureEventsLoaded();
 
     // Prune old events first
     await this.pruneOldEvents();
+    await this.persistEventsNow();
 
     if (!this.useFirebase || !this.firestore) {
       if (__DEV__) {
-        const events = await this.loadEvents();
-        logger.log(`[Analytics] Local mode — ${events.length} events stored`);
+        logger.log(`[Analytics] Local mode — ${this.bufferedEvents.length} events stored`);
       }
       return 0;
     }
 
-    const events = await this.loadEvents();
+    const events = [...this.bufferedEvents];
     if (events.length === 0) return 0;
 
     try {
@@ -772,7 +841,7 @@ class Analytics {
 
       // Clear flushed events from local storage
       const flushedIds = new Set(events.map((e: StoredEvent) => e.id));
-      const remaining = (await this.loadEvents()).filter(e => !flushedIds.has(e.id));
+      const remaining = this.bufferedEvents.filter(e => !flushedIds.has(e.id));
       await this.persistEvents(remaining);
 
       if (__DEV__) {
@@ -799,7 +868,7 @@ class Analytics {
     exportedAt: number;
   }> {
     await this.ensureLoaded();
-    const events = await this.loadEvents();
+    const events = [...await this.loadEvents()];
     const retention = await this.loadRetention();
 
     return {
@@ -843,6 +912,11 @@ class Analytics {
    */
   async destroy(): Promise<void> {
     this.stopAutoFlush();
+    if (this.eventsPersistTimer) {
+      clearTimeout(this.eventsPersistTimer);
+      this.eventsPersistTimer = null;
+    }
+    await this.persistEventsNow();
     try {
       await this.flush();
     } catch (e) {

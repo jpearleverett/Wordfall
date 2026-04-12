@@ -120,9 +120,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 8,
-    shadowOpacity: 0.8,
-    elevation: 8,
+    shadowRadius: 4,
+    shadowOpacity: 0.45,
+    elevation: 3,
   },
   dot: {
     position: 'absolute',
@@ -132,9 +132,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 8,
-    shadowOpacity: 0.8,
-    elevation: 8,
+    shadowRadius: 4,
+    shadowOpacity: 0.45,
+    elevation: 3,
   },
 });
 

@@ -28,6 +28,7 @@ const ProfileStack = createStackNavigator();
 export const screenOptions = {
   headerShown: false,
   cardStyle: { backgroundColor: COLORS.bg },
+  freezeOnBlur: true,
 };
 
 // ── Tab icon styles (extracted to avoid object creation on every render) ──
@@ -165,6 +166,7 @@ export function MainTabs({ HomeStackScreen, PlayStackScreen }: MainTabsProps) {
       tabBar={(props) => <NeonTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        freezeOnBlur: true,
         tabBarActiveTintColor: COLORS.accent,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarLabelStyle: {
