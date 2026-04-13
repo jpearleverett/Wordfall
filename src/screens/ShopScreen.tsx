@@ -128,6 +128,42 @@ const COIN_SHOP_CATEGORIES: { key: string; label: string }[] = [
   { key: 'boosters', label: 'Boosters' },
 ];
 
+function getCommerceStatusMessage(status: ReturnType<typeof iapManager.getStatus>): {
+  tone: 'success' | 'warning' | 'info';
+  title: string;
+  detail: string;
+} {
+  if (status.commerceLaunchReady) {
+    return {
+      tone: 'success',
+      title: 'Billing ready',
+      detail: 'Store billing and server validation are configured for this build.',
+    };
+  }
+
+  if (status.isMockMode) {
+    return {
+      tone: 'info',
+      title: 'Development billing',
+      detail: 'This build can preview purchase UI, but real charges still depend on a native dev client and deployed validation.',
+    };
+  }
+
+  if (!status.validationAvailable) {
+    return {
+      tone: 'warning',
+      title: 'Validation required',
+      detail: 'Set EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL before enabling production purchases.',
+    };
+  }
+
+  return {
+    tone: 'warning',
+    title: 'Billing unavailable',
+    detail: 'Create a fresh native dev-client / EAS build to test real purchases in-app.',
+  };
+}
+
 // ─── Parental controls helper ────────────────────────────────────────────────
 
 interface ParentalCheckResult {
