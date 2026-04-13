@@ -31,13 +31,6 @@
         { "fieldPath": "toUserId", "order": "ASCENDING" },
         { "fieldPath": "claimed", "order": "ASCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "goals",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "active", "order": "ASCENDING" }
-      ]
     }
   ],
   "fieldOverrides": []
