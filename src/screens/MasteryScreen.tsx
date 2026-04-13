@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
-import { useSettings } from '../contexts/SettingsContext';
+import { useEconomy } from '../contexts/EconomyContext';
 import {
   MASTERY_REWARDS,
   MASTERY_MAX_TIER,
@@ -23,7 +23,7 @@ import {
   daysRemaining,
 } from '../data/masteryRewards';
 import { CollectionReward } from '../types';
-import { iapManager } from '../services/iap';
+import { useCommerce } from '../hooks/useCommerce';
 
 const { width } = Dimensions.get('window');
 
@@ -33,7 +33,8 @@ interface MasteryScreenProps {
 
 const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
   const player = usePlayer();
-  const settings = useSettings();
+  const economy = useEconomy();
+  const commerce = useCommerce();
 
   // Use puzzlesSolved * 100 as mastery XP proxy
   const masteryXP = (player.puzzlesSolved ?? 0) * 100;
@@ -41,7 +42,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
   const { current: tierProgress, needed: tierNeeded } = getXPProgressInTier(masteryXP);
   const progressPercent = Math.min(100, (tierProgress / tierNeeded) * 100);
 
-  const isPremium = settings.premiumPass;
+  const isPremium = economy.isPremiumPass;
   const seasonName = currentSeason();
   const days = daysRemaining();
 
@@ -53,9 +54,8 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
     if (isPremium || purchasingPass) return;
     setPurchasingPass(true);
     try {
-      const result = await iapManager.purchase('premium_pass');
+      const result = await commerce.purchaseProduct('premium_pass');
       if (result.success) {
-        settings.updateSetting('premiumPass', true);
         Alert.alert('Premium Unlocked!', 'You now have access to all premium rewards this season.');
       } else if (result.error && result.error !== 'User cancelled') {
         Alert.alert('Purchase Failed', result.error);
@@ -65,7 +65,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
     } finally {
       setPurchasingPass(false);
     }
-  }, [isPremium, purchasingPass, settings]);
+  }, [commerce, isPremium, purchasingPass]);
 
   // ── Render helpers ────────────────────────────────────────────────────
 

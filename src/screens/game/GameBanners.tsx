@@ -47,10 +47,30 @@ function GameBannersImpl({
   onRetryTap,
 }: GameBannersProps) {
   const isPlaying = status === 'playing';
+  const showGravityBanner = mode === 'gravityFlip' && gravityDirection !== 'down';
+  const showShrinkBanner = mode === 'shrinkingBoard' && wordsUntilShrink === 1 && isPlaying;
+  const showWildcardBanner = wildcardMode;
+  const showUndoBanner = isStuck && isPlaying && undosLeft > 0;
+  const showRetryBanner = isStuck && isPlaying && undosLeft <= 0;
+  const showIdleHelpBanner =
+    showIdleHint &&
+    !showUndoBanner &&
+    !showRetryBanner &&
+    !showWildcardBanner &&
+    isPlaying &&
+    hintsAvailable > 0;
+  const showAdHelpBanner =
+    showIdleHint &&
+    !showUndoBanner &&
+    !showRetryBanner &&
+    !showWildcardBanner &&
+    isPlaying &&
+    hintsAvailable === 0 &&
+    canShowAdHint;
 
   return (
     <>
-      {mode === 'gravityFlip' && gravityDirection !== 'down' && (
+      {showGravityBanner && (
         <View style={styles.cascadeBar}>
           <Text style={styles.cascadeText}>
             {'\uD83D\uDD04'} Gravity:{' '}
@@ -58,42 +78,42 @@ function GameBannersImpl({
           </Text>
         </View>
       )}
-      {mode === 'shrinkingBoard' && wordsUntilShrink === 1 && isPlaying && (
+      {showShrinkBanner && (
         <View style={[styles.cascadeBar, styles.cascadeBarCoral]}>
           <Text style={[styles.cascadeText, styles.cascadeTextCoral]}>
             {'\uD83D\uDD3B'} SHRINKING IN 1 WORD
           </Text>
         </View>
       )}
-      {wildcardMode && (
+      {showWildcardBanner && (
         <View style={[styles.cascadeBar, styles.cascadeBarGold]}>
           <Text style={[styles.cascadeText, styles.cascadeTextGold]}>
             {'\u2605'} Tap a cell to place wildcard
           </Text>
         </View>
       )}
-      {showIdleHint && hintsAvailable > 0 && isPlaying && (
+      {showIdleHelpBanner && (
         <Pressable style={styles.idleHintBanner} onPress={onIdleHintTap}>
           <Text style={styles.idleHintText}>
             Need help? Tap here or press {'\uD83D\uDCA1'} for a hint
           </Text>
         </Pressable>
       )}
-      {showIdleHint && hintsAvailable === 0 && isPlaying && canShowAdHint && (
+      {showAdHelpBanner && (
         <Pressable style={styles.adHintBanner} onPress={onAdHintTap}>
           <Text style={styles.adHintBannerText}>
             {'\uD83C\uDFAC'} Out of hints — watch ad for +1 hint
           </Text>
         </Pressable>
       )}
-      {isStuck && isPlaying && undosLeft > 0 && (
+      {showUndoBanner && (
         <Pressable style={styles.stuckBanner} onPress={onUndoTap}>
           <Text style={styles.stuckText}>
             Stuck? Tap here to undo your last move
           </Text>
         </Pressable>
       )}
-      {isStuck && isPlaying && undosLeft <= 0 && (
+      {showRetryBanner && (
         <Pressable style={[styles.stuckBanner, styles.stuckBannerRetry]} onPress={onRetryTap}>
           <Text style={styles.stuckText}>
             No moves left — tap to retry this puzzle

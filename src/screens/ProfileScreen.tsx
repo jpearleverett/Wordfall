@@ -26,7 +26,6 @@ import { LOCAL_IMAGES } from '../utils/localAssets';
 import {
   canPrestige,
   getPrestigeRewards,
-  getPrestigeMultiplier,
   getPrestigeSummary,
   PRESTIGE_LEVELS,
 } from '../data/prestigeSystem';
@@ -310,8 +309,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <Text style={styles.prestigeBadgeIcon}>{prestigeDef.icon}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.prestigeBadgeLabel}>{prestigeDef.label}</Text>
-                <Text style={styles.prestigeBadgeMultiplier}>
-                  {prestigeDef.xpMultiplier}x XP Multiplier
+              <Text style={styles.prestigeBadgeMultiplier}>
+                  Permanent prestige bonuses unlocked
                 </Text>
               </View>
               <Text style={styles.prestigeBadgeCount}>
@@ -333,13 +332,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               style={styles.prestigeButton}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel={`Prestige to ${nextDef.label}. Resets level to 1, earns ${nextDef.xpMultiplier}x XP multiplier`}
+              accessibilityLabel={`Prestige to ${nextDef.label}. Resets level to 1 and unlocks permanent prestige bonuses`}
               onPress={() => {
                 Alert.alert(
                   `Prestige to ${nextDef.label}?`,
                   `This will reset your level to 1 but you keep all cosmetics.\n\n` +
                   `You'll earn:\n` +
-                  `  ${nextDef.icon} ${nextDef.xpMultiplier}x XP multiplier\n` +
+                  `  ${nextDef.icon} ${nextDef.label} prestige bonuses\n` +
                   `  Exclusive ${nextDef.cosmeticReward.type}\n` +
                   summary.gains.map((g) => `  ${g}`).join('\n') +
                   `\n\nThis cannot be undone.`,
@@ -349,8 +348,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       text: 'PRESTIGE',
                       style: 'destructive',
                       onPress: () => {
-                        // Prestige logic would be wired in PlayerContext later
-                        Alert.alert('Coming Soon', 'Prestige system will be fully wired in a future update.');
+                        const success = playerContext.performPrestige?.();
+                        if (!success) {
+                          Alert.alert('Prestige Unavailable', 'Reach the required level before prestiging.');
+                        }
                       },
                     },
                   ],
@@ -367,7 +368,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <View style={{ flex: 1 }}>
                 <Text style={styles.prestigeButtonTitle}>PRESTIGE</Text>
                 <Text style={styles.prestigeButtonSub}>
-                  Reset to Level 1 {'\u2022'} Keep cosmetics {'\u2022'} Earn {nextDef.xpMultiplier}x XP {'\u2022'} Unlock {nextDef.label} frame
+                  Reset to Level 1 {'\u2022'} Keep cosmetics {'\u2022'} Unlock permanent bonuses {'\u2022'} Claim {nextDef.label} rewards
                 </Text>
               </View>
             </TouchableOpacity>

@@ -80,6 +80,7 @@ export interface GameState {
     smartShuffle: number;
   };
   lastInvalidTap: CellPosition | null;
+  lastSelectionResetTap: CellPosition | null;
   solveSequence: SolveStep[];
   puzzleStartTime: number;
   scoreDoubler: boolean;

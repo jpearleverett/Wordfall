@@ -114,8 +114,8 @@ User reviews and merges via GitHub PR. Exception: tiny config-only fixes (packag
 | Firebase | `EXPO_PUBLIC_FIREBASE_*` env vars | App runs fully offline (AsyncStorage only) |
 | Sentry | `EXPO_PUBLIC_SENTRY_DSN` | Console logging |
 | AdMob | `EXPO_PUBLIC_ADMOB_REWARDED_ID` | `MockAdModal` component |
-| IAP products | Register `wordfall_*` IDs in App Store Connect / Play Console | Mock mode (grants rewards locally, no charge) |
-| Firestore rules + indexes | Create `firebase.json`, then `firebase deploy --only firestore:rules,firestore:indexes` | Rules file exists at `firestore.rules`, indexes at `firestore.indexes.json` — NOT deployed |
+| IAP products | Register `wordfall_*` IDs in App Store Connect / Play Console | Production purchases are gated off until store products and server validation are configured |
+| Firestore rules + indexes | `firebase.json` is in the repo root; run the helper script or `firebase deploy --only firestore:rules,firestore:indexes` | Rules file exists at `firestore.rules`, indexes at `firestore.indexes.json` — still requires deployment |
 | Cloud Functions | `cd functions && firebase deploy` and `cd cloud-functions && firebase deploy` | Club goals, leaderboards, IAP validation don't run |
 | Audio assets | Drop `.mp3` files in `assets/audio/` | Synthesized tones |
 
@@ -123,8 +123,6 @@ EAS project already configured (`projectId: b6dd187c-d46c-4331-bb15-5c7ffced89b3
 
 ## Still Needs Work
 
-- Re-add `react-native-iap` via config plugin (Gradle variant fix)
-- Create `firebase.json` and deploy Firestore rules + indexes
 - Deploy both `cloud-functions/` and `functions/` directories (or consolidate)
 - iOS Universal Links (scheme works; HTTPS needs domain + apple-app-site-association)
 - E2E tests (Detox/Maestro — unit coverage is strong with 779 tests)

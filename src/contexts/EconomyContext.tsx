@@ -4,10 +4,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
+import { useSettings } from './SettingsContext';
 import { LIVES } from '../constants';
 import { AdRewardType, AD_REWARD_VALUES } from '../services/ads';
-import { getProductById, ProductRewards } from '../data/shopProducts';
+import { getProductById } from '../data/shopProducts';
 import { getVipStreakBonus } from '../data/vipBenefits';
+import {
+  activateTemporaryEntitlement,
+  applyCatalogPurchase,
+  CommercialEffectId,
+  CommercialPurchaseRecord,
+  isTemporaryEntitlementActive,
+  LEGACY_ENTITLEMENT_MIGRATION_VERSION,
+  migrateLegacyEntitlements,
+  PlayerGrantSummary,
+  PurchaseFulfillmentOptions,
+} from '../services/commercialEntitlements';
 
 interface Economy {
   coins: number;
@@ -27,13 +39,7 @@ interface TotalEarned {
   libraryPoints: number;
 }
 
-interface PurchaseRecord {
-  id: string;
-  item: string;
-  currency: string;
-  amount: number;
-  timestamp: number;
-}
+type PurchaseRecord = CommercialPurchaseRecord;
 
 interface LivesData {
   current: number;
@@ -65,6 +71,10 @@ interface IAPState {
   vipStreakBonusClaimed: boolean;
   /** Timestamp of last VIP streak check/increment */
   vipStreakLastChecked: number;
+  /** Time-bound temporary effects and rentals */
+  temporaryEntitlements: Partial<Record<CommercialEffectId, number>>;
+  /** One-time migration guard for legacy settings-owned entitlements */
+  entitlementMigrationVersion: number;
 }
 
 interface EconomyState extends Economy, IAPState {
@@ -98,6 +108,10 @@ interface EconomyContextType extends Economy {
   isAdFree: boolean;
   // IAP
   processPurchase: (productId: string) => void;
+  applyValidatedPurchase: (
+    productId: string,
+    options?: PurchaseFulfillmentOptions,
+  ) => { grants: PlayerGrantSummary; applied: boolean };
   isPremiumPass: boolean;
   dailyValuePackExpiry: number;
   starterPackAvailable: boolean;
@@ -115,6 +129,9 @@ interface EconomyContextType extends Economy {
   checkVipStreak: () => number;
   claimVipStreakBonus: () => boolean;
   addLives: (count: number) => void;
+  hasTemporaryEntitlement: (effectId: CommercialEffectId) => boolean;
+  getTemporaryEntitlementExpiry: (effectId: CommercialEffectId) => number;
+  grantTemporaryEntitlement: (effectId: CommercialEffectId, durationMinutes: number) => void;
 }
 
 const STORAGE_KEY = '@wordfall_economy';
@@ -154,6 +171,8 @@ const DEFAULT_ECONOMY: EconomyState = {
   vipStreakWeeks: 0,
   vipStreakBonusClaimed: false,
   vipStreakLastChecked: 0,
+  temporaryEntitlements: {},
+  entitlementMigrationVersion: 0,
 };
 
 /** Calculate how many lives should have refilled since lastRefillTime. */
@@ -197,6 +216,7 @@ const EconomyContext = createContext<EconomyContextType>({
   processAdReward: () => {},
   isAdFree: false,
   processPurchase: () => {},
+  applyValidatedPurchase: () => ({ grants: { cosmetics: [], decorations: [] }, applied: false }),
   isPremiumPass: false,
   dailyValuePackExpiry: 0,
   starterPackAvailable: true,
@@ -214,10 +234,14 @@ const EconomyContext = createContext<EconomyContextType>({
   checkVipStreak: () => 0,
   claimVipStreakBonus: () => false,
   addLives: () => {},
+  hasTemporaryEntitlement: () => false,
+  getTemporaryEntitlementExpiry: () => 0,
+  grantTemporaryEntitlement: () => {},
 });
 
 export function EconomyProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const settings = useSettings();
   const [state, setState] = useState<EconomyState>(DEFAULT_ECONOMY);
   const [loaded, setLoaded] = useState(false);
 
@@ -274,6 +298,25 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
 
     syncFromFirestore();
   }, [user, loaded]);
+
+  // One-time migration from legacy settings-owned purchase flags.
+  useEffect(() => {
+    if (!loaded || !settings.loaded) return;
+    if (state.entitlementMigrationVersion >= LEGACY_ENTITLEMENT_MIGRATION_VERSION) return;
+
+    setState((prev) =>
+      migrateLegacyEntitlements(prev, {
+        adsRemoved: settings.adsRemoved,
+        premiumPass: settings.premiumPass,
+      }).nextState
+    );
+  }, [
+    loaded,
+    settings.loaded,
+    settings.adsRemoved,
+    settings.premiumPass,
+    state.entitlementMigrationVersion,
+  ]);
 
   // Debounce persistence. Economy state churns many times per puzzle (currency,
   // life tick, booster counts, etc.) — writing to AsyncStorage + Firestore on
@@ -548,77 +591,43 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return success;
   }, []);
 
-  // ── IAP purchase processing ───────────────────────────────────────────────
+  // ── Purchase fulfilment ───────────────────────────────────────────────────
 
-  const processPurchase = useCallback((productId: string) => {
-    const product = getProductById(productId);
-    if (!product) {
-      console.warn('[Economy] Unknown product for processPurchase:', productId);
-      return;
-    }
-
-    const rewards = product.rewards;
+  const applyValidatedPurchase = useCallback((
+    productId: string,
+    options: PurchaseFulfillmentOptions = {},
+  ): { grants: PlayerGrantSummary; applied: boolean } => {
+    let grants: PlayerGrantSummary = { cosmetics: [], decorations: [] };
+    let applied = false;
 
     setState((prev) => {
-      const next = { ...prev };
-
-      // Award currencies
-      if (rewards.coins) {
-        next.coins += rewards.coins;
-        next.totalEarned = { ...next.totalEarned, coins: next.totalEarned.coins + rewards.coins };
-      }
-      if (rewards.gems) {
-        next.gems += rewards.gems;
-        next.totalEarned = { ...next.totalEarned, gems: next.totalEarned.gems + rewards.gems };
-      }
-      if (rewards.hintTokens) {
-        next.hintTokens += rewards.hintTokens;
-        next.totalEarned = { ...next.totalEarned, hintTokens: next.totalEarned.hintTokens + rewards.hintTokens };
-      }
-      if (rewards.undoTokens) {
-        next.undoTokens += rewards.undoTokens;
-      }
-
-      // Set flags (premiumPass, adsRemoved, vipSubscriber)
-      if (rewards.flags) {
-        if (rewards.flags.premiumPass) {
-          next.isPremiumPassFlag = true;
-        }
-        if (rewards.flags.adsRemoved) {
-          next.isAdFreeFlag = true;
-        }
-        if (rewards.flags.vipSubscriber) {
-          next.isVipSubscriber = true;
-          next.vipExpiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
-          next.vipDailyLastClaim = ''; // reset so they can claim today
-        }
-      }
-
-      // Daily value pack — set expiry
-      if (rewards.dripDays) {
-        next.dailyValuePackExpiry = Date.now() + rewards.dripDays * 24 * 60 * 60 * 1000;
-        next.dailyValuePackLastClaim = ''; // reset so they can claim today
-      }
-
-      // Record purchase in history
-      next.purchaseHistory = [
-        ...next.purchaseHistory,
-        {
-          id: `iap_${productId}_${Date.now()}`,
-          item: productId,
-          currency: 'USD',
-          amount: product.fallbackPriceAmount,
-          timestamp: Date.now(),
-        },
-      ];
-
-      return next;
+      const result = applyCatalogPurchase(prev, productId, options);
+      grants = result.grants;
+       applied = result.applied;
+      return result.nextState;
     });
 
-    // Note: decorations and boosters from rewards need to be handled by
-    // the caller (e.g. PlayerContext) since EconomyContext doesn't manage those.
-    console.log(`[Economy] Processed purchase: ${productId}`);
+    return { grants, applied };
   }, []);
+
+  const processPurchase = useCallback((productId: string) => {
+    void applyValidatedPurchase(productId, { source: 'purchase' });
+  }, [applyValidatedPurchase]);
+
+  const grantTemporaryEntitlement = useCallback((
+    effectId: CommercialEffectId,
+    durationMinutes: number,
+  ): void => {
+    setState((prev) => activateTemporaryEntitlement(prev, effectId, durationMinutes));
+  }, []);
+
+  const hasTemporaryEntitlement = useCallback((effectId: CommercialEffectId): boolean => {
+    return isTemporaryEntitlementActive(state.temporaryEntitlements, effectId);
+  }, [state.temporaryEntitlements]);
+
+  const getTemporaryEntitlementExpiry = useCallback((effectId: CommercialEffectId): number => {
+    return state.temporaryEntitlements[effectId] ?? 0;
+  }, [state.temporaryEntitlements]);
 
   /** Claim today's daily value pack drip rewards. Returns true if claimed. */
   const claimDailyValuePackDrip = useCallback((): boolean => {
@@ -772,6 +781,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
 
   // Compute active VIP status (subscribed and not expired)
   const isVipActive = state.isVipSubscriber && state.vipExpiresAt > Date.now();
+  const hasVipExperience = isTemporaryEntitlementActive(state.temporaryEntitlements, 'vip_experience');
 
   const currentLives = computeRefilledLives(state.lives).current;
   const nextLifeTime = currentLives < LIVES.max
@@ -805,8 +815,9 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       refillLives,
       getTimeUntilNextLife,
       processAdReward,
-      isAdFree: state.isAdFreeFlag || isVipActive,
+      isAdFree: state.isAdFreeFlag || isVipActive || hasVipExperience,
       processPurchase,
+      applyValidatedPurchase,
       isPremiumPass: state.isPremiumPassFlag,
       dailyValuePackExpiry: state.dailyValuePackExpiry,
       starterPackAvailable: state.starterPackExpiresAt > Date.now(),
@@ -824,6 +835,9 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       checkVipStreak,
       claimVipStreakBonus,
       addLives,
+      hasTemporaryEntitlement,
+      getTemporaryEntitlementExpiry,
+      grantTemporaryEntitlement,
     }),
     [
       state,
@@ -844,7 +858,9 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       refillLives,
       getTimeUntilNextLife,
       processAdReward,
+      hasVipExperience,
       processPurchase,
+      applyValidatedPurchase,
       activateStarterPack,
       addUndoTokens,
       spendUndoToken,
@@ -855,6 +871,9 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       checkVipStreak,
       claimVipStreakBonus,
       addLives,
+      hasTemporaryEntitlement,
+      getTemporaryEntitlementExpiry,
+      grantTemporaryEntitlement,
     ],
   );
 

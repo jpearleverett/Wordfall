@@ -93,6 +93,7 @@
     },
     "plugins": [
       "expo-font",
+      "react-native-iap",
       [
         "expo-notifications",
         {
@@ -103,7 +104,15 @@
       ],
       "expo-video",
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.2.0"
+          }
+        }
+      ]
     ],
     "experiments": {
       "reactCompiler": true

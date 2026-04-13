@@ -515,6 +515,21 @@ export function HomeScreen({
         </Pressable>
       )}
 
+      {!nextGuidedMilestone && playerStage === 'early' && (
+        <View style={styles.earlyGuidanceCard}>
+          <LinearGradient
+            colors={['rgba(0,212,255,0.16)', 'rgba(0,212,255,0.06)'] as [string, string]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+          <Text style={styles.earlyGuidanceLabel}>NEXT UP</Text>
+          <Text style={styles.earlyGuidanceText}>
+            Solve a few more puzzles to unlock more modes, better rewards, and your next library milestone.
+          </Text>
+        </View>
+      )}
+
       {/* Active Event Banners */}
       {activeEventBanners.length > 0 && (
         <Animated.View
@@ -1920,5 +1935,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.display,
     letterSpacing: 1,
+  },
+  earlyGuidanceCard: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: 'rgba(0, 212, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 212, 255, 0.18)',
+  },
+  earlyGuidanceLabel: {
+    color: COLORS.accent,
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    letterSpacing: 1.2,
+    marginBottom: 6,
+  },
+  earlyGuidanceText: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FONTS.bodyMedium,
   },
 });

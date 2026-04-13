@@ -412,6 +412,7 @@ export function GameScreen({
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const perfectRun = useStore(store, s => s.perfectRun);
   const lastInvalidTap = useStore(store, s => s.lastInvalidTap);
+  const lastSelectionResetTap = useStore(store, s => s.lastSelectionResetTap);
   const boardFreezeActive = useStore(store, s => s.boardFreezeActive);
   const scoreDoubler = useStore(store, s => s.scoreDoubler);
 
@@ -484,8 +485,12 @@ export function GameScreen({
   const closeFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // post_puzzle: track whether to show after completion dismissal
   const [pendingPostPuzzleOffer, setPendingPostPuzzleOffer] = useState(false);
+  // Post-loss modal state
+  const [showPostLoss, setShowPostLoss] = useState(false);
+  const postLossShownRef = useRef(false);
   // booster_pack: only show once per level on first entry to hard/expert
   const boosterPackShown = useRef(false);
+  const offerSuppressed = showModeTutorial || showComplete || showPostLoss || showFailed || activeOffer !== null;
 
   // --- Rewarded Ad state ---
   const [mockAdState, setMockAdState] = useState<{
@@ -542,7 +547,7 @@ export function GameScreen({
   }, [activeOffer, level, mode, difficulty]);
 
   const showOfferIfAllowed = useCallback((type: OfferType) => {
-    if (offerShownThisLevel.current || activeOffer) return false;
+    if (offerShownThisLevel.current || offerSuppressed) return false;
     offerShownThisLevel.current = true;
     trackTimeout(() => {
       setActiveOffer(type);
@@ -554,11 +559,12 @@ export function GameScreen({
       });
     }, 750);
     return true;
-  }, [activeOffer, level, mode, difficulty, trackTimeout]);
+  }, [offerSuppressed, level, mode, difficulty, trackTimeout]);
 
   // booster_pack: show on first entry to a hard/expert level
   useEffect(() => {
     if (boosterPackShown.current) return;
+    if (player.puzzlesSolved < 8) return;
     if (difficulty === 'hard' || difficulty === 'expert') {
       const levelsPlayed = player.failCountByLevel ?? {};
       const previouslyPlayed = (levelsPlayed[level] ?? 0) > 0;
@@ -567,7 +573,7 @@ export function GameScreen({
         showOfferIfAllowed('booster_pack');
       }
     }
-  }, [level, difficulty, player.failCountByLevel, showOfferIfAllowed]);
+  }, [level, difficulty, player.failCountByLevel, player.puzzlesSolved, showOfferIfAllowed]);
 
   // close_finish: watch for 1 word remaining + stuck or idle 15s
   useEffect(() => {
@@ -859,7 +865,7 @@ export function GameScreen({
     ]).start(() => setShowInvalidFlash(false));
   }, [invalidFlashAnim]);
 
-  // Trigger invalid flash when a non-adjacent cell is tapped
+  // Trigger invalid flash only for true invalid-tap errors.
   useEffect(() => {
     if (lastInvalidTap) {
       showInvalidFlashAnim();
@@ -1209,10 +1215,6 @@ export function GameScreen({
     setGridAreaHeight(0);
   }, [board]);
 
-  // Post-loss modal state
-  const [showPostLoss, setShowPostLoss] = useState(false);
-  const postLossShownRef = useRef(false);
-
   // Show post-loss modal first (if applicable), then failed modal
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && !showFailed) {
@@ -1327,7 +1329,7 @@ export function GameScreen({
     setShowComplete(false);
     completionHandled.current = false;
     // post_puzzle: show hint upsell if player used all free hints
-    if (pendingPostPuzzleOffer && !offerShownThisLevel.current) {
+    if (pendingPostPuzzleOffer && !offerShownThisLevel.current && !offerSuppressed) {
       setPendingPostPuzzleOffer(false);
       showOfferIfAllowed('post_puzzle');
       // Still proceed to next level after a brief delay for the offer to appear
@@ -1335,7 +1337,7 @@ export function GameScreen({
     } else {
       onNextLevel();
     }
-  }, [onNextLevel, pendingPostPuzzleOffer, showOfferIfAllowed, trackTimeout]);
+  }, [onNextLevel, pendingPostPuzzleOffer, offerSuppressed, showOfferIfAllowed, trackTimeout]);
 
   // First-booster ceremony (fires once ever, tracked via tooltipsShown)
   const checkFirstBooster = useCallback(() => {

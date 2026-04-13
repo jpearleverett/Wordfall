@@ -577,17 +577,15 @@ No continuous animation loops run on idle tiles.
 
 ### Needs External Setup
 - **Firebase credentials** — set `EXPO_PUBLIC_FIREBASE_*` env vars to enable Analytics, Firestore social, leaderboards. Without them, all services gracefully fall back to local-only mode
-- **Firebase Cloud Functions URL** — set `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` for server-side receipt validation. Without it, receipts are validated client-side only
+- **Firebase Cloud Functions URL** — set `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` for server-side receipt validation. Without it, receipts are validated client-side only in development and fail closed in production
 - **Sentry DSN** — set `EXPO_PUBLIC_SENTRY_DSN` for production crash reporting. Without it, crash reporter uses console-only mode
 - **AdMob ad unit IDs** — set `EXPO_PUBLIC_ADMOB_REWARDED_ID` env var. Without it, MockAdModal (simulated 5s countdown) is used for rewarded, instant-resolve for interstitials
-- **App Store / Play Store IAP products** — register 50+ product IDs (in shopProducts.ts incl. VIP weekly + whale tiers + 3 mega bundles, prefixed `wordfall_`) in store consoles. Without store config, IAP runs in mock mode
-- **EAS project ID** — run `eas init` to generate a real project ID (currently placeholder `wordfall-production` in app.json)
+- **App Store / Play Store IAP products** — register 50+ product IDs (in `shopProducts.ts`, incl. VIP weekly + whale tiers + 3 mega bundles, prefixed `wordfall_`) in store consoles. Without store config, IAP remains unavailable in production builds
 - **Professional audio assets** — place .mp3 files in `assets/audio/` per the README there. Synthesized tones remain as fallback
 
 ### Scaffolded / Needs Work
-- **`react-native-iap` is removed** — re-add via config plugin that patches `android/app/build.gradle` to resolve the amazon/play product flavor variant ambiguity
 - **Assets optimized** — already run; `assets/` is now ~24MB (down from 44MB). PNGs converted to WebP, video compressed
-- **Firestore rules + indexes exist but aren't deployed** — `firestore.rules` and `firestore.indexes.json` are at the repo root; need a `firebase.json` referencing them, then `firebase deploy --only firestore:rules,firestore:indexes`
+- **Firestore rules + indexes need deployment** — root `firebase.json` now references `firestore.rules` and `firestore.indexes.json`; run the root helper scripts or `firebase deploy --only firestore:rules,firestore:indexes`
 - **Two cloud function directories exist, neither deployed**:
   - `cloud-functions/` — club goal tracking, leaderboard updates, push notifications, streak reminders, club goal rotation (5 functions, production-ready)
   - `functions/` — `validateReceipt`, subscription renewal, club goal progress, auto-kick inactive members (newer; IAP/subscription focused)
@@ -600,7 +598,7 @@ No continuous animation loops run on idle tiles.
 - **Prestige system is fully wired** — `performPrestige()` in `PlayerContext.tsx` resets level/stars/chapters/modeLevels, unlocks the cosmetic reward, and queues a ceremony. `canPrestige()` gate via `getPrestigeInfo()`. Previously listed as "needs wiring" — this is no longer accurate
 - **Professional audio assets** — synthesized tones are functional but artificial. Place .mp3 files in `assets/audio/` for premium feel
 - **Ad mediation SDK** — currently AdMob only (or mock). No ironSource/MAX mediation
-- **Server-side receipt validation endpoint** — implemented in `functions/src/index.ts` as `validateReceipt`, needs deployment. Set `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` after deployment
+- **Server-side receipt validation endpoint** — implemented in `functions/src/index.ts` as `validateReceipt`, still needs deployment. Set `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` after deployment
 - **Dev client rebuild required for native dep changes** — Expo Go is not supported. `eas build --profile development --platform android` (see CLAUDE.md for the full dev client workflow and Termux notes)
 
 ## Common Patterns

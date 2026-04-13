@@ -89,6 +89,7 @@ function createInitialState(
       smartShuffle: 0,
     },
     lastInvalidTap: null,
+    lastSelectionResetTap: null,
     solveSequence: [],
     puzzleStartTime: Date.now(),
     scoreDoubler: false,
@@ -249,6 +250,7 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
       selectedCells: newSelected,
       selectionDirection: newSelected.length < 2 ? null : selectionDirection,
       lastInvalidTap: null,
+      lastSelectionResetTap: null,
     };
   }
 
@@ -259,6 +261,7 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
       selectedCells: [position],
       selectionDirection: null,
       lastInvalidTap: null,
+      lastSelectionResetTap: null,
     };
   }
 
@@ -275,7 +278,8 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
       ...state,
       selectedCells: [position],
       selectionDirection: null,
-      lastInvalidTap: position,
+      lastInvalidTap: null,
+      lastSelectionResetTap: position,
     };
   }
 
@@ -285,6 +289,7 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
     selectedCells: newSelected,
     selectionDirection: newDir,
     lastInvalidTap: null,
+    lastSelectionResetTap: null,
   };
 }
 
@@ -314,6 +319,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectedCells: [],
         selectionDirection: null,
         lastInvalidTap: null,
+        lastSelectionResetTap: null,
         spotlightActive: false,
         spotlightLetters: [],
       };
