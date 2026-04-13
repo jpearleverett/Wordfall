@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
 
 usage() {
   echo "Usage: $0 [commerce|social|all]"
@@ -14,27 +15,25 @@ if [[ "${TARGET}" == "--help" || "${TARGET}" == "-h" ]]; then
   usage
 fi
 
-deploy_dir() {
+install_and_build() {
   local dir="$1"
-  echo "==> Deploying Firebase Functions from ${dir}"
-  (
-    cd "${ROOT_DIR}/${dir}"
-    npm install
-    npm run build
-    npm run deploy
-  )
+  echo "==> Installing and building ${dir}"
+  (cd "${ROOT_DIR}/${dir}" && npm install && npm run build)
 }
 
 case "${TARGET}" in
   commerce)
-    deploy_dir "functions"
+    install_and_build "functions"
+    firebase deploy --only functions:commerce
     ;;
   social)
-    deploy_dir "cloud-functions"
+    install_and_build "cloud-functions"
+    firebase deploy --only functions:social
     ;;
   all)
-    deploy_dir "functions"
-    deploy_dir "cloud-functions"
+    install_and_build "functions"
+    install_and_build "cloud-functions"
+    firebase deploy --only functions
     ;;
   *)
     usage
