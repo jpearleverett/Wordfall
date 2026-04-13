@@ -20,6 +20,12 @@ interface GameHeaderProps {
   mode?: GameMode;
   maxMoves?: number;
   timeRemaining?: number;
+  themeColors?: {
+    bg: string;
+    surface: string;
+    accent: string;
+    cellSelected: string;
+  };
   onHint: () => void;
   onUndo: () => void;
   onBack: () => void;
@@ -38,12 +44,17 @@ export const GameHeader = React.memo(function GameHeader({
   mode = 'classic',
   maxMoves = 0,
   timeRemaining = 0,
+  themeColors,
   onHint,
   onUndo,
   onBack,
 }: GameHeaderProps) {
   const insets = useSafeAreaInsets();
   const modeConfig = MODE_CONFIGS[mode];
+  const accentColor = themeColors?.accent ?? COLORS.accent;
+  const surfaceColor = themeColors?.surface ?? '#1a0a2e';
+  const bgColor = themeColors?.bg ?? '#0a0015';
+  const selectedColor = themeColors?.cellSelected ?? accentColor;
   const modeLabel = isDaily ? 'Daily' : mode !== 'classic' ? modeConfig.name : `Lv ${level}`;
   const progress = totalWords > 0 ? (foundWords / totalWords) * 100 : 0;
   const scoreScale = useSharedValue(1);
@@ -74,7 +85,7 @@ export const GameHeader = React.memo(function GameHeader({
     <View style={[styles.wrapper, { paddingTop: Math.max(insets.top, 6) + 4 }]}>
       <View style={styles.chromeCard}>
         <LinearGradient
-          colors={GRADIENTS.header as unknown as [string, string, ...string[]]}
+          colors={[surfaceColor, bgColor] as [string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
@@ -133,6 +144,7 @@ export const GameHeader = React.memo(function GameHeader({
               style={[
                 styles.scoreValue,
                 scoreStyle,
+                  { color: accentColor, textShadowColor: `${accentColor}AA` },
               ]}
             >
               {score.toLocaleString()}
@@ -178,6 +190,7 @@ export const GameHeader = React.memo(function GameHeader({
                   styles.hintButton,
                   hintsLeft <= 0 && styles.actionDisabled,
                   pressed && styles.btnPressed,
+                  { borderColor: `${selectedColor}45` },
                 ]}
                 onPress={onHint}
                 disabled={hintsLeft <= 0}
@@ -185,12 +198,12 @@ export const GameHeader = React.memo(function GameHeader({
                 accessibilityHint="Reveals the next word to find"
               >
                 <LinearGradient
-                  colors={['rgba(255,215,0,0.18)', 'rgba(255,215,0,0.06)'] as [string, string]}
+                  colors={[`${selectedColor}33`, `${selectedColor}14`] as [string, string]}
                   style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]}
                 />
                 {/* Glow beam from bulb */}
                 {hintsLeft > 0 && (
-                  <View style={styles.hintGlow} />
+                  <View style={[styles.hintGlow, { backgroundColor: `${selectedColor}44` }]} />
                 )}
                 <Image source={LOCAL_IMAGES.iconHint} style={{ width: 22, height: 22 }} resizeMode="contain" />
                 {hintsLeft > 0 && (
@@ -205,7 +218,7 @@ export const GameHeader = React.memo(function GameHeader({
 
         {/* Animated progress bar */}
         <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, progressBarStyle, { backgroundColor: modeConfig.color }]}>
+          <Animated.View style={[styles.progressFill, progressBarStyle, { backgroundColor: selectedColor }]}>
             {/* Shimmer on progress fill */}
             <View style={styles.progressShimmer} />
           </Animated.View>
@@ -216,8 +229,8 @@ export const GameHeader = React.memo(function GameHeader({
                 styles.progressGlowDot,
                 {
                   left: `${progress}%` as any,
-                  backgroundColor: modeConfig.color,
-                  shadowColor: modeConfig.color,
+                  backgroundColor: selectedColor,
+                  shadowColor: selectedColor,
                 },
               ]}
             />
