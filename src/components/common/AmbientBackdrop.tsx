@@ -9,6 +9,11 @@ import SynthwaveHomeBackdrop from '../home/SynthwaveHomeBackdrop';
 
 interface AmbientBackdropProps {
   variant?: 'home' | 'library' | 'game' | 'collections' | 'profile' | 'shop' | 'leaderboard' | 'event' | 'mastery' | 'modes' | 'settings' | 'club';
+  colorOverride?: {
+    bg?: string;
+    surface?: string;
+    accent?: string;
+  };
 }
 
 function NebulaOrb({
@@ -132,13 +137,21 @@ function getLocalBg(variant: string) {
   }
 }
 
-export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
+export function AmbientBackdrop({ variant = 'home', colorOverride }: AmbientBackdropProps) {
   // Gate animated children on focus. When the screen is not focused, render a
   // static version (just bg image + gradients) so we don't burn CPU/GPU running
   // 3 nebula orbs + 12 twinkling stars on every inactive screen in the stack/tabs.
   const isFocused = useIsFocused();
 
   if (variant === 'game') {
+    const gameGradient = [
+      colorOverride?.bg ?? '#050008',
+      colorOverride?.surface ?? '#0d0020',
+      colorOverride?.accent ?? '#1a0533',
+      colorOverride?.surface ?? '#2a0845',
+      colorOverride?.accent ?? '#1a0533',
+      colorOverride?.bg ?? '#0d0020',
+    ] as [string, string, ...string[]];
     // Game screen gets a STATIC backdrop — just the sky gradient + bg image.
     // Previously this rendered SynthwaveBackdrop with a looping H.264 video,
     // an animated NeonSun, a scrolling perspective grid, and 10-25 twinkling
@@ -149,7 +162,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
     return (
       <View pointerEvents="none" style={styles.container}>
         <LinearGradient
-          colors={['#050008', '#0d0020', '#1a0533', '#2a0845', '#1a0533', '#0d0020'] as [string, string, ...string[]]}
+          colors={gameGradient}
           locations={[0, 0.15, 0.3, 0.42, 0.55, 1]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -166,7 +179,7 @@ export function AmbientBackdrop({ variant = 'home' }: AmbientBackdropProps) {
           resizeMode="cover"
         />
         <LinearGradient
-          colors={['transparent', 'rgba(10,0,21,0.75)'] as [string, string]}
+          colors={['transparent', `${colorOverride?.bg ?? '#0a0015'}CC`] as [string, string]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={styles.bottomFade}

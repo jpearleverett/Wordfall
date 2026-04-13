@@ -25,6 +25,7 @@ import {
   triggerFriendBeatScoreNotification,
 } from '../services/notificationTriggers';
 import { firestoreService } from '../services/firestore';
+import { getTitleLabel } from '../data/cosmetics';
 
 // Helper: get difficulty name for a level
 function getDifficultyForLevel(level: number): string {
@@ -680,7 +681,7 @@ export function useRewardWiring({
       : '';
 
     // Firestore social layer: submit scores + sync profile
-    const displayName = player.equippedTitle || 'Player';
+    const displayName = getTitleLabel(player.equippedTitle) || 'Player';
 
     if (isDaily && userId) {
       void firestoreService.submitDailyScore(userId, score, stars, level, displayName);

@@ -109,7 +109,11 @@ const EventScreen: React.FC<EventScreenProps> = ({
   const handleClaimExclusiveReward = useCallback(() => {
     if (!exclusiveReward || !primaryEvent) return;
 
-    player.unlockCosmetic(exclusiveReward.id);
+    if (exclusiveReward.type === 'decoration') {
+      player.unlockDecoration(exclusiveReward.id);
+    } else {
+      player.unlockCosmetic(exclusiveReward.id);
+    }
     eventManager.claimExclusiveReward(primaryEvent.id);
 
     Animated.sequence([
@@ -124,7 +128,9 @@ const EventScreen: React.FC<EventScreenProps> = ({
   // Exclusive reward claim state
   const goldTierReached = primaryEvent?.rewards?.find(r => r.tier === 'gold')?.reached ?? false;
   const exclusiveAlreadyClaimed = exclusiveReward
-    ? player.unlockedCosmetics.includes(exclusiveReward.id)
+    ? exclusiveReward.type === 'decoration'
+      ? player.ownedDecorations.includes(exclusiveReward.id)
+      : player.unlockedCosmetics.includes(exclusiveReward.id)
     : false;
   const canClaimExclusive = goldTierReached && !exclusiveAlreadyClaimed && !!exclusiveReward;
 

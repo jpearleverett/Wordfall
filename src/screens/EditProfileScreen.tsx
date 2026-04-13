@@ -13,7 +13,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { usePlayer } from '../contexts/PlayerContext';
-import { PROFILE_FRAMES, PROFILE_TITLES, COSMETIC_THEMES } from '../data/cosmetics';
+import {
+  PROFILE_FRAMES,
+  PROFILE_TITLES,
+  COSMETIC_THEMES,
+  getTitle,
+  getTitleLabel,
+} from '../data/cosmetics';
 import { ProfileFrame, ProfileTitle, CosmeticTheme } from '../types';
 
 const { width } = Dimensions.get('window');
@@ -31,6 +37,26 @@ interface EditProfileScreenProps {
 
 const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => {
   const player = usePlayer();
+  const equippedThemeData = useMemo(
+    () => COSMETIC_THEMES.find((theme) => theme.id === player.equippedTheme) ?? COSMETIC_THEMES[0],
+    [player.equippedTheme],
+  );
+  const equippedTitleLabel = useMemo(
+    () => getTitleLabel(player.equippedTitle),
+    [player.equippedTitle],
+  );
+  const previewGradients = useMemo(
+    () =>
+      [
+        `${equippedThemeData.colors.surface}EE`,
+        `${equippedThemeData.colors.bg}F8`,
+      ] as [string, string],
+    [equippedThemeData],
+  );
+  const playerName = useMemo(() => {
+    const title = getTitle(player.equippedTitle);
+    return title?.title === 'Newcomer' ? 'Player' : 'Player';
+  }, [player.equippedTitle]);
 
   const isOwned = useCallback(
     (id: string) =>
@@ -57,7 +83,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
     const owned: ProfileTitle[] = [];
     const locked: ProfileTitle[] = [];
     for (const t of PROFILE_TITLES) {
-      if (t.title === player.equippedTitle) equipped.push(t);
+      if (t.id === player.equippedTitle) equipped.push(t);
       else if (isOwned(t.id)) owned.push(t);
       else locked.push(t);
     }
@@ -82,7 +108,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
   );
 
   const frameRarityColor = RARITY_COLORS[equippedFrameData.rarity] ?? COLORS.rarityCommon;
-  const initial = 'P'; // Player initial
+  const initial = playerName.charAt(0).toUpperCase();
 
   const handleEquipFrame = useCallback(
     (frame: ProfileFrame) => {
@@ -93,7 +119,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
 
   const handleEquipTitle = useCallback(
     (title: ProfileTitle) => {
-      if (isOwned(title.id)) player.equipCosmetic('title', title.title);
+      if (isOwned(title.id)) player.equipCosmetic('title', title.id);
     },
     [isOwned, player],
   );
@@ -116,7 +142,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           onPress={() => handleEquipFrame(frame)}
           style={({ pressed }) => [
             styles.frameCard,
-            equipped && { borderColor: COLORS.accent + '80' },
+            equipped && { borderColor: frameRarityColor + '80' },
             !owned && styles.lockedItem,
             pressed && owned && { opacity: 0.8, transform: [{ scale: 0.95 }] },
           ]}
@@ -180,7 +206,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           onPress={() => handleEquipTheme(theme)}
           style={({ pressed }) => [
             styles.themeCard,
-            equipped && { borderColor: COLORS.accent + '80' },
+            equipped && { borderColor: theme.colors.accent + '80' },
             !owned && styles.lockedItem,
             pressed && owned && { opacity: 0.8, transform: [{ scale: 0.95 }] },
           ]}
@@ -249,34 +275,56 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
         {/* Live Preview */}
         <View style={styles.previewCard}>
           <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
+            colors={previewGradients}
             style={StyleSheet.absoluteFill}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
           />
-          <View style={[styles.avatarRing, { borderColor: frameRarityColor, shadowColor: frameRarityColor }]}>
+          <View
+            style={[
+              styles.avatarRing,
+              {
+                borderColor: frameRarityColor,
+                shadowColor: frameRarityColor,
+                backgroundColor: equippedThemeData.colors.bg,
+              },
+            ]}
+          >
             <View style={styles.avatarCircle}>
               <LinearGradient
-                colors={[...GRADIENTS.surfaceCard]}
+                colors={[equippedThemeData.colors.surface, equippedThemeData.colors.bg]}
                 style={StyleSheet.absoluteFill}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
               />
-              <Text style={styles.avatarLetter}>{initial}</Text>
+              <Text style={[styles.avatarLetter, { color: equippedThemeData.colors.accent }]}>{initial}</Text>
             </View>
           </View>
           <View style={styles.levelBadge}>
             <LinearGradient
-              colors={[...GRADIENTS.button.primary]}
+              colors={[
+                equippedThemeData.colors.accent,
+                equippedThemeData.colors.cellSelected,
+              ]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             />
             <Text style={styles.levelText}>Lv.{player.currentLevel}</Text>
           </View>
-          <Text style={styles.playerName}>Player</Text>
-          <View style={styles.titleBadge}>
-            <Text style={styles.titleText}>{player.equippedTitle}</Text>
+          <Text style={styles.playerName}>{playerName}</Text>
+          <View
+            style={[
+              styles.titleBadge,
+              {
+                borderColor: `${equippedThemeData.colors.accent}55`,
+                backgroundColor: `${equippedThemeData.colors.bg}AA`,
+              },
+            ]}
+          >
+            <Text style={[styles.titleText, { color: equippedThemeData.colors.accent }]}>
+              {equippedTitleLabel}
+            </Text>
           </View>
           <Text style={styles.frameLabelText}>
             {equippedFrameData.name} Frame
@@ -310,7 +358,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           />
           {sortedTitles.map((title, index) => {
             const owned = isOwned(title.id);
-            const equipped = title.title === player.equippedTitle;
+            const equipped = title.id === player.equippedTitle;
 
             return (
               <React.Fragment key={title.id}>
@@ -330,7 +378,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                     <Text
                       style={[
                         styles.titleName,
-                        equipped && { color: COLORS.gold },
+                        equipped && { color: equippedThemeData.colors.accent },
                         !owned && styles.lockedText,
                       ]}
                     >
@@ -490,10 +538,10 @@ const styles = StyleSheet.create({
   },
   titleBadge: {
     marginTop: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 4,
+    borderWidth: 1,
   },
   titleText: {
     fontSize: 13,

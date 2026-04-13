@@ -15,7 +15,13 @@ import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { Skeleton, SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import { usePlayer } from '../contexts/PlayerContext';
 import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
-import { PROFILE_FRAMES, COSMETIC_THEMES } from '../data/cosmetics';
+import {
+  PROFILE_FRAMES,
+  COSMETIC_THEMES,
+  getTheme,
+  getFrame,
+  getTitleLabel,
+} from '../data/cosmetics';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import {
   canPrestige,
@@ -123,7 +129,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const contextPlayer = useMemo(
     () => ({
       level: playerContext.currentLevel,
-      title: playerContext.equippedTitle,
+      title: getTitleLabel(playerContext.equippedTitle),
       puzzlesSolved: playerContext.puzzlesSolved,
       totalStars: playerContext.totalStars,
       bestStreak: playerContext.streaks.bestStreak,
@@ -153,6 +159,26 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     [contextPlayer, playerProp],
   );
   const initial = useMemo(() => p.name.charAt(0).toUpperCase(), [p.name]);
+  const equippedTheme = useMemo(
+    () => getTheme(playerContext.equippedTheme) ?? COSMETIC_THEMES[0],
+    [playerContext.equippedTheme],
+  );
+  const equippedFrame = useMemo(
+    () => getFrame(playerContext.equippedFrame) ?? PROFILE_FRAMES[0],
+    [playerContext.equippedFrame],
+  );
+  const frameBorderColor = useMemo(() => {
+    switch (equippedFrame.rarity) {
+      case 'legendary':
+        return COLORS.rarityLegendary;
+      case 'epic':
+        return COLORS.rarityEpic;
+      case 'rare':
+        return COLORS.rarityRare;
+      default:
+        return COLORS.rarityCommon;
+    }
+  }, [equippedFrame.rarity]);
 
   const renderProgressBar = (progress: number, color: string) => (
     <View style={styles.progressBarBg}>
@@ -218,20 +244,36 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* Avatar Area */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatarRing}>
-            <View style={styles.avatarCircle}>
+          <View
+            style={[
+              styles.avatarRing,
+              {
+                borderColor: frameBorderColor,
+                shadowColor: frameBorderColor,
+                backgroundColor: equippedTheme.colors.surface,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.avatarCircle,
+                {
+                  backgroundColor: equippedTheme.colors.surface,
+                },
+              ]}
+            >
               <LinearGradient
-                colors={[...GRADIENTS.surfaceCard]}
+                colors={[equippedTheme.colors.surface, equippedTheme.colors.bg] as [string, string]}
                 style={StyleSheet.absoluteFill}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
               />
-              <Text style={styles.avatarLetter}>{initial}</Text>
+              <Text style={[styles.avatarLetter, { color: equippedTheme.colors.accent }]}>{initial}</Text>
             </View>
           </View>
           <View style={styles.levelBadge}>
             <LinearGradient
-              colors={[...GRADIENTS.button.primary]}
+              colors={[equippedTheme.colors.accent, frameBorderColor] as [string, string]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -239,7 +281,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <Text style={styles.levelText}>Lv.{p.level}</Text>
           </View>
           <Text style={styles.playerName}>{p.name}</Text>
-          <View style={styles.titleBadge}>
+          <View
+            style={[
+              styles.titleBadge,
+              {
+                backgroundColor: `${equippedTheme.colors.surface}cc`,
+                borderColor: `${equippedTheme.colors.accent}55`,
+              },
+            ]}
+          >
             <Text style={styles.titleText}>{p.title}</Text>
           </View>
         </View>
@@ -609,6 +659,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 4,
+    borderWidth: 1,
   },
   titleText: {
     fontSize: 13,

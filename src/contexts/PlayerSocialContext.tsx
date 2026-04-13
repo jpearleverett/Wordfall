@@ -10,6 +10,7 @@
 import { useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { FriendChallenge, GameMode, BoardConfig } from '../types';
+import { getTitleLabel } from '../data/cosmetics';
 
 const getToday = (): string => new Date().toISOString().split('T')[0];
 
@@ -75,7 +76,7 @@ export function createSocialMethods<T extends PlayerSocialData>(
       import('../services/firestore').then(({ firestoreService }) => {
         void firestoreService.sendGift(
           user.uid,
-          data.equippedTitle || 'A friend',
+          getTitleLabel(data.equippedTitle) || 'A friend',
           friendId,
           'hint',
           1
@@ -104,7 +105,7 @@ export function createSocialMethods<T extends PlayerSocialData>(
       import('../services/firestore').then(({ firestoreService }) => {
         void firestoreService.sendGift(
           user.uid,
-          data.equippedTitle || 'A friend',
+          getTitleLabel(data.equippedTitle) || 'A friend',
           friendId,
           'tile',
           1
@@ -129,7 +130,7 @@ export function createSocialMethods<T extends PlayerSocialData>(
     const challenge: FriendChallenge = {
       id: `challenge_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
       challengerId: user?.uid ?? 'local_player',
-      challengerName: data.equippedTitle || 'Player',
+      challengerName: getTitleLabel(data.equippedTitle) || 'Player',
       challengerScore: puzzleData.score,
       challengerStars: puzzleData.stars,
       challengerTime: puzzleData.time,

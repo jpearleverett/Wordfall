@@ -1,4 +1,13 @@
 import { CosmeticTheme, ProfileFrame, ProfileTitle, LibraryDecoration, CurrencyType } from '../types';
+import { ECONOMY, STAR_MILESTONES } from '../constants';
+import { EVENT_TEMPLATES } from './events';
+import { GRAND_CHALLENGES } from './grandChallenges';
+import { PRESTIGE_LEVELS } from './prestigeSystem';
+import { REFERRAL_MILESTONES } from './referralSystem';
+import { SEASON_PASS_TIERS } from './seasonPass';
+import { SEASONAL_QUESTS } from './seasonalQuests';
+import { SEASONAL_WHEELS } from './seasonalWheels';
+import { VIP_STREAK_BONUSES } from './vipBenefits';
 
 // ── Color Themes ────────────────────────────────────────────────────────────
 
@@ -241,7 +250,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
 
 // ── Profile Frames ──────────────────────────────────────────────────────────
 
-export const PROFILE_FRAMES: ProfileFrame[] = [
+const BASE_PROFILE_FRAMES: ProfileFrame[] = [
   { id: 'default', name: 'Basic', rarity: 'common', source: 'Default', owned: true },
   { id: 'bronze_ring', name: 'Bronze Ring', rarity: 'common', source: 'Complete 10 puzzles', owned: false },
   { id: 'silver_ring', name: 'Silver Ring', rarity: 'common', source: 'Complete 50 puzzles', owned: false },
@@ -293,7 +302,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
 
 // ── Profile Titles ──────────────────────────────────────────────────────────
 
-export const PROFILE_TITLES: ProfileTitle[] = [
+const BASE_PROFILE_TITLES: ProfileTitle[] = [
   { id: 'title_newcomer', title: 'Newcomer', source: 'Default', owned: true },
   { id: 'title_word_finder', title: 'Word Finder', source: 'Find 100 words', owned: false },
   { id: 'title_puzzle_solver', title: 'Puzzle Solver', source: 'Complete 25 puzzles', owned: false },
@@ -388,6 +397,319 @@ export const LIBRARY_DECORATIONS: LibraryDecoration[] = [
   { id: 'decoration_platinum_exclusive', name: 'Platinum Display', description: 'An exclusive platinum display case.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
 ];
 
+type FrameSeed = Omit<ProfileFrame, 'owned'> & { owned?: boolean };
+type TitleSeed = Omit<ProfileTitle, 'owned'> & { owned?: boolean };
+
+function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    unique.push(item);
+  }
+  return unique;
+}
+
+function titleCase(input: string): string {
+  return input
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => {
+      if (word.toUpperCase() === 'VIP') return 'VIP';
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+function humanizeCosmeticId(id: string): string {
+  return titleCase(
+    id
+      .replace(/^(frame|title|theme|set|deco)_/, '')
+      .replace(/_/g, ' ')
+      .trim(),
+  );
+}
+
+function inferCosmeticKind(id?: string): 'frame' | 'title' | null {
+  if (!id) return null;
+  if (id.startsWith('title_') || id.endsWith('_title') || id === 'vip_champion' || id === 'gauntlet_survivor' || id === 'blitz_warrior') {
+    return 'title';
+  }
+  if (
+    id.startsWith('frame_') ||
+    id.endsWith('_frame') ||
+    id === 'streak_30_frame' ||
+    id === 'season_champion_frame' ||
+    id === 'cosmic_frame' ||
+    id === 'vip_silver' ||
+    id === 'vip_gold' ||
+    id === 'frame_speed'
+  ) {
+    return 'frame';
+  }
+  return null;
+}
+
+function inferFrameRarity(index: number): ProfileFrame['rarity'] {
+  if (index >= 25) return 'legendary';
+  if (index >= 12) return 'epic';
+  if (index >= 5) return 'rare';
+  return 'common';
+}
+
+function inferTitleRaritySource(source: string): string {
+  return source;
+}
+
+function frameSeed(id: string, name: string, rarity: ProfileFrame['rarity'], source: string): FrameSeed {
+  return {
+    id,
+    name,
+    rarity,
+    source,
+    owned: false,
+  };
+}
+
+function titleSeed(id: string, title: string, source: string): TitleSeed {
+  return {
+    id,
+    title,
+    source: inferTitleRaritySource(source),
+    owned: false,
+  };
+}
+
+const EVENT_FRAME_SEEDS: FrameSeed[] = EVENT_TEMPLATES
+  .filter((event) => event.exclusiveReward?.type === 'frame')
+  .map((event) =>
+    frameSeed(
+      event.exclusiveReward!.id,
+      event.exclusiveReward!.name,
+      event.exclusiveReward!.rarity,
+      `${event.name} event`,
+    ),
+  );
+
+const EVENT_TITLE_SEEDS: TitleSeed[] = EVENT_TEMPLATES
+  .filter((event) => event.exclusiveReward?.type === 'title')
+  .map((event) =>
+    titleSeed(
+      event.exclusiveReward!.id,
+      event.exclusiveReward!.name,
+      `${event.name} event`,
+    ),
+  );
+
+const PRESTIGE_FRAME_SEEDS: FrameSeed[] = PRESTIGE_LEVELS
+  .filter((level) => level.cosmeticReward.type === 'frame')
+  .map((level, index) =>
+    frameSeed(
+      level.cosmeticReward.id,
+      `${level.label} Frame`,
+      inferFrameRarity(index + 1),
+      `${level.label} prestige reward`,
+    ),
+  );
+
+const PRESTIGE_TITLE_SEEDS: TitleSeed[] = PRESTIGE_LEVELS
+  .filter((level) => level.cosmeticReward.type === 'title')
+  .map((level) =>
+    titleSeed(
+      level.cosmeticReward.id,
+      humanizeCosmeticId(level.cosmeticReward.id),
+      `${level.label} prestige reward`,
+    ),
+  );
+
+const REFERRAL_FRAME_SEEDS: FrameSeed[] = REFERRAL_MILESTONES
+  .filter((milestone) => milestone.rewards.cosmeticType === 'frame' && milestone.rewards.cosmeticId)
+  .map((milestone, index) =>
+    frameSeed(
+      milestone.rewards.cosmeticId!,
+      milestone.label,
+      inferFrameRarity(index + 5),
+      `${milestone.count} referrals`,
+    ),
+  );
+
+const REFERRAL_TITLE_SEEDS: TitleSeed[] = REFERRAL_MILESTONES
+  .filter((milestone) => milestone.rewards.cosmeticType === 'title' && milestone.rewards.cosmeticId)
+  .map((milestone) =>
+    titleSeed(
+      milestone.rewards.cosmeticId!,
+      milestone.label,
+      `${milestone.count} referrals`,
+    ),
+  );
+
+const VIP_FRAME_SEEDS: FrameSeed[] = VIP_STREAK_BONUSES
+  .filter((bonus) => bonus.extraReward?.type === 'frame' && bonus.extraReward.id)
+  .map((bonus, index) =>
+    frameSeed(
+      bonus.extraReward!.id!,
+      bonus.label,
+      inferFrameRarity(index + 7),
+      `${bonus.weeksRequired}-week VIP streak`,
+    ),
+  );
+
+const VIP_TITLE_SEEDS: TitleSeed[] = VIP_STREAK_BONUSES
+  .filter((bonus) => bonus.extraReward?.type === 'title' && bonus.extraReward.id)
+  .map((bonus) =>
+    titleSeed(
+      bonus.extraReward!.id!,
+      bonus.label,
+      `${bonus.weeksRequired}-week VIP streak`,
+    ),
+  );
+
+const QUEST_FRAME_SEEDS: FrameSeed[] = SEASONAL_QUESTS
+  .filter((quest) => quest.finalReward.cosmetic?.type === 'frame' && quest.finalReward.cosmetic.id)
+  .map((quest, index) =>
+    frameSeed(
+      quest.finalReward.cosmetic!.id,
+      humanizeCosmeticId(quest.finalReward.cosmetic!.id),
+      inferFrameRarity(index + 9),
+      `${quest.name} seasonal quest`,
+    ),
+  );
+
+const GRAND_CHALLENGE_FRAME_SEEDS: FrameSeed[] = GRAND_CHALLENGES
+  .filter((challenge) => inferCosmeticKind(challenge.reward.cosmetic) === 'frame')
+  .map((challenge) =>
+    frameSeed(
+      challenge.reward.cosmetic!,
+      challenge.name,
+      challenge.difficulty === 'legendary' ? 'legendary' : challenge.difficulty === 'hard' ? 'epic' : 'rare',
+      challenge.name,
+    ),
+  );
+
+const GRAND_CHALLENGE_TITLE_SEEDS: TitleSeed[] = GRAND_CHALLENGES
+  .filter((challenge) => inferCosmeticKind(challenge.reward.cosmetic) === 'title')
+  .map((challenge) =>
+    titleSeed(
+      challenge.reward.cosmetic!,
+      challenge.name,
+      challenge.name,
+    ),
+  );
+
+const SEASON_PASS_FRAME_SEEDS: FrameSeed[] = SEASON_PASS_TIERS
+  .filter((tier) => inferCosmeticKind(tier.premiumReward.cosmeticId) === 'frame')
+  .map((tier) =>
+    frameSeed(
+      tier.premiumReward.cosmeticId!,
+      tier.premiumReward.label.replace(/\s*Frame$/i, ''),
+      tier.level >= 40 ? 'legendary' : tier.level >= 20 ? 'epic' : 'rare',
+      `Season Pass tier ${tier.level}`,
+    ),
+  );
+
+const SEASON_PASS_TITLE_SEEDS: TitleSeed[] = SEASON_PASS_TIERS
+  .filter((tier) => inferCosmeticKind(tier.premiumReward.cosmeticId) === 'title')
+  .map((tier) =>
+    titleSeed(
+      tier.premiumReward.cosmeticId!,
+      tier.premiumReward.label.replace(/\s*Title$/i, ''),
+      `Season Pass tier ${tier.level}`,
+    ),
+  );
+
+const SEASONAL_WHEEL_FRAME_SEEDS: FrameSeed[] = Object.values(SEASONAL_WHEELS)
+  .flat()
+  .filter((segment) => inferCosmeticKind(segment.reward.cosmetic) === 'frame')
+  .map((segment) =>
+    frameSeed(
+      segment.reward.cosmetic!,
+      segment.label,
+      segment.rarity === 'legendary' ? 'legendary' : segment.rarity === 'epic' ? 'epic' : 'rare',
+      'Seasonal wheel reward',
+    ),
+  );
+
+const SEASONAL_WHEEL_TITLE_SEEDS: TitleSeed[] = Object.values(SEASONAL_WHEELS)
+  .flat()
+  .filter((segment) => inferCosmeticKind(segment.reward.cosmetic) === 'title')
+  .map((segment) =>
+    titleSeed(
+      segment.reward.cosmetic!,
+      segment.label,
+      'Seasonal wheel reward',
+    ),
+  );
+
+const LOGIN_FRAME_SEEDS: FrameSeed[] = ECONOMY.loginRewards
+  .filter((reward) => inferCosmeticKind(reward.cosmetic) === 'frame')
+  .map((reward, index) =>
+    frameSeed(
+      reward.cosmetic!,
+      reward.day === 21 ? 'Login Master' : humanizeCosmeticId(reward.cosmetic!),
+      index === 0 ? 'rare' : 'legendary',
+      `Login reward day ${reward.day}`,
+    ),
+  );
+
+const LOGIN_TITLE_SEEDS: TitleSeed[] = ECONOMY.loginRewards
+  .filter((reward) => inferCosmeticKind(reward.cosmetic) === 'title')
+  .map((reward) =>
+    titleSeed(
+      reward.cosmetic!,
+      humanizeCosmeticId(reward.cosmetic!),
+      `Login reward day ${reward.day}`,
+    ),
+  );
+
+const STAR_MILESTONE_FRAME_SEEDS: FrameSeed[] = STAR_MILESTONES
+  .filter((milestone) => milestone.type === 'frame')
+  .map((milestone, index) =>
+    frameSeed(
+      milestone.reward,
+      milestone.name.replace(/\s*Frame$/i, ''),
+      inferFrameRarity(index + 3),
+      `${milestone.stars} stars`,
+    ),
+  );
+
+const STAR_MILESTONE_TITLE_SEEDS: TitleSeed[] = STAR_MILESTONES
+  .filter((milestone) => milestone.type === 'title')
+  .map((milestone) =>
+    titleSeed(
+      milestone.reward,
+      milestone.name,
+      `${milestone.stars} stars`,
+    ),
+  );
+
+export const PROFILE_FRAMES: ProfileFrame[] = dedupeById([
+  ...BASE_PROFILE_FRAMES,
+  ...EVENT_FRAME_SEEDS,
+  ...PRESTIGE_FRAME_SEEDS,
+  ...REFERRAL_FRAME_SEEDS,
+  ...VIP_FRAME_SEEDS,
+  ...QUEST_FRAME_SEEDS,
+  ...GRAND_CHALLENGE_FRAME_SEEDS,
+  ...SEASON_PASS_FRAME_SEEDS,
+  ...SEASONAL_WHEEL_FRAME_SEEDS,
+  ...LOGIN_FRAME_SEEDS,
+  ...STAR_MILESTONE_FRAME_SEEDS,
+]).map((frame) => ({ ...frame, owned: frame.owned ?? false }));
+
+export const PROFILE_TITLES: ProfileTitle[] = dedupeById([
+  ...BASE_PROFILE_TITLES,
+  ...EVENT_TITLE_SEEDS,
+  ...PRESTIGE_TITLE_SEEDS,
+  ...REFERRAL_TITLE_SEEDS,
+  ...VIP_TITLE_SEEDS,
+  ...GRAND_CHALLENGE_TITLE_SEEDS,
+  ...SEASON_PASS_TITLE_SEEDS,
+  ...SEASONAL_WHEEL_TITLE_SEEDS,
+  ...LOGIN_TITLE_SEEDS,
+  ...STAR_MILESTONE_TITLE_SEEDS,
+]).map((title) => ({ ...title, owned: title.owned ?? false }));
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 export function getTheme(id: string): CosmeticTheme | undefined {
@@ -400,6 +722,41 @@ export function getFrame(id: string): ProfileFrame | undefined {
 
 export function getTitle(id: string): ProfileTitle | undefined {
   return PROFILE_TITLES.find((t) => t.id === id);
+}
+
+export function hasTheme(id: string): boolean {
+  return COSMETIC_THEMES.some((theme) => theme.id === id);
+}
+
+export function hasFrame(id: string): boolean {
+  return PROFILE_FRAMES.some((frame) => frame.id === id);
+}
+
+export function hasTitle(id: string): boolean {
+  return PROFILE_TITLES.some((title) => title.id === id);
+}
+
+export function hasDecoration(id: string): boolean {
+  return LIBRARY_DECORATIONS.some((decoration) => decoration.id === id);
+}
+
+export function isProfileCosmeticId(id: string): boolean {
+  return hasTheme(id) || hasFrame(id) || hasTitle(id);
+}
+
+export function resolveLegacyCosmeticId(id: string): string {
+  if (id === 'default_theme' || id === 'default_frame') return 'default';
+  return id;
+}
+
+export function resolveTitleId(value: string): string | undefined {
+  const normalized = resolveLegacyCosmeticId(value);
+  return getTitle(normalized)?.id ?? PROFILE_TITLES.find((title) => title.title === value)?.id;
+}
+
+export function getTitleLabel(value: string): string {
+  const resolvedId = resolveTitleId(value);
+  return resolvedId ? getTitle(resolvedId)?.title ?? value : value;
 }
 
 export function getDecoration(id: string): LibraryDecoration | undefined {

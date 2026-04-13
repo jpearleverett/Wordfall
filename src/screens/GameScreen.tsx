@@ -32,6 +32,7 @@ import { useStableCallback } from '../utils/hooks';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { analytics } from '../services/analytics';
+import { getTheme } from '../data/cosmetics';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { adManager, AdRewardType } from '../services/ads';
@@ -350,6 +351,10 @@ export function GameScreen({
   nextUnlockPreview = null,
 }: GameScreenProps) {
   const player = usePlayer();
+  const equippedTheme = useMemo(
+    () => getTheme(player.equippedTheme),
+    [player.equippedTheme],
+  );
   const failCount = player.failCountByLevel?.[level] ?? 0;
   // Dynamic hint generosity: show hint sooner if player has failed this level before
   // Memoized to keep resetIdleTimer callback stable across renders

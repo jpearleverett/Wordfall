@@ -14,6 +14,7 @@ import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
+import { isProfileCosmeticId, resolveLegacyCosmeticId } from '../data/cosmetics';
 import { updatePlayerMetrics } from '../engine/difficultyAdjuster';
 import { PlayerMetrics } from '../types';
 
@@ -76,6 +77,7 @@ export interface PlayerProgressData {
   // Tracking
   wordsFoundTotal: number;
   modesPlayedThisWeek: string[];
+  unlockedCosmetics: string[];
 
   // Library
   restoredWings: string[];
@@ -229,10 +231,17 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
 
       // Check if a streak milestone was just crossed
       const prevStreak = streaks.currentStreak;
+      let unlockedCosmetics = prev.unlockedCosmetics;
       let pendingCeremonies = prev.pendingCeremonies;
       for (const milestone of STREAK.milestones) {
         if (newStreak >= milestone && prevStreak < milestone) {
           const reward = STREAK.milestoneRewards[milestone as keyof typeof STREAK.milestoneRewards];
+          const cosmeticId = 'cosmetic' in reward && reward.cosmetic
+            ? resolveLegacyCosmeticId(reward.cosmetic)
+            : undefined;
+          if (cosmeticId && isProfileCosmeticId(cosmeticId) && !unlockedCosmetics.includes(cosmeticId)) {
+            unlockedCosmetics = [...unlockedCosmetics, cosmeticId];
+          }
           pendingCeremonies = [
             ...pendingCeremonies,
             {
@@ -247,6 +256,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         ...prev,
         dailyLoginDates: newLoginDates,
         loginCycleDay,
+        unlockedCosmetics,
         pendingCeremonies,
         streaks: {
           ...streaks,

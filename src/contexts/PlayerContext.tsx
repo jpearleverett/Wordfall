@@ -9,8 +9,9 @@ import { CeremonyItem, PlayerMetrics, PuzzleEnergyState, WeeklyGoalsState } from
 import { SeasonalQuestState, DEFAULT_SEASONAL_QUEST_STATE } from '../data/seasonalQuests';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
-import { COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STREAK } from '../constants';
+import { COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STAR_MILESTONES, STREAK } from '../constants';
 import { DEFAULT_PLAYER_METRICS, updatePlayerMetrics } from '../engine/difficultyAdjuster';
+import { ATLAS_PAGES } from '../data/collections';
 import {
   PlayerSegments,
   DEFAULT_SEGMENTS,
@@ -20,8 +21,17 @@ import {
 import { triggerEnergyFullNotification } from '../services/notificationTriggers';
 import { createProgressMethods } from './PlayerProgressContext';
 import { createSocialMethods } from './PlayerSocialContext';
-import { generateReferralCode } from '../data/referralSystem';
-import { PROFILE_TITLES } from '../data/cosmetics';
+import { generateReferralCode, REFERRAL_MILESTONES } from '../data/referralSystem';
+import {
+  getTitle,
+  getTitleLabel,
+  hasDecoration,
+  hasFrame,
+  hasTitle,
+  isProfileCosmeticId,
+  resolveLegacyCosmeticId,
+  resolveTitleId,
+} from '../data/cosmetics';
 import {
   canPrestige,
   getPrestigeRewards,
@@ -398,8 +408,8 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Cosmetics
   equippedTheme: 'default',
   equippedFrame: 'default',
-  equippedTitle: 'Newcomer',
-  unlockedCosmetics: ['default_theme', 'default_frame', 'title_newcomer'],
+  equippedTitle: 'title_newcomer',
+  unlockedCosmetics: ['default', 'title_newcomer'],
 
   // Library
   restoredWings: [],
@@ -571,6 +581,53 @@ const PlayerContext = createContext<PlayerContextType>({
     nextRewards: null,
   }),
 });
+
+function deriveProgressUnlockedCosmetics(data: PlayerData): string[] {
+  const unlocked = new Set<string>();
+
+  const addIfValid = (id: string) => {
+    if (isProfileCosmeticId(id)) unlocked.add(resolveLegacyCosmeticId(id));
+  };
+
+  if (data.puzzlesSolved >= 10) addIfValid('bronze_ring');
+  if (data.puzzlesSolved >= 50) addIfValid('silver_ring');
+  if (data.puzzlesSolved >= 100) addIfValid('gold_ring');
+  if (data.puzzlesSolved >= 500) addIfValid('diamond_ring');
+
+  if (data.puzzlesSolved >= 25) addIfValid('title_puzzle_solver');
+  if (data.puzzlesSolved >= 30) addIfValid('title_veteran');
+  if (data.perfectSolves >= 10) addIfValid('title_perfectionist');
+
+  const totalRareTiles = Object.values(data.collections.rareTiles).reduce((sum, count) => sum + count, 0);
+  if (totalRareTiles >= 50) addIfValid('title_collector');
+
+  const completedAtlasPages = Object.values(data.collections.atlasPages).filter((words) => words.length >= 10).length;
+  if (completedAtlasPages >= 3) addIfValid('title_scholar');
+
+  const uniqueModesPlayed = Object.entries(data.modeStats)
+    .filter(([, stats]) => stats.played > 0)
+    .map(([modeId]) => modeId);
+  if (uniqueModesPlayed.length >= 10) addIfValid('title_explorer');
+
+  if (data.restoredWings.length >= 4) addIfValid('title_librarian');
+
+  if (data.streaks.currentStreak >= 7) addIfValid('title_streak_keeper');
+
+  if (data.wordsFoundTotal >= 100) addIfValid('title_word_finder');
+  if (data.wordsFoundTotal >= 1000) addIfValid('title_word_sage');
+
+  const speedDemonTier = data.achievementIds.includes('speed_demon_gold')
+    || data.achievementIds.includes('speed_solver_bronze');
+  if (speedDemonTier) addIfValid('title_speed_demon');
+
+  const maxStarMilestone = STAR_MILESTONES.filter((milestone) => data.totalStars >= milestone.stars);
+  for (const milestone of maxStarMilestone) {
+    if (milestone.type === 'frame' && hasFrame(milestone.reward)) addIfValid(milestone.reward);
+    if (milestone.type === 'title' && hasTitle(milestone.reward)) addIfValid(milestone.reward);
+  }
+
+  return Array.from(unlocked);
+}
 
 // ─── Provider ───────────────────────────────────────────────────────────────
 
@@ -931,19 +988,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     (type: 'theme' | 'frame' | 'title', id: string) => {
       setData((prev) => {
         if (type === 'title') {
-          // Title callers pass the display name; look up the real ID for ownership check
-          const titleEntry = PROFILE_TITLES.find((t) => t.title === id);
-          const titleId = titleEntry?.id;
+          const titleId = resolveTitleId(id);
           if (!titleId) return prev;
           if (!prev.unlockedCosmetics.includes(titleId) && titleId !== 'title_newcomer') return prev;
-          return { ...prev, equippedTitle: id };
+          return { ...prev, equippedTitle: titleId };
         }
-        if (!prev.unlockedCosmetics.includes(id) && id !== 'default') return prev;
+        const resolvedId = resolveLegacyCosmeticId(id);
+        if (!prev.unlockedCosmetics.includes(resolvedId) && resolvedId !== 'default') return prev;
         switch (type) {
           case 'theme':
-            return { ...prev, equippedTheme: id };
+            return { ...prev, equippedTheme: resolvedId };
           case 'frame':
-            return { ...prev, equippedFrame: id };
+            return { ...prev, equippedFrame: resolvedId };
           default:
             return prev;
         }
@@ -954,10 +1010,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const unlockCosmetic = useCallback((id: string) => {
     setData((prev) => {
-      if (prev.unlockedCosmetics.includes(id)) return prev;
+      const resolvedId = resolveLegacyCosmeticId(id);
+      if (!isProfileCosmeticId(resolvedId)) return prev;
+      if (prev.unlockedCosmetics.includes(resolvedId)) return prev;
       return {
         ...prev,
-        unlockedCosmetics: [...prev.unlockedCosmetics, id],
+        unlockedCosmetics: [...prev.unlockedCosmetics, resolvedId],
       };
     });
   }, []);
@@ -1236,9 +1294,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setData((prev) => {
       if (prev.referralMilestonesClaimed.includes(count)) return prev;
       if (prev.referralCount < count) return prev;
+      const milestone = REFERRAL_MILESTONES.find((entry) => entry.count === count);
+      const rewards = milestone?.rewards;
+      const unlockedCosmetics =
+        rewards?.cosmeticId && isProfileCosmeticId(rewards.cosmeticId)
+          ? Array.from(new Set([...prev.unlockedCosmetics, resolveLegacyCosmeticId(rewards.cosmeticId)]))
+          : prev.unlockedCosmetics;
       claimed = true;
       return {
         ...prev,
+        unlockedCosmetics,
         referralMilestonesClaimed: [...prev.referralMilestonesClaimed, count],
       };
     });
@@ -1274,9 +1339,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
       // Unlock the cosmetic reward
       const cosmeticId = rewards.cosmeticReward.id;
-      const newUnlockedCosmetics = prev.unlockedCosmetics.includes(cosmeticId)
-        ? prev.unlockedCosmetics
-        : [...prev.unlockedCosmetics, cosmeticId];
+      const unlocksProfileCosmetic = isProfileCosmeticId(cosmeticId);
+      const newUnlockedCosmetics =
+        unlocksProfileCosmetic && !prev.unlockedCosmetics.includes(cosmeticId)
+          ? [...prev.unlockedCosmetics, cosmeticId]
+          : prev.unlockedCosmetics;
+      const newOwnedDecorations =
+        rewards.cosmeticReward.type === 'decoration' && hasDecoration(cosmeticId) && !prev.ownedDecorations.includes(cosmeticId)
+          ? [...prev.ownedDecorations, cosmeticId]
+          : prev.ownedDecorations;
 
       // Queue prestige ceremony
       const ceremony: CeremonyItem = {
@@ -1303,6 +1374,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         },
         // Unlock cosmetic reward
         unlockedCosmetics: newUnlockedCosmetics,
+        ownedDecorations: newOwnedDecorations,
         // Queue ceremony
         pendingCeremonies: [...prev.pendingCeremonies, ceremony],
       };

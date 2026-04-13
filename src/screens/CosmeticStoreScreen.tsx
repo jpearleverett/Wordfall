@@ -19,6 +19,7 @@ import {
   PROFILE_FRAMES,
   PROFILE_TITLES,
   LIBRARY_DECORATIONS,
+  getTitleLabel,
 } from '../data/cosmetics';
 import { CosmeticTheme, ProfileFrame, ProfileTitle, LibraryDecoration, CurrencyType } from '../types';
 
@@ -123,7 +124,7 @@ function normalizeTitles(
     description: t.source,
     rarity: 'common' as const,
     owned: t.id === 'title_newcomer' || unlockedCosmetics.includes(t.id),
-    equipped: equippedTitle === t.title,
+    equipped: equippedTitle === t.id,
     source: t.source,
     tabType: 'titles' as const,
   }));
@@ -223,7 +224,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
           player.equipCosmetic('frame', item.id);
           break;
         case 'titles':
-          player.equipCosmetic('title', item.name);
+          player.equipCosmetic('title', item.id);
           break;
         case 'decorations':
           setSelectedItem(null);
@@ -364,7 +365,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     const isEquipped =
       (selectedItem.tabType === 'themes' && player.equippedTheme === selectedItem.id) ||
       (selectedItem.tabType === 'frames' && player.equippedFrame === selectedItem.id) ||
-      (selectedItem.tabType === 'titles' && player.equippedTitle === selectedItem.name) ||
+      (selectedItem.tabType === 'titles' && player.equippedTitle === selectedItem.id) ||
       (selectedItem.tabType === 'decorations' &&
         Object.values(player.placedDecorations ?? {}).includes(selectedItem.id));
 
@@ -430,7 +431,9 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
             </View>
 
             {/* Name & Description */}
-            <Text style={styles.modalName}>{selectedItem.name}</Text>
+            <Text style={styles.modalName}>
+              {selectedItem.tabType === 'titles' ? getTitleLabel(selectedItem.id) : selectedItem.name}
+            </Text>
             <Text style={styles.modalDescription}>{selectedItem.description}</Text>
 
             {selectedItem.source && selectedItem.tabType !== 'themes' && (
