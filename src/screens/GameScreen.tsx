@@ -412,6 +412,7 @@ export function GameScreen({
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const perfectRun = useStore(store, s => s.perfectRun);
   const lastInvalidTap = useStore(store, s => s.lastInvalidTap);
+  const lastSelectionResetTap = useStore(store, s => s.lastSelectionResetTap);
   const boardFreezeActive = useStore(store, s => s.boardFreezeActive);
   const scoreDoubler = useStore(store, s => s.scoreDoubler);
 
@@ -859,7 +860,7 @@ export function GameScreen({
     ]).start(() => setShowInvalidFlash(false));
   }, [invalidFlashAnim]);
 
-  // Trigger invalid flash when a non-adjacent cell is tapped
+  // Trigger invalid flash only for true invalid-tap errors.
   useEffect(() => {
     if (lastInvalidTap) {
       showInvalidFlashAnim();

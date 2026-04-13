@@ -131,6 +131,8 @@ describe('gameReducer - SELECT_CELL', () => {
     state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 2, col: 2 } });
     // Should start new selection from (2,2)
     expect(state.selectedCells).toEqual([{ row: 2, col: 2 }]);
+    expect(state.lastInvalidTap).toBeNull();
+    expect(state.lastSelectionResetTap).toEqual({ row: 2, col: 2 });
   });
 
   it('ignores taps on null cells', () => {
