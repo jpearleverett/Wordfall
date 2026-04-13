@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { logger } from '../utils/logger';
 import type { IAPProductId } from '../types';
-import { validateReceipt } from './receiptValidation';
+import { isReceiptValidationConfigured, validateReceipt } from './receiptValidation';
 import {
   SHOP_PRODUCTS,
   getAllStoreProductIds,
@@ -41,6 +41,15 @@ export interface PurchaseResult {
   transactionId?: string;
   receipt?: string;
   error?: string;
+  expiresAt?: number;
+}
+
+export interface CommerceStatus {
+  initialized: boolean;
+  isMockMode: boolean;
+  billingAvailable: boolean;
+  validationAvailable: boolean;
+  commerceLaunchReady: boolean;
 }
 
 export interface StoredReceipt {
@@ -79,6 +88,7 @@ class IAPManager {
   private pendingPurchaseResolvers: Map<string, {
     resolve: (result: PurchaseResult) => void;
     timeout: ReturnType<typeof setTimeout>;
+    userId?: string;
   }> = new Map();
 
   private constructor() {}
@@ -240,15 +250,30 @@ class IAPManager {
 
   // ── Purchasing ──────────────────────────────────────────────────────────
 
-  async purchase(productId: string): Promise<PurchaseResult> {
+  async purchase(productId: string, userId?: string): Promise<PurchaseResult> {
     await this.init();
 
     // Resolve the store product ID
     const storeId = this.resolveStoreId(productId);
     const internalId = this.resolveInternalId(productId);
 
+    if (!__DEV__ && !isReceiptValidationConfigured()) {
+      return {
+        success: false,
+        productId: internalId,
+        error: 'Server validation unavailable',
+      };
+    }
+
     if (this.useMock || !this.rniap) {
-      return this.mockPurchase(internalId);
+      if (__DEV__) {
+        return this.mockPurchase(internalId, userId);
+      }
+      return {
+        success: false,
+        productId: internalId,
+        error: 'In-app purchases are unavailable in this build',
+      };
     }
 
     // Store as pending before initiating
@@ -275,7 +300,7 @@ class IAPManager {
           });
         }, 120_000);
 
-        this.pendingPurchaseResolvers.set(storeId, { resolve, timeout });
+        this.pendingPurchaseResolvers.set(storeId, { resolve, timeout, userId });
       });
     } catch (e: any) {
       await this.clearPendingPurchase(internalId);
@@ -297,12 +322,15 @@ class IAPManager {
 
   // ── Restore purchases ───────────────────────────────────────────────────
 
-  async restorePurchases(): Promise<PurchaseResult[]> {
+  async restorePurchases(userId?: string): Promise<PurchaseResult[]> {
     await this.init();
 
     if (this.useMock || !this.rniap) {
-      logger.log('[IAP] Mock restore — checking stored receipts');
-      return this.getStoredNonConsumableResults();
+      if (__DEV__) {
+        logger.log('[IAP] Mock restore — checking stored receipts');
+        return this.getStoredNonConsumableResults();
+      }
+      throw new Error('In-app purchases are unavailable in this build');
     }
 
     try {
@@ -314,20 +342,32 @@ class IAPManager {
       for (const purchase of purchases) {
         const internalId = storeIdToInternalId(purchase.productId);
         if (internalId) {
+          const receipt = purchase.purchaseToken ?? '';
+          const validation = await validateReceipt(receipt, internalId, userId);
+          if (!validation.valid) {
+            results.push({
+              success: false,
+              productId: internalId,
+              error: validation.error ?? 'Receipt validation failed',
+            });
+            continue;
+          }
+
           const result: PurchaseResult = {
             success: true,
-            productId: internalId,
+            productId: validation.productId ?? internalId,
             transactionId: purchase.id,
-            receipt: purchase.purchaseToken ?? undefined,
+            receipt,
+            expiresAt: validation.expiresAt,
           };
           results.push(result);
 
           // Store the receipt
           await this.storeReceipt({
             productId: purchase.productId,
-            internalId,
+            internalId: validation.productId ?? internalId,
             transactionId: purchase.id ?? `restored_${Date.now()}`,
-            receipt: purchase.purchaseToken ?? '',
+            receipt,
             platform: Platform.OS,
             purchaseDate: purchase.transactionDate ?? Date.now(),
           });
@@ -395,7 +435,19 @@ class IAPManager {
   }
 
   isAvailable(): boolean {
-    return this.initialized;
+    return this.connected && !this.useMock;
+  }
+
+  getStatus(): CommerceStatus {
+    const billingAvailable = this.connected && !this.useMock;
+    const validationAvailable = isReceiptValidationConfigured();
+    return {
+      initialized: this.initialized,
+      isMockMode: this.useMock,
+      billingAvailable,
+      validationAvailable,
+      commerceLaunchReady: billingAvailable && validationAvailable,
+    };
   }
 
   // ── Listener management ─────────────────────────────────────────────────
@@ -424,10 +476,11 @@ class IAPManager {
     const internalId = storeIdToInternalId(storeId) ?? storeId;
     const transactionId: string = purchase.id ?? `tx_${Date.now()}`;
     const receipt: string = purchase.purchaseToken ?? '';
+    const pendingPurchase = this.pendingPurchaseResolvers.get(storeId);
 
     try {
       // Validate receipt
-      const validation = await validateReceipt(receipt, internalId);
+      const validation = await validateReceipt(receipt, internalId, pendingPurchase?.userId);
 
       if (!validation.valid) {
         const errorResult: PurchaseResult = {
@@ -482,6 +535,7 @@ class IAPManager {
         productId: internalId,
         transactionId,
         receipt,
+        expiresAt: validation.expiresAt,
       };
 
       this.resolvePendingPurchase(storeId, successResult);
@@ -673,7 +727,7 @@ class IAPManager {
     return products;
   }
 
-  private async mockPurchase(productId: string): Promise<PurchaseResult> {
+  private async mockPurchase(productId: string, userId?: string): Promise<PurchaseResult> {
     logger.log(`[IAP] Mock purchase: ${productId}`);
 
     // Simulate a 1-second purchase delay
@@ -683,7 +737,7 @@ class IAPManager {
     const receipt = `mock_receipt_${transactionId}`;
 
     // Validate receipt (will pass in mock mode)
-    const validation = await validateReceipt(receipt, productId);
+    const validation = await validateReceipt(receipt, productId, userId);
     if (!validation.valid) {
       const result: PurchaseResult = {
         success: false,
@@ -709,6 +763,7 @@ class IAPManager {
       productId,
       transactionId,
       receipt,
+      expiresAt: validation.expiresAt,
     };
 
     this.notifyListeners(result);

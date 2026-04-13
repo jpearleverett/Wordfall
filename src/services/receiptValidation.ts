@@ -14,6 +14,10 @@ const FIREBASE_FUNCTIONS_URL =
     (process as any).env?.EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL) ||
   '';
 
+export function isReceiptValidationConfigured(): boolean {
+  return !!FIREBASE_FUNCTIONS_URL;
+}
+
 const RECEIPT_HASH_STORAGE_KEY = '@wordfall_receipt_hashes';
 
 const MAX_RETRY_ATTEMPTS = 3;

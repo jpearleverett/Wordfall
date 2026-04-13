@@ -17,7 +17,7 @@ import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useSettings } from '../contexts/SettingsContext';
 import { useEconomy } from '../contexts/EconomyContext';
 import { usePlayer } from '../contexts/PlayerContext';
-import { iapManager, PurchaseResult } from '../services/iap';
+import { iapManager } from '../services/iap';
 import { adManager, AdRewardType } from '../services/ads';
 import { MockAdModal } from '../components/MockAdModal';
 import {
@@ -29,13 +29,13 @@ import {
 import { funnelTracker } from '../services/funnelTracker';
 import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
 import { getFlashSale, FlashSale } from '../data/dynamicPricing';
-import { getProductById } from '../data/shopProducts';
 import { soundManager } from '../services/sound';
 import {
   getVipStreakBonus,
   getNextVipStreakMilestone,
   getVipStreakProgress,
 } from '../data/vipBenefits';
+import { useCommerce } from '../hooks/useCommerce';
 
 const { width } = Dimensions.get('window');
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
@@ -126,7 +126,6 @@ const GEM_PACKS: ShopItem[] = [
 const COIN_SHOP_CATEGORIES: { key: string; label: string }[] = [
   { key: 'consumables', label: 'Consumables' },
   { key: 'boosters', label: 'Boosters' },
-  { key: 'temporary', label: 'Temporary Effects' },
 ];
 
 // ─── Parental controls helper ────────────────────────────────────────────────
@@ -183,9 +182,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   const settings = useSettings();
   const economy = useEconomy();
   const player = usePlayer();
-  const adsRemoved = adsRemovedProp ?? economy.isAdFree ?? settings.adsRemoved;
-  const premiumPass = premiumPassProp ?? economy.isPremiumPass ?? settings.premiumPass;
-  const iapAvailable = iapManager.isInitialized();
+  const adsRemoved = adsRemovedProp ?? economy.isAdFree;
+  const premiumPass = premiumPassProp ?? economy.isPremiumPass;
+  const { commerceStatus, checkPurchaseAllowed, purchaseProduct, restorePurchases } = useCommerce();
   const featuredExpiryAtRef = useRef(Date.now() + DAY_IN_MS);
 
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
@@ -212,7 +211,6 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
   // Initialise IAP + Ads
   useEffect(() => {
-    iapManager.init().catch(() => {});
     adManager.init().catch(() => {});
     if (adsRemoved) adManager.setAdsRemoved(true);
     // Register mock ad handler for development
@@ -232,18 +230,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       if (purchasingId) return; // already in flight
 
       // Check parental controls
-      const priceAmount = iapManager.getPriceAmount(productId);
-      const parentalCheck = checkParentalControls(
-        {
-          spendingLimitEnabled: settings.spendingLimitEnabled,
-          monthlySpendingLimit: settings.monthlySpendingLimit,
-          monthlySpent: settings.monthlySpent,
-          monthlySpentResetDate: settings.monthlySpentResetDate,
-          requirePurchasePin: settings.requirePurchasePin,
-          purchasePin: settings.purchasePin,
-        },
-        priceAmount,
-      );
+      const parentalCheck = checkPurchaseAllowed(productId);
 
       if (!parentalCheck.allowed) {
         Alert.alert('Purchase Blocked', parentalCheck.reason ?? 'Spending limit reached.');
@@ -285,52 +272,16 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
       executePurchase(productId);
     },
-    [purchasingId, settings],
+    [checkPurchaseAllowed, purchasingId, settings],
   );
 
   const executePurchase = useCallback(
     async (productId: string) => {
       setPurchasingId(productId);
-      void funnelTracker.trackStep('iap_initiated');
 
       try {
-        const result: PurchaseResult = await iapManager.purchase(productId);
+        const result = await purchaseProduct(productId);
         if (result.success) {
-          // Use economy.processPurchase for centralized reward fulfilment
-          economy.processPurchase(result.productId);
-
-          // Unlock any cosmetics/decorations included in the product
-          const purchasedProduct = getProductById(result.productId);
-          const decos = purchasedProduct?.rewards.decorations;
-          if (decos) {
-            for (const id of decos) {
-              if (id.startsWith('decoration_') || id === 'starter_bookend' || id === 'chapter_decoration') {
-                player.unlockDecoration(id);
-              } else {
-                player.unlockCosmetic(id);
-              }
-            }
-          }
-
-          // Also sync flags to settings for backward compat
-          if (result.productId === 'ad_removal' || result.productId === 'vip_weekly') {
-            settings.updateSetting('adsRemoved', true);
-          }
-          if (result.productId === 'premium_pass') {
-            settings.updateSetting('premiumPass', true);
-          }
-
-          // Track spending for parental controls
-          if (settings.spendingLimitEnabled) {
-            const priceAmount = iapManager.getPriceAmount(productId);
-            const now = new Date();
-            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            const currentSpent =
-              settings.monthlySpentResetDate === currentMonth ? settings.monthlySpent : 0;
-            settings.updateSetting('monthlySpent', currentSpent + priceAmount);
-            settings.updateSetting('monthlySpentResetDate', currentMonth);
-          }
-
           Alert.alert('Purchase Complete', 'Your items have been delivered!');
         } else {
           if (result.error && result.error !== 'User cancelled') {
@@ -346,7 +297,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       // Also call the legacy prop callback if provided
       if (onPurchaseProp) onPurchaseProp(productId);
     },
-    [economy, settings, onPurchaseProp],
+    [onPurchaseProp, purchaseProduct],
   );
 
   // ── Rewarded ad handlers ────────────────────────────────────────────────
@@ -406,44 +357,18 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     if (restoringPurchases) return;
     setRestoringPurchases(true);
     try {
-      const results = await iapManager.restorePurchases();
+      const { results, restoredCount } = await restorePurchases();
       if (results.length === 0) {
         Alert.alert('No Purchases Found', 'There are no purchases to restore.');
       } else {
-        let restoredCount = 0;
-        for (const result of results) {
-          if (result.success) {
-            economy.processPurchase(result.productId);
-            // Unlock any cosmetics/decorations included in the product
-            const restoredProduct = getProductById(result.productId);
-            const restoredDecos = restoredProduct?.rewards.decorations;
-            if (restoredDecos) {
-              for (const id of restoredDecos) {
-                if (id.startsWith('decoration_') || id === 'starter_bookend' || id === 'chapter_decoration') {
-                  player.unlockDecoration(id);
-                } else {
-                  player.unlockCosmetic(id);
-                }
-              }
-            }
-            // Sync flags to settings
-            if (result.productId === 'ad_removal') {
-              settings.updateSetting('adsRemoved', true);
-            }
-            if (result.productId === 'premium_pass') {
-              settings.updateSetting('premiumPass', true);
-            }
-            restoredCount++;
-          }
-        }
         Alert.alert('Purchases Restored', `${restoredCount} purchase(s) restored successfully.`);
       }
-    } catch {
-      Alert.alert('Restore Failed', 'Could not restore purchases. Please try again.');
+    } catch (error: any) {
+      Alert.alert('Restore Failed', error?.message ?? 'Could not restore purchases. Please try again.');
     } finally {
       setRestoringPurchases(false);
     }
-  }, [restoringPurchases, economy, settings]);
+  }, [restorePurchases, restoringPurchases]);
 
   // ── Rotating item gem purchase ──────────────────────────────────────────
 
@@ -1370,149 +1295,23 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           );
         })}
 
-        {/* ── Limited Rentals (coin-purchasable cosmetic rentals) ────── */}
-        {(() => {
-          const rentalItems = getCoinShopByCategory('cosmetic_rental');
-          if (rentalItems.length === 0) {
-            // Also check 'temporary' category for cosmetic_rental reward types
-            const tempItems = getCoinShopByCategory('temporary').filter(
-              (item) => item.reward.type === 'cosmetic_rental',
-            );
-            if (tempItems.length === 0) return null;
-            return (
-              <>
-                <Text style={styles.sectionTitle}>{'\u23F0'} Limited Rentals</Text>
-                <Text style={styles.rentalSubtitle}>Temporary boosts for coins</Text>
-                <View style={styles.rentalGrid}>
-                  {tempItems.map((item) => {
-                    const cantAfford = !economy.canAfford('coins', item.costCoins);
-                    const currentDate = new Date().toISOString().slice(0, 10);
-                    const purchases = currentDate === coinShopDate ? coinShopPurchasesToday : {};
-                    const todayCount = purchases[item.id] ?? 0;
-                    const limitReached = item.dailyLimit !== undefined && todayCount >= item.dailyLimit;
-                    const disabled = limitReached || cantAfford;
-                    const durationLabel = item.reward.durationMinutes
-                      ? item.reward.durationMinutes >= 1440
-                        ? `${Math.floor(item.reward.durationMinutes / 1440)} day${Math.floor(item.reward.durationMinutes / 1440) > 1 ? 's' : ''}`
-                        : item.reward.durationMinutes >= 60
-                          ? `${Math.floor(item.reward.durationMinutes / 60)} hour${Math.floor(item.reward.durationMinutes / 60) > 1 ? 's' : ''}`
-                          : `${item.reward.durationMinutes} min`
-                      : '';
-
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={[styles.rentalCard, disabled && styles.coinShopCardDisabled]}
-                        activeOpacity={disabled ? 1 : 0.7}
-                        onPress={() => !disabled && handleCoinShopPurchase(item)}
-                      >
-                        <LinearGradient
-                          colors={[...GRADIENTS.surfaceCard]}
-                          style={StyleSheet.absoluteFill}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 0, y: 1 }}
-                        />
-                        <Text style={styles.rentalIcon}>{item.icon}</Text>
-                        <Text style={[styles.rentalName, disabled && styles.coinShopTextDisabled]}>
-                          {item.name}
-                        </Text>
-                        <Text style={[styles.rentalDesc, disabled && styles.coinShopTextDisabled]}>
-                          {item.description}
-                        </Text>
-                        {durationLabel ? (
-                          <View style={styles.rentalDurationBadge}>
-                            <Text style={styles.rentalDurationText}>{'\u23F1'} {durationLabel}</Text>
-                          </View>
-                        ) : null}
-                        <View style={[styles.coinShopPrice, cantAfford && styles.coinShopPriceDisabled]}>
-                          <Text style={[styles.coinShopPriceText, cantAfford && styles.coinShopPriceTextDisabled]}>
-                            {'\u{1FA99}'} {item.costCoins}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          style={[styles.rentalBuyButton, disabled && styles.rentalBuyButtonDisabled]}
-                          onPress={() => !disabled && handleCoinShopPurchase(item)}
-                          activeOpacity={disabled ? 1 : 0.7}
-                          disabled={disabled}
-                        >
-                          <Text style={[styles.rentalBuyText, disabled && styles.rentalBuyTextDisabled]}>
-                            {cantAfford ? "Can't Afford" : limitReached ? 'Limit Reached' : 'Rent'}
-                          </Text>
-                        </TouchableOpacity>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            );
-          }
-          return (
-            <>
-              <Text style={styles.sectionTitle}>{'\u23F0'} Limited Rentals</Text>
-              <Text style={styles.rentalSubtitle}>Temporary boosts for coins</Text>
-              <View style={styles.rentalGrid}>
-                {rentalItems.map((item) => {
-                  const cantAfford = !economy.canAfford('coins', item.costCoins);
-                  const currentDate = new Date().toISOString().slice(0, 10);
-                  const purchases = currentDate === coinShopDate ? coinShopPurchasesToday : {};
-                  const todayCount = purchases[item.id] ?? 0;
-                  const limitReached = item.dailyLimit !== undefined && todayCount >= item.dailyLimit;
-                  const disabled = limitReached || cantAfford;
-                  const durationLabel = item.reward.durationMinutes
-                    ? item.reward.durationMinutes >= 1440
-                      ? `${Math.floor(item.reward.durationMinutes / 1440)} day${Math.floor(item.reward.durationMinutes / 1440) > 1 ? 's' : ''}`
-                      : item.reward.durationMinutes >= 60
-                        ? `${Math.floor(item.reward.durationMinutes / 60)} hour${Math.floor(item.reward.durationMinutes / 60) > 1 ? 's' : ''}`
-                        : `${item.reward.durationMinutes} min`
-                    : '';
-
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[styles.rentalCard, disabled && styles.coinShopCardDisabled]}
-                      activeOpacity={disabled ? 1 : 0.7}
-                      onPress={() => !disabled && handleCoinShopPurchase(item)}
-                    >
-                      <LinearGradient
-                        colors={[...GRADIENTS.surfaceCard]}
-                        style={StyleSheet.absoluteFill}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 1 }}
-                      />
-                      <Text style={styles.rentalIcon}>{item.icon}</Text>
-                      <Text style={[styles.rentalName, disabled && styles.coinShopTextDisabled]}>
-                        {item.name}
-                      </Text>
-                      <Text style={[styles.rentalDesc, disabled && styles.coinShopTextDisabled]}>
-                        {item.description}
-                      </Text>
-                      {durationLabel ? (
-                        <View style={styles.rentalDurationBadge}>
-                          <Text style={styles.rentalDurationText}>{'\u23F1'} {durationLabel}</Text>
-                        </View>
-                      ) : null}
-                      <View style={[styles.coinShopPrice, cantAfford && styles.coinShopPriceDisabled]}>
-                        <Text style={[styles.coinShopPriceText, cantAfford && styles.coinShopPriceTextDisabled]}>
-                          {'\u{1FA99}'} {item.costCoins}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.rentalBuyButton, disabled && styles.rentalBuyButtonDisabled]}
-                        onPress={() => !disabled && handleCoinShopPurchase(item)}
-                        activeOpacity={disabled ? 1 : 0.7}
-                        disabled={disabled}
-                      >
-                        <Text style={[styles.rentalBuyText, disabled && styles.rentalBuyTextDisabled]}>
-                          {cantAfford ? "Can't Afford" : limitReached ? 'Limit Reached' : 'Rent'}
-                        </Text>
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </>
-          );
-        })()}
+        <Text style={styles.sectionTitle}>{'\u23F0'} Limited Rentals</Text>
+        <Text style={styles.rentalSubtitle}>
+          Timed rentals and temporary boosts return in a future update after their gameplay hooks are fully wired.
+        </Text>
+        <View style={styles.rentalPlaceholderCard}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <Text style={styles.rentalPlaceholderIcon}>{'\u{1F6A7}'}</Text>
+          <Text style={styles.rentalPlaceholderTitle}>Temporarily Unavailable</Text>
+          <Text style={styles.rentalPlaceholderText}>
+            These timed rentals return once each effect is fully playable in live gameplay.
+          </Text>
+        </View>
 
         {/* ── Restore Purchases ──────────────────────────────────────── */}
         <TouchableOpacity
@@ -2374,6 +2173,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
     lineHeight: 14,
+  },
+  rentalPlaceholderCard: {
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 8,
+  },
+  rentalPlaceholderIcon: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  rentalPlaceholderTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  rentalPlaceholderText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontFamily: FONTS.bodyMedium,
+    lineHeight: 17,
+    textAlign: 'center',
+    maxWidth: 280,
   },
   rentalDurationBadge: {
     backgroundColor: COLORS.accent + '20',

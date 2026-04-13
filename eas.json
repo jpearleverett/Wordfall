@@ -7,6 +7,9 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+      },
       "android": {
         "buildType": "apk"
       },
@@ -16,6 +19,9 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+      },
       "ios": {
         "resourceClass": "m-medium"
       },
@@ -25,6 +31,9 @@
     },
     "production": {
       "distribution": "store",
+      "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+      },
       "ios": {
         "resourceClass": "m-medium",
         "autoIncrement": "buildNumber"
@@ -38,7 +47,7 @@
   "submit": {
     "production": {
       "android": {
-        "track": "internal"
+        "track": "production"
       }
     }
   }
