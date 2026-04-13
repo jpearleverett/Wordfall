@@ -2,6 +2,7 @@
   "name": "wordfall-cloud-functions",
   "version": "1.0.0",
   "description": "Firebase Cloud Functions for Wordfall club goals, push notifications, and streak reminders",
+  "engines": { "node": "20" },
   "main": "lib/index.js",
   "scripts": {
     "build": "tsc",
