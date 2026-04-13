@@ -2,5 +2,15 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
-  }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "commerce"
+    },
+    {
+      "source": "cloud-functions",
+      "codebase": "social"
+    }
+  ]
 }
