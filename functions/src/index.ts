@@ -273,86 +273,116 @@ async function validateGoogleReceipt(
 
 // ── Cloud Functions ──────────────────────────────────────────────────────────
 
+async function validateReceiptCore(
+  data: ValidateReceiptRequest,
+  authenticatedUserId?: string
+): Promise<ValidateReceiptResponse> {
+  const { receipt, productId, platform, userId } = data;
+
+  if (!receipt || !productId || !platform) {
+    return {
+      valid: false,
+      error: "Missing required fields: receipt, productId, platform",
+    };
+  }
+
+  if (platform !== "ios" && platform !== "android") {
+    return {
+      valid: false,
+      error: "Platform must be 'ios' or 'android'",
+    };
+  }
+
+  const hash = hashReceipt(receipt);
+  if (await isReceiptReplay(hash)) {
+    functions.logger.warn("Duplicate receipt detected", {
+      productId,
+      userId,
+    });
+    return {
+      valid: false,
+      error: "Duplicate receipt — possible replay attack",
+    };
+  }
+
+  let result: ValidateReceiptResponse;
+
+  try {
+    if (platform === "ios") {
+      result = await validateAppleReceipt(receipt, productId);
+    } else {
+      result = await validateGoogleReceipt(receipt, productId);
+    }
+  } catch (error) {
+    functions.logger.error("Receipt validation error", { error, productId });
+    return {
+      valid: false,
+      error: "Receipt validation failed",
+    };
+  }
+
+  if (result.valid) {
+    await storeReceiptHash(hash, productId, userId ?? authenticatedUserId);
+
+    const uid = userId ?? authenticatedUserId;
+    if (uid) {
+      await db
+        .collection("users")
+        .doc(uid)
+        .collection("purchases")
+        .add({
+          productId,
+          transactionId: result.transactionId ?? null,
+          expiresAt: result.expiresAt ?? null,
+          platform,
+          purchasedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    }
+  }
+
+  return result;
+}
+
 /**
- * validateReceipt — HTTPS Callable
+ * validateReceipt — HTTPS endpoint
  *
- * Validates IAP receipts against Apple App Store or Google Play.
- * Stores validated receipt hashes in Firestore to prevent replay attacks.
+ * Matches the mobile app's fetch-based contract:
+ * POST /validateReceipt
+ * { receipt, productId, platform, userId? }
  */
-export const validateReceipt = functions.https.onCall(
-  async (
-    data: ValidateReceiptRequest,
-    context
-  ): Promise<ValidateReceiptResponse> => {
-    const { receipt, productId, platform, userId } = data;
-
-    // Input validation
-    if (!receipt || !productId || !platform) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Missing required fields: receipt, productId, platform"
-      );
+export const validateReceipt = functions.https.onRequest(
+  async (req, res): Promise<void> => {
+    if (req.method !== "POST") {
+      res.status(405).json({ valid: false, error: "Method not allowed" });
+      return;
     }
 
-    if (platform !== "ios" && platform !== "android") {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Platform must be 'ios' or 'android'"
-      );
-    }
+    const data = (req.body ?? {}) as ValidateReceiptRequest;
+    const authHeader = req.header("Authorization");
+    let authenticatedUserId: string | undefined;
 
-    // Replay detection
-    const hash = hashReceipt(receipt);
-    if (await isReceiptReplay(hash)) {
-      functions.logger.warn("Duplicate receipt detected", {
-        productId,
-        userId,
-      });
-      return {
-        valid: false,
-        error: "Duplicate receipt — possible replay attack",
-      };
-    }
-
-    // Platform-specific validation
-    let result: ValidateReceiptResponse;
-
-    try {
-      if (platform === "ios") {
-        result = await validateAppleReceipt(receipt, productId);
-      } else {
-        result = await validateGoogleReceipt(receipt, productId);
-      }
-    } catch (error) {
-      functions.logger.error("Receipt validation error", { error, productId });
-      throw new functions.https.HttpsError(
-        "internal",
-        "Receipt validation failed"
-      );
-    }
-
-    // Store hash on success to prevent replay
-    if (result.valid) {
-      await storeReceiptHash(hash, productId, userId ?? context.auth?.uid);
-
-      // If the caller is authenticated, grant entitlement in Firestore
-      const uid = userId ?? context.auth?.uid;
-      if (uid) {
-        await db
-          .collection("users")
-          .doc(uid)
-          .collection("purchases")
-          .add({
-            productId,
-            transactionId: result.transactionId ?? null,
-            expiresAt: result.expiresAt ?? null,
-            platform,
-            purchasedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+    if (authHeader?.startsWith("Bearer ")) {
+      const idToken = authHeader.slice("Bearer ".length);
+      try {
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        authenticatedUserId = decoded.uid;
+      } catch (error) {
+        functions.logger.warn("Failed to verify Firebase ID token for receipt validation", {
+          error,
+        });
       }
     }
 
-    return result;
+    const result = await validateReceiptCore(data, authenticatedUserId);
+    const statusCode =
+      result.valid ? 200 :
+      result.error === "Missing required fields: receipt, productId, platform" ? 400 :
+      result.error === "Platform must be 'ios' or 'android'" ? 400 :
+      result.error === "Method not allowed" ? 405 :
+      result.error === "Receipt validation failed" ? 500 :
+      200;
+
+    res.status(statusCode).json(result);
   }
 );
 
