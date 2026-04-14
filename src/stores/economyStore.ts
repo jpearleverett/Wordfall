@@ -15,6 +15,8 @@ import { createContext, useContext } from 'react';
 import { createStore, useStore } from 'zustand';
 import type { EconomyState, EconomyContextType } from '../contexts/EconomyContext';
 import { isTemporaryEntitlementActive } from '../services/commercialEntitlements';
+import { computeRefilledLives } from '../utils/lives';
+import { LIVES } from '../constants';
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
@@ -35,12 +37,48 @@ export function useEconomyStore<T>(selector: (s: EconomyState) => T): T {
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
-/** Action keys from EconomyContextType — everything except the raw Economy
- * fields. Includes computed fields (lives, isAdFree, isVip, etc.) and methods. */
-export type EconomyActions = Omit<
+/**
+ * Pure dispatch surface. ONLY methods — no state-derived values — so the
+ * actions object identity stays stable across normal state churn (currency
+ * adds, life ticks, etc.). Read state via useEconomyStore selectors.
+ *
+ * Computed values previously exposed on the context (`lives`, `isAdFree`,
+ * `isVip`, `nextLifeTime`, `starterPackAvailable`, `vipExpiresAt`,
+ * `isPremiumPass`, `dailyValuePackExpiry`, `undoTokens`, `totalEarned`,
+ * `purchaseHistory`) live in the store; use the corresponding selectors
+ * (e.g. `selectLivesCurrent`, `selectIsAdFreeComputed`).
+ */
+export type EconomyActions = Pick<
   EconomyContextType,
-  'coins' | 'gems' | 'hintTokens' | 'eventStars' | 'libraryPoints' | 'boosterTokens'
->;
+  | 'addCoins'
+  | 'spendCoins'
+  | 'addGems'
+  | 'spendGems'
+  | 'addHintTokens'
+  | 'spendHintToken'
+  | 'addEventStars'
+  | 'addLibraryPoints'
+  | 'canAfford'
+  | 'spendLife'
+  | 'refillLives'
+  | 'getTimeUntilNextLife'
+  | 'processAdReward'
+  | 'processPurchase'
+  | 'applyValidatedPurchase'
+  | 'activateStarterPack'
+  | 'addUndoTokens'
+  | 'spendUndoToken'
+  | 'addBoosterToken'
+  | 'spendBoosterToken'
+  | 'claimDailyValuePackDrip'
+  | 'claimVipDailyRewards'
+  | 'checkVipStreak'
+  | 'claimVipStreakBonus'
+  | 'addLives'
+  | 'hasTemporaryEntitlement'
+  | 'getTemporaryEntitlementExpiry'
+  | 'grantTemporaryEntitlement'
+> & { loaded: boolean };
 
 export const EconomyActionsContext = createContext<EconomyActions | null>(null);
 
@@ -94,3 +132,15 @@ export const selectIsAdFreeComputed = (s: EconomyState) =>
 
 export const selectStarterPackAvailable = (s: EconomyState) =>
   s.starterPackExpiresAt > Date.now();
+
+/** Lives.current after refill compute (matches EconomyContext.value.lives). */
+export const selectLivesCurrent = (s: EconomyState) =>
+  computeRefilledLives(s.lives).current;
+
+/** Timestamp at which the next life will refill, or null if at max. */
+export const selectNextLifeTime = (s: EconomyState) => {
+  const refilled = computeRefilledLives(s.lives);
+  return refilled.current < LIVES.max
+    ? s.lives.lastRefillTime + LIVES.refillMinutes * 60 * 1000
+    : null;
+};

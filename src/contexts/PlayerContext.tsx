@@ -1181,8 +1181,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getModeLevel = useCallback((modeId: string): number => {
-    return data.modeLevels[modeId] ?? 1;
-  }, [data.modeLevels]);
+    return dataRef.current.modeLevels[modeId] ?? 1;
+  }, []);
 
   // ── Achievements, Feature Unlocks, Tooltips, Weekly Goals, Ceremonies,
   //    Difficulty Pacing, Achievement Checking, Comebacks
@@ -1404,11 +1404,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getPrestigeInfo = useCallback(() => {
-    const state = data.prestige ?? DEFAULT_PRESTIGE_STATE;
-    const canDo = canPrestige(data.currentLevel, state.prestigeLevel);
+    const current = dataRef.current;
+    const state = current.prestige ?? DEFAULT_PRESTIGE_STATE;
+    const canDo = canPrestige(current.currentLevel, state.prestigeLevel);
     const nextRewards = getPrestigeRewards(state.prestigeLevel + 1);
     return { state, canPrestige: canDo, nextRewards };
-  }, [data.prestige, data.currentLevel]);
+  }, []);
 
   // ── Puzzle Energy ──────────────────────────────────────────────────────
 
@@ -1534,7 +1535,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [computeCurrentEnergy]);
 
   const getTimeUntilNextEnergy = useCallback((): number => {
-    const energyNow = computeCurrentEnergy(data.puzzleEnergy);
+    const energyNow = computeCurrentEnergy(dataRef.current.puzzleEnergy);
     if (energyNow.current >= ENERGY.MAX) return 0;
 
     const lastRegen = new Date(energyNow.lastRegenTime).getTime();
@@ -1542,10 +1543,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const elapsed = Date.now() - lastRegen;
     const remaining = regenMs - (elapsed % regenMs);
     return Math.max(0, remaining);
-  }, [data.puzzleEnergy, computeCurrentEnergy]);
+  }, [computeCurrentEnergy]);
 
   const getEnergyDisplay = useCallback(() => {
-    const energyNow = computeCurrentEnergy(data.puzzleEnergy);
+    const energyNow = computeCurrentEnergy(dataRef.current.puzzleEnergy);
     const bonusPlaysLeft = ENERGY.BONUS_PLAYS_AFTER_ZERO - energyNow.bonusPlaysUsed;
     return {
       current: energyNow.current,
@@ -1553,7 +1554,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       bonusPlaysLeft: Math.max(0, bonusPlaysLeft),
       isBonusMode: energyNow.current <= 0 && energyNow.bonusPlaysUsed > 0,
     };
-  }, [data.puzzleEnergy, computeCurrentEnergy]);
+  }, [computeCurrentEnergy]);
 
   // ── Adaptive Difficulty + Friend Challenges (extracted to PlayerProgressContext / PlayerSocialContext) ──
 

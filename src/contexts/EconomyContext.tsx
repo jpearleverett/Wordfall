@@ -27,6 +27,7 @@ import {
   type EconomyStore,
   type EconomyActions,
 } from '../stores/economyStore';
+import { computeRefilledLives } from '../utils/lives';
 
 interface Economy {
   coins: number;
@@ -182,26 +183,6 @@ const DEFAULT_ECONOMY: EconomyState = {
   entitlementMigrationVersion: 0,
 };
 
-/** Calculate how many lives should have refilled since lastRefillTime. */
-function computeRefilledLives(livesData: LivesData): LivesData {
-  const now = Date.now();
-  const elapsed = now - livesData.lastRefillTime;
-  const refillMs = LIVES.refillMinutes * 60 * 1000;
-  const livesEarned = Math.floor(elapsed / refillMs);
-
-  if (livesEarned <= 0 || livesData.current >= LIVES.max) {
-    return livesData;
-  }
-
-  const newCurrent = Math.min(livesData.current + livesEarned, LIVES.max);
-  const newLastRefill =
-    newCurrent >= LIVES.max
-      ? now
-      : livesData.lastRefillTime + livesEarned * refillMs;
-
-  return { current: newCurrent, lastRefillTime: newLastRefill };
-}
-
 const EconomyContext = createContext<EconomyContextType>({
   ...DEFAULT_ECONOMY,
   addCoins: () => {},
@@ -342,8 +323,10 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   // blocking the JS thread. Batch to one write per second of quiet.
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestStateRef = useRef(state);
+  // Keep the ref in sync during render so canAfford / other ref-readers
+  // never see stale state (effects run after commit, which is too late).
+  latestStateRef.current = state;
   useEffect(() => {
-    latestStateRef.current = state;
     if (!loaded) return;
 
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
@@ -489,11 +472,15 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  // Read latest state via ref so canAfford has stable identity across the
+  // many state mutations economy goes through. Behavior is unchanged because
+  // latestStateRef is updated synchronously in the persist effect above on
+  // every state change.
   const canAfford = useCallback(
     (currency: 'coins' | 'gems', amount: number): boolean => {
-      return state[currency] >= amount;
+      return latestStateRef.current[currency] >= amount;
     },
-    [state],
+    [],
   );
 
   // ── Lives ──────────────────────────────────────────────────────────────────
@@ -533,13 +520,13 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getTimeUntilNextLife = useCallback((): number => {
-    const livesNow = computeRefilledLives(state.lives);
+    const livesNow = computeRefilledLives(latestStateRef.current.lives);
     if (livesNow.current >= LIVES.max) return 0;
     const refillMs = LIVES.refillMinutes * 60 * 1000;
     const elapsed = Date.now() - livesNow.lastRefillTime;
     const remaining = refillMs - (elapsed % refillMs);
     return Math.max(0, remaining);
-  }, [state.lives]);
+  }, []);
 
   // ── Ad reward processing ─────────────────────────────────────────────────
   const processAdReward = useCallback((rewardType: AdRewardType) => {
@@ -640,12 +627,15 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const hasTemporaryEntitlement = useCallback((effectId: CommercialEffectId): boolean => {
-    return isTemporaryEntitlementActive(state.temporaryEntitlements, effectId);
-  }, [state.temporaryEntitlements]);
+    return isTemporaryEntitlementActive(
+      latestStateRef.current.temporaryEntitlements,
+      effectId,
+    );
+  }, []);
 
   const getTemporaryEntitlementExpiry = useCallback((effectId: CommercialEffectId): number => {
-    return state.temporaryEntitlements[effectId] ?? 0;
-  }, [state.temporaryEntitlements]);
+    return latestStateRef.current.temporaryEntitlements[effectId] ?? 0;
+  }, []);
 
   /** Claim today's daily value pack drip rewards. Returns true if claimed. */
   const claimDailyValuePackDrip = useCallback((): boolean => {
@@ -895,11 +885,15 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  // Actions bag for useEconomyActions(). Stable identity tracks the same
-  // useCallback identities as `value` above. Computed fields (lives, isVip,
-  // isAdFree, etc.) are included so consumers don't have to recompute them.
+  // Pure-method dispatch bag. State-derived values are NOT included — they're
+  // exposed via store selectors (selectLivesCurrent, selectIsAdFreeComputed,
+  // selectIsVipActive, etc.) so that consumers reading e.g. coins via a
+  // selector don't re-render when undoTokens churns. This memo's identity is
+  // stable across normal state churn because every dep is a stable callback;
+  // it only changes when one of the underlying useCallback identities does.
   const actions = useMemo<EconomyActions>(
     () => ({
+      loaded,
       addCoins,
       spendCoins,
       addGems,
@@ -909,32 +903,18 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       addEventStars,
       addLibraryPoints,
       canAfford,
-      totalEarned: state.totalEarned,
-      purchaseHistory: state.purchaseHistory,
-      loaded,
-      lives: currentLives,
-      maxLives: LIVES.max,
-      nextLifeTime,
       spendLife,
       refillLives,
       getTimeUntilNextLife,
       processAdReward,
-      isAdFree: state.isAdFreeFlag || isVipActive || hasVipExperience,
       processPurchase,
       applyValidatedPurchase,
-      isPremiumPass: state.isPremiumPassFlag,
-      dailyValuePackExpiry: state.dailyValuePackExpiry,
-      starterPackAvailable: state.starterPackExpiresAt > Date.now(),
-      starterPackExpiresAt: state.starterPackExpiresAt,
       activateStarterPack,
-      undoTokens: state.undoTokens,
       addUndoTokens,
       spendUndoToken,
       addBoosterToken,
       spendBoosterToken,
       claimDailyValuePackDrip,
-      isVip: isVipActive,
-      vipExpiresAt: state.vipExpiresAt,
       claimVipDailyRewards,
       checkVipStreak,
       claimVipStreakBonus,
@@ -944,12 +924,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       grantTemporaryEntitlement,
     }),
     [
-      state,
       loaded,
-      currentLives,
-      nextLifeTime,
-      isVipActive,
-      hasVipExperience,
       addCoins,
       spendCoins,
       addGems,
