@@ -162,21 +162,33 @@ class Analytics {
       }
 
       // Dynamically import Firebase modules so the app works without them
-      const { getAnalytics, logEvent: fbLogEvent, setUserId: fbSetUserId, setUserProperties: fbSetUserProperties } = await import('firebase/analytics');
       const { getFirestore, collection, addDoc } = await import('firebase/firestore');
       const { getApp } = await import('firebase/app');
-
       const app = getApp();
-      this.firebaseAnalytics = {
-        instance: getAnalytics(app),
-        logEvent: fbLogEvent,
-        setUserId: fbSetUserId,
-        setUserProperties: fbSetUserProperties,
-      };
+
+      // Firestore works on all platforms — always wire it up for event flushing
       this.firestore = { instance: getFirestore(app), collection, addDoc };
       this.useFirebase = true;
 
-      logger.log('[Analytics] Firebase Analytics connected');
+      // firebase/analytics is web-only (needs DOM). Skip on React Native.
+      // isSupported() returns false in non-browser environments.
+      try {
+        const { getAnalytics, isSupported, logEvent: fbLogEvent, setUserId: fbSetUserId, setUserProperties: fbSetUserProperties } = await import('firebase/analytics');
+        const supported = await isSupported();
+        if (supported) {
+          this.firebaseAnalytics = {
+            instance: getAnalytics(app),
+            logEvent: fbLogEvent,
+            setUserId: fbSetUserId,
+            setUserProperties: fbSetUserProperties,
+          };
+          logger.log('[Analytics] Firebase Analytics connected (web)');
+        } else {
+          logger.log('[Analytics] Firebase Analytics unsupported on this platform — using Firestore event stream only');
+        }
+      } catch (analyticsError) {
+        logger.log('[Analytics] Firebase Analytics not available — using Firestore event stream only');
+      }
     } catch (error) {
       logger.log('[Analytics] Firebase not available, using local storage only');
     }
