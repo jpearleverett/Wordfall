@@ -26,6 +26,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.wordfall.app",
       "buildNumber": "2",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:wordfall.app"
       ],
@@ -61,6 +62,7 @@
     "android": {
       "package": "com.wordfall.app",
       "versionCode": 2,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#060918"
@@ -93,6 +95,7 @@
     },
     "plugins": [
       "@sentry/react-native/expo",
+      "@react-native-firebase/app",
       "expo-font",
       "react-native-iap",
       [
@@ -111,6 +114,9 @@
         {
           "android": {
             "kotlinVersion": "2.2.0"
+          },
+          "ios": {
+            "useFrameworks": "static"
           }
         }
       ]
