@@ -29,8 +29,24 @@ import { LOCAL_IMAGES } from '../utils/localAssets';
 import { wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
-import { usePlayer } from '../contexts/PlayerContext';
-import { useEconomy } from '../contexts/EconomyContext';
+import {
+  usePlayerStore,
+  usePlayerActions,
+  selectEquippedTheme,
+  selectFailCountByLevel,
+  selectPuzzlesSolved,
+  selectStreaks,
+  selectTooltipsShown,
+} from '../stores/playerStore';
+import {
+  useEconomyStore,
+  useEconomyActions,
+  selectHintTokens,
+  selectUndoTokens,
+  selectBoosterTokens,
+  selectLivesCurrent,
+  selectIsAdFreeComputed,
+} from '../stores/economyStore';
 import { analytics } from '../services/analytics';
 import { getTheme } from '../data/cosmetics';
 
@@ -350,12 +366,26 @@ export function GameScreen({
   totalGemsAwarded = 0,
   nextUnlockPreview = null,
 }: GameScreenProps) {
-  const player = usePlayer();
+  // Narrow zustand subscriptions — re-render only when the slice actually
+  // read changes. usePlayer() / useEconomy() would re-render this 1700-line
+  // component on every economy/player mutation across the app.
+  const equippedThemeId = usePlayerStore(selectEquippedTheme);
+  const failCountByLevel = usePlayerStore(selectFailCountByLevel);
+  const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
+  const playerStreaks = usePlayerStore(selectStreaks);
+  const tooltipsShown = usePlayerStore(selectTooltipsShown);
+  const playerActions = usePlayerActions();
+  const { markTooltipShown, queueCeremony, sendChallenge } = playerActions;
+  // Cast handle for the dynamic streak_shield activation lookup below — no
+  // such method exists on PlayerActions today, but the offer-accept switch
+  // checks for it so a future addition wires through automatically.
+  const playerActionsAny = playerActions as unknown as Record<string, unknown>;
+
   const equippedTheme = useMemo(
-    () => getTheme(player.equippedTheme),
-    [player.equippedTheme],
+    () => getTheme(equippedThemeId),
+    [equippedThemeId],
   );
-  const failCount = player.failCountByLevel?.[level] ?? 0;
+  const failCount = failCountByLevel?.[level] ?? 0;
   // Dynamic hint generosity: show hint sooner if player has failed this level before
   // Memoized to keep resetIdleTimer callback stable across renders
   const idleHintDelay = useMemo(
@@ -474,7 +504,22 @@ export function GameScreen({
   const [tutorialTip, setTutorialTip] = useState<{ id: string; text: string } | null>(null);
 
   // --- Contextual Offer state ---
-  const economy = useEconomy();
+  const hintTokens = useEconomyStore(selectHintTokens);
+  const undoTokens = useEconomyStore(selectUndoTokens);
+  const boosterTokens = useEconomyStore(selectBoosterTokens);
+  const lives = useEconomyStore(selectLivesCurrent);
+  const isAdFree = useEconomyStore(selectIsAdFreeComputed);
+  const {
+    addHintTokens,
+    addLives,
+    addBoosterToken,
+    spendBoosterToken,
+    spendHintToken,
+    spendUndoToken,
+    spendCoins,
+    spendGems,
+    processAdReward,
+  } = useEconomyActions();
   const [activeOffer, setActiveOffer] = useState<OfferType | null>(null);
   const offerShownThisLevel = useRef(false);
   const completionHandled = useRef(false);
@@ -512,10 +557,10 @@ export function GameScreen({
   const handleWatchAdForHint = useCallback(async () => {
     const result = await adManager.showRewardedAd('hint_reward');
     if (result.rewarded) {
-      economy.processAdReward('hint_reward');
+      processAdReward('hint_reward');
       void soundManager.playSound('hintUsed');
     }
-  }, [economy]);
+  }, [processAdReward]);
 
   const handleWatchAdForDoubleReward = useCallback(async () => {
     const result = await adManager.showRewardedAd('double_reward');
@@ -564,16 +609,16 @@ export function GameScreen({
   // booster_pack: show on first entry to a hard/expert level
   useEffect(() => {
     if (boosterPackShown.current) return;
-    if (player.puzzlesSolved < 8) return;
+    if (puzzlesSolved < 8) return;
     if (difficulty === 'hard' || difficulty === 'expert') {
-      const levelsPlayed = player.failCountByLevel ?? {};
+      const levelsPlayed = failCountByLevel ?? {};
       const previouslyPlayed = (levelsPlayed[level] ?? 0) > 0;
       if (!previouslyPlayed) {
         boosterPackShown.current = true;
         showOfferIfAllowed('booster_pack');
       }
     }
-  }, [level, difficulty, player.failCountByLevel, player.puzzlesSolved, showOfferIfAllowed]);
+  }, [level, difficulty, failCountByLevel, puzzlesSolved, showOfferIfAllowed]);
 
   // close_finish: watch for 1 word remaining + stuck or idle 15s
   useEffect(() => {
@@ -614,7 +659,7 @@ export function GameScreen({
         failureCountedRef.current = true;
         sessionFailCount.current += 1;
       }
-      const persistentFails = player.failCountByLevel?.[level] ?? 0;
+      const persistentFails = failCountByLevel?.[level] ?? 0;
       const totalFails = Math.max(sessionFailCount.current, persistentFails);
       if (totalFails >= 2 && !offerShownThisLevel.current && !activeOffer) {
         showOfferIfAllowed('hint_rescue');
@@ -622,28 +667,28 @@ export function GameScreen({
     } else {
       failureCountedRef.current = false;
     }
-  }, [status, activeOffer, showOfferIfAllowed, player.failCountByLevel, level]);
+  }, [status, activeOffer, showOfferIfAllowed, failCountByLevel, level]);
 
   // hint_rescue: dead-end detected while player has 0 hint tokens
   useEffect(() => {
     if (
       isStuck &&
       status === 'playing' &&
-      economy.hintTokens === 0 &&
+      hintTokens === 0 &&
       mode !== 'relax' &&
       !offerShownThisLevel.current &&
       !activeOffer
     ) {
       showOfferIfAllowed('hint_rescue');
     }
-  }, [isStuck, status, economy.hintTokens, mode, activeOffer, showOfferIfAllowed]);
+  }, [isStuck, status, hintTokens, mode, activeOffer, showOfferIfAllowed]);
 
   // post_puzzle (restock): show when hint tokens reach 0 mid-gameplay after using a hint
   useEffect(() => {
     if (
       status === 'playing' &&
       hintsUsed > 0 &&
-      economy.hintTokens === 0 &&
+      hintTokens === 0 &&
       mode !== 'relax' &&
       remainingWords.length > 0 &&
       !offerShownThisLevel.current &&
@@ -651,21 +696,21 @@ export function GameScreen({
     ) {
       showOfferIfAllowed('post_puzzle');
     }
-  }, [status, hintsUsed, economy.hintTokens, mode, remainingWords.length, activeOffer, showOfferIfAllowed]);
+  }, [status, hintsUsed, hintTokens, mode, remainingWords.length, activeOffer, showOfferIfAllowed]);
 
   // life_refill: show when player fails and has no lives remaining
   useEffect(() => {
-    if ((status === 'failed' || status === 'timeout') && economy.lives === 0) {
+    if ((status === 'failed' || status === 'timeout') && lives === 0) {
       if (!offerShownThisLevel.current && !activeOffer) {
         showOfferIfAllowed('life_refill');
       }
     }
-  }, [status, economy.lives, activeOffer, showOfferIfAllowed]);
+  }, [status, lives, activeOffer, showOfferIfAllowed]);
 
   // streak_shield: show when player has an active streak at risk during gameplay
   useEffect(() => {
     if (status !== 'playing') return;
-    const streaks = player.streaks;
+    const streaks = playerStreaks;
     if (!streaks || streaks.currentStreak < 3 || streaks.streakShieldAvailable) return;
     // Check if last play was yesterday (streak at risk of expiring today)
     if (!streaks.lastPlayDate) return;
@@ -677,14 +722,14 @@ export function GameScreen({
     if (diffHours >= 20 && !offerShownThisLevel.current && !activeOffer) {
       showOfferIfAllowed('streak_shield');
     }
-  }, [status, player.streaks, activeOffer, showOfferIfAllowed]);
+  }, [status, playerStreaks, activeOffer, showOfferIfAllowed]);
 
   // post_puzzle: flag when puzzle won with hint tokens depleted
   useEffect(() => {
-    if (status === 'won' && economy.hintTokens === 0 && mode !== 'relax') {
+    if (status === 'won' && hintTokens === 0 && mode !== 'relax') {
       setPendingPostPuzzleOffer(true);
     }
-  }, [status, economy.hintTokens, mode]);
+  }, [status, hintTokens, mode]);
 
   const handleOfferAccept = useCallback(() => {
     if (!activeOffer) return;
@@ -692,46 +737,48 @@ export function GameScreen({
     switch (activeOffer) {
       case 'hint_rescue':
         // Spend 50 coins, grant 5 hint tokens
-        if (economy.spendCoins(50)) {
-          economy.addHintTokens(5);
+        if (spendCoins(50)) {
+          addHintTokens(5);
           accepted = true;
         }
         break;
       case 'close_finish':
         // Spend 25 coins, grant 1 hint token
-        if (economy.spendCoins(25)) {
-          economy.addHintTokens(1);
+        if (spendCoins(25)) {
+          addHintTokens(1);
           accepted = true;
         }
         break;
       case 'post_puzzle':
         // Spend 80 coins, grant 10 hint tokens
-        if (economy.spendCoins(80)) {
-          economy.addHintTokens(10);
+        if (spendCoins(80)) {
+          addHintTokens(10);
           accepted = true;
         }
         break;
       case 'booster_pack':
         // Spend 15 gems, grant 1 of each booster to persistent inventory
-        if (economy.spendGems(15)) {
-          economy.addBoosterToken('wildcardTile');
-          economy.addBoosterToken('spotlight');
-          economy.addBoosterToken('smartShuffle');
+        if (spendGems(15)) {
+          addBoosterToken('wildcardTile');
+          addBoosterToken('spotlight');
+          addBoosterToken('smartShuffle');
           accepted = true;
         }
         break;
       case 'life_refill':
         // Spend 10 gems, refill lives
-        if (economy.spendGems(10)) {
-          economy.addLives(5);
+        if (spendGems(10)) {
+          addLives(5);
           accepted = true;
         }
         break;
       case 'streak_shield':
-        // Activate streak shield — only spend gems if method exists
-        if (typeof (player as any).activateStreakShield === 'function') {
-          if (economy.spendGems(30)) {
-            (player as any).activateStreakShield();
+        // Activate streak shield — only spend gems if method exists.
+        // (Placeholder — no such method on PlayerActions today; keeping the
+        // dynamic check so a future addition wires through automatically.)
+        if (typeof (playerActionsAny as Record<string, unknown>).activateStreakShield === 'function') {
+          if (spendGems(30)) {
+            (playerActionsAny as { activateStreakShield: () => void }).activateStreakShield();
             accepted = true;
           }
         }
@@ -745,7 +792,18 @@ export function GameScreen({
       transactionCompleted: accepted,
     });
     setActiveOffer(null);
-  }, [activeOffer, economy, level, mode, difficulty, player]);
+  }, [
+    activeOffer,
+    spendCoins,
+    addHintTokens,
+    spendGems,
+    addBoosterToken,
+    addLives,
+    playerActionsAny,
+    level,
+    mode,
+    difficulty,
+  ]);
 
   // Memoize the composed grid scale to avoid creating a new style object each render
   const gridScaleStyle = useMemo(() => ({
@@ -874,8 +932,8 @@ export function GameScreen({
 
   // Hints/undos use persistent economy tokens (not per-level allocation)
   // Relax mode still uses unlimited per-level allocation
-  const hintsAvailable = mode === 'relax' ? hintsLeft : economy.hintTokens;
-  const undosAvailable = mode === 'relax' ? undosLeft : economy.undoTokens;
+  const hintsAvailable = mode === 'relax' ? hintsLeft : hintTokens;
+  const undosAvailable = mode === 'relax' ? undosLeft : undoTokens;
 
   // Idle hint prompt — use refs to avoid recreating on every state change
   const statusRef = useRef(status);
@@ -905,7 +963,7 @@ export function GameScreen({
 
   // Show mode tutorial on first play of a mode, or fall back to 2.5s text banner
   useEffect(() => {
-    if (mode !== 'classic' && modeTutorialSteps && !player.tooltipsShown.includes(`mode_tutorial_${mode}`)) {
+    if (mode !== 'classic' && modeTutorialSteps && !tooltipsShown.includes(`mode_tutorial_${mode}`)) {
       // First time playing this mode — show interactive tutorial instead of banner
       setShowModeIntro(false);
       setShowModeTutorial(true);
@@ -1237,21 +1295,21 @@ export function GameScreen({
   const handleHint = useCallback(() => {
     if (mode !== 'relax') {
       // Spend from persistent inventory and grant into game state
-      if (economy.hintTokens <= 0) return;
-      economy.spendHintToken();
+      if (hintTokens <= 0) return;
+      spendHintToken();
       grantHint();
     }
     void soundManager.playSound('hintUsed');
     void analytics.logEvent('hint_used', { level, mode, hintsAvailable });
     useHint();
-  }, [useHint, grantHint, level, mode, hintsAvailable, economy]);
+  }, [useHint, grantHint, level, mode, hintsAvailable, hintTokens, spendHintToken]);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
     if (mode !== 'relax') {
       // Spend from persistent inventory and grant into game state
-      if (economy.undoTokens <= 0) return;
-      economy.spendUndoToken();
+      if (undoTokens <= 0) return;
+      spendUndoToken();
       grantUndo();
     }
     void soundManager.playSound('undoUsed');
@@ -1288,7 +1346,7 @@ export function GameScreen({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, grantUndo, level, mode, undosAvailable, economy, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
+  }, [undoMove, grantUndo, level, mode, undosAvailable, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
@@ -1341,14 +1399,14 @@ export function GameScreen({
 
   // First-booster ceremony (fires once ever, tracked via tooltipsShown)
   const checkFirstBooster = useCallback(() => {
-    if (!player.tooltipsShown.includes('first_booster_used')) {
-      player.markTooltipShown('first_booster_used');
-      player.queueCeremony({
+    if (!tooltipsShown.includes('first_booster_used')) {
+      markTooltipShown('first_booster_used');
+      queueCeremony({
         type: 'first_booster',
         data: {},
       });
     }
-  }, [player]);
+  }, [tooltipsShown, markTooltipShown, queueCeremony]);
 
   // Booster handlers — spend from persistent economy inventory
   // Booster handlers use useStableCallback (not useCallback) so their
@@ -1356,8 +1414,8 @@ export function GameScreen({
   // every economy change (which is most renders), defeating BoosterBarMemo's
   // React.memo compare and making the booster bar re-render with every tap.
   const handleWildcard = useStableCallback(() => {
-    if ((economy.boosterTokens?.wildcardTile ?? 0) <= 0) return;
-    economy.spendBoosterToken('wildcardTile');
+    if ((boosterTokens?.wildcardTile ?? 0) <= 0) return;
+    spendBoosterToken('wildcardTile');
     grantBooster('wildcardTile');
     void soundManager.playSound('buttonPress');
     void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
@@ -1366,8 +1424,8 @@ export function GameScreen({
   });
 
   const handleSpotlight = useStableCallback(() => {
-    if ((economy.boosterTokens?.spotlight ?? 0) <= 0) return;
-    economy.spendBoosterToken('spotlight');
+    if ((boosterTokens?.spotlight ?? 0) <= 0) return;
+    spendBoosterToken('spotlight');
     grantBooster('spotlight');
     void soundManager.playSound('buttonPress');
     void analytics.logEvent('booster_used', { level, mode, booster: 'spotlight' });
@@ -1376,8 +1434,8 @@ export function GameScreen({
   });
 
   const handleSmartShuffle = useStableCallback(() => {
-    if ((economy.boosterTokens?.smartShuffle ?? 0) <= 0) return;
-    economy.spendBoosterToken('smartShuffle');
+    if ((boosterTokens?.smartShuffle ?? 0) <= 0) return;
+    spendBoosterToken('smartShuffle');
     grantBooster('smartShuffle');
     void soundManager.playSound('buttonPress');
     void analytics.logEvent('booster_used', { level, mode, booster: 'smartShuffle' });
@@ -1390,7 +1448,7 @@ export function GameScreen({
   // to GameFlashes (src/screens/game/GameFlashes.tsx) as part of the
   // per-tap re-render decomposition — see that file for the memoized subtree.
 
-  const bt = economy.boosterTokens ?? { wildcardTile: 0, spotlight: 0, smartShuffle: 0 };
+  const bt = boosterTokens ?? { wildcardTile: 0, spotlight: 0, smartShuffle: 0 };
   const hasAnyBoosters =
     bt.wildcardTile > 0 ||
     bt.spotlight > 0 ||
@@ -1529,7 +1587,7 @@ export function GameScreen({
             status={status}
             showIdleHint={showIdleHint}
             hintsAvailable={hintsAvailable}
-            canShowAdHint={!economy.isAdFree && adManager.canShowAd('hint_reward')}
+            canShowAdHint={!isAdFree && adManager.canShowAd('hint_reward')}
             isStuck={isStuck}
             undosLeft={undosLeft}
             onIdleHintTap={stableHandleIdleHintBannerTap}
@@ -1615,9 +1673,9 @@ export function GameScreen({
           onRetry={handleRetry}
           onDoubleReward={handleWatchAdForDoubleReward}
           rewardDoubled={rewardDoubled}
-          showAdOption={!economy.isAdFree && adManager.canShowAd('double_reward')}
+          showAdOption={!isAdFree && adManager.canShowAd('double_reward')}
           onChallengeFriend={() => {
-            const challenge = player.sendChallenge('friend', {
+            const challenge = sendChallenge('friend', {
               score: score,
               stars,
               time: solveSequence.length > 0 ? solveSequence[solveSequence.length - 1].timestamp : 0,
@@ -1648,8 +1706,8 @@ export function GameScreen({
             difficulty,
             wordsRemaining: remainingWords.length,
             hintsUsed: hintsUsed,
-            streakDays: player.streaks?.currentStreak ?? 0,
-            livesRemaining: economy.lives,
+            streakDays: playerStreaks?.currentStreak ?? 0,
+            livesRemaining: lives,
           }}
           onAccept={handleOfferAccept}
           onDismiss={dismissOffer}
@@ -1663,7 +1721,7 @@ export function GameScreen({
           visible={showModeTutorial}
           onComplete={() => {
             setShowModeTutorial(false);
-            player.markTooltipShown(`mode_tutorial_${mode}`);
+            markTooltipShown(`mode_tutorial_${mode}`);
           }}
         />
       )}
@@ -1680,8 +1738,8 @@ export function GameScreen({
           onBuyHints={() => {
             setShowPostLoss(false);
             // Navigate to shop or trigger IAP for hint_bundle_10
-            if (economy.spendCoins(80)) {
-              economy.addHintTokens(5);
+            if (spendCoins(80)) {
+              addHintTokens(5);
             }
             setShowFailed(true);
           }}
@@ -1750,7 +1808,7 @@ export function GameScreen({
                 <Text style={styles.retryButtonText}>TRY AGAIN</Text>
               </Pressable>
               {/* Watch ad for a free hint — shown after failure when player has no hints */}
-              {!economy.isAdFree && adManager.canShowAd('hint_reward') && hintsLeft === 0 && (
+              {!isAdFree && adManager.canShowAd('hint_reward') && hintsLeft === 0 && (
                 <Pressable
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={handleWatchAdForHint}
