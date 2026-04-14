@@ -14,8 +14,13 @@ import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { getCurrentEvent } from '../data/events';
 import { EventExclusiveReward } from '../types';
 import { eventManager, ActiveEvent, EventRewardTierDisplay } from '../services/eventManager';
-import { useEconomy } from '../contexts/EconomyContext';
-import { usePlayer } from '../contexts/PlayerContext';
+import { useEconomyActions } from '../stores/economyStore';
+import {
+  usePlayerStore,
+  usePlayerActions,
+  selectOwnedDecorations,
+  selectUnlockedCosmetics,
+} from '../stores/playerStore';
 
 const { width } = Dimensions.get('window');
 
@@ -32,8 +37,10 @@ const EventScreen: React.FC<EventScreenProps> = ({
   onPlayEventPuzzle: onPlayEventPuzzleProp,
   onOpenEventShop: onOpenEventShopProp,
 }) => {
-  const economy = useEconomy();
-  const player = usePlayer();
+  const { addCoins, addGems, addHintTokens } = useEconomyActions();
+  const ownedDecorations = usePlayerStore(selectOwnedDecorations);
+  const unlockedCosmetics = usePlayerStore(selectUnlockedCosmetics);
+  const { unlockCosmetic, unlockDecoration, updateProgress } = usePlayerActions();
   const onPlayEventPuzzle = onPlayEventPuzzleProp ?? (() => {});
   const onOpenEventShop = onOpenEventShopProp ?? (() => {});
   const [timeRemaining, setTimeRemaining] = useState('');
@@ -82,9 +89,9 @@ const EventScreen: React.FC<EventScreenProps> = ({
   const handleClaimReward = useCallback((eventId: string, tier: string) => {
     const reward = eventManager.claimEventReward(eventId, tier);
     if (reward) {
-      if (reward.coins) economy.addCoins(reward.coins);
-      if (reward.gems) economy.addGems(reward.gems);
-      if (reward.hintTokens) economy.addHintTokens(reward.hintTokens);
+      if (reward.coins) addCoins(reward.coins);
+      if (reward.gems) addGems(reward.gems);
+      if (reward.hintTokens) addHintTokens(reward.hintTokens);
 
       // Animate claim
       Animated.sequence([
@@ -94,9 +101,9 @@ const EventScreen: React.FC<EventScreenProps> = ({
 
       // Refresh events and persist claimed state to PlayerContext/AsyncStorage
       setActiveEvents(eventManager.getActiveEvents());
-      player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
+      updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
     }
-  }, [economy, claimAnim, player]);
+  }, [addCoins, addGems, addHintTokens, claimAnim, updateProgress]);
 
   // Get the current event's exclusive reward (must be declared before the claim callback
   // that closes over it, otherwise TS flags a "used before declaration" error).
@@ -110,9 +117,9 @@ const EventScreen: React.FC<EventScreenProps> = ({
     if (!exclusiveReward || !primaryEvent) return;
 
     if (exclusiveReward.type === 'decoration') {
-      player.unlockDecoration(exclusiveReward.id);
+      unlockDecoration(exclusiveReward.id);
     } else {
-      player.unlockCosmetic(exclusiveReward.id);
+      unlockCosmetic(exclusiveReward.id);
     }
     eventManager.claimExclusiveReward(primaryEvent.id);
 
@@ -122,15 +129,15 @@ const EventScreen: React.FC<EventScreenProps> = ({
     ]).start();
 
     setActiveEvents(eventManager.getActiveEvents());
-    player.updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
-  }, [exclusiveReward, primaryEvent, player, claimAnim]);
+    updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
+  }, [exclusiveReward, primaryEvent, unlockCosmetic, unlockDecoration, updateProgress, claimAnim]);
 
   // Exclusive reward claim state
   const goldTierReached = primaryEvent?.rewards?.find(r => r.tier === 'gold')?.reached ?? false;
   const exclusiveAlreadyClaimed = exclusiveReward
     ? exclusiveReward.type === 'decoration'
-      ? player.ownedDecorations.includes(exclusiveReward.id)
-      : player.unlockedCosmetics.includes(exclusiveReward.id)
+      ? ownedDecorations.includes(exclusiveReward.id)
+      : unlockedCosmetics.includes(exclusiveReward.id)
     : false;
   const canClaimExclusive = goldTierReached && !exclusiveAlreadyClaimed && !!exclusiveReward;
 

@@ -39,6 +39,13 @@ import {
   PRESTIGE_LEVELS,
 } from '../data/prestigeSystem';
 import { PrestigeState } from '../types';
+import {
+  PlayerStoreContext,
+  PlayerActionsContext,
+  createPlayerStore,
+  type PlayerStore,
+  type PlayerActions,
+} from '../stores/playerStore';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -77,7 +84,7 @@ interface ModeStats {
   wins: number;
 }
 
-interface PlayerData {
+export interface PlayerData {
   // Progress
   currentLevel: number;
   highestLevel: number;
@@ -218,7 +225,7 @@ interface PlayerData {
 
 type CloudSyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
 
-interface PlayerContextType extends PlayerData {
+export interface PlayerContextType extends PlayerData {
   loaded: boolean;
   cloudSyncStatus: CloudSyncStatus;
 
@@ -649,6 +656,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const latestDataRef = useRef<PlayerData>(DEFAULT_PLAYER_DATA);
   const isInitialLoadDone = useRef(false);
 
+  // Zustand store mirror — see src/stores/playerStore.ts. Every consumer that
+  // calls usePlayerStore(selector) re-renders only when that slice changes.
+  // Backwards-compat: usePlayer() still returns the full context value.
+  const storeRef = useRef<PlayerStore | null>(null);
+  if (!storeRef.current) storeRef.current = createPlayerStore(DEFAULT_PLAYER_DATA);
+
   // ── Persistence ─────────────────────────────────────────────────────────
 
   // Step 1: Load from AsyncStorage
@@ -833,6 +846,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return { ...prev, referralCode: generateReferralCode(user.uid) };
     });
   }, [loaded, user]);
+
+  // ── Mirror state into the zustand store ───────────────────────────────────
+  // The store is the subscription surface for usePlayerStore(selector). The
+  // useState above remains the write source of truth so the debounce and
+  // reconciliation effects below are unchanged.
+  useEffect(() => {
+    storeRef.current!.setState(data, true);
+  }, [data]);
 
   // ── Data accessor ref (for factory functions that need current data) ──
   const dataRef = useRef(data);
@@ -1160,8 +1181,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getModeLevel = useCallback((modeId: string): number => {
-    return data.modeLevels[modeId] ?? 1;
-  }, [data.modeLevels]);
+    return dataRef.current.modeLevels[modeId] ?? 1;
+  }, []);
 
   // ── Achievements, Feature Unlocks, Tooltips, Weekly Goals, Ceremonies,
   //    Difficulty Pacing, Achievement Checking, Comebacks
@@ -1383,11 +1404,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getPrestigeInfo = useCallback(() => {
-    const state = data.prestige ?? DEFAULT_PRESTIGE_STATE;
-    const canDo = canPrestige(data.currentLevel, state.prestigeLevel);
+    const current = dataRef.current;
+    const state = current.prestige ?? DEFAULT_PRESTIGE_STATE;
+    const canDo = canPrestige(current.currentLevel, state.prestigeLevel);
     const nextRewards = getPrestigeRewards(state.prestigeLevel + 1);
     return { state, canPrestige: canDo, nextRewards };
-  }, [data.prestige, data.currentLevel]);
+  }, []);
 
   // ── Puzzle Energy ──────────────────────────────────────────────────────
 
@@ -1513,7 +1535,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [computeCurrentEnergy]);
 
   const getTimeUntilNextEnergy = useCallback((): number => {
-    const energyNow = computeCurrentEnergy(data.puzzleEnergy);
+    const energyNow = computeCurrentEnergy(dataRef.current.puzzleEnergy);
     if (energyNow.current >= ENERGY.MAX) return 0;
 
     const lastRegen = new Date(energyNow.lastRegenTime).getTime();
@@ -1521,10 +1543,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const elapsed = Date.now() - lastRegen;
     const remaining = regenMs - (elapsed % regenMs);
     return Math.max(0, remaining);
-  }, [data.puzzleEnergy, computeCurrentEnergy]);
+  }, [computeCurrentEnergy]);
 
   const getEnergyDisplay = useCallback(() => {
-    const energyNow = computeCurrentEnergy(data.puzzleEnergy);
+    const energyNow = computeCurrentEnergy(dataRef.current.puzzleEnergy);
     const bonusPlaysLeft = ENERGY.BONUS_PLAYS_AFTER_ZERO - energyNow.bonusPlaysUsed;
     return {
       current: energyNow.current,
@@ -1532,7 +1554,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       bonusPlaysLeft: Math.max(0, bonusPlaysLeft),
       isBonusMode: energyNow.current <= 0 && energyNow.bonusPlaysUsed > 0,
     };
-  }, [data.puzzleEnergy, computeCurrentEnergy]);
+  }, [computeCurrentEnergy]);
 
   // ── Adaptive Difficulty + Friend Challenges (extracted to PlayerProgressContext / PlayerSocialContext) ──
 
@@ -1705,7 +1727,137 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
+  // Actions bag for usePlayerActions(). Identity is stable as long as the
+  // underlying useCallback deps don't churn — same dep set as `value` above
+  // minus the raw `data` field.
+  const actions = useMemo<PlayerActions>(
+    () => ({
+      loaded,
+      cloudSyncStatus,
+      updateProgress,
+      recordPuzzleComplete,
+      recordDailyComplete,
+      collectAtlasWord,
+      addRareTile,
+      collectStamp,
+      updateMissionProgress,
+      claimMissionReward,
+      generateDailyMissions,
+      updateStreak,
+      useGraceDay,
+      useStreakShield,
+      equipCosmetic,
+      unlockCosmetic,
+      restoreWing,
+      placeDecoration,
+      unlockDecoration,
+      unlockMode,
+      recordModePlay,
+      advanceModeLevel,
+      getModeLevel,
+      completeAchievement,
+      checkComebackRewards,
+      unlockFeature,
+      checkFeatureUnlocks,
+      markTooltipShown,
+      completeOnboardingMilestone,
+      initWeeklyGoals,
+      updateWeeklyGoalProgress,
+      queueCeremony,
+      popCeremony,
+      recordFailure,
+      needsBreather,
+      checkAchievements,
+      sendHintGift,
+      sendTileGift,
+      updateMysteryWheel,
+      awardFreeSpin,
+      updateWinStreak,
+      useEnergy,
+      refillEnergy,
+      getTimeUntilNextEnergy,
+      getEnergyDisplay,
+      recordPerformanceMetrics,
+      sendChallenge,
+      respondToChallenge,
+      recomputeSegments,
+      updateEventProgress: updateEventProgressCb,
+      applyReferralCode,
+      recordReferralSuccess,
+      claimReferralMilestone,
+      updateSeasonalQuest,
+      notifyFriendActivity,
+      performPrestige,
+      getPrestigeInfo,
+    }),
+    [
+      loaded,
+      cloudSyncStatus,
+      updateProgress,
+      recordPuzzleComplete,
+      recordDailyComplete,
+      collectAtlasWord,
+      addRareTile,
+      collectStamp,
+      updateMissionProgress,
+      claimMissionReward,
+      generateDailyMissions,
+      updateStreak,
+      useGraceDay,
+      useStreakShield,
+      equipCosmetic,
+      unlockCosmetic,
+      restoreWing,
+      placeDecoration,
+      unlockDecoration,
+      unlockMode,
+      recordModePlay,
+      advanceModeLevel,
+      getModeLevel,
+      completeAchievement,
+      checkComebackRewards,
+      unlockFeature,
+      checkFeatureUnlocks,
+      markTooltipShown,
+      completeOnboardingMilestone,
+      initWeeklyGoals,
+      updateWeeklyGoalProgress,
+      queueCeremony,
+      popCeremony,
+      recordFailure,
+      needsBreather,
+      checkAchievements,
+      sendHintGift,
+      sendTileGift,
+      updateMysteryWheel,
+      awardFreeSpin,
+      updateWinStreak,
+      useEnergy,
+      refillEnergy,
+      getTimeUntilNextEnergy,
+      getEnergyDisplay,
+      recordPerformanceMetrics,
+      sendChallenge,
+      respondToChallenge,
+      recomputeSegments,
+      updateEventProgressCb,
+      applyReferralCode,
+      recordReferralSuccess,
+      claimReferralMilestone,
+      updateSeasonalQuest,
+      notifyFriendActivity,
+      performPrestige,
+      getPrestigeInfo,
+    ],
+  );
+
+  return (
+    <PlayerStoreContext.Provider value={storeRef.current}>
+      <PlayerActionsContext.Provider value={actions}>
+        <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+      </PlayerActionsContext.Provider>
+    </PlayerStoreContext.Provider>
+  );
 }
 
 export const usePlayer = () => useContext(PlayerContext);

@@ -12,7 +12,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRoute } from '@react-navigation/native';
 import { COLORS, GRADIENTS, FONTS, SHADOWS, LIBRARY, MILESTONE_DECORATIONS } from '../constants';
 import { SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  usePlayerStore,
+  usePlayerActions,
+  selectCurrentChapter,
+  selectCurrentLevel,
+  selectOwnedDecorations,
+  selectPlacedDecorations,
+  selectPuzzlesSolved,
+  selectRestoredWings,
+  selectStarsByLevel,
+  selectTooltipsShown,
+} from '../stores/playerStore';
 import { CHAPTERS } from '../data/chapters';
 import { Chapter } from '../types';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -43,17 +54,25 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   currentChapter: currentChapterProp,
   decorations: decorationsProp,
 }) => {
-  const player = usePlayer();
+  const currentChapterFromStore = usePlayerStore(selectCurrentChapter);
+  const currentLevel = usePlayerStore(selectCurrentLevel);
+  const ownedDecorations = usePlayerStore(selectOwnedDecorations);
+  const placedDecorations = usePlayerStore(selectPlacedDecorations);
+  const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
+  const restoredWingsFromStore = usePlayerStore(selectRestoredWings);
+  const starsByLevel = usePlayerStore(selectStarsByLevel);
+  const tooltipsShown = usePlayerStore(selectTooltipsShown);
+  const { placeDecoration, markTooltipShown } = usePlayerActions();
   const route = useRoute<any>();
   const showDecorations = route.params?.showDecorations === true;
-  const restoredWings = restoredWingsProp ?? player.restoredWings;
-  const currentChapter = currentChapterProp ?? player.currentChapter;
-  const decorations = decorationsProp ?? player.placedDecorations;
+  const restoredWings = restoredWingsProp ?? restoredWingsFromStore;
+  const currentChapter = currentChapterProp ?? currentChapterFromStore;
+  const decorations = decorationsProp ?? placedDecorations;
   const [selectedWing, setSelectedWing] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDecorationPicker, setShowDecorationPicker] = useState<string | null>(null);
   const [showTooltip, setShowTooltip] = useState(
-    !player.tooltipsShown.includes('library_screen')
+    !tooltipsShown.includes('library_screen')
   );
   const scrollViewRef = useRef<ScrollView>(null);
   const decorationsPanelY = useRef(0);
@@ -110,7 +129,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     Animated.parallel(animations).start();
   }, [wingAnims]);
 
-  const totalLibraryStars = Object.values(player.starsByLevel).reduce((sum, value) => sum + value, 0);
+  const totalLibraryStars = Object.values(starsByLevel).reduce((sum, value) => sum + value, 0);
   const selectedWingData = wings.find((wing) => wing.id === selectedWing) ?? wings[0];
 
   const getWingProgress = (chapters: Chapter[]) => {
@@ -138,7 +157,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         visible={showTooltip}
         onDismiss={() => {
           setShowTooltip(false);
-          player.markTooltipShown('library_screen');
+          markTooltipShown('library_screen');
         }}
         position="top"
       />
@@ -177,11 +196,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
 
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStatCard}>
-              <Text style={styles.heroStatValue}>{player.currentLevel}</Text>
+              <Text style={styles.heroStatValue}>{currentLevel}</Text>
               <Text style={styles.heroStatLabel}>Level</Text>
             </View>
             <View style={styles.heroStatCard}>
-              <Text style={styles.heroStatValue}>{player.puzzlesSolved}</Text>
+              <Text style={styles.heroStatValue}>{puzzlesSolved}</Text>
               <Text style={styles.heroStatLabel}>Puzzles</Text>
             </View>
             <View style={styles.heroStatCard}>
@@ -312,7 +331,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <TouchableOpacity
               style={styles.featureDecorationBadge}
               onPress={() => {
-                if (player.ownedDecorations.length > 0) {
+                if (ownedDecorations.length > 0) {
                   setShowDecorationPicker(selectedWingData.id);
                 }
               }}
@@ -407,11 +426,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           />
           <Text style={styles.sectionTitle}>Decorations</Text>
           <Text style={[styles.featureSubtitle, { marginBottom: 14 }]}>
-            {player.ownedDecorations.length} of {MILESTONE_DECORATIONS.length} collected
+            {ownedDecorations.length} of {MILESTONE_DECORATIONS.length} collected
           </Text>
           <View style={styles.decorationsGrid}>
             {MILESTONE_DECORATIONS.map((md) => {
-              const owned = player.ownedDecorations.includes(md.decoration);
+              const owned = ownedDecorations.includes(md.decoration);
               const placedInWing = Object.entries(decorations).find(([, dec]) => dec === md.decoration)?.[0];
               return (
                 <TouchableOpacity
@@ -424,7 +443,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   activeOpacity={owned && showDecorationPicker ? 0.7 : 1}
                   onPress={() => {
                     if (owned && showDecorationPicker) {
-                      player.placeDecoration(showDecorationPicker, md.decoration);
+                      placeDecoration(showDecorationPicker, md.decoration);
                       setShowDecorationPicker(null);
                     }
                   }}

@@ -15,7 +15,7 @@ import ShopScreen from '../screens/ShopScreen';
 import ClubScreen from '../screens/ClubScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import EventScreen from '../screens/EventScreen';
-import { usePlayer } from '../contexts/PlayerContext';
+import { usePlayerStore, selectFeaturesUnlocked } from '../stores/playerStore';
 import { COLORS, FONTS } from '../constants';
 
 const Tab = createBottomTabNavigator();
@@ -157,9 +157,9 @@ interface MainTabsProps {
 }
 
 export function MainTabs({ HomeStackScreen, PlayStackScreen }: MainTabsProps) {
-  const player = usePlayer();
+  const featuresUnlocked = usePlayerStore(selectFeaturesUnlocked);
 
-  const hasFeature = (id: string) => player.featuresUnlocked.includes(id);
+  const hasFeature = (id: string) => featuresUnlocked.includes(id);
 
   return (
     <Tab.Navigator

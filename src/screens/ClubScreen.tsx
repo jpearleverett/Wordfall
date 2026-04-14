@@ -12,7 +12,13 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  usePlayerStore,
+  selectClubId,
+  selectEquippedTitle,
+  selectPuzzlesSolved,
+  selectStarsByLevel,
+} from '../stores/playerStore';
 import { useAuth } from '../contexts/AuthContext';
 import { firestoreService, ClubMessage } from '../services/firestore';
 import { getTitleLabel } from '../data/cosmetics';
@@ -62,8 +68,11 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   onJoinClub = () => {},
   onLeaveClub = () => {},
 }) => {
-  const player = usePlayer();
-  const clubId = clubIdProp !== undefined ? clubIdProp : player.clubId;
+  const clubIdFromStore = usePlayerStore(selectClubId);
+  const equippedTitle = usePlayerStore(selectEquippedTitle);
+  const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
+  const starsByLevel = usePlayerStore(selectStarsByLevel);
+  const clubId = clubIdProp !== undefined ? clubIdProp : clubIdFromStore;
   const [searchText, setSearchText] = useState('');
   const [createName, setCreateName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -91,7 +100,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     const text = chatInput.trim();
     if (!text || !clubId) return;
     const userId = user?.uid ?? 'local_user';
-    const displayName = (player as any).displayName ?? getTitleLabel(player.equippedTitle) ?? 'Player';
+    const displayName = getTitleLabel(equippedTitle) ?? 'Player';
     setChatInput('');
 
     // Optimistically add to local list
@@ -107,7 +116,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 
     // Send to Firestore (no-op if unavailable)
     await firestoreService.sendClubMessage(clubId, userId, displayName, filterMessage(text));
-  }, [chatInput, clubId, user, (player as any).displayName, player.equippedTitle]);
+  }, [chatInput, clubId, user, equippedTitle]);
 
   const getRelativeTime = useCallback((timestamp: number): string => {
     const diff = Date.now() - timestamp;
@@ -178,8 +187,8 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     if (!clubGoal) return 0;
     // In real Firestore mode, this would come from the user's tracked contribution
     // For now, derive from player's puzzle progress
-    return player.puzzlesSolved ? Math.min(player.puzzlesSolved * 3, clubGoal.target) : 0;
-  }, [clubGoal, player.puzzlesSolved]);
+    return puzzlesSolved ? Math.min(puzzlesSolved * 3, clubGoal.target) : 0;
+  }, [clubGoal, puzzlesSolved]);
 
   const renderNoClub = () => (
     <ScrollView
@@ -371,14 +380,14 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             <View style={styles.contributeDivider} />
             <View style={styles.contributeStat}>
               <Text style={styles.contributeStatValue}>
-                {player.puzzlesSolved ?? 0}
+                {puzzlesSolved ?? 0}
               </Text>
               <Text style={styles.contributeStatLabel}>Puzzles</Text>
             </View>
             <View style={styles.contributeDivider} />
             <View style={styles.contributeStat}>
               <Text style={styles.contributeStatValue}>
-                {(player.starsByLevel ? Object.values(player.starsByLevel as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0).toLocaleString()}
+                {(starsByLevel ? Object.values(starsByLevel as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0).toLocaleString()}
               </Text>
               <Text style={styles.contributeStatLabel}>Stars</Text>
             </View>

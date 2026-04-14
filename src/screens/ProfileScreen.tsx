@@ -13,7 +13,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { Skeleton, SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  usePlayerStore,
+  usePlayerActions,
+  selectAchievementIds,
+  selectCurrentLevel,
+  selectEquippedTitle,
+  selectPuzzlesSolved,
+  selectTotalStars,
+  selectStreaks,
+  selectPerfectSolves,
+  selectTotalScore,
+  selectEquippedFrame,
+  selectEquippedTheme,
+  selectPrestige,
+} from '../stores/playerStore';
 import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
 import {
   PROFILE_FRAMES,
@@ -91,7 +105,21 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onOpenMastery: onOpenMasteryProp,
 }) => {
   const [loading, setLoading] = useState(true);
-  const playerContext = usePlayer();
+  // Narrow zustand subscriptions — ProfileScreen reads many slices but rarely
+  // triggers writes; selector-based subscription drops re-renders on
+  // unrelated player state churn (currency, ceremonies, etc.).
+  const achievementIds = usePlayerStore(selectAchievementIds);
+  const currentLevel = usePlayerStore(selectCurrentLevel);
+  const equippedTitle = usePlayerStore(selectEquippedTitle);
+  const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
+  const totalStars = usePlayerStore(selectTotalStars);
+  const playerStreaks = usePlayerStore(selectStreaks);
+  const perfectSolves = usePlayerStore(selectPerfectSolves);
+  const totalScore = usePlayerStore(selectTotalScore);
+  const equippedFrameId = usePlayerStore(selectEquippedFrame);
+  const equippedThemeId = usePlayerStore(selectEquippedTheme);
+  const prestige = usePlayerStore(selectPrestige);
+  const playerActions = usePlayerActions();
   const onEditProfile = onEditProfileProp ?? (() => {});
   const onOpenSettings = onOpenSettingsProp ?? (() => {});
   const onOpenMastery = onOpenMasteryProp ?? (() => {});
@@ -101,8 +129,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     return () => clearTimeout(timer);
   }, []);
   const achievementIdsSet = useMemo(
-    () => new Set(playerContext.achievementIds),
-    [playerContext.achievementIds],
+    () => new Set(achievementIds),
+    [achievementIds],
   );
   const achievementsViewData = useMemo(
     () =>
@@ -127,30 +155,30 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   );
   const contextPlayer = useMemo(
     () => ({
-      level: playerContext.currentLevel,
-      title: getTitleLabel(playerContext.equippedTitle),
-      puzzlesSolved: playerContext.puzzlesSolved,
-      totalStars: playerContext.totalStars,
-      bestStreak: playerContext.streaks.bestStreak,
-      perfectSolves: playerContext.perfectSolves,
-      totalScore: playerContext.totalScore,
-      badges: playerContext.achievementIds.map((id: string) => ({ id, name: id, icon: '\u{1F3C5}' })),
+      level: currentLevel,
+      title: getTitleLabel(equippedTitle),
+      puzzlesSolved,
+      totalStars,
+      bestStreak: playerStreaks.bestStreak,
+      perfectSolves,
+      totalScore,
+      badges: achievementIds.map((id: string) => ({ id, name: id, icon: '\u{1F3C5}' })),
       equippedCosmetics: {
-        frame: playerContext.equippedFrame,
-        theme: playerContext.equippedTheme,
+        frame: equippedFrameId,
+        theme: equippedThemeId,
       },
     }),
     [
-      playerContext.currentLevel,
-      playerContext.equippedTitle,
-      playerContext.puzzlesSolved,
-      playerContext.totalStars,
-      playerContext.streaks.bestStreak,
-      playerContext.perfectSolves,
-      playerContext.totalScore,
-      playerContext.achievementIds,
-      playerContext.equippedFrame,
-      playerContext.equippedTheme,
+      currentLevel,
+      equippedTitle,
+      puzzlesSolved,
+      totalStars,
+      playerStreaks.bestStreak,
+      perfectSolves,
+      totalScore,
+      achievementIds,
+      equippedFrameId,
+      equippedThemeId,
     ],
   );
   const p: PlayerData = useMemo(
@@ -159,12 +187,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   );
   const initial = useMemo(() => p.name.charAt(0).toUpperCase(), [p.name]);
   const equippedTheme = useMemo(
-    () => getTheme(playerContext.equippedTheme) ?? COSMETIC_THEMES[0],
-    [playerContext.equippedTheme],
+    () => getTheme(equippedThemeId) ?? COSMETIC_THEMES[0],
+    [equippedThemeId],
   );
   const equippedFrame = useMemo(
-    () => getFrame(playerContext.equippedFrame) ?? PROFILE_FRAMES[0],
-    [playerContext.equippedFrame],
+    () => getFrame(equippedFrameId) ?? PROFILE_FRAMES[0],
+    [equippedFrameId],
   );
   const frameBorderColor = useMemo(() => {
     switch (equippedFrame.rarity) {
@@ -294,8 +322,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
 
         {/* Prestige Badge (for players who have prestiged) */}
-        {(playerContext as any).prestige?.prestigeLevel > 0 && (() => {
-          const prestigeLevel = (playerContext as any).prestige.prestigeLevel;
+        {prestige?.prestigeLevel > 0 && (() => {
+          const prestigeLevel = prestige.prestigeLevel;
           const prestigeDef = PRESTIGE_LEVELS.find((pl) => pl.level === prestigeLevel);
           if (!prestigeDef) return null;
           return (
@@ -321,8 +349,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         })()}
 
         {/* Prestige Button (when eligible) */}
-        {canPrestige(p.level, (playerContext as any).prestige?.prestigeLevel ?? 0) && (() => {
-          const nextPrestige = ((playerContext as any).prestige?.prestigeLevel ?? 0) + 1;
+        {canPrestige(p.level, prestige?.prestigeLevel ?? 0) && (() => {
+          const nextPrestige = (prestige?.prestigeLevel ?? 0) + 1;
           const nextDef = PRESTIGE_LEVELS.find((pl) => pl.level === nextPrestige);
           if (!nextDef) return null;
           const summary = getPrestigeSummary(nextPrestige);
@@ -348,7 +376,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       text: 'PRESTIGE',
                       style: 'destructive',
                       onPress: () => {
-                        const success = playerContext.performPrestige?.();
+                        const success = playerActions.performPrestige?.();
                         if (!success) {
                           Alert.alert('Prestige Unavailable', 'Reach the required level before prestiging.');
                         }
@@ -397,7 +425,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* Achievements Grid */}
         <Text style={styles.sectionTitle}>
-          Achievements ({playerContext.achievementIds.length}/{ACHIEVEMENTS.length * 3})
+          Achievements ({achievementIds.length}/{ACHIEVEMENTS.length * 3})
         </Text>
         <View style={styles.achievementsGrid}>
           {achievementsViewData.map(({ achievement, highestTier, tierColor, earnedLevels }) => {

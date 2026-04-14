@@ -11,7 +11,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS, MODE_CONFIGS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { ModeConfig } from '../types';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  usePlayerStore,
+  usePlayerActions,
+  selectUnlockedModes,
+  selectCurrentLevel,
+  selectPerfectSolves,
+  selectTotalStars,
+  selectPuzzlesSolved,
+  selectTooltipsShown,
+} from '../stores/playerStore';
 import { Tooltip } from '../components/common/Tooltip';
 
 const { width } = Dimensions.get('window');
@@ -40,10 +49,17 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
   playerLevel: playerLevelProp,
   onOpenLeaderboard,
 }) => {
-  const player = usePlayer();
+  // Narrow zustand subscriptions
+  const playerUnlockedModes = usePlayerStore(selectUnlockedModes);
+  const playerCurrentLevel = usePlayerStore(selectCurrentLevel);
+  const perfectSolves = usePlayerStore(selectPerfectSolves);
+  const totalStars = usePlayerStore(selectTotalStars);
+  const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
+  const tooltipsShown = usePlayerStore(selectTooltipsShown);
+  const { markTooltipShown } = usePlayerActions();
   const onSelectMode = onSelectModeProp ?? ((_mode: string) => {});
-  const unlockedModes = unlockedModesProp ?? player.unlockedModes;
-  const playerLevel = playerLevelProp ?? player.currentLevel;
+  const unlockedModes = unlockedModesProp ?? playerUnlockedModes;
+  const playerLevel = playerLevelProp ?? playerCurrentLevel;
   const isModeAccessible = (modeId: string): { accessible: boolean; reason: string } => {
     const modeConfig = MODE_CONFIGS[modeId as keyof typeof MODE_CONFIGS] as ModeConfig | undefined;
     if (!modeConfig) return { accessible: false, reason: 'Unknown mode' };
@@ -54,14 +70,14 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
 
     const gate = modeConfig.rules.skillGate;
     if (gate) {
-      if (gate.perfectSolves && player.perfectSolves < gate.perfectSolves) {
-        return { accessible: false, reason: `Need ${gate.perfectSolves} perfect solves (${player.perfectSolves}/${gate.perfectSolves})` };
+      if (gate.perfectSolves && perfectSolves < gate.perfectSolves) {
+        return { accessible: false, reason: `Need ${gate.perfectSolves} perfect solves (${perfectSolves}/${gate.perfectSolves})` };
       }
-      if (gate.minStars && player.totalStars < gate.minStars) {
-        return { accessible: false, reason: `Need ${gate.minStars} stars (${player.totalStars}/${gate.minStars})` };
+      if (gate.minStars && totalStars < gate.minStars) {
+        return { accessible: false, reason: `Need ${gate.minStars} stars (${totalStars}/${gate.minStars})` };
       }
-      if (gate.puzzlesSolved && player.puzzlesSolved < gate.puzzlesSolved) {
-        return { accessible: false, reason: `Need ${gate.puzzlesSolved} puzzles solved (${player.puzzlesSolved}/${gate.puzzlesSolved})` };
+      if (gate.puzzlesSolved && puzzlesSolved < gate.puzzlesSolved) {
+        return { accessible: false, reason: `Need ${gate.puzzlesSolved} puzzles solved (${puzzlesSolved}/${gate.puzzlesSolved})` };
       }
     }
 
@@ -121,7 +137,7 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
   };
 
   const [showTooltip, setShowTooltip] = useState(
-    !player.tooltipsShown.includes('modes_screen')
+    !tooltipsShown.includes('modes_screen')
   );
 
   return (
@@ -145,7 +161,7 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
         visible={showTooltip}
         onDismiss={() => {
           setShowTooltip(false);
-          player.markTooltipShown('modes_screen');
+          markTooltipShown('modes_screen');
         }}
         position="top"
       />

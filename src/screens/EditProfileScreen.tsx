@@ -12,7 +12,15 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  usePlayerStore,
+  usePlayerActions,
+  selectCurrentLevel,
+  selectEquippedFrame,
+  selectEquippedTheme,
+  selectEquippedTitle,
+  selectUnlockedCosmetics,
+} from '../stores/playerStore';
 import {
   PROFILE_FRAMES,
   PROFILE_TITLES,
@@ -36,14 +44,19 @@ interface EditProfileScreenProps {
 }
 
 const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => {
-  const player = usePlayer();
+  const currentLevel = usePlayerStore(selectCurrentLevel);
+  const equippedFrame = usePlayerStore(selectEquippedFrame);
+  const equippedTheme = usePlayerStore(selectEquippedTheme);
+  const equippedTitle = usePlayerStore(selectEquippedTitle);
+  const unlockedCosmetics = usePlayerStore(selectUnlockedCosmetics);
+  const { equipCosmetic } = usePlayerActions();
   const equippedThemeData = useMemo(
-    () => COSMETIC_THEMES.find((theme) => theme.id === player.equippedTheme) ?? COSMETIC_THEMES[0],
-    [player.equippedTheme],
+    () => COSMETIC_THEMES.find((theme) => theme.id === equippedTheme) ?? COSMETIC_THEMES[0],
+    [equippedTheme],
   );
   const equippedTitleLabel = useMemo(
-    () => getTitleLabel(player.equippedTitle),
-    [player.equippedTitle],
+    () => getTitleLabel(equippedTitle),
+    [equippedTitle],
   );
   const previewGradients = useMemo(
     () =>
@@ -54,16 +67,16 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
     [equippedThemeData],
   );
   const playerName = useMemo(() => {
-    const title = getTitle(player.equippedTitle);
+    const title = getTitle(equippedTitle);
     return title?.title === 'Newcomer' ? 'Player' : 'Player';
-  }, [player.equippedTitle]);
+  }, [equippedTitle]);
 
   const isOwned = useCallback(
     (id: string) =>
       id === 'default' ||
       id === 'title_newcomer' ||
-      player.unlockedCosmetics.includes(id),
-    [player.unlockedCosmetics],
+      unlockedCosmetics.includes(id),
+    [unlockedCosmetics],
   );
 
   const sortedFrames = useMemo(() => {
@@ -71,40 +84,40 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
     const owned: ProfileFrame[] = [];
     const locked: ProfileFrame[] = [];
     for (const f of PROFILE_FRAMES) {
-      if (f.id === player.equippedFrame) equipped.push(f);
+      if (f.id === equippedFrame) equipped.push(f);
       else if (isOwned(f.id)) owned.push(f);
       else locked.push(f);
     }
     return [...equipped, ...owned, ...locked];
-  }, [player.equippedFrame, isOwned]);
+  }, [equippedFrame, isOwned]);
 
   const sortedTitles = useMemo(() => {
     const equipped: ProfileTitle[] = [];
     const owned: ProfileTitle[] = [];
     const locked: ProfileTitle[] = [];
     for (const t of PROFILE_TITLES) {
-      if (t.id === player.equippedTitle) equipped.push(t);
+      if (t.id === equippedTitle) equipped.push(t);
       else if (isOwned(t.id)) owned.push(t);
       else locked.push(t);
     }
     return [...equipped, ...owned, ...locked];
-  }, [player.equippedTitle, isOwned]);
+  }, [equippedTitle, isOwned]);
 
   const sortedThemes = useMemo(() => {
     const equipped: CosmeticTheme[] = [];
     const owned: CosmeticTheme[] = [];
     const locked: CosmeticTheme[] = [];
     for (const t of COSMETIC_THEMES) {
-      if (t.id === player.equippedTheme) equipped.push(t);
+      if (t.id === equippedTheme) equipped.push(t);
       else if (isOwned(t.id)) owned.push(t);
       else locked.push(t);
     }
     return [...equipped, ...owned, ...locked];
-  }, [player.equippedTheme, isOwned]);
+  }, [equippedTheme, isOwned]);
 
   const equippedFrameData = useMemo(
-    () => PROFILE_FRAMES.find((f) => f.id === player.equippedFrame) ?? PROFILE_FRAMES[0],
-    [player.equippedFrame],
+    () => PROFILE_FRAMES.find((f) => f.id === equippedFrame) ?? PROFILE_FRAMES[0],
+    [equippedFrame],
   );
 
   const frameRarityColor = RARITY_COLORS[equippedFrameData.rarity] ?? COLORS.rarityCommon;
@@ -112,29 +125,29 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
 
   const handleEquipFrame = useCallback(
     (frame: ProfileFrame) => {
-      if (isOwned(frame.id)) player.equipCosmetic('frame', frame.id);
+      if (isOwned(frame.id)) equipCosmetic('frame', frame.id);
     },
-    [isOwned, player],
+    [isOwned, equipCosmetic],
   );
 
   const handleEquipTitle = useCallback(
     (title: ProfileTitle) => {
-      if (isOwned(title.id)) player.equipCosmetic('title', title.id);
+      if (isOwned(title.id)) equipCosmetic('title', title.id);
     },
-    [isOwned, player],
+    [isOwned, equipCosmetic],
   );
 
   const handleEquipTheme = useCallback(
     (theme: CosmeticTheme) => {
-      if (isOwned(theme.id)) player.equipCosmetic('theme', theme.id);
+      if (isOwned(theme.id)) equipCosmetic('theme', theme.id);
     },
-    [isOwned, player],
+    [isOwned, equipCosmetic],
   );
 
   const renderFrameItem = useCallback(
     ({ item: frame }: { item: ProfileFrame }) => {
       const owned = isOwned(frame.id);
-      const equipped = frame.id === player.equippedFrame;
+      const equipped = frame.id === equippedFrame;
       const rarityColor = RARITY_COLORS[frame.rarity] ?? COLORS.rarityCommon;
 
       return (
@@ -193,13 +206,13 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
         </Pressable>
       );
     },
-    [isOwned, player.equippedFrame, handleEquipFrame],
+    [isOwned, equippedFrame, handleEquipFrame],
   );
 
   const renderThemeItem = useCallback(
     ({ item: theme }: { item: CosmeticTheme }) => {
       const owned = isOwned(theme.id);
-      const equipped = theme.id === player.equippedTheme;
+      const equipped = theme.id === equippedTheme;
 
       return (
         <Pressable
@@ -249,7 +262,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
         </Pressable>
       );
     },
-    [isOwned, player.equippedTheme, handleEquipTheme],
+    [isOwned, equippedTheme, handleEquipTheme],
   );
 
   return (
@@ -310,7 +323,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             />
-            <Text style={styles.levelText}>Lv.{player.currentLevel}</Text>
+            <Text style={styles.levelText}>Lv.{currentLevel}</Text>
           </View>
           <Text style={styles.playerName}>{playerName}</Text>
           <View
@@ -358,7 +371,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           />
           {sortedTitles.map((title, index) => {
             const owned = isOwned(title.id);
-            const equipped = title.id === player.equippedTitle;
+            const equipped = title.id === equippedTitle;
 
             return (
               <React.Fragment key={title.id}>

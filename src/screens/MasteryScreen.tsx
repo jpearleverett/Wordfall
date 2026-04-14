@@ -12,8 +12,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
-import { usePlayer } from '../contexts/PlayerContext';
-import { useEconomy } from '../contexts/EconomyContext';
+import { usePlayerStore, selectPuzzlesSolved } from '../stores/playerStore';
+import { useEconomyStore, selectIsPremiumPassFlag } from '../stores/economyStore';
 import {
   MASTERY_REWARDS,
   MASTERY_MAX_TIER,
@@ -32,17 +32,17 @@ interface MasteryScreenProps {
 }
 
 const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
-  const player = usePlayer();
-  const economy = useEconomy();
+  const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
+  const isPremiumPass = useEconomyStore(selectIsPremiumPassFlag);
   const commerce = useCommerce();
 
   // Use puzzlesSolved * 100 as mastery XP proxy
-  const masteryXP = (player.puzzlesSolved ?? 0) * 100;
+  const masteryXP = (puzzlesSolved ?? 0) * 100;
   const currentTier = getMasteryTierForXP(masteryXP);
   const { current: tierProgress, needed: tierNeeded } = getXPProgressInTier(masteryXP);
   const progressPercent = Math.min(100, (tierProgress / tierNeeded) * 100);
 
-  const isPremium = economy.isPremiumPass;
+  const isPremium = isPremiumPass;
   const seasonName = currentSeason();
   const days = daysRemaining();
 

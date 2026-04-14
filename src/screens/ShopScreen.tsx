@@ -15,8 +15,18 @@ import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useSettings } from '../contexts/SettingsContext';
-import { useEconomy } from '../contexts/EconomyContext';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  useEconomyStore,
+  useEconomyActions,
+  selectCoins,
+  selectVipExpiresAt,
+  selectIsVipActive,
+  selectIsAdFreeComputed,
+  selectIsPremiumPassFlag,
+  selectVipStreakWeeks,
+  selectVipStreakBonusClaimed,
+} from '../stores/economyStore';
+import { usePlayerActions } from '../stores/playerStore';
 import { iapManager } from '../services/iap';
 import { adManager, AdRewardType } from '../services/ads';
 import { MockAdModal } from '../components/MockAdModal';
@@ -216,10 +226,28 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   navigation,
 }) => {
   const settings = useSettings();
-  const economy = useEconomy();
-  const player = usePlayer();
-  const adsRemoved = adsRemovedProp ?? economy.isAdFree;
-  const premiumPass = premiumPassProp ?? economy.isPremiumPass;
+  // Narrow zustand subscriptions — ShopScreen no longer re-renders on every
+  // economy churn; only on the slices it actually reads.
+  const coins = useEconomyStore(selectCoins);
+  const vipExpiresAt = useEconomyStore(selectVipExpiresAt);
+  const isVip = useEconomyStore(selectIsVipActive);
+  const isAdFreeComputed = useEconomyStore(selectIsAdFreeComputed);
+  const isPremiumPassFlag = useEconomyStore(selectIsPremiumPassFlag);
+  const vipStreakWeeks = useEconomyStore(selectVipStreakWeeks);
+  const vipStreakBonusClaimed = useEconomyStore(selectVipStreakBonusClaimed);
+  const {
+    canAfford,
+    spendCoins,
+    spendGems,
+    addHintTokens,
+    addUndoTokens,
+    addBoosterToken,
+    processAdReward,
+    claimVipDailyRewards,
+  } = useEconomyActions();
+  const { unlockCosmetic } = usePlayerActions();
+  const adsRemoved = adsRemovedProp ?? isAdFreeComputed;
+  const premiumPass = premiumPassProp ?? isPremiumPassFlag;
   const { commerceStatus, checkPurchaseAllowed, purchaseProduct, restorePurchases } = useCommerce();
   const featuredExpiryAtRef = useRef(Date.now() + DAY_IN_MS);
 
@@ -344,7 +372,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     try {
       const result = await adManager.showRewardedAd('hint_reward');
       if (result.rewarded) {
-        economy.processAdReward('hint_reward');
+        processAdReward('hint_reward');
         Alert.alert('Reward Earned!', 'You received 1 free hint!');
       }
     } catch {
@@ -352,7 +380,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     } finally {
       setWatchingAd(false);
     }
-  }, [watchingAd, economy]);
+  }, [watchingAd, processAdReward]);
 
   const handleWatchAdForCoins = useCallback(async () => {
     if (watchingAd) return;
@@ -360,7 +388,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     try {
       const result = await adManager.showRewardedAd('coins_reward');
       if (result.rewarded) {
-        economy.processAdReward('coins_reward');
+        processAdReward('coins_reward');
         Alert.alert('Reward Earned!', 'You received 50 coins!');
       }
     } catch {
@@ -368,7 +396,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     } finally {
       setWatchingAd(false);
     }
-  }, [watchingAd, economy]);
+  }, [watchingAd, processAdReward]);
 
   const handleWatchAdForSpin = useCallback(async () => {
     if (watchingAd) return;
@@ -410,7 +438,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
   const handleRotatingPurchase = useCallback(
     (item: RotatingItem) => {
-      if (!economy.canAfford('gems', item.gemCost)) {
+      if (!canAfford('gems', item.gemCost)) {
         Alert.alert('Not Enough Gems', `You need ${item.gemCost} gems for this item.`);
         return;
       }
@@ -422,9 +450,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           {
             text: 'Buy',
             onPress: () => {
-              const spent = economy.spendGems(item.gemCost);
+              const spent = spendGems(item.gemCost);
               if (spent) {
-                player.unlockCosmetic(item.id);
+                unlockCosmetic(item.id);
                 Alert.alert('Purchased!', `${item.name} has been added to your collection.`);
               }
             },
@@ -432,7 +460,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         ],
       );
     },
-    [economy],
+    [canAfford, spendGems, unlockCosmetic],
   );
 
   // ── Coin shop purchase handler ──────────────────────────────────────────
@@ -455,27 +483,27 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       }
 
       // Check affordability
-      if (!economy.canAfford('coins', item.costCoins)) {
+      if (!canAfford('coins', item.costCoins)) {
         Alert.alert('Not Enough Coins', `You need ${item.costCoins} coins for ${item.name}.`);
         return;
       }
 
       // Spend coins
-      const spent = economy.spendCoins(item.costCoins);
+      const spent = spendCoins(item.costCoins);
       if (!spent) return;
 
       // Grant the item
       const reward = item.reward;
       switch (reward.type) {
         case 'hint':
-          economy.addHintTokens(reward.amount ?? 1);
+          addHintTokens(reward.amount ?? 1);
           break;
         case 'undo':
-          economy.addUndoTokens(reward.amount ?? 1);
+          addUndoTokens(reward.amount ?? 1);
           break;
         case 'booster':
           if (reward.boosterType) {
-            economy.addBoosterToken(reward.boosterType, reward.amount ?? 1);
+            addBoosterToken(reward.boosterType, reward.amount ?? 1);
           }
           break;
         case 'temporary_effect':
@@ -499,7 +527,15 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       if (coinShopConfirmTimerRef.current) clearTimeout(coinShopConfirmTimerRef.current);
       coinShopConfirmTimerRef.current = setTimeout(() => setCoinShopConfirmation(null), 1500);
     },
-    [economy, coinShopPurchasesToday, coinShopDate],
+    [
+      canAfford,
+      spendCoins,
+      addHintTokens,
+      addUndoTokens,
+      addBoosterToken,
+      coinShopPurchasesToday,
+      coinShopDate,
+    ],
   );
 
   // Cleanup coin shop confirm timer
@@ -768,7 +804,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               <Text style={styles.vipTitle}>VIP WEEKLY</Text>
               <Text style={styles.vipSubtitle}>The ultimate Wordfall experience</Text>
             </View>
-            {economy.isVip && (
+            {isVip && (
               <View style={styles.vipActiveBadge}>
                 <Text style={styles.vipActiveBadgeText}>ACTIVE</Text>
               </View>
@@ -781,12 +817,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             <Text style={styles.vipBenefit}>{'\u{1F5BC}\uFE0F'} Exclusive VIP frame</Text>
             <Text style={styles.vipBenefit}>{'\u{1F680}'} 2x XP boost</Text>
           </View>
-          {economy.isVip ? (
+          {isVip ? (
             <View style={styles.vipActions}>
               <TouchableOpacity
                 style={styles.vipClaimButton}
                 onPress={() => {
-                  const claimed = economy.claimVipDailyRewards();
+                  const claimed = claimVipDailyRewards();
                   if (claimed) {
                     Alert.alert('VIP Rewards Claimed!', 'You received 50 gems and 3 hints.');
                   } else {
@@ -806,7 +842,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 <Text style={styles.vipClaimText}>CLAIM DAILY REWARDS</Text>
               </TouchableOpacity>
               <Text style={styles.vipExpiryText}>
-                Renews {new Date(economy.vipExpiresAt).toLocaleDateString()}
+                Renews {new Date(vipExpiresAt).toLocaleDateString()}
               </Text>
             </View>
           ) : (
@@ -834,9 +870,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         </View>
 
         {/* ── VIP Streak Bonus (for active subscribers) ─────────────── */}
-        {economy.isVip && (() => {
-          const streakWeeks = (economy as any).vipStreakWeeks ?? 0;
-          const streakBonusClaimed = (economy as any).vipStreakBonusClaimed ?? false;
+        {isVip && (() => {
+          const streakWeeks = vipStreakWeeks;
+          const streakBonusClaimed = vipStreakBonusClaimed;
           const currentBonus = getVipStreakBonus(streakWeeks);
           const nextMilestone = getNextVipStreakMilestone(streakWeeks);
           const progress = getVipStreakProgress(streakWeeks);
@@ -1258,7 +1294,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         {/* ── Coin Shop (spend coins on consumables) ─────────────────── */}
         <Text style={styles.sectionTitle}>Spend Coins</Text>
         <Text style={styles.coinShopSubtitle}>
-          {'\u{1FA99}'} {economy.coins.toLocaleString()} coins available
+          {'\u{1FA99}'} {coins.toLocaleString()} coins available
         </Text>
 
         {coinShopConfirmation && (
@@ -1284,7 +1320,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 {categoryItems.map((item) => {
                   const todayCount = purchases[item.id] ?? 0;
                   const limitReached = item.dailyLimit !== undefined && todayCount >= item.dailyLimit;
-                  const cantAfford = !economy.canAfford('coins', item.costCoins);
+                  const cantAfford = !canAfford('coins', item.costCoins);
                   const disabled = limitReached || cantAfford;
 
                   return (
