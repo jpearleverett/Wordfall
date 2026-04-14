@@ -1,0 +1,54 @@
+# EAS upload exclusions (supplements .gitignore)
+# When this file exists, EAS uses it INSTEAD of .gitignore,
+# so we copy the gitignore entries and add more exclusions.
+
+# From .gitignore
+.env
+.env.local
+.env.production
+node_modules/
+**/lib/
+.expo/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+coverage/
+.DS_Store
+*.tsbuildinfo
+.claude/
+
+# Not needed for build
+.git/
+.github/
+.agents/
+.canvas/
+agent_docs/
+attached_assets/
+store-metadata/
+docs/
+functions/
+cloud-functions/
+
+# Test files
+**/__tests__/
+**/*.test.ts
+**/*.test.tsx
+jest.config.*
+jest.setup.*
+
+# Editor / OS
+*.swp
+*.swo
+.vscode/
+.idea/
+Thumbs.db
+
+# Build artifacts
+*.log
+*.pid
