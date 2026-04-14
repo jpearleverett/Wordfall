@@ -45,7 +45,7 @@ EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  
 ## Things That Will Bite You
 
 - **Reanimated gesture worklets.** `Gesture.Pan()/.Tap()` callbacks run as worklets on the UI thread by default. If your callback calls React state / reducers / `useRef.current`, add **`.runOnJS(true)`** immediately after the constructor. Without it: `Tried to synchronously call a non-worklet function 'X' on the UI thread` crash. See `Grid.tsx` for the pattern.
-- **`react-native-iap` is removed** from `package.json`. The Gradle build fails on v14 (Nitro Modules peer dep) and v12 (amazon/play flavor ambiguity). `src/services/iap.ts` dynamically imports it with a variable package name and falls back to mock mode when missing. Re-adding requires a config plugin to patch `build.gradle`. Until then, all purchases succeed locally but nothing is charged.
+- **`react-native-iap` is installed at `^15.0.0`** and the full purchase flow is wired in `src/services/iap.ts` (init/connection, fetchProducts, requestPurchase, listeners, finishTransaction/acknowledge/consume, restorePurchases, fraud-detection via receipt hash dedupe). The native module is autolinked via the `react-native-iap` config plugin in `app.json`. v14 had Gradle problems with Nitro Modules; v15 fixed them — do not downgrade. The service guards against missing native modules (Expo Go) by checking `NativeModules.RNIapModule` before importing, and falls back to mock mode (`__DEV__` only — production rejects purchases when the native module isn't linked or `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` is unset). Real purchases still require Play Console / App Store products to be created with the `wordfall_*` SKUs from `src/data/shopProducts.ts`.
 - **`expo-av` is REMOVED in SDK 55.** Replaced by `expo-audio` (SFX/music) and `expo-video`. Don't reintroduce — the package is discontinued and won't autolink. `src/services/sound.ts` uses `expo-audio` only; the legacy fallback was deleted.
 - **Babel config: React Compiler + worklets plugin.** `babel.config.js` enables React Compiler via `babel-preset-expo`'s `'react-compiler'` option (scoped to `src/`) AND has `react-native-worklets/plugin` as the **last plugin**. The worklets plugin MUST stay last or you get `_WORKLET is not defined` at runtime. Do not remove the compiler config — it auto-memoizes all components in `src/`.
 - **`generateBoard(config, seed, mode)` REQUIRES the `mode` arg** for `shrinkingBoard` / `gravityFlip` / `noGravity`. Each uses a different solvability check.
@@ -117,16 +117,18 @@ User reviews and merges via GitHub PR. Exception: tiny config-only fixes (packag
 | AdMob | `EXPO_PUBLIC_ADMOB_REWARDED_ID` | `MockAdModal` component |
 | IAP products | Register `wordfall_*` IDs in App Store Connect / Play Console | Production purchases are gated off until store products and server validation are configured |
 | Firestore rules + indexes | `firebase.json` is in the repo root; run the helper script or `firebase deploy --only firestore:rules,firestore:indexes` | Rules file exists at `firestore.rules`, indexes at `firestore.indexes.json` — still requires deployment |
-| Cloud Functions | `cd functions && firebase deploy` and `cd cloud-functions && firebase deploy` | Club goals, leaderboards, IAP validation don't run |
+| Cloud Functions | Both directories are wired as codebases in `firebase.json` (`commerce` → `functions/`, `social` → `cloud-functions/`). Deploy from repo root: `firebase deploy --only functions` (both), `firebase deploy --only functions:commerce`, or `firebase deploy --only functions:social`. Helper script at `scripts/firebase_deploy_functions.sh`. Both currently run on Node 22 with `firebase-functions/v1` imports. | Club goals, leaderboards, IAP validation don't run |
 | Audio assets | Drop `.mp3` files in `assets/audio/` | Synthesized tones |
 
 EAS project already configured (`projectId: b6dd187c-d46c-4331-bb15-5c7ffced89b3`, owner `jpearleverett`).
 
 ## Still Needs Work
 
-- Deploy both `cloud-functions/` and `functions/` directories (or consolidate)
-- iOS Universal Links (scheme works; HTTPS needs domain + apple-app-site-association)
-- E2E tests (Detox/Maestro — unit coverage is strong with 779 tests)
-- Professional audio assets to replace synthesized tones
-- FCM credentials for Android push notifications
-- Context selectors for PlayerContext/EconomyContext (narrow subscriptions via `useSyncExternalStore` — plan exists in `/.claude/plans/kind-weaving-hoare.md` Phase 4)
+- **Play Console & App Store Connect setup**: Register `wordfall_*` IAP product IDs (matches `src/data/shopProducts.ts`), create Google Play API service account for server-side receipt validation, upload service account JSON for Cloud Functions to use.
+- **AdMob**: Code is wired in `src/services/ads.ts` via dynamic import of `react-native-google-mobile-ads` with a mock fallback. To go live: `npm i react-native-google-mobile-ads`, add config plugin to `app.json` with the AdMob app ID, set `EXPO_PUBLIC_ADMOB_REWARDED_ID` and `EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID` in `.env`. Until then, `MockAdModal` simulates the ad UI.
+- **FCM credentials for Android push notifications**: `expo-notifications` handles local notifications today. Remote push needs the FCM server key uploaded to Firebase Console → Cloud Messaging → Project Settings, plus the `google-services.json` already present.
+- **iOS setup pending**: `GoogleService-Info.plist` referenced in `app.json` but not yet committed (download from Firebase Console when ready). iOS Universal Links also pending — scheme works; HTTPS needs domain + apple-app-site-association.
+- Consolidate `cloud-functions/` and `functions/` into one codebase (currently both are deployed but split by domain — commerce vs social).
+- Professional audio assets to replace synthesized tones (drop `.mp3` files in `assets/audio/`).
+- Context selectors for PlayerContext/EconomyContext (narrow subscriptions via `useSyncExternalStore` — plan exists in `/.claude/plans/kind-weaving-hoare.md` Phase 4).
+- E2E tests (Detox/Maestro — unit coverage is strong with 779 tests).
