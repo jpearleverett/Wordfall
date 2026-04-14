@@ -110,6 +110,7 @@ export const selectIsVipSubscriber   = (s: EconomyState) => s.isVipSubscriber;
 export const selectVipExpiresAt      = (s: EconomyState) => s.vipExpiresAt;
 export const selectVipDailyLastClaim = (s: EconomyState) => s.vipDailyLastClaim;
 export const selectVipStreakWeeks    = (s: EconomyState) => s.vipStreakWeeks;
+export const selectVipStreakBonusClaimed = (s: EconomyState) => s.vipStreakBonusClaimed;
 export const selectStarterPackExpiresAt = (s: EconomyState) => s.starterPackExpiresAt;
 export const selectDailyValuePackExpiry = (s: EconomyState) => s.dailyValuePackExpiry;
 export const selectTemporaryEntitlements = (s: EconomyState) =>
