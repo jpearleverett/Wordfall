@@ -21,3 +21,19 @@ See `CLAUDE.md` for full architecture, commands, gotchas, and code patterns.
 - **Metro bundler** successfully starts and bundles 1382 modules. It listens on port 8081 and generates a QR code / deep link for the dev client.
 - **Tests are fully headless** — they mock `react-native` and `AsyncStorage` (see `src/__mocks__/`), so they run entirely in Node without any device or emulator.
 - **`--legacy-peer-deps`** is required due to React 19 + RN 0.83 peer conflicts. The `.npmrc` file sets this automatically.
+
+### Current integration status (April 2026)
+
+| System | Status | Notes |
+|--------|--------|-------|
+| Firebase Auth / Firestore / Functions | ✅ Wired (JS SDK) | `firebase` npm package, hybrid setup |
+| Firebase Analytics | ✅ Wired (native) | `@react-native-firebase/analytics` v24 — JS SDK is web-only |
+| Sentry crash reporting | ✅ Wired | `@sentry/react-native` ~7.11, plugin in `app.json`, DSN in `.env` |
+| `react-native-iap` | ✅ Wired (v15) | Full purchase flow + server validation. Awaiting Play Console product IDs. |
+| Cloud Functions | ✅ Deployed | Two codebases: `commerce` (`functions/`) + `social` (`cloud-functions/`) |
+| Firestore rules + indexes | ✅ Deployed | `firestore.rules`, `firestore.indexes.json` |
+| AdMob | ⚠️ Mock only | Service uses dynamic import; `react-native-google-mobile-ads` not installed yet |
+| Push notifications (local) | ✅ Wired | `expo-notifications` |
+| Push notifications (remote/FCM) | ⚠️ Pending | Needs FCM server key uploaded to Firebase Console |
+| iOS build | ⚠️ Pending | `GoogleService-Info.plist` not committed; needs Mac/EAS macOS to build |
+| Audio assets | ⚠️ Synthesized fallback | Real `.mp3`s not in `assets/audio/` |
