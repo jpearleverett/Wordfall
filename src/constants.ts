@@ -907,6 +907,10 @@ export const AD_CONFIG = {
   REWARDED_AD_UNIT_ID:
     (typeof process !== 'undefined' && (process as any).env?.EXPO_PUBLIC_ADMOB_REWARDED_ID) ||
     'ca-app-pub-3940256099942544/5224354917', // Google test ad unit
+  /** AdMob interstitial ad unit ID (defaults to Google test ID for development) */
+  INTERSTITIAL_AD_UNIT_ID:
+    (typeof process !== 'undefined' && (process as any).env?.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID) ||
+    'ca-app-pub-3940256099942544/1033173712', // Google test interstitial unit
   /** Maximum total rewarded ads a player can watch per day */
   MAX_ADS_PER_DAY: 10,
   /** Maximum "watch ad for coins" ads per day */
