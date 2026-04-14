@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useEconomy } from '../contexts/EconomyContext';
-import { usePlayer } from '../contexts/PlayerContext';
+import { useEconomyActions } from '../stores/economyStore';
+import { usePlayerActions } from '../stores/playerStore';
 import { useSettings } from '../contexts/SettingsContext';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
@@ -29,8 +29,8 @@ function currentMonthKey(): string {
 
 export function useCommerce() {
   const { user } = useAuth();
-  const economy = useEconomy();
-  const player = usePlayer();
+  const { applyValidatedPurchase } = useEconomyActions();
+  const { unlockDecoration, unlockCosmetic } = usePlayerActions();
   const settings = useSettings();
   const [commerceStatus, setCommerceStatus] = useState<CommerceStatus>(() => iapManager.getStatus());
 
@@ -53,13 +53,13 @@ export function useCommerce() {
 
   const applyPlayerGrants = useCallback((grants: { cosmetics: string[]; decorations: string[] }) => {
     for (const decorationId of grants.decorations) {
-      player.unlockDecoration(decorationId);
+      unlockDecoration(decorationId);
     }
 
     for (const cosmeticId of grants.cosmetics) {
-      player.unlockCosmetic(cosmeticId);
+      unlockCosmetic(cosmeticId);
     }
-  }, [player]);
+  }, [unlockDecoration, unlockCosmetic]);
 
   const recordSpend = useCallback((priceAmount: number) => {
     if (!settings.spendingLimitEnabled) return;
@@ -114,7 +114,7 @@ export function useCommerce() {
       return result;
     }
 
-    const applied = economy.applyValidatedPurchase(result.productId, {
+    const applied = applyValidatedPurchase(result.productId, {
       source: 'purchase',
       transactionId: result.transactionId,
       currency: 'USD',
@@ -134,7 +134,7 @@ export function useCommerce() {
     return result;
   }, [
     applyPlayerGrants,
-    economy,
+    applyValidatedPurchase,
     recordSpend,
     refreshStatus,
     user?.uid,
@@ -150,7 +150,7 @@ export function useCommerce() {
     for (const result of results) {
       if (!result.success) continue;
 
-      const applied = economy.applyValidatedPurchase(result.productId, {
+      const applied = applyValidatedPurchase(result.productId, {
         source: 'restore',
         transactionId: result.transactionId,
         currency: 'USD',
@@ -166,7 +166,7 @@ export function useCommerce() {
 
     refreshStatus();
     return { results, restoredCount };
-  }, [applyPlayerGrants, economy, refreshStatus, user?.uid]);
+  }, [applyPlayerGrants, applyValidatedPurchase, refreshStatus, user?.uid]);
 
   return useMemo(() => ({
     commerceStatus,
