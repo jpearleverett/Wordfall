@@ -20,6 +20,13 @@ import {
   PlayerGrantSummary,
   PurchaseFulfillmentOptions,
 } from '../services/commercialEntitlements';
+import {
+  EconomyStoreContext,
+  EconomyActionsContext,
+  createEconomyStore,
+  type EconomyStore,
+  type EconomyActions,
+} from '../stores/economyStore';
 
 interface Economy {
   coins: number;
@@ -77,13 +84,13 @@ interface IAPState {
   entitlementMigrationVersion: number;
 }
 
-interface EconomyState extends Economy, IAPState {
+export interface EconomyState extends Economy, IAPState {
   totalEarned: TotalEarned;
   purchaseHistory: PurchaseRecord[];
   lives: LivesData;
 }
 
-interface EconomyContextType extends Economy {
+export interface EconomyContextType extends Economy {
   addCoins: (amount: number) => void;
   spendCoins: (amount: number) => boolean;
   addGems: (amount: number) => void;
@@ -244,6 +251,17 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   const settings = useSettings();
   const [state, setState] = useState<EconomyState>(DEFAULT_ECONOMY);
   const [loaded, setLoaded] = useState(false);
+
+  // Zustand store mirror — see src/stores/economyStore.ts. Consumers that
+  // call useEconomyStore(selector) only re-render when their slice changes.
+  // The useState above remains the write source of truth so the 1s debounce,
+  // 60s life-refill tick, AppState flush, and entitlement migration are all
+  // unchanged.
+  const storeRef = useRef<EconomyStore | null>(null);
+  if (!storeRef.current) storeRef.current = createEconomyStore(DEFAULT_ECONOMY);
+  useEffect(() => {
+    storeRef.current!.setState(state, true);
+  }, [state]);
 
   // Load from AsyncStorage on mount, computing refilled lives
   useEffect(() => {
@@ -877,7 +895,99 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <EconomyContext.Provider value={value}>{children}</EconomyContext.Provider>;
+  // Actions bag for useEconomyActions(). Stable identity tracks the same
+  // useCallback identities as `value` above. Computed fields (lives, isVip,
+  // isAdFree, etc.) are included so consumers don't have to recompute them.
+  const actions = useMemo<EconomyActions>(
+    () => ({
+      addCoins,
+      spendCoins,
+      addGems,
+      spendGems,
+      addHintTokens,
+      spendHintToken,
+      addEventStars,
+      addLibraryPoints,
+      canAfford,
+      totalEarned: state.totalEarned,
+      purchaseHistory: state.purchaseHistory,
+      loaded,
+      lives: currentLives,
+      maxLives: LIVES.max,
+      nextLifeTime,
+      spendLife,
+      refillLives,
+      getTimeUntilNextLife,
+      processAdReward,
+      isAdFree: state.isAdFreeFlag || isVipActive || hasVipExperience,
+      processPurchase,
+      applyValidatedPurchase,
+      isPremiumPass: state.isPremiumPassFlag,
+      dailyValuePackExpiry: state.dailyValuePackExpiry,
+      starterPackAvailable: state.starterPackExpiresAt > Date.now(),
+      starterPackExpiresAt: state.starterPackExpiresAt,
+      activateStarterPack,
+      undoTokens: state.undoTokens,
+      addUndoTokens,
+      spendUndoToken,
+      addBoosterToken,
+      spendBoosterToken,
+      claimDailyValuePackDrip,
+      isVip: isVipActive,
+      vipExpiresAt: state.vipExpiresAt,
+      claimVipDailyRewards,
+      checkVipStreak,
+      claimVipStreakBonus,
+      addLives,
+      hasTemporaryEntitlement,
+      getTemporaryEntitlementExpiry,
+      grantTemporaryEntitlement,
+    }),
+    [
+      state,
+      loaded,
+      currentLives,
+      nextLifeTime,
+      isVipActive,
+      hasVipExperience,
+      addCoins,
+      spendCoins,
+      addGems,
+      spendGems,
+      addHintTokens,
+      spendHintToken,
+      addEventStars,
+      addLibraryPoints,
+      canAfford,
+      spendLife,
+      refillLives,
+      getTimeUntilNextLife,
+      processAdReward,
+      processPurchase,
+      applyValidatedPurchase,
+      activateStarterPack,
+      addUndoTokens,
+      spendUndoToken,
+      addBoosterToken,
+      spendBoosterToken,
+      claimDailyValuePackDrip,
+      claimVipDailyRewards,
+      checkVipStreak,
+      claimVipStreakBonus,
+      addLives,
+      hasTemporaryEntitlement,
+      getTemporaryEntitlementExpiry,
+      grantTemporaryEntitlement,
+    ],
+  );
+
+  return (
+    <EconomyStoreContext.Provider value={storeRef.current}>
+      <EconomyActionsContext.Provider value={actions}>
+        <EconomyContext.Provider value={value}>{children}</EconomyContext.Provider>
+      </EconomyActionsContext.Provider>
+    </EconomyStoreContext.Provider>
+  );
 }
 
 export const useEconomy = () => useContext(EconomyContext);
