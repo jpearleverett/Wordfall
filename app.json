@@ -92,6 +92,7 @@
       ]
     },
     "plugins": [
+      "@sentry/react-native/expo",
       "expo-font",
       "react-native-iap",
       [
