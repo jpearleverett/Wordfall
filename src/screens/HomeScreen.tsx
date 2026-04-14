@@ -24,7 +24,16 @@ import NeonStreakFlame from '../components/home/NeonStreakFlame';
 import ReferralCard from '../components/ReferralCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  usePlayerStore,
+  usePlayerActions,
+  selectOnboardingMilestones,
+  selectMysteryWheel,
+  selectSeasonalQuest,
+  selectReferralCode,
+  selectReferralCount,
+  selectReferralMilestonesClaimed,
+} from '../stores/playerStore';
 import { getNextMilestone } from '../data/onboardingMilestones';
 
 interface DailyMissionDisplay {
@@ -129,7 +138,20 @@ export function HomeScreen({
   claimedLoginToday = false,
   onClaimLoginReward,
 }: HomeScreenProps) {
-  const player = usePlayer();
+  // Narrow zustand subscriptions — re-render only on the slices actually read.
+  const onboardingMilestones = usePlayerStore(selectOnboardingMilestones);
+  const mysteryWheelData = usePlayerStore(selectMysteryWheel);
+  const seasonalQuestState = usePlayerStore(selectSeasonalQuest);
+  const referralCode = usePlayerStore(selectReferralCode);
+  const referralCount = usePlayerStore(selectReferralCount);
+  const referralMilestonesClaimed = usePlayerStore(selectReferralMilestonesClaimed);
+  const {
+    updateProgress,
+    updateSeasonalQuest,
+    queueCeremony,
+    completeOnboardingMilestone,
+    claimReferralMilestone,
+  } = usePlayerActions();
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
   const wheelPulse = useRef(new Animated.Value(1)).current;
@@ -260,8 +282,8 @@ export function HomeScreen({
     [progress.starsByLevel],
   );
   const nextGuidedMilestone = useMemo(
-    () => getNextMilestone(progress.currentLevel, player.onboardingMilestones ?? []),
-    [progress.currentLevel, player.onboardingMilestones],
+    () => getNextMilestone(progress.currentLevel, onboardingMilestones ?? []),
+    [progress.currentLevel, onboardingMilestones],
   );
   const dailyDeal = useMemo(() => getDailyDeal(today), [today]);
   const dealHoursLeft = dailyDeal.availableHours;
@@ -302,7 +324,7 @@ export function HomeScreen({
 
   // ── Seasonal Quest ──────────────────────────────────────────────────
   const seasonalQuest = getCurrentSeasonalQuest();
-  const questState = player.seasonalQuest;
+  const questState = seasonalQuestState;
   const showSeasonalQuest = (playerStage === 'established' || playerStage === 'veteran')
     && !questState.completedQuestIds.includes(seasonalQuest.id);
 
@@ -310,7 +332,7 @@ export function HomeScreen({
   useEffect(() => {
     if (!showSeasonalQuest) return;
     if (questState.activeQuestId !== seasonalQuest.id && !questState.completedQuestIds.includes(seasonalQuest.id)) {
-      player.updateSeasonalQuest({
+      updateSeasonalQuest({
         activeQuestId: seasonalQuest.id,
         currentStepIndex: 0,
         stepProgress: 0,
@@ -326,7 +348,7 @@ export function HomeScreen({
     // Grant step rewards via economy context is not available here;
     // use player.updateProgress to signal claim, and grant rewards via updateSeasonalQuest
     // Since we can't access economy directly, we queue a ceremony that triggers reward granting
-    player.queueCeremony({
+    queueCeremony({
       type: 'quest_step_complete',
       data: {
         icon: currentStep.icon,
@@ -342,8 +364,8 @@ export function HomeScreen({
 
     // Advance to next step
     const newState = advanceQuestStep(questState, seasonalQuest);
-    player.updateSeasonalQuest(newState);
-  }, [questState, seasonalQuest, player]);
+    updateSeasonalQuest(newState);
+  }, [questState, seasonalQuest, queueCeremony, updateSeasonalQuest]);
 
   return (
     <View style={styles.container}>
@@ -473,7 +495,7 @@ export function HomeScreen({
         <Pressable
           style={({ pressed }) => [pressed && styles.buttonPressed]}
           onPress={() => {
-            player.completeOnboardingMilestone(nextGuidedMilestone.id);
+            completeOnboardingMilestone(nextGuidedMilestone.id);
             switch (nextGuidedMilestone.action) {
               case 'play':
               case 'play_again':
@@ -610,7 +632,7 @@ export function HomeScreen({
                   </View>
                 )}
                 {/* First-spin glow — extra prominent badge for players who haven't spun yet */}
-                {mysteryWheelSpins > 0 && (player.mysteryWheel?.totalSpins ?? 0) === 0 && (
+                {mysteryWheelSpins > 0 && (mysteryWheelData?.totalSpins ?? 0) === 0 && (
                   <View style={[styles.dailySpinBadge, { backgroundColor: COLORS.gold + 'DD' }]}>
                     <Text style={styles.dailySpinBadgeText}>NEW!</Text>
                   </View>
@@ -755,13 +777,13 @@ export function HomeScreen({
         )}
 
         {/* Referral Card - established+ players */}
-        {(playerStage === 'established' || playerStage === 'veteran') && player.referralCode ? (
+        {(playerStage === 'established' || playerStage === 'veteran') && referralCode ? (
           <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
             <ReferralCard
-              referralCode={player.referralCode}
-              referralCount={player.referralCount}
-              milestonesClaimed={player.referralMilestonesClaimed}
-              onClaimMilestone={(count) => player.claimReferralMilestone(count)}
+              referralCode={referralCode}
+              referralCount={referralCount}
+              milestonesClaimed={referralMilestonesClaimed}
+              onClaimMilestone={(count) => claimReferralMilestone(count)}
             />
           </View>
         ) : null}

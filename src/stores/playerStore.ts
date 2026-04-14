@@ -107,5 +107,6 @@ export const selectPuzzleEnergy       = (s: PlayerData) => s.puzzleEnergy;
 export const selectSegments           = (s: PlayerData) => s.segments;
 export const selectReferralCode       = (s: PlayerData) => s.referralCode;
 export const selectReferralCount      = (s: PlayerData) => s.referralCount;
+export const selectReferralMilestonesClaimed = (s: PlayerData) => s.referralMilestonesClaimed;
 export const selectPrestige           = (s: PlayerData) => s.prestige;
 export const selectSeasonalQuest      = (s: PlayerData) => s.seasonalQuest;
