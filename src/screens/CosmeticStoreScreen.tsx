@@ -12,8 +12,22 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, TYPOGRAPHY } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
-import { useEconomy } from '../contexts/EconomyContext';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  useEconomyStore,
+  useEconomyActions,
+  selectCoins,
+  selectGems,
+  selectLibraryPoints,
+} from '../stores/economyStore';
+import {
+  usePlayerStore,
+  usePlayerActions,
+  selectEquippedFrame,
+  selectEquippedTheme,
+  selectEquippedTitle,
+  selectPlacedDecorations,
+  selectUnlockedCosmetics,
+} from '../stores/playerStore';
 import {
   COSMETIC_THEMES,
   PROFILE_FRAMES,
@@ -155,22 +169,30 @@ interface CosmeticStoreScreenProps {
 }
 
 const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation }) => {
-  const economy = useEconomy();
-  const player = usePlayer();
+  const coins = useEconomyStore(selectCoins);
+  const gems = useEconomyStore(selectGems);
+  const libraryPoints = useEconomyStore(selectLibraryPoints);
+  const { canAfford, spendCoins, spendGems } = useEconomyActions();
+  const equippedFrame = usePlayerStore(selectEquippedFrame);
+  const equippedTheme = usePlayerStore(selectEquippedTheme);
+  const equippedTitle = usePlayerStore(selectEquippedTitle);
+  const placedDecorations = usePlayerStore(selectPlacedDecorations);
+  const unlockedCosmetics = usePlayerStore(selectUnlockedCosmetics);
+  const { equipCosmetic, unlockCosmetic } = usePlayerActions();
 
   const [activeTab, setActiveTab] = useState<TabId>('themes');
   const [selectedItem, setSelectedItem] = useState<NormalizedItem | null>(null);
 
   // Build normalized items from data + player state
   const items = useMemo(() => {
-    const unlocked = player.unlockedCosmetics ?? [];
+    const unlocked = unlockedCosmetics ?? [];
     return {
-      themes: normalizeThemes(COSMETIC_THEMES, unlocked, player.equippedTheme),
-      frames: normalizeFrames(PROFILE_FRAMES, unlocked, player.equippedFrame),
-      titles: normalizeTitles(PROFILE_TITLES, unlocked, player.equippedTitle),
+      themes: normalizeThemes(COSMETIC_THEMES, unlocked, equippedTheme),
+      frames: normalizeFrames(PROFILE_FRAMES, unlocked, equippedFrame),
+      titles: normalizeTitles(PROFILE_TITLES, unlocked, equippedTitle),
       decorations: normalizeDecorations(LIBRARY_DECORATIONS, unlocked),
     };
-  }, [player.unlockedCosmetics, player.equippedTheme, player.equippedFrame, player.equippedTitle]);
+  }, [unlockedCosmetics, equippedTheme, equippedFrame, equippedTitle]);
 
   const currentItems = items[activeTab];
 
@@ -186,11 +208,11 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
       const currency = item.costCurrency === 'libraryPoints' ? 'coins' : item.costCurrency;
       // libraryPoints doesn't have spendLibraryPoints; treat as coins for now
       if (item.costCurrency === 'libraryPoints') {
-        if ((economy.libraryPoints ?? 0) < item.costAmount) {
+        if ((libraryPoints ?? 0) < item.costAmount) {
           Alert.alert('Not Enough Library Points', `You need ${item.costAmount} library points.`);
           return;
         }
-      } else if (!economy.canAfford(currency as 'coins' | 'gems', item.costAmount)) {
+      } else if (!canAfford(currency as 'coins' | 'gems', item.costAmount)) {
         Alert.alert(
           'Not Enough ' + (currency === 'coins' ? 'Coins' : 'Gems'),
           `You need ${item.costAmount} ${currency}.`,
@@ -200,31 +222,31 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
 
       // Spend currency
       if (item.costCurrency === 'coins') {
-        economy.spendCoins(item.costAmount);
+        spendCoins(item.costAmount);
       } else if (item.costCurrency === 'gems') {
-        economy.spendGems(item.costAmount);
+        spendGems(item.costAmount);
       }
       // libraryPoints: no spend method exists, just unlock
 
-      player.unlockCosmetic(item.id);
+      unlockCosmetic(item.id);
       setSelectedItem((prev) =>
         prev && prev.id === item.id ? { ...prev, owned: true } : prev,
       );
     },
-    [economy, player],
+    [libraryPoints, canAfford, spendCoins, spendGems, unlockCosmetic],
   );
 
   const handleEquip = useCallback(
     (item: NormalizedItem) => {
       switch (item.tabType) {
         case 'themes':
-          player.equipCosmetic('theme', item.id);
+          equipCosmetic('theme', item.id);
           break;
         case 'frames':
-          player.equipCosmetic('frame', item.id);
+          equipCosmetic('frame', item.id);
           break;
         case 'titles':
-          player.equipCosmetic('title', item.id);
+          equipCosmetic('title', item.id);
           break;
         case 'decorations':
           setSelectedItem(null);
@@ -233,7 +255,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
       }
       setSelectedItem(null);
     },
-    [player, navigation],
+    [equipCosmetic, navigation],
   );
 
   // ── Render helpers ──────────────────────────────────────────────────────
@@ -269,11 +291,11 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     (item: NormalizedItem): boolean => {
       if (!item.costCurrency || !item.costAmount) return false;
       if (item.costCurrency === 'libraryPoints') {
-        return (economy.libraryPoints ?? 0) >= item.costAmount;
+        return (libraryPoints ?? 0) >= item.costAmount;
       }
-      return economy.canAfford(item.costCurrency as 'coins' | 'gems', item.costAmount);
+      return canAfford(item.costCurrency as 'coins' | 'gems', item.costAmount);
     },
-    [economy],
+    [libraryPoints, canAfford],
   );
 
   const formatPrice = (amount: number): string => amount.toLocaleString();
@@ -357,17 +379,17 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     if (!selectedItem) return null;
 
     // Re-derive owned/equipped from current player state
-    const unlocked = player.unlockedCosmetics ?? [];
+    const unlocked = unlockedCosmetics ?? [];
     const isOwned =
       selectedItem.id === 'default' ||
       selectedItem.id === 'title_newcomer' ||
       unlocked.includes(selectedItem.id);
     const isEquipped =
-      (selectedItem.tabType === 'themes' && player.equippedTheme === selectedItem.id) ||
-      (selectedItem.tabType === 'frames' && player.equippedFrame === selectedItem.id) ||
-      (selectedItem.tabType === 'titles' && player.equippedTitle === selectedItem.id) ||
+      (selectedItem.tabType === 'themes' && equippedTheme === selectedItem.id) ||
+      (selectedItem.tabType === 'frames' && equippedFrame === selectedItem.id) ||
+      (selectedItem.tabType === 'titles' && equippedTitle === selectedItem.id) ||
       (selectedItem.tabType === 'decorations' &&
-        Object.values(player.placedDecorations ?? {}).includes(selectedItem.id));
+        Object.values(placedDecorations ?? {}).includes(selectedItem.id));
 
     const rarityColor = RARITY_COLORS[selectedItem.rarity] ?? COLORS.rarityCommon;
     const hasCost = selectedItem.costCurrency && selectedItem.costAmount;
@@ -512,8 +534,8 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         )}
         <Text style={styles.title}>COSMETICS</Text>
         <View style={styles.currencyRow}>
-          <Text style={styles.currencyText}>{'\u{1FA99}'} {economy.coins}</Text>
-          <Text style={styles.currencyText}>{'\u{1F48E}'} {economy.gems}</Text>
+          <Text style={styles.currencyText}>{'\u{1FA99}'} {coins}</Text>
+          <Text style={styles.currencyText}>{'\u{1F48E}'} {gems}</Text>
         </View>
       </View>
 
