@@ -213,16 +213,10 @@ export function generateClubGoal(
   clubTier: 'bronze' | 'silver' | 'gold' | 'diamond',
   memberCount: number
 ): ActiveClubGoal {
-  // Filter eligible goals by club tier
-  const eligible = CLUB_GOAL_TEMPLATES.filter((t) => {
-    if (!t.minClubTier) return true;
-    return TIER_ORDER[clubTier] >= TIER_ORDER[t.minClubTier];
-  });
-
   // Deterministic selection based on date — same goal for the whole club
   const now = new Date();
   const dateHash = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-  const template = eligible[dateHash % eligible.length];
+  const template = CLUB_GOAL_TEMPLATES[dateHash % CLUB_GOAL_TEMPLATES.length];
 
   // Scale target by member count (minimum 5 members worth)
   const effectiveMembers = Math.max(memberCount, 5);
