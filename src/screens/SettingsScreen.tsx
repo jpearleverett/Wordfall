@@ -12,7 +12,11 @@ import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useEconomy } from '../contexts/EconomyContext';
+import {
+  useEconomyStore,
+  selectIsAdFreeComputed,
+  selectIsPremiumPassFlag,
+} from '../stores/economyStore';
 
 const THEMES = [
   { id: 'dark', name: 'Dark', color: '#0a0e27' },
@@ -36,7 +40,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onSignOut: onSignOutProp,
 }) => {
   const contextSettings = useSettings();
-  const economy = useEconomy();
+  const isAdFreeComputed = useEconomyStore(selectIsAdFreeComputed);
+  const isPremiumPassFlag = useEconomyStore(selectIsPremiumPassFlag);
   const { signOut } = useAuth();
 
   const settings = settingsProp ?? contextSettings;
@@ -50,8 +55,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const notificationsEnabled = settings?.notificationsEnabled ?? settings?.notifications ?? true;
   const selectedTheme = settings?.theme ?? 'dark';
   const isSignedIn = settings?.isSignedIn ?? false;
-  const adsRemoved = economy?.isAdFree ?? false;
-  const premiumPass = economy?.isPremiumPass ?? false;
+  const adsRemoved = isAdFreeComputed ?? false;
+  const premiumPass = isPremiumPassFlag ?? false;
   const appVersion = settings?.version ?? '1.0.0';
 
   const handleVolumeChange = (key: string, currentValue: number, delta: number) => {

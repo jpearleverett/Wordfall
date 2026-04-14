@@ -17,7 +17,13 @@ import { COLORS, GRADIENTS, SHADOWS, FONTS, getLevelConfig } from '../constants'
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useAuth } from '../contexts/AuthContext';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  usePlayerStore,
+  usePlayerActions,
+  selectCurrentLevel,
+  selectDailyCompleted,
+  selectTotalScore,
+} from '../stores/playerStore';
 import {
   firestoreService,
   FirestoreLeaderboardEntry,
@@ -127,7 +133,10 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   onChangeTab: onChangeTabProp,
 }) => {
   const { user } = useAuth();
-  const player = usePlayer();
+  const currentLevel = usePlayerStore(selectCurrentLevel);
+  const dailyCompleted = usePlayerStore(selectDailyCompleted);
+  const totalScore = usePlayerStore(selectTotalScore);
+  const { sendChallenge } = usePlayerActions();
   const currentUserId = currentUserIdProp ?? user?.uid ?? '';
 
   const [activeTime, setActiveTime] = useState<TimeTab>('Daily');
@@ -144,9 +153,9 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
   // Check if player completed today's daily
   const today = new Date().toISOString().split('T')[0];
-  const playerCompletedDaily = player.dailyCompleted.includes(today);
+  const playerCompletedDaily = dailyCompleted.includes(today);
   const playerDailyScore = playerCompletedDaily
-    ? Math.max(300, (player.totalScore % 900) + 200)
+    ? Math.max(300, (totalScore % 900) + 200)
     : null;
 
   // Mock fallback for when Firestore is not available
@@ -165,12 +174,12 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         (new Date().getTime() - new Date(new Date().getFullYear(), 0, 1).getTime()) /
           604800000
       );
-    return generateMockLeaderboard(weekSeed, player.totalScore > 0 ? Math.floor(player.totalScore * 0.3) : null, currentUserId);
-  }, [player.totalScore, currentUserId]);
+    return generateMockLeaderboard(weekSeed, totalScore > 0 ? Math.floor(totalScore * 0.3) : null, currentUserId);
+  }, [totalScore, currentUserId]);
 
   const mockAllTimeEntries = useMemo(() => {
-    return generateMockLeaderboard(42, player.totalScore > 0 ? player.totalScore : null, currentUserId);
-  }, [player.totalScore, currentUserId]);
+    return generateMockLeaderboard(42, totalScore > 0 ? totalScore : null, currentUserId);
+  }, [totalScore, currentUserId]);
 
   // Fetch leaderboard data from Firestore
   const fetchLeaderboard = useCallback(
@@ -191,11 +200,11 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           // Merge with current player if not already in the list
           const entries = firestoreToEntries(data, currentUserId);
           const playerInList = entries.some((e) => e.id === currentUserId);
-          if (!playerInList && player.totalScore > 0) {
+          if (!playerInList && totalScore > 0) {
             let playerScore = 0;
             if (tab === 'Daily') playerScore = playerDailyScore || 0;
-            else if (tab === 'Weekly') playerScore = Math.floor(player.totalScore * 0.3);
-            else playerScore = player.totalScore;
+            else if (tab === 'Weekly') playerScore = Math.floor(totalScore * 0.3);
+            else playerScore = totalScore;
 
             if (playerScore > 0) {
               entries.push({
@@ -218,7 +227,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       }
       setLoading(false);
     },
-    [currentUserId, isFirestoreAvailable, playerDailyScore, player.totalScore]
+    [currentUserId, isFirestoreAvailable, playerDailyScore, totalScore]
   );
 
   // Load friend code on mount
@@ -571,10 +580,10 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                         <TouchableOpacity
                           style={styles.challengeButton}
                           onPress={() => {
-                            const level = player.currentLevel;
+                            const level = currentLevel;
                             const config = getLevelConfig(level);
-                            player.sendChallenge(entry.id, {
-                              score: player.totalScore > 0 ? Math.floor(player.totalScore * 0.01) : 0,
+                            sendChallenge(entry.id, {
+                              score: totalScore > 0 ? Math.floor(totalScore * 0.01) : 0,
                               stars: 0,
                               time: 0,
                               level,
