@@ -14,7 +14,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { GameMode, VictorySummaryItem } from '../types';
-import { usePlayer } from '../contexts/PlayerContext';
+import {
+  usePlayerStore,
+  selectStarsByLevel,
+  selectPuzzlesSolved,
+  selectCurrentStreak,
+  selectCurrentChapter,
+} from '../stores/playerStore';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { VideoBackground } from './common/VideoBackground';
 import ChromeText from './common/ChromeText';
@@ -227,15 +233,18 @@ const CONFETTI_COLORS = [
 ];
 
 function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: number; statsAnim: Animated.Value }) {
-  const player = usePlayer();
-  const totalStars = Object.values(player.starsByLevel).reduce((sum, v) => sum + v, 0) + stars;
-  const puzzlesSolved = player.puzzlesSolved;
-  const currentStreak = player.streaks.currentStreak;
+  // Narrow zustand subscriptions — PuzzleComplete is hit by the 15+ setData
+  // burst on every win; reading individual slices keeps it from re-rendering
+  // on unrelated player state churn.
+  const starsByLevel = usePlayerStore(selectStarsByLevel);
+  const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
+  const currentStreak = usePlayerStore(selectCurrentStreak);
+  const currentChapter = usePlayerStore(selectCurrentChapter);
+  const totalStars = Object.values(starsByLevel).reduce((sum, v) => sum + v, 0) + stars;
 
   // Milestone proximity: library wing
   const wingMilestoneMsg = useMemo(() => {
     const wingChapterThresholds = LIBRARY.wingChapters.map(([start]) => start);
-    const currentChapter = player.currentChapter;
     for (const threshold of wingChapterThresholds) {
       if (currentChapter < threshold) {
         const chaptersAway = threshold - currentChapter;
@@ -248,7 +257,7 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
       }
     }
     return null;
-  }, [player.currentChapter]);
+  }, [currentChapter]);
 
   // Star milestone proximity
   const starMilestoneMsg = useMemo(() => {
