@@ -4,7 +4,9 @@
 >
 > **Scope:** React Native + Expo SDK 55 game shipping to Google Play + App Store. Audit focused on what could ship as a bug, crash, store-review rejection, or unfixable production blind spot.
 >
-> **Totals:** 779 Jest tests still green. 62 `console.log` in `src/` prod paths. 339 / 361 interactive elements unlabeled (sampled). 0 Sentry instrumentation on 5 critical paths. 23 MB of unoptimized PNG/MP4 assets despite existing `scripts/optimize-assets.sh`. 0 `TODO`/`FIXME`/`HACK` comments. 0 hardcoded secrets.
+> **Totals (re-verified 2026-04-15):** 791 Jest tests still green. 62 `console.log` in `src/` prod paths. 339 / 361 interactive elements unlabeled (sampled). 0 Sentry instrumentation on 5 critical paths. 23 MB assets — 23 WebP + 26 PNG coexist (optimize-assets was run but PNG originals never removed); `bg-homescreen.mp4` (4.9 MB) also ships alongside its 753 KB optimized twin. 0 `TODO`/`FIXME`/`HACK` comments. 0 hardcoded secrets.
+>
+> **Addendum 2026-04-15:** PRs #179–#185 shipped between the original audit and now (context selectors, AdMob real IDs, Maestro E2E, Android package rename to `com.wordfall.game`). The one new iOS blocker surfaced during the TASK 1 re-check is listed in §1 under "iOS-only".
 
 ---
 
@@ -13,15 +15,21 @@
 These aren't audit items per se, they're prerequisites that can't be completed in code. Listing them up top so they don't get lost in triage.
 
 - [ ] **Register `wordfall_*` IAP products in Play Console.** Catalog lives at `src/data/shopProducts.ts`. Required before real purchases work end-to-end.
+- [ ] **Grant Android Publisher role to the Firebase default service account** (`<project>@appspot.gserviceaccount.com`) in Play Console → Users and permissions. `functions/src/index.ts` reads the Google Play subscription endpoint via `admin.app().options.credential.getAccessToken()` — without this role, `validateReceipt` returns 403 on all Android receipts.
 - [ ] **Upload FCM server key to Firebase Console** → Cloud Messaging → Project Settings. Required for Android push.
 - [ ] **Download `GoogleService-Info.plist` from Firebase Console** → commit to repo root. Referenced in `app.json` but not yet in repo. iOS-only; can wait until iOS work starts.
 - [ ] **Apple Developer enrollment + first iOS EAS build.** Blocks iOS launch.
-- [ ] **Real AdMob app IDs + unit IDs.** TASK 2 will wire Google's test IDs so dev client works; real IDs come from AdMob web console.
+- [ ] **Sentry project + DSN.** Create the project, add `EXPO_PUBLIC_SENTRY_DSN` to `.env`. Without this, the instrumentation gaps below are invisible even once fixed.
 - [ ] **Real `.mp3` audio assets** → drop in `assets/audio/`. Today synthesized tones.
+- [x] ~~Real AdMob app IDs + unit IDs.~~ *Done in PRs #180–#182 (Apr 2026). `app.json` now ships real AdMob app IDs; `eas.json` injects real unit IDs per profile.*
 
 ---
 
 ## 1. Blockers (must fix before Play Store / App Store submission)
+
+### iOS-only (App Store submission)
+
+- [ ] **Missing `NSUserTrackingUsageDescription` + no ATT prompt before first ad request.** `app.json` declares `infoPlist` + `privacyManifests` but not the tracking description string; `expo-tracking-transparency` is not in the plugins list; `grep -r 'requestTrackingPermissionsAsync\|NSUserTrackingUsageDescription' src/` returns zero hits. AdMob (`react-native-google-mobile-ads@^16`) on iOS 14.5+ requires the ATT prompt for IDFA-based personalization; without it Apple's App Review will flag the SDK's entitlement use against a missing purpose string. **Fix (TASK 6):** (1) add `"NSUserTrackingUsageDescription": "This identifier will be used to deliver more relevant ads."` to `app.json` `ios.infoPlist`, (2) add `"expo-tracking-transparency"` to the plugins array, (3) call `requestTrackingPermissionsAsync()` once before the first AdMob request in `src/services/ads.ts`, (4) pass the ATT result into the Google Mobile Ads SDK's `requestNonPersonalizedAdsOnly` flag. Only blocks iOS launch; Android is unaffected.
 
 ### Errors & crash safety
 
@@ -55,7 +63,7 @@ These aren't audit items per se, they're prerequisites that can't be completed i
 
 ### Bundle size (store submission warning)
 
-- [ ] **`assets/` = 23 MB. `scripts/optimize-assets.sh` exists but has never been run** (0 `.webp` files in tree, 26 `.png`). 9 PNGs over 1 MB each. `bg-homescreen.mp4` = 4.9 MB uncompressed. Est. 7–12 MB savings. Play Store warns over 50 MB APK; we're fine, but every MB over ~20 MB for a puzzle game hurts install conversion. Fix: run `npm run optimize-assets`, commit resulting `.webp` + compressed mp4, update image imports.
+- [ ] **`assets/` = 23 MB. Optimize-assets was partially run but originals never removed.** Current state: 23 `.webp` + 26 `.png` coexist; `bg-homescreen.mp4` (4.9 MB) ships alongside `bg-homescreen-optimized.mp4` (753 KB). 9 PNGs over 1 MB each. Est. 7–12 MB savings. Play Store warns over 50 MB APK; we're fine, but every MB over ~20 MB for a puzzle game hurts install conversion. **Fix:** (1) `git grep` to confirm image imports use the WebP names (not the PNG originals), (2) `git rm` the 26 PNGs whose WebP twin exists, (3) `git rm assets/videos/bg-homescreen.mp4` (the optimized version is what Metro should be loading; verify via grep of `bg-homescreen` imports first).
 
 ---
 
@@ -94,7 +102,7 @@ These aren't audit items per se, they're prerequisites that can't be completed i
 - [ ] **Swallowed catches in IAP init/cleanup.** `iap.ts:183–185, 604–606, 617–619`. Intentional (AsyncStorage non-critical, connection cleanup). Not a bug. Fix (if desired): breadcrumb instead of silent swallow.
 - [ ] **Preload audio failure swallow in `sound.ts:690–691`.** Non-critical — synthesized-tone fallback handles it. Not a bug.
 - [ ] **Missing club-invite deep link pattern.** `src/utils/deepLinking.ts` doesn't parse `wordfall://club/{id}`. Not in scope for v1.0 unless we plan to run club-invite campaigns at launch. Fix: add parser + `pendingDeepLinkRef` handling.
-- [ ] **Consolidate `cloud-functions/` and `functions/` dirs.** Tracked separately as TASK 6.
+- [ ] **Consolidate `cloud-functions/` and `functions/` dirs.** Tracked separately as TASK 5 in the current launch plan (`claude/functions-consolidate` branch).
 
 ---
 
@@ -115,7 +123,7 @@ These aren't audit items per se, they're prerequisites that can't be completed i
 
 1. Read Section 0 — make sure nothing there surprises you.
 2. Pick the Blockers (Section 1) you consider launch-critical. Strike the rest down to Polish or Nice-to-have.
-3. Send me the filtered Blocker list as input to **TASK 7 (Final polish pass)**. I'll tackle them on branch `claude/final-polish`.
+3. Send me the filtered Blocker list as input to **TASK 6 (Final polish pass)**. I'll tackle them on branch `claude/final-polish`. The iOS ATT blocker is committed regardless.
 4. Polish + Nice-to-have items can live as a v1.1 backlog in a GitHub issue or a follow-up doc.
 
 ## Files referenced in this audit
