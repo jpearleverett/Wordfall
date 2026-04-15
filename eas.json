@@ -8,7 +8,11 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+        "EAS_SKIP_AUTO_FINGERPRINT": "1",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID": "ca-app-pub-6575205005908086/7915277947",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_ANDROID": "ca-app-pub-6575205005908086/2383749660",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_IOS": "ca-app-pub-6575205005908086/4985862277",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_IOS": "ca-app-pub-6575205005908086/1617462905"
       },
       "android": {
         "buildType": "apk"
@@ -20,7 +24,11 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+        "EAS_SKIP_AUTO_FINGERPRINT": "1",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID": "ca-app-pub-6575205005908086/7915277947",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_ANDROID": "ca-app-pub-6575205005908086/2383749660",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_IOS": "ca-app-pub-6575205005908086/4985862277",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_IOS": "ca-app-pub-6575205005908086/1617462905"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -32,7 +40,11 @@
     "production": {
       "distribution": "store",
       "env": {
-        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+        "EAS_SKIP_AUTO_FINGERPRINT": "1",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID": "ca-app-pub-6575205005908086/7915277947",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_ANDROID": "ca-app-pub-6575205005908086/2383749660",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_IOS": "ca-app-pub-6575205005908086/4985862277",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_IOS": "ca-app-pub-6575205005908086/1617462905"
       },
       "ios": {
         "resourceClass": "m-medium",
