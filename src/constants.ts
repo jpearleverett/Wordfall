@@ -1,4 +1,4 @@
-import { Dimensions } from 'react-native';
+import { Dimensions, Platform } from 'react-native';
 import { BoardConfig, Difficulty, GameMode, ModeConfig } from './types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -902,15 +902,31 @@ export const BACKGROUND_EVOLUTION = {
 } as const;
 
 // Ad configuration — rewarded ads tuning
+//
+// Ad unit IDs are platform-specific: an Android ad unit will not load against
+// an iOS app ID and vice versa. We resolve at module init via Platform.OS,
+// reading the platform-specific env var first and falling back to Google's
+// public test unit IDs (which work on both platforms) so dev / unconfigured
+// builds always show test ads instead of crashing.
+const env = (typeof process !== 'undefined' ? (process as any).env : {}) ?? {};
+const ADMOB_REWARDED_ID =
+  (Platform.OS === 'ios'
+    ? env.EXPO_PUBLIC_ADMOB_REWARDED_ID_IOS
+    : env.EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID) ||
+  env.EXPO_PUBLIC_ADMOB_REWARDED_ID || // legacy / shared fallback
+  'ca-app-pub-3940256099942544/5224354917'; // Google test rewarded unit
+const ADMOB_INTERSTITIAL_ID =
+  (Platform.OS === 'ios'
+    ? env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_IOS
+    : env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_ANDROID) ||
+  env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || // legacy / shared fallback
+  'ca-app-pub-3940256099942544/1033173712'; // Google test interstitial unit
+
 export const AD_CONFIG = {
-  /** AdMob rewarded ad unit ID (defaults to Google test ID for development) */
-  REWARDED_AD_UNIT_ID:
-    (typeof process !== 'undefined' && (process as any).env?.EXPO_PUBLIC_ADMOB_REWARDED_ID) ||
-    'ca-app-pub-3940256099942544/5224354917', // Google test ad unit
-  /** AdMob interstitial ad unit ID (defaults to Google test ID for development) */
-  INTERSTITIAL_AD_UNIT_ID:
-    (typeof process !== 'undefined' && (process as any).env?.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID) ||
-    'ca-app-pub-3940256099942544/1033173712', // Google test interstitial unit
+  /** AdMob rewarded ad unit ID (resolved by platform; falls back to Google test ID) */
+  REWARDED_AD_UNIT_ID: ADMOB_REWARDED_ID,
+  /** AdMob interstitial ad unit ID (resolved by platform; falls back to Google test ID) */
+  INTERSTITIAL_AD_UNIT_ID: ADMOB_INTERSTITIAL_ID,
   /** Maximum total rewarded ads a player can watch per day */
   MAX_ADS_PER_DAY: 10,
   /** Maximum "watch ad for coins" ads per day */
