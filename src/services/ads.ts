@@ -12,6 +12,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AD_CONFIG } from '../constants';
 import { logger } from '../utils/logger';
+import { analytics } from './analytics';
+import { crashReporter } from './crashReporting';
 
 // ── Reward type definitions ────────────────────────────────────────────────────
 
@@ -111,17 +113,25 @@ class AdManager {
     this.tracking = await loadTracking();
 
     try {
-      // Attempt react-native-google-mobile-ads
+      // Attempt react-native-google-mobile-ads. Default export is a callable
+      // `MobileAds()` that returns the module instance (v15+/v16 API).
       const mobileAds = await import('react-native-google-mobile-ads' as string);
-      if (mobileAds && typeof mobileAds.default?.initialize === 'function') {
-        await mobileAds.default.initialize();
+      const defaultExport = mobileAds?.default;
+      const instance = typeof defaultExport === 'function' ? defaultExport() : defaultExport;
+      if (instance && typeof instance.initialize === 'function') {
+        await instance.initialize();
         this.useMock = false;
         this.preloadRewardedAd();
         logger.log('[Ads] Native ad module (react-native-google-mobile-ads) initialised');
+        crashReporter.addBreadcrumb('AdMob initialized', 'ads');
       }
-    } catch {
+    } catch (e) {
       this.useMock = true;
       logger.log('[Ads] No ad SDK available — using mock mode');
+      crashReporter.addBreadcrumb(
+        `AdMob init failed: ${e instanceof Error ? e.message : String(e)}`,
+        'ads',
+      );
     }
 
     // In mock mode the rewarded ad is always "ready"
@@ -186,6 +196,7 @@ class AdManager {
         this.tracking.coinAdCount++;
       }
       await saveTracking(this.tracking);
+      void analytics.trackAdWatched('rewarded', rewardType);
     }
 
     return result;
@@ -302,6 +313,7 @@ class AdManager {
       this.tracking.interstitialCount++;
       this.tracking.lastInterstitialTime = Date.now();
       await saveTracking(this.tracking);
+      void analytics.trackAdWatched('interstitial', 'none');
     }
 
     return shown;
@@ -321,16 +333,31 @@ class AdManager {
       if (mobileAds.InterstitialAd) {
         return new Promise<boolean>((resolve) => {
           const ad = mobileAds.InterstitialAd.createForAdRequest(
-            AD_CONFIG.REWARDED_AD_UNIT_ID, // Would use a separate interstitial ID in production
+            AD_CONFIG.INTERSTITIAL_AD_UNIT_ID,
           );
           ad.addAdEventListener('closed', () => resolve(true));
-          ad.addAdEventListener('error', () => resolve(false));
+          ad.addAdEventListener('error', (err: unknown) => {
+            crashReporter.addBreadcrumb(
+              `Interstitial ad error: ${err instanceof Error ? err.message : String(err)}`,
+              'ads',
+            );
+            resolve(false);
+          });
           ad.load();
-          ad.show().catch(() => resolve(false));
+          ad.show().catch((err: unknown) => {
+            crashReporter.addBreadcrumb(
+              `Interstitial ad show() rejected: ${err instanceof Error ? err.message : String(err)}`,
+              'ads',
+            );
+            resolve(false);
+          });
         });
       }
-    } catch {
-      // No ad SDK available
+    } catch (e) {
+      crashReporter.addBreadcrumb(
+        `Interstitial ad import failed: ${e instanceof Error ? e.message : String(e)}`,
+        'ads',
+      );
     }
     logger.warn('[Ads] Failed to show native interstitial ad');
     return false;
@@ -375,17 +402,30 @@ class AdManager {
           ad.addAdEventListener('closed', () => {
             resolve({ rewarded: false, rewardType });
           });
-          ad.addAdEventListener('error', () => {
+          ad.addAdEventListener('error', (err: unknown) => {
+            crashReporter.addBreadcrumb(
+              `Rewarded ad error: ${err instanceof Error ? err.message : String(err)}`,
+              'ads',
+            );
             resolve({ rewarded: false, rewardType });
           });
           ad.load();
-          ad.show().catch(() => resolve({ rewarded: false, rewardType }));
+          ad.show().catch((err: unknown) => {
+            crashReporter.addBreadcrumb(
+              `Rewarded ad show() rejected: ${err instanceof Error ? err.message : String(err)}`,
+              'ads',
+            );
+            resolve({ rewarded: false, rewardType });
+          });
         });
         this.preloadRewardedAd();
         return result;
       }
-    } catch {
-      // No ad SDK available
+    } catch (e) {
+      crashReporter.addBreadcrumb(
+        `Rewarded ad import failed: ${e instanceof Error ? e.message : String(e)}`,
+        'ads',
+      );
     }
     return { rewarded: false, rewardType };
   }

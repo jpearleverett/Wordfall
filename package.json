@@ -43,6 +43,7 @@
     "react-dom": "19.2.0",
     "react-native": "0.83.4",
     "react-native-gesture-handler": "~2.30.0",
+    "react-native-google-mobile-ads": "^16.3.2",
     "react-native-iap": "^15.0.0",
     "react-native-nitro-modules": "^0.35.4",
     "react-native-reanimated": "4.2.1",

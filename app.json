@@ -99,6 +99,13 @@
       "expo-font",
       "react-native-iap",
       [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-6575205005908086~9364090985",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
