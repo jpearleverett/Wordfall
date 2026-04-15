@@ -1,0 +1,33 @@
+# Flow 05 — Mode select
+#
+# Opens the Modes screen (Play tab) and verifies that at least the
+# always-unlocked Classic mode card renders and routes into the game.
+# The other 9 modes are progressively unlocked by player level so
+# they aren't tappable on a fresh install — we don't attempt to tap
+# each one. Instead we assert that the mode names are at least
+# *visible* on screen to prove ModesScreen renders all cards.
+appId: com.wordfall.app
+name: "05 — Mode select"
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+- tapOn: "Play"
+- waitForAnimationToEnd
+# All 10 modes render on the screen (locked ones are visible but
+# non-interactive). Check the first three which are always near the
+# top of the sort order.
+- assertVisible: "Classic"
+- assertVisible: "Shrinking Board"
+- assertVisible: "Time Pressure"
+# Classic is always unlocked — tap it, verify we enter the game, back out
+- tapOn: "Classic"
+- waitForAnimationToEnd
+- assertVisible: "Go back"
+- tapOn: "Go back"
+- waitForAnimationToEnd
+# Back on Modes screen
+- assertVisible: "Classic"

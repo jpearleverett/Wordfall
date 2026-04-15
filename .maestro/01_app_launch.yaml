@@ -1,0 +1,19 @@
+# Flow 01 — App launch
+#
+# Cold-launches Wordfall, dismisses the onboarding welcome if shown,
+# and verifies we land on the Home tab by asserting the bottom tab bar
+# labels are visible.
+appId: com.wordfall.app
+name: "01 — App launch"
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+# Home tab is always present after onboarding completes.
+# The bottom tab bar shows "Home" and "Play" at minimum (other tabs
+# are progressively unlocked by player level).
+- assertVisible: "Home"
+- assertVisible: "Play"

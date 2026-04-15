@@ -1,0 +1,16 @@
+# Reusable subflow: dismiss any onboarding that's showing.
+#
+# On a fresh install, OnboardingScreen runs through 3 phases:
+# welcome → tutorial → celebrate. The welcome phase shows a "Skip
+# tutorial" link that jumps straight to completion.
+#
+# On subsequent launches (after `tutorialComplete: true` has been
+# persisted) the app goes straight to Home and this subflow is a no-op.
+appId: com.wordfall.app
+---
+- runFlow:
+    when:
+      visible: "Skip tutorial"
+    commands:
+      - tapOn: "Skip tutorial"
+      - waitForAnimationToEnd

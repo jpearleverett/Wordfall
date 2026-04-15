@@ -1,0 +1,46 @@
+# Flow 02 — Daily puzzle entry
+#
+# Smoke test that tapping the daily puzzle card on Home opens the
+# GameScreen with the grid header rendered. Does NOT complete a
+# puzzle — completion requires knowing the daily board's valid words,
+# which vary by date; E2E-driving a real solve is fragile without a
+# debug "skip to win" hook. The victory-screen assertion is a
+# v1.1 follow-up.
+#
+# Handles two daily-card states:
+#   1. "Today's challenge"  — puzzle not yet solved today
+#   2. "Daily completed"    — already solved today (tap is a no-op;
+#                             we skip into Classic via Play tab instead)
+appId: com.wordfall.app
+name: "02 — Daily puzzle entry"
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+# Primary path: daily not yet solved today
+- runFlow:
+    when:
+      visible: "Today's challenge"
+    commands:
+      - tapOn: "Today's challenge"
+      - waitForAnimationToEnd
+      - assertVisible: "Go back"          # GameHeader back button
+      - tapOn: "Go back"
+      - waitForAnimationToEnd
+# Fallback path: daily already done today — use Play → Classic
+- runFlow:
+    when:
+      visible: "Daily completed"
+    commands:
+      - tapOn: "Play"
+      - waitForAnimationToEnd
+      - tapOn: "Classic"
+      - waitForAnimationToEnd
+      - assertVisible: "Go back"
+      - tapOn: "Go back"
+      - waitForAnimationToEnd
+# Whichever path ran, we should be back at a tab screen
+- assertVisible: "Home"
