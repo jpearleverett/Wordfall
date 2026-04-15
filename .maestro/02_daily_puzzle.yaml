@@ -11,7 +11,7 @@
 #   1. "Today's challenge"  — puzzle not yet solved today
 #   2. "Daily completed"    — already solved today (tap is a no-op;
 #                             we skip into Classic via Play tab instead)
-appId: com.wordfall.app
+appId: com.wordfall.game
 name: "02 — Daily puzzle entry"
 tags:
   - smoke

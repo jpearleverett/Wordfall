@@ -6,7 +6,7 @@
 # they aren't tappable on a fresh install — we don't attempt to tap
 # each one. Instead we assert that the mode names are at least
 # *visible* on screen to prove ModesScreen renders all cards.
-appId: com.wordfall.app
+appId: com.wordfall.game
 name: "05 — Mode select"
 tags:
   - smoke

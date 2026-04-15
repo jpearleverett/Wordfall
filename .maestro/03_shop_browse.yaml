@@ -3,7 +3,7 @@
 # Opens the shop from the Home header (icon button with
 # accessibilityLabel="Open shop"), scrolls the product list, and
 # navigates back. Smoke test only — doesn't attempt a purchase.
-appId: com.wordfall.app
+appId: com.wordfall.game
 name: "03 — Shop browse"
 tags:
   - smoke

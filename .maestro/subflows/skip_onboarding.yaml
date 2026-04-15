@@ -6,7 +6,7 @@
 #
 # On subsequent launches (after `tutorialComplete: true` has been
 # persisted) the app goes straight to Home and this subflow is a no-op.
-appId: com.wordfall.app
+appId: com.wordfall.game
 ---
 - runFlow:
     when:
