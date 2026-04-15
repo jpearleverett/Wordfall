@@ -3,7 +3,7 @@
 # Cold-launches Wordfall, dismisses the onboarding welcome if shown,
 # and verifies we land on the Home tab by asserting the bottom tab bar
 # labels are visible.
-appId: com.wordfall.app
+appId: com.wordfall.game
 name: "01 — App launch"
 tags:
   - smoke

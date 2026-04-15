@@ -3,7 +3,7 @@
 # Navigates Profile → Settings, toggles the Haptics switch (a stable
 # boolean — SettingsScreen's "Sound" section uses +/- volume
 # controls, not a single toggle), and exits.
-appId: com.wordfall.app
+appId: com.wordfall.game
 name: "04 — Settings and toggle"
 tags:
   - smoke

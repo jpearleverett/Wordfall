@@ -60,7 +60,7 @@
       }
     },
     "android": {
-      "package": "com.wordfall.app",
+      "package": "com.wordfall.game",
       "versionCode": 2,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {

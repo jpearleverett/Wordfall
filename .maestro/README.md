@@ -42,7 +42,7 @@ your phone is paired to.
 - Phone plugged in and authorized. Check with `adb devices` — the
   phone should appear as a single device with status `device` (not
   `unauthorized`).
-- The Wordfall dev client APK installed on the phone (`com.wordfall.app`).
+- The Wordfall dev client APK installed on the phone (`com.wordfall.game`).
   Build with:
   ```bash
   EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android
@@ -158,7 +158,7 @@ requiring a full app data wipe.
 If you want a known-clean state:
 
 ```bash
-adb shell pm clear com.wordfall.app    # Android — wipes app data
+adb shell pm clear com.wordfall.game   # Android — wipes app data
 # iOS: delete + reinstall the app
 ```
 

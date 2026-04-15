@@ -199,7 +199,7 @@ async function validateAppleReceipt(
 
 // ── Google Play validation ───────────────────────────────────────────────────
 
-const GOOGLE_PACKAGE_NAME = "com.wordfall.app";
+const GOOGLE_PACKAGE_NAME = "com.wordfall.game";
 
 async function getGoogleAccessToken(): Promise<string> {
   const credential = admin.app().options.credential;
