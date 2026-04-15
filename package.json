@@ -11,6 +11,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "e2e": "maestro test .maestro/",
     "optimize-assets": "bash scripts/optimize-assets.sh"
   },
   "dependencies": {

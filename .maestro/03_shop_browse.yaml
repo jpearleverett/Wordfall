@@ -1,0 +1,30 @@
+# Flow 03 — Shop browse
+#
+# Opens the shop from the Home header (icon button with
+# accessibilityLabel="Open shop"), scrolls the product list, and
+# navigates back. Smoke test only — doesn't attempt a purchase.
+appId: com.wordfall.app
+name: "03 — Shop browse"
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+- tapOn: "Open shop"
+- waitForAnimationToEnd
+- assertVisible: "SHOP"                  # ShopScreen headerTitle
+# Scroll the main list; swipe down to simulate user browsing
+- swipe:
+    direction: UP
+    duration: 600
+- waitForAnimationToEnd
+- swipe:
+    direction: DOWN
+    duration: 600
+- waitForAnimationToEnd
+# Exit back to Home via Android back button
+- back
+- waitForAnimationToEnd
+- assertVisible: "Home"

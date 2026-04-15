@@ -1,0 +1,31 @@
+# Flow 04 — Settings + toggle
+#
+# Navigates Profile → Settings, toggles the Haptics switch (a stable
+# boolean — SettingsScreen's "Sound" section uses +/- volume
+# controls, not a single toggle), and exits.
+appId: com.wordfall.app
+name: "04 — Settings and toggle"
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+- tapOn: "Profile"
+- waitForAnimationToEnd
+- assertVisible: "PROFILE"
+- tapOn: "Open settings"                 # gear icon accessibilityLabel
+- waitForAnimationToEnd
+- assertVisible: "SETTINGS"
+- assertVisible: "Sound"                 # section header
+# Toggle Haptics — accessibilityLabel on the switch is "Haptics"
+- tapOn: "Haptics"
+- waitForAnimationToEnd
+# Toggle back so the flow leaves state unchanged
+- tapOn: "Haptics"
+- waitForAnimationToEnd
+# Return to Profile via Android back button
+- back
+- waitForAnimationToEnd
+- assertVisible: "PROFILE"
