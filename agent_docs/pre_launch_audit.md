@@ -6,7 +6,11 @@
 >
 > **Totals (re-verified 2026-04-15):** 791 Jest tests still green. 62 `console.log` in `src/` prod paths. 339 / 361 interactive elements unlabeled (sampled). 0 Sentry instrumentation on 5 critical paths. 23 MB assets — 23 WebP + 26 PNG coexist (optimize-assets was run but PNG originals never removed); `bg-homescreen.mp4` (4.9 MB) also ships alongside its 753 KB optimized twin. 0 `TODO`/`FIXME`/`HACK` comments. 0 hardcoded secrets.
 >
+> **Addendum B totals:** 2 critical-severity server auth holes (`validateReceipt` accepts client-supplied `userId`; `sendPushNotification` unauthenticated). 1 high-severity Firestore-rule hole (`dailyScores` / `weeklyScores` accept unbounded client-written scores). 3 UGC safeguards missing from Apple 1.2 checklist (report, block, ToS gate). 0 GDPR/UMP consent SDK. 0 analytics opt-out. Mystery Wheel paid-spin odds undisclosed. 2 unused Android permissions declared. `allowBackup` defaults open. `npm audit --production` = 0 critical / 2 high / 2 moderate (all transitive build tooling).
+>
 > **Addendum 2026-04-15:** PRs #179–#185 shipped between the original audit and now (context selectors, AdMob real IDs, Maestro E2E, Android package rename to `com.wordfall.game`). The one new iOS blocker surfaced during the TASK 1 re-check is listed in §1 under "iOS-only".
+>
+> **Addendum 2026-04-15 (B) — deeper sweep:** The original audit focused on crashes, error handling, a11y, and telemetry gaps. A second pass covering **store policy compliance (UGC, privacy consent, loot boxes)**, **server-side security**, and **build/release config** surfaced additional blockers, listed below in §§1.UGC, 1.PRIV, 1.LOOT, 1.SEC, 1.BUILD. These are launch-blocking in the same sense as the existing blockers — a policy-violation rejection has the same effect as a crash. Treat them with the same weight.
 
 ---
 
@@ -67,10 +71,66 @@ These aren't audit items per se, they're prerequisites that can't be completed i
 
 ---
 
+### 1.UGC — UGC moderation (Apple Guideline 1.2 / Play UGC policy) *[Addendum B]*
+
+Club chat accepts user-generated text. Apple and Google both require the same five UGC safeguards. Today we have **1 of 5**.
+
+- [ ] **No in-app "report message" or "report user" mechanism.** Grep for `report|block|mute` across `src/` returned zero hits. Apple 1.2 requires users be able to flag objectionable content. `src/screens/ClubScreen.tsx` renders messages with no long-press menu. **Fix:** add long-press → "Report message" that writes to a `reports/` collection + captures `{messageId, reporterId, reason}`; deployed at the same time as the server-side handler.
+- [ ] **No "block user" mechanism.** Once a user is reported, the reporter has no way to stop seeing their messages. Apple 1.2 requires it. **Fix:** add a `blockedUserIds` array on the user profile; filter client-side in `ClubScreen` message list; deny-list their incoming messages server-side.
+- [ ] **Profanity filter is client-side only.** `src/utils/profanityFilter.ts` is real (45+ words, leet/substitution handling) and is applied at send in `ClubScreen.tsx:111, 118`. But because filtering only runs on the client, a modified client skips it entirely — server accepts anything ≤200 chars (`src/services/firestore.ts:685–705`; `firestore.rules:58–61`). **Fix:** mirror the filter in a Cloud Function that runs on `onCreate(clubs/{clubId}/messages/{id})`, or gate write via a callable that filters before `set`.
+- [ ] **No Terms of Service / EULA acceptance gate.** `OnboardingScreen.tsx` is game-tutorial only. The privacy policy and ToS drafts (`agent_docs/privacy_policy_draft.md`) exist but no in-app acceptance step. Play UGC policy + EU GDPR require a user-visible ToS. **Fix:** add an "I agree to the Terms of Service and Privacy Policy" gate in onboarding (or first-launch dialog) with external links.
+- [ ] **No in-app support / developer contact.** Apple 1.2(d) requires published contact info for users to reach the developer. `SettingsScreen.tsx` has no "Contact Support" or "Email Us" row. **Fix:** add a "Contact" row in Settings that opens `mailto:support@wordfall.app` (or similar).
+
+> Already-in-place: client-side profanity filter (`src/utils/profanityFilter.ts`). Counts as partial credit for Apple 1.2(a) but not a complete implementation.
+
+---
+
+### 1.PRIV — Privacy consent & tracking *[Addendum B]*
+
+These are enforcement-level gaps. Any one of them is grounds for a store rejection or, in the EU, post-launch regulatory complaint.
+
+- [ ] **No GDPR consent SDK / CMP / Google UMP integration.** `src/services/ads.ts` calls `MobileAds().initialize()` with no preceding `requestConsentInfoUpdate` and no consent gate. In the EU (GDPR + ePrivacy), personalized ads require opt-in consent before any identifier is read. Google ad serving policy requires a Google-certified CMP for EU traffic. **Blocks EU launch.** **Fix:** install Google UMP SDK (via `react-native-google-mobile-ads`' built-in consent module or an `@react-native-firebase` package), call `requestConsentInfoUpdate` on app start before ads load, and pass the consent status into `requestNonPersonalizedAdsOnly`.
+- [ ] **Privacy Policy + Terms of Service rows in Settings are non-functional.** `src/screens/SettingsScreen.tsx:348–356` — both `TouchableOpacity` elements have no `onPress`. They render a chevron but do nothing on tap. Play Store compliance requires a reachable in-app privacy policy. **Fix:** `onPress={() => Linking.openURL('https://wordfall.app/privacy')}` on line 348 and the equivalent ToS URL on line 353.
+- [ ] **Firebase Analytics auto-enabled, no user opt-out.** `src/services/analytics.ts:152–216` initializes `@react-native-firebase/analytics` without `setAnalyticsCollectionEnabled(false)`. There is no analytics toggle in `SettingsScreen` and no `analyticsEnabled` field in `SettingsContext`. On iOS this runs before any ATT prompt; on Android it collects AAID by default. GDPR + CCPA require explicit opt-out for ad identifiers. The Play Store Data Safety form already drafted in `agent_docs/data_safety.md` must match whatever ships. **Fix:** (1) add `analyticsEnabled: boolean` to `SettingsContext`, default-off in EU (based on consent result), (2) add a toggle in `SettingsScreen.tsx`, (3) call `nativeAnalytics.setAnalyticsCollectionEnabled(value)` when the setting changes, (4) gate `trackEvent` calls on the setting.
+- [ ] **AdMob `childDirectedTreatment` / `tagForUnderAgeOfConsent` flags not set.** `src/services/ads.ts` creates `RewardedAd.createForAdRequest(...)` without `RequestOptions`. Google ad serving requires these flags to match the Play Console "target audience" declaration, or ads are denied. **Fix:** pass `{ requestNonPersonalizedAdsOnly, tagForChildDirectedTreatment, tagForUnderAgeOfConsent }` into every ad-request call; derive from consent + target-audience.
+- [ ] **No age gate.** `OnboardingScreen.tsx` auto-advances after 3s on the welcome phase. If the Play Console target audience includes under-13, COPPA + GDPR-K require a neutral age-screen before any data collection. **Fix (only if the Play Console target audience is set to include under-13):** add a neutral date-of-birth screen before analytics init, gate all tracking on the result.
+
+---
+
+### 1.LOOT — Loot box probability disclosure *[Addendum B]*
+
+- [ ] **Mystery Wheel odds are not disclosed pre-purchase.** `src/components/MysteryWheel.tsx` lets the user spend gems (SKU = `SPIN_COST_GEMS = 15`, bundle = `SPIN_BUNDLE_COST_GEMS = 60` in `src/data/mysteryWheel.ts:269, 272`). Gems are purchasable with real money, so this is a paid loot box under Apple (Guideline 3.1.1) and Google policy. Weighted outcomes exist (`src/data/mysteryWheel.ts:56–156`: 10 segments summing to 100%, plus a 6-outcome secondary "Mystery Box" table at lines 162–169) but the probabilities are never shown to the user. **Fix:** add a "View odds" affordance on `MysteryWheel.tsx` that opens a modal listing every segment as a percentage. Same disclosure must appear in the Play Store and App Store listing descriptions.
+
+---
+
+### 1.SEC — Server-side auth & fraud vectors *[Addendum B]*
+
+Hand-verified the Cloud Functions and Firestore rules source. These are real holes, not hypotheticals.
+
+- [ ] **`validateReceipt` accepts an attacker-supplied `userId` that overrides the authenticated UID.** `functions/src/index.ts:325, 327` — `await storeReceiptHash(hash, productId, userId ?? authenticatedUserId)` and `const uid = userId ?? authenticatedUserId;`. The client POSTs `{ receipt, productId, platform, userId? }` plus a Firebase ID token. If a valid receipt is presented with someone else's `userId`, fulfillment gets written to that target's `users/{uid}/purchases` subcollection. Fraud vector: buy once, reassign to many users. **Fix:** drop the `userId` field from the request schema entirely; use `authenticatedUserId` and require it (reject requests with no valid bearer token). If a `userId` param is kept for explicit gifting later, enforce `userId === authenticatedUserId` or `auth.token.admin === true`.
+- [ ] **`sendPushNotification` has no auth check whatsoever.** `cloud-functions/src/index.ts:176–211`. Arrow function signature is `async (data) => { ... }` — the `context` argument is never destructured. Any unauthenticated caller can trigger push to any `userId`. Harassment / spam / phishing vector. **Fix:** callable signature must be `async (data, context) => { if (!context.auth) throw new HttpsError('unauthenticated', '...'); ... }`, plus (a) rate-limit per `auth.uid`, (b) only allow sending to users who have an existing friendship / club-comembership / explicit event subscription relationship with `auth.uid`.
+- [ ] **`clubGoalProgress` accepts unauthenticated calls.** `functions/src/index.ts:569–630`. Similar pattern: `context` is present in signature but never checked. Any caller can increment any club's goal counter. **Fix:** `if (!context.auth) throw new HttpsError('unauthenticated', '...')`, then verify `auth.uid` is a member of the target club via Firestore read.
+- [ ] **Firestore `clubs/{clubId}/messages/{id}` allows create by any authenticated user, regardless of club membership.** `firestore.rules:58–61` — `allow create: if request.auth != null;`. Any logged-in user can post into any club's chat, even one they didn't join. **Fix:** tighten to `allow create: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberIds && request.resource.data.message is string && request.resource.data.message.size() <= 200;`.
+- [ ] **Firestore `dailyScores` / `weeklyScores` allow unbounded client writes.** `firestore.rules:22–33` — client writes the `score` field directly. No bounds check. Classic leaderboard-cheat vector: write score `999999999`, top the leaderboard. **Fix:** route score submission through a Cloud Function that validates the puzzle result (seed + move log), OR tighten the rule to `&& request.resource.data.score is number && request.resource.data.score >= 0 && request.resource.data.score <= 100000` (pick a reasonable ceiling) as a partial mitigation.
+- [ ] **No rate limiting on any callable / onRequest function.** Every Cloud Function is callable as fast as the attacker can hit it. Expo SDK is used to send push (`sendPushNotification` at ~$0.00 per send, but still spammable). Receipt validation hits Apple/Google's endpoints — sustained abuse could get the whole project rate-limited by Apple. **Fix (post-launch acceptable):** per-UID token bucket using a small Firestore counter doc, refill-per-minute; 30 req/min is generous for honest use. Implement during v1.1 if not before launch.
+
+---
+
+### 1.BUILD — Android / iOS build config *[Addendum B]*
+
+- [ ] **Two unused Android permissions declared: `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`.** `app.json:77–78`. `src/services/sound.ts` only plays audio — there is no recording path anywhere. Declaring `RECORD_AUDIO` triggers Play Console's "sensitive permission" review and the permission prompt on first launch, hurting install-trust. **Fix:** delete both lines from `app.json`.
+- [ ] **`android.allowBackup` not explicitly set (defaults to `true`).** No entry in `app.json`. With `allowBackup: true`, Google Backup will snapshot AsyncStorage — which in our app stores the IAP receipt hash store, economy state, and VIP flags. A restore to another device could resurrect unearned currency / VIP. **Fix:** `app.json` doesn't expose `allowBackup` directly; add `"android.allowBackup": "false"` via `expo-build-properties` plugin config, or ship a small Expo config plugin that injects the attribute into `AndroidManifest.xml`.
+- [ ] **Proguard / minification not enabled for Android release.** `expo-build-properties` config in `app.json:120–129` sets `kotlinVersion` but no `enableProguardInReleaseBuilds: true`. The release APK ships unminified, exposing game logic. **Fix:** add `"enableProguardInReleaseBuilds": true, "enableShrinkResourcesInReleaseBuilds": true` to the android block of the `expo-build-properties` plugin.
+- [ ] **Android HTTPS deep links not wired.** `app.json:80–94` only declares the custom `wordfall://` scheme. The iOS `associatedDomains` has `applinks:wordfall.app` but Android has no matching `<intent-filter android:autoVerify="true"><data android:scheme="https" android:host="wordfall.app" /></intent-filter>`. Any campaign that shares an `https://wordfall.app/...` link will open the browser, not the app, on Android. **Fix:** add a second `intentFilters` entry with `scheme: "https"`, `host: "wordfall.app"`, `autoVerify: true`; also host the `/.well-known/assetlinks.json` file at that domain.
+- [ ] **`npm audit --production` reports 4 transitive vulnerabilities.** 2 high (`@xmldom/xmldom` XML-injection, `picomatch` ReDoS), 2 moderate (`brace-expansion`, `yaml`). All transitive, all in build tooling — they do not end up in the shipped JS bundle. Not a launch blocker on their own but worth bumping before next EAS build to keep `npm audit` clean for review. **Fix:** `npm install --legacy-peer-deps` after bumping direct deps; re-run `npm audit` to confirm zero high/critical.
+
+---
+
 ## 2. Polish (ship-able but visible papercuts)
 
 ### Errors & crash safety
 
+- [ ] **No field-length validation at the Firestore rule layer for club messages.** Already covered as a blocker in §1.SEC above. Noting here for cross-reference — once the `.size() <= 200` check lands, this moves to "verified clean".
 - [ ] **Game field subtrees have no local ErrorBoundary.** `src/screens/game/PlayField.tsx`, `GameFlashes.tsx`, `GameBanners.tsx`. Root boundary exists but a render error means the whole app restarts mid-game. Fix: one boundary wrapping the game field with a "Return to Home" fallback.
 - [ ] **Silent `.catch(() => {})` on Share API.** `src/components/PuzzleComplete.tsx:863`, `src/components/ReplayViewer.tsx:230`. Share being cancelled is fine; Share failing due to OS-level error should at least be logged to Sentry as a breadcrumb. Fix: `.catch((e) => crashReporter.addBreadcrumb(...))`.
 - [ ] **Silent Share / clipboard catches in `ReferralCard`.** `src/components/ReferralCard.tsx:71–73, 84–86`. If clipboard is unavailable (rare but possible on locked-down devices) the user taps and nothing happens — no toast, no fallback. Fix: `Alert.alert('Copy failed', 'Long-press the code to copy manually.')`.
@@ -97,6 +157,8 @@ These aren't audit items per se, they're prerequisites that can't be completed i
 
 ## 3. Nice-to-have (can ship without; v1.1 cleanup)
 
+- [ ] **AsyncStorage-stored receipts are not encrypted at rest.** `src/services/iap.ts:650–676` writes the receipt-hash store and pending-purchase queue to AsyncStorage in cleartext. A physically compromised device (rooted / jailbroken) can read them. Not a typical consumer-scale threat for a puzzle game, but worth noting for the v1.1 security pass. Fix: migrate to `expo-secure-store` (iOS Keychain / Android KeyStore-backed).
+- [ ] **Cloud Functions log `authenticatedUserId` in plaintext on warn/error paths.** `functions/src/index.ts:298–317, 370`. Firebase logs are private but PII-minimization best practice says truncate or hash. Fix: log only the first 6 chars of the UID.
 - [ ] **AsyncStorage + Firestore debounce-timer races in `PlayerContext` / `EconomyContext`.** Intentionally not cleared on rapid mutations (per existing comments at `PlayerContext.tsx:725–753`, `EconomyContext.tsx:329–353`); coalescence behavior is the desired outcome. Data loss risk is very low because AppState flush covers backgrounding. Still worth a single-slot write queue for rigor. Fix: serialize persistence writes via a module-level promise chain.
 - [ ] **`iap.ts` purchase promise never rejects on timeout.** Caller must check `success: false` on the resolved object (`iap.ts:293–304`). Works fine — just an unusual contract. Fix: consider normalizing to `throws`.
 - [ ] **Swallowed catches in IAP init/cleanup.** `iap.ts:183–185, 604–606, 617–619`. Intentional (AsyncStorage non-critical, connection cleanup). Not a bug. Fix (if desired): breadcrumb instead of silent swallow.
@@ -129,14 +191,19 @@ These aren't audit items per se, they're prerequisites that can't be completed i
 ## Files referenced in this audit
 
 - `App.tsx` (ErrorBoundary wiring, ceremony switch, deep-link handler)
+- `app.json` (permissions, plugins, privacy manifests, deep links)
 - `src/components/ErrorBoundary.tsx`, `src/components/common/{Button,Modal}.tsx`
 - `src/components/{PuzzleComplete,ReplayViewer,ReferralCard,MysteryWheel,GameHeader,PostLossModal,ChallengeCard,AchievementCeremony}.tsx`
-- `src/screens/{Home,Shop,Settings,Club,Event,Leaderboard,Collections,Library,Game}Screen.tsx`
+- `src/screens/{Home,Shop,Settings,Club,Event,Leaderboard,Collections,Library,Game,Onboarding,EditProfile,Profile}Screen.tsx`
 - `src/screens/game/{PlayField,GameFlashes,GameBanners}.tsx`
 - `src/services/{iap,receiptValidation,ads,analytics,funnelTracker,softLaunchAnalytics,firestore,crashReporting,notifications,sound,commercialEntitlements}.ts`
-- `src/contexts/{Auth,Player,Economy}Context.tsx`
+- `src/contexts/{Auth,Player,Economy,Settings}Context.tsx`
 - `src/hooks/{useGame,useRewardWiring}.ts`
-- `src/utils/{deepLinking,perfInstrument}.ts`
-- `src/constants.ts` (color palette)
+- `src/utils/{deepLinking,perfInstrument,profanityFilter}.ts`
+- `src/data/{mysteryWheel,shopProducts}.ts`
+- `src/constants.ts` (color palette, AD_CONFIG)
+- `functions/src/index.ts` (validateReceipt, clubGoalProgress)
+- `cloud-functions/src/index.ts` (sendPushNotification, processStreakReminders)
+- `firestore.rules` (all collection access rules)
 - `scripts/optimize-assets.sh`
-- `assets/` (23 MB, 26 PNG, 0 WebP, `bg-homescreen.mp4` 4.9 MB)
+- `assets/` (23 MB, 26 PNG, 23 WebP, `bg-homescreen.mp4` 4.9 MB)
