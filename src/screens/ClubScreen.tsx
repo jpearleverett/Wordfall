@@ -8,6 +8,7 @@ import {
   TextInput,
   StyleSheet,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
@@ -81,6 +82,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   const [chatMessages, setChatMessages] = useState<ClubMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
 
   // Load chat messages on mount when club is available
   useEffect(() => {
@@ -95,6 +97,139 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     });
     return () => { cancelled = true; };
   }, [clubId]);
+
+  // Load this user's block list — messages from blocked users are filtered out
+  useEffect(() => {
+    const userId = user?.uid;
+    if (!userId) {
+      setBlockedUserIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    firestoreService.getBlockedUserIds(userId).then((ids) => {
+      if (!cancelled) setBlockedUserIds(ids);
+    });
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
+  const handleMessageLongPress = useCallback(
+    (message: ClubMessage) => {
+      const currentUserId = user?.uid ?? 'local_user';
+      if (message.userId === currentUserId) {
+        // Let the author delete their own message
+        Alert.alert(
+          'Your message',
+          'Delete this message?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: async () => {
+                setChatMessages((prev) => prev.filter((m) => m.id !== message.id));
+                // Best-effort: Firestore rule permits author delete via setDoc-rules/allow delete
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      Alert.alert(
+        message.displayName || 'Player',
+        'Choose an action',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Report message',
+            onPress: () => confirmReportMessage(message),
+          },
+          {
+            text: 'Block user',
+            style: 'destructive',
+            onPress: () => confirmBlockUser(message.userId, message.displayName),
+          },
+        ],
+      );
+    },
+    [user?.uid],
+  );
+
+  const confirmReportMessage = useCallback(
+    (message: ClubMessage) => {
+      if (!clubId) return;
+      const reasons: Array<'spam' | 'harassment' | 'hate' | 'other'> = [
+        'spam',
+        'harassment',
+        'hate',
+        'other',
+      ];
+      Alert.alert(
+        'Report message',
+        'Why are you reporting this message?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          ...reasons.map((r) => ({
+            text: r.charAt(0).toUpperCase() + r.slice(1),
+            onPress: async () => {
+              const reporterId = user?.uid ?? 'local_user';
+              const ok = await firestoreService.reportMessage(
+                reporterId,
+                clubId,
+                message.id,
+                message.userId,
+                r,
+                message.message,
+              );
+              Alert.alert(
+                ok ? 'Reported' : 'Could not report',
+                ok
+                  ? 'Thanks — our team will review it.'
+                  : 'Please try again later.',
+              );
+            },
+          })),
+        ],
+      );
+    },
+    [clubId, user?.uid],
+  );
+
+  const confirmBlockUser = useCallback(
+    (targetUserId: string, targetName: string) => {
+      Alert.alert(
+        'Block user',
+        `Block ${targetName}? You won't see their messages anymore.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Block',
+            style: 'destructive',
+            onPress: async () => {
+              const reporterId = user?.uid;
+              if (!reporterId) return;
+              const ok = await firestoreService.blockUser(reporterId, targetUserId);
+              if (ok) {
+                setBlockedUserIds((prev) => {
+                  const next = new Set(prev);
+                  next.add(targetUserId);
+                  return next;
+                });
+              } else {
+                Alert.alert('Could not block', 'Please try again later.');
+              }
+            },
+          },
+        ],
+      );
+    },
+    [user?.uid],
+  );
+
+  const visibleChatMessages = useMemo(
+    () => chatMessages.filter((m) => !blockedUserIds.has(m.userId)),
+    [chatMessages, blockedUserIds],
+  );
 
   const handleSendMessage = useCallback(async () => {
     const text = chatInput.trim();
@@ -488,14 +623,14 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                   <View style={styles.chatPlaceholder}>
                     <Text style={styles.chatPlaceholderText}>Loading messages...</Text>
                   </View>
-                ) : chatMessages.length === 0 ? (
+                ) : visibleChatMessages.length === 0 ? (
                   <View style={styles.chatPlaceholder}>
                     <Text style={styles.chatPlaceholderIcon}>💬</Text>
                     <Text style={styles.chatPlaceholderText}>No messages yet. Say hello!</Text>
                   </View>
                 ) : (
                   <FlatList
-                    data={chatMessages}
+                    data={visibleChatMessages}
                     keyExtractor={(item) => item.id}
                     inverted
                     style={styles.chatList}
@@ -505,15 +640,24 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                     maxToRenderPerBatch={10}
                     windowSize={5}
                     renderItem={({ item }) => (
-                      <View style={styles.chatMessageRow}>
-                        <View style={styles.chatMessageBubble}>
-                          <View style={styles.chatMessageHeader}>
-                            <Text style={styles.chatSenderName}>{item.displayName}</Text>
-                            <Text style={styles.chatTimestamp}>{getRelativeTime(item.timestamp)}</Text>
+                      <TouchableOpacity
+                        onLongPress={() => handleMessageLongPress(item)}
+                        activeOpacity={0.7}
+                        delayLongPress={300}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Message from ${item.displayName}. Long-press for options.`}
+                        accessibilityHint="Long-press to report or block this user"
+                      >
+                        <View style={styles.chatMessageRow}>
+                          <View style={styles.chatMessageBubble}>
+                            <View style={styles.chatMessageHeader}>
+                              <Text style={styles.chatSenderName}>{item.displayName}</Text>
+                              <Text style={styles.chatTimestamp}>{getRelativeTime(item.timestamp)}</Text>
+                            </View>
+                            <Text style={styles.chatMessageText}>{item.message}</Text>
                           </View>
-                          <Text style={styles.chatMessageText}>{item.message}</Text>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     )}
                   />
                 )}

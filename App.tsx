@@ -35,6 +35,10 @@ import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import MasteryScreen from './src/screens/MasteryScreen';
+import { ConsentGate } from './src/components/ConsentGate';
+import { hasAcceptedTos } from './src/services/consent';
+import LocalErrorBoundary from './src/components/LocalErrorBoundary';
+import { crashReporter } from './src/services/crashReporting';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
@@ -174,6 +178,10 @@ function EventScreenWrapperNav({ navigation }: any) {
       });
     } catch (e: any) {
       if (e?.message?.includes('timed out')) {
+        crashReporter.captureMessage(
+          `board_gen_timeout mode=${mode} level=${player.currentLevel}`,
+          'warning',
+        );
         try {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
@@ -184,10 +192,18 @@ function EventScreenWrapperNav({ navigation }: any) {
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
-        } catch {
+        } catch (fallbackError) {
+          crashReporter.captureException(
+            fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)),
+            { tags: { step: 'board_gen_fallback' }, mode, level: player.currentLevel },
+          );
           Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
         }
       } else {
+        crashReporter.captureException(
+          e instanceof Error ? e : new Error(String(e?.message ?? e)),
+          { tags: { step: 'board_gen' }, mode, level: player.currentLevel },
+        );
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
@@ -474,6 +490,10 @@ function ModesScreenWrapper({ navigation }: any) {
       });
     } catch (e: any) {
       if (e?.message?.includes('timed out')) {
+        crashReporter.captureMessage(
+          `board_gen_timeout (mode-select) mode=${mode} level=${modeLevel}`,
+          'warning',
+        );
         try {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           board = generateBoard(easyConfig, Date.now());
@@ -484,10 +504,18 @@ function ModesScreenWrapper({ navigation }: any) {
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
-        } catch {
+        } catch (fallbackError) {
+          crashReporter.captureException(
+            fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)),
+            { tags: { step: 'board_gen_fallback_mode_select' }, mode, level: modeLevel },
+          );
           Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
         }
       } else {
+        crashReporter.captureException(
+          e instanceof Error ? e : new Error(String(e?.message ?? e)),
+          { tags: { step: 'board_gen_mode_select' }, mode, level: modeLevel },
+        );
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
@@ -558,24 +586,36 @@ function GameScreenWrapper({ route, navigation }: any) {
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
     } catch (e: any) {
+      const fallbackMode = (params.mode || 'classic') as GameMode;
+      const fallbackLevel = fallbackMode === 'classic' ? (params.level || 0) + 1 : player.getModeLevel(fallbackMode);
       if (e?.message?.includes('timed out')) {
+        crashReporter.captureMessage(
+          `board_gen_timeout (next-puzzle) mode=${fallbackMode} level=${fallbackLevel}`,
+          'warning',
+        );
         try {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
-          const mode = (params.mode || 'classic') as GameMode;
-          const modeLevel = mode === 'classic' ? (params.level || 0) + 1 : player.getModeLevel(mode);
           const board = generateBoard(easyConfig, Date.now());
-          const modeConfig = MODE_CONFIGS[mode];
+          const modeConfig = MODE_CONFIGS[fallbackMode];
           Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
           navigation.replace('Game', {
-            board, level: modeLevel, mode, isDaily: false,
+            board, level: fallbackLevel, mode: fallbackMode, isDaily: false,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
-        } catch {
+        } catch (fallbackError) {
+          crashReporter.captureException(
+            fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)),
+            { tags: { step: 'board_gen_fallback_next' }, mode: fallbackMode, level: fallbackLevel },
+          );
           Alert.alert('Error', 'Failed to generate next puzzle.');
           navigation.goBack();
         }
       } else {
+        crashReporter.captureException(
+          e instanceof Error ? e : new Error(String(e?.message ?? e)),
+          { tags: { step: 'board_gen_next' }, mode: fallbackMode, level: fallbackLevel },
+        );
         Alert.alert('Error', 'Failed to generate next puzzle.');
         navigation.goBack();
       }
@@ -616,22 +656,35 @@ function GameScreenWrapper({ route, navigation }: any) {
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
     } catch (e: any) {
+      const fallbackMode = (params.mode || 'classic') as GameMode;
       if (e?.message?.includes('timed out')) {
+        crashReporter.captureMessage(
+          `board_gen_timeout (retry) mode=${fallbackMode} level=${nextModeLevel}`,
+          'warning',
+        );
         try {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
-          const modeConfig = MODE_CONFIGS[(params.mode || 'classic') as GameMode];
+          const modeConfig = MODE_CONFIGS[fallbackMode];
           Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
           navigation.replace('Game', {
-            board, level: nextModeLevel, mode: (params.mode || 'classic') as GameMode, isDaily: false,
+            board, level: nextModeLevel, mode: fallbackMode, isDaily: false,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
-        } catch {
+        } catch (fallbackError) {
+          crashReporter.captureException(
+            fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)),
+            { tags: { step: 'board_gen_fallback_retry' }, mode: fallbackMode, level: nextModeLevel },
+          );
           Alert.alert('Error', 'Failed to generate next puzzle.');
           navigation.goBack();
         }
       } else {
+        crashReporter.captureException(
+          e instanceof Error ? e : new Error(String(e?.message ?? e)),
+          { tags: { step: 'board_gen_retry' }, mode: fallbackMode, level: nextModeLevel },
+        );
         Alert.alert('Error', 'Failed to generate next puzzle.');
         navigation.goBack();
       }
@@ -1443,8 +1496,23 @@ function AppContent() {
   const economy = useEconomy();
   const settings = useSettings();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [consentLoaded, setConsentLoaded] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
   const routeNameRef = useRef<string | undefined>();
+
+  // Check ToS / Privacy Policy acceptance on mount.
+  useEffect(() => {
+    let cancelled = false;
+    hasAcceptedTos().then((accepted) => {
+      if (cancelled) return;
+      setConsentAccepted(accepted);
+      setConsentLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Ceremony queue — rendered at app level so modals overlay all screens
   const { activeCeremony, handleDismissCeremony, resetBatchCounter } = useCeremonyQueue({
@@ -1461,6 +1529,15 @@ function AppContent() {
     soundManager.setMuted(settings.sfxVolume <= 0 && settings.musicVolume <= 0);
     setHapticsEnabled(settings.hapticsEnabled);
   }, [settings.loaded, settings.sfxVolume, settings.musicVolume, settings.hapticsEnabled]);
+
+  // Privacy: propagate user-chosen toggles to analytics + ads services.
+  useEffect(() => {
+    if (!settings.loaded) return;
+    void analytics.setEnabled(settings.analyticsEnabled);
+    import('./src/services/ads').then(({ adManager }) => {
+      adManager.setAdConsent({ allowPersonalizedAds: settings.personalizedAdsEnabled });
+    });
+  }, [settings.loaded, settings.analyticsEnabled, settings.personalizedAdsEnabled]);
 
   useEffect(() => {
     if (player.loaded && !player.tutorialComplete) {
@@ -1489,9 +1566,21 @@ function AppContent() {
             break;
           case 'challenge':
             if (data.challengeId) {
-              // Store challenge ID — navigation will pick it up when ready
-              pendingDeepLinkRef.current = data.challengeId;
-              if (__DEV__) console.log('[DeepLink] Challenge received:', data.challengeId);
+              // Lightweight shape validation before storing — a malformed
+              // challengeId shouldn't send the user to a blank GameScreen.
+              // Shape: non-empty alphanumeric/underscore/dash, <=64 chars.
+              const cid = data.challengeId;
+              const isValid =
+                typeof cid === 'string' &&
+                cid.length > 0 &&
+                cid.length <= 64 &&
+                /^[A-Za-z0-9_-]+$/.test(cid);
+              if (!isValid) {
+                Alert.alert('Invalid challenge link', 'That challenge link is malformed.');
+                break;
+              }
+              pendingDeepLinkRef.current = cid;
+              if (__DEV__) console.log('[DeepLink] Challenge received:', cid);
             }
             break;
           case 'daily':
@@ -1503,6 +1592,29 @@ function AppContent() {
               });
             } catch {
               // Navigation may not be ready yet — silently ignore
+            }
+            break;
+          case 'club_invite':
+            if (data.clubId) {
+              // Shape-validate the club ID (Firestore doc IDs are alnum/-/_)
+              const cidRaw = data.clubId;
+              const isValid =
+                typeof cidRaw === 'string' &&
+                cidRaw.length > 0 &&
+                cidRaw.length <= 64 &&
+                /^[A-Za-z0-9_-]+$/.test(cidRaw);
+              if (!isValid) {
+                Alert.alert('Invalid club link', 'That club invite link is malformed.');
+                break;
+              }
+              try {
+                (navigationRef.current as any)?.navigate('Home', {
+                  screen: 'Club',
+                  params: { joinClubId: cidRaw },
+                });
+              } catch {
+                // Navigation not ready — fall through
+              }
             }
             break;
           default:
@@ -1559,10 +1671,19 @@ function AppContent() {
     routeNameRef.current = currentRouteName;
   }, [resetBatchCounter]);
 
-  if (!player.loaded) {
+  if (!player.loaded || !consentLoaded) {
     return (
       <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color={COLORS.accent} />
+      </View>
+    );
+  }
+
+  // ToS + Privacy Policy gate — mandatory before any data collection.
+  if (!consentAccepted) {
+    return (
+      <View style={{ flex: 1 }}>
+        <ConsentGate onAccept={() => setConsentAccepted(true)} />
       </View>
     );
   }
@@ -1636,7 +1757,15 @@ function AppContent() {
         </RootStack.Navigator>
       </NavigationContainer>
 
-      {/* Ceremony modals — rendered at app level to overlay all screens */}
+      {/* Ceremony modals — rendered at app level to overlay all screens.
+          Wrapped in a local boundary so a render error in any one ceremony
+          dequeues cleanly instead of taking down the whole app. */}
+      <LocalErrorBoundary
+        scope="ceremony"
+        title="Couldn't show that reward"
+        actionLabel="Skip"
+        onReset={handleDismissCeremony}
+      >
       {activeCeremony?.type === 'feature_unlock' && (
         <FeatureUnlockCeremony
           icon={activeCeremony.data.icon}
@@ -1812,6 +1941,7 @@ function AppContent() {
           }}
         />
       )}
+      </LocalErrorBoundary>
     </View>
   );
 }

@@ -103,6 +103,9 @@ export function PostLossModal({
           <Pressable
             style={({ pressed }) => [styles.adButton, pressed && styles.buttonPressed]}
             onPress={handleWatchAd}
+            accessibilityRole="button"
+            accessibilityLabel="Watch an ad for a free hint and retry"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Text style={styles.adButtonText}>Watch Ad for Hint + Retry</Text>
             <Text style={styles.adButtonSubtext}>FREE</Text>
@@ -111,11 +114,20 @@ export function PostLossModal({
           <Pressable
             style={({ pressed }) => [styles.buyButton, pressed && styles.buttonPressed]}
             onPress={handleBuyHints}
+            accessibilityRole="button"
+            accessibilityLabel="Buy 5 hints for 99 cents"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Text style={styles.buyButtonText}>Get 5 Hints — $0.99</Text>
           </Pressable>
 
-          <Pressable style={styles.dismissButton} onPress={handleDismiss}>
+          <Pressable
+            style={styles.dismissButton}
+            onPress={handleDismiss}
+            accessibilityRole="button"
+            accessibilityLabel={`Dismiss offer. Auto-dismisses in ${timeLeft} seconds.`}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Text style={styles.dismissText}>No thanks ({timeLeft}s)</Text>
           </Pressable>
         </LinearGradient>

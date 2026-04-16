@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
@@ -25,6 +27,23 @@ const THEMES = [
   { id: 'forest', name: 'Forest', color: '#0a1a0f' },
   { id: 'sunset', name: 'Sunset', color: '#1a0a0a' },
 ];
+
+const PRIVACY_POLICY_URL = 'https://wordfall.app/privacy';
+const TERMS_OF_SERVICE_URL = 'https://wordfall.app/terms';
+const SUPPORT_EMAIL = 'support@wordfall.app';
+
+async function openUrlSafe(url: string, fallbackTitle: string) {
+  try {
+    const ok = await Linking.canOpenURL(url);
+    if (ok) {
+      await Linking.openURL(url);
+      return;
+    }
+  } catch {
+    // fall through to alert
+  }
+  Alert.alert(fallbackTitle, url);
+}
 
 interface SettingsScreenProps {
   settings?: any;
@@ -48,6 +67,29 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const onUpdateSetting = onUpdateSettingProp ?? ((key: string, value: any) => contextSettings.updateSetting(key as any, value));
   const onResetProgress = onResetProgressProp ?? (() => {});
   const onSignOut = onSignOutProp ?? signOut;
+
+  const [signingIn, setSigningIn] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignIn = async () => {
+    if (signingIn) return;
+    setSigningIn(true);
+    try {
+      await Promise.resolve(onUpdateSetting('isSignedIn', true));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await Promise.resolve(onSignOut());
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   const sfxVolume = settings?.sfxVolume ?? 80;
   const musicVolume = settings?.musicVolume ?? 60;
@@ -222,24 +264,51 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <Text style={styles.chevron}>{'\u203A'}</Text>
               </TouchableOpacity>
               <View style={styles.divider} />
-              <TouchableOpacity style={styles.actionRow} onPress={confirmSignOut} accessibilityRole="button" accessibilityLabel="Sign out">
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => {
+                  // Defer the confirmation prompt then run the async handler
+                  Alert.alert(
+                    'Sign Out',
+                    'Are you sure you want to sign out?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Sign Out', onPress: () => void handleSignOut() },
+                    ],
+                  );
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Sign out"
+                accessibilityState={{ busy: signingOut }}
+                disabled={signingOut}
+              >
                 <Text style={[styles.settingLabel, { color: COLORS.coral }]}>
                   Sign Out
                 </Text>
-                <Text style={[styles.chevron, { color: COLORS.coral }]}>{'\u203A'}</Text>
+                {signingOut ? (
+                  <ActivityIndicator size="small" color={COLORS.coral} />
+                ) : (
+                  <Text style={[styles.chevron, { color: COLORS.coral }]}>{'\u203A'}</Text>
+                )}
               </TouchableOpacity>
             </>
           ) : (
             <TouchableOpacity
               style={styles.actionRow}
-              onPress={() => onUpdateSetting('isSignedIn', true)}
+              onPress={() => void handleSignIn()}
               accessibilityRole="button"
               accessibilityLabel="Sign in"
+              accessibilityState={{ busy: signingIn }}
+              disabled={signingIn}
             >
               <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
-                Sign In
+                {signingIn ? 'Signing in…' : 'Sign In'}
               </Text>
-              <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
+              {signingIn ? (
+                <ActivityIndicator size="small" color={COLORS.accent} />
+              ) : (
+                <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
+              )}
             </TouchableOpacity>
           )}
         </View>
@@ -331,6 +400,28 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           {renderToggle('Require PIN for Purchases', settings?.requirePurchasePin ?? false, 'requirePurchasePin')}
         </View>
 
+        {/* Privacy Section */}
+        <Text style={styles.sectionTitle}>Privacy</Text>
+        <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          {renderToggle(
+            'Analytics',
+            settings?.analyticsEnabled ?? true,
+            'analyticsEnabled',
+          )}
+          <View style={styles.divider} />
+          {renderToggle(
+            'Personalized Ads',
+            settings?.personalizedAdsEnabled ?? true,
+            'personalizedAdsEnabled',
+          )}
+        </View>
+
         {/* About Section */}
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>
@@ -345,13 +436,41 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <Text style={styles.settingValue}>{appVersion}</Text>
           </View>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.actionRow} accessibilityRole="button" accessibilityLabel="Privacy Policy">
+          <TouchableOpacity
+            style={styles.actionRow}
+            accessibilityRole="button"
+            accessibilityLabel="Privacy Policy"
+            onPress={() => openUrlSafe(PRIVACY_POLICY_URL, 'Privacy Policy')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Text style={styles.settingLabel}>Privacy Policy</Text>
             <Text style={styles.chevron}>{'\u203A'}</Text>
           </TouchableOpacity>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.actionRow} accessibilityRole="button" accessibilityLabel="Terms of Service">
+          <TouchableOpacity
+            style={styles.actionRow}
+            accessibilityRole="button"
+            accessibilityLabel="Terms of Service"
+            onPress={() => openUrlSafe(TERMS_OF_SERVICE_URL, 'Terms of Service')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Text style={styles.settingLabel}>Terms of Service</Text>
+            <Text style={styles.chevron}>{'\u203A'}</Text>
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <TouchableOpacity
+            style={styles.actionRow}
+            accessibilityRole="button"
+            accessibilityLabel="Contact Support"
+            onPress={() =>
+              openUrlSafe(
+                `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Wordfall Support')}`,
+                'Contact Support',
+              )
+            }
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.settingLabel}>Contact Support</Text>
             <Text style={styles.chevron}>{'\u203A'}</Text>
           </TouchableOpacity>
         </View>

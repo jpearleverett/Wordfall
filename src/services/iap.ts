@@ -9,6 +9,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { logger } from '../utils/logger';
+import { crashReporter } from './crashReporting';
 import type { IAPProductId } from '../types';
 import { isReceiptValidationConfigured, validateReceipt } from './receiptValidation';
 import {
@@ -90,6 +91,22 @@ class IAPManager {
     timeout: ReturnType<typeof setTimeout>;
     userId?: string;
   }> = new Map();
+  /**
+   * In-flight and recently-completed transaction IDs.
+   * Play Billing is known to fire purchaseUpdatedListener twice on reconnect;
+   * we dedupe at the earliest point to avoid double-validation + double-fulfillment.
+   * Bounded FIFO to cap memory usage.
+   */
+  private processedTransactionIds: Set<string> = new Set();
+  private readonly MAX_PROCESSED_TX_IDS = 200;
+
+  private recordTransactionId(transactionId: string): void {
+    this.processedTransactionIds.add(transactionId);
+    if (this.processedTransactionIds.size > this.MAX_PROCESSED_TX_IDS) {
+      const first = this.processedTransactionIds.values().next().value;
+      if (first) this.processedTransactionIds.delete(first);
+    }
+  }
 
   private constructor() {}
 
@@ -180,8 +197,13 @@ class IAPManager {
     if (this.rniap && this.connected) {
       try {
         await this.rniap.endConnection();
-      } catch {
-        // Ignore cleanup errors
+      } catch (e) {
+        // Cleanup errors are non-fatal — keep a breadcrumb so they're visible
+        // alongside any purchase failure that follows.
+        crashReporter.addBreadcrumb(
+          `iap.endConnection failed: ${e instanceof Error ? e.message : String(e)}`,
+          'iap',
+        );
       }
     }
 
@@ -478,6 +500,15 @@ class IAPManager {
     const receipt: string = purchase.purchaseToken ?? '';
     const pendingPurchase = this.pendingPurchaseResolvers.get(storeId);
 
+    // Dedupe: Play Billing may fire purchaseUpdatedListener multiple times for
+    // the same transaction on reconnect. Skip validation + fulfillment if this
+    // transaction has already been processed in-session.
+    if (this.processedTransactionIds.has(transactionId)) {
+      logger.log('[IAP] Skipping duplicate purchase event', { transactionId, storeId });
+      return;
+    }
+    this.recordTransactionId(transactionId);
+
     try {
       // Validate receipt
       const validation = await validateReceipt(receipt, internalId, pendingPurchase?.userId);
@@ -542,6 +573,10 @@ class IAPManager {
       this.notifyListeners(successResult);
     } catch (e: any) {
       logger.warn('[IAP] Error handling purchase update:', e);
+      crashReporter.captureException(
+        e instanceof Error ? e : new Error(String(e?.message ?? e)),
+        { tags: { step: 'handlePurchaseUpdate' }, sku: storeId, transactionId },
+      );
       const errorResult: PurchaseResult = {
         success: false,
         productId: internalId,
@@ -554,6 +589,12 @@ class IAPManager {
 
   private handlePurchaseError(error: any): void {
     logger.warn('[IAP] Purchase error from store:', error);
+    if (error?.code !== 'E_USER_CANCELLED') {
+      crashReporter.captureException(
+        error instanceof Error ? error : new Error(String(error?.message ?? error)),
+        { tags: { step: 'handlePurchaseError' }, code: error?.code, sku: error?.productId },
+      );
+    }
 
     const storeId: string | undefined = error?.productId;
     const internalId = storeId ? (storeIdToInternalId(storeId) ?? storeId) : 'unknown';
@@ -601,8 +642,11 @@ class IAPManager {
         pending.push(productId);
         await AsyncStorage.setItem(PENDING_PURCHASES_KEY, JSON.stringify(pending));
       }
-    } catch {
-      // Non-critical
+    } catch (e) {
+      crashReporter.addBreadcrumb(
+        `storePendingPurchase failed: ${e instanceof Error ? e.message : String(e)}`,
+        'iap',
+      );
     }
   }
 
@@ -614,8 +658,11 @@ class IAPManager {
         const filtered = pending.filter((id) => id !== productId);
         await AsyncStorage.setItem(PENDING_PURCHASES_KEY, JSON.stringify(filtered));
       }
-    } catch {
-      // Non-critical
+    } catch (e) {
+      crashReporter.addBreadcrumb(
+        `clearPendingPurchase failed: ${e instanceof Error ? e.message : String(e)}`,
+        'iap',
+      );
     }
   }
 

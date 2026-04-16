@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Easing as RNEasing, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Easing as RNEasing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
@@ -14,6 +14,7 @@ import {
   SPIN_COST_GEMS,
   SPIN_BUNDLE_COST_GEMS,
   SPIN_BUNDLE_COUNT,
+  MYSTERY_BOX_REWARDS,
 } from '../data/mysteryWheel';
 
 interface MysteryWheelProps {
@@ -40,7 +41,25 @@ export function MysteryWheel({
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<WheelSegment | null>(null);
   const [mysteryBoxResult, setMysteryBoxResult] = useState<{ label: string; icon: string } | null>(null);
+  const [oddsVisible, setOddsVisible] = useState(false);
   const currentRotation = useRef(0);
+
+  // Pre-compute each segment's probability from its weight for public disclosure.
+  const wheelOdds = useMemo(() => {
+    const totalWeight = WHEEL_SEGMENTS.reduce((sum, s) => sum + s.weight, 0);
+    return WHEEL_SEGMENTS.map((s) => ({
+      segment: s,
+      percent: (s.weight / totalWeight) * 100,
+    }));
+  }, []);
+
+  const mysteryBoxOdds = useMemo(() => {
+    const totalWeight = MYSTERY_BOX_REWARDS.reduce((sum, r) => sum + r.weight, 0);
+    return MYSTERY_BOX_REWARDS.map((r) => ({
+      reward: r,
+      percent: (r.weight / totalWeight) * 100,
+    }));
+  }, []);
 
   useEffect(() => {
     fade.value = withTiming(1, { duration: 300 });
@@ -258,9 +277,80 @@ export function MysteryWheel({
         )}
       </View>
 
+      {/* Publicly-visible odds disclosure (required for paid loot boxes) */}
+      <Pressable
+        style={styles.oddsLinkButton}
+        onPress={() => setOddsVisible(true)}
+        accessibilityRole="button"
+        accessibilityLabel="View wheel odds and probabilities"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Text style={styles.oddsLinkText}>View odds</Text>
+      </Pressable>
+
       <Pressable style={styles.closeButton} onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Close mystery wheel">
         <Text style={styles.closeText}>Close</Text>
       </Pressable>
+
+      <Modal
+        visible={oddsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOddsVisible(false)}
+      >
+        <View style={styles.oddsBackdrop}>
+          <View style={styles.oddsCard}>
+            <Text style={styles.oddsTitle}>Mystery Wheel Odds</Text>
+            <Text style={styles.oddsSubtitle}>
+              Each spin picks one segment below using these probabilities.
+            </Text>
+            <ScrollView style={styles.oddsScroll} showsVerticalScrollIndicator={false}>
+              {wheelOdds.map(({ segment, percent }) => (
+                <View key={segment.id} style={styles.oddsRow}>
+                  <Text style={[styles.oddsIcon, { textShadowColor: segment.color }]}>
+                    {segment.icon}
+                  </Text>
+                  <View style={styles.oddsRowText}>
+                    <Text style={styles.oddsLabel}>{segment.label}</Text>
+                    <Text style={[styles.oddsRarity, { color: segment.color }]}>
+                      {segment.rarity.toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={styles.oddsPercent}>{percent.toFixed(2)}%</Text>
+                </View>
+              ))}
+
+              <View style={styles.oddsDivider} />
+              <Text style={styles.oddsSectionTitle}>Mystery Box secondary rewards</Text>
+              <Text style={styles.oddsSubtitle}>
+                When the wheel lands on "Mystery Box", one of these is rolled.
+              </Text>
+              {mysteryBoxOdds.map(({ reward, percent }) => (
+                <View key={reward.label} style={styles.oddsRow}>
+                  <Text style={styles.oddsIcon}>{reward.icon}</Text>
+                  <View style={styles.oddsRowText}>
+                    <Text style={styles.oddsLabel}>{reward.label}</Text>
+                  </View>
+                  <Text style={styles.oddsPercent}>{percent.toFixed(2)}%</Text>
+                </View>
+              ))}
+              <Text style={styles.oddsFootnote}>
+                A "pity" rule also guarantees at least one rare+ reward every
+                25 spins.
+              </Text>
+            </ScrollView>
+            <Pressable
+              style={styles.oddsClose}
+              onPress={() => setOddsVisible(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close odds disclosure"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.oddsCloseText}>Got it</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 }
@@ -465,5 +555,116 @@ const styles = StyleSheet.create({
   closeText: {
     color: COLORS.textSecondary,
     fontSize: 14,
+  },
+  oddsLinkButton: {
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  oddsLinkText: {
+    color: COLORS.accent,
+    fontSize: 13,
+    textDecorationLine: 'underline',
+    fontFamily: FONTS.bodySemiBold,
+  },
+  oddsBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  oddsCard: {
+    width: '100%',
+    maxWidth: 380,
+    maxHeight: '80%',
+    backgroundColor: '#110028',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    padding: 18,
+  },
+  oddsTitle: {
+    color: COLORS.gold,
+    fontSize: 20,
+    fontFamily: FONTS.display,
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  oddsSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  oddsScroll: {
+    flexGrow: 0,
+  },
+  oddsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  oddsIcon: {
+    fontSize: 22,
+    width: 32,
+    textAlign: 'center',
+  },
+  oddsRowText: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  oddsLabel: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontFamily: FONTS.bodyMedium,
+  },
+  oddsRarity: {
+    fontSize: 10,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  oddsPercent: {
+    color: COLORS.accent,
+    fontSize: 14,
+    fontFamily: FONTS.bodyBold,
+    minWidth: 64,
+    textAlign: 'right',
+  },
+  oddsDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginVertical: 14,
+  },
+  oddsSectionTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  oddsFootnote: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 14,
+  },
+  oddsClose: {
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignSelf: 'center',
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+  },
+  oddsCloseText: {
+    color: '#0a0015',
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
   },
 });

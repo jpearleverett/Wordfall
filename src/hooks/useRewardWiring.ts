@@ -25,6 +25,7 @@ import {
   triggerFriendBeatScoreNotification,
 } from '../services/notificationTriggers';
 import { firestoreService } from '../services/firestore';
+import { crashReporter } from '../services/crashReporting';
 import { getTitleLabel } from '../data/cosmetics';
 
 // Helper: get difficulty name for a level
@@ -170,6 +171,7 @@ export function useRewardWiring({
   navigation,
 }: UseRewardWiringParams) {
   const handleComplete = useCallback((stars: number, score: number, maxCombo: number = 0) => {
+    try {
     const level = params.level || 0;
     const mode = (params.mode || 'classic') as GameMode;
     const isDaily = params.isDaily || false;
@@ -767,6 +769,16 @@ export function useRewardWiring({
       });
     }
 
+    } catch (e) {
+      // A reward-wiring bug should never swallow a victory silently. Report
+      // to Sentry with scope tags and rethrow so the local PuzzleComplete
+      // ErrorBoundary can show the player a recovery button.
+      crashReporter.captureException(
+        e instanceof Error ? e : new Error(String(e)),
+        { tags: { step: 'reward_wiring', mode: (params.mode ?? 'unknown') as string }, level: params.level ?? 0 },
+      );
+      throw e;
+    }
   }, [params, player, economy, navigation, userId]);
 
   return handleComplete;

@@ -258,7 +258,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
           setState((prev) => ({ ...prev, ...parsed }));
         }
       } catch (e) {
-        console.warn('Failed to load economy from AsyncStorage:', e);
+        if (__DEV__) console.warn('Failed to load economy from AsyncStorage:', e);
       }
       setLoaded(true);
     };
@@ -291,7 +291,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
           setState((prev) => ({ ...prev, ...firestoreData }));
         }
       } catch (e) {
-        console.warn('Firestore economy sync failed, using local data:', e);
+        if (__DEV__) console.warn('Firestore economy sync failed, using local data:', e);
       }
     };
 
@@ -335,14 +335,14 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         try {
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(latestStateRef.current));
         } catch (e) {
-          console.warn('Failed to save economy to AsyncStorage:', e);
+          if (__DEV__) console.warn('Failed to save economy to AsyncStorage:', e);
         }
         if (user) {
           try {
             const docRef = doc(db, 'users', user.uid, 'economy', 'current');
             await setDoc(docRef, latestStateRef.current, { merge: true });
           } catch (e) {
-            console.warn('Failed to sync economy to Firestore:', e);
+            if (__DEV__) console.warn('Failed to sync economy to Firestore:', e);
           }
         }
       })();
@@ -364,7 +364,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
           STORAGE_KEY,
           JSON.stringify(latestStateRef.current),
         ).catch((e) => {
-          console.warn('Failed to flush economy on background:', e);
+          if (__DEV__) console.warn('Failed to flush economy on background:', e);
         });
       }
     };
@@ -546,7 +546,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         // Double reward is a multiplier — caller handles the actual doubling
         break;
       default:
-        console.warn('[Economy] Unknown ad reward currency:', def.currency);
+        if (__DEV__) console.warn('[Economy] Unknown ad reward currency:', def.currency);
     }
   }, [addCoins, addHintTokens]);
 

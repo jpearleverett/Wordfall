@@ -3,9 +3,10 @@
 // Supports wordfall:// custom scheme links and https:// universal links.
 
 export interface DeepLinkData {
-  type: 'referral' | 'challenge' | 'daily' | 'unknown';
+  type: 'referral' | 'challenge' | 'daily' | 'club_invite' | 'unknown';
   referralCode?: string;
   challengeId?: string;
+  clubId?: string;
   levelSeed?: number;
 }
 
@@ -58,6 +59,13 @@ export function parseDeepLink(url: string): DeepLinkData {
       }
     }
 
+    if (path.startsWith('club/')) {
+      const id = path.substring('club/'.length).trim();
+      if (id.length > 0) {
+        return { type: 'club_invite', clubId: id };
+      }
+    }
+
     if (path === 'daily') {
       return { type: 'daily' };
     }
@@ -72,6 +80,10 @@ export function parseDeepLink(url: string): DeepLinkData {
 
       if (params.challenge) {
         return { type: 'challenge', challengeId: params.challenge };
+      }
+
+      if (params.club) {
+        return { type: 'club_invite', clubId: params.club };
       }
 
       if (params.seed) {
@@ -108,6 +120,13 @@ export function buildChallengeLink(challengeId: string): string {
  */
 export function buildDailyLink(): string {
   return 'wordfall://daily';
+}
+
+/**
+ * Build a deep link URL for a club invite.
+ */
+export function buildClubInviteLink(clubId: string): string {
+  return `wordfall://club/${clubId}`;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

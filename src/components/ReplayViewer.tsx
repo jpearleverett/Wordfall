@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SolveStep } from '../types';
 import { generateReplayText } from '../utils/replayGenerator';
+import { crashReporter } from '../services/crashReporting';
 
 interface ReplayViewerProps {
   steps: SolveStep[];
@@ -227,7 +228,12 @@ export function ReplayViewer({
 
   const handleShareReplay = useCallback(() => {
     const text = generateReplayText(steps, level, stars, totalScore, isDaily);
-    Share.share({ message: text }).catch(() => {});
+    Share.share({ message: text }).catch((e) => {
+      crashReporter.addBreadcrumb(
+        `Share.share (replay) failed: ${e instanceof Error ? e.message : String(e)}`,
+        'share',
+      );
+    });
   }, [steps, level, stars, totalScore, isDaily]);
 
   const atEnd = currentStep >= totalSteps - 1 && showAfterGravity;

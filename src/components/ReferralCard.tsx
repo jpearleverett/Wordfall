@@ -7,12 +7,14 @@ import {
   Share,
   Animated,
   Platform,
+  Alert,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
 import { getNextMilestone, REFERRAL_MILESTONES } from '../data/referralSystem';
 import { buildReferralLink } from '../utils/deepLinking';
+import { crashReporter } from '../services/crashReporting';
 
 interface ReferralCardProps {
   /** The player's 6-char referral code */
@@ -68,8 +70,17 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
         duration: 800,
         useNativeDriver: true,
       }).start();
-    } catch {
-      // Clipboard may not be available
+    } catch (e) {
+      // Clipboard may not be available (locked-down devices). Log a breadcrumb
+      // so Sentry sessions include the context, then tell the user.
+      crashReporter.addBreadcrumb(
+        `Clipboard.setString failed: ${e instanceof Error ? e.message : String(e)}`,
+        'referral',
+      );
+      Alert.alert(
+        'Copy failed',
+        'Long-press the code to copy it manually.',
+      );
     }
   }, [referralCode, copyFlashAnim]);
 
@@ -81,8 +92,12 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
       await Share.share({
         message: `Join me on Wordfall! Use my code for free rewards: ${link}`,
       });
-    } catch {
-      // Share cancelled or unavailable
+    } catch (e) {
+      // Share cancelled or unavailable — keep silent UX but capture context.
+      crashReporter.addBreadcrumb(
+        `Share.share failed: ${e instanceof Error ? e.message : String(e)}`,
+        'referral',
+      );
     }
   }, [referralCode]);
 

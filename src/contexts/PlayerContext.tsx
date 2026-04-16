@@ -674,7 +674,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           setData((prev) => ({ ...prev, ...parsed } as PlayerData));
         }
       } catch (e) {
-        console.warn('Failed to load player data from AsyncStorage:', e);
+        if (__DEV__) console.warn('Failed to load player data from AsyncStorage:', e);
       }
       setLoaded(true);
     };
@@ -705,7 +705,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
         setCloudSyncStatus('synced');
       } catch (e) {
-        console.warn('Firestore player sync failed, using local data:', e);
+        if (__DEV__) console.warn('Firestore player sync failed, using local data:', e);
         setCloudSyncStatus('offline');
       }
     };
@@ -742,7 +742,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             JSON.stringify(latestDataRef.current),
           );
         } catch (e) {
-          console.warn('Failed to save player data to AsyncStorage:', e);
+          if (__DEV__) console.warn('Failed to save player data to AsyncStorage:', e);
         }
       })();
     }, 300);
@@ -759,7 +759,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           await setDoc(docRef, latestDataRef.current, { merge: true });
           setCloudSyncStatus('synced');
         } catch (e) {
-          console.warn('Failed to sync player data to Firestore:', e);
+          if (__DEV__) console.warn('Failed to sync player data to Firestore:', e);
           setCloudSyncStatus('error');
         }
       }, 5000);
@@ -791,7 +791,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           STORAGE_KEY,
           JSON.stringify(latestDataRef.current),
         ).catch((e) => {
-          console.warn('Failed to flush player data on background:', e);
+          if (__DEV__) console.warn('Failed to flush player data on background:', e);
         });
       }
     };

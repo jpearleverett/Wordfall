@@ -23,6 +23,7 @@ import {
 } from '../stores/playerStore';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { VideoBackground } from './common/VideoBackground';
+import { crashReporter } from '../services/crashReporting';
 import ChromeText from './common/ChromeText';
 import ScanLineOverlay from './common/ScanLineOverlay';
 import NeonStarBurst from './victory/NeonStarBurst';
@@ -860,7 +861,12 @@ export function PuzzleComplete({
                     <Pressable
                       style={({ pressed }) => [styles.secondaryButton, styles.shareButton, pressed && styles.buttonPressed]}
                       onPress={() => {
-                        Share.share({ message: shareText }).catch(() => {});
+                        Share.share({ message: shareText }).catch((e) => {
+                          crashReporter.addBreadcrumb(
+                            `Share.share (puzzle_complete) failed: ${e instanceof Error ? e.message : String(e)}`,
+                            'share',
+                          );
+                        });
                         onShare?.();
                       }}
                       accessibilityRole="button"

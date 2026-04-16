@@ -173,9 +173,104 @@ export const updateClubLeaderboard = functions.pubsub
  * HTTPS callable function to send push notifications.
  * Used for friend activity, event reminders, and streak warnings.
  */
+// Simple in-memory token bucket to mitigate push spam per sender UID.
+// Survives within a warm invocation; Firestore-backed rate limiting is a v1.1 item.
+const PUSH_RATE_LIMIT_PER_MIN = 30;
+const pushRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function checkPushRateLimit(uid: string): boolean {
+  const now = Date.now();
+  const bucket = pushRateBuckets.get(uid);
+  if (!bucket || now > bucket.resetAt) {
+    pushRateBuckets.set(uid, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (bucket.count >= PUSH_RATE_LIMIT_PER_MIN) return false;
+  bucket.count += 1;
+  return true;
+}
+
+/**
+ * Check whether the authenticated sender has an existing relationship
+ * (friendship, club co-membership) with the target user, authorizing a push.
+ */
+async function canSendPushTo(senderUid: string, targetUid: string): Promise<boolean> {
+  if (senderUid === targetUid) return true;
+
+  // Friendship: a doc in `friendships` with both UIDs in `users` array
+  try {
+    const friendshipSnap = await db
+      .collection('friendships')
+      .where('users', 'array-contains', senderUid)
+      .get();
+    for (const doc of friendshipSnap.docs) {
+      const users = (doc.data().users as string[]) ?? [];
+      if (users.includes(targetUid)) return true;
+    }
+  } catch {
+    // fall through
+  }
+
+  // Club co-membership: sender and target share a club
+  try {
+    const clubsSnap = await db
+      .collection('clubs')
+      .where('memberIds', 'array-contains', senderUid)
+      .get();
+    for (const doc of clubsSnap.docs) {
+      const memberIds = (doc.data().memberIds as string[]) ?? [];
+      if (memberIds.includes(targetUid)) return true;
+    }
+  } catch {
+    // fall through
+  }
+
+  return false;
+}
+
 export const sendPushNotification = functions.https.onCall(
-  async (data: { userId: string; title: string; body: string; data?: Record<string, string> }) => {
+  async (
+    data: { userId: string; title: string; body: string; data?: Record<string, string> },
+    context,
+  ) => {
+    // SECURITY: Require authentication.
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+    }
+    const senderUid = context.auth.uid;
+
     const { userId, title, body } = data;
+    if (!userId || typeof title !== 'string' || typeof body !== 'string') {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Missing required fields: userId, title, body',
+      );
+    }
+
+    // Bound payload sizes to prevent abuse
+    if (title.length > 100 || body.length > 500) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'title/body too long',
+      );
+    }
+
+    // Per-sender rate limit
+    if (!checkPushRateLimit(senderUid)) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Too many push requests — try again in a minute',
+      );
+    }
+
+    // Relationship gate: only friends / club co-members (or self) can push
+    const authorized = await canSendPushTo(senderUid, userId);
+    if (!authorized) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'No existing relationship with target user',
+      );
+    }
 
     // Get user's push token
     const tokenDoc = await db.doc(`users/${userId}/pushToken/current`).get();
@@ -317,4 +412,67 @@ export const rotateClubGoals = functions.pubsub
 
     console.log(`Rotated goals for ${clubsSnap.size} clubs`);
   });
+
+// ─── Server-side profanity filter ────────────────────────────────────────────
+
+// Mirrors src/utils/profanityFilter.ts. Kept as a duplicate copy here because
+// Cloud Functions need a standalone module with no React Native deps.
+const PROFANE_WORDS_SERVER: string[] = [
+  'ass', 'asshole', 'bastard', 'bitch', 'bloody', 'bollocks', 'bullshit',
+  'crap', 'cunt', 'damn', 'dick', 'douche', 'dumbass', 'fag', 'faggot',
+  'fuck', 'fucking', 'fucker', 'goddamn', 'hell', 'idiot', 'jackass',
+  'jerk', 'moron', 'motherfucker', 'nigger', 'nigga', 'piss', 'prick',
+  'pussy', 'retard', 'retarded', 'shit', 'shitty', 'slut', 'stfu',
+  'stupid', 'twat', 'wanker', 'whore', 'wtf',
+];
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function serverFilterProfanity(text: string): string {
+  let out = text;
+  const lower = text.toLowerCase();
+  for (const word of PROFANE_WORDS_SERVER) {
+    const re = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'gi');
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(lower)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      out = out.substring(0, start) + '*'.repeat(match[0].length) + out.substring(end);
+    }
+  }
+  return out;
+}
+
+/**
+ * moderateClubMessage — onCreate trigger
+ *
+ * Runs server-side after a message is written. Filters profanity so that a
+ * modified client cannot bypass the client-side filter. Also caps length
+ * defensively in case rule validation is ever relaxed.
+ */
+export const moderateClubMessage = functions.firestore
+  .document('clubs/{clubId}/messages/{messageId}')
+  .onCreate(async (snap) => {
+    const data = snap.data();
+    const original: string = data?.message ?? '';
+    if (!original) return;
+
+    const capped = original.slice(0, 200);
+    const filtered = serverFilterProfanity(capped);
+
+    if (filtered !== original) {
+      try {
+        await snap.ref.update({
+          message: filtered,
+          filteredByServer: true,
+          filteredAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.warn('[moderateClubMessage] update failed', e);
+      }
+    }
+  });
+
 

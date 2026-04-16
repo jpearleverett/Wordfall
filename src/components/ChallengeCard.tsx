@@ -166,6 +166,10 @@ export function ChallengeCard({ challenge, onAccept, onDismiss, result }: Challe
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={() => onAccept(challenge)}
+            accessibilityRole="button"
+            accessibilityLabel="Accept challenge"
+            accessibilityHint="Start playing the challenged puzzle"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <LinearGradient
               colors={[COLORS.purple, '#7c3aed'] as [string, string]}
@@ -189,6 +193,9 @@ export function ChallengeCard({ challenge, onAccept, onDismiss, result }: Challe
           <Pressable
             style={({ pressed }) => [styles.dismissButton, pressed && styles.buttonPressed]}
             onPress={() => onDismiss(challenge.id)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss challenge"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Text style={styles.dismissText}>Dismiss</Text>
           </Pressable>
