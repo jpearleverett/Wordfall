@@ -90,6 +90,22 @@ class IAPManager {
     timeout: ReturnType<typeof setTimeout>;
     userId?: string;
   }> = new Map();
+  /**
+   * In-flight and recently-completed transaction IDs.
+   * Play Billing is known to fire purchaseUpdatedListener twice on reconnect;
+   * we dedupe at the earliest point to avoid double-validation + double-fulfillment.
+   * Bounded FIFO to cap memory usage.
+   */
+  private processedTransactionIds: Set<string> = new Set();
+  private readonly MAX_PROCESSED_TX_IDS = 200;
+
+  private recordTransactionId(transactionId: string): void {
+    this.processedTransactionIds.add(transactionId);
+    if (this.processedTransactionIds.size > this.MAX_PROCESSED_TX_IDS) {
+      const first = this.processedTransactionIds.values().next().value;
+      if (first) this.processedTransactionIds.delete(first);
+    }
+  }
 
   private constructor() {}
 
@@ -477,6 +493,15 @@ class IAPManager {
     const transactionId: string = purchase.id ?? `tx_${Date.now()}`;
     const receipt: string = purchase.purchaseToken ?? '';
     const pendingPurchase = this.pendingPurchaseResolvers.get(storeId);
+
+    // Dedupe: Play Billing may fire purchaseUpdatedListener multiple times for
+    // the same transaction on reconnect. Skip validation + fulfillment if this
+    // transaction has already been processed in-session.
+    if (this.processedTransactionIds.has(transactionId)) {
+      logger.log('[IAP] Skipping duplicate purchase event', { transactionId, storeId });
+      return;
+    }
+    this.recordTransactionId(transactionId);
 
     try {
       // Validate receipt

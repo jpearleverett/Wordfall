@@ -114,20 +114,31 @@ async function loadReceiptHashes(): Promise<Set<string>> {
   return new Set();
 }
 
+// Serialize all receipt-hash writes through a single-slot promise chain.
+// Without this, two concurrent purchases can both read the same snapshot,
+// append their own hash, and race on save(), losing one hash.
+let receiptHashWriteChain: Promise<void> = Promise.resolve();
+
 async function saveReceiptHash(hash: string): Promise<void> {
-  try {
-    const hashes = await loadReceiptHashes();
-    hashes.add(hash);
-    // Keep only the last 500 hashes to bound storage
-    const arr = Array.from(hashes);
-    const trimmed = arr.length > 500 ? arr.slice(arr.length - 500) : arr;
-    await AsyncStorage.setItem(
-      RECEIPT_HASH_STORAGE_KEY,
-      JSON.stringify(trimmed),
-    );
-  } catch {
-    console.warn('[ReceiptValidation] Failed to persist receipt hash');
-  }
+  receiptHashWriteChain = receiptHashWriteChain.then(async () => {
+    try {
+      const hashes = await loadReceiptHashes();
+      hashes.add(hash);
+      // Keep only the last 500 hashes to bound storage
+      const arr = Array.from(hashes);
+      const trimmed = arr.length > 500 ? arr.slice(arr.length - 500) : arr;
+      await AsyncStorage.setItem(
+        RECEIPT_HASH_STORAGE_KEY,
+        JSON.stringify(trimmed),
+      );
+    } catch {
+      console.warn('[ReceiptValidation] Failed to persist receipt hash');
+    }
+  }, () => {
+    // Previous write failed — still attempt this one
+    // No-op; thenable continues with next task
+  });
+  await receiptHashWriteChain;
 }
 
 // ── Retry logic ──────────────────────────────────────────────────────────────

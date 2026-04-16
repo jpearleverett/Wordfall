@@ -173,9 +173,104 @@ export const updateClubLeaderboard = functions.pubsub
  * HTTPS callable function to send push notifications.
  * Used for friend activity, event reminders, and streak warnings.
  */
+// Simple in-memory token bucket to mitigate push spam per sender UID.
+// Survives within a warm invocation; Firestore-backed rate limiting is a v1.1 item.
+const PUSH_RATE_LIMIT_PER_MIN = 30;
+const pushRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function checkPushRateLimit(uid: string): boolean {
+  const now = Date.now();
+  const bucket = pushRateBuckets.get(uid);
+  if (!bucket || now > bucket.resetAt) {
+    pushRateBuckets.set(uid, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (bucket.count >= PUSH_RATE_LIMIT_PER_MIN) return false;
+  bucket.count += 1;
+  return true;
+}
+
+/**
+ * Check whether the authenticated sender has an existing relationship
+ * (friendship, club co-membership) with the target user, authorizing a push.
+ */
+async function canSendPushTo(senderUid: string, targetUid: string): Promise<boolean> {
+  if (senderUid === targetUid) return true;
+
+  // Friendship: a doc in `friendships` with both UIDs in `users` array
+  try {
+    const friendshipSnap = await db
+      .collection('friendships')
+      .where('users', 'array-contains', senderUid)
+      .get();
+    for (const doc of friendshipSnap.docs) {
+      const users = (doc.data().users as string[]) ?? [];
+      if (users.includes(targetUid)) return true;
+    }
+  } catch {
+    // fall through
+  }
+
+  // Club co-membership: sender and target share a club
+  try {
+    const clubsSnap = await db
+      .collection('clubs')
+      .where('memberIds', 'array-contains', senderUid)
+      .get();
+    for (const doc of clubsSnap.docs) {
+      const memberIds = (doc.data().memberIds as string[]) ?? [];
+      if (memberIds.includes(targetUid)) return true;
+    }
+  } catch {
+    // fall through
+  }
+
+  return false;
+}
+
 export const sendPushNotification = functions.https.onCall(
-  async (data: { userId: string; title: string; body: string; data?: Record<string, string> }) => {
+  async (
+    data: { userId: string; title: string; body: string; data?: Record<string, string> },
+    context,
+  ) => {
+    // SECURITY: Require authentication.
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+    }
+    const senderUid = context.auth.uid;
+
     const { userId, title, body } = data;
+    if (!userId || typeof title !== 'string' || typeof body !== 'string') {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Missing required fields: userId, title, body',
+      );
+    }
+
+    // Bound payload sizes to prevent abuse
+    if (title.length > 100 || body.length > 500) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'title/body too long',
+      );
+    }
+
+    // Per-sender rate limit
+    if (!checkPushRateLimit(senderUid)) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Too many push requests — try again in a minute',
+      );
+    }
+
+    // Relationship gate: only friends / club co-members (or self) can push
+    const authorized = await canSendPushTo(senderUid, userId);
+    if (!authorized) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'No existing relationship with target user',
+      );
+    }
 
     // Get user's push token
     const tokenDoc = await db.doc(`users/${userId}/pushToken/current`).get();

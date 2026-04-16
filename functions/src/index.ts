@@ -72,7 +72,8 @@ interface GooglePlaySubscription {
 
 interface ClubGoalRequest {
   clubId: string;
-  userId: string;
+  /** Deprecated — retained for wire compatibility. Caller UID is used server-side. */
+  userId?: string;
   pointsEarned: number;
 }
 
@@ -277,7 +278,16 @@ async function validateReceiptCore(
   data: ValidateReceiptRequest,
   authenticatedUserId?: string
 ): Promise<ValidateReceiptResponse> {
-  const { receipt, productId, platform, userId } = data;
+  const { receipt, productId, platform } = data;
+
+  // SECURITY: Reject unauthenticated calls. Fulfillment is always written to
+  // the authenticated caller's UID — never a client-supplied userId field.
+  if (!authenticatedUserId) {
+    return {
+      valid: false,
+      error: "Unauthenticated",
+    };
+  }
 
   if (!receipt || !productId || !platform) {
     return {
@@ -297,7 +307,7 @@ async function validateReceiptCore(
   if (await isReceiptReplay(hash)) {
     functions.logger.warn("Duplicate receipt detected", {
       productId,
-      userId,
+      uid: authenticatedUserId.slice(0, 6),
     });
     return {
       valid: false,
@@ -322,22 +332,19 @@ async function validateReceiptCore(
   }
 
   if (result.valid) {
-    await storeReceiptHash(hash, productId, userId ?? authenticatedUserId);
+    await storeReceiptHash(hash, productId, authenticatedUserId);
 
-    const uid = userId ?? authenticatedUserId;
-    if (uid) {
-      await db
-        .collection("users")
-        .doc(uid)
-        .collection("purchases")
-        .add({
-          productId,
-          transactionId: result.transactionId ?? null,
-          expiresAt: result.expiresAt ?? null,
-          platform,
-          purchasedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-    }
+    await db
+      .collection("users")
+      .doc(authenticatedUserId)
+      .collection("purchases")
+      .add({
+        productId,
+        transactionId: result.transactionId ?? null,
+        expiresAt: result.expiresAt ?? null,
+        platform,
+        purchasedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
   }
 
   return result;
@@ -376,6 +383,7 @@ export const validateReceipt = functions.https.onRequest(
     const result = await validateReceiptCore(data, authenticatedUserId);
     const statusCode =
       result.valid ? 200 :
+      result.error === "Unauthenticated" ? 401 :
       result.error === "Missing required fields: receipt, productId, platform" ? 400 :
       result.error === "Platform must be 'ios' or 'android'" ? 400 :
       result.error === "Method not allowed" ? 405 :
@@ -571,12 +579,22 @@ export const clubGoalProgress = functions.https.onCall(
     data: ClubGoalRequest,
     context
   ): Promise<{ success: boolean; currentProgress: number }> => {
-    const { clubId, userId, pointsEarned } = data;
+    // SECURITY: Require authentication. The caller's UID — never a client-
+    // supplied userId — is the only identity we trust for progress attribution.
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Authentication required"
+      );
+    }
+    const callerUid = context.auth.uid;
 
-    if (!clubId || !userId || typeof pointsEarned !== "number") {
+    const { clubId, pointsEarned } = data;
+
+    if (!clubId || typeof pointsEarned !== "number") {
       throw new functions.https.HttpsError(
         "invalid-argument",
-        "Missing required fields: clubId, userId, pointsEarned"
+        "Missing required fields: clubId, pointsEarned"
       );
     }
 
@@ -586,6 +604,17 @@ export const clubGoalProgress = functions.https.onCall(
         "pointsEarned must be positive"
       );
     }
+
+    // Clamp to a sane per-call ceiling to prevent runaway score injection
+    const MAX_POINTS_PER_CALL = 10000;
+    if (pointsEarned > MAX_POINTS_PER_CALL) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        `pointsEarned exceeds per-call max (${MAX_POINTS_PER_CALL})`
+      );
+    }
+
+    const userId = callerUid;
 
     const clubRef = db.collection("clubs").doc(clubId);
 
