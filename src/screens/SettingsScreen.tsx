@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
@@ -25,6 +26,23 @@ const THEMES = [
   { id: 'forest', name: 'Forest', color: '#0a1a0f' },
   { id: 'sunset', name: 'Sunset', color: '#1a0a0a' },
 ];
+
+const PRIVACY_POLICY_URL = 'https://wordfall.app/privacy';
+const TERMS_OF_SERVICE_URL = 'https://wordfall.app/terms';
+const SUPPORT_EMAIL = 'support@wordfall.app';
+
+async function openUrlSafe(url: string, fallbackTitle: string) {
+  try {
+    const ok = await Linking.canOpenURL(url);
+    if (ok) {
+      await Linking.openURL(url);
+      return;
+    }
+  } catch {
+    // fall through to alert
+  }
+  Alert.alert(fallbackTitle, url);
+}
 
 interface SettingsScreenProps {
   settings?: any;
@@ -345,13 +363,41 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <Text style={styles.settingValue}>{appVersion}</Text>
           </View>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.actionRow} accessibilityRole="button" accessibilityLabel="Privacy Policy">
+          <TouchableOpacity
+            style={styles.actionRow}
+            accessibilityRole="button"
+            accessibilityLabel="Privacy Policy"
+            onPress={() => openUrlSafe(PRIVACY_POLICY_URL, 'Privacy Policy')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Text style={styles.settingLabel}>Privacy Policy</Text>
             <Text style={styles.chevron}>{'\u203A'}</Text>
           </TouchableOpacity>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.actionRow} accessibilityRole="button" accessibilityLabel="Terms of Service">
+          <TouchableOpacity
+            style={styles.actionRow}
+            accessibilityRole="button"
+            accessibilityLabel="Terms of Service"
+            onPress={() => openUrlSafe(TERMS_OF_SERVICE_URL, 'Terms of Service')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Text style={styles.settingLabel}>Terms of Service</Text>
+            <Text style={styles.chevron}>{'\u203A'}</Text>
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <TouchableOpacity
+            style={styles.actionRow}
+            accessibilityRole="button"
+            accessibilityLabel="Contact Support"
+            onPress={() =>
+              openUrlSafe(
+                `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Wordfall Support')}`,
+                'Contact Support',
+              )
+            }
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.settingLabel}>Contact Support</Text>
             <Text style={styles.chevron}>{'\u203A'}</Text>
           </TouchableOpacity>
         </View>
