@@ -35,6 +35,8 @@ import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import MasteryScreen from './src/screens/MasteryScreen';
+import { ConsentGate } from './src/components/ConsentGate';
+import { hasAcceptedTos } from './src/services/consent';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
@@ -1443,8 +1445,23 @@ function AppContent() {
   const economy = useEconomy();
   const settings = useSettings();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [consentLoaded, setConsentLoaded] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
   const routeNameRef = useRef<string | undefined>();
+
+  // Check ToS / Privacy Policy acceptance on mount.
+  useEffect(() => {
+    let cancelled = false;
+    hasAcceptedTos().then((accepted) => {
+      if (cancelled) return;
+      setConsentAccepted(accepted);
+      setConsentLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Ceremony queue — rendered at app level so modals overlay all screens
   const { activeCeremony, handleDismissCeremony, resetBatchCounter } = useCeremonyQueue({
@@ -1559,10 +1576,19 @@ function AppContent() {
     routeNameRef.current = currentRouteName;
   }, [resetBatchCounter]);
 
-  if (!player.loaded) {
+  if (!player.loaded || !consentLoaded) {
     return (
       <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color={COLORS.accent} />
+      </View>
+    );
+  }
+
+  // ToS + Privacy Policy gate — mandatory before any data collection.
+  if (!consentAccepted) {
+    return (
+      <View style={{ flex: 1 }}>
+        <ConsentGate onAccept={() => setConsentAccepted(true)} />
       </View>
     );
   }

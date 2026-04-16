@@ -86,6 +86,7 @@ import {
   setDoc,
   addDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -701,6 +702,103 @@ class FirestoreService {
       });
     } catch (e) {
       logger.warn('[Firestore] sendClubMessage failed:', e);
+    }
+  }
+
+  /**
+   * Report a message for moderation review.
+   * Writes into the admin-only `reports/` collection (clients cannot read).
+   */
+  async reportMessage(
+    reporterId: string,
+    clubId: string,
+    messageId: string,
+    messageUserId: string,
+    reason: string,
+    messageText?: string,
+  ): Promise<boolean> {
+    if (!this.enabled || !reporterId) return false;
+    try {
+      await addDoc(collection(db, 'reports'), {
+        reporterId,
+        targetType: 'message',
+        clubId,
+        messageId,
+        messageUserId,
+        reason: reason.slice(0, 500),
+        messageText: messageText ? messageText.slice(0, 500) : null,
+        createdAt: serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      logger.warn('[Firestore] reportMessage failed:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Report a user for moderation review.
+   */
+  async reportUser(
+    reporterId: string,
+    targetUserId: string,
+    reason: string,
+  ): Promise<boolean> {
+    if (!this.enabled || !reporterId) return false;
+    try {
+      await addDoc(collection(db, 'reports'), {
+        reporterId,
+        targetType: 'user',
+        targetUserId,
+        reason: reason.slice(0, 500),
+        createdAt: serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      logger.warn('[Firestore] reportUser failed:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Block another user. Subsequent messages from them are filtered client-side.
+   */
+  async blockUser(currentUserId: string, blockedUserId: string): Promise<boolean> {
+    if (!this.enabled || !currentUserId || !blockedUserId) return false;
+    if (currentUserId === blockedUserId) return false;
+    try {
+      await setDoc(doc(db, `users/${currentUserId}/blockedUsers/${blockedUserId}`), {
+        blockedAt: serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      logger.warn('[Firestore] blockUser failed:', e);
+      return false;
+    }
+  }
+
+  async unblockUser(currentUserId: string, blockedUserId: string): Promise<boolean> {
+    if (!this.enabled || !currentUserId || !blockedUserId) return false;
+    try {
+      await deleteDoc(doc(db, `users/${currentUserId}/blockedUsers/${blockedUserId}`));
+      return true;
+    } catch (e) {
+      logger.warn('[Firestore] unblockUser failed:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Fetch the set of userIds this user has blocked.
+   */
+  async getBlockedUserIds(currentUserId: string): Promise<Set<string>> {
+    if (!this.enabled || !currentUserId) return new Set();
+    try {
+      const snap = await getDocs(collection(db, `users/${currentUserId}/blockedUsers`));
+      return new Set(snap.docs.map((d) => d.id));
+    } catch (e) {
+      logger.warn('[Firestore] getBlockedUserIds failed:', e);
+      return new Set();
     }
   }
 

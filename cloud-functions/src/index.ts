@@ -413,3 +413,66 @@ export const rotateClubGoals = functions.pubsub
     console.log(`Rotated goals for ${clubsSnap.size} clubs`);
   });
 
+// ─── Server-side profanity filter ────────────────────────────────────────────
+
+// Mirrors src/utils/profanityFilter.ts. Kept as a duplicate copy here because
+// Cloud Functions need a standalone module with no React Native deps.
+const PROFANE_WORDS_SERVER: string[] = [
+  'ass', 'asshole', 'bastard', 'bitch', 'bloody', 'bollocks', 'bullshit',
+  'crap', 'cunt', 'damn', 'dick', 'douche', 'dumbass', 'fag', 'faggot',
+  'fuck', 'fucking', 'fucker', 'goddamn', 'hell', 'idiot', 'jackass',
+  'jerk', 'moron', 'motherfucker', 'nigger', 'nigga', 'piss', 'prick',
+  'pussy', 'retard', 'retarded', 'shit', 'shitty', 'slut', 'stfu',
+  'stupid', 'twat', 'wanker', 'whore', 'wtf',
+];
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function serverFilterProfanity(text: string): string {
+  let out = text;
+  const lower = text.toLowerCase();
+  for (const word of PROFANE_WORDS_SERVER) {
+    const re = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'gi');
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(lower)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      out = out.substring(0, start) + '*'.repeat(match[0].length) + out.substring(end);
+    }
+  }
+  return out;
+}
+
+/**
+ * moderateClubMessage — onCreate trigger
+ *
+ * Runs server-side after a message is written. Filters profanity so that a
+ * modified client cannot bypass the client-side filter. Also caps length
+ * defensively in case rule validation is ever relaxed.
+ */
+export const moderateClubMessage = functions.firestore
+  .document('clubs/{clubId}/messages/{messageId}')
+  .onCreate(async (snap) => {
+    const data = snap.data();
+    const original: string = data?.message ?? '';
+    if (!original) return;
+
+    const capped = original.slice(0, 200);
+    const filtered = serverFilterProfanity(capped);
+
+    if (filtered !== original) {
+      try {
+        await snap.ref.update({
+          message: filtered,
+          filteredByServer: true,
+          filteredAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.warn('[moderateClubMessage] update failed', e);
+      }
+    }
+  });
+
+
