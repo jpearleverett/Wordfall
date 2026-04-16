@@ -72,6 +72,62 @@ User reviews and merges via GitHub PR. Exception: tiny config-only fixes (packag
 
 ## External Setup & Open Items
 
-Firebase / Sentry / AdMob env vars, IAP/Firestore/Cloud Functions deploy steps, launch-prep to-do list — see **`agent_docs/setup.md`**.
+Firebase / Sentry / AdMob env vars, IAP/Firestore/Cloud Functions deploy steps, launch-prep to-do list — see **`agent_docs/setup.md`** and **`agent_docs/pre_launch_audit.md`**.
 
 EAS project already configured (`projectId: b6dd187c-d46c-4331-bb15-5c7ffced89b3`, owner `jpearleverett`).
+
+## Launch Status (April 2026 — Android-first)
+
+Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design).
+
+### What the user has ALREADY done outside this repo (do not ask again)
+- Google Play Console account: created + verified ($25 paid)
+- Firebase project on Blaze plan: created, billing enabled, wired into the app via `EXPO_PUBLIC_FIREBASE_*` env vars and `google-services.json` (in repo root)
+- Sentry.io account: created. SDK is wired (`@sentry/react-native ~7.11.0`). Only the `EXPO_PUBLIC_SENTRY_DSN` env var still needs to be set
+- Cloudflare Pages site: live at https://wordfallgame.app — privacy policy (`/privacy`), terms (`/terms`), and support page already published from `wordfallgamesite/` in repo
+- Support email alias `info@iridescent-games.com` is live (matches `SUPPORT_EMAIL` in `src/screens/SettingsScreen.tsx`)
+- EAS project + dev client APK: building cleanly, smoke test passed (all screens load, game plays through)
+
+### What the codebase ALREADY has wired (don't re-implement, just verify)
+- **Leaderboards**: `firestoreService.submitDailyScore` / `submitWeeklyScore` are called from `src/hooks/useRewardWiring.ts:689,693` on puzzle complete; reads in `src/services/firestore.ts:300+`
+- **VIP subscription end-to-end**: `vip_weekly` product → `applyProduct` in `src/services/commercialEntitlements.ts:207` sets `isVipSubscriber/vipExpiresAt`. Server-side renewal/expiry handled by `onSubscriptionRenew` (Apple SSN v2 + Google RTDN) in `functions/src/index.ts:418`
+- **Cloud Functions** (6 total, split across two codebases — see `firebase.json`):
+  - `functions/` (commerce codebase): `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`
+  - `cloud-functions/` (social codebase): `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`
+- **Push notifications client**: `src/services/notifications.ts` registers Expo + device push tokens, saves to Firestore at `users/{uid}/pushToken` (line 506-509). Server-side `sendPushNotification` callable exists in `cloud-functions/src/index.ts:231`
+- **Receipt validation + replay protection**: `validateReceipt` in `functions/src/index.ts:370` with SHA256 hash dedup (`/receipts` collection)
+- **Consent gate, club moderation (Perspective API), report/block, loot-box odds disclosure, A/B testing engine, Remote Config, soft-launch analytics module, 35+ analytics events** — all wired
+- **Firestore rules + indexes**: `firestore.rules` (124 lines, strict), `firestore.indexes.json` — written, just need `firebase deploy`
+- **Site/legal**: `wordfallgamesite/` has privacy/terms/support + an `assetlinks.json` template (placeholder SHA256 needs Play app signing fingerprint)
+
+### Real launch-blocking gaps (code-side)
+- **GDPR account deletion**: Settings has a `confirmResetProgress` placeholder; no `deleteUserData` Cloud Function. Required for Play data-safety compliance.
+- **Social account linking**: Firebase Anonymous auth only. No Google Sign-In. Not strictly blocking but anonymous-only means a wiped device = lost paid progression.
+- **`assetlinks.json` SHA256**: replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` in `wordfallgamesite/.well-known/assetlinks.json` with the Play app signing key fingerprint (from Play Console → App signing).
+
+### Real launch-blocking gaps (user-side, outside this repo)
+- Register `wordfall_*` IAP SKUs in Play Console (catalog: `src/data/shopProducts.ts`)
+- Grant Firebase default service account (`<project>@appspot.gserviceaccount.com`) the **Android Publisher** role in Play Console → Users and permissions (so `validateReceipt` can call Google's API)
+- Upload FCM server key to Firebase → Cloud Messaging (for remote push)
+- Set `EXPO_PUBLIC_SENTRY_DSN` as an EAS secret + `.env`
+- Swap AdMob test app IDs in `app.json` for real IDs from your AdMob console; set `EXPO_PUBLIC_ADMOB_REWARDED_ID` + `EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID`
+- Author the UMP consent message inside AdMob → Privacy & messaging → GDPR
+- Run `firebase deploy --only firestore:rules,firestore:indexes,functions` (one-time)
+- Fill Play Console Data Safety form (draft in `agent_docs/data_safety.md`)
+- Upload store listing assets (icon, feature graphic, screenshots — copy in `agent_docs/store_listing.md`)
+- Commission real audio (synth fallback works but sounds amateur)
+
+### Deferred to v1.1 (NOT launch blockers)
+- Migrate AsyncStorage receipts to `expo-secure-store`
+- Consolidate `cloud-functions/` + `functions/` into one codebase
+- Per-UID Firestore rate-limit counter
+- Inline board-gen timeout banner (vs Alert)
+- Localization (UI-only, top 5 languages)
+- Maestro E2E flows beyond smoke
+- iOS lane (Apple Developer enrollment, `GoogleService-Info.plist`, Universal Links, ATT verification)
+
+### Working-style reminders for Claude
+- **Small chunks**: never edit > ~150 lines per Edit / write > ~400 lines per Write — long edits time out
+- **Commit at logical boundaries**, push to `claude/<slug>` only (never `main`)
+- **Reuse, don't reinvent**: many "missing" features are wired — search before writing
+- **Verify on device**: tests prove correctness, not fun

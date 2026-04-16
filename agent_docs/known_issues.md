@@ -1,96 +1,130 @@
 # Wordfall — Known Issues & Launch Gaps
 
 > Created during Phase 0 baseline (see `/root/.claude/plans/as-an-expert-mobile-inherited-stream.md`).
-> This file tracks everything discovered during the launch readiness assessment that needs follow-up before ship.
+> **Significantly revised after deep code-scan verification on 2026-04-16.**
+> The earlier explore-agent reports missed `agent_docs/pre_launch_audit.md` and several wired Cloud Functions / client paths.
+> The repo is *much* closer to launch than the original assessment said.
 
 ---
 
-## Correction of earlier assessment
+## Phase 0 baseline results (2026-04-16)
 
-Two items flagged as "stubbed" in the initial assessment turned out to be more complete than described. Updated status:
-
-### 1. Leaderboards — PARTIAL (not fully stubbed)
-- **What exists:** `src/services/firestore.ts` implements `getDailyLeaderboard`, `getWeeklyLeaderboard`, `getAllTimeLeaderboard` (`weeklyScores` + `users.totalScore` queries). `src/screens/LeaderboardScreen.tsx` calls them, falls back to a deterministic mock (`generateMockLeaderboard`) when Firestore is disabled / empty.
-- **Real gap:** Nothing ever **writes** to `weeklyScores` / `dailyScores` collections. No `submitScore()` / `writeLeaderboardEntry()` in the codebase. Grep for `weeklyScores` returns only the read path.
-- **Phase 1 task narrows to:** add score-submit on puzzle complete → Firestore, plus a server-side bounds-validating Cloud Function. Keep the existing read path & mock fallback.
-
-### 2. VIP Weekly Subscription — MORE WIRED THAN REPORTED
-- **What exists:**
-  - Product `vip_weekly` → store id `wordfall_vip_weekly` defined (`src/data/shopProducts.ts:802`).
-  - Purchase application via `applyProduct()` in `src/services/commercialEntitlements.ts:207-211`: sets `isVipSubscriber=true`, `vipExpiresAt=now+7d`, `adsRemoved=true`, enables gem+hint daily drip, grants `frame_vip_exclusive`.
-  - VIP streak tracking fields exist (`vipStreakWeeks`, `vipStreakBonusClaimed`, `vipStreakLastChecked`).
-  - Shop purchase button wired (`src/screens/ShopScreen.tsx:856`).
-- **Real gap:** No subscription **renewal** detection. Missing:
-  - Apple App Store Server Notifications v2 webhook → Cloud Function
-  - Google RTDN (Real-Time Developer Notifications) → Cloud Function
-  - On renewal: extend `vipExpiresAt` +7d, increment `vipStreakWeeks`
-  - On expiry/cancel: clear `isVipSubscriber`, `adsRemoved`, `dailyDrip`
-  - Grace period / billing retry handling
-- **Phase 1 task narrows to:** server-side receipt + lifecycle. Client code largely already handles VIP state correctly.
+- `npm install --legacy-peer-deps` — PASS (930 packages, 38s)
+- `npx tsc --noEmit` — PASS (clean)
+- `npm test` — PASS (39/39 suites, 791/791 tests, 21.3s)
+- Device smoke test — PASS (user-confirmed: APK builds via EAS, all screens load, game plays through)
 
 ---
 
-## Confirmed launch gaps (from the full assessment — still valid)
+## Status corrections vs the initial assessment
 
-### Must-fix before ship
+### 1. Leaderboards — WIRED (correction)
+- `firestoreService.submitDailyScore` (`src/services/firestore.ts:355`) and `submitWeeklyScore` (`src/services/firestore.ts:387`) write scores.
+- They are CALLED on puzzle complete from `src/hooks/useRewardWiring.ts:689,693`.
+- Reads via `getDailyLeaderboard` / `getWeeklyLeaderboard` / `getAllTimeLeaderboard` (`src/services/firestore.ts:300+`).
+- Firestore rules already enforce `0 ≤ score ≤ 1,000,000` and ownership (`firestore.rules:23-50`).
+- Composite indexes exist (`firestore.indexes.json`).
+- Mock fallback in `LeaderboardScreen.tsx` only kicks in when Firestore is disabled / empty.
 
-- [ ] **Audio assets**: `/assets/audio/` empty. 830-line synth fallback in `src/services/sound.ts` works but sounds amateur. Commission 3 BGM + 20 SFX.
-- [ ] **Social account linking**: only Firebase Anonymous auth. No Google/Apple Sign-In. Users who wipe device lose paid progression.
-- [ ] **Secure receipt storage**: receipts currently in AsyncStorage (cleartext). Migrate to `expo-secure-store`.
-- [ ] **GDPR account deletion**: no UI or Cloud Function for "Delete my account & data".
-- [ ] **Remote push (FCM/APNs)**: `sendPushNotification` Cloud Function scaffolded; FCM server key + APNs .p8 not configured.
-- [ ] **Leaderboard score submission**: see correction #1 above.
-- [ ] **VIP subscription renewal/expiry**: see correction #2 above.
+### 2. VIP weekly subscription — WIRED end-to-end (correction)
+- Client side: purchase → `applyProduct` (`src/services/commercialEntitlements.ts:207`) sets `isVipSubscriber=true`, `vipExpiresAt=now+7d`, `adsRemoved=true`, `dailyDrip` (50 gems + 3 hints), VIP frame.
+- Server side: `onSubscriptionRenew` Pub/Sub function (`functions/src/index.ts:418`) handles BOTH:
+  - Apple App Store Server Notifications v2 (`handleAppleSubscriptionEvent`)
+  - Google RTDN (`handleGoogleSubscriptionEvent`)
+- Updates `users/{uid}.vipActive` + `vipExpiresAt` on renew/cancel/refund/expire.
+- Trial detection (`is_trial_period` / `paymentState`) included.
+- Receipt validation server-side via `validateReceipt` (`functions/src/index.ts:370`) with SHA256 hash replay protection.
 
-### External (console / account) work
+### 3. Push notifications — client WIRED (correction)
+- `src/services/notifications.ts` registers Expo + device push tokens, saves to `users/{uid}/pushToken` in Firestore (line 506-509).
+- Server-side `sendPushNotification` callable exists (`cloud-functions/src/index.ts:231`) with auth, 30/min rate limit, friend/club-co-member-only delivery.
+- `processStreakReminders` scheduled function exists (`cloud-functions/src/index.ts:313`).
+- Real launch dependency: FCM server key uploaded to Firebase Console.
 
-- [ ] Apple Developer: app ID, IAPs (30+ SKUs), subscription group, ATT, Sign-in-with-Apple key, APNs auth key
-- [ ] Google Play Console: app, IAPs, subscription, service account with Android Publisher role, data safety, content rating, assetlinks.json
-- [ ] Firebase: production project, Firestore rules/indexes deploy, Cloud Functions deploy, secrets (Apple shared secret, Play SA, Perspective, FCM), Remote Config defaults, BigQuery export
-- [ ] AdMob: create apps, ad units, UMP consent form, IDFA / ATT prompt
-- [ ] Sentry: project + DSN as EAS secret + release alerts
-- [ ] Privacy policy legal review + hosted at `wordfallgame.app/privacy`
-- [ ] Store creatives: 8 screenshots × 2 form factors × 2 stores, preview videos, feature graphic, ASO keywords
+### 4. Sentry — WIRED (correction)
+- SDK installed (`@sentry/react-native ~7.11.0`).
+- `crashReporter.captureException` wired across IAP, receipt validation, AuthContext, useRewardWiring, every major Firestore mutation, board-gen timeouts.
+- `redactUid()` PII minimization in Cloud Function logs.
+- Only missing: `EXPO_PUBLIC_SENTRY_DSN` env var (user confirmed Sentry account exists).
 
-### Soft-launch required
+### 5. Cloud Functions — 6 deployed (not the 1-2 implied earlier)
+**`functions/` (commerce codebase):**
+- `validateReceipt` (HTTPS) — Apple+Google validation, replay protection
+- `onSubscriptionRenew` (Pub/Sub) — VIP lifecycle
+- `clubGoalProgress` (callable) — atomic transactional club goal increment, fraud ceiling
+- `autoKickInactiveMembers` (scheduled, daily 3am UTC)
 
-- [ ] Pick 1-2 markets (recommended: Philippines + Canada)
-- [ ] 4-6 weeks minimum soft-launch to validate KPIs (D1 ≥40%, D7 ≥18%, D30 ≥6%, crash-free ≥99.5%, payer% ≥2%, ARPDAU ≥$0.08)
-- [ ] UA budget ($500-2000/week)
-- [ ] Weekly economy / difficulty / ad-load tuning via Remote Config
+**`cloud-functions/` (social codebase):**
+- `onPuzzleComplete` (Firestore trigger) — propagates results to club goals
+- `updateClubLeaderboard` (Pub/Sub)
+- `sendPushNotification` (callable) — auth + rate-limited
+- `processStreakReminders` (Pub/Sub)
+- `rotateClubGoals` (Pub/Sub)
+- `moderateClubMessage` (Firestore trigger) — Perspective API
 
-### Nice-to-have before global launch
+### 6. Privacy/legal/site — DONE (correction)
+- `wordfallgamesite/` published to Cloudflare Pages at https://wordfallgame.app
+- `/privacy`, `/terms`, `/support` live, with real entity (Iridescent Games), date (April 16 2026), jurisdiction (New York), email (info@iridescent-games.com)
+- `wordfallgamesite/.well-known/assetlinks.json` exists — needs SHA256 fingerprint replaced (one-line edit when Play app signing is set up)
+- ConsentGate enforces ToS/Privacy versioned acceptance, server-mirrored
 
-- [ ] Localization (5 languages, UI only for v1 — puzzles stay English)
-- [ ] RevenueCat consideration for cross-platform subscription management
-- [ ] Offer A/B experiments (framework exists, no experiments configured)
-- [ ] In-product age gate (if targeting child-friendly ratings)
+### 7. Analytics — 35+ events instrumented (was reported as ~60+ earlier; both off — actual is ~35+ distinct events plus soft-launch module)
 
 ---
 
-## Phase 0 baseline results
+## Real launch-blocking gaps (Android-first)
 
-Results recorded on: 2026-04-16
+### Code-side (Phase 1)
+- [ ] **GDPR account deletion**: `confirmResetProgress` in `SettingsScreen.tsx:109` only clears local state. Need:
+  - Settings UI button "Delete account & data" with double-confirm
+  - Cloud Function `deleteUserData` to wipe `/users/{uid}` + subcollections + leaderboard entries + receipts
+  - Local cleanup: AsyncStorage clear, sign-out, navigate to onboarding
+- [ ] **Social account linking** (recommended, not strict): Google Sign-In via `@react-native-google-signin/google-signin` + `linkWithCredential`. Without it, wiped device = lost paid progression = refund risk. Apple Sign-In can wait (Android-first).
+- [ ] **`assetlinks.json` SHA256**: replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` with real Play app signing fingerprint. Two-line task once Play app signing key is generated.
 
-### Dependency install
-- `npm install --legacy-peer-deps` — **PASS** (930 packages, 38s, 3 deprecation warnings — `glob@7.2.3` transitive, not blocking)
+### User-side / external (Phase 2)
+- [ ] Register `wordfall_*` IAP SKUs in Play Console
+- [ ] Grant Firebase default service account `<project>@appspot.gserviceaccount.com` the **Android Publisher** role in Play Console → Users and permissions
+- [ ] Upload FCM server key to Firebase → Cloud Messaging
+- [ ] Set `EXPO_PUBLIC_SENTRY_DSN` (`eas secret:create --scope project --name EXPO_PUBLIC_SENTRY_DSN --value <DSN>` + add to `.env`)
+- [ ] Swap test AdMob app IDs for real IDs in `app.json` (plugin `androidAppId`); set `EXPO_PUBLIC_ADMOB_REWARDED_ID` + `EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID`
+- [ ] Author UMP consent message in AdMob → Privacy & messaging
+- [ ] Run `firebase deploy --only firestore:rules,firestore:indexes,functions` (or `scripts/firebase_deploy_functions.sh`)
+- [ ] Fill Play Console Data Safety form (draft in `agent_docs/data_safety.md`)
+- [ ] Upload store listing assets — icon (512×512), feature graphic (1024×500), 8 phone screenshots; copy in `agent_docs/store_listing.md`
+- [ ] Pick content rating; ensure Mystery Wheel odds disclosure mentioned in description
+- [ ] Set Play target audience to 13+ (current code has no DOB gate)
 
-### Typecheck
-- `npx tsc --noEmit` — **PASS** (exit 0, no errors)
+### Polish (Phase 2-3, parallel)
+- [ ] Commission audio: 3 BGM + 20+ SFX. Synth fallback ships fine but sounds amateur vs Royal Match tier.
+- [ ] Soft-launch markets (Philippines + Canada recommended) for 4-6 weeks before global UA push.
 
-### Tests
-- `npm test` — **PASS** (39/39 suites, 791/791 tests, 21.3s)
+---
 
-### Device smoke test
-- **DEFERRED** — requires user to provide Android device + run EAS build. Captured as separate outside-environment task.
+## Deferred to v1.1 (NOT launch blockers)
+
+From `agent_docs/pre_launch_audit.md` section 1:
+- AsyncStorage receipt store → `expo-secure-store` migration
+- Per-UID Firestore rate-limit counter (currently in-memory token bucket on `sendPushNotification` only)
+- Consolidate `cloud-functions/` + `functions/` into one codebase
+- Inline board-gen timeout banner (vs Alert)
+- Single-slot write queue for PlayerContext / EconomyContext
+- `iap.ts` purchase-promise rejection contract normalization
+- Remaining `console.log` sweep in low-traffic modules
+- Maestro E2E expansion (first purchase, club chat report/block, consent flow)
+- Context selector Phase 4 (`useSyncExternalStore` for narrow subscriptions)
+- Retry helper + "not synced yet" indicator for Firestore writes
+- Localization (UI-only, top 5 languages — puzzles stay English)
+- iOS lane
 
 ---
 
 ## Environment notes for Claude future sessions
 
-- Repo is at `/home/user/Wordfall`.
-- Working branch: `claude/game-readiness-assessment-NABLG` (base for phase work).
-- Dev client APK is required — Expo Go not supported.
-- Native builds must go through EAS (Termux cannot build locally — NDK missing ARM64 host tools).
+- Repo at `/home/user/Wordfall`; working branch `claude/game-readiness-assessment-NABLG`.
+- **Always read `agent_docs/pre_launch_audit.md` first** — it's the canonical "what's done" doc.
+- Dev client APK required (Expo Go not supported); user has working APK on Android.
+- Native builds: EAS only (Termux can't build locally — NDK has no ARM64 host tools). Use `EAS_SKIP_AUTO_FINGERPRINT=1`.
 - **Never push to `main`**. Use `claude/<slug>` branches; user merges PRs.
-- Use `npm install --legacy-peer-deps` (`.npmrc` sets this by default but re-affirm if fresh clone).
+- `npm install --legacy-peer-deps` (forced by `.npmrc`).
+- Cloud Functions live in TWO codebases: `functions/` (commerce) and `cloud-functions/` (social). Both deploy via `firebase.json` codebase routing.
