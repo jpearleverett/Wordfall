@@ -1594,6 +1594,29 @@ function AppContent() {
               // Navigation may not be ready yet — silently ignore
             }
             break;
+          case 'club_invite':
+            if (data.clubId) {
+              // Shape-validate the club ID (Firestore doc IDs are alnum/-/_)
+              const cidRaw = data.clubId;
+              const isValid =
+                typeof cidRaw === 'string' &&
+                cidRaw.length > 0 &&
+                cidRaw.length <= 64 &&
+                /^[A-Za-z0-9_-]+$/.test(cidRaw);
+              if (!isValid) {
+                Alert.alert('Invalid club link', 'That club invite link is malformed.');
+                break;
+              }
+              try {
+                (navigationRef.current as any)?.navigate('Home', {
+                  screen: 'Club',
+                  params: { joinClubId: cidRaw },
+                });
+              } catch {
+                // Navigation not ready — fall through
+              }
+            }
+            break;
           default:
             break;
         }

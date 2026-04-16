@@ -84,6 +84,16 @@ function hashReceipt(receipt: string): string {
 }
 
 /**
+ * PII-minimization: log the first 6 chars of a UID instead of the full value.
+ * The full UID is still stored in Firestore (which is private) but Cloud
+ * Functions logs can be retained longer and accessed by more people.
+ */
+function redactUid(uid: string | undefined | null): string {
+  if (!uid) return "-";
+  return uid.slice(0, 6) + "…";
+}
+
+/**
  * Check Firestore for receipt replay. Returns true if receipt was already used.
  */
 async function isReceiptReplay(hash: string): Promise<boolean> {
@@ -483,7 +493,7 @@ async function handleAppleSubscriptionEvent(
         vipUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     functions.logger.info("Apple subscription renewed", {
-      userId,
+      uid: redactUid(userId),
       expiresAt: expiresDateMs,
     });
   } else if (isExpired) {
@@ -494,7 +504,7 @@ async function handleAppleSubscriptionEvent(
         vipActive: false,
         vipUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-    functions.logger.info("Apple subscription expired/revoked", { userId });
+    functions.logger.info("Apple subscription expired/revoked", { uid: redactUid(userId) });
   }
 }
 
@@ -554,7 +564,7 @@ async function handleGoogleSubscriptionEvent(
         vipUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     functions.logger.info("Google subscription renewed", {
-      userId,
+      uid: redactUid(userId),
       expiresAt: subResult.expiresAt,
     });
   } else {
@@ -565,7 +575,7 @@ async function handleGoogleSubscriptionEvent(
         vipActive: false,
         vipUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-    functions.logger.info("Google subscription expired/canceled", { userId });
+    functions.logger.info("Google subscription expired/canceled", { uid: redactUid(userId) });
   }
 }
 

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
@@ -66,6 +67,29 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const onUpdateSetting = onUpdateSettingProp ?? ((key: string, value: any) => contextSettings.updateSetting(key as any, value));
   const onResetProgress = onResetProgressProp ?? (() => {});
   const onSignOut = onSignOutProp ?? signOut;
+
+  const [signingIn, setSigningIn] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignIn = async () => {
+    if (signingIn) return;
+    setSigningIn(true);
+    try {
+      await Promise.resolve(onUpdateSetting('isSignedIn', true));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await Promise.resolve(onSignOut());
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   const sfxVolume = settings?.sfxVolume ?? 80;
   const musicVolume = settings?.musicVolume ?? 60;
@@ -240,24 +264,51 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <Text style={styles.chevron}>{'\u203A'}</Text>
               </TouchableOpacity>
               <View style={styles.divider} />
-              <TouchableOpacity style={styles.actionRow} onPress={confirmSignOut} accessibilityRole="button" accessibilityLabel="Sign out">
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => {
+                  // Defer the confirmation prompt then run the async handler
+                  Alert.alert(
+                    'Sign Out',
+                    'Are you sure you want to sign out?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Sign Out', onPress: () => void handleSignOut() },
+                    ],
+                  );
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Sign out"
+                accessibilityState={{ busy: signingOut }}
+                disabled={signingOut}
+              >
                 <Text style={[styles.settingLabel, { color: COLORS.coral }]}>
                   Sign Out
                 </Text>
-                <Text style={[styles.chevron, { color: COLORS.coral }]}>{'\u203A'}</Text>
+                {signingOut ? (
+                  <ActivityIndicator size="small" color={COLORS.coral} />
+                ) : (
+                  <Text style={[styles.chevron, { color: COLORS.coral }]}>{'\u203A'}</Text>
+                )}
               </TouchableOpacity>
             </>
           ) : (
             <TouchableOpacity
               style={styles.actionRow}
-              onPress={() => onUpdateSetting('isSignedIn', true)}
+              onPress={() => void handleSignIn()}
               accessibilityRole="button"
               accessibilityLabel="Sign in"
+              accessibilityState={{ busy: signingIn }}
+              disabled={signingIn}
             >
               <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
-                Sign In
+                {signingIn ? 'Signing in…' : 'Sign In'}
               </Text>
-              <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
+              {signingIn ? (
+                <ActivityIndicator size="small" color={COLORS.accent} />
+              ) : (
+                <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
+              )}
             </TouchableOpacity>
           )}
         </View>

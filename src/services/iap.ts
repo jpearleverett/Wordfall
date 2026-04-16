@@ -197,8 +197,13 @@ class IAPManager {
     if (this.rniap && this.connected) {
       try {
         await this.rniap.endConnection();
-      } catch {
-        // Ignore cleanup errors
+      } catch (e) {
+        // Cleanup errors are non-fatal — keep a breadcrumb so they're visible
+        // alongside any purchase failure that follows.
+        crashReporter.addBreadcrumb(
+          `iap.endConnection failed: ${e instanceof Error ? e.message : String(e)}`,
+          'iap',
+        );
       }
     }
 
@@ -637,8 +642,11 @@ class IAPManager {
         pending.push(productId);
         await AsyncStorage.setItem(PENDING_PURCHASES_KEY, JSON.stringify(pending));
       }
-    } catch {
-      // Non-critical
+    } catch (e) {
+      crashReporter.addBreadcrumb(
+        `storePendingPurchase failed: ${e instanceof Error ? e.message : String(e)}`,
+        'iap',
+      );
     }
   }
 
@@ -650,8 +658,11 @@ class IAPManager {
         const filtered = pending.filter((id) => id !== productId);
         await AsyncStorage.setItem(PENDING_PURCHASES_KEY, JSON.stringify(filtered));
       }
-    } catch {
-      // Non-critical
+    } catch (e) {
+      crashReporter.addBreadcrumb(
+        `clearPendingPurchase failed: ${e instanceof Error ? e.message : String(e)}`,
+        'iap',
+      );
     }
   }
 

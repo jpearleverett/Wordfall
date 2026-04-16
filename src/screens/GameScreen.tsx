@@ -20,6 +20,7 @@ import { GameStoreContext } from '../stores/gameStore';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import LocalErrorBoundary from '../components/LocalErrorBoundary';
+import { crashReporter } from '../services/crashReporting';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -1704,7 +1705,12 @@ export function GameScreen({
               '',
               '#Wordfall #Challenge',
             ].join('\n');
-            Share.share({ message: challengeText }).catch(() => {});
+            Share.share({ message: challengeText }).catch((e) => {
+              crashReporter.addBreadcrumb(
+                `Share.share (challenge) failed: ${e instanceof Error ? e.message : String(e)}`,
+                'share',
+              );
+            });
           }}
         />
         </LocalErrorBoundary>
