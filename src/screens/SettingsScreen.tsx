@@ -28,9 +28,9 @@ const THEMES = [
   { id: 'sunset', name: 'Sunset', color: '#1a0a0a' },
 ];
 
-const PRIVACY_POLICY_URL = 'https://wordfall.app/privacy';
-const TERMS_OF_SERVICE_URL = 'https://wordfall.app/terms';
-const SUPPORT_EMAIL = 'support@wordfall.app';
+const PRIVACY_POLICY_URL = 'https://wordfallgame.app/privacy';
+const TERMS_OF_SERVICE_URL = 'https://wordfallgame.app/terms';
+const SUPPORT_EMAIL = 'support@wordfallgame.app';
 
 async function openUrlSafe(url: string, fallbackTitle: string) {
   try {
