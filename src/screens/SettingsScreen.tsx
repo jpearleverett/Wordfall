@@ -117,17 +117,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     );
   };
 
-  const confirmSignOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', onPress: onSignOut },
-      ],
-    );
-  };
-
   const renderVolumeControl = (label: string, settingKey: string, value: number) => (
     <View style={styles.settingRow} accessibilityRole="adjustable" accessibilityLabel={`${label}: ${value} percent`} accessibilityValue={{ min: 0, max: 100, now: value }}>
       <Text style={styles.settingLabel}>{label}</Text>
