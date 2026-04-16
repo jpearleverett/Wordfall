@@ -10,7 +10,7 @@ type FunnelStep =
   | 'first_puzzle_start' | 'first_puzzle_complete' | 'first_word_found' | 'first_chain'
   | 'day1_return' | 'day3_return' | 'day7_return' | 'day14_return' | 'day30_return'
   | 'first_hint_used' | 'first_hint_ran_out'
-  | 'shop_view' | 'iap_initiated' | 'iap_completed' | 'iap_failed'
+  | 'shop_view' | 'shop_product_tapped' | 'iap_initiated' | 'iap_completed' | 'iap_failed'
   | 'ad_offered' | 'ad_watched' | 'ad_skipped'
   | 'mode_unlocked' | 'second_mode_played'
   | 'collection_started' | 'first_rare_tile'
@@ -64,7 +64,10 @@ class FunnelTracker {
     }
   }
 
-  async trackPurchase(step: 'shop_view' | 'iap_initiated' | 'iap_completed' | 'iap_failed', productId?: string): Promise<void> {
+  async trackPurchase(
+    step: 'shop_view' | 'shop_product_tapped' | 'iap_initiated' | 'iap_completed' | 'iap_failed',
+    productId?: string,
+  ): Promise<void> {
     await this.trackStep(step, { productId });
   }
 

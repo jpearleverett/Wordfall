@@ -490,6 +490,10 @@ function ModesScreenWrapper({ navigation }: any) {
       });
     } catch (e: any) {
       if (e?.message?.includes('timed out')) {
+        crashReporter.captureMessage(
+          `board_gen_timeout (mode-select) mode=${mode} level=${modeLevel}`,
+          'warning',
+        );
         try {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           board = generateBoard(easyConfig, Date.now());
@@ -500,10 +504,18 @@ function ModesScreenWrapper({ navigation }: any) {
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
-        } catch {
+        } catch (fallbackError) {
+          crashReporter.captureException(
+            fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)),
+            { tags: { step: 'board_gen_fallback_mode_select' }, mode, level: modeLevel },
+          );
           Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
         }
       } else {
+        crashReporter.captureException(
+          e instanceof Error ? e : new Error(String(e?.message ?? e)),
+          { tags: { step: 'board_gen_mode_select' }, mode, level: modeLevel },
+        );
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
@@ -574,24 +586,36 @@ function GameScreenWrapper({ route, navigation }: any) {
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
     } catch (e: any) {
+      const fallbackMode = (params.mode || 'classic') as GameMode;
+      const fallbackLevel = fallbackMode === 'classic' ? (params.level || 0) + 1 : player.getModeLevel(fallbackMode);
       if (e?.message?.includes('timed out')) {
+        crashReporter.captureMessage(
+          `board_gen_timeout (next-puzzle) mode=${fallbackMode} level=${fallbackLevel}`,
+          'warning',
+        );
         try {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
-          const mode = (params.mode || 'classic') as GameMode;
-          const modeLevel = mode === 'classic' ? (params.level || 0) + 1 : player.getModeLevel(mode);
           const board = generateBoard(easyConfig, Date.now());
-          const modeConfig = MODE_CONFIGS[mode];
+          const modeConfig = MODE_CONFIGS[fallbackMode];
           Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
           navigation.replace('Game', {
-            board, level: modeLevel, mode, isDaily: false,
+            board, level: fallbackLevel, mode: fallbackMode, isDaily: false,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
-        } catch {
+        } catch (fallbackError) {
+          crashReporter.captureException(
+            fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)),
+            { tags: { step: 'board_gen_fallback_next' }, mode: fallbackMode, level: fallbackLevel },
+          );
           Alert.alert('Error', 'Failed to generate next puzzle.');
           navigation.goBack();
         }
       } else {
+        crashReporter.captureException(
+          e instanceof Error ? e : new Error(String(e?.message ?? e)),
+          { tags: { step: 'board_gen_next' }, mode: fallbackMode, level: fallbackLevel },
+        );
         Alert.alert('Error', 'Failed to generate next puzzle.');
         navigation.goBack();
       }
@@ -632,22 +656,35 @@ function GameScreenWrapper({ route, navigation }: any) {
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
     } catch (e: any) {
+      const fallbackMode = (params.mode || 'classic') as GameMode;
       if (e?.message?.includes('timed out')) {
+        crashReporter.captureMessage(
+          `board_gen_timeout (retry) mode=${fallbackMode} level=${nextModeLevel}`,
+          'warning',
+        );
         try {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
-          const modeConfig = MODE_CONFIGS[(params.mode || 'classic') as GameMode];
+          const modeConfig = MODE_CONFIGS[fallbackMode];
           Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
           navigation.replace('Game', {
-            board, level: nextModeLevel, mode: (params.mode || 'classic') as GameMode, isDaily: false,
+            board, level: nextModeLevel, mode: fallbackMode, isDaily: false,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
-        } catch {
+        } catch (fallbackError) {
+          crashReporter.captureException(
+            fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)),
+            { tags: { step: 'board_gen_fallback_retry' }, mode: fallbackMode, level: nextModeLevel },
+          );
           Alert.alert('Error', 'Failed to generate next puzzle.');
           navigation.goBack();
         }
       } else {
+        crashReporter.captureException(
+          e instanceof Error ? e : new Error(String(e?.message ?? e)),
+          { tags: { step: 'board_gen_retry' }, mode: fallbackMode, level: nextModeLevel },
+        );
         Alert.alert('Error', 'Failed to generate next puzzle.');
         navigation.goBack();
       }
@@ -1529,9 +1566,21 @@ function AppContent() {
             break;
           case 'challenge':
             if (data.challengeId) {
-              // Store challenge ID — navigation will pick it up when ready
-              pendingDeepLinkRef.current = data.challengeId;
-              if (__DEV__) console.log('[DeepLink] Challenge received:', data.challengeId);
+              // Lightweight shape validation before storing — a malformed
+              // challengeId shouldn't send the user to a blank GameScreen.
+              // Shape: non-empty alphanumeric/underscore/dash, <=64 chars.
+              const cid = data.challengeId;
+              const isValid =
+                typeof cid === 'string' &&
+                cid.length > 0 &&
+                cid.length <= 64 &&
+                /^[A-Za-z0-9_-]+$/.test(cid);
+              if (!isValid) {
+                Alert.alert('Invalid challenge link', 'That challenge link is malformed.');
+                break;
+              }
+              pendingDeepLinkRef.current = cid;
+              if (__DEV__) console.log('[DeepLink] Challenge received:', cid);
             }
             break;
           case 'daily':

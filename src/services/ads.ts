@@ -155,6 +155,11 @@ class AdManager {
     // Load daily tracking
     this.tracking = await loadTracking();
 
+    // iOS: request App Tracking Transparency BEFORE initializing Google Mobile
+    // Ads. If the user declines, we force non-personalized ads. No-op on
+    // Android and on iOS versions without the API.
+    await this.runTrackingTransparencyFlow();
+
     try {
       // Attempt react-native-google-mobile-ads. Default export is a callable
       // `MobileAds()` that returns the module instance (v15+/v16 API).
@@ -188,6 +193,37 @@ class AdManager {
     }
 
     this.initialized = true;
+  }
+
+  /**
+   * iOS 14.5+: prompt App Tracking Transparency. If denied or unavailable,
+   * force non-personalized ads (no IDFA passed to AdMob). No-op on other
+   * platforms / older iOS. Never throws.
+   */
+  private async runTrackingTransparencyFlow(): Promise<void> {
+    try {
+      const { Platform } = await import('react-native');
+      if (Platform.OS !== 'ios') return;
+
+      const ATT = await import('expo-tracking-transparency' as string).catch(() => null);
+      if (!ATT?.requestTrackingPermissionsAsync) {
+        // Module not installed — force NPA to stay safe.
+        this.setAdConsent({ allowPersonalizedAds: false });
+        return;
+      }
+
+      const { status } = await ATT.requestTrackingPermissionsAsync();
+      const authorized = status === 'granted';
+      this.setAdConsent({ allowPersonalizedAds: authorized });
+      crashReporter.addBreadcrumb(`ATT status=${status}`, 'ads');
+    } catch (e) {
+      // Never let ATT failure crash ad init. Force NPA on error.
+      this.setAdConsent({ allowPersonalizedAds: false });
+      crashReporter.addBreadcrumb(
+        `ATT flow failed: ${e instanceof Error ? e.message : String(e)}`,
+        'ads',
+      );
+    }
   }
 
   /**
@@ -430,6 +466,13 @@ class AdManager {
             this.buildRequestOptions(),
           );
           ad.addAdEventListener('closed', () => resolve(true));
+          // AdMob impression-level revenue event (v15+). `data` includes
+          // { valueMicros, currency, precision } when available.
+          ad.addAdEventListener?.('paid', (data: any) => {
+            const valueMicros = Number(data?.valueMicros ?? 0);
+            const estimated = valueMicros ? valueMicros / 1_000_000 : 0;
+            void analytics.trackAdRevenue('interstitial', estimated);
+          });
           ad.addAdEventListener('error', (err: unknown) => {
             crashReporter.addBreadcrumb(
               `Interstitial ad error: ${err instanceof Error ? err.message : String(err)}`,
@@ -498,6 +541,11 @@ class AdManager {
           });
           ad.addAdEventListener('closed', () => {
             resolve({ rewarded: false, rewardType });
+          });
+          ad.addAdEventListener?.('paid', (data: any) => {
+            const valueMicros = Number(data?.valueMicros ?? 0);
+            const estimated = valueMicros ? valueMicros / 1_000_000 : 0;
+            void analytics.trackAdRevenue('rewarded', estimated);
           });
           ad.addAdEventListener('error', (err: unknown) => {
             crashReporter.addBreadcrumb(

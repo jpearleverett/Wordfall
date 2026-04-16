@@ -294,6 +294,10 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     async (productId: string) => {
       if (purchasingId) return; // already in flight
 
+      // Funnel: record that the user tapped a specific product tile. This
+      // closes the drop-off gap between 'shop_view' and 'iap_initiated'.
+      void funnelTracker.trackPurchase('shop_product_tapped', productId);
+
       // Check parental controls
       const parentalCheck = checkPurchaseAllowed(productId);
 

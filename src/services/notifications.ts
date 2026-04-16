@@ -253,7 +253,7 @@ class NotificationManager {
       }
 
       this.initialized = true;
-      console.log('[Notifications] Initialized successfully');
+      if (__DEV__) console.log('[Notifications] Initialized successfully');
       return true;
     } catch (error) {
       logger.warn('[Notifications] Init failed:', error);
@@ -288,7 +288,7 @@ class NotificationManager {
         }
 
         if (freqData.count >= MAX_NOTIFICATIONS_PER_DAY) {
-          console.log(`[Notifications] Frequency cap reached (${MAX_NOTIFICATIONS_PER_DAY}/day), skipping ${category}`);
+          if (__DEV__) console.log(`[Notifications] Frequency cap reached (${MAX_NOTIFICATIONS_PER_DAY}/day), skipping ${category}`);
           return null;
         }
 
@@ -368,7 +368,7 @@ class NotificationManager {
       });
 
       this.scheduledIds.set(category, id);
-      console.log(`[Notifications] Scheduled (${category}): ${title} — ${body}`);
+      if (__DEV__) console.log(`[Notifications] Scheduled (${category}): ${title} — ${body}`);
       return id;
     } catch (error) {
       logger.warn('[Notifications] Schedule failed:', error);
@@ -390,7 +390,7 @@ class NotificationManager {
     }
 
     this.scheduledIds.delete(category);
-    console.log(`[Notifications] Cancelled: ${category}`);
+    if (__DEV__) console.log(`[Notifications] Cancelled: ${category}`);
   }
 
   /**
@@ -404,7 +404,7 @@ class NotificationManager {
     }
 
     this.scheduledIds.clear();
-    console.log('[Notifications] All cancelled');
+    if (__DEV__) console.log('[Notifications] All cancelled');
   }
 
   // ─── Convenience Schedulers ───────────────────────────────────────────────
@@ -468,12 +468,12 @@ class NotificationManager {
    */
   async registerForRemotePush(userId?: string): Promise<string | null> {
     if (!Notifications) {
-      console.log('[Notifications] Module not available — cannot register for remote push');
+      if (__DEV__) console.log('[Notifications] Module not available — cannot register for remote push');
       return null;
     }
 
     if (!this.permissionGranted) {
-      console.log('[Notifications] Permission not granted — cannot register for remote push');
+      if (__DEV__) console.log('[Notifications] Permission not granted — cannot register for remote push');
       return null;
     }
 
@@ -511,7 +511,7 @@ class NotificationManager {
       // Set up notification response listener (user taps a notification)
       this.setupResponseListener();
 
-      console.log('[Notifications] Remote push registered — Expo token:', expoToken);
+      if (__DEV__) console.log('[Notifications] Remote push registered — Expo token:', expoToken);
       return expoToken;
     } catch (error) {
       logger.warn('[Notifications] Failed to register for remote push:', error);
@@ -531,7 +531,7 @@ class NotificationManager {
     try {
       const { isFirebaseConfigured } = await import('../config/firebase');
       if (!isFirebaseConfigured) {
-        console.log('[Notifications] Firebase not configured — token not saved to Firestore');
+        if (__DEV__) console.log('[Notifications] Firebase not configured — token not saved to Firestore');
         return;
       }
 
@@ -548,7 +548,7 @@ class NotificationManager {
         updatedAt: Date.now(),
       }, { merge: true });
 
-      console.log('[Notifications] Push token saved to Firestore for user:', userId);
+      if (__DEV__) console.log('[Notifications] Push token saved to Firestore for user:', userId);
     } catch (error) {
       // Silent fallback — remote push is best-effort
       console.warn('[Notifications] Failed to save token to Firestore:', error);
@@ -614,7 +614,7 @@ class NotificationManager {
         updatedAt: Date.now(),
       });
 
-      console.log('[Notifications] Push token sent to server for user:', userId);
+      if (__DEV__) console.log('[Notifications] Push token sent to server for user:', userId);
     } catch (error) {
       // Silent fallback — remote push is best-effort
       logger.warn('[Notifications] Failed to send token to server:', error);
@@ -634,18 +634,18 @@ class NotificationManager {
     const category = data.category as NotificationCategory | undefined;
 
     if (__DEV__) {
-      console.log('[Notifications] Remote notification received:', data);
+      if (__DEV__) console.log('[Notifications] Remote notification received:', data);
     }
 
     if (!category) {
-      console.log('[Notifications] Remote notification has no category — ignoring');
+      if (__DEV__) console.log('[Notifications] Remote notification has no category — ignoring');
       return;
     }
 
     // Route to specific handler based on category
     switch (category) {
       case 'streak_reminder': {
-        console.log('[Notifications] Handling streak_reminder — prompting daily play');
+        if (__DEV__) console.log('[Notifications] Handling streak_reminder — prompting daily play');
         // The UI layer listens via addResponseListener to navigate to daily puzzle
         this.lastRemotePayload = { category, ...data };
         break;
@@ -653,27 +653,27 @@ class NotificationManager {
       case 'friend_activity': {
         const friendName = data.friendName as string | undefined;
         const event = data.event as string | undefined;
-        console.log(`[Notifications] Handling friend_activity — friend: ${friendName}, event: ${event}`);
+        if (__DEV__) console.log(`[Notifications] Handling friend_activity — friend: ${friendName}, event: ${event}`);
         this.lastRemotePayload = { category, ...data };
         break;
       }
       case 'event_starting': {
         const eventName = data.eventName as string | undefined;
-        console.log(`[Notifications] Handling event_start — event: ${eventName}`);
+        if (__DEV__) console.log(`[Notifications] Handling event_start — event: ${eventName}`);
         this.lastRemotePayload = { category, ...data };
         break;
       }
       case 'comeback': {
-        console.log('[Notifications] Handling comeback — applying comeback bonus');
+        if (__DEV__) console.log('[Notifications] Handling comeback — applying comeback bonus');
         this.lastRemotePayload = { category, ...data };
         break;
       }
       default: {
         if (NOTIFICATION_TEMPLATES[category]) {
-          console.log(`[Notifications] Handling remote notification category: ${category}`);
+          if (__DEV__) console.log(`[Notifications] Handling remote notification category: ${category}`);
           this.lastRemotePayload = { category, ...data };
         } else {
-          console.log(`[Notifications] Unknown remote notification category: ${category}`);
+          if (__DEV__) console.log(`[Notifications] Unknown remote notification category: ${category}`);
         }
         break;
       }

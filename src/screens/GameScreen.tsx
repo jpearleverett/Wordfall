@@ -1527,6 +1527,15 @@ export function GameScreen({
       />
 
 
+      {/* Game field subtree wrapped in a scoped boundary so a render error
+          in PlayField / GameFlashes / GameBanners shows a recovery card
+          instead of restarting the app mid-puzzle. */}
+      <LocalErrorBoundary
+        scope="game_field"
+        title="Game ran into an error"
+        actionLabel="Return home"
+        onReset={onHome}
+      >
       {/* Chain celebrations, valid/invalid flash, score popup, big word
           celebration — all extracted into a single memoized subtree so
           this branch doesn't re-reconcile on every SELECT_CELL. All
@@ -1628,6 +1637,7 @@ export function GameScreen({
           />
         )}
       </View>
+      </LocalErrorBoundary>
 
       {/* Booster bar — extracted to a memoized sub-component so it doesn't
           re-render on every cell tap (it has no dependency on selectedCells). */}
