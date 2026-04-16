@@ -4,7 +4,6 @@ import {
   Alert,
   AppState,
   Animated,
-  Linking,
   Pressable,
   SafeAreaView,
   StatusBar,
@@ -12,8 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -37,34 +35,28 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import MasteryScreen from './src/screens/MasteryScreen';
 import { ConsentGate } from './src/components/ConsentGate';
 import { hasAcceptedTos } from './src/services/consent';
-import LocalErrorBoundary from './src/components/LocalErrorBoundary';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
 import { getBreatherConfig } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
-import { AuthProvider, useAuth } from './src/contexts/AuthContext';
-import { EconomyProvider, useEconomy } from './src/contexts/EconomyContext';
-import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
-import { PlayerProvider, usePlayer } from './src/contexts/PlayerContext';
+import { useAuth } from './src/contexts/AuthContext';
+import { useEconomy } from './src/contexts/EconomyContext';
+import { useSettings } from './src/contexts/SettingsContext';
+import { usePlayer } from './src/contexts/PlayerContext';
 import { soundManager } from './src/services/sound';
 import { setHapticsEnabled } from './src/services/haptics';
 // ATLAS_PAGES and generateShareText moved to useRewardWiring
-import { FeatureUnlockCeremony } from './src/components/FeatureUnlockCeremony';
-import { ModeUnlockCeremony } from './src/components/ModeUnlockCeremony';
-import { AchievementCeremony } from './src/components/AchievementCeremony';
-import { StreakMilestoneCeremony } from './src/components/StreakMilestoneCeremony';
-import { CollectionCompleteCeremony } from './src/components/CollectionCompleteCeremony';
 import { notificationManager } from './src/services/notifications';
-import { MilestoneCeremony } from './src/components/MilestoneCeremony';
+import { Providers } from './src/App/Providers';
+import { CeremonyRouter } from './src/App/CeremonyRouter';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { MysteryWheel } from './src/components/MysteryWheel';
 import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT } from './src/data/mysteryWheel';
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
-import ErrorBoundary from './src/components/ErrorBoundary';
 import { funnelTracker } from './src/services/funnelTracker';
-import { parseDeepLink } from './src/utils/deepLinking';
+import { useDeepLinks } from './src/App/useDeepLinks';
 import {
   triggerStreakReminder,
   triggerEventNotifications,
@@ -1547,103 +1539,7 @@ function AppContent() {
   // ── Deep link handling ──────────────────────────────────────────────────
   const pendingDeepLinkRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (!player.loaded) return;
-
-    const handleDeepLink = (url: string | null) => {
-      if (!url) return;
-      try {
-        const data = parseDeepLink(url);
-        switch (data.type) {
-          case 'referral':
-            if (data.referralCode) {
-              const success = player.applyReferralCode(data.referralCode);
-              if (success) {
-                Alert.alert('Welcome!', 'Referral code applied! You received bonus rewards.');
-              }
-            }
-            break;
-          case 'challenge':
-            if (data.challengeId) {
-              // Lightweight shape validation before storing — a malformed
-              // challengeId shouldn't send the user to a blank GameScreen.
-              // Shape: non-empty alphanumeric/underscore/dash, <=64 chars.
-              const cid = data.challengeId;
-              const isValid =
-                typeof cid === 'string' &&
-                cid.length > 0 &&
-                cid.length <= 64 &&
-                /^[A-Za-z0-9_-]+$/.test(cid);
-              if (!isValid) {
-                Alert.alert('Invalid challenge link', 'That challenge link is malformed.');
-                break;
-              }
-              pendingDeepLinkRef.current = cid;
-              if (__DEV__) console.log('[DeepLink] Challenge received:', cid);
-            }
-            break;
-          case 'daily':
-            // Navigate to daily mode when navigation is ready
-            try {
-              (navigationRef.current as any)?.navigate('Play', {
-                screen: 'Game',
-                params: { mode: 'daily' },
-              });
-            } catch {
-              // Navigation may not be ready yet — silently ignore
-            }
-            break;
-          case 'club_invite':
-            if (data.clubId) {
-              // Shape-validate the club ID (Firestore doc IDs are alnum/-/_)
-              const cidRaw = data.clubId;
-              const isValid =
-                typeof cidRaw === 'string' &&
-                cidRaw.length > 0 &&
-                cidRaw.length <= 64 &&
-                /^[A-Za-z0-9_-]+$/.test(cidRaw);
-              if (!isValid) {
-                Alert.alert('Invalid club link', 'That club invite link is malformed.');
-                break;
-              }
-              try {
-                (navigationRef.current as any)?.navigate('Home', {
-                  screen: 'Club',
-                  params: { joinClubId: cidRaw },
-                });
-              } catch {
-                // Navigation not ready — fall through
-              }
-            }
-            break;
-          default:
-            break;
-        }
-        if (data.type !== 'unknown') {
-          void analytics.logEvent('deep_link_opened', { type: data.type, url });
-        }
-      } catch {
-        // Never crash on a malformed deep link
-        if (__DEV__) console.warn('[DeepLink] Failed to handle URL:', url);
-      }
-    };
-
-    // Check for initial URL (app was opened via deep link)
-    Linking.getInitialURL()
-      .then(handleDeepLink)
-      .catch(() => {
-        // getInitialURL can fail on some platforms — ignore
-      });
-
-    // Listen for incoming deep links while app is running
-    const subscription = Linking.addEventListener('url', (event) => {
-      handleDeepLink(event.url);
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [player.loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  useDeepLinks({ player, navigationRef, pendingChallengeRef: pendingDeepLinkRef });
 
   // Track screen views on navigation state changes
   const handleNavigationReady = useCallback(() => {
@@ -1759,188 +1655,11 @@ function AppContent() {
       {/* Ceremony modals — rendered at app level to overlay all screens.
           Wrapped in a local boundary so a render error in any one ceremony
           dequeues cleanly instead of taking down the whole app. */}
-      <LocalErrorBoundary
-        scope="ceremony"
-        title="Couldn't show that reward"
-        actionLabel="Skip"
-        onReset={handleDismissCeremony}
-      >
-      {activeCeremony?.type === 'feature_unlock' && (
-        <FeatureUnlockCeremony
-          icon={activeCeremony.data.icon}
-          title={activeCeremony.data.title}
-          description={activeCeremony.data.description}
-          accentColor={activeCeremony.data.accentColor}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'mode_unlock' && (
-        <ModeUnlockCeremony
-          modeName={activeCeremony.data.modeName}
-          modeIcon={activeCeremony.data.modeIcon}
-          modeDescription={activeCeremony.data.modeDescription}
-          modeColor={activeCeremony.data.modeColor}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'achievement' && (
-        <AchievementCeremony
-          icon={activeCeremony.data.icon}
-          name={activeCeremony.data.name}
-          description={activeCeremony.data.description}
-          tier={activeCeremony.data.tier}
-          reward={activeCeremony.data.reward}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'streak_milestone' && (
-        <StreakMilestoneCeremony
-          milestone={activeCeremony.data.streakCount}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'collection_complete' && (
-        <CollectionCompleteCeremony
-          collectionIcon={activeCeremony.data.icon}
-          collectionName={activeCeremony.data.name}
-          reward={activeCeremony.data.reward}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'mystery_wheel_jackpot' && (
-        <MilestoneCeremony
-          ribbon="JACKPOT!"
-          icon={activeCeremony.data.icon || '\u{1F3B0}'}
-          title={activeCeremony.data.label || 'Rare Reward!'}
-          description="The Mystery Wheel delivered something special!"
-          accentColor={COLORS.gold}
-          rewardLabel={activeCeremony.data.rewardLabel}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'win_streak_milestone' && (
-        <MilestoneCeremony
-          ribbon="WIN STREAK!"
-          icon={'\u{1F525}'}
-          title={activeCeremony.data.label || `${activeCeremony.data.streak} Wins!`}
-          description={`You won ${activeCeremony.data.streak} puzzles in a row!`}
-          accentColor={COLORS.orange}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'first_rare_tile' && (
-        <MilestoneCeremony
-          ribbon="FIRST RARE TILE!"
-          icon={'\u{1FA99}'}
-          title="Rare Tile Found!"
-          description={`You found the "${activeCeremony.data.letter}" tile! Collect all 26 letters for rewards.`}
-          accentColor={COLORS.gold}
-          buttonText="COLLECT"
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'first_booster' && (
-        <MilestoneCeremony
-          ribbon="POWER UP!"
-          icon={'\u{26A1}'}
-          title="Boosters Unlocked!"
-          description="Use boosters to freeze columns, preview moves, or shuffle filler letters!"
-          accentColor={COLORS.accent}
-          buttonText="TRY IT"
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'wing_complete' && (
-        <MilestoneCeremony
-          ribbon="WING RESTORED"
-          icon={'\u{1F4DA}'}
-          title={`${activeCeremony.data.wingName} Complete!`}
-          description="Another wing of the library has been fully restored!"
-          accentColor={COLORS.teal}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'word_mastery_gold' && (
-        <MilestoneCeremony
-          ribbon="GOLD MASTERY"
-          icon={'\u{1F451}'}
-          title={`"${activeCeremony.data.word}" Mastered!`}
-          description="Found this word 5 times! It now has a gold border in your Atlas."
-          accentColor={COLORS.gold}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'first_mode_clear' && (
-        <MilestoneCeremony
-          ribbon="MODE CONQUERED"
-          icon={'\u{1F3C6}'}
-          title={`${activeCeremony.data.modeName} Cleared!`}
-          description="First victory in this mode! Try it again for higher scores."
-          accentColor={COLORS.green}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'wildcard_earned' && (
-        <MilestoneCeremony
-          ribbon="WILDCARD!"
-          icon={'\u{1F0CF}'}
-          title="Wildcard Tile Earned!"
-          description="5 duplicate tiles converted into a wildcard. Use it to complete any set!"
-          accentColor={COLORS.purple}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'quest_step_complete' && (
-        <MilestoneCeremony
-          ribbon="QUEST COMPLETE!"
-          icon={activeCeremony.data.icon || '\u2728'}
-          title={activeCeremony.data.title || 'Quest Step Complete!'}
-          description={activeCeremony.data.description}
-          accentColor={COLORS.green}
-          rewardLabel={activeCeremony.data.description}
-          onDismiss={() => {
-            if (activeCeremony.data.rewardCoins) economy.addCoins(activeCeremony.data.rewardCoins);
-            if (activeCeremony.data.rewardGems) economy.addGems(activeCeremony.data.rewardGems);
-            handleDismissCeremony();
-          }}
-        />
-      )}
-      {activeCeremony?.type === 'prestige' && (
-        <MilestoneCeremony
-          ribbon="PRESTIGE!"
-          icon={activeCeremony.data?.icon || '\u{1F31F}'}
-          title={activeCeremony.data?.title || 'Prestige Level Up!'}
-          description={activeCeremony.data?.description || 'You have ascended to a new prestige tier!'}
-          accentColor={COLORS.gold}
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'first_win' && (
-        <MilestoneCeremony
-          ribbon="FIRST VICTORY!"
-          icon={'\u{1F389}'}
-          title="You Did It!"
-          description={`Your first puzzle is complete! +${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems, and a free Mystery Wheel spin!`}
-          accentColor={COLORS.gold}
-          rewardLabel={`+${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems`}
-          buttonText="AMAZING!"
-          onDismiss={handleDismissCeremony}
-        />
-      )}
-      {activeCeremony?.type === 'starter_pack_unlocked' && (
-        <MilestoneCeremony
-          ribbon="SPECIAL OFFER!"
-          icon={'\u{1F4E6}'}
-          title="Starter Pack Available!"
-          description="A limited-time offer has been unlocked just for you. Check the Shop for great value!"
-          accentColor={COLORS.gold}
-          buttonText="VIEW OFFER"
-          onDismiss={() => {
-            handleDismissCeremony();
-          }}
-        />
-      )}
-      </LocalErrorBoundary>
+      <CeremonyRouter
+        activeCeremony={activeCeremony}
+        onDismiss={handleDismissCeremony}
+        economy={economy}
+      />
     </View>
   );
 }
@@ -1974,21 +1693,9 @@ export default function App() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ErrorBoundary>
-        <SafeAreaProvider>
-          <AuthProvider>
-            <SettingsProvider>
-              <EconomyProvider>
-                <PlayerProvider>
-                  <AppContent />
-                </PlayerProvider>
-              </EconomyProvider>
-            </SettingsProvider>
-          </AuthProvider>
-        </SafeAreaProvider>
-      </ErrorBoundary>
-    </GestureHandlerRootView>
+    <Providers>
+      <AppContent />
+    </Providers>
   );
 }
 
