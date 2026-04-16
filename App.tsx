@@ -37,6 +37,8 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import MasteryScreen from './src/screens/MasteryScreen';
 import { ConsentGate } from './src/components/ConsentGate';
 import { hasAcceptedTos } from './src/services/consent';
+import LocalErrorBoundary from './src/components/LocalErrorBoundary';
+import { crashReporter } from './src/services/crashReporting';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
@@ -176,6 +178,10 @@ function EventScreenWrapperNav({ navigation }: any) {
       });
     } catch (e: any) {
       if (e?.message?.includes('timed out')) {
+        crashReporter.captureMessage(
+          `board_gen_timeout mode=${mode} level=${player.currentLevel}`,
+          'warning',
+        );
         try {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
@@ -186,10 +192,18 @@ function EventScreenWrapperNav({ navigation }: any) {
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
-        } catch {
+        } catch (fallbackError) {
+          crashReporter.captureException(
+            fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError)),
+            { tags: { step: 'board_gen_fallback' }, mode, level: player.currentLevel },
+          );
           Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
         }
       } else {
+        crashReporter.captureException(
+          e instanceof Error ? e : new Error(String(e?.message ?? e)),
+          { tags: { step: 'board_gen' }, mode, level: player.currentLevel },
+        );
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
@@ -1671,7 +1685,15 @@ function AppContent() {
         </RootStack.Navigator>
       </NavigationContainer>
 
-      {/* Ceremony modals — rendered at app level to overlay all screens */}
+      {/* Ceremony modals — rendered at app level to overlay all screens.
+          Wrapped in a local boundary so a render error in any one ceremony
+          dequeues cleanly instead of taking down the whole app. */}
+      <LocalErrorBoundary
+        scope="ceremony"
+        title="Couldn't show that reward"
+        actionLabel="Skip"
+        onReset={handleDismissCeremony}
+      >
       {activeCeremony?.type === 'feature_unlock' && (
         <FeatureUnlockCeremony
           icon={activeCeremony.data.icon}
@@ -1847,6 +1869,7 @@ function AppContent() {
           }}
         />
       )}
+      </LocalErrorBoundary>
     </View>
   );
 }

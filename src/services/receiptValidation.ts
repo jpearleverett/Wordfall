@@ -8,6 +8,7 @@
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { crashReporter } from './crashReporting';
 
 const FIREBASE_FUNCTIONS_URL =
   (typeof process !== 'undefined' &&
@@ -286,6 +287,10 @@ export async function validateReceipt(
       error: 'Server validation unavailable',
     };
   } catch (error) {
+    crashReporter.captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      { tags: { step: 'serverValidate' }, productId },
+    );
     // All retries exhausted
     if (__DEV__) {
       console.warn(

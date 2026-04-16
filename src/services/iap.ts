@@ -9,6 +9,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { logger } from '../utils/logger';
+import { crashReporter } from './crashReporting';
 import type { IAPProductId } from '../types';
 import { isReceiptValidationConfigured, validateReceipt } from './receiptValidation';
 import {
@@ -567,6 +568,10 @@ class IAPManager {
       this.notifyListeners(successResult);
     } catch (e: any) {
       logger.warn('[IAP] Error handling purchase update:', e);
+      crashReporter.captureException(
+        e instanceof Error ? e : new Error(String(e?.message ?? e)),
+        { tags: { step: 'handlePurchaseUpdate' }, sku: storeId, transactionId },
+      );
       const errorResult: PurchaseResult = {
         success: false,
         productId: internalId,
@@ -579,6 +584,12 @@ class IAPManager {
 
   private handlePurchaseError(error: any): void {
     logger.warn('[IAP] Purchase error from store:', error);
+    if (error?.code !== 'E_USER_CANCELLED') {
+      crashReporter.captureException(
+        error instanceof Error ? error : new Error(String(error?.message ?? error)),
+        { tags: { step: 'handlePurchaseError' }, code: error?.code, sku: error?.productId },
+      );
+    }
 
     const storeId: string | undefined = error?.productId;
     const internalId = storeId ? (storeIdToInternalId(storeId) ?? storeId) : 'unknown';

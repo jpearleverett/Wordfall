@@ -19,6 +19,7 @@ import { useGame } from '../hooks/useGame';
 import { GameStoreContext } from '../stores/gameStore';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
+import LocalErrorBoundary from '../components/LocalErrorBoundary';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -1643,8 +1644,10 @@ export function GameScreen({
         onSmartShuffle={handleSmartShuffle}
       />
 
-      {/* Completion overlay */}
+      {/* Completion overlay — wrapped so a render crash doesn't leave the
+          player stuck on a broken victory screen with no way home. */}
       {showComplete && (
+        <LocalErrorBoundary scope="puzzle_complete" onReset={onHome} actionLabel="Go home">
         <PuzzleComplete
           score={score}
           moves={moves}
@@ -1694,6 +1697,7 @@ export function GameScreen({
             Share.share({ message: challengeText }).catch(() => {});
           }}
         />
+        </LocalErrorBoundary>
       )}
 
       {/* Contextual offer overlay */}

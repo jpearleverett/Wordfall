@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import LocalErrorBoundary from '../components/LocalErrorBoundary';
 import { useSettings } from '../contexts/SettingsContext';
 import {
   useEconomyStore,
@@ -2334,4 +2335,18 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ShopScreen;
+// Wrap ShopScreen in a local error boundary so render errors during a
+// purchase (or anywhere else in this large screen) don't crash the whole app
+// and leave the player without context on what they were buying.
+const ShopScreenWithBoundary: React.FC<any> = (props) => (
+  <LocalErrorBoundary
+    scope="shop"
+    title="Shop ran into an error"
+    actionLabel="Back"
+    onReset={props.onNavigate ? () => props.onNavigate('Home') : undefined}
+  >
+    <ShopScreen {...props} />
+  </LocalErrorBoundary>
+);
+
+export default ShopScreenWithBoundary;

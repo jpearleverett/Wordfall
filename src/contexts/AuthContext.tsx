@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, ReactNode } from 'react';
 import { auth, isFirebaseConfigured } from '../config/firebase';
 import { signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
+import { crashReporter } from '../services/crashReporting';
 
 interface AuthContextType {
   user: User | null;
@@ -35,7 +36,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           await signInAnonymously(auth);
         } catch (e) {
-          console.warn('Anonymous auth failed:', e);
+          if (__DEV__) console.warn('Anonymous auth failed:', e);
+          crashReporter.captureException(
+            e instanceof Error ? e : new Error(String(e)),
+            { tags: { operation: 'signInAnonymously' } },
+          );
         }
       }
       setLoading(false);
@@ -47,7 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await auth.signOut();
     } catch (e) {
-      console.warn('Sign out failed:', e);
+      if (__DEV__) console.warn('Sign out failed:', e);
+      crashReporter.captureException(
+        e instanceof Error ? e : new Error(String(e)),
+        { tags: { operation: 'signOut' } },
+      );
     }
   }, []);
 

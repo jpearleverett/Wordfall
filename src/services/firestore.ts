@@ -78,6 +78,19 @@
 
 import { db, isFirebaseConfigured } from '../config/firebase';
 import { logger } from '../utils/logger';
+import { crashReporter } from './crashReporting';
+
+/**
+ * Log a Firestore mutation failure to both the local logger (dev visibility)
+ * and Sentry (prod diagnosability). Tag with {collection, op}.
+ */
+function logFirestoreError(op: string, collectionName: string, e: unknown): void {
+  logger.warn(`[Firestore] ${op} failed:`, e);
+  crashReporter.captureException(
+    e instanceof Error ? e : new Error(String(e)),
+    { tags: { service: 'firestore', op, collection: collectionName } },
+  );
+}
 import {
   collection,
   doc,
@@ -200,7 +213,7 @@ class FirestoreService {
         { merge: true }
       );
     } catch (e) {
-      logger.warn('[Firestore] syncPlayerProfile failed:', e);
+      logFirestoreError('syncPlayerProfile', 'users', e);
     }
   }
 
@@ -364,7 +377,7 @@ class FirestoreService {
         timestamp: serverTimestamp(),
       });
     } catch (e) {
-      logger.warn('[Firestore] submitDailyScore failed:', e);
+      logFirestoreError('submitDailyScore', 'dailyScores', e);
     }
   }
 
@@ -391,7 +404,7 @@ class FirestoreService {
         timestamp: serverTimestamp(),
       });
     } catch (e) {
-      logger.warn('[Firestore] submitWeeklyScore failed:', e);
+      logFirestoreError('submitWeeklyScore', 'weeklyScores', e);
     }
   }
 
@@ -489,7 +502,7 @@ class FirestoreService {
       });
       return { friendUserId: found.userId, friendName: found.displayName };
     } catch (e) {
-      logger.warn('[Firestore] addFriend failed:', e);
+      logFirestoreError('addFriend', 'friendships', e);
       return null;
     }
   }
@@ -504,7 +517,7 @@ class FirestoreService {
       await updateDoc(ref, { status: 'accepted' });
       return true;
     } catch (e) {
-      logger.warn('[Firestore] acceptFriendRequest failed:', e);
+      logFirestoreError('acceptFriendRequest', 'friendships', e);
       return false;
     }
   }
@@ -583,7 +596,7 @@ class FirestoreService {
       });
       return true;
     } catch (e) {
-      logger.warn('[Firestore] sendGift failed:', e);
+      logFirestoreError('sendGift', 'gifts', e);
       return false;
     }
   }
@@ -627,7 +640,7 @@ class FirestoreService {
       await updateDoc(giftRef, { claimed: true });
       return true;
     } catch (e) {
-      logger.warn('[Firestore] claimGift failed:', e);
+      logFirestoreError('claimGift', 'gifts', e);
       return false;
     }
   }
@@ -657,7 +670,7 @@ class FirestoreService {
       });
       return clubRef.id;
     } catch (e) {
-      logger.warn('[Firestore] createClub failed:', e);
+      logFirestoreError('createClub', 'clubs', e);
       return null;
     }
   }
@@ -701,7 +714,7 @@ class FirestoreService {
         type: 'text',
       });
     } catch (e) {
-      logger.warn('[Firestore] sendClubMessage failed:', e);
+      logFirestoreError('sendClubMessage', 'clubs/messages', e);
     }
   }
 
