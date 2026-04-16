@@ -1479,6 +1479,15 @@ function AppContent() {
     setHapticsEnabled(settings.hapticsEnabled);
   }, [settings.loaded, settings.sfxVolume, settings.musicVolume, settings.hapticsEnabled]);
 
+  // Privacy: propagate user-chosen toggles to analytics + ads services.
+  useEffect(() => {
+    if (!settings.loaded) return;
+    void analytics.setEnabled(settings.analyticsEnabled);
+    import('./src/services/ads').then(({ adManager }) => {
+      adManager.setAdConsent({ allowPersonalizedAds: settings.personalizedAdsEnabled });
+    });
+  }, [settings.loaded, settings.analyticsEnabled, settings.personalizedAdsEnabled]);
+
   useEffect(() => {
     if (player.loaded && !player.tutorialComplete) {
       setShowOnboarding(true);

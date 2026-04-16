@@ -88,6 +88,16 @@ class AdManager {
   private useMock = true;
   private tracking: AdTracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
 
+  /**
+   * Consent + audience state used to build AdMob `RequestOptions`.
+   * `npaOnly` true when user hasn't consented to personalized ads (EU, opt-out,
+   * or ATT denied on iOS). `childDirected` and `underAge` come from the app's
+   * Play Console / App Store target-audience declaration.
+   */
+  private npaOnly = true;
+  private childDirected = false;
+  private underAge = false;
+
   /** Listeners for ad-availability state changes */
   private adReadyListeners: Array<(ready: boolean) => void> = [];
 
@@ -96,6 +106,39 @@ class AdManager {
   private onShowMockAd: ((rewardType: AdRewardType, resolve: (watched: boolean) => void) => void) | null = null;
 
   private constructor() {}
+
+  /**
+   * Update the ad consent + audience flags. Call from the consent flow
+   * (Google UMP for EU) and from app start once the target audience is known.
+   * Every subsequent ad request is built with these flags.
+   */
+  setAdConsent(opts: {
+    allowPersonalizedAds?: boolean;
+    childDirected?: boolean;
+    underAgeOfConsent?: boolean;
+  }): void {
+    if (opts.allowPersonalizedAds !== undefined) {
+      this.npaOnly = !opts.allowPersonalizedAds;
+    }
+    if (opts.childDirected !== undefined) {
+      this.childDirected = opts.childDirected;
+    }
+    if (opts.underAgeOfConsent !== undefined) {
+      this.underAge = opts.underAgeOfConsent;
+    }
+  }
+
+  private buildRequestOptions(): {
+    requestNonPersonalizedAdsOnly: boolean;
+    tagForChildDirectedTreatment: boolean;
+    tagForUnderAgeOfConsent: boolean;
+  } {
+    return {
+      requestNonPersonalizedAdsOnly: this.npaOnly,
+      tagForChildDirectedTreatment: this.childDirected,
+      tagForUnderAgeOfConsent: this.underAge,
+    };
+  }
 
   static getInstance(): AdManager {
     if (!AdManager.instance) {
@@ -116,6 +159,11 @@ class AdManager {
       // Attempt react-native-google-mobile-ads. Default export is a callable
       // `MobileAds()` that returns the module instance (v15+/v16 API).
       const mobileAds = await import('react-native-google-mobile-ads' as string);
+
+      // Consent gate: Google UMP SDK (shipped inside react-native-google-mobile-ads).
+      // Must run before MobileAds().initialize() for EU (GDPR) compliance.
+      await this.runConsentFlow(mobileAds);
+
       const defaultExport = mobileAds?.default;
       const instance = typeof defaultExport === 'function' ? defaultExport() : defaultExport;
       if (instance && typeof instance.initialize === 'function') {
@@ -140,6 +188,51 @@ class AdManager {
     }
 
     this.initialized = true;
+  }
+
+  /**
+   * Runs the Google UMP consent flow for GDPR / CCPA jurisdictions.
+   * Outcome updates `this.npaOnly`. If the UMP module is missing (older SDKs)
+   * or the call throws, we default to non-personalized ads to stay safe.
+   */
+  private async runConsentFlow(mobileAds: any): Promise<void> {
+    try {
+      // UMP lives at `AdsConsent` on react-native-google-mobile-ads v13+.
+      const AdsConsent = mobileAds?.AdsConsent;
+      if (!AdsConsent) {
+        // No UMP module — keep npaOnly=true (safer default).
+        crashReporter.addBreadcrumb('AdsConsent module unavailable — defaulting to NPA', 'ads');
+        return;
+      }
+
+      const info = await AdsConsent.requestInfoUpdate();
+      if (info?.isConsentFormAvailable) {
+        await AdsConsent.showForm?.();
+      }
+
+      // After the form: check whether personalized ads are allowed.
+      let allowPersonalized = false;
+      try {
+        const purposes = await AdsConsent.getPurposeConsents?.();
+        // Purpose 1 is "store and/or access information on a device" — required for personalized ads.
+        allowPersonalized = typeof purposes === 'string' && purposes.charAt(0) === '1';
+      } catch {
+        allowPersonalized = false;
+      }
+
+      this.setAdConsent({ allowPersonalizedAds: allowPersonalized });
+      crashReporter.addBreadcrumb(
+        `UMP consent processed, personalized=${allowPersonalized}`,
+        'ads',
+      );
+    } catch (e) {
+      crashReporter.addBreadcrumb(
+        `UMP consent flow failed: ${e instanceof Error ? e.message : String(e)}`,
+        'ads',
+      );
+      // On failure, force NPA to be safe.
+      this.setAdConsent({ allowPersonalizedAds: false });
+    }
   }
 
   // ── Public API ──────────────────────────────────────────────────────────
@@ -334,6 +427,7 @@ class AdManager {
         return new Promise<boolean>((resolve) => {
           const ad = mobileAds.InterstitialAd.createForAdRequest(
             AD_CONFIG.INTERSTITIAL_AD_UNIT_ID,
+            this.buildRequestOptions(),
           );
           ad.addAdEventListener('closed', () => resolve(true));
           ad.addAdEventListener('error', (err: unknown) => {
@@ -395,7 +489,10 @@ class AdManager {
       const mobileAds = await import('react-native-google-mobile-ads' as string);
       if (mobileAds.RewardedAd) {
         const result: AdRewardResult = await new Promise<AdRewardResult>((resolve) => {
-          const ad = mobileAds.RewardedAd.createForAdRequest(AD_CONFIG.REWARDED_AD_UNIT_ID);
+          const ad = mobileAds.RewardedAd.createForAdRequest(
+            AD_CONFIG.REWARDED_AD_UNIT_ID,
+            this.buildRequestOptions(),
+          );
           ad.addAdEventListener('rewarded', () => {
             resolve({ rewarded: true, rewardType });
           });

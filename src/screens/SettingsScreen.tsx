@@ -349,6 +349,28 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           {renderToggle('Require PIN for Purchases', settings?.requirePurchasePin ?? false, 'requirePurchasePin')}
         </View>
 
+        {/* Privacy Section */}
+        <Text style={styles.sectionTitle}>Privacy</Text>
+        <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          {renderToggle(
+            'Analytics',
+            settings?.analyticsEnabled ?? true,
+            'analyticsEnabled',
+          )}
+          <View style={styles.divider} />
+          {renderToggle(
+            'Personalized Ads',
+            settings?.personalizedAdsEnabled ?? true,
+            'personalizedAdsEnabled',
+          )}
+        </View>
+
         {/* About Section */}
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>

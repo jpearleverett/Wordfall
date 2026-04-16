@@ -137,6 +137,12 @@ class Analytics {
   private eventsDirty = false;
   private eventsPersistTimer: ReturnType<typeof setTimeout> | null = null;
   private eventsPersistPromise: Promise<void> = Promise.resolve();
+  /**
+   * User-controlled opt-out. When false, `logEvent` short-circuits and native
+   * Firebase Analytics collection is disabled. Default: true (enabled). The
+   * UI layer flips this based on the "Analytics" toggle in Settings.
+   */
+  private analyticsEnabled = true;
 
   static getInstance(): Analytics {
     if (!Analytics.instance) {
@@ -372,7 +378,30 @@ class Analytics {
     return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  /**
+   * Set whether analytics collection is enabled. When false:
+   * - logEvent() becomes a no-op
+   * - @react-native-firebase/analytics is told to stop collecting via
+   *   setAnalyticsCollectionEnabled(false) (disables auto-collection of
+   *   AAID / IDFA and removes pending events from the local buffer).
+   */
+  async setEnabled(enabled: boolean): Promise<void> {
+    this.analyticsEnabled = enabled;
+    if (this.firebaseAnalytics?.instance?.setAnalyticsCollectionEnabled) {
+      try {
+        await this.firebaseAnalytics.instance.setAnalyticsCollectionEnabled(enabled);
+      } catch (e) {
+        logger.warn('[Analytics] setAnalyticsCollectionEnabled failed:', e);
+      }
+    }
+  }
+
+  isEnabled(): boolean {
+    return this.analyticsEnabled;
+  }
+
   async logEvent(event: AnalyticsEventName | string, params?: EventParams): Promise<void> {
+    if (!this.analyticsEnabled) return;
     await this.ensureLoaded();
     await this.ensureEventsLoaded();
 

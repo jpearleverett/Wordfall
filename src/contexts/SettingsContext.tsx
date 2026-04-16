@@ -13,6 +13,9 @@ interface Settings {
   premiumPass: boolean;
   showTutorial: boolean;
   language: string;
+  // Privacy
+  analyticsEnabled: boolean;
+  personalizedAdsEnabled: boolean;
   // Parental controls
   spendingLimitEnabled: boolean;
   monthlySpendingLimit: number;
@@ -38,6 +41,11 @@ const DEFAULT_SETTINGS: Settings = {
   premiumPass: false,
   showTutorial: true,
   language: 'en',
+  // Privacy — default-on for non-EU; the consent flow (UMP) can flip
+  // personalizedAdsEnabled off based on jurisdiction. Users can toggle both
+  // from Settings at any time.
+  analyticsEnabled: true,
+  personalizedAdsEnabled: true,
   // Parental controls
   spendingLimitEnabled: false,
   monthlySpendingLimit: 25,
