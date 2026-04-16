@@ -1,36 +1,41 @@
+// All image assets are served as WebP from `assets/images/optimized/` for
+// smaller bundle size. The source PNGs were removed in the launch-readiness
+// bundle trim. To add a new image: drop the source PNG in assets/images/,
+// run `scripts/optimize-assets.sh` to produce a WebP, then register it below.
 export const LOCAL_IMAGES = {
   // Background images (5 shared across all screens)
-  bg1: require('../../assets/images/bg1.png'),
-  bg2: require('../../assets/images/bg2.png'),
-  bg3: require('../../assets/images/bg3.png'),
-  bg4: require('../../assets/images/bg4.png'),
-  bg5: require('../../assets/images/bg5.png'),
+  bg1: require('../../assets/images/optimized/bg1.webp'),
+  bg2: require('../../assets/images/optimized/bg2.webp'),
+  bg3: require('../../assets/images/optimized/bg3.webp'),
+  bg4: require('../../assets/images/optimized/bg4.webp'),
+  bg5: require('../../assets/images/optimized/bg5.webp'),
 
-  tileGemTexture: require('../../assets/images/tile-gem-texture.png'),
-  neonSun: require('../../assets/images/neon-sun-element.png'),
-  neonFrame: require('../../assets/images/neon-frame-border.png'),
-  crystalGems: require('../../assets/images/crystal-gems-collection.png'),
+  tileGemTexture: require('../../assets/images/optimized/tile-gem-texture.webp'),
+  neonSun: require('../../assets/images/optimized/neon-sun-element.webp'),
+  neonFrame: require('../../assets/images/optimized/neon-frame-border.webp'),
+  crystalGems: require('../../assets/images/optimized/crystal-gems-collection.webp'),
 
-  trophyCrown: require('../../assets/images/trophy-crown-element.png'),
-  energyRing: require('../../assets/images/energy-ring-element.png'),
+  trophyCrown: require('../../assets/images/optimized/trophy-crown-element.webp'),
+  energyRing: require('../../assets/images/optimized/energy-ring-element.webp'),
 
-  iconCoinGold: require('../../assets/images/icon-coin-gold.png'),
-  iconGemDiamond: require('../../assets/images/icon-gem-diamond.png'),
-  achievementBadge: require('../../assets/images/achievement-badge-frame.png'),
-  sparkleSprites: require('../../assets/images/sparkle-sprites.png'),
+  iconCoinGold: require('../../assets/images/optimized/icon-coin-gold.webp'),
+  iconGemDiamond: require('../../assets/images/optimized/icon-gem-diamond.webp'),
+  achievementBadge: require('../../assets/images/optimized/achievement-badge-frame.webp'),
+  sparkleSprites: require('../../assets/images/optimized/sparkle-sprites.webp'),
 
-  iconBattery: require('../../assets/images/icon-battery.png'),
-  iconHint: require('../../assets/images/icon-hint.png'),
-  iconUndo: require('../../assets/images/icon-undo.png'),
-  iconBack: require('../../assets/images/icon-back.png'),
+  iconBattery: require('../../assets/images/optimized/icon-battery.webp'),
+  iconHint: require('../../assets/images/optimized/icon-hint.webp'),
+  iconUndo: require('../../assets/images/optimized/icon-undo.webp'),
+  iconBack: require('../../assets/images/optimized/icon-back.webp'),
 
-  shelfBooster: require('../../assets/images/shelf-booster.png'),
+  shelfBooster: require('../../assets/images/optimized/shelf-booster.webp'),
 
+  // PNG kept — logo renders at launch splash / branding surfaces; 259KB.
   wordfallLogo: require('../../assets/wordfalllogo.png'),
 
-  playButton: require('../../assets/images/playbutton.png'),
-  statsCard: require('../../assets/images/statscard.png'),
-  shopButton: require('../../assets/images/shopbutton.png'),
+  playButton: require('../../assets/images/optimized/playbutton.webp'),
+  statsCard: require('../../assets/images/optimized/statscard.webp'),
+  shopButton: require('../../assets/images/optimized/shopbutton.webp'),
 };
 
 // Audio asset registry — maps sound names to require() sources.
@@ -71,7 +76,8 @@ export const LOCAL_AUDIO: Record<string, any> = {};
 
 export const LOCAL_VIDEOS = {
   synthwaveGridFlow: require('../../attached_assets/generated_videos/synthwave_grid_flow.mp4'),
-  bgHomescreen: require('../../assets/videos/bg-homescreen.mp4'),
+  // Use the 753 KB optimized encode instead of the 4.9 MB source.
+  bgHomescreen: require('../../assets/videos/bg-homescreen-optimized.mp4'),
   victoryCelebration: require('../../attached_assets/generated_videos/victory_celebration_burst.mp4'),
   neonAuroraAmbient: require('../../attached_assets/generated_videos/neon_aurora_ambient.mp4'),
 };
