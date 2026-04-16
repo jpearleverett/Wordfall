@@ -20,8 +20,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { recordTosAcceptance } from '../services/consent';
 
-const PRIVACY_POLICY_URL = 'https://wordfall.app/privacy';
-const TERMS_OF_SERVICE_URL = 'https://wordfall.app/terms';
+const PRIVACY_POLICY_URL = 'https://wordfallgame.app/privacy';
+const TERMS_OF_SERVICE_URL = 'https://wordfallgame.app/terms';
 
 async function openUrlSafe(url: string, fallbackTitle: string) {
   try {

@@ -28,7 +28,7 @@ export function parseDeepLink(url: string): DeepLinkData {
     const cleaned = url.trim().replace(/\/+$/, '');
 
     // Try to extract scheme and path
-    // Handle both wordfall://path and https://wordfall.app/path
+    // Handle both wordfall://path and https://wordfallgame.app/path
     let path = '';
     let queryString = '';
 
@@ -136,7 +136,7 @@ function extractPath(url: string): string {
   const schemeMatch = url.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//);
   if (schemeMatch) {
     let afterScheme = url.substring(schemeMatch[0].length);
-    // For https:// URLs, also strip the host portion (e.g., wordfall.app)
+    // For https:// URLs, also strip the host portion (e.g., wordfallgame.app)
     if (schemeMatch[0].startsWith('https://') || schemeMatch[0].startsWith('http://')) {
       const slashIndex = afterScheme.indexOf('/');
       if (slashIndex !== -1) {

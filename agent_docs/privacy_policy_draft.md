@@ -1,6 +1,6 @@
 # Wordfall Privacy Policy
 
-> **Status:** Draft for hosting at `https://wordfall.app/privacy` before Play Store / App Store submission. Replace `[Contact email]`, `[Effective date]`, and `[Entity name]` with real values before going live. Legal review recommended.
+> **Status:** Draft for hosting at `https://wordfallgame.app/privacy` before Play Store / App Store submission. Replace `[Contact email]`, `[Effective date]`, and `[Entity name]` with real values before going live. Legal review recommended.
 
 **Effective Date:** [Effective date — set to the date you publish the page]
 **Last Updated:** 2026-04-15

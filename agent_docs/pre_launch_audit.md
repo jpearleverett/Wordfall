@@ -20,9 +20,9 @@ These unblock the actual Play Store submission. The app is wired to handle each 
 - [ ] **Content rating questionnaire** — include Mystery Wheel odds disclosure in the description (matches the in-app modal already shipped).
 
 ### Deploy
-- [ ] **Host the Privacy Policy at `https://wordfall.app/privacy`** and ToS at `/terms`. Drafts are in `agent_docs/privacy_policy_draft.md`. Replace `[Entity name]`, `[Contact email]`, `[Effective date]` placeholders first.
-- [ ] **Host `/.well-known/assetlinks.json`** at `https://wordfall.app/` so the Android App Links `autoVerify="true"` intent-filter actually associates the domain with the app.
-- [ ] **Stand up `support@wordfall.app`** (or change `SUPPORT_EMAIL` in `src/screens/SettingsScreen.tsx` to whatever inbox you use).
+- [ ] **Host the Privacy Policy at `https://wordfallgame.app/privacy`** and ToS at `/terms`. Drafts are in `agent_docs/privacy_policy_draft.md`. Replace `[Entity name]`, `[Contact email]`, `[Effective date]` placeholders first.
+- [ ] **Host `/.well-known/assetlinks.json`** at `https://wordfallgame.app/` so the Android App Links `autoVerify="true"` intent-filter actually associates the domain with the app.
+- [ ] **Stand up `support@wordfallgame.app`** (or change `SUPPORT_EMAIL` in `src/screens/SettingsScreen.tsx` to whatever inbox you use).
 - [ ] **Deploy Firestore rules and Cloud Functions**: `firebase deploy --only firestore:rules,firestore:indexes,functions`. The new `moderateClubMessage` trigger and tightened rules are already committed.
 - [ ] **Create a Sentry project**, set `EXPO_PUBLIC_SENTRY_DSN` in `.env` and EAS secrets. All the `crashReporter.captureException` call sites are already wired — they just need the DSN to start reporting.
 - [ ] **Configure the Google UMP consent form** in AdMob Console (GDPR message). The code calls `AdsConsent.requestInfoUpdate` + `showForm` but the message itself is authored in the AdMob dashboard.
@@ -34,7 +34,7 @@ These unblock the actual Play Store submission. The app is wired to handle each 
   - Apple Developer account enrollment
   - Download `GoogleService-Info.plist` from Firebase Console → commit to repo root
   - First iOS EAS build
-  - iOS Universal Links: host apple-app-site-association at `https://wordfall.app/.well-known/apple-app-site-association`
+  - iOS Universal Links: host apple-app-site-association at `https://wordfallgame.app/.well-known/apple-app-site-association`
   - Verify ATT prompt shows on a real iOS 14.5+ device (code is wired in `ads.ts`)
 
 ---
@@ -106,7 +106,7 @@ All of the following are committed on `claude/game-launch-readiness-bxmxE`. Kept
 - `RECORD_AUDIO` / `MODIFY_AUDIO_SETTINGS` moved to `blockedPermissions` (were unused)
 - `allowBackup: false` — AsyncStorage (receipt hashes, VIP flags) no longer snapshotted by Google Backup
 - Proguard + `shrinkResources` enabled for Android release via `expo-build-properties`
-- Android HTTPS deep-link intent-filter (`https://wordfall.app`) with `autoVerify="true"`
+- Android HTTPS deep-link intent-filter (`https://wordfallgame.app`) with `autoVerify="true"`
 - `NSUserTrackingUsageDescription` + `expo-tracking-transparency` plugin in `app.json` for iOS
 
 ### Accessibility

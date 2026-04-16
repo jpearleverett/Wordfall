@@ -28,7 +28,7 @@
       "buildNumber": "2",
       "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
-        "applinks:wordfall.app"
+        "applinks:wordfallgame.app"
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -101,7 +101,7 @@
           "data": [
             {
               "scheme": "https",
-              "host": "wordfall.app"
+              "host": "wordfallgame.app"
             }
           ],
           "category": [
