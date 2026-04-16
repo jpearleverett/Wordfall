@@ -16,4 +16,5 @@ web-build/
 coverage/
 .DS_Store
 *.tsbuildinfo
-.claude/
+.claude/settings.local.json
+.claude/*.local.*
