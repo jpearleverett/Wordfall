@@ -44,9 +44,10 @@ Static site for **wordfallgame.app** — landing page, Privacy Policy, Terms of 
 
 ## Before you ship
 
-- [ ] **Replace `[Entity name]`** in both `privacy/index.html` and `terms/index.html` with your real entity (e.g. "Wordfall LLC" or your name as a sole proprietor).
-- [ ] **Replace `[Effective date]`** in both legal pages with the publish date.
-- [ ] **Replace `[Jurisdiction]` and `[City, State]`** in `terms/index.html` Section 13 with your governing law / arbitration venue.
+- [x] ~~Replace `[Entity name]`~~ — set to **Iridescent Games** in both legal pages.
+- [ ] **Replace `[Effective date]`** in both `privacy/index.html` and `terms/index.html` with the publish date (YYYY-MM-DD).
+- [ ] **Replace `[Jurisdiction — e.g. "the State of Delaware, USA"]`** in `terms/index.html` Section 13 with your governing law.
+- [ ] **Replace `[City, State]`** in `terms/index.html` Section 13 with your arbitration venue (usually where Iridescent Games is legally registered).
 - [ ] **Have a lawyer skim the Terms of Service.** The template covers the standard ground but isn't legal advice.
 - [ ] **Get the SHA-256 cert fingerprint** from Play Console (App integrity → App signing) once you've uploaded your first AAB, then **edit `.well-known/assetlinks.json`** to replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` with the real value.
 - [ ] **Verify assetlinks** at https://developers.google.com/digital-asset-links/tools/generator — paste `wordfallgame.app` as the website and confirm "Statement list is valid".
