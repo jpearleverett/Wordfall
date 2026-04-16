@@ -1,9 +1,9 @@
 # Wordfall Privacy Policy
 
-> **Status:** Draft for hosting at `https://wordfallgame.app/privacy`. Entity name (Iridescent Games) and contact email (info@iridescent-games.com) are filled in. Replace `[Effective date]` with the publish date before going live. Legal review recommended.
+> **Status:** Source-of-truth draft. The HTML version lives at `wordfallgamesite/privacy/index.html` and is published to `https://wordfallgame.app/privacy`. Legal review recommended before any material change.
 
-**Effective Date:** [Effective date — set to the date you publish the page]
-**Last Updated:** 2026-04-15
+**Effective Date:** April 16, 2026
+**Last Updated:** April 16, 2026
 
 ## 1. Introduction
 
