@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0015" />
+  <title>Wordfall — Gravity Word Puzzle</title>
+  <meta name="description" content="A brain-teasing word puzzle where gravity changes everything. Find words on a falling letter grid, chain combos, and master 10 game modes." />
+
+  <meta property="og:title" content="Wordfall — Gravity Word Puzzle" />
+  <meta property="og:description" content="A brain-teasing word puzzle where gravity changes everything." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://wordfallgame.app" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <link rel="icon" href="/favicon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <style>
+    :root {
+      --bg: #0a0015;
+      --bg-2: #110028;
+      --accent: #ff2d95;
+      --accent-glow: rgba(255, 45, 149, 0.45);
+      --cyan: #00d4ff;
+      --gold: #ffb800;
+      --text: #f0e6ff;
+      --text-mute: #a08cc7;
+      --card: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.12);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+      background: radial-gradient(ellipse at top, var(--bg-2) 0%, var(--bg) 60%, #050010 100%);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    a { color: var(--cyan); text-decoration: none; transition: opacity .15s; }
+    a:hover { opacity: .8; }
+
+    .nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 24px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'SF Mono', 'Menlo', monospace;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: var(--accent);
+      text-shadow: 0 0 12px var(--accent-glow);
+      font-size: 18px;
+    }
+    .nav-links { display: flex; gap: 24px; font-size: 14px; }
+    .nav-links a { color: var(--text-mute); }
+
+    .hero {
+      flex: 1;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 80px 24px 60px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+    @media (min-width: 768px) {
+      .hero { grid-template-columns: 1.2fr 1fr; padding-top: 120px; }
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(255, 45, 149, 0.12);
+      border: 1px solid rgba(255, 45, 149, 0.3);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: clamp(40px, 7vw, 72px);
+      line-height: 1.05;
+      letter-spacing: -1px;
+      margin-bottom: 24px;
+      font-weight: 800;
+    }
+    .h1-accent {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .lede {
+      font-size: 18px;
+      color: var(--text-mute);
+      margin-bottom: 36px;
+      max-width: 540px;
+    }
+
+    .cta-row { display: flex; flex-wrap: wrap; gap: 16px; }
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 24px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: transform .15s;
+    }
+    .cta:hover { transform: translateY(-2px); }
+    .cta-primary {
+      background: linear-gradient(135deg, var(--accent), #d6228a);
+      color: #fff;
+      box-shadow: 0 8px 24px var(--accent-glow);
+    }
+    .cta-secondary {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .cta-disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .features {
+      list-style: none;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 40px;
+    }
+    @media (min-width: 480px) {
+      .features { grid-template-columns: 1fr 1fr; }
+    }
+    .feature {
+      padding: 14px 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+    }
+    .feature-icon {
+      display: inline-block;
+      margin-right: 8px;
+      font-size: 16px;
+    }
+
+    .visual {
+      position: relative;
+      aspect-ratio: 9 / 16;
+      max-height: 600px;
+      max-width: 100%;
+      margin: 0 auto;
+      border-radius: 28px;
+      background: linear-gradient(135deg, var(--bg-2), var(--bg));
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 60px rgba(255, 45, 149, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .visual-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 48px);
+      grid-template-rows: repeat(5, 48px);
+      gap: 6px;
+    }
+    .tile {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      font-family: 'SF Mono', monospace;
+      font-weight: 700;
+      font-size: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-mute);
+      border: 1px solid var(--border);
+    }
+    .tile.lit {
+      background: linear-gradient(135deg, var(--accent), #d6228a);
+      color: #fff;
+      box-shadow: 0 4px 16px var(--accent-glow);
+      border-color: transparent;
+    }
+    .tile.cyan {
+      background: linear-gradient(135deg, var(--cyan), #00a3cc);
+      color: #001020;
+    }
+
+    .footer {
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-mute);
+    }
+    .footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
+    .footer-links a { color: var(--text-mute); }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-logo">WORDFALL</div>
+    <div class="nav-links">
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/support">Support</a>
+    </div>
+  </nav>
+
+  <main class="hero">
+    <div>
+      <div class="badge">Coming Soon to Google Play</div>
+      <h1>The word puzzle where <span class="h1-accent">gravity changes everything</span>.</h1>
+      <p class="lede">
+        Find hidden words on a letter grid. When you clear a word, everything above falls — reshaping the entire board. The order you solve matters. Plan your moves. Master the cascade.
+      </p>
+
+      <div class="cta-row">
+        <a href="#" class="cta cta-primary cta-disabled" aria-disabled="true">
+          ▶ Get on Google Play
+        </a>
+        <a href="/support" class="cta cta-secondary">Get notified</a>
+      </div>
+
+      <ul class="features">
+        <li class="feature"><span class="feature-icon">🌀</span>10 unique game modes</li>
+        <li class="feature"><span class="feature-icon">📚</span>600+ handcrafted puzzles</li>
+        <li class="feature"><span class="feature-icon">⚡</span>Cascade combo scoring</li>
+        <li class="feature"><span class="feature-icon">🏛️</span>Restore the Grand Library</li>
+      </ul>
+    </div>
+
+    <div class="visual" aria-hidden="true">
+      <div class="visual-grid">
+        <span class="tile">B</span><span class="tile">L</span><span class="tile">M</span><span class="tile">N</span><span class="tile">P</span>
+        <span class="tile">Q</span><span class="tile lit">W</span><span class="tile lit">O</span><span class="tile lit">R</span><span class="tile lit">D</span>
+        <span class="tile">T</span><span class="tile">V</span><span class="tile">X</span><span class="tile">Y</span><span class="tile">Z</span>
+        <span class="tile">A</span><span class="tile cyan">F</span><span class="tile cyan">A</span><span class="tile cyan">L</span><span class="tile cyan">L</span>
+        <span class="tile">C</span><span class="tile">D</span><span class="tile">E</span><span class="tile">F</span><span class="tile">G</span>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div>© 2026 Wordfall. All rights reserved.</div>
+    <div class="footer-links">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="/support">Support</a>
+      <a href="mailto:support@wordfallgame.app">support@wordfallgame.app</a>
+    </div>
+  </footer>
+
+</body>
+</html>
