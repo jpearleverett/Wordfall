@@ -4,7 +4,7 @@ Gravity-based word puzzle (React Native + Expo). Find hidden words on a letter g
 
 **Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**39 suites, 791 tests**).
 
-For detailed architecture see `agent_docs/architecture.md`. For domain/gameplay detail see `agent_docs/domain.md` if it exists; otherwise read `src/constants.ts` and `src/data/`.
+For detailed architecture see `agent_docs/architecture.md` — it's a short **index** that routes you to per-domain slices (state, engine, screens, cloud) so you only read what the current question needs.
 
 ## Commands
 
