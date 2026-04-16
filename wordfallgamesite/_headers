@@ -1,0 +1,16 @@
+# Cloudflare Pages headers config — see https://developers.cloudflare.com/pages/configuration/headers/
+
+# Android App Links require the asset statement to be served as application/json.
+# Google's Digital Asset Links verifier also expects no surprises (no auth, no redirect).
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Cache-Control: public, max-age=300
+  Access-Control-Allow-Origin: *
+
+# Sensible defaults for everything else
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
