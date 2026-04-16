@@ -1,6 +1,6 @@
 # Wordfall Privacy Policy
 
-> **Status:** Draft for hosting at `https://wordfallgame.app/privacy`. Entity name (Iridescent Games) and contact email (support@wordfallgame.app) are filled in. Replace `[Effective date]` with the publish date before going live. Legal review recommended.
+> **Status:** Draft for hosting at `https://wordfallgame.app/privacy`. Entity name (Iridescent Games) and contact email (info@iridescent-games.com) are filled in. Replace `[Effective date]` with the publish date before going live. Legal review recommended.
 
 **Effective Date:** [Effective date — set to the date you publish the page]
 **Last Updated:** 2026-04-15
@@ -99,7 +99,7 @@ You have the right to:
 - Withdraw consent to optional processing (ads personalization, push notifications) at any time.
 - Lodge a complaint with your local Data Protection Authority.
 
-To exercise any of these rights, email `support@wordfallgame.app`. We will respond within 30 days.
+To exercise any of these rights, email `info@iridescent-games.com`. We will respond within 30 days.
 
 ### 7.2 CCPA / CPRA (California)
 
@@ -119,7 +119,7 @@ California residents have the right to:
 
 ### 7.4 Data deletion
 
-Email `support@wordfallgame.app` with the subject "Delete my data" and include your in-app profile screenshot (Settings → Profile shows your user ID suffix). We will delete your Firestore records, Sentry data, and Analytics pseudonymous identifier within 30 days and reply to confirm.
+Email `info@iridescent-games.com` with the subject "Delete my data" and include your in-app profile screenshot (Settings → Profile shows your user ID suffix). We will delete your Firestore records, Sentry data, and Analytics pseudonymous identifier within 30 days and reply to confirm.
 
 Uninstalling the app removes all on-device data (AsyncStorage). Cloud-side data requires the deletion request above.
 
@@ -144,6 +144,6 @@ We will post any changes to this page and update the "Last Updated" date. Materi
 
 ## 12. Contact
 
-Privacy questions, data requests, or child-data concerns: `support@wordfallgame.app`
+Privacy questions, data requests, or child-data concerns: `info@iridescent-games.com`
 
 For App Store purchase refund questions, contact Apple. For Play Store purchase refund questions, contact Google. We can assist with consumption of in-app items but cannot process refunds directly.

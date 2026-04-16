@@ -22,7 +22,7 @@ These unblock the actual Play Store submission. The app is wired to handle each 
 ### Deploy
 - [ ] **Host the Privacy Policy at `https://wordfallgame.app/privacy`** and ToS at `/terms`. Drafts are in `agent_docs/privacy_policy_draft.md`. Replace `[Entity name]`, `[Contact email]`, `[Effective date]` placeholders first.
 - [ ] **Host `/.well-known/assetlinks.json`** at `https://wordfallgame.app/` so the Android App Links `autoVerify="true"` intent-filter actually associates the domain with the app.
-- [ ] **Stand up `support@wordfallgame.app`** (or change `SUPPORT_EMAIL` in `src/screens/SettingsScreen.tsx` to whatever inbox you use).
+- [ ] **Stand up `info@iridescent-games.com`** (or change `SUPPORT_EMAIL` in `src/screens/SettingsScreen.tsx` to whatever inbox you use).
 - [ ] **Deploy Firestore rules and Cloud Functions**: `firebase deploy --only firestore:rules,firestore:indexes,functions`. The new `moderateClubMessage` trigger and tightened rules are already committed.
 - [ ] **Create a Sentry project**, set `EXPO_PUBLIC_SENTRY_DSN` in `.env` and EAS secrets. All the `crashReporter.captureException` call sites are already wired — they just need the DSN to start reporting.
 - [ ] **Configure the Google UMP consent form** in AdMob Console (GDPR message). The code calls `AdsConsent.requestInfoUpdate` + `showForm` but the message itself is authored in the AdMob dashboard.

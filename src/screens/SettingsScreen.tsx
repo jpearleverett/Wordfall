@@ -30,7 +30,7 @@ const THEMES = [
 
 const PRIVACY_POLICY_URL = 'https://wordfallgame.app/privacy';
 const TERMS_OF_SERVICE_URL = 'https://wordfallgame.app/terms';
-const SUPPORT_EMAIL = 'support@wordfallgame.app';
+const SUPPORT_EMAIL = 'info@iridescent-games.com';
 
 async function openUrlSafe(url: string, fallbackTitle: string) {
   try {
