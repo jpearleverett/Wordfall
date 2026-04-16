@@ -92,6 +92,9 @@ export function AchievementCeremony({
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={onDismiss}
+            accessibilityRole="button"
+            accessibilityLabel="Claim achievement reward"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <LinearGradient
               colors={[tierColor, tierColor + 'CC']}

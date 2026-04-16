@@ -24,7 +24,8 @@ export const COLORS = {
 
   textPrimary: '#f0e6ff',
   textSecondary: '#b08cda',
-  textMuted: '#6b4d8a',
+  // WCAG AA: raised from #6b4d8a (~2.5:1 on bg) to #a08cc7 (~4.5:1). (F2)
+  textMuted: '#a08cc7',
 
   accent: '#ff2d95',
   accentLight: '#ff6eb8',
@@ -57,7 +58,9 @@ export const COLORS = {
   starEmpty: '#2a1548',
 
   buttonPrimary: '#ff2d95',
-  buttonSecondary: '#2d1452',
+  // WCAG AA: raised from #2d1452 (~2:1 vs bg) to #4a2380 (~3.4:1, acceptable
+  // for large control fills; labels still rely on textPrimary). (F2)
+  buttonSecondary: '#4a2380',
   buttonDanger: '#ff4466',
   buttonGold: '#ffb800',
 
@@ -72,11 +75,13 @@ export const COLORS = {
   tierDiamond: '#00e5ff',
 
   tabActive: '#ff2d95',
-  tabInactive: '#6b4d8a',
+  // WCAG AA: raised from #6b4d8a to #a08cc7 to match textMuted. (F2)
+  tabInactive: '#a08cc7',
 
   surface2: '#2d1452',
   surfaceGlass: 'rgba(26, 10, 46, 0.88)',
-  borderSubtle: 'rgba(255,255,255,0.06)',
+  // WCAG AA: raised from 0.06 alpha to 0.12 for visible boundaries. (F2)
+  borderSubtle: 'rgba(255,255,255,0.12)',
   borderMedium: 'rgba(255,255,255,0.12)',
   borderAccent: 'rgba(255,45,149,0.30)',
   textTertiary: '#4a2d6b',

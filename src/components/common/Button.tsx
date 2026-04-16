@@ -7,9 +7,14 @@ import {
   ViewStyle,
   TextStyle,
   View,
+  AccessibilityRole,
+  AccessibilityState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS } from '../../constants';
+
+// Default hit slop ensures a 44×44pt minimum touch target (WCAG 2.5.5).
+const DEFAULT_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 10 };
 
 interface ButtonProps {
   title: string;
@@ -19,6 +24,18 @@ interface ButtonProps {
   disabled?: boolean;
   icon?: string;
   fullWidth?: boolean;
+  /** Screen-reader label override. Defaults to the button's visible `title`. */
+  accessibilityLabel?: string;
+  /** Accessibility role. Defaults to 'button'. */
+  accessibilityRole?: AccessibilityRole;
+  /** Hint describing the result of activating the button. */
+  accessibilityHint?: string;
+  /** Additional accessibility state (e.g. { selected: true }). */
+  accessibilityState?: AccessibilityState;
+  /** Custom hit-slop override. Falls back to a default that guarantees 44pt targets. */
+  hitSlop?: { top?: number; bottom?: number; left?: number; right?: number };
+  /** Optional test identifier for E2E automation. */
+  testID?: string;
 }
 
 const VARIANT_STYLES: Record<
@@ -55,6 +72,12 @@ export default function Button({
   disabled = false,
   icon,
   fullWidth = false,
+  accessibilityLabel,
+  accessibilityRole = 'button',
+  accessibilityHint,
+  accessibilityState,
+  hitSlop,
+  testID,
 }: ButtonProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -115,12 +138,23 @@ export default function Button({
     </>
   );
 
+  const mergedA11yState: AccessibilityState = {
+    disabled,
+    ...(accessibilityState ?? {}),
+  };
+
   return (
     <TouchableWithoutFeedback
       onPress={disabled ? undefined : onPress}
       onPressIn={disabled ? undefined : handlePressIn}
       onPressOut={disabled ? undefined : handlePressOut}
       disabled={disabled}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel ?? title}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={mergedA11yState}
+      hitSlop={hitSlop ?? DEFAULT_HIT_SLOP}
+      testID={testID}
     >
       <Animated.View style={containerStyle}>
         {hasGradient ? (
