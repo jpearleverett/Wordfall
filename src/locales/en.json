@@ -36,6 +36,18 @@
     "starsAway_one": "{{count}} star until {{milestone}}!",
     "starsAway_other": "{{count}} stars until {{milestone}}!"
   },
+  "lives": {
+    "outOfLives": "Out of Lives",
+    "youHaveOf": "You have {{current}} of {{max}} lives.",
+    "watchAdForLife": "\u25B6\uFE0F  Watch Ad for +1 Life",
+    "watchAdA11y": "Watch an ad to earn one life",
+    "fullRefillGems": "\uD83D\uDC8E {{count}} Gems \u2014 Full Refill",
+    "youHaveGems": "You have {{count}} gems",
+    "refillA11y": "Refill lives for {{count}} gems",
+    "nextLifeIn": "Next life in",
+    "illWait": "I'll Wait",
+    "closeA11y": "Close no-lives modal and wait"
+  },
   "offer": {
     "expiresIn": "Offer expires in",
     "noThanks": "No thanks",

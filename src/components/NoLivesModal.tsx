@@ -11,6 +11,7 @@
  * self-contained so it can be mounted from any screen that triggers play.
  */
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -51,6 +52,7 @@ export const NoLivesModal: React.FC<NoLivesModalProps> = ({
   onWatchAd,
   onSpendGems,
 }) => {
+  const { t } = useTranslation();
   const [countdown, setCountdown] = useState<string>('--:--');
   const [watchingAd, setWatchingAd] = useState(false);
 
@@ -95,9 +97,9 @@ export const NoLivesModal: React.FC<NoLivesModalProps> = ({
           style={styles.card}
         >
           <Text style={styles.heart}>💔</Text>
-          <Text style={styles.title}>Out of Lives</Text>
+          <Text style={styles.title}>{t('lives.outOfLives')}</Text>
           <Text style={styles.subtitle}>
-            You have {livesRemaining} of {LIVES.max} lives.
+            {t('lives.youHaveOf', { current: livesRemaining, max: LIVES.max })}
           </Text>
 
           <TouchableOpacity
@@ -105,7 +107,7 @@ export const NoLivesModal: React.FC<NoLivesModalProps> = ({
             disabled={watchingAd}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Watch an ad to earn one life"
+            accessibilityLabel={t('lives.watchAdA11y')}
             accessibilityState={{ busy: watchingAd }}
           >
             <LinearGradient
@@ -117,7 +119,7 @@ export const NoLivesModal: React.FC<NoLivesModalProps> = ({
               {watchingAd ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.ctaPrimaryText}>▶️  Watch Ad for +1 Life</Text>
+                <Text style={styles.ctaPrimaryText}>{t('lives.watchAdForLife')}</Text>
               )}
             </LinearGradient>
           </TouchableOpacity>
@@ -128,19 +130,19 @@ export const NoLivesModal: React.FC<NoLivesModalProps> = ({
             activeOpacity={canAffordGems ? 0.85 : 1}
             style={[styles.ctaSecondary, !canAffordGems && styles.ctaDisabled]}
             accessibilityRole="button"
-            accessibilityLabel={`Refill lives for ${gemRefillCost} gems`}
+            accessibilityLabel={t('lives.refillA11y', { count: gemRefillCost })}
             accessibilityState={{ disabled: !canAffordGems }}
           >
             <Text style={styles.ctaSecondaryText}>
-              💎 {gemRefillCost} Gems — Full Refill
+              {t('lives.fullRefillGems', { count: gemRefillCost })}
             </Text>
             <Text style={styles.ctaSecondarySubtext}>
-              You have {gemsAvailable} gems
+              {t('lives.youHaveGems', { count: gemsAvailable })}
             </Text>
           </TouchableOpacity>
 
           <View style={styles.countdownBlock}>
-            <Text style={styles.countdownLabel}>Next life in</Text>
+            <Text style={styles.countdownLabel}>{t('lives.nextLifeIn')}</Text>
             <Text style={styles.countdownValue}>{countdown}</Text>
           </View>
 
@@ -149,9 +151,9 @@ export const NoLivesModal: React.FC<NoLivesModalProps> = ({
             activeOpacity={0.7}
             style={styles.closeBtn}
             accessibilityRole="button"
-            accessibilityLabel="Close no-lives modal and wait"
+            accessibilityLabel={t('lives.closeA11y')}
           >
-            <Text style={styles.closeBtnText}>I'll Wait</Text>
+            <Text style={styles.closeBtnText}>{t('lives.illWait')}</Text>
           </TouchableOpacity>
         </LinearGradient>
       </View>
