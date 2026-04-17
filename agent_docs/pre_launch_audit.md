@@ -81,6 +81,7 @@ All of the following are committed on `claude/game-launch-readiness-bxmxE`. Kept
 - `validateReceipt` rejects unauthenticated callers and always attributes purchases to `authenticatedUserId` — never a client-supplied UID
 - `sendPushNotification` requires auth, rate-limits 30/min per UID, only allows push to friends / club co-members
 - `clubGoalProgress` requires auth; progress is credited to `context.auth.uid`, not a client field; per-call cap of 10k points
+- `sendGift` / `claimGift` require auth, 5 gifts/day/sender cap (date-keyed `users/{uid}/giftQuota` doc), idempotency-key replay guard, clubmate/friend relationship required; server never writes to the recipient's economy doc (client applies grant locally after claim)
 - Firestore `dailyScores`/`weeklyScores`: enforced `0 ≤ score ≤ 1,000,000`
 - Firestore club `messages`: require membership + userId match + 1–200 char size
 - `reports/` admin-only collection + `users/{uid}/blockedUsers` subcollection + `users/{uid}/consent` ledger
@@ -137,6 +138,7 @@ All of the following are committed on `claude/game-launch-readiness-bxmxE`. Kept
 - `src/constants.ts` (palette)
 - `src/hooks/useRewardWiring.ts`
 - `functions/src/index.ts` (validateReceipt, clubGoalProgress, redactUid)
-- `cloud-functions/src/index.ts` (sendPushNotification, moderateClubMessage)
+- `cloud-functions/src/index.ts` (sendPushNotification, moderateClubMessage, sendGift, claimGift)
+- `src/services/gifts.ts` (secure gifting client wrapper; `sendGiftSecure` / `claimGiftSecure`)
 - `firestore.rules`
 - `app.json`, `eas.json`

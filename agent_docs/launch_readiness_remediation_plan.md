@@ -268,7 +268,7 @@ i18n unlocks ~60% of non-EN revenue. Hard-energy A/B + gifting + share cards clo
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 4.12 | **Gifting** (lives/hints) to clubmates + referred friends. Cloud Function atomically debits sender pool + credits receiver with idempotency key. Rate-limit 5 gifts/day/sender. | `cloud-functions/src/index.ts`, `src/screens/ClubScreen.tsx` | 2d |
+| 4.12 | **Gifting** (lives/hints) to clubmates + referred friends. Cloud Function atomically debits sender pool + credits receiver with idempotency key. Rate-limit 5 gifts/day/sender. **[server + client wrapper + tests DONE — `sendGift`/`claimGift` callables, `src/services/gifts.ts`. Remaining: swap `PlayerSocialContext` call sites post-deploy + surface a ClubScreen inbox banner.]** | `cloud-functions/src/index.ts`, `src/screens/ClubScreen.tsx` | 2d |
 | 4.13 | **Share-to-social victory card.** Off-screen grid + score + stars + "beat my score" deep link. `react-native-view-shot` → `expo-sharing`. | `src/components/ShareCard.tsx` (new), `src/screens/GameScreen.tsx` win handler | 1.5d |
 | 4.14 | (Stretch) **Ask-for-hint** from stuck tile. Broadcasts snapshot to club chat; clubmate replies with hint. | `src/screens/ClubScreen.tsx`, `cloud-functions/src/index.ts` | 2d |
 

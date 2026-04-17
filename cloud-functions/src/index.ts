@@ -475,4 +475,227 @@ export const moderateClubMessage = functions.firestore
     }
   });
 
+// ─── 7. sendGift / claimGift (social gifting) ────────────────────────────────
+//
+// The existing client-direct gifting path in firestoreService.sendGift writes
+// straight to the `gifts/` collection with fields
+// { fromUserId, toUserId, type, amount, claimed, createdAt, expiresAt }. That
+// path is convenient but has no rate-limit, no idempotency, and is spammable
+// by a modified client. The callables below are the secure authoritative
+// path: atomic txn, 5/day sender cap, idempotency key. They write the SAME
+// schema so the existing fetchUnclaimedGifts + claim UI keep working.
+
+/**
+ * Per-sender daily gift cap. 5/day prevents spam while leaving enough
+ * headroom for normal club play. Counter resets at UTC midnight via
+ * date-keyed doc id.
+ */
+const GIFT_DAILY_CAP_PER_SENDER = 5;
+
+type GiftType = 'hint' | 'tile' | 'life';
+const ALLOWED_GIFT_TYPES: readonly GiftType[] = ['hint', 'tile', 'life'] as const;
+const GIFT_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD, UTC
+}
+
+/**
+ * sendGift — HTTPS Callable
+ *
+ * Debits sender's daily gift quota + writes a pending gift doc. All writes
+ * occur in one transaction so double-calls with the same idempotencyKey are
+ * safe: a repeat short-circuits without changing quota or duplicating rows.
+ *
+ * The server never writes to the recipient's economy doc; the recipient's
+ * client applies the grant locally after claimGift flips `claimed`, which
+ * keeps all economy writes client-driven (same pattern as every other
+ * currency mutation) and works in offline/flaky-network cases.
+ */
+export const sendGift = functions.https.onCall(
+  async (
+    data: {
+      toUserId: string;
+      type: GiftType;
+      amount?: number;
+      fromDisplayName?: string;
+      idempotencyKey: string;
+    },
+    context,
+  ) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Authentication required',
+      );
+    }
+    const fromUserId = context.auth.uid;
+    const {
+      toUserId,
+      type,
+      amount = 1,
+      fromDisplayName = 'A friend',
+      idempotencyKey,
+    } = data ?? ({} as typeof data);
+
+    if (
+      typeof toUserId !== 'string' ||
+      toUserId.length === 0 ||
+      toUserId.length > 128
+    ) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid toUserId');
+    }
+    if (!ALLOWED_GIFT_TYPES.includes(type)) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid gift type');
+    }
+    if (typeof amount !== 'number' || amount < 1 || amount > 5) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'amount must be 1..5',
+      );
+    }
+    if (
+      typeof idempotencyKey !== 'string' ||
+      idempotencyKey.length < 8 ||
+      idempotencyKey.length > 128
+    ) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid idempotencyKey');
+    }
+    if (fromUserId === toUserId) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Cannot send a gift to yourself',
+      );
+    }
+
+    // Reuse the relationship check that guards push notifications — gifts
+    // must be between clubmates or friends.
+    const related = await canSendPushTo(fromUserId, toUserId);
+    if (!related) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Recipient is not a clubmate or friend',
+      );
+    }
+
+    const day = todayKey();
+    const giftRef = db.collection('gifts').doc(idempotencyKey);
+    const quotaRef = db
+      .collection('users')
+      .doc(fromUserId)
+      .collection('giftQuota')
+      .doc(day);
+
+    return db.runTransaction(async (tx) => {
+      const existing = await tx.get(giftRef);
+      if (existing.exists) {
+        // Idempotent replay — return cached state without double-debiting quota.
+        const prev = existing.data() ?? {};
+        return {
+          success: true,
+          giftId: idempotencyKey,
+          alreadySent: true,
+          claimed: Boolean(prev.claimed),
+        };
+      }
+
+      const quotaSnap = await tx.get(quotaRef);
+      const sentToday = (quotaSnap.data()?.count as number) ?? 0;
+      if (sentToday >= GIFT_DAILY_CAP_PER_SENDER) {
+        throw new functions.https.HttpsError(
+          'resource-exhausted',
+          `Daily gift limit reached (${GIFT_DAILY_CAP_PER_SENDER}/day)`,
+        );
+      }
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const expiresAt = admin.firestore.Timestamp.fromMillis(
+        Date.now() + GIFT_EXPIRY_MS,
+      );
+
+      tx.set(giftRef, {
+        fromUserId,
+        fromDisplayName,
+        toUserId,
+        type,
+        amount,
+        claimed: false,
+        createdAt: now,
+        expiresAt,
+      });
+      tx.set(
+        quotaRef,
+        {
+          count: admin.firestore.FieldValue.increment(1),
+          day,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+
+      return { success: true, giftId: idempotencyKey, alreadySent: false, claimed: false };
+    });
+  },
+);
+
+/**
+ * claimGift — HTTPS Callable
+ *
+ * Called by the recipient's client after applying the gift locally (adding
+ * a life / hint via EconomyContext). Flips `claimed: true` so the gift stops
+ * appearing in the unread inbox. Server never writes to the client's economy
+ * doc; this is only a state-machine transition + audit trail.
+ */
+export const claimGift = functions.https.onCall(
+  async (data: { giftId: string }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Authentication required',
+      );
+    }
+    const claimerUid = context.auth.uid;
+    const giftId = data?.giftId;
+
+    if (typeof giftId !== 'string' || giftId.length < 1 || giftId.length > 128) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid giftId');
+    }
+
+    const giftRef = db.collection('gifts').doc(giftId);
+
+    return db.runTransaction(async (tx) => {
+      const giftSnap = await tx.get(giftRef);
+      if (!giftSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'Gift not found');
+      }
+      const gift = giftSnap.data()!;
+      if (gift.toUserId !== claimerUid) {
+        throw new functions.https.HttpsError(
+          'permission-denied',
+          'Only the recipient may claim this gift',
+        );
+      }
+      if (gift.claimed === true) {
+        return {
+          success: true,
+          type: gift.type as GiftType,
+          amount: (gift.amount as number) ?? 1,
+          alreadyClaimed: true,
+        };
+      }
+
+      tx.update(giftRef, {
+        claimed: true,
+        claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {
+        success: true,
+        type: gift.type as GiftType,
+        amount: (gift.amount as number) ?? 1,
+        alreadyClaimed: false,
+      };
+    });
+  },
+);
+
 

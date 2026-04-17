@@ -91,9 +91,10 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 ### What the codebase ALREADY has wired (don't re-implement, just verify)
 - **Leaderboards**: `firestoreService.submitDailyScore` / `submitWeeklyScore` are called from `src/hooks/useRewardWiring.ts:689,693` on puzzle complete; reads in `src/services/firestore.ts:300+`
 - **VIP subscription end-to-end**: `vip_weekly` product → `applyProduct` in `src/services/commercialEntitlements.ts:207` sets `isVipSubscriber/vipExpiresAt`. Server-side renewal/expiry handled by `onSubscriptionRenew` (Apple SSN v2 + Google RTDN) in `functions/src/index.ts:418`
-- **Cloud Functions** (6 total, split across two codebases — see `firebase.json`):
-  - `functions/` (commerce codebase): `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`
-  - `cloud-functions/` (social codebase): `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`
+- **Cloud Functions** (13 total, split across two codebases — see `firebase.json`):
+  - `functions/` (commerce codebase): `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion`
+  - `cloud-functions/` (social codebase): `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift`
+- **Gifting (secure path)**: `sendGift` + `claimGift` HTTPS callables in `cloud-functions/src/index.ts` — atomic txn, 5/day/sender cap (`users/{uid}/giftQuota`), idempotency-key replay guard. Client wrapper `src/services/gifts.ts` (`sendGiftSecure`/`claimGiftSecure`). Uses the same `gifts/` collection schema as the existing `firestoreService.sendGift` direct-write path, so `getPendingGifts` reads keep working — the existing `PlayerSocialContext` call sites can swap to the secure wrapper post-deploy.
 - **Push notifications client**: `src/services/notifications.ts` registers Expo + device push tokens, saves to Firestore at `users/{uid}/pushToken` (line 506-509). Server-side `sendPushNotification` callable exists in `cloud-functions/src/index.ts:231`
 - **Receipt validation + replay protection**: `validateReceipt` in `functions/src/index.ts:370` with SHA256 hash dedup (`/receipts` collection)
 - **Consent gate, club moderation (Perspective API), report/block, loot-box odds disclosure, A/B testing engine, Remote Config, soft-launch analytics module, 35+ analytics events** — all wired
@@ -101,9 +102,9 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 - **Site/legal**: `wordfallgamesite/` has privacy/terms/support + an `assetlinks.json` template (placeholder SHA256 needs Play app signing fingerprint)
 
 ### Real launch-blocking gaps (code-side)
-- **GDPR account deletion**: Settings has a `confirmResetProgress` placeholder; no `deleteUserData` Cloud Function. Required for Play data-safety compliance.
 - **Social account linking**: Firebase Anonymous auth only. No Google Sign-In. Not strictly blocking but anonymous-only means a wiped device = lost paid progression.
 - **`assetlinks.json` SHA256**: replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` in `wordfallgamesite/.well-known/assetlinks.json` with the Play app signing key fingerprint (from Play Console → App signing).
+- _(resolved April 2026)_ GDPR account deletion UI + `requestAccountDeletion` Cloud Function are live; direct-client gifting upgraded to a secure `sendGift`/`claimGift` callable path with rate limits.
 
 ### Real launch-blocking gaps (user-side, outside this repo)
 - Register `wordfall_*` IAP SKUs in Play Console (catalog: `src/data/shopProducts.ts`)
