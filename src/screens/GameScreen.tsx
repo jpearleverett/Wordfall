@@ -59,6 +59,7 @@ import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
 import { getModeTutorial } from '../data/modeTutorials';
 import { PostLossModal } from '../components/PostLossModal';
 import { GameFlashes } from './game/GameFlashes';
+import { ComboFlash } from '../components/effects/ComboFlash';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
 
@@ -1079,15 +1080,16 @@ export function GameScreen({
           anim.setValue(offsetPx);
 
           const delay = colDelayMap.get(cell.col) ?? 0;
-          // Animate to 0 (final position) with gravity-like feel:
-          // timing for the main fall, then spring for landing bounce
+          // Animate to 0 (final position) with gravity-like feel.
+          // Phase 3.10: friction dropped 12 → 9 for a subtle landing bounce
+          // overshoot (reduceMotion users already skip this block at line 1048).
           animations.push(
             Animated.sequence([
               Animated.delay(delay),
               Animated.spring(anim, {
                 toValue: 0,
                 tension: 180,
-                friction: 12,
+                friction: 9,
                 useNativeDriver: true,
               }),
             ])
@@ -1591,6 +1593,10 @@ export function GameScreen({
         scorePopupAnim={scorePopupAnim}
         bigWordAnim={bigWordAnim}
       />
+
+      {/* Combo tint pulse + confetti at combo >=5 (Phase 3.9). Reads
+          reduceMotion-aware; renders noop below the combo-3 threshold. */}
+      <ComboFlash combo={combo} reduceMotion={reduceMotion} />
 
 
       {/* Word bank — reads selection state from the zustand store directly.
