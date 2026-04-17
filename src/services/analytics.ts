@@ -807,6 +807,8 @@ class Analytics {
     player_stage?: 'new' | 'early' | 'established' | 'veteran';
     is_payer?: boolean;
     total_spend?: number;
+    /** Phase 4.11 — Firebase A/B segmentation for hard-energy cohort */
+    hard_energy_enabled?: boolean;
   }): Promise<void> {
     await this.ensureLoaded();
 

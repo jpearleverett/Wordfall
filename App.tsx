@@ -78,6 +78,7 @@ import {
   triggerWinStreakMilestoneNotification,
 } from './src/services/notificationTriggers';
 import { eventManager } from './src/services/eventManager';
+import { getRemoteBoolean } from './src/services/remoteConfig';
 import { getChapterExtended, getLevelConfigExtended } from './src/engine/puzzleGenerator';
 import {
   getPersonalizedHomeContent,
@@ -910,6 +911,11 @@ function HomeMainScreen({ route, navigation }: any) {
 
       void analytics.startSession('app_launch');
       void analytics.trackAppOpen();
+      // hard_energy_enabled lets Firebase A/B Testing slice retention/revenue
+      // by the Remote Config flag the client actually observed at boot.
+      const hardEnergyOn = (() => {
+        try { return getRemoteBoolean('hardEnergyEnabled'); } catch { return false; }
+      })();
       void analytics.updateUserProperties({
         player_level: player.currentLevel,
         total_puzzles_solved: player.puzzlesSolved,
@@ -917,6 +923,7 @@ function HomeMainScreen({ route, navigation }: any) {
         player_stage: playerStageFromPuzzles(player.puzzlesSolved),
         is_payer: false, // Updated when IAP completes
         total_spend: 0,
+        hard_energy_enabled: hardEnergyOn,
       });
       void analytics.logEvent('streak_count', {
         currentStreak: player.streaks.currentStreak,
