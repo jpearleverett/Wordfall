@@ -11,10 +11,13 @@
  *     outage).
  *   - lastSyncedAt: ms since epoch of the most recent successful write.
  *
- * The store is a plain subscribable — no React import so it works in
- * services / tests without pulling in the RN tree. Use `useSyncStatus()`
- * from a separate file if a React-hook shape is needed.
+ * Consumers get state via `useSyncStatus()` / `useSyncStatusSelector()`
+ * (below), which wrap React 18's useSyncExternalStore — the canonical
+ * concurrent-mode-safe subscription primitive. That avoids the tearing
+ * issues that plain useState + useEffect(subscribe) can hit under
+ * Suspense / transitions / startTransition.
  */
+import { useSyncExternalStore } from 'react';
 
 export type SyncState = 'idle' | 'pending' | 'failed';
 
@@ -100,4 +103,41 @@ export function __resetSyncStatusForTest(): void {
   snapshot.lastSyncedAt = null;
   snapshot.lastError = null;
   emit();
+}
+
+// ── React hooks ──────────────────────────────────────────────────────────────
+
+// useSyncExternalStore demands a stable getSnapshot reference — otherwise
+// React treats every call as a change and infinite-loops. We track the
+// latest emitted snapshot in a module-scoped cache so getSnapshot can
+// return a stable object reference between emit() calls.
+let cachedSnapshot: SyncSnapshot = { ...snapshot };
+function refreshCache(): void {
+  cachedSnapshot = { ...snapshot };
+}
+function getCachedSnapshot(): SyncSnapshot {
+  return cachedSnapshot;
+}
+listeners.add(refreshCache);
+
+function subscribe(listener: () => void): () => void {
+  return subscribeSyncStatus(() => listener());
+}
+
+/**
+ * React hook form — returns the current SyncSnapshot and re-renders on
+ * any change. For slice-only subscriptions use useSyncStatusSelector.
+ */
+export function useSyncStatus(): SyncSnapshot {
+  return useSyncExternalStore(subscribe, getCachedSnapshot, getCachedSnapshot);
+}
+
+/**
+ * Selector-aware hook. Re-renders only when the selected slice changes
+ * under strict equality. Example:
+ *   const showBanner = useSyncStatusSelector(s => s.state === 'failed');
+ */
+export function useSyncStatusSelector<T>(selector: (s: SyncSnapshot) => T): T {
+  const full = useSyncExternalStore(subscribe, getCachedSnapshot, getCachedSnapshot);
+  return selector(full);
 }

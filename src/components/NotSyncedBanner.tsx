@@ -1,13 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, SHADOWS } from '../constants';
-import {
-  getSyncStatus,
-  subscribeSyncStatus,
-  type SyncSnapshot,
-} from '../services/syncStatus';
+import { useSyncStatusSelector } from '../services/syncStatus';
 
 /**
  * Surfaces a small banner when recent Firestore writes keep failing
@@ -22,17 +18,14 @@ const SHOW_AFTER_N_FAILURES = 2;
 
 export function NotSyncedBanner() {
   const { t } = useTranslation();
-  const [snap, setSnap] = useState<SyncSnapshot>(() => getSyncStatus());
   const insets = useSafeAreaInsets();
   const opacity = React.useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    const unsub = subscribeSyncStatus(setSnap);
-    return unsub;
-  }, []);
-
-  const shouldShow =
-    snap.state === 'failed' && snap.failureCount >= SHOW_AFTER_N_FAILURES;
+  // Derived boolean — the hook only re-renders when THIS predicate's
+  // value flips, not on every pendingOps tick.
+  const shouldShow = useSyncStatusSelector(
+    (s) => s.state === 'failed' && s.failureCount >= SHOW_AFTER_N_FAILURES,
+  );
 
   useEffect(() => {
     Animated.timing(opacity, {
