@@ -276,9 +276,9 @@ i18n unlocks ~60% of non-EN revenue. Hard-energy A/B + gifting + share cards clo
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 4.15 | Remote-Config-driven event calendar. JSON schema documented. Fetched on app start. Falls back to `src/data/events.ts`. | `src/services/eventManager.ts`, `src/services/remoteConfig.ts`, `src/data/events.ts` | 2d |
-| 4.16 | Remote-Config-driven daily deals + flash sales (replace hard-coded date hash in `src/data/dynamicPricing.ts`). Tune without builds. | `src/data/dynamicPricing.ts`, `src/services/remoteConfig.ts` | 1d |
-| 4.17 | "Event editor" JSON template doc so non-engineers can ship events via Remote Config edit. | `agent_docs/live_ops.md` (new) | 0.5d |
+| 4.15 | Remote-Config-driven event calendar. JSON schema documented. Fetched on app start. Falls back to `src/data/events.ts`. **[DONE — `parseRemoteEvents` in `src/services/eventManager.ts` consumes `eventCalendarOverride`; malformed/empty falls back to built-in calendar.]** | `src/services/eventManager.ts`, `src/services/remoteConfig.ts`, `src/data/events.ts` | 2d |
+| 4.16 | Remote-Config-driven daily deals + flash sales (replace hard-coded date hash in `src/data/dynamicPricing.ts`). Tune without builds. **[DONE — `parseRemoteDailyDeal` + `dailyDealOverride` wired in `getFlashSale`; covered by `src/data/__tests__/dynamicPricing.override.test.ts` (6 cases).]** | `src/data/dynamicPricing.ts`, `src/services/remoteConfig.ts` | 1d |
+| 4.17 | "Event editor" JSON template doc so non-engineers can ship events via Remote Config edit. **[DONE — `agent_docs/live_ops.md` documents both overrides + troubleshooting + verification steps.]** | `agent_docs/live_ops.md` (new) | 0.5d |
 
 **Verification.** Locale swap → all top-5 screens render cleanly, no clipped labels. Flip `hardEnergyEnabled=true` → lives consume/regen correctly, ad refill works, no bypass. Two-account gifting → ledgers balance, idempotency stops double-credit. Victory share card renders on Android share sheet; deep link opens on recipient device. Fake event authored in Remote Config appears in-app without rebuild.
 
