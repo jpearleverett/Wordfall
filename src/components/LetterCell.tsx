@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { perfCountCellRender } from '../utils/perfInstrument';
+import { useColors } from '../hooks/useColors';
 
 // ── Pre-computed style constants (module scope so tuples share a single reference) ─
 const BODY_COLORS_VALID: [string, string, string, string, string] = ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
@@ -30,6 +31,44 @@ const GRADIENT_END_08_1 = { x: 0.8, y: 1 };
 const GRADIENT_START_05_0 = { x: 0.5, y: 0 };
 const GRADIENT_END_05_055 = { x: 0.5, y: 0.55 };
 
+// ── Accessibility helpers ────────────────────────────────────────────────────
+interface A11yArgs {
+  letter: string;
+  isWildcard: boolean;
+  isSelected: boolean;
+  isValidWord: boolean;
+  isHinted: boolean;
+  selectionIndex: number;
+  row?: number;
+  col?: number;
+  currentWord?: string;
+}
+
+function buildA11yLabel(a: A11yArgs): string {
+  const parts: string[] = [];
+  parts.push(a.isWildcard ? 'Wildcard' : `Letter ${a.letter}`);
+  if (a.row !== undefined && a.col !== undefined) {
+    // 1-indexed for screen-reader readability
+    parts.push(`row ${a.row + 1} column ${a.col + 1}`);
+  }
+  if (a.isValidWord) {
+    parts.push(`part of valid word${a.currentWord ? ` ${a.currentWord}` : ''}`);
+  } else if (a.isSelected) {
+    parts.push(
+      a.selectionIndex >= 0
+        ? `selected, position ${a.selectionIndex + 1}`
+        : 'selected',
+    );
+    if (a.currentWord && a.currentWord.length > 0) {
+      parts.push(`current word ${a.currentWord}`);
+    }
+  }
+  if (a.isHinted && !a.isSelected) {
+    parts.push('hint');
+  }
+  return parts.join(', ');
+}
+
 interface LetterCellProps {
   letter: string;
   cellId: string;
@@ -43,6 +82,12 @@ interface LetterCellProps {
   isSpotlightDimmed?: boolean;
   /** Animated.Value driving gravity fall translateY (pixels, animates to 0) */
   fallAnim?: Animated.Value;
+  /** Grid row index (0-based). Used to build screen-reader position hints. */
+  row?: number;
+  /** Grid column index (0-based). Used to build screen-reader position hints. */
+  col?: number;
+  /** The word currently being built from selected letters. Announced in the hint. */
+  currentWord?: string;
 }
 
 export const LetterCell = React.memo(function LetterCell({
@@ -57,10 +102,14 @@ export const LetterCell = React.memo(function LetterCell({
   isWildcard = false,
   isSpotlightDimmed = false,
   fallAnim,
+  row,
+  col,
+  currentWord,
 }: LetterCellProps) {
   // Dev-only: count how many LetterCell renders happen per Grid commit.
   // If memoization is working we expect ~1 render per tap.
   perfCountCellRender();
+  const palette = useColors();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const movedAnim = useRef(new Animated.Value(0)).current;
 
@@ -127,16 +176,16 @@ export const LetterCell = React.memo(function LetterCell({
     else highlight = HIGHLIGHT_DEFAULT;
 
     let border: string;
-    if (isValidWord) border = COLORS.green;
-    else if (isSelected && isHinted) border = COLORS.gold;
-    else if (isSelected) border = COLORS.accent;
-    else if (isWildcard) border = COLORS.gold;
+    if (isValidWord) border = palette.green;
+    else if (isSelected && isHinted) border = palette.gold;
+    else if (isSelected) border = palette.accent;
+    else if (isWildcard) border = palette.gold;
     else border = DEFAULT_BORDER_COLOR;
 
     let shadow: string;
-    if (isValidWord) shadow = COLORS.green;
-    else if (isSelected) shadow = COLORS.accent;
-    else if (isWildcard) shadow = COLORS.gold;
+    if (isValidWord) shadow = palette.green;
+    else if (isSelected) shadow = palette.accent;
+    else if (isWildcard) shadow = palette.gold;
     else shadow = COLORS.purple;
 
     return {
@@ -145,7 +194,7 @@ export const LetterCell = React.memo(function LetterCell({
       borderColor: border,
       shadowColor: shadow,
     };
-  }, [isValidWord, isSelected, isHinted, isWildcard]);
+  }, [isValidWord, isSelected, isHinted, isWildcard, palette]);
 
   // CRITICAL: always use Animated.View, never swap between View and Animated.View
   // based on props. A component-type swap forces React to unmount the entire
@@ -169,9 +218,23 @@ export const LetterCell = React.memo(function LetterCell({
       pointerEvents="none"
       style={outerStyle}
       accessibilityRole="button"
-      accessibilityLabel={isWildcard ? 'Wildcard' : letter}
-      accessibilityHint="Double tap to select this letter"
-      accessibilityState={{ selected: isSelected }}
+      accessibilityLabel={buildA11yLabel({
+        letter,
+        isWildcard,
+        isSelected,
+        isValidWord,
+        isHinted,
+        selectionIndex,
+        row,
+        col,
+        currentWord,
+      })}
+      accessibilityHint={
+        isSelected
+          ? 'Tap again to deselect. Drag across connected tiles to build a word.'
+          : 'Tap to start building a word from this letter.'
+      }
+      accessibilityState={{ selected: isSelected, disabled: isSpotlightDimmed }}
     >
       {/* Decorative overlay rings removed:
        *  - ripple ring (isSelected)
@@ -202,7 +265,7 @@ export const LetterCell = React.memo(function LetterCell({
             bottom: -2,
             borderRadius: borderRadius + 2,
             borderWidth: 1.5,
-            borderColor: COLORS.accent,
+            borderColor: palette.accent,
             opacity: movedAnim,
           }}
         />
@@ -332,6 +395,8 @@ export const LetterCell = React.memo(function LetterCell({
                 width: size * 0.28,
                 height: size * 0.28,
                 borderRadius: size * 0.14,
+                backgroundColor: palette.accent,
+                shadowColor: palette.accent,
               },
             ]}
           >
@@ -349,6 +414,8 @@ export const LetterCell = React.memo(function LetterCell({
                 borderRadius: size * 0.14,
                 width: size * 0.26,
                 height: size * 0.26,
+                backgroundColor: palette.green,
+                shadowColor: palette.green,
               },
             ]}
           >

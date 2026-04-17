@@ -25,6 +25,15 @@ import {
   clearLocalUserData,
   isAccountDeletionConfigured,
 } from '../services/accountDeletion';
+import type { ColorblindMode } from '../contexts/SettingsContext';
+import { COLORBLIND_MODE_LABELS } from '../services/colorblind';
+
+const COLORBLIND_MODES: ColorblindMode[] = [
+  'off',
+  'deuteranopia',
+  'protanopia',
+  'tritanopia',
+];
 
 const THEMES = [
   { id: 'dark', name: 'Dark', color: '#0a0e27' },
@@ -125,6 +134,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const hapticsEnabled = settings?.hapticsEnabled ?? settings?.haptics ?? true;
   const notificationsEnabled = settings?.notificationsEnabled ?? settings?.notifications ?? true;
   const selectedTheme = settings?.theme ?? 'dark';
+  const colorblindMode: ColorblindMode = settings?.colorblindMode ?? 'off';
   const isSignedIn = settings?.isSignedIn ?? false;
   const adsRemoved = isAdFreeComputed ?? false;
   const premiumPass = isPremiumPassFlag ?? false;
@@ -295,6 +305,40 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           {renderToggle('Haptics', hapticsEnabled, 'haptics')}
           <View style={styles.divider} />
           {renderToggle('Notifications', notificationsEnabled, 'notifications')}
+        </View>
+
+        {/* Accessibility Section */}
+        <Text style={styles.sectionTitle}>Accessibility</Text>
+        <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <Text style={[styles.settingLabel, { marginBottom: 4 }]}>Colorblind Mode</Text>
+            <Text style={[styles.dangerSubtext, { textAlign: 'left', marginBottom: 12 }]}>
+              Swaps letter-cell, selection, and valid-word colors so they remain distinct.
+            </Text>
+          </View>
+          {COLORBLIND_MODES.map((mode, idx) => (
+            <React.Fragment key={mode}>
+              {idx > 0 && <View style={styles.divider} />}
+              <TouchableOpacity
+                style={styles.themeRow}
+                onPress={() => onUpdateSetting('colorblindMode', mode)}
+                accessibilityRole="radio"
+                accessibilityLabel={`Colorblind mode: ${COLORBLIND_MODE_LABELS[mode]}`}
+                accessibilityState={{ selected: colorblindMode === mode }}
+              >
+                <Text style={styles.settingLabel}>{COLORBLIND_MODE_LABELS[mode]}</Text>
+                <View style={styles.radioOuter}>
+                  {colorblindMode === mode && <View style={styles.radioInner} />}
+                </View>
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
         </View>
 
         {/* Theme Section */}

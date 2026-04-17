@@ -48,7 +48,12 @@ import { soundManager } from './src/services/sound';
 import { setHapticsEnabled } from './src/services/haptics';
 // ATLAS_PAGES and generateShareText moved to useRewardWiring
 import { notificationManager } from './src/services/notifications';
+import { installGlobalFontScaleClamp } from './src/components/common/Typography';
 import { Providers } from './src/App/Providers';
+
+// Clamp system font scaling once at module init so large-text settings can't
+// break tight layouts (grid, HUD, shop pricing). See Typography.tsx for why.
+installGlobalFontScaleClamp();
 import { CeremonyRouter } from './src/App/CeremonyRouter';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { MysteryWheel } from './src/components/MysteryWheel';

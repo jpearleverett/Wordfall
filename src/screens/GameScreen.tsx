@@ -452,6 +452,26 @@ export function GameScreen({
   const [showFailed, setShowFailed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [gridAreaHeight, setGridAreaHeight] = useState(0);
+
+  // Announce every newly-found word to screen readers (TalkBack / VoiceOver).
+  // solveSequence grows by one entry per valid word; we watch its length and
+  // emit the `wordFound` string from the most recent step.
+  const lastAnnouncedIdxRef = useRef(-1);
+  useEffect(() => {
+    const len = solveSequence.length;
+    if (len === 0) {
+      lastAnnouncedIdxRef.current = -1;
+      return;
+    }
+    if (lastAnnouncedIdxRef.current >= len - 1) return;
+    lastAnnouncedIdxRef.current = len - 1;
+    const step = solveSequence[len - 1];
+    if (step?.wordFound) {
+      AccessibilityInfo.announceForAccessibility(
+        `Found word ${step.wordFound}. ${foundWords} of ${totalWords} complete.`,
+      );
+    }
+  }, [solveSequence, foundWords, totalWords]);
   const gridHeightLocked = useRef(false);
   const chainAnim = useRef(new Animated.Value(0)).current;
   const [chainVisible, setChainVisible] = useState(false);

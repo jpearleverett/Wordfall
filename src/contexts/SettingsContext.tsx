@@ -3,6 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type ThemeOption = 'dark' | 'midnight' | 'ocean' | 'forest' | 'sunset';
 
+export type ColorblindMode =
+  | 'off'
+  | 'deuteranopia'
+  | 'protanopia'
+  | 'tritanopia';
+
 interface Settings {
   sfxVolume: number;
   musicVolume: number;
@@ -13,6 +19,8 @@ interface Settings {
   premiumPass: boolean;
   showTutorial: boolean;
   language: string;
+  // Accessibility
+  colorblindMode: ColorblindMode;
   // Privacy
   analyticsEnabled: boolean;
   personalizedAdsEnabled: boolean;
@@ -41,6 +49,7 @@ const DEFAULT_SETTINGS: Settings = {
   premiumPass: false,
   showTutorial: true,
   language: 'en',
+  colorblindMode: 'off',
   // Privacy — default-on for non-EU; the consent flow (UMP) can flip
   // personalizedAdsEnabled off based on jurisdiction. Users can toggle both
   // from Settings at any time.
