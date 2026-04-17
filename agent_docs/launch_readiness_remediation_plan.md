@@ -153,11 +153,11 @@ Play policy scanner fails if any of the below is missing. Every item is small.
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 1.1 | **Account-Deletion UI** under Settings → Account. Two-step confirm + re-auth prompt. Calls `requestAccountDeletion` callable. | `src/screens/SettingsScreen.tsx`, `src/contexts/AuthContext.tsx`, `src/services/firestore.ts` | 1d |
-| 1.2 | **`requestAccountDeletion` Cloud Function.** Purges `players/{uid}`, `users/{uid}/*`, club membership + authored messages, consent ledger, `blockedUsers`, Firebase Auth record. Purchase-receipt ledger retained with UID→one-way SHA256 hash (tax / fraud audit). SLA ≤ 30d per Play policy. | `functions/src/index.ts` | 1d |
-| 1.3 | **Surface Restore Purchases in Settings** (flow exists in `ShopScreen.tsx:1403` — reuse). | `src/screens/SettingsScreen.tsx`, `src/services/iap.ts` | 0.25d |
-| 1.4 | **Data-deletion web-form** at `wordfallgame.app/account-deletion` (Play policy: deletion reachable **without** installing the app). Form → email to `info@iridescent-games.com` → internal SLA invokes the callable on the user's behalf. | `wordfallgamesite/account-deletion/index.html` (new) | 0.5d |
-| 1.5 | Rename Settings:109 "Reset Progress" → **"Reset local data"** (avoid confusion with deletion). | `src/screens/SettingsScreen.tsx` | 0.1d |
+| 1.1 | **Account-Deletion UI** under Settings → Account. Two-step confirm + re-auth prompt. Calls `requestAccountDeletion` callable. **[DONE — `requestAccountDeletion` imported into `SettingsScreen` with two-step confirm; handler purges local storage + signs out.]** | `src/screens/SettingsScreen.tsx`, `src/contexts/AuthContext.tsx`, `src/services/firestore.ts` | 1d |
+| 1.2 | **`requestAccountDeletion` Cloud Function.** Purges `players/{uid}`, `users/{uid}/*`, club membership + authored messages, consent ledger, `blockedUsers`, Firebase Auth record. Purchase-receipt ledger retained with UID→one-way SHA256 hash (tax / fraud audit). SLA ≤ 30d per Play policy. **[DONE — `functions/src/index.ts` L785 `requestAccountDeletion` HTTPS endpoint.]** | `functions/src/index.ts` | 1d |
+| 1.3 | **Surface Restore Purchases in Settings** (flow exists in `ShopScreen.tsx:1403` — reuse). **[DONE — `handleRestorePurchases` wired in `SettingsScreen.tsx:95` via `useCommerce().restorePurchases`.]** | `src/screens/SettingsScreen.tsx`, `src/services/iap.ts` | 0.25d |
+| 1.4 | **Data-deletion web-form** at `wordfallgame.app/account-deletion` (Play policy: deletion reachable **without** installing the app). Form → email to `info@iridescent-games.com` → internal SLA invokes the callable on the user's behalf. **[DONE — `wordfallgamesite/account-deletion/index.html` (348 lines) published via Cloudflare Pages.]** | `wordfallgamesite/account-deletion/index.html` (new) | 0.5d |
+| 1.5 | Rename Settings:109 "Reset Progress" → **"Reset local data"** (avoid confusion with deletion). **[DONE — label + accessibilityLabel now "Reset local data" at `SettingsScreen.tsx:680`.]** | `src/screens/SettingsScreen.tsx` | 0.1d |
 | 1.6 | Fill Play Console Data Safety form from `agent_docs/data_safety.md`. Verify declared types match what the app actually sends (Firebase Analytics, AdMob ad ID, Sentry crash traces). | Play Console | 0.5d |
 | 1.7 | Confirm Play target audience = 13+. | Play Console | 0.1d |
 
@@ -269,7 +269,7 @@ i18n unlocks ~60% of non-EN revenue. Hard-energy A/B + gifting + share cards clo
 | # | Task | Files | Effort |
 |---|------|-------|--------|
 | 4.12 | **Gifting** (lives/hints) to clubmates + referred friends. Cloud Function atomically debits sender pool + credits receiver with idempotency key. Rate-limit 5 gifts/day/sender. **[DONE — `sendGift`/`claimGift` callables with atomic txn + 5/day cap + idempotency (`cloud-functions/src/index.ts`); client wrapper `src/services/gifts.ts` with 5 unit tests; `PlayerSocialContext.sendHintGift`/`sendTileGift` route through `sendGiftSecure` with legacy direct-write fallback; inbox UI `src/components/GiftInbox.tsx` mounted in `ClubScreen` — claim via `claimGiftSecure`, grants applied locally through EconomyContext.]** | `cloud-functions/src/index.ts`, `src/screens/ClubScreen.tsx`, `src/components/GiftInbox.tsx`, `src/contexts/PlayerSocialContext.tsx` | 2d |
-| 4.13 | **Share-to-social victory card.** Off-screen grid + score + stars + "beat my score" deep link. `react-native-view-shot` → `expo-sharing`. | `src/components/ShareCard.tsx` (new), `src/screens/GameScreen.tsx` win handler | 1.5d |
+| 4.13 | **Share-to-social victory card.** Off-screen grid + score + stars + "beat my score" deep link. `react-native-view-shot` → `expo-sharing`. **[DONE — `src/components/ShareCard.tsx` + `src/hooks/useShareVictory.ts` wrap `captureRef` + `Sharing.shareAsync`; fires `share_tapped` analytics; used from `PuzzleComplete` win surface.]** | `src/components/ShareCard.tsx`, `src/hooks/useShareVictory.ts`, `src/components/PuzzleComplete.tsx` | 1.5d |
 | 4.14 | (Stretch) **Ask-for-hint** from stuck tile. Broadcasts snapshot to club chat; clubmate replies with hint. | `src/screens/ClubScreen.tsx`, `cloud-functions/src/index.ts` | 2d |
 
 ### 4D. LiveOps authoring pipeline
