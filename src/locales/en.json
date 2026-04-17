@@ -36,6 +36,53 @@
     "starsAway_one": "{{count}} star until {{milestone}}!",
     "starsAway_other": "{{count}} stars until {{milestone}}!"
   },
+  "offer": {
+    "expiresIn": "Offer expires in",
+    "noThanks": "No thanks",
+    "dismissA11y": "Dismiss offer",
+    "hintRescue": {
+      "ribbon": "STUCK?",
+      "title": "Hint Rescue Pack",
+      "description": "Get 5 hints to help crack this level. You're closer than you think!",
+      "button": "GET 5 HINTS",
+      "price": "5 gems"
+    },
+    "lifeRefill": {
+      "ribbon": "OUT OF LIVES",
+      "title": "Instant Refill",
+      "description": "Don't wait! Get all 5 lives back instantly.",
+      "button": "REFILL NOW",
+      "price": "10 gems"
+    },
+    "streakShield": {
+      "ribbon": "STREAK AT RISK",
+      "title": "Protect Your Streak",
+      "description": "Your {{streak}}-day streak expires tonight. Shield it!",
+      "button": "ACTIVATE SHIELD",
+      "price": "30 gems"
+    },
+    "closeFinish": {
+      "ribbon": "SO CLOSE!",
+      "title": "Just 1 Word Away",
+      "description": "You're one word from victory! A hint could seal the deal.",
+      "button": "GET A HINT",
+      "price": "3 gems"
+    },
+    "postPuzzle": {
+      "ribbon": "LOW ON HINTS",
+      "title": "Stock Up",
+      "description": "Great solve! Grab hints for the next challenge.",
+      "button": "GET 10 HINTS",
+      "price": "10 gems"
+    },
+    "boosterPack": {
+      "ribbon": "TOUGH LEVEL AHEAD",
+      "title": "Power-Up Pack",
+      "description": "Get Spotlight + Wildcard + Shuffle for this {{difficulty}} puzzle!",
+      "button": "GET 3 BOOSTERS",
+      "price": "15 gems"
+    }
+  },
   "home": {
     "play": "Play",
     "daily": "Daily Challenge",
