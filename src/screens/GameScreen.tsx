@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
   Animated,
@@ -369,6 +370,7 @@ export function GameScreen({
   totalGemsAwarded = 0,
   nextUnlockPreview = null,
 }: GameScreenProps) {
+  const { t } = useTranslation();
   // Narrow zustand subscriptions — re-render only when the slice actually
   // read changes. usePlayer() / useEconomy() would re-render this 1700-line
   // component on every economy/player mutation across the app.
@@ -1817,31 +1819,35 @@ export function GameScreen({
             {/* Near-miss encouragement */}
             {foundWords > 0 && foundWords >= totalWords - 1 ? (
               <>
-                <Text style={styles.failedTitle}>SO CLOSE!</Text>
+                <Text style={styles.failedTitle}>{t('result.soClose')}</Text>
                 <Text style={styles.failedSubtext}>
-                  You found {foundWords} of {totalWords} words — just {totalWords - foundWords} more!
+                  {t('result.foundWordsAlmost', {
+                    found: foundWords,
+                    total: totalWords,
+                    remaining: totalWords - foundWords,
+                  })}
                 </Text>
               </>
             ) : foundWords > 0 ? (
               <>
                 <Text style={styles.failedTitle}>
-                  {status === 'timeout' ? '⏱ TIME\'S UP!' : 'KEEP GOING!'}
+                  {status === 'timeout' ? `⏱ ${t('result.timeUpShort')}` : t('result.keepGoing')}
                 </Text>
                 <Text style={styles.failedSubtext}>
-                  You found {foundWords} of {totalWords} words. You're making progress!
+                  {t('result.foundWordsProgress', { found: foundWords, total: totalWords })}
                 </Text>
               </>
             ) : (
               <>
                 <Text style={styles.failedTitle}>
-                  {status === 'timeout' ? '⏱ TIME\'S UP!' : '❌ PUZZLE FAILED'}
+                  {status === 'timeout' ? `⏱ ${t('result.timeUpShort')}` : `❌ ${t('result.puzzleFailed')}`}
                 </Text>
                 <Text style={styles.failedSubtext}>
                   {status === 'timeout'
-                    ? 'You ran out of time. Try again?'
+                    ? t('result.ranOutOfTime')
                     : mode === 'perfectSolve'
-                      ? 'Perfect mode requires zero mistakes.'
-                      : `You used all ${effectiveMaxMoves} moves.`}
+                      ? t('result.perfectZeroMistakes')
+                      : t('result.usedAllMoves', { count: effectiveMaxMoves })}
                 </Text>
               </>
             )}
@@ -1854,18 +1860,18 @@ export function GameScreen({
                     { width: `${Math.max((foundWords / totalWords) * 100, 2)}%` },
                   ]} />
                 </View>
-                <Text style={styles.failedProgressText}>{foundWords}/{totalWords} words</Text>
+                <Text style={styles.failedProgressText}>{t('result.wordsCounter', { found: foundWords, total: totalWords })}</Text>
               </View>
             )}
             <View style={styles.failedStats}>
-              <Text style={styles.failedStat}>Score: {score}</Text>
+              <Text style={styles.failedStat}>{t('result.score', { score })}</Text>
             </View>
             <View style={styles.failedButtons}>
               <Pressable
                 style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
                 onPress={handleRetry}
               >
-                <Text style={styles.retryButtonText}>TRY AGAIN</Text>
+                <Text style={styles.retryButtonText}>{t('result.tryAgain').toUpperCase()}</Text>
               </Pressable>
               {/* Watch ad for a free hint — shown after failure when player has no hints */}
               {!isAdFree && adManager.canShowAd('hint_reward') && hintsLeft === 0 && (
@@ -1873,7 +1879,7 @@ export function GameScreen({
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={handleWatchAdForHint}
                 >
-                  <Text style={styles.adHintButtonText}>{'\uD83C\uDFAC'} Watch Ad for Free Hint</Text>
+                  <Text style={styles.adHintButtonText}>{'\uD83C\uDFAC'} {t('result.watchAdFreeHint')}</Text>
                 </Pressable>
               )}
               {undosLeft > 0 && history.length > 0 && (
@@ -1881,14 +1887,14 @@ export function GameScreen({
                   style={({ pressed }) => [styles.undoRecoverButton, pressed && styles.buttonPressed]}
                   onPress={handleUndo}
                 >
-                  <Text style={styles.undoRecoverText}>↩ UNDO LAST MOVE</Text>
+                  <Text style={styles.undoRecoverText}>↩ {t('result.undoLastMove')}</Text>
                 </Pressable>
               )}
               <Pressable
                 style={({ pressed }) => [styles.homeButton, pressed && styles.buttonPressed]}
                 onPress={onHome}
               >
-                <Text style={styles.homeButtonText}>HOME</Text>
+                <Text style={styles.homeButtonText}>{t('result.home').toUpperCase()}</Text>
               </Pressable>
             </View>
           </View>
