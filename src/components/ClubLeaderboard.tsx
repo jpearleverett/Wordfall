@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
@@ -25,6 +26,7 @@ const RANK_DECORATIONS: Record<number, { emoji: string; color: string }> = {
 };
 
 const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubId }) => {
+  const { t } = useTranslation();
   return (
     <LinearGradient
       colors={[...GRADIENTS.surfaceCard] as [string, string]}
@@ -36,14 +38,14 @@ const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubI
       <View style={styles.header}>
         <Text style={styles.headerIcon}>{'🏅'}</Text>
         <View>
-          <Text style={styles.headerTitle}>Club Leaderboard</Text>
-          <Text style={styles.headerSubtitle}>Weekly rankings</Text>
+          <Text style={styles.headerTitle}>{t('club.leaderboardTitle')}</Text>
+          <Text style={styles.headerSubtitle}>{t('club.weeklyRankingsSub')}</Text>
         </View>
       </View>
 
       {/* Reward Preview */}
       <View style={styles.rewardPreview}>
-        <Text style={styles.rewardPreviewLabel}>Top Club Rewards</Text>
+        <Text style={styles.rewardPreviewLabel}>{t('club.topClubRewards')}</Text>
         <View style={styles.rewardRow}>
           <View style={styles.rewardItem}>
             <Text style={styles.rewardEmoji}>{'🏆'}</Text>
@@ -114,7 +116,7 @@ const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubI
                     </Text>
                     {isCurrentClub && (
                       <View style={styles.youBadge}>
-                        <Text style={styles.youBadgeText}>YOU</Text>
+                        <Text style={styles.youBadgeText}>{t('club.you')}</Text>
                       </View>
                     )}
                   </View>
@@ -125,7 +127,7 @@ const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubI
                       </Text>
                     </View>
                     <Text style={styles.memberCountText}>
-                      {entry.memberCount} members
+                      {t('common.membersCount', { count: entry.memberCount })}
                     </Text>
                   </View>
                 </View>
@@ -149,8 +151,8 @@ const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubI
       ) : (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>{'📊'}</Text>
-          <Text style={styles.emptyText}>No club rankings yet this week</Text>
-          <Text style={styles.emptySubtext}>Play puzzles to earn club score</Text>
+          <Text style={styles.emptyText}>{t('club.noRankingsYet')}</Text>
+          <Text style={styles.emptySubtext}>{t('club.playToEarnScore')}</Text>
         </View>
       )}
     </LinearGradient>

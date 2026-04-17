@@ -8,6 +8,7 @@
  * applied locally via EconomyContext so it still works on a cold reconnect.
  */
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -30,13 +31,14 @@ const GIFT_ICON: Record<FirestoreGift['type'], string> = {
   life: '❤️',
 };
 
-const GIFT_LABEL: Record<FirestoreGift['type'], string> = {
-  hint: 'Hint',
-  tile: 'Wildcard Tile',
-  life: 'Life',
+const GIFT_I18N_KEY: Record<FirestoreGift['type'], string> = {
+  hint: 'club.gifts.hint',
+  tile: 'club.gifts.tile',
+  life: 'club.gifts.life',
 };
 
 export const GiftInbox: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { addHintTokens, addBoosterToken, addLives } = useEconomy();
   const [gifts, setGifts] = useState<FirestoreGift[]>([]);
@@ -82,8 +84,8 @@ export const GiftInbox: React.FC = () => {
         setGifts((prev) => prev.filter((g) => g.id !== gift.id));
       } catch (err) {
         Alert.alert(
-          'Could not claim gift',
-          'Please try again in a moment.',
+          t('club.gifts.couldNotClaim'),
+          t('club.gifts.tryAgainMoment'),
         );
         crashReporter.captureException(err as Error, {
           feature: 'gifts_inbox_claim',
@@ -93,7 +95,7 @@ export const GiftInbox: React.FC = () => {
         setClaimingId(null);
       }
     },
-    [applyGrant, claimingId],
+    [applyGrant, claimingId, t],
   );
 
   if (!user?.uid) return null;
@@ -109,49 +111,53 @@ export const GiftInbox: React.FC = () => {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>
-        🎁 Gifts from friends ({gifts.length})
+        {t('common.giftCount', { count: gifts.length })}
       </Text>
-      {gifts.map((gift) => (
-        <LinearGradient
-          key={gift.id}
-          colors={[...GRADIENTS.surfaceCard] as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.card}
-        >
-          <Text style={styles.giftIcon}>{GIFT_ICON[gift.type] ?? '🎁'}</Text>
-          <View style={styles.info}>
-            <Text style={styles.from} numberOfLines={1}>
-              {gift.fromDisplayName || 'A friend'}
-            </Text>
-            <Text style={styles.detail}>
-              sent you {gift.amount}× {GIFT_LABEL[gift.type] ?? 'Gift'}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => handleClaim(gift)}
-            disabled={claimingId === gift.id}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={`Claim ${GIFT_LABEL[gift.type] ?? 'gift'} from ${gift.fromDisplayName || 'friend'}`}
-            accessibilityState={{ busy: claimingId === gift.id }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      {gifts.map((gift) => {
+        const itemLabel = t(GIFT_I18N_KEY[gift.type] ?? 'club.gifts.hint');
+        const fromName = gift.fromDisplayName || t('club.gifts.aFriend');
+        return (
+          <LinearGradient
+            key={gift.id}
+            colors={[...GRADIENTS.surfaceCard] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.card}
           >
-            <LinearGradient
-              colors={[...GRADIENTS.button.primary] as [string, string, ...string[]]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.claimBtn}
+            <Text style={styles.giftIcon}>{GIFT_ICON[gift.type] ?? '🎁'}</Text>
+            <View style={styles.info}>
+              <Text style={styles.from} numberOfLines={1}>
+                {fromName}
+              </Text>
+              <Text style={styles.detail}>
+                {t('common.giftSentYou', { count: gift.amount, item: itemLabel })}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => handleClaim(gift)}
+              disabled={claimingId === gift.id}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={t('club.gifts.claimA11y', { item: itemLabel, from: fromName })}
+              accessibilityState={{ busy: claimingId === gift.id }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              {claimingId === gift.id ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.claimBtnText}>Claim</Text>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-        </LinearGradient>
-      ))}
+              <LinearGradient
+                colors={[...GRADIENTS.button.primary] as [string, string, ...string[]]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.claimBtn}
+              >
+                {claimingId === gift.id ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.claimBtnText}>{t('club.gifts.claim')}</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </LinearGradient>
+        );
+      })}
     </View>
   );
 };
