@@ -191,6 +191,60 @@ function checkPushRateLimit(uid: string): boolean {
 }
 
 /**
+ * Firestore-backed per-UID rate limit (token-bucket w/ fixed time window).
+ *
+ * In-memory limits (`pushRateBuckets`) only bind one function instance; a
+ * caller that fans out across cold starts can burst past the limit. This
+ * backs every call with a tiny Firestore counter at
+ * `rateLimits/{uid}_{endpoint}_{windowStart}`, incremented atomically, TTL
+ * via `expiresAt`. Callers should still run the in-memory check first as a
+ * fast-path — Firestore is only consulted if memory says ok.
+ *
+ * Docs are ~80 bytes; at 30 req/min/user worst-case that's ~3 MB / 100k DAU /
+ * day, deleted daily by the scheduled cleanup.
+ *
+ * Returns true if the request is within budget, false if over.
+ */
+async function checkFirestoreRateLimit(
+  uid: string,
+  endpoint: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<boolean> {
+  const now = Date.now();
+  const windowStart = Math.floor(now / (windowSeconds * 1000)) * windowSeconds;
+  const docId = `${uid}_${endpoint}_${windowStart}`;
+  const ref = db.collection('rateLimits').doc(docId);
+  try {
+    const next = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = (snap.exists ? (snap.data()?.count as number) : 0) ?? 0;
+      if (current >= limit) return current + 1;
+      tx.set(
+        ref,
+        {
+          uid,
+          endpoint,
+          count: admin.firestore.FieldValue.increment(1),
+          windowStart,
+          expiresAt: admin.firestore.Timestamp.fromMillis(
+            (windowStart + windowSeconds) * 1000 + 60_000,
+          ),
+        },
+        { merge: true },
+      );
+      return current + 1;
+    });
+    return next <= limit;
+  } catch (err) {
+    // Fail open so Firestore hiccups don't black out legit traffic — the
+    // in-memory bucket + abuse monitoring above still provide coverage.
+    console.warn('[rateLimit] Firestore check failed, allowing:', err);
+    return true;
+  }
+}
+
+/**
  * Check whether the authenticated sender has an existing relationship
  * (friendship, club co-membership) with the target user, authorizing a push.
  */
@@ -255,8 +309,21 @@ export const sendPushNotification = functions.https.onCall(
       );
     }
 
-    // Per-sender rate limit
+    // Per-sender rate limit — in-memory fast path, then durable Firestore
+    // check that survives cold starts / instance fan-out.
     if (!checkPushRateLimit(senderUid)) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Too many push requests — try again in a minute',
+      );
+    }
+    const withinDurableBudget = await checkFirestoreRateLimit(
+      senderUid,
+      'sendPushNotification',
+      PUSH_RATE_LIMIT_PER_MIN,
+      60,
+    );
+    if (!withinDurableBudget) {
       throw new functions.https.HttpsError(
         'resource-exhausted',
         'Too many push requests — try again in a minute',

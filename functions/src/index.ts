@@ -94,6 +94,59 @@ function redactUid(uid: string | undefined | null): string {
 }
 
 /**
+ * Firestore-backed per-UID rate limit (token-bucket w/ fixed time window).
+ *
+ * Bucket doc lives at rateLimits/{uid}_{endpoint}_{windowStart}; increments
+ * atomically; TTL via expiresAt. Used to throttle expensive server calls
+ * (receipt validation, club goal progress, account deletion) across cold
+ * starts so a single attacker can't burst past the per-endpoint budget by
+ * spraying requests through concurrent function instances.
+ *
+ * Fails OPEN on Firestore errors so a hiccup never black-holes legitimate
+ * traffic — pair with in-memory checks where extra defense-in-depth matters.
+ */
+async function checkFirestoreRateLimit(
+  uid: string,
+  endpoint: string,
+  limit: number,
+  windowSeconds: number
+): Promise<boolean> {
+  const now = Date.now();
+  const windowStart = Math.floor(now / (windowSeconds * 1000)) * windowSeconds;
+  const docId = `${uid}_${endpoint}_${windowStart}`;
+  const ref = db.collection("rateLimits").doc(docId);
+  try {
+    const next = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = (snap.exists ? (snap.data()?.count as number) : 0) ?? 0;
+      if (current >= limit) return current + 1;
+      tx.set(
+        ref,
+        {
+          uid,
+          endpoint,
+          count: admin.firestore.FieldValue.increment(1),
+          windowStart,
+          expiresAt: admin.firestore.Timestamp.fromMillis(
+            (windowStart + windowSeconds) * 1000 + 60_000
+          ),
+        },
+        { merge: true }
+      );
+      return current + 1;
+    });
+    return next <= limit;
+  } catch (err) {
+    functions.logger.warn("[rateLimit] Firestore check failed, allowing", {
+      uid: redactUid(uid),
+      endpoint,
+      err,
+    });
+    return true;
+  }
+}
+
+/**
  * Check Firestore for receipt replay. Returns true if receipt was already used.
  */
 async function isReceiptReplay(hash: string): Promise<boolean> {
@@ -390,6 +443,25 @@ export const validateReceipt = functions.https.onRequest(
       }
     }
 
+    // Per-UID rate limit: 20 receipt-validation attempts / 5min. A legitimate
+    // purchase retries at most a handful of times on flaky networks; anything
+    // above this cap is an attacker probing receipt forgery.
+    if (authenticatedUserId) {
+      const ok = await checkFirestoreRateLimit(
+        authenticatedUserId,
+        "validateReceipt",
+        20,
+        300
+      );
+      if (!ok) {
+        res.status(429).json({
+          valid: false,
+          error: "Too many validation attempts — try again later",
+        });
+        return;
+      }
+    }
+
     const result = await validateReceiptCore(data, authenticatedUserId);
     const statusCode =
       result.valid ? 200 :
@@ -624,6 +696,21 @@ export const clubGoalProgress = functions.https.onCall(
       );
     }
 
+    // Per-UID rate limit: 60 progress calls / minute. A real puzzle completion
+    // fires once; this ceiling only trips when a client is hot-looping.
+    const ok = await checkFirestoreRateLimit(
+      callerUid,
+      "clubGoalProgress",
+      60,
+      60
+    );
+    if (!ok) {
+      throw new functions.https.HttpsError(
+        "resource-exhausted",
+        "Too many club progress updates — slow down"
+      );
+    }
+
     const userId = callerUid;
 
     const clubRef = db.collection("clubs").doc(clubId);
@@ -806,6 +893,25 @@ export const requestAccountDeletion = functions.https.onRequest(
     }
 
     const tag = redactUid(uid);
+
+    // Per-UID rate limit: 3 deletion attempts / hour. Deletion is a
+    // high-cost, destructive op; a legitimate user calls it once. Any
+    // repeat within the window is either a retry (still fine up to 3) or
+    // an attacker trying to flood the purge pipeline.
+    const ok = await checkFirestoreRateLimit(
+      uid,
+      "requestAccountDeletion",
+      3,
+      3600
+    );
+    if (!ok) {
+      res.status(429).json({
+        ok: false,
+        error: "Too many deletion attempts — try again later",
+      });
+      return;
+    }
+
     functions.logger.info("Account deletion requested", { uid: tag });
 
     const stats = {
