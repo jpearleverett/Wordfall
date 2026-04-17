@@ -12,6 +12,7 @@ import { logger } from '../utils/logger';
 import { crashReporter } from './crashReporting';
 import type { IAPProductId } from '../types';
 import { isReceiptValidationConfigured, validateReceipt } from './receiptValidation';
+import { secureStorage } from './secureStorage';
 import {
   SHOP_PRODUCTS,
   getAllStoreProductIds,
@@ -729,7 +730,7 @@ class IAPManager {
 
   private async storeReceipt(receipt: StoredReceipt): Promise<void> {
     try {
-      const stored = await AsyncStorage.getItem(RECEIPTS_STORAGE_KEY);
+      const stored = await secureStorage.getItem(RECEIPTS_STORAGE_KEY);
       const receipts: StoredReceipt[] = stored ? JSON.parse(stored) : [];
 
       // Avoid duplicate receipts
@@ -738,7 +739,7 @@ class IAPManager {
       );
       if (!exists) {
         receipts.push(receipt);
-        await AsyncStorage.setItem(RECEIPTS_STORAGE_KEY, JSON.stringify(receipts));
+        await secureStorage.setItem(RECEIPTS_STORAGE_KEY, JSON.stringify(receipts));
       }
     } catch (e) {
       logger.warn('[IAP] Failed to store receipt:', e);
@@ -747,7 +748,7 @@ class IAPManager {
 
   async getStoredReceipts(): Promise<StoredReceipt[]> {
     try {
-      const stored = await AsyncStorage.getItem(RECEIPTS_STORAGE_KEY);
+      const stored = await secureStorage.getItem(RECEIPTS_STORAGE_KEY);
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
