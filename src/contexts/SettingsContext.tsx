@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils/logger';
 
 type ThemeOption = 'dark' | 'midnight' | 'ocean' | 'forest' | 'sunset';
 
@@ -87,7 +88,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           setSettings((prev) => ({ ...prev, ...parsed }));
         }
       } catch (e) {
-        console.warn('Failed to load settings from AsyncStorage:', e);
+        logger.warn('Failed to load settings from AsyncStorage:', e);
       }
       setLoaded(true);
     };
@@ -102,7 +103,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       try {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
       } catch (e) {
-        console.warn('Failed to save settings to AsyncStorage:', e);
+        logger.warn('Failed to save settings to AsyncStorage:', e);
       }
     };
     persist();

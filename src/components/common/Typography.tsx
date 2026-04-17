@@ -24,6 +24,7 @@ import {
   Platform,
 } from 'react-native';
 import { TYPOGRAPHY } from '../../constants';
+import { logger } from '../../utils/logger';
 
 export type TypographyVariant = keyof typeof TYPOGRAPHY;
 
@@ -122,7 +123,7 @@ export function installGlobalFontScaleClamp(): void {
     // to stay defensive if a future RN rev removes it.
     if (__DEV__) {
       // eslint-disable-next-line no-console
-      console.warn('[Typography] could not install global font-scale clamp');
+      logger.warn('[Typography] could not install global font-scale clamp');
     }
   }
   // Platform-specific no-op touch so the import isn't unused if something

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, View, Image, ImageSourcePropType } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
+import { logger } from '../../utils/logger';
 
 interface VideoBackgroundProps {
   source: number; // require() asset
@@ -89,7 +90,7 @@ class VideoErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error) {
-    console.warn('[VideoBackground] Crashed, falling back to static view:', error.message);
+    logger.warn('[VideoBackground] Crashed, falling back to static view:', error.message);
   }
 
   render() {

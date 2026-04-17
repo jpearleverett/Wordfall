@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, getLevelConfig } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import { logger } from '../utils/logger';
 import { useAuth } from '../contexts/AuthContext';
 import {
   usePlayerStore,
@@ -222,7 +223,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           setFirestoreEntries([]);
         }
       } catch (e) {
-        console.warn('[Leaderboard] fetch failed:', e);
+        logger.warn('[Leaderboard] fetch failed:', e);
         setFirestoreEntries([]);
       }
       setLoading(false);

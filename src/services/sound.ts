@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 // Lazy-load audio modules to avoid deprecation warnings and crashes
 let createAudioPlayerFn: any = null;
 let setAudioModeFn: any = null;
@@ -663,7 +665,7 @@ class SoundManager {
           tags: { feature: 'audio_real_file_load', asset: label },
         });
       } else if (__DEV__) {
-        console.warn(`[sound] real-file load failed for ${label}:`, e);
+        logger.warn(`[sound] real-file load failed for ${label}:`, e);
       }
       return null;
     }
@@ -800,7 +802,7 @@ class SoundManager {
       // render its first frame before heavy DSP work begins.
       setTimeout(() => this.preWarmAll(), 0);
     } catch (e) {
-      console.warn('Sound init failed:', e);
+      logger.warn('Sound init failed:', e);
     }
   }
 
@@ -851,7 +853,7 @@ class SoundManager {
       player.seekTo(0);
       player.play();
     } catch (e) {
-      console.warn(`Failed to play sound "${name}":`, e);
+      logger.warn(`Failed to play sound "${name}":`, e);
     }
   }
 
@@ -878,7 +880,7 @@ class SoundManager {
       }
       this.currentTrack = track;
     } catch (e) {
-      console.warn(`Failed to play music "${track}":`, e);
+      logger.warn(`Failed to play music "${track}":`, e);
     }
   }
 

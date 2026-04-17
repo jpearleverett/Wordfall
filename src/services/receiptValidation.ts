@@ -8,6 +8,7 @@
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils/logger';
 import { crashReporter } from './crashReporting';
 
 const FIREBASE_FUNCTIONS_URL =
@@ -133,7 +134,7 @@ async function saveReceiptHash(hash: string): Promise<void> {
         JSON.stringify(trimmed),
       );
     } catch {
-      console.warn('[ReceiptValidation] Failed to persist receipt hash');
+      logger.warn('[ReceiptValidation] Failed to persist receipt hash');
     }
   }, () => {
     // Previous write failed — still attempt this one
@@ -246,7 +247,7 @@ export async function validateReceipt(
   const knownHashes = await loadReceiptHashes();
 
   if (knownHashes.has(hash)) {
-    console.warn(
+    logger.warn(
       '[ReceiptValidation] Duplicate receipt detected (possible replay attack):',
       productId,
     );
