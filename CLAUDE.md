@@ -110,7 +110,7 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 - Grant Firebase default service account (`<project>@appspot.gserviceaccount.com`) the **Android Publisher** role in Play Console → Users and permissions (so `validateReceipt` can call Google's API)
 - Upload FCM server key to Firebase → Cloud Messaging (for remote push)
 - Set `EXPO_PUBLIC_SENTRY_DSN` as an EAS secret + `.env`
-- AdMob **app IDs** in `app.json` are already real (`ca-app-pub-6575205005908086~...`). Remaining: set real rewarded + interstitial **unit IDs** via `EXPO_PUBLIC_ADMOB_REWARDED_ID` + `EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID` env vars / EAS secrets (`src/constants.ts` falls back to Google test unit IDs when unset — dev builds work without them)
+- AdMob **app IDs** in `app.json` AND rewarded + interstitial **unit IDs** (via `EXPO_PUBLIC_ADMOB_REWARDED_ID*` / `..._INTERSTITIAL_ID*` env vars) are already real on the user's side. Only remaining AdMob step: confirm those env vars are populated in EAS secrets so production AABs don't fall through to the dev-only Google test unit fallback in `src/constants.ts`
 - Author the UMP consent message inside AdMob → Privacy & messaging → GDPR
 - Run `firebase deploy --only firestore:rules,firestore:indexes,functions` (one-time)
 - Fill Play Console Data Safety form (draft in `agent_docs/data_safety.md`)
