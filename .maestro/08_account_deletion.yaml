@@ -1,0 +1,34 @@
+# Flow 08 — Account deletion (cancellation path)
+#
+# Play Store Data Safety form requires an in-app account deletion path.
+# This flow taps the "Delete Account & Data" button from Settings,
+# confirms the two-step confirmation dialog appears, and then backs out
+# without actually deleting (so the flow can re-run deterministically).
+#
+# Full deletion is exercised by the backend integration test against
+# the requestAccountDeletion Cloud Function, not this UI smoke.
+appId: com.wordfall.game
+name: "08 — Account deletion dialog"
+tags:
+  - compliance
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+- tapOn: "Open settings"
+- waitForAnimationToEnd
+- assertVisible: "SETTINGS"
+- scrollUntilVisible:
+    element: "Delete account and data. Permanently erases your cloud profile"
+    direction: DOWN
+- tapOn: "Delete account and data. Permanently erases your cloud profile"
+- waitForAnimationToEnd
+# First confirmation dialog — cancel it so nothing is deleted.
+- assertVisible:
+    text: "Delete Account?"
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- assertVisible: "SETTINGS"
+- back
+- waitForAnimationToEnd

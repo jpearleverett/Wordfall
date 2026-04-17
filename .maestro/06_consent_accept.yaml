@@ -1,0 +1,35 @@
+# Flow 06 — Consent acceptance
+#
+# First-launch only: the ConsentGate overlays the app before any screen
+# is reachable, and must be accepted to proceed. This flow clears state
+# so the gate is guaranteed to show, then taps the accept button.
+#
+# Hard launch blocker: Play policy requires a visible, explicit ToS +
+# Privacy consent step before any telemetry/ad traffic fires.
+appId: com.wordfall.game
+name: "06 — Consent accept"
+tags:
+  - compliance
+---
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+- assertVisible:
+    text: "Terms of Service"
+- assertVisible:
+    text: "Privacy Policy"
+- tapOn: "I agree to the Terms of Service and Privacy Policy"
+- waitForAnimationToEnd
+# After accept, onboarding (or Home on repeat launches) must be visible.
+# We assert either the "Skip tutorial" link (first run) or the Home
+# "Open shop" icon (if onboarding was already completed earlier).
+- runFlow:
+    when:
+      visible: "Skip tutorial"
+    commands:
+      - assertVisible: "Skip tutorial"
+- runFlow:
+    when:
+      notVisible: "Skip tutorial"
+    commands:
+      - assertVisible: "Open shop"

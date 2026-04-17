@@ -1,0 +1,29 @@
+# Flow 07 — Restore Purchases from Settings
+#
+# Play Store policy wants a discoverable Restore Purchases flow under
+# Account settings. This flow opens Settings, taps the Restore
+# Purchases row, and confirms the accessibilityLabel renders and the
+# row is tappable without crashing.
+appId: com.wordfall.game
+name: "07 — Restore purchases"
+tags:
+  - compliance
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+- tapOn: "Open settings"
+- waitForAnimationToEnd
+- assertVisible: "SETTINGS"
+- scrollUntilVisible:
+    element: "Restore previous purchases"
+    direction: DOWN
+- tapOn: "Restore previous purchases"
+- waitForAnimationToEnd
+# On mock mode (dev builds) and with no pending purchases, Restore
+# resolves with a toast/log but leaves the screen intact. Assert we're
+# still on Settings afterwards — no crash, no unexpected nav.
+- assertVisible: "SETTINGS"
+- back
+- waitForAnimationToEnd
