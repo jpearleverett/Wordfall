@@ -14,11 +14,17 @@ import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useCommerce } from '../hooks/useCommerce';
 import {
   useEconomyStore,
   selectIsAdFreeComputed,
   selectIsPremiumPassFlag,
 } from '../stores/economyStore';
+import {
+  requestAccountDeletion,
+  clearLocalUserData,
+  isAccountDeletionConfigured,
+} from '../services/accountDeletion';
 
 const THEMES = [
   { id: 'dark', name: 'Dark', color: '#0a0e27' },
@@ -62,6 +68,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const isAdFreeComputed = useEconomyStore(selectIsAdFreeComputed);
   const isPremiumPassFlag = useEconomyStore(selectIsPremiumPassFlag);
   const { signOut } = useAuth();
+  const { restorePurchases } = useCommerce();
 
   const settings = settingsProp ?? contextSettings;
   const onUpdateSetting = onUpdateSettingProp ?? ((key: string, value: any) => contextSettings.updateSetting(key as any, value));
@@ -70,6 +77,28 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const [signingIn, setSigningIn] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleRestorePurchases = async () => {
+    if (restoring) return;
+    setRestoring(true);
+    try {
+      const { results, restoredCount } = await restorePurchases();
+      if (results.length === 0) {
+        Alert.alert('No Purchases Found', 'There are no purchases to restore on this account.');
+      } else {
+        Alert.alert(
+          'Purchases Restored',
+          `${restoredCount} purchase${restoredCount === 1 ? '' : 's'} restored successfully.`,
+        );
+      }
+    } catch (error: any) {
+      Alert.alert('Restore Failed', error?.message ?? 'Could not restore purchases. Please try again.');
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const handleSignIn = async () => {
     if (signingIn) return;
@@ -106,10 +135,74 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     onUpdateSetting(key, newValue);
   };
 
+  const performAccountDeletion = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const result = await requestAccountDeletion();
+      if (!result.ok) {
+        Alert.alert(
+          'Deletion Failed',
+          result.error ??
+            'We could not complete the deletion. Please contact support so we can finish it manually.',
+        );
+        return;
+      }
+      await clearLocalUserData();
+      try {
+        await signOut();
+      } catch {
+        // signOut errors are non-fatal — auth state will settle on next launch
+      }
+      Alert.alert(
+        'Account Deleted',
+        'Your account and all associated data have been deleted. We are sorry to see you go.',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const confirmDeleteAccount = () => {
+    if (deleting) return;
+    if (!isAccountDeletionConfigured()) {
+      Alert.alert(
+        'Unavailable',
+        `Account deletion is temporarily unavailable from the app. Please email ${SUPPORT_EMAIL} and we will delete your account within 30 days.`,
+      );
+      return;
+    }
+    Alert.alert(
+      'Delete Account?',
+      'This permanently deletes your profile, progress, club memberships, and friends list. Purchase records are retained in anonymized form for tax and fraud auditing only.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are You Absolutely Sure?',
+              'This cannot be undone. Any unspent gems, purchased VIP time, and tournament progress will be lost.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: () => void performAccountDeletion(),
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   const confirmResetProgress = () => {
     Alert.alert(
-      'Reset Progress',
-      'This will permanently delete all your game progress. This action cannot be undone.',
+      'Reset Local Data',
+      'This clears on-device progress only. Your account, purchases, and cloud-synced stats stay intact. Use "Delete Account & Data" below if you want full erasure.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Reset', style: 'destructive', onPress: onResetProgress },
@@ -348,6 +441,26 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </Text>
             </View>
           </View>
+          <View style={styles.divider} />
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => void handleRestorePurchases()}
+            accessibilityRole="button"
+            accessibilityLabel="Restore previous purchases"
+            accessibilityHint="Re-applies purchases made on this account. Use this after reinstalling or switching devices."
+            accessibilityState={{ busy: restoring }}
+            disabled={restoring}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
+              {restoring ? 'Restoring\u2026' : 'Restore Purchases'}
+            </Text>
+            {restoring ? (
+              <ActivityIndicator size="small" color={COLORS.accent} />
+            ) : (
+              <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Parental Controls */}
@@ -479,12 +592,35 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             style={styles.dangerButton}
             onPress={confirmResetProgress}
             accessibilityRole="button"
-            accessibilityLabel="Reset progress. This will permanently delete all data"
+            accessibilityLabel="Reset local data. Clears on-device progress only"
           >
-            <Text style={styles.dangerButtonText}>Reset Progress</Text>
+            <Text style={styles.dangerButtonText}>Reset Local Data</Text>
             <Text style={styles.dangerSubtext}>
-              This will permanently delete all data
+              Clears on-device progress only. Account and purchases are kept.
             </Text>
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <TouchableOpacity
+            style={styles.dangerButton}
+            onPress={confirmDeleteAccount}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account and data. Permanently erases your cloud profile"
+            accessibilityState={{ busy: deleting, disabled: deleting }}
+            disabled={deleting}
+          >
+            <Text style={styles.dangerButtonText}>
+              {deleting ? 'Deleting\u2026' : 'Delete Account & Data'}
+            </Text>
+            <Text style={styles.dangerSubtext}>
+              Permanently erases your profile, progress, and cloud data. Cannot be undone.
+            </Text>
+            {deleting ? (
+              <ActivityIndicator
+                size="small"
+                color={COLORS.coral}
+                style={styles.dangerSpinner}
+              />
+            ) : null}
           </TouchableOpacity>
         </View>
 
@@ -729,6 +865,10 @@ const styles = StyleSheet.create({
   dangerSubtext: {
     fontSize: 12,
     color: COLORS.textMuted,
+    textAlign: 'center',
+  },
+  dangerSpinner: {
+    marginTop: 8,
   },
   bottomSpacer: {
     height: 40,

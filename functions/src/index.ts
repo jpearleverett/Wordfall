@@ -737,3 +737,163 @@ export const autoKickInactiveMembers = functions.pubsub
 
     functions.logger.info("Auto-kick complete", { totalKicked });
   });
+
+// ── Account deletion (GDPR / Play Store Data Safety) ─────────────────────────
+
+/**
+ * Delete every document in a subcollection in batches of 400.
+ * Firestore batch limit is 500; 400 leaves headroom for dependent writes.
+ */
+async function deleteCollection(
+  collectionRef: admin.firestore.CollectionReference | admin.firestore.Query,
+): Promise<number> {
+  let total = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const snap = await collectionRef.limit(400).get();
+    if (snap.empty) return total;
+    const batch = db.batch();
+    snap.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    total += snap.size;
+    if (snap.size < 400) return total;
+  }
+}
+
+/**
+ * Hash a UID for receipt-ledger retention. Tax / fraud audit needs the ledger
+ * to persist for years; the hash breaks linkability back to the deleted user.
+ */
+function hashUid(uid: string): string {
+  return crypto.createHash("sha256").update(uid).digest("hex");
+}
+
+/**
+ * requestAccountDeletion — HTTPS endpoint.
+ *
+ * POST /requestAccountDeletion
+ * Headers: Authorization: Bearer <Firebase ID token>
+ *
+ * Purges: users/{uid} + all subcollections, players/{uid}, club membership +
+ * authored chat messages, consent ledger entries, blockedUsers edges, push
+ * tokens. Retains /receipts rows with UID replaced by SHA-256 hash (audit).
+ * Finally deletes the Firebase Auth user record.
+ *
+ * Must respond within 30 days per Google Play Data Safety policy. In practice
+ * this function completes synchronously.
+ */
+export const requestAccountDeletion = functions.https.onRequest(
+  async (req, res): Promise<void> => {
+    if (req.method !== "POST") {
+      res.status(405).json({ ok: false, error: "Method not allowed" });
+      return;
+    }
+
+    const authHeader = req.header("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ ok: false, error: "Missing auth token" });
+      return;
+    }
+
+    let uid: string;
+    try {
+      const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+      uid = decoded.uid;
+    } catch (error) {
+      functions.logger.warn("Failed to verify ID token for account deletion", { error });
+      res.status(401).json({ ok: false, error: "Invalid auth token" });
+      return;
+    }
+
+    const tag = redactUid(uid);
+    functions.logger.info("Account deletion requested", { uid: tag });
+
+    const stats = {
+      userSubcollections: 0,
+      playerDoc: 0,
+      clubsLeft: 0,
+      clubMessagesRemoved: 0,
+      receiptsHashed: 0,
+      reportsAnonymized: 0,
+    };
+
+    try {
+      const userRef = db.collection("users").doc(uid);
+      for (const subName of ["consent", "blockedUsers", "pushTokens", "inventory", "notifications"]) {
+        stats.userSubcollections += await deleteCollection(userRef.collection(subName));
+      }
+
+      await userRef.delete().catch(() => undefined);
+
+      const playerRef = db.collection("players").doc(uid);
+      const playerSnap = await playerRef.get();
+      if (playerSnap.exists) {
+        await playerRef.delete();
+        stats.playerDoc = 1;
+      }
+
+      const clubsWithMember = await db
+        .collection("clubs")
+        .where("memberIds", "array-contains", uid)
+        .get();
+      for (const clubDoc of clubsWithMember.docs) {
+        const update: Record<string, unknown> = {
+          memberIds: admin.firestore.FieldValue.arrayRemove(uid),
+          [`memberContributions.${uid}`]: admin.firestore.FieldValue.delete(),
+          [`memberRoles.${uid}`]: admin.firestore.FieldValue.delete(),
+        };
+        await clubDoc.ref.update(update);
+        stats.clubsLeft += 1;
+
+        const authored = await clubDoc.ref
+          .collection("messages")
+          .where("userId", "==", uid)
+          .get();
+        if (!authored.empty) {
+          const batch = db.batch();
+          authored.docs.forEach((m) => batch.delete(m.ref));
+          await batch.commit();
+          stats.clubMessagesRemoved += authored.size;
+        }
+      }
+
+      const hashed = hashUid(uid);
+      const receipts = await db.collection("receipts").where("userId", "==", uid).get();
+      if (!receipts.empty) {
+        const batch = db.batch();
+        receipts.docs.forEach((r) =>
+          batch.update(r.ref, {
+            userId: `deleted:${hashed}`,
+            anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }),
+        );
+        await batch.commit();
+        stats.receiptsHashed = receipts.size;
+      }
+
+      const reports = await db.collection("reports").where("reporterId", "==", uid).get();
+      if (!reports.empty) {
+        const batch = db.batch();
+        reports.docs.forEach((r) => batch.update(r.ref, { reporterId: `deleted:${hashed}` }));
+        await batch.commit();
+        stats.reportsAnonymized = reports.size;
+      }
+
+      await admin.auth().deleteUser(uid).catch((e) => {
+        functions.logger.warn("Auth user delete failed (non-fatal)", {
+          uid: tag,
+          error: e?.message,
+        });
+      });
+
+      functions.logger.info("Account deletion complete", { uid: tag, ...stats });
+      res.status(200).json({ ok: true, ...stats });
+    } catch (error) {
+      functions.logger.error("Account deletion failed", {
+        uid: tag,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      res.status(500).json({ ok: false, error: "Deletion failed. Please contact support." });
+    }
+  },
+);

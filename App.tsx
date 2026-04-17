@@ -1280,8 +1280,8 @@ function HomeMainScreen({ route, navigation }: any) {
 
   const handleReset = useCallback(() => {
     Alert.alert(
-      'Reset Progress',
-      'Are you sure? This will erase all saved progress.',
+      'Reset Local Data',
+      'This clears on-device progress only. Your account and purchases are preserved.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

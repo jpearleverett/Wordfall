@@ -92,7 +92,7 @@ Earlier explore passes missed many of these. Verified via `agent_docs/pre_launch
 - Grant Android Publisher role to `<firebase-project>@appspot.gserviceaccount.com` in Play Console → Users and permissions.
 - Upload FCM server key to Firebase → Cloud Messaging.
 - Set `EXPO_PUBLIC_SENTRY_DSN` via `eas secret:create` + `.env`.
-- Swap AdMob test IDs for real ones in `app.json`; set `EXPO_PUBLIC_ADMOB_REWARDED_ID` + `..._INTERSTITIAL_ID`.
+- AdMob app IDs in `app.json` are already real. Remaining: set real rewarded + interstitial unit IDs via `EXPO_PUBLIC_ADMOB_REWARDED_ID` + `..._INTERSTITIAL_ID` in `.env` + EAS secrets.
 - Author Google UMP consent message in AdMob → Privacy & messaging.
 - Run `firebase deploy --only firestore:rules,firestore:indexes,functions` once.
 - Fill Play Console Data Safety form (draft: `agent_docs/data_safety.md`).
@@ -135,7 +135,7 @@ Live builds, receipt validation, push, real ads, crash reporting, deep-link veri
 | 0.4 | `firebase deploy --only functions:commerce` (wires `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`). | shell | 0.25d |
 | 0.5 | `firebase deploy --only functions:social` (wires `sendPushNotification`, `moderateClubMessage`, etc.). | shell | 0.25d |
 | 0.6 | `firebase deploy --only firestore:rules,firestore:indexes`. | shell | 0.1d |
-| 0.7 | Swap AdMob test IDs in `app.json` plugin config for real ones; set `EXPO_PUBLIC_ADMOB_REWARDED_ID` + `..._INTERSTITIAL_ID` in `.env` + EAS secrets; rebuild dev APK. | `app.json`, `src/constants.ts` AD_CONFIG | 0.5d |
+| 0.7 | AdMob **app IDs** in `app.json` plugin config are already real (`ca-app-pub-6575205005908086~...`). Remaining: set real rewarded + interstitial **unit IDs** via `EXPO_PUBLIC_ADMOB_REWARDED_ID` + `..._INTERSTITIAL_ID` in `.env` + EAS secrets; rebuild dev APK. (`src/constants.ts` AD_CONFIG falls back to Google test unit IDs when env vars are unset — dev builds work without them.) | `.env`, EAS secrets | 0.25d |
 | 0.8 | Replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` in `wordfallgamesite/.well-known/assetlinks.json` with Play app signing SHA-256, republish Cloudflare Pages. | site repo | 0.1d |
 | 0.9 | Create Sentry project, add `EXPO_PUBLIC_SENTRY_DSN` to `.env` + `eas secret:create`. | Sentry + shell | 0.25d |
 | 0.10 | Configure Google UMP consent form (GDPR) in AdMob → Privacy & messaging. | AdMob Console | 0.1d |

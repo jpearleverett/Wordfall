@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0015" />
+  <title>Delete Your Account — Wordfall</title>
+  <meta name="description" content="Request permanent deletion of your Wordfall account and all associated data. Required by Google Play and GDPR." />
+  <link rel="icon" href="/favicon.png" type="image/png" />
+
+  <style>
+    :root {
+      --bg: #0a0015;
+      --bg-2: #110028;
+      --accent: #ff2d95;
+      --cyan: #00d4ff;
+      --gold: #ffb800;
+      --coral: #ff6b6b;
+      --text: #f0e6ff;
+      --text-mute: #a08cc7;
+      --card: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.12);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+      background: radial-gradient(ellipse at top, var(--bg-2) 0%, var(--bg) 60%, #050010 100%);
+      color: var(--text);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+    a { color: var(--cyan); }
+    a:hover { opacity: .8; }
+
+    .nav {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px 24px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .nav-logo {
+      font-family: 'SF Mono', monospace;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: var(--accent);
+      text-shadow: 0 0 12px rgba(255, 45, 149, 0.45);
+      font-size: 16px;
+    }
+    .nav a { color: var(--text-mute); font-size: 14px; }
+
+    main { max-width: 800px; margin: 0 auto; padding: 60px 24px 80px; }
+
+    h1 {
+      font-size: clamp(32px, 5vw, 44px);
+      letter-spacing: -1px;
+      margin-bottom: 8px;
+      font-weight: 800;
+    }
+    .lede {
+      color: var(--text-mute);
+      font-size: 17px;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h2 {
+      font-size: 22px;
+      margin-top: 36px;
+      margin-bottom: 16px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    p { margin-bottom: 14px; }
+
+    .callout {
+      padding: 18px 20px;
+      background: rgba(255, 107, 107, 0.08);
+      border: 1px solid rgba(255, 107, 107, 0.35);
+      border-radius: 12px;
+      margin-bottom: 28px;
+    }
+    .callout strong { color: var(--coral); }
+
+    ul { margin: 10px 0 18px 22px; }
+    ul li { margin-bottom: 6px; }
+
+    .card {
+      padding: 22px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 20px;
+    }
+
+    form { display: grid; gap: 14px; margin-top: 12px; }
+    label { font-size: 14px; color: var(--text-mute); display: block; margin-bottom: 6px; }
+    input, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 15px;
+      font-family: inherit;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(255, 45, 149, 0.2);
+    }
+
+    .checkbox-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text);
+      padding: 10px 0;
+    }
+    .checkbox-row input[type="checkbox"] {
+      width: auto;
+      margin-top: 3px;
+      accent-color: var(--accent);
+    }
+
+    button {
+      padding: 14px 22px;
+      background: linear-gradient(135deg, var(--coral), #d84848);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: .5px;
+      box-shadow: 0 8px 24px rgba(255, 107, 107, 0.25);
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .status {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      display: none;
+    }
+    .status.show { display: block; }
+    .status.ok {
+      background: rgba(76, 175, 80, 0.12);
+      border: 1px solid rgba(76, 175, 80, 0.4);
+      color: #8eeba0;
+    }
+    .status.err {
+      background: rgba(255, 107, 107, 0.12);
+      border: 1px solid rgba(255, 107, 107, 0.4);
+      color: #ffb0b0;
+    }
+
+    .footer {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-mute);
+      text-align: center;
+    }
+
+    code {
+      font-family: 'SF Mono', monospace;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-logo">WORDFALL</div>
+    <a href="/">← Home</a>
+  </nav>
+
+  <main>
+    <h1>Delete Your Account</h1>
+    <p class="lede">
+      You can permanently delete your Wordfall account and all associated data at any time.
+      This page exists so you can request deletion without needing to install or reopen the app.
+    </p>
+
+    <div class="callout">
+      <strong>Heads up:</strong> Deletion is permanent and cannot be undone.
+      Any unspent gems, purchased VIP time, tournament progress, and club data will be lost.
+    </div>
+
+    <h2>What gets deleted</h2>
+    <ul>
+      <li>Your profile (username, avatar, stats, prestige, chapter progress)</li>
+      <li>Your cloud save (gems, coins, inventory, completion history)</li>
+      <li>Club membership, contributions, and chat messages you authored</li>
+      <li>Friends list, blocked users, and notification tokens</li>
+      <li>Consent records and preference settings</li>
+      <li>Your Firebase Authentication record (sign-in identity)</li>
+    </ul>
+
+    <h2>What is retained (and why)</h2>
+    <ul>
+      <li>
+        <strong>Purchase receipts</strong> — retained in anonymized form (your user ID is
+        replaced with a one-way SHA-256 hash) for up to 7 years to meet tax and fraud-prevention
+        obligations under applicable law. These records cannot be linked back to you.
+      </li>
+      <li>
+        <strong>Aggregated analytics</strong> — non-identifying usage metrics (e.g., "n daily
+        active users") that do not contain any personal identifiers.
+      </li>
+    </ul>
+
+    <h2>How to delete from inside the app</h2>
+    <p>
+      If you still have Wordfall installed, the fastest way is: open the app →
+      <strong>Settings → Danger Zone → Delete Account &amp; Data</strong>. Deletion is immediate.
+    </p>
+
+    <h2>Request deletion by email</h2>
+    <p>
+      Fill in the form below. We will verify the request, delete your data within 30 days
+      (usually much sooner), and email a confirmation.
+    </p>
+
+    <div class="card">
+      <form id="deletion-form">
+        <div>
+          <label for="email">Email address used with the app (if you have one on file)</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div>
+          <label for="userid">User ID suffix (optional — from Settings → Profile)</label>
+          <input type="text" id="userid" name="userid" placeholder="e.g. abc123" />
+        </div>
+        <div>
+          <label for="device">Device / platform (optional)</label>
+          <input type="text" id="device" name="device" placeholder="e.g. Pixel 7, Android 14" />
+        </div>
+        <div>
+          <label for="notes">Anything else we should know?</label>
+          <textarea id="notes" name="notes" placeholder="Optional — purchase order IDs, reason for deletion, etc."></textarea>
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="confirm" name="confirm" required />
+          <span>
+            I understand that deletion is permanent, that any unspent in-app currency or
+            active subscription time will be lost, and that purchase receipts will be retained
+            in anonymized form for tax / fraud auditing only.
+          </span>
+        </label>
+        <button type="submit" id="submit-btn">Send deletion request</button>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+
+    <h2>What happens next</h2>
+    <ul>
+      <li>We receive your request at <code>info@iridescent-games.com</code>.</li>
+      <li>We verify ownership (we may reply asking for proof, e.g. a Play Store order ID).</li>
+      <li>Deletion is executed on our servers within 30 days of verification.</li>
+      <li>You receive an email confirmation when it is complete.</li>
+    </ul>
+
+    <p style="margin-top: 20px;">
+      Questions? Email
+      <a href="mailto:info@iridescent-games.com?subject=Account%20Deletion%20Question">info@iridescent-games.com</a>
+      or visit our <a href="/support">Support</a> page.
+    </p>
+  </main>
+
+  <footer class="footer">
+    <p>© 2026 Wordfall · <a href="/">Home</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/support">Support</a></p>
+  </footer>
+
+  <script>
+    (function () {
+      var form = document.getElementById('deletion-form');
+      var status = document.getElementById('status');
+      var btn = document.getElementById('submit-btn');
+      if (!form) return;
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var email = (document.getElementById('email') || {}).value || '';
+        var userid = (document.getElementById('userid') || {}).value || '';
+        var device = (document.getElementById('device') || {}).value || '';
+        var notes = (document.getElementById('notes') || {}).value || '';
+        var confirmed = (document.getElementById('confirm') || {}).checked;
+
+        if (!confirmed) {
+          status.className = 'status show err';
+          status.textContent = 'Please confirm you understand deletion is permanent.';
+          return;
+        }
+        if (!email && !userid) {
+          status.className = 'status show err';
+          status.textContent = 'Please enter at least an email address or a user ID suffix so we can locate your account.';
+          return;
+        }
+
+        var subject = 'Account deletion request';
+        var body =
+          'I am requesting permanent deletion of my Wordfall account and all associated data.\n\n' +
+          'Email on file: ' + (email || '(none provided)') + '\n' +
+          'User ID suffix: ' + (userid || '(none provided)') + '\n' +
+          'Device / platform: ' + (device || '(none provided)') + '\n\n' +
+          'Notes:\n' + (notes || '(none)') + '\n\n' +
+          'I confirm I understand this action is permanent, that unspent in-app currency ' +
+          'and active subscriptions will be lost, and that purchase receipts will be ' +
+          'retained in anonymized form for tax / fraud auditing only.';
+
+        var mailto =
+          'mailto:info@iridescent-games.com' +
+          '?subject=' + encodeURIComponent(subject) +
+          '&body=' + encodeURIComponent(body);
+
+        btn.disabled = true;
+        status.className = 'status show ok';
+        status.innerHTML =
+          'Opening your email app… If nothing happens, email ' +
+          '<a href="mailto:info@iridescent-games.com?subject=Account%20deletion%20request">' +
+          'info@iridescent-games.com</a> with subject "Account deletion request" and ' +
+          'include your user ID suffix.';
+
+        window.location.href = mailto;
+        setTimeout(function () { btn.disabled = false; }, 2000);
+      });
+    })();
+  </script>
+
+</body>
+</html>
