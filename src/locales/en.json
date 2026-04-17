@@ -130,7 +130,21 @@
     "leaderboard": "Leaderboard",
     "goals": "Club Goals",
     "report": "Report",
-    "block": "Block"
+    "block": "Block",
+    "joinOrCreate": "Join or Create a Club",
+    "joinOrCreateDesc": "Team up with friends, compete in weekly challenges, and climb the leaderboards together.",
+    "findClub": "Find a Club",
+    "searchAndJoin": "Search & Join",
+    "createClub": "Create a Club",
+    "createNewClub": "Create New Club",
+    "create": "Create",
+    "weeklyClubScore": "Weekly Club Score",
+    "clubPuzzle": "Club Puzzle",
+    "clubPuzzleDesc": "Solve today's club challenge",
+    "clubGoal": "Club Goal",
+    "yourContribution": "Your Contribution",
+    "contributed": "Contributed",
+    "memberCountLabel": "{{current}} / {{max}} Members"
   },
   "result": {
     "victory": "Victory!",
