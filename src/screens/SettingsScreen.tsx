@@ -97,7 +97,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     setRestoring(true);
     try {
       const { results, restoredCount } = await restorePurchases();
-      if (results.length === 0) {
+      // restorePurchases() resolves on every path; failed attempts surface as
+      // a row with productId='restore_failed' (see iap.ts contract comment).
+      const failureRow = results.find((r) => r.productId === 'restore_failed' && !r.success);
+      if (failureRow) {
+        Alert.alert('Restore Failed', failureRow.error ?? 'Could not restore purchases. Please try again.');
+      } else if (results.length === 0) {
         Alert.alert('No Purchases Found', 'There are no purchases to restore on this account.');
       } else {
         Alert.alert(
@@ -105,8 +110,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           t('common.purchasesRestored', { count: restoredCount }),
         );
       }
-    } catch (error: any) {
-      Alert.alert('Restore Failed', error?.message ?? 'Could not restore purchases. Please try again.');
     } finally {
       setRestoring(false);
     }

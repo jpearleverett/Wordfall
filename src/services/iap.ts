@@ -272,6 +272,14 @@ class IAPManager {
 
   // ── Purchasing ──────────────────────────────────────────────────────────
 
+  /**
+   * Purchase contract: always RESOLVES, never rejects.
+   *
+   * Every path — user cancel, receipt validation failure, timeout, native
+   * module error — returns a `PurchaseResult` with `success: false` and an
+   * `error` string. Callers never need try/catch. This keeps the UX code
+   * (useCommerce, ShopScreen) to a single branch on `result.success`.
+   */
   async purchase(productId: string, userId?: string): Promise<PurchaseResult> {
     await this.init();
 
@@ -344,6 +352,16 @@ class IAPManager {
 
   // ── Restore purchases ───────────────────────────────────────────────────
 
+  /**
+   * Restore contract: always RESOLVES to a `PurchaseResult[]`.
+   *
+   * `[]` means "nothing to restore" in every scenario — fresh install, IAP
+   * not available on the device (e.g. missing Play Services, unmounted
+   * react-native-iap), or the underlying `getAvailablePurchases` call
+   * failed. Failed individual receipt-validations surface as
+   * `{ success: false, error, productId }` rows in the returned array so
+   * the UI can report partial results. Mirrors the `purchase()` contract.
+   */
   async restorePurchases(userId?: string): Promise<PurchaseResult[]> {
     await this.init();
 
@@ -352,7 +370,10 @@ class IAPManager {
         logger.log('[IAP] Mock restore — checking stored receipts');
         return this.getStoredNonConsumableResults();
       }
-      throw new Error('In-app purchases are unavailable in this build');
+      // IAP not available in this production build — treat as "nothing to
+      // restore" rather than an error. The Settings/Shop UI will show
+      // "No Purchases Found" which is the correct UX for this state.
+      return [];
     }
 
     try {
@@ -399,7 +420,18 @@ class IAPManager {
       return results;
     } catch (e: any) {
       logger.warn('[IAP] Restore failed:', e);
-      throw new Error(e?.message ?? 'Failed to restore purchases');
+      crashReporter.captureException(
+        e instanceof Error ? e : new Error(String(e?.message ?? e)),
+        { tags: { step: 'restore_purchases' } },
+      );
+      // Contract: never reject. Surface the failure as a single error row
+      // so callers can distinguish "no purchases" (empty array) from
+      // "restore attempt hit an error" (array with failed rows).
+      return [{
+        success: false,
+        productId: 'restore_failed',
+        error: e?.message ?? 'Failed to restore purchases',
+      }];
     }
   }
 

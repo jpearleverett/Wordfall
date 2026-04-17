@@ -82,4 +82,24 @@ describe('useCommerce integration (iapManager mock-mode)', () => {
     expect(adRemovalRow).toBeDefined();
     expect(adRemovalRow!.success).toBe(true);
   });
+
+  it('purchase contract — never rejects, always resolves with a result object', async () => {
+    // Pass a product id that the catalog does not know about. mockPurchase
+    // still goes through validateReceipt, so this exercises the "never throws"
+    // guarantee the iap.ts contract doc promises.
+    await expect(
+      (async () => {
+        const p = iapManager.purchase('definitely_not_a_real_sku', 'uid1');
+        await jest.advanceTimersByTimeAsync(1200);
+        return p;
+      })(),
+    ).resolves.toMatchObject({ productId: 'definitely_not_a_real_sku' });
+  });
+
+  it('restorePurchases contract — returns [] on a clean restore (never rejects)', async () => {
+    // No purchases stored => restore resolves to [].
+    const restored = await iapManager.restorePurchases('uid1');
+    expect(Array.isArray(restored)).toBe(true);
+    expect(restored.length).toBe(0);
+  });
 });
