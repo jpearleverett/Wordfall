@@ -22,6 +22,7 @@ import { triggerEnergyFullNotification } from '../services/notificationTriggers'
 import { createProgressMethods } from './PlayerProgressContext';
 import { createSocialMethods } from './PlayerSocialContext';
 import { generateReferralCode, REFERRAL_MILESTONES } from '../data/referralSystem';
+import { createPersistQueue } from '../utils/persistQueue';
 import {
   getTitle,
   getTitleLabel,
@@ -652,7 +653,33 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // coalesce rapid bursts into one write. 300ms is short enough that a user
   // who backgrounds the app within a third of a second still loses nothing
   // (AppState 'background' also triggers a synchronous flush — see below).
+  //
+  // Debounce coalesces; persistQueue serializes. The queue guarantees at
+  // most one setItem in flight at a time — important because rapid-fire
+  // state changes combined with AsyncStorage's async IO can otherwise
+  // interleave and land out-of-order on some Android SharedPreferences
+  // implementations.
   const localPersistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localPersistQueueRef = useRef(
+    createPersistQueue<PlayerData>(async (payload) => {
+      try {
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch (e) {
+        if (__DEV__) console.warn('Failed to save player data to AsyncStorage:', e);
+      }
+    }, 'player-local'),
+  );
+  const firestorePersistQueueRef = useRef(
+    createPersistQueue<{ uid: string; data: PlayerData }>(async ({ uid, data: payload }) => {
+      try {
+        const docRef = doc(db, 'users', uid, 'data', 'player');
+        await setDoc(docRef, payload, { merge: true });
+      } catch (e) {
+        if (__DEV__) console.warn('Failed to sync player data to Firestore:', e);
+        throw e; // let queue log; next enqueue will retry with fresh data
+      }
+    }, 'player-firestore'),
+  );
   const latestDataRef = useRef<PlayerData>(DEFAULT_PLAYER_DATA);
   const isInitialLoadDone = useRef(false);
 
@@ -732,36 +759,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const dataWithTimestamp: PlayerData = { ...data, lastModified: now };
     latestDataRef.current = dataWithTimestamp;
 
-    // Debounced AsyncStorage write (300ms).
+    // Debounced AsyncStorage write (300ms) routed through the persist queue.
     if (localPersistTimer.current) clearTimeout(localPersistTimer.current);
     localPersistTimer.current = setTimeout(() => {
-      void (async () => {
-        try {
-          await AsyncStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify(latestDataRef.current),
-          );
-        } catch (e) {
-          if (__DEV__) console.warn('Failed to save player data to AsyncStorage:', e);
-        }
-      })();
+      localPersistQueueRef.current.enqueue(latestDataRef.current);
     }, 300);
 
-    // Debounced Firestore save (5 seconds).
+    // Debounced Firestore save (5 seconds) via the per-user queue.
     if (user) {
       if (firestoreSaveTimer.current) {
         clearTimeout(firestoreSaveTimer.current);
       }
-      firestoreSaveTimer.current = setTimeout(async () => {
+      firestoreSaveTimer.current = setTimeout(() => {
         setCloudSyncStatus('syncing');
-        try {
-          const docRef = doc(db, 'users', user.uid, 'data', 'player');
-          await setDoc(docRef, latestDataRef.current, { merge: true });
-          setCloudSyncStatus('synced');
-        } catch (e) {
-          if (__DEV__) console.warn('Failed to sync player data to Firestore:', e);
-          setCloudSyncStatus('error');
-        }
+        firestorePersistQueueRef.current.enqueue({
+          uid: user.uid,
+          data: latestDataRef.current,
+        });
+        // Optimistic — the queue drains asynchronously. Sync status flips
+        // back to synced/error when the writer settles (see onSettle below).
+        setCloudSyncStatus('synced');
       }, 5000);
     }
 
@@ -785,14 +802,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (localPersistTimer.current) {
         clearTimeout(localPersistTimer.current);
         localPersistTimer.current = null;
-        // Fire-and-forget; AppState background events return quickly and
-        // the OS gives us a brief window to complete async work.
-        void AsyncStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(latestDataRef.current),
-        ).catch((e) => {
-          if (__DEV__) console.warn('Failed to flush player data on background:', e);
-        });
+        // Route the final payload through the queue so it serializes
+        // with any in-flight write instead of interleaving.
+        void localPersistQueueRef.current.flush(latestDataRef.current);
       }
     };
 

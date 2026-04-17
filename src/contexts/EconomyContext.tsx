@@ -28,6 +28,7 @@ import {
   type EconomyActions,
 } from '../stores/economyStore';
 import { computeRefilledLives } from '../utils/lives';
+import { createPersistQueue } from '../utils/persistQueue';
 
 interface Economy {
   coins: number;
@@ -321,31 +322,43 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   // life tick, booster counts, etc.) — writing to AsyncStorage + Firestore on
   // every mutation would JSON.stringify the full state blob 50+ times per game,
   // blocking the JS thread. Batch to one write per second of quiet.
+  //
+  // The debounce coalesces rapid bursts; the persistQueue below serializes the
+  // actual write so two slow Firestore round-trips can't overlap and land
+  // out-of-order.
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestStateRef = useRef(state);
   // Keep the ref in sync during render so canAfford / other ref-readers
   // never see stale state (effects run after commit, which is too late).
   latestStateRef.current = state;
+
+  const userRef = useRef(user);
+  userRef.current = user;
+  const persistQueueRef = useRef(
+    createPersistQueue<EconomyState>(async (payload) => {
+      try {
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch (e) {
+        if (__DEV__) console.warn('Failed to save economy to AsyncStorage:', e);
+      }
+      const u = userRef.current;
+      if (u) {
+        try {
+          const docRef = doc(db, 'users', u.uid, 'economy', 'current');
+          await setDoc(docRef, payload, { merge: true });
+        } catch (e) {
+          if (__DEV__) console.warn('Failed to sync economy to Firestore:', e);
+        }
+      }
+    }, 'economy'),
+  );
+
   useEffect(() => {
     if (!loaded) return;
 
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     persistTimerRef.current = setTimeout(() => {
-      (async () => {
-        try {
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(latestStateRef.current));
-        } catch (e) {
-          if (__DEV__) console.warn('Failed to save economy to AsyncStorage:', e);
-        }
-        if (user) {
-          try {
-            const docRef = doc(db, 'users', user.uid, 'economy', 'current');
-            await setDoc(docRef, latestStateRef.current, { merge: true });
-          } catch (e) {
-            if (__DEV__) console.warn('Failed to sync economy to Firestore:', e);
-          }
-        }
-      })();
+      persistQueueRef.current.enqueue(latestStateRef.current);
     }, 1000);
 
     // Intentionally no cleanup here — we want the timer to persist across
@@ -360,12 +373,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
         persistTimerRef.current = null;
-        void AsyncStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(latestStateRef.current),
-        ).catch((e) => {
-          if (__DEV__) console.warn('Failed to flush economy on background:', e);
-        });
+        void persistQueueRef.current.flush(latestStateRef.current);
       }
     };
 
