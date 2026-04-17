@@ -2,6 +2,11 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import en from '../locales/en.json';
+import es419 from '../locales/es-419.json';
+import ptBR from '../locales/pt-BR.json';
+import de from '../locales/de.json';
+import fr from '../locales/fr.json';
+import ja from '../locales/ja.json';
 
 export type SupportedLocale = 'en' | 'es-419' | 'pt-BR' | 'de' | 'fr' | 'ja';
 
@@ -63,7 +68,11 @@ export async function initI18n(initialLocale?: SupportedLocale): Promise<void> {
     compatibilityJSON: 'v4',
     resources: {
       en: { translation: en },
-      // Additional locales lazy-loaded in Phase 4A.2 once translations land.
+      'es-419': { translation: es419 },
+      'pt-BR': { translation: ptBR },
+      de: { translation: de },
+      fr: { translation: fr },
+      ja: { translation: ja },
     },
     lng: locale,
     fallbackLng: 'en',
