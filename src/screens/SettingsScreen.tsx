@@ -27,6 +27,7 @@ import {
 } from '../services/accountDeletion';
 import type { ColorblindMode } from '../contexts/SettingsContext';
 import { COLORBLIND_MODE_LABELS } from '../services/colorblind';
+import i18n, { SUPPORTED_LOCALES, LOCALE_LABELS, type SupportedLocale } from '../i18n';
 
 const COLORBLIND_MODES: ColorblindMode[] = [
   'off',
@@ -335,6 +336,42 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <Text style={styles.settingLabel}>{COLORBLIND_MODE_LABELS[mode]}</Text>
                 <View style={styles.radioOuter}>
                   {colorblindMode === mode && <View style={styles.radioInner} />}
+                </View>
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
+        </View>
+
+        {/* Language Section */}
+        <Text style={styles.sectionTitle}>Language</Text>
+        <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <Text style={[styles.dangerSubtext, { textAlign: 'left', marginBottom: 12 }]}>
+              UI language. Puzzles remain English.
+            </Text>
+          </View>
+          {SUPPORTED_LOCALES.map((loc, idx) => (
+            <React.Fragment key={loc}>
+              {idx > 0 && <View style={styles.divider} />}
+              <TouchableOpacity
+                style={styles.themeRow}
+                onPress={() => {
+                  onUpdateSetting('language', loc);
+                  void i18n.changeLanguage(loc);
+                }}
+                accessibilityRole="radio"
+                accessibilityLabel={`Language: ${LOCALE_LABELS[loc as SupportedLocale]}`}
+                accessibilityState={{ selected: (settings?.language ?? 'en') === loc }}
+              >
+                <Text style={styles.settingLabel}>{LOCALE_LABELS[loc as SupportedLocale]}</Text>
+                <View style={styles.radioOuter}>
+                  {(settings?.language ?? 'en') === loc && <View style={styles.radioInner} />}
                 </View>
               </TouchableOpacity>
             </React.Fragment>
