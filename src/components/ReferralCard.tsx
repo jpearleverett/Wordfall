@@ -1,4 +1,5 @@
 import React, { useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -33,6 +34,7 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
   milestonesClaimed,
   onClaimMilestone,
 }) => {
+  const { t } = useTranslation();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const copyFlashAnim = useRef(new Animated.Value(0)).current;
 
@@ -117,7 +119,7 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
           <View style={styles.headerText}>
             <Text style={styles.title}>Invite Friends</Text>
             <Text style={styles.subtitle}>
-              {referralCount} friend{referralCount !== 1 ? 's' : ''} referred
+              {t('common.friendsReferred', { count: referralCount })}
             </Text>
           </View>
         </View>

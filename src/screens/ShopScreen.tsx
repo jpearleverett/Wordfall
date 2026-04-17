@@ -897,7 +897,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 <View style={{ flex: 1 }}>
                   <Text style={styles.vipStreakTitle}>{t('shop.vipStreak')}</Text>
                   <Text style={styles.vipStreakWeeks}>
-                    {streakWeeks} {streakWeeks === 1 ? 'week' : 'weeks'} subscribed
+                    {t('common.weeksSubscribed', { count: streakWeeks })}
                   </Text>
                 </View>
                 {currentBonus && (

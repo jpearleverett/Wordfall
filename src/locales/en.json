@@ -24,7 +24,17 @@
     "daysRemainingSeason_one": "{{count}} day remaining this season",
     "daysRemainingSeason_other": "{{count}} days remaining this season",
     "daysLeftRewards_one": "Don't miss out! Only {{count}} day left to earn exclusive rewards",
-    "daysLeftRewards_other": "Don't miss out! Only {{count}} days left to earn exclusive rewards"
+    "daysLeftRewards_other": "Don't miss out! Only {{count}} days left to earn exclusive rewards",
+    "movesCount_one": "{{count}} move",
+    "movesCount_other": "{{count}} moves",
+    "friendsReferred_one": "{{count}} friend referred",
+    "friendsReferred_other": "{{count}} friends referred",
+    "weeksSubscribed_one": "{{count}} week subscribed",
+    "weeksSubscribed_other": "{{count}} weeks subscribed",
+    "chaptersAway_one": "{{count}} chapter away from the {{wing}} library wing!",
+    "chaptersAway_other": "{{count}} chapters away from the {{wing}} library wing!",
+    "starsAway_one": "{{count}} star until {{milestone}}!",
+    "starsAway_other": "{{count}} stars until {{milestone}}!"
   },
   "home": {
     "play": "Play",

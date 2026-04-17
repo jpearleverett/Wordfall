@@ -251,7 +251,7 @@ i18n unlocks ~60% of non-EN revenue. Hard-energy A/B + gifting + share cards clo
 | 4.2 | **In progress.** `src/locales/en.json` has ~128 lines of extracted strings covering Onboarding + GameScreen fail modal + Settings labels. Remaining high-traffic surfaces (Home, Shop, Club, Ceremony) still need extraction. | every `src/screens/**` + `src/components/**` with strings | 3–4d |
 | 4.3 | Commission translations: ES-419, PT-BR, DE, FR, JA. ~500 strings × 5 locales. Mobile-gaming tone. | external | 0d code, 1–2wk wall-clock |
 | 4.4 | ✅ DONE. Locale selector in Settings; defaults to device locale, falls back to EN via `SettingsContext`. | `src/screens/SettingsScreen.tsx`, `src/contexts/SettingsContext.tsx` | 0.5d |
-| 4.5 | i18next `plural`/`number` formatters; audit `"You earned " + n + " coins"` → `{{count, number}}`. | across strings | 1d |
+| 4.5 | ✅ DONE (UI plural-safety). Migrated all hardcoded English plural concatenations to i18next `_one/_other` plural keys. Sites: `SettingsScreen.tsx:105` (purchasesRestored), `HomeScreen.tsx:627` (freeSpinsAvailable), `MysteryWheel.tsx:152` (spinsAvailable), `MasteryScreen.tsx:192,214` (daysRemainingSeason, daysLeftRewards), `PuzzleComplete.tsx:259,273` (chaptersAway, starsAway), `ReplayViewer.tsx:254` (movesCount), `ReferralCard.tsx:121` (friendsReferred), `ShopScreen.tsx:900` (weeksSubscribed). Share-text in `replayGenerator.ts:48,49` intentionally kept English per plan 4.7 ("English puzzles, translated UI"). | across strings | 1d |
 | 4.6 | Snapshot-test each locale for top 5 screens (DE strings ~+30% wider than EN). | `src/screens/__tests__/*.locale.test.tsx` | 0.5d |
 | 4.7 | Store-listing description clearly states "English puzzles, translated UI". | Play Console | 0.1d |
 

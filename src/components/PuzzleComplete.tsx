@@ -237,6 +237,7 @@ const CONFETTI_COLORS = [
 ];
 
 function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: number; statsAnim: Animated.Value }) {
+  const { t } = useTranslation();
   // Narrow zustand subscriptions — PuzzleComplete is hit by the 15+ setData
   // burst on every win; reading individual slices keeps it from re-rendering
   // on unrelated player state churn.
@@ -255,13 +256,13 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
         if (chaptersAway <= 3) {
           const wingIdx = wingChapterThresholds.indexOf(threshold);
           const wingName = LIBRARY.wingNames[wingIdx] ?? 'new';
-          return `${chaptersAway} chapter${chaptersAway === 1 ? '' : 's'} away from the ${wingName} library wing!`;
+          return t('common.chaptersAway', { count: chaptersAway, wing: wingName });
         }
         break;
       }
     }
     return null;
-  }, [currentChapter]);
+  }, [currentChapter, t]);
 
   // Star milestone proximity
   const starMilestoneMsg = useMemo(() => {
@@ -269,13 +270,13 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
       if (totalStars < milestone.stars) {
         const starsAway = milestone.stars - totalStars;
         if (starsAway <= 15) {
-          return `${starsAway} star${starsAway === 1 ? '' : 's'} until ${milestone.name}!`;
+          return t('common.starsAway', { count: starsAway, milestone: milestone.name });
         }
         break;
       }
     }
     return null;
-  }, [totalStars]);
+  }, [totalStars, t]);
 
   const milestoneMsg = wingMilestoneMsg || starMilestoneMsg;
 
