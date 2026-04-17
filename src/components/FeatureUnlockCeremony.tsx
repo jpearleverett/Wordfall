@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,6 +23,7 @@ export function FeatureUnlockCeremony({
   accentColor = COLORS.accent,
   onDismiss,
 }: FeatureUnlockCeremonyProps) {
+  const { t } = useTranslation();
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.7);
   const iconProgress = useSharedValue(0);
@@ -71,7 +73,7 @@ export function FeatureUnlockCeremony({
             ]}
           />
 
-          <Text style={styles.ribbon}>NEW UNLOCK</Text>
+          <Text style={styles.ribbon}>{t('ceremony.newUnlock')}</Text>
 
           <Animated.View
             style={[
@@ -98,7 +100,7 @@ export function FeatureUnlockCeremony({
               end={{ x: 1, y: 0 }}
               style={[styles.button, SHADOWS.glow(accentColor)]}
             >
-              <Text style={styles.buttonText}>EXPLORE NOW</Text>
+              <Text style={styles.buttonText}>{t('ceremony.exploreNow')}</Text>
             </LinearGradient>
           </Pressable>
         </LinearGradient>
