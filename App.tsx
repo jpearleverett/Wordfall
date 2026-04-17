@@ -49,11 +49,16 @@ import { setHapticsEnabled } from './src/services/haptics';
 // ATLAS_PAGES and generateShareText moved to useRewardWiring
 import { notificationManager } from './src/services/notifications';
 import { installGlobalFontScaleClamp } from './src/components/common/Typography';
+import { initI18n } from './src/i18n';
 import { Providers } from './src/App/Providers';
 
 // Clamp system font scaling once at module init so large-text settings can't
 // break tight layouts (grid, HUD, shop pricing). See Typography.tsx for why.
 installGlobalFontScaleClamp();
+
+// Bootstrap i18n from device locale. Resolves to EN fallback for unsupported
+// device languages. Fire-and-forget: errors land in the crash reporter.
+void initI18n().catch(() => { /* fallback EN is already active */ });
 import { CeremonyRouter } from './src/App/CeremonyRouter';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { MysteryWheel } from './src/components/MysteryWheel';
