@@ -17,6 +17,56 @@ import {
 } from '../data/eventLayers';
 import { getCurrentEvent, getEventForWeek } from '../data/events';
 import { GameEvent, EventRewardTier } from '../types';
+import { getRemoteString } from './remoteConfig';
+
+// ─── Remote-Config override (Phase 4D) ────────────────────────────────────
+// Schema (documented for non-engineer editors):
+// {
+//   "events": [
+//     {
+//       "id": "string",               // unique; prefix "rc_" to avoid collisions
+//       "type": "main" | "mini",      // rendered alongside main/mini built-ins
+//       "name": "string",
+//       "description": "string",
+//       "icon": "emoji or glyph",
+//       "endTime": <epoch ms>,        // when the event disappears
+//       "multipliers": {              // all optional, default 1
+//         "coins": 2, "xp": 2, "rareTileChance": 1.5
+//       }
+//     }
+//   ]
+// }
+// If JSON is empty or malformed the built-in calendar is used untouched.
+
+interface RemoteEventEntry {
+  id: string;
+  type: 'main' | 'mini';
+  name: string;
+  description: string;
+  icon: string;
+  endTime: number;
+  multipliers?: Partial<EventMultipliers>;
+}
+
+function parseRemoteEvents(): RemoteEventEntry[] {
+  const raw = getRemoteString('eventCalendarOverride');
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return [];
+    const events = (parsed as { events?: unknown }).events;
+    if (!Array.isArray(events)) return [];
+    return events.filter((e): e is RemoteEventEntry =>
+      !!e &&
+      typeof e === 'object' &&
+      typeof (e as RemoteEventEntry).id === 'string' &&
+      typeof (e as RemoteEventEntry).endTime === 'number' &&
+      ((e as RemoteEventEntry).type === 'main' || (e as RemoteEventEntry).type === 'mini'),
+    );
+  } catch {
+    return [];
+  }
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -192,6 +242,28 @@ class EventManager {
           { tier: 'gold', threshold: 12, rewards: { coins: 1000, gems: 15 }, claimed: this.isTierClaimed(blitzId, 'gold'), reached: this.getProgress(blitzId) >= 12 },
         ],
         multipliers: { coins: 1, xp: 2, rareTileChance: 2 },
+      });
+    }
+
+    // 4. Remote-Config override events (Phase 4D). Layered on top of the
+    // built-ins; the multiplier aggregator takes the max per field so
+    // stacking a remote 2x coins with a built-in 1.5x blitz yields 2x.
+    for (const remote of parseRemoteEvents()) {
+      if (remote.endTime <= now) continue;
+      events.push({
+        id: remote.id,
+        type: remote.type,
+        name: remote.name,
+        description: remote.description,
+        icon: remote.icon,
+        progress: this.getProgress(remote.id),
+        endTime: remote.endTime,
+        rewards: [],
+        multipliers: {
+          coins: remote.multipliers?.coins ?? 1,
+          xp: remote.multipliers?.xp ?? 1,
+          rareTileChance: remote.multipliers?.rareTileChance ?? 1,
+        },
       });
     }
 
