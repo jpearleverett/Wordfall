@@ -53,6 +53,13 @@ export interface RemoteConfigValues {
   streakShieldGemPrice: number;
   // Difficulty
   adaptiveDifficultyEnabled: boolean;
+  // Phase 4B — hard-energy A/B (default OFF; flip on if soft-launch D7 sags)
+  hardEnergyEnabled: boolean;
+  // Phase 0 — pricing + LiveOps override hooks (Phase 4D)
+  starterBundlePrice: string;
+  eventCalendarOverride: string;   // JSON string; empty = use built-in calendar
+  dailyDealOverride: string;       // JSON string; empty = use hashed defaults
+  interstitialIntervalSeconds: number; // mirror of interstitialIntervalMs but named per plan 0.11
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -92,6 +99,13 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   streakShieldGemPrice: 30,
   // Difficulty
   adaptiveDifficultyEnabled: true,
+  // Phase 4B — hard-energy off until soft-launch cohort data justifies it
+  hardEnergyEnabled: false,
+  // Phase 0 / 4D LiveOps overrides — empty strings/0 mean "use built-ins"
+  starterBundlePrice: '0.49',
+  eventCalendarOverride: '',
+  dailyDealOverride: '',
+  interstitialIntervalSeconds: 90,
 };
 
 // ---------------------------------------------------------------------------
