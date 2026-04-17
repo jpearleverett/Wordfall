@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Image,
@@ -138,6 +139,7 @@ export function HomeScreen({
   claimedLoginToday = false,
   onClaimLoginReward,
 }: HomeScreenProps) {
+  const { t } = useTranslation();
   // Narrow zustand subscriptions — re-render only on the slices actually read.
   const onboardingMilestones = usePlayerStore(selectOnboardingMilestones);
   const mysteryWheelData = usePlayerStore(selectMysteryWheel);
@@ -407,7 +409,7 @@ export function HomeScreen({
               <View style={styles.shopButtonWrapper}>
                 <Image source={LOCAL_IMAGES.shopButton} style={styles.shopButtonImage} resizeMode="contain" />
                 <View style={styles.shopButtonOverlay}>
-                  <Text style={styles.shopButtonText}>Shop</Text>
+                  <Text style={styles.shopButtonText}>{t('home.shop')}</Text>
                 </View>
               </View>
             </Pressable>

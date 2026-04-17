@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -74,6 +75,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onResetProgress: onResetProgressProp,
   onSignOut: onSignOutProp,
 }) => {
+  const { t } = useTranslation();
   const contextSettings = useSettings();
   const isAdFreeComputed = useEconomyStore(selectIsAdFreeComputed);
   const isPremiumPassFlag = useEconomyStore(selectIsPremiumPassFlag);
@@ -309,7 +311,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </View>
 
         {/* Accessibility Section */}
-        <Text style={styles.sectionTitle}>Accessibility</Text>
+        <Text style={styles.sectionTitle}>{t('settings.accessibility')}</Text>
         <View style={styles.card}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
@@ -343,7 +345,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </View>
 
         {/* Language Section */}
-        <Text style={styles.sectionTitle}>Language</Text>
+        <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
         <View style={styles.card}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
@@ -412,7 +414,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </View>
 
         {/* Account Section */}
-        <Text style={styles.sectionTitle}>Account</Text>
+        <Text style={styles.sectionTitle}>{t('settings.account')}</Text>
         <View style={styles.card}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
@@ -534,7 +536,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
-              {restoring ? 'Restoring\u2026' : 'Restore Purchases'}
+              {restoring ? `${t('common.loading')}` : t('settings.restorePurchases')}
             </Text>
             {restoring ? (
               <ActivityIndicator size="small" color={COLORS.accent} />
@@ -660,7 +662,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         {/* Danger Zone */}
         <Text style={[styles.sectionTitle, { color: COLORS.coral }]}>
-          Danger Zone
+          {t('settings.dangerZone')}
         </Text>
         <View style={[styles.card, styles.dangerCard]}>
           <LinearGradient
@@ -675,7 +677,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             accessibilityRole="button"
             accessibilityLabel="Reset local data. Clears on-device progress only"
           >
-            <Text style={styles.dangerButtonText}>Reset Local Data</Text>
+            <Text style={styles.dangerButtonText}>{t('settings.resetLocalData')}</Text>
             <Text style={styles.dangerSubtext}>
               Clears on-device progress only. Account and purchases are kept.
             </Text>
@@ -690,7 +692,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             disabled={deleting}
           >
             <Text style={styles.dangerButtonText}>
-              {deleting ? 'Deleting\u2026' : 'Delete Account & Data'}
+              {deleting ? `${t('common.loading')}` : t('settings.deleteAccount')}
             </Text>
             <Text style={styles.dangerSubtext}>
               Permanently erases your profile, progress, and cloud data. Cannot be undone.

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Image,
@@ -345,6 +346,7 @@ export function PuzzleComplete({
   totalGemsAwarded = 0,
   nextUnlockPreview = null,
 }: PuzzleCompleteProps) {
+  const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
 
   // Victory card share (Phase 4C). Captures the off-screen <ShareCard/>
@@ -871,7 +873,7 @@ export function PuzzleComplete({
                     end={{ x: 1, y: 0 }}
                     style={styles.primaryButton}
                   >
-                    <Text style={styles.primaryButtonText}>{isDaily ? 'PLAY ANOTHER MODE' : 'NEXT LEVEL'}</Text>
+                    <Text style={styles.primaryButtonText}>{isDaily ? 'PLAY ANOTHER MODE' : t('result.next').toUpperCase()}</Text>
                   </LinearGradient>
                 </Pressable>
                 {showTomorrowPreview && (
@@ -885,7 +887,7 @@ export function PuzzleComplete({
                 )}
                 <View style={styles.secondaryRow}>
                   <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome} accessibilityRole="button" accessibilityLabel="Go to home screen">
-                    <Text style={styles.secondaryButtonText}>Home</Text>
+                    <Text style={styles.secondaryButtonText}>{t('result.home')}</Text>
                   </Pressable>
                   {shareText ? (
                     <Pressable
