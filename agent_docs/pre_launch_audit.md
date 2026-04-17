@@ -140,5 +140,7 @@ All of the following are committed on `claude/game-launch-readiness-bxmxE`. Kept
 - `functions/src/index.ts` (validateReceipt, clubGoalProgress, redactUid)
 - `cloud-functions/src/index.ts` (sendPushNotification, moderateClubMessage, sendGift, claimGift)
 - `src/services/gifts.ts` (secure gifting client wrapper; `sendGiftSecure` / `claimGiftSecure`)
+- `src/components/GiftInbox.tsx` (gift-inbox UI; mounted in `ClubScreen`, claim via `claimGiftSecure`, grants applied via EconomyContext)
+- `src/contexts/PlayerSocialContext.tsx` (sends gifts through `sendGiftSecure` with legacy direct-write fallback)
 - `firestore.rules`
 - `app.json`, `eas.json`

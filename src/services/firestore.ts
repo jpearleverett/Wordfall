@@ -161,7 +161,7 @@ export interface FirestoreGift {
   fromUserId: string;
   fromDisplayName: string;
   toUserId: string;
-  type: 'hint' | 'tile';
+  type: 'hint' | 'tile' | 'life';
   amount: number;
   claimed: boolean;
   createdAt: any;

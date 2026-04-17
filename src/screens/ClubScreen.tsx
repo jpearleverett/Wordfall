@@ -25,6 +25,7 @@ import { firestoreService, ClubMessage } from '../services/firestore';
 import { getTitleLabel } from '../data/cosmetics';
 import ClubGoalCard from '../components/ClubGoalCard';
 import ClubLeaderboard from '../components/ClubLeaderboard';
+import { GiftInbox } from '../components/GiftInbox';
 import {
   generateClubGoal,
   ActiveClubGoal,
@@ -488,6 +489,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             <Text style={styles.chevron}>›</Text>
           </LinearGradient>
         </TouchableOpacity>
+
+        {/* Pending Gifts */}
+        <GiftInbox />
 
         {/* Club Cooperative Goal */}
         {clubGoal && (
