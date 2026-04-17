@@ -230,7 +230,7 @@ User chose **tighten procedural generation** instead of hand-authoring 75 tutori
 |---|------|-------|--------|
 | 3.8 | ✅ DONE. `src/components/effects/ParticleSystem.tsx` runs spark+absorb particles on word-find; wired from `PlayField`. Audio tie-in will land with the real-asset commission in Phase 2.1. | `src/components/effects/ParticleSystem.tsx`, `src/screens/game/PlayField.tsx` | 1d |
 | 3.9 | ✅ DONE. `src/components/effects/ComboFlash.tsx` — accent-tint flash at combo ≥ 3, gold tint + confetti burst at combo ≥ 5, honours reduce-motion. Mounted in `GameScreen.tsx:1601`. | `src/components/effects/ComboFlash.tsx` | 1d |
-| 3.10 | Gravity-settle polish: tiny bounce-overshoot on land (`withSpring(damping:10)`). | `src/screens/game/PlayField.tsx`, `src/engine/gravity.ts` timings | 0.5d |
+| 3.10 | ✅ DONE. Fall-in spring at `GameScreen.tsx:1091` uses `tension:180, friction:9` for a subtle landing bounce-overshoot. Reduce-motion users skip the spring block. | `src/screens/GameScreen.tsx` | 0.5d |
 | 3.11 | Layered BGM: high-intensity stem mixes in at combo ≥ 3, fades on miss. Requires 2.1 to have requested stems. | `src/services/sound.ts` | 1d |
 
 **Verification.** CI: golden-seed + fuzz green. Telemetry from 2nd-pass cohort lands within target distributions. Recorded juice demo: fresh eyes say "oh, that's satisfying".

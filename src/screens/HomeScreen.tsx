@@ -375,7 +375,7 @@ export function HomeScreen({
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         {onOpenSettings && (
-          <Pressable style={styles.iconButton} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel="Open settings">
+          <Pressable style={styles.iconButton} onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel={t('home.openSettings')}>
             <Ionicons name="settings-outline" size={22} color={COLORS.textSecondary} />
           </Pressable>
         )}
@@ -405,7 +405,7 @@ export function HomeScreen({
             </>
           )}
           {onOpenShop && (
-            <Pressable onPress={onOpenShop} style={({ pressed }) => [pressed && styles.buttonPressed]} accessibilityRole="button" accessibilityLabel="Open shop">
+            <Pressable onPress={onOpenShop} style={({ pressed }) => [pressed && styles.buttonPressed]} accessibilityRole="button" accessibilityLabel={t('home.openShop')}>
               <View style={styles.shopButtonWrapper}>
                 <Image source={LOCAL_IMAGES.shopButton} style={styles.shopButtonImage} resizeMode="contain" />
                 <View style={styles.shopButtonOverlay}>
@@ -460,7 +460,7 @@ export function HomeScreen({
               <View style={styles.playButtonOverlay}>
                 <View>
                   <Text style={styles.playButtonLabel}>{playerStage === 'new' ? 'Start playing' : 'Continue journey'}</Text>
-                  <Text style={styles.playButtonLevel}>Play Level {progress.currentLevel}</Text>
+                  <Text style={styles.playButtonLevel}>{t('home.playLevel', { level: progress.currentLevel })}</Text>
                 </View>
                 <Text style={styles.playButtonArrow}>→</Text>
               </View>
@@ -619,7 +619,7 @@ export function HomeScreen({
                   <Text style={styles.mysteryWheelIcon}>{'\u{1F3B0}'}</Text>
                 </View>
                 <View style={styles.mysteryWheelContent}>
-                  <Text style={styles.mysteryWheelTitle}>Mystery Wheel</Text>
+                  <Text style={styles.mysteryWheelTitle}>{t('home.mysteryWheel')}</Text>
                   <Text style={styles.mysteryWheelSubtitle}>
                     {dailyFreeSpinAvailable
                       ? 'Daily free spin ready!'
@@ -673,7 +673,7 @@ export function HomeScreen({
             style={styles.freeSpinToastInner}
           >
             <Text style={styles.freeSpinToastIcon}>{'\u{1F3B0}'}</Text>
-            <Text style={styles.freeSpinToastText}>Free Mystery Wheel Spin Available!</Text>
+            <Text style={styles.freeSpinToastText}>{t('home.freeSpinToast')}</Text>
           </LinearGradient>
         </Animated.View>
       )}
@@ -700,7 +700,7 @@ export function HomeScreen({
             style={[styles.missionPanel, SHADOWS.medium]}
           >
             <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelTitle}>Daily Missions</Text>
+              <Text style={styles.panelTitle}>{t('home.dailyMissions')}</Text>
               <Text style={styles.panelMeta}>{dailyMissions.filter(m => m.completed).length}/{dailyMissions.length}</Text>
             </View>
             {dailyMissions.map((mission) => {
@@ -738,7 +738,7 @@ export function HomeScreen({
             style={[styles.weeklyGoalsPanel, SHADOWS.medium]}
           >
             <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelTitle}>Weekly Goals</Text>
+              <Text style={styles.panelTitle}>{t('home.weeklyGoals')}</Text>
               <Text style={styles.panelMeta}>{weeklyGoals.goals.filter(g => g.completed).length}/{weeklyGoals.goals.length}</Text>
             </View>
             {weeklyGoals.goals.map((goal, idx) => {
@@ -798,7 +798,7 @@ export function HomeScreen({
           >
             <Text style={styles.tomorrowIcon}>🌟</Text>
             <View style={styles.tomorrowContent}>
-              <Text style={styles.tomorrowTitle}>Your streak starts now!</Text>
+              <Text style={styles.tomorrowTitle}>{t('home.streakStartsNow')}</Text>
               <Text style={styles.tomorrowSubtext}>
                 Complete today's Daily Challenge and come back tomorrow to keep it going.
               </Text>
@@ -814,7 +814,7 @@ export function HomeScreen({
           >
             <View style={styles.panelHeaderRow}>
               <Text style={styles.panelTitle}>🔥 Streak</Text>
-              <Text style={styles.panelMeta}>Next: {nextMilestone} days</Text>
+              <Text style={styles.panelMeta}>{t('home.nextMilestone', { days: nextMilestone })}</Text>
             </View>
             <View style={styles.streakBarRow}>
               <NeonStreakFlame streakDays={progress.currentStreak} size="small" />
@@ -839,7 +839,7 @@ export function HomeScreen({
           >
             <View style={styles.panelHeaderRow}>
               <Text style={styles.panelTitle}>{dailyDeal.icon} Today's Deal</Text>
-              <Text style={styles.panelMeta}>Ends in {dealHoursLeft}h</Text>
+              <Text style={styles.panelMeta}>{t('home.endsInHours', { hours: dealHoursLeft })}</Text>
             </View>
             <View style={styles.dealContent}>
               <View style={styles.dealInfo}>
@@ -912,8 +912,8 @@ export function HomeScreen({
               style={[styles.rewardsPanel, SHADOWS.medium]}
             >
               <View style={styles.panelHeaderRow}>
-                <Text style={styles.panelTitle}>Login Calendar</Text>
-                <Text style={styles.panelMeta}>Day {calendarDay} of 30</Text>
+                <Text style={styles.panelTitle}>{t('home.loginCalendar')}</Text>
+                <Text style={styles.panelMeta}>{t('home.loginCalendarDay', { day: calendarDay })}</Text>
               </View>
               <View style={styles.calendarGrid}>
                 {Array.from({ length: 30 }, (_, i) => {
@@ -996,7 +996,7 @@ export function HomeScreen({
               </View>
               {/* Grand prize label for day 30 */}
               <View style={styles.calendarGrandRow}>
-                <Text style={styles.calendarGrandLabel}>Day 30: GRAND PRIZE</Text>
+                <Text style={styles.calendarGrandLabel}>{t('home.calendarGrandPrize')}</Text>
                 <Text style={styles.calendarGrandReward}>🪙1000  💎100  ✨Rare Tile  🎨Exclusive</Text>
               </View>
               {/* Claim button for today */}
@@ -1052,7 +1052,7 @@ export function HomeScreen({
             colors={GRADIENTS.surfaceCard}
             style={[styles.quickPlayPanel, SHADOWS.medium]}
           >
-            <Text style={styles.panelTitle}>Quick play</Text>
+            <Text style={styles.panelTitle}>{t('home.quickPlay')}</Text>
             <View style={styles.quickPlayGrid}>
               {(['easy', 'medium', 'hard', 'expert'] as Difficulty[]).map((difficulty) => (
                 <Pressable
