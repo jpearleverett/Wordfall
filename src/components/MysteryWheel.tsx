@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Easing as RNEasing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -35,6 +36,7 @@ export function MysteryWheel({
   onBuySpin,
   onDismiss,
 }: MysteryWheelProps) {
+  const { t } = useTranslation();
   const rotate = useSharedValue(0);
   const fade = useSharedValue(0);
   const resultProgress = useSharedValue(0);
@@ -147,8 +149,8 @@ export function MysteryWheel({
       <SparkleField count={12} intensity="medium" />
 
       <View style={styles.header}>
-        <Text style={styles.title}>Mystery Wheel</Text>
-        <Text style={styles.spinsLeft}>{wheelState.spinsAvailable} spin{wheelState.spinsAvailable !== 1 ? 's' : ''} available</Text>
+        <Text style={styles.title}>{t('home.mysteryWheel')}</Text>
+        <Text style={styles.spinsLeft}>{t('common.spinsAvailable', { count: wheelState.spinsAvailable })}</Text>
       </View>
 
       {/* Wheel */}

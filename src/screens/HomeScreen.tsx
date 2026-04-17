@@ -624,7 +624,7 @@ export function HomeScreen({
                     {dailyFreeSpinAvailable
                       ? 'Daily free spin ready!'
                       : mysteryWheelSpins > 0
-                        ? `${mysteryWheelSpins} free spin${mysteryWheelSpins !== 1 ? 's' : ''} available!`
+                        ? t('common.freeSpinsAvailable', { count: mysteryWheelSpins })
                         : 'Spin for prizes!'}
                   </Text>
                 </View>

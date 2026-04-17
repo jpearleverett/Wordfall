@@ -102,7 +102,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       } else {
         Alert.alert(
           'Purchases Restored',
-          `${restoredCount} purchase${restoredCount === 1 ? '' : 's'} restored successfully.`,
+          t('common.purchasesRestored', { count: restoredCount }),
         );
       }
     } catch (error: any) {

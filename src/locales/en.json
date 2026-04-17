@@ -14,7 +14,17 @@
     "yes": "Yes",
     "no": "No",
     "error": "Error",
-    "success": "Success"
+    "success": "Success",
+    "spinsAvailable_one": "{{count}} spin available",
+    "spinsAvailable_other": "{{count}} spins available",
+    "freeSpinsAvailable_one": "{{count}} free spin available!",
+    "freeSpinsAvailable_other": "{{count}} free spins available!",
+    "purchasesRestored_one": "{{count}} purchase restored successfully.",
+    "purchasesRestored_other": "{{count}} purchases restored successfully.",
+    "daysRemainingSeason_one": "{{count}} day remaining this season",
+    "daysRemainingSeason_other": "{{count}} days remaining this season",
+    "daysLeftRewards_one": "Don't miss out! Only {{count}} day left to earn exclusive rewards",
+    "daysLeftRewards_other": "Don't miss out! Only {{count}} days left to earn exclusive rewards"
   },
   "home": {
     "play": "Play",
@@ -66,7 +76,18 @@
     "removeAds": "Remove Ads",
     "restorePurchases": "Restore Purchases",
     "bestValue": "Best Value",
-    "mostPopular": "Most Popular"
+    "mostPopular": "Most Popular",
+    "exclusiveCosmetics": "Exclusive Cosmetics",
+    "hintBundles": "Hint Bundles",
+    "undoBundles": "Undo Bundles",
+    "premium": "Premium",
+    "spendCoins": "Spend Coins",
+    "limitedRentals": "Limited Rentals",
+    "vipWeekly": "VIP WEEKLY",
+    "vipStreak": "VIP STREAK",
+    "chapterBundle": "Chapter Bundle",
+    "dailyValuePack": "Daily Value Pack",
+    "premiumPass": "Premium Pass"
   },
   "settings": {
     "title": "Settings",

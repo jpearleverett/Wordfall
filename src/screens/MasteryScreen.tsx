@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -32,6 +33,7 @@ interface MasteryScreenProps {
 }
 
 const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
+  const { t } = useTranslation();
   const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
   const isPremiumPass = useEconomyStore(selectIsPremiumPassFlag);
   const commerce = useCommerce();
@@ -189,7 +191,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
         />
         <Text style={styles.countdownIcon}>{'\u23F3'}</Text>
         <Text style={styles.countdownText}>
-          {days > 0 ? `${days} day${days === 1 ? '' : 's'} remaining this season` : 'Season ending soon!'}
+          {days > 0 ? t('common.daysRemainingSeason', { count: days }) : 'Season ending soon!'}
         </Text>
       </View>
 
@@ -211,7 +213,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
               </Text>
               {days <= 14 && days > 0 && (
                 <Text style={styles.fomoText}>
-                  Don't miss out! Only {days} day{days === 1 ? '' : 's'} left to earn exclusive rewards
+                  {t('common.daysLeftRewards', { count: days })}
                 </Text>
               )}
             </View>
