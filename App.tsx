@@ -18,6 +18,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import NeonTabBar from './src/components/navigation/NeonTabBar';
+import { BoardGenBanner } from './src/components/BoardGenBanner';
+import { emitBoardGenNotice } from './src/utils/boardGenNotice';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import ModesScreen from './src/screens/ModesScreen';
@@ -190,7 +192,7 @@ function EventScreenWrapperNav({ navigation }: any) {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
           const modeConfig = MODE_CONFIGS[mode];
-          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          emitBoardGenNotice();
           navigation.navigate('Game', {
             board, level: player.currentLevel, mode,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
@@ -502,7 +504,7 @@ function ModesScreenWrapper({ navigation }: any) {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           board = generateBoard(easyConfig, Date.now());
           const modeConfig = MODE_CONFIGS[mode];
-          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          emitBoardGenNotice();
           navigation.navigate('Game', {
             board, level: modeLevel, mode,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
@@ -643,7 +645,7 @@ function GameScreenWrapper({ route, navigation }: any) {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
           const modeConfig = MODE_CONFIGS[fallbackMode];
-          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          emitBoardGenNotice();
           navigation.replace('Game', {
             board, level: fallbackLevel, mode: fallbackMode, isDaily: false,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
@@ -712,7 +714,7 @@ function GameScreenWrapper({ route, navigation }: any) {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
           const modeConfig = MODE_CONFIGS[fallbackMode];
-          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          emitBoardGenNotice();
           navigation.replace('Game', {
             board, level: nextModeLevel, mode: fallbackMode, isDaily: false,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
@@ -1316,7 +1318,7 @@ function HomeMainScreen({ route, navigation }: any) {
               const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
               const board = generateBoard(easyConfig, Date.now());
               setLoading(false);
-              Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+              emitBoardGenNotice();
               navigation.navigate('Game', { board, level: player.currentLevel, mode: 'classic', isDaily: false });
             } catch {
               Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
@@ -1733,6 +1735,7 @@ function AppContent() {
         onDismiss={handleDismissCeremony}
         economy={economy}
       />
+      <BoardGenBanner />
     </View>
   );
 }

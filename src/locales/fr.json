@@ -142,7 +142,8 @@
     "timeLeft": "{{seconds}}s",
     "perfect": "Perfect!",
     "great": "Great!",
-    "nice": "Nice!"
+    "nice": "Nice!",
+    "boardGenSlowBanner": "Puzzle took a moment — served you an easier one."
   },
   "shop": {
     "title": "Shop",
