@@ -48,7 +48,11 @@ interface RemoteEventEntry {
   multipliers?: Partial<EventMultipliers>;
 }
 
-function parseRemoteEvents(): RemoteEventEntry[] {
+/**
+ * Exported for testing. Parses `eventCalendarOverride` into a clean
+ * RemoteEventEntry[]. Returns [] on empty, malformed, or wrongly-shaped JSON.
+ */
+export function parseRemoteEvents(): RemoteEventEntry[] {
   const raw = getRemoteString('eventCalendarOverride');
   if (!raw) return [];
   try {
