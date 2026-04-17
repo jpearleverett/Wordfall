@@ -1115,6 +1115,9 @@ export function GameScreen({
 
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && showFailed) {
+      const puzzleStartTime = store.getState().puzzleStartTime;
+      const chainCount = store.getState().chainCount;
+      const timeMs = puzzleStartTime > 0 ? Date.now() - puzzleStartTime : 0;
       void analytics.logEvent('puzzle_fail', {
         level,
         mode,
@@ -1123,8 +1126,19 @@ export function GameScreen({
         totalWords,
         score: score,
       });
+      void analytics.trackDifficultyTelemetry({
+        mode,
+        level,
+        outcome: status === 'timeout' ? 'timeout' : 'fail',
+        hints_used: hintsUsed,
+        max_combo: maxCombo,
+        chain_count: chainCount,
+        time_ms: timeMs,
+        words_found: foundWords,
+        words_total: totalWords,
+      });
     }
-  }, [status, showFailed, level, mode, foundWords, totalWords, score]);
+  }, [status, showFailed, level, mode, foundWords, totalWords, score, hintsUsed, maxCombo, store]);
 
   // Score popup when score changes (word found) + particle burst (#1) + big word celebration (Task 2)
   useEffect(() => {
