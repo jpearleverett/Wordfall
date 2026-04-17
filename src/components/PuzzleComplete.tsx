@@ -306,8 +306,8 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
             <Text style={hookStyles.streakNumber}>{currentStreak}</Text>
           </View>
           <View style={hookStyles.streakRight}>
-            <Text style={hookStyles.streakLabel}>Day Streak</Text>
-            <Text style={hookStyles.streakCta}>Keep it going!</Text>
+            <Text style={hookStyles.streakLabel}>{t('result.dayStreak')}</Text>
+            <Text style={hookStyles.streakCta}>{t('result.keepItGoing')}</Text>
           </View>
         </LinearGradient>
       )}
@@ -619,7 +619,7 @@ export function PuzzleComplete({
                 style={styles.scorePanel}
               >
                 <ScanLineOverlay opacity={0.02} height={80} />
-                <Text style={styles.scoreLabel}>FINAL SCORE</Text>
+                <Text style={styles.scoreLabel}>{t('result.finalScore')}</Text>
                 <View accessibilityLabel={`Final score: ${score}`}>
                   <AnimatedScore targetScore={score} />
                 </View>
@@ -638,21 +638,21 @@ export function PuzzleComplete({
                   colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
                   style={styles.statCard}
                 >
-                  <Text style={styles.statCardLabel}>Moves</Text>
+                  <Text style={styles.statCardLabel}>{t('result.moves')}</Text>
                   <Text style={styles.statCardValue}>{moves}</Text>
                 </LinearGradient>
                 <LinearGradient
                   colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
                   style={styles.statCard}
                 >
-                  <Text style={styles.statCardLabel}>Best Combo</Text>
+                  <Text style={styles.statCardLabel}>{t('result.bestCombo')}</Text>
                   <Text style={styles.statCardValue}>{combo > 1 ? `${combo}x` : '—'}</Text>
                 </LinearGradient>
                 <LinearGradient
                   colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
                   style={styles.statCard}
                 >
-                  <Text style={styles.statCardLabel}>Stars</Text>
+                  <Text style={styles.statCardLabel}>{t('result.stars')}</Text>
                   <Text style={styles.statCardValue}>{stars}/3</Text>
                 </LinearGradient>
               </Animated.View>
@@ -666,7 +666,7 @@ export function PuzzleComplete({
                   },
                 ]}
               >
-                <Text style={styles.rewardsTitle}>Rewards</Text>
+                <Text style={styles.rewardsTitle}>{t('result.rewards')}</Text>
                 <View style={styles.rewardRow}>
                   <LinearGradient
                     colors={['#1a2050', '#222860'] as [string, string, ...string[]]}
@@ -738,8 +738,8 @@ export function PuzzleComplete({
                 <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.gold + '20', borderColor: COLORS.gold + '40', opacity: statsAnim }]}>
                   <Text style={styles.levelUpEmoji}>{'\uD83C\uDF89'}</Text>
                   <View>
-                    <Text style={[styles.levelUpText, { color: COLORS.gold }]}>WELCOME TO WORDFALL!</Text>
-                    <Text style={styles.levelUpSubtext}>Your adventure begins</Text>
+                    <Text style={[styles.levelUpText, { color: COLORS.gold }]}>{t('result.welcomeToWordfall')}</Text>
+                    <Text style={styles.levelUpSubtext}>{t('result.adventureBegins')}</Text>
                   </View>
                 </Animated.View>
               )}
@@ -769,7 +769,7 @@ export function PuzzleComplete({
                         </View>
                         {item.action && (
                           <View style={[styles.summaryItemCta, { borderColor: item.accentColor + '50' }]}>
-                            <Text style={[styles.summaryItemCtaText, { color: item.accentColor }]}>Claim</Text>
+                            <Text style={[styles.summaryItemCtaText, { color: item.accentColor }]}>{t('result.claim')}</Text>
                           </View>
                         )}
                       </View>
@@ -832,7 +832,7 @@ export function PuzzleComplete({
                       </Text>
                       <Text style={styles.nextUnlockSublabel}>
                         {nextUnlockPreview.unlockLevel - level <= 1
-                          ? 'Unlocks NEXT LEVEL!'
+                          ? t('result.unlocksNextLevel')
                           : `${nextUnlockPreview.unlockLevel - level} levels away`}
                       </Text>
                     </View>
@@ -874,7 +874,7 @@ export function PuzzleComplete({
                     end={{ x: 1, y: 0 }}
                     style={styles.primaryButton}
                   >
-                    <Text style={styles.primaryButtonText}>{isDaily ? 'PLAY ANOTHER MODE' : t('result.next').toUpperCase()}</Text>
+                    <Text style={styles.primaryButtonText}>{isDaily ? t('result.playAnotherMode') : t('result.next').toUpperCase()}</Text>
                   </LinearGradient>
                 </Pressable>
                 {showTomorrowPreview && (
@@ -882,12 +882,12 @@ export function PuzzleComplete({
                     colors={['rgba(100,180,255,0.12)', 'rgba(100,180,255,0.04)'] as [string, string]}
                     style={styles.tomorrowPreview}
                   >
-                    <Text style={styles.tomorrowPreviewTitle}>Come back tomorrow!</Text>
-                    <Text style={styles.tomorrowPreviewText}>Daily Bonus + Free Mystery Spin await you</Text>
+                    <Text style={styles.tomorrowPreviewTitle}>{t('result.comeBackTomorrow')}</Text>
+                    <Text style={styles.tomorrowPreviewText}>{t('result.dailyBonusAwaits')}</Text>
                   </LinearGradient>
                 )}
                 <View style={styles.secondaryRow}>
-                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome} accessibilityRole="button" accessibilityLabel="Go to home screen">
+                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome} accessibilityRole="button" accessibilityLabel={t('result.goHomeA11y')}>
                     <Text style={styles.secondaryButtonText}>{t('result.home')}</Text>
                   </Pressable>
                   {shareText ? (
@@ -920,7 +920,7 @@ export function PuzzleComplete({
                       accessibilityRole="button"
                       accessibilityLabel="Share results"
                     >
-                      <Text style={styles.shareButtonText}>Share</Text>
+                      <Text style={styles.shareButtonText}>{t('result.share')}</Text>
                     </Pressable>
                   ) : null}
                   {onChallengeFriend && (
