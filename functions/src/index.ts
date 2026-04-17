@@ -1003,3 +1003,10 @@ export const requestAccountDeletion = functions.https.onRequest(
     }
   },
 );
+
+// ── Social codebase (merged from cloud-functions/ in v1.1) ──────────────────
+// onPuzzleComplete, updateClubLeaderboard, sendPushNotification,
+// processStreakReminders, rotateClubGoals, moderateClubMessage, sendGift,
+// claimGift. admin.initializeApp() is already called above, so social.ts
+// imports the same Firestore singleton without re-initializing.
+export * from "./social";

@@ -33,7 +33,6 @@ attached_assets/
 store-metadata/
 docs/
 functions/
-cloud-functions/
 
 # Test files
 **/__tests__/

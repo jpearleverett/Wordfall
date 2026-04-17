@@ -37,8 +37,8 @@
 
 ### 3. Push notifications — client WIRED (correction)
 - `src/services/notifications.ts` registers Expo + device push tokens, saves to `users/{uid}/pushToken` in Firestore (line 506-509).
-- Server-side `sendPushNotification` callable exists (`cloud-functions/src/index.ts:231`) with auth, 30/min rate limit, friend/club-co-member-only delivery.
-- `processStreakReminders` scheduled function exists (`cloud-functions/src/index.ts:313`).
+- Server-side `sendPushNotification` callable exists (`functions/src/social.ts`) with auth, in-memory 30/min rate limit + per-UID Firestore rate-limit counter (`rateLimits/{uid}_sendPushNotification_{windowStart}`), friend/club-co-member-only delivery.
+- `processStreakReminders` scheduled function exists (`functions/src/social.ts`).
 - Real launch dependency: FCM server key uploaded to Firebase Console.
 
 ### 4. Sentry — WIRED (correction)
@@ -47,20 +47,22 @@
 - `redactUid()` PII minimization in Cloud Function logs.
 - Only missing: `EXPO_PUBLIC_SENTRY_DSN` env var (user confirmed Sentry account exists).
 
-### 5. Cloud Functions — 6 deployed (not the 1-2 implied earlier)
-**`functions/` (commerce codebase):**
-- `validateReceipt` (HTTPS) — Apple+Google validation, replay protection
+### 5. Cloud Functions — 13 deployed in a single `functions/` codebase (consolidated Apr 2026)
+**Commerce (`functions/src/index.ts`):**
+- `validateReceipt` (HTTPS) — Apple+Google validation, replay protection, per-UID Firestore rate-limit (20/5min)
 - `onSubscriptionRenew` (Pub/Sub) — VIP lifecycle
-- `clubGoalProgress` (callable) — atomic transactional club goal increment, fraud ceiling
+- `clubGoalProgress` (callable) — atomic transactional club goal increment, fraud ceiling, per-UID rate-limit (60/min)
 - `autoKickInactiveMembers` (scheduled, daily 3am UTC)
+- `requestAccountDeletion` (HTTPS callable + HTTP endpoint for web form) — GDPR purge, per-UID rate-limit (3/hour)
 
-**`cloud-functions/` (social codebase):**
+**Social (`functions/src/social.ts`, re-exported from `index.ts`):**
 - `onPuzzleComplete` (Firestore trigger) — propagates results to club goals
 - `updateClubLeaderboard` (Pub/Sub)
 - `sendPushNotification` (callable) — auth + rate-limited
 - `processStreakReminders` (Pub/Sub)
 - `rotateClubGoals` (Pub/Sub)
 - `moderateClubMessage` (Firestore trigger) — Perspective API
+- `sendGift` / `claimGift` (callables) — atomic gift txn, 5/day/sender cap, idempotency-key replay guard
 
 ### 6. Privacy/legal/site — DONE (correction)
 - `wordfallgamesite/` published to Cloudflare Pages at https://wordfallgame.app
@@ -103,19 +105,21 @@
 
 ## Deferred to v1.1 (NOT launch blockers)
 
-From `agent_docs/pre_launch_audit.md` section 1:
-- AsyncStorage receipt store → `expo-secure-store` migration
-- Per-UID Firestore rate-limit counter (currently in-memory token bucket on `sendPushNotification` only)
-- Consolidate `cloud-functions/` + `functions/` into one codebase
-- Inline board-gen timeout banner (vs Alert)
-- Single-slot write queue for PlayerContext / EconomyContext
-- `iap.ts` purchase-promise rejection contract normalization
-- Remaining `console.log` sweep in low-traffic modules
+Remaining after Apr 2026 hardening pass:
 - Maestro E2E expansion (first purchase, club chat report/block, consent flow)
-- Context selector Phase 4 (`useSyncExternalStore` for narrow subscriptions)
-- Retry helper + "not synced yet" indicator for Firestore writes
 - Localization (UI-only, top 5 languages — puzzles stay English)
 - iOS lane
+
+### Completed Apr 2026 (see `agent_docs/pre_launch_audit.md` section 1 for details)
+- AsyncStorage receipt store → `expo-secure-store` migration (`src/services/secureStorage.ts`)
+- Per-UID Firestore rate-limit counter (`checkFirestoreRateLimit` in `functions/src/index.ts`)
+- Consolidated `cloud-functions/` + `functions/` into a single `functions/` codebase
+- Inline board-gen timeout banner (`src/components/BoardGenTimeoutBanner.tsx`)
+- Single-slot write queue for PlayerContext / EconomyContext (`src/utils/persistQueue.ts`)
+- `iap.ts` purchase-promise rejection contract normalized
+- Remaining `console.log` sweep — migrated to `src/utils/logger`
+- Retry helper (`src/services/retry.ts`) + "not synced yet" indicator (`src/components/NotSyncedBanner.tsx`)
+- `useSyncExternalStore` + cached-snapshot pattern landed for sync-status selectors
 
 ---
 
@@ -127,4 +131,4 @@ From `agent_docs/pre_launch_audit.md` section 1:
 - Native builds: EAS only (Termux can't build locally — NDK has no ARM64 host tools). Use `EAS_SKIP_AUTO_FINGERPRINT=1`.
 - **Never push to `main`**. Use `claude/<slug>` branches; user merges PRs.
 - `npm install --legacy-peer-deps` (forced by `.npmrc`).
-- Cloud Functions live in TWO codebases: `functions/` (commerce) and `cloud-functions/` (social). Both deploy via `firebase.json` codebase routing.
+- Cloud Functions live in a single `functions/` codebase (consolidated Apr 2026). `functions/src/index.ts` hosts commerce callables and re-exports `./social` which hosts all social callables.

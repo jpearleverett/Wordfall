@@ -1,5 +1,5 @@
 /**
- * Wordfall Cloud Functions
+ * Wordfall Cloud Functions — social codebase (merged into functions/ in v1.1).
  *
  * Handles:
  * - Club cooperative goal tracking (onPuzzleComplete)
@@ -7,12 +7,20 @@
  * - Push notifications for friend activity, events, streaks
  * - Streak reminders (scheduled daily at 8 PM UTC)
  * - Weekly club goal rotation (scheduled Monday)
+ * - Secure gifting (sendGift / claimGift)
+ * - Moderation (moderateClubMessage — Perspective API)
+ *
+ * `admin.initializeApp()` is called exactly once in ./index.ts; this file
+ * imports the shared firestore() handle via that initialization. Every
+ * `const db = admin.firestore()` returns the same singleton so this is
+ * safe even though both files create their own local reference.
  */
 
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 
-admin.initializeApp();
+// admin.initializeApp() is called from ./index.ts — do NOT re-init here;
+// a second initializeApp() throws "The default Firebase app already exists".
 const db = admin.firestore();
 
 // ─── Club Goal Templates ─────────────────────────────────────────────────────

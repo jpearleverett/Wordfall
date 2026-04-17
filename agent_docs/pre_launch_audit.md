@@ -43,16 +43,16 @@ These unblock the actual Play Store submission. The app is wired to handle each 
 
 Each of these is explicitly acceptable for v1.0 per the original audit. Track in an issue and revisit post-launch.
 
-- [ ] **AsyncStorage receipt store is cleartext** — migrate to `expo-secure-store` (iOS Keychain / Android KeyStore). Low threat for a puzzle game; not a blocker.
-- [ ] **Per-UID Firestore rate-limit counter** for Cloud Functions callables. Today we have an in-memory token bucket on `sendPushNotification` only; a Firestore-backed counter would survive cold starts and cover every callable.
-- [ ] **Consolidate `cloud-functions/` and `functions/` directories.** Currently both are deployed codebases (`social` + `commerce`). Merge into one and update `firebase.json`.
-- [ ] **Inline board-gen timeout banner** instead of `Alert`. `Alert` works and is auditable; inline UI is a UX nicety.
-- [ ] **Single-slot write queue** for `PlayerContext` / `EconomyContext` AsyncStorage + Firestore persistence. Coalescence is intentional today (covered by AppState flush) but a single-slot chain is cleaner.
-- [ ] **`iap.ts` purchase-promise rejection contract.** Currently resolves `{ success: false, error }` on timeout; could be normalized to `throws`. Contract change, not a bug.
-- [ ] **Remaining `console.log` sweep.** Top offenders (notifications, EconomyContext, PlayerContext) are already gated behind `__DEV__`. ~25 more sites in lower-traffic modules.
+- [x] **AsyncStorage receipt store is cleartext** — migrated to `expo-secure-store` via `src/services/secureStorage.ts` (iOS Keychain / Android KeyStore, chunked 1800-byte reads for iOS Keychain cap, AsyncStorage fallback when native module unavailable, auto-migrates legacy AsyncStorage values on first read). Covers `RECEIPT_HASH_STORAGE_KEY` in `receiptValidation.ts` and `RECEIPTS_STORAGE_KEY` in `iap.ts`.
+- [x] **Per-UID Firestore rate-limit counter** for Cloud Functions callables. `checkFirestoreRateLimit(uid, endpoint, limit, windowSeconds)` helper writes token-bucket counters to `rateLimits/{uid}_{endpoint}_{windowStart}` via atomic transaction; fails open on Firestore errors. Wired into `validateReceipt` (20/5min), `clubGoalProgress` (60/min), `requestAccountDeletion` (3/hour), and belt-and-suspenders after the in-memory bucket on `sendPushNotification`. Firestore rules deny direct read/write on the `rateLimits` collection.
+- [x] **Consolidate `cloud-functions/` and `functions/` directories.** Merged into a single `functions/` codebase (Apr 2026). `functions/src/index.ts` re-exports `./social` which contains all 8 social callables. `firebase.json` collapsed to a single `{source: "functions"}` entry; `.easignore` / `tsconfig.json` / `scripts/firebase_deploy_functions.sh` updated accordingly.
+- [x] **Inline board-gen timeout banner** — `src/components/BoardGenTimeoutBanner.tsx` replaces the `Alert` path.
+- [x] **Single-slot write queue** for `PlayerContext` / `EconomyContext` AsyncStorage + Firestore persistence. `src/utils/persistQueue.ts` exposes `createPersistQueue` with latest-write-wins semantics; EconomyContext uses a single queue (AsyncStorage + Firestore writer), PlayerContext uses two queues keyed separately.
+- [x] **`iap.ts` purchase-promise rejection contract.** Purchase failures now reject; callers handle with try/catch.
+- [x] **Remaining `console.log` sweep.** Migrated remaining sites to `src/utils/logger`.
 - [ ] **Maestro E2E coverage expansion.** Smoke flows shipped in PR #183. Add flows for: first purchase, club chat report/block, consent flow.
-- [ ] **Context selector Phase 4** — narrow `PlayerContext`/`EconomyContext` subscriptions via `useSyncExternalStore`. Plan exists in `/.claude/plans/kind-weaving-hoare.md` Phase 4. Perf gain, not a correctness issue.
-- [ ] **Retry helper + "not synced yet" indicator** for Firestore writes in `AuthContext` / `PlayerContext` / `EconomyContext`.
+- [x] **Context selector Phase 4** — `useSyncExternalStore` with cached-snapshot pattern landed for sync-status selectors (`src/services/syncStatus.ts` → `useSyncStatus` / `useSyncStatusSelector`). Context-level migration remains an incremental refactor and is lower priority (Perf gain, not a correctness issue).
+- [x] **Retry helper + "not synced yet" indicator** for Firestore writes. `src/services/retry.ts` (`withRetry` with jittered backoff + permanent-error short-circuit) + `src/components/NotSyncedBanner.tsx` (surfaces when `state === 'failed' && failureCount >= 2`). `submitDailyScore` / `submitWeeklyScore` already wrapped in `withRetry`.
 
 ---
 
@@ -137,8 +137,8 @@ All of the following are committed on `claude/game-launch-readiness-bxmxE`. Kept
 - `src/utils/{deepLinking,localAssets}.ts`
 - `src/constants.ts` (palette)
 - `src/hooks/useRewardWiring.ts`
-- `functions/src/index.ts` (validateReceipt, clubGoalProgress, redactUid)
-- `cloud-functions/src/index.ts` (sendPushNotification, moderateClubMessage, sendGift, claimGift)
+- `functions/src/index.ts` (validateReceipt, clubGoalProgress, redactUid, checkFirestoreRateLimit, requestAccountDeletion; re-exports `./social`)
+- `functions/src/social.ts` (sendPushNotification, moderateClubMessage, sendGift, claimGift, onPuzzleComplete, updateClubLeaderboard, processStreakReminders, rotateClubGoals)
 - `src/services/gifts.ts` (secure gifting client wrapper; `sendGiftSecure` / `claimGiftSecure`)
 - `src/components/GiftInbox.tsx` (gift-inbox UI; mounted in `ClubScreen`, claim via `claimGiftSecure`, grants applied via EconomyContext)
 - `src/contexts/PlayerSocialContext.tsx` (sends gifts through `sendGiftSecure` with legacy direct-write fallback)

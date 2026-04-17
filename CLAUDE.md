@@ -91,11 +91,11 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 ### What the codebase ALREADY has wired (don't re-implement, just verify)
 - **Leaderboards**: `firestoreService.submitDailyScore` / `submitWeeklyScore` are called from `src/hooks/useRewardWiring.ts:689,693` on puzzle complete; reads in `src/services/firestore.ts:300+`
 - **VIP subscription end-to-end**: `vip_weekly` product → `applyProduct` in `src/services/commercialEntitlements.ts:207` sets `isVipSubscriber/vipExpiresAt`. Server-side renewal/expiry handled by `onSubscriptionRenew` (Apple SSN v2 + Google RTDN) in `functions/src/index.ts:418`
-- **Cloud Functions** (13 total, split across two codebases — see `firebase.json`):
-  - `functions/` (commerce codebase): `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion`
-  - `cloud-functions/` (social codebase): `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift`
-- **Gifting (secure path)**: `sendGift` + `claimGift` HTTPS callables in `cloud-functions/src/index.ts` — atomic txn, 5/day/sender cap (`users/{uid}/giftQuota`), idempotency-key replay guard. Client wrapper `src/services/gifts.ts` (`sendGiftSecure`/`claimGiftSecure`). `PlayerSocialContext.sendHintGift`/`sendTileGift` route through `sendGiftSecure` with a fallback to the legacy `firestoreService.sendGift` direct write (same `gifts/` schema) so it stays safe pre-deploy. Inbox UI: `src/components/GiftInbox.tsx` mounted inside `ClubScreen`; reads `firestoreService.getPendingGifts`, claim via `claimGiftSecure`, grant applied locally through EconomyContext (`addHintTokens` / `addBoosterToken('wildcardTile')` / `addLives`).
-- **Push notifications client**: `src/services/notifications.ts` registers Expo + device push tokens, saves to Firestore at `users/{uid}/pushToken` (line 506-509). Server-side `sendPushNotification` callable exists in `cloud-functions/src/index.ts:231`
+- **Cloud Functions** (13 total, single codebase at `functions/` — see `firebase.json`):
+  - Commerce: `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion` (in `functions/src/index.ts`)
+  - Social: `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift` (in `functions/src/social.ts`, re-exported from `index.ts`)
+- **Gifting (secure path)**: `sendGift` + `claimGift` HTTPS callables in `functions/src/social.ts` — atomic txn, 5/day/sender cap (`users/{uid}/giftQuota`), idempotency-key replay guard. Client wrapper `src/services/gifts.ts` (`sendGiftSecure`/`claimGiftSecure`). `PlayerSocialContext.sendHintGift`/`sendTileGift` route through `sendGiftSecure` with a fallback to the legacy `firestoreService.sendGift` direct write (same `gifts/` schema) so it stays safe pre-deploy. Inbox UI: `src/components/GiftInbox.tsx` mounted inside `ClubScreen`; reads `firestoreService.getPendingGifts`, claim via `claimGiftSecure`, grant applied locally through EconomyContext (`addHintTokens` / `addBoosterToken('wildcardTile')` / `addLives`).
+- **Push notifications client**: `src/services/notifications.ts` registers Expo + device push tokens, saves to Firestore at `users/{uid}/pushToken` (line 506-509). Server-side `sendPushNotification` callable exists in `functions/src/social.ts`
 - **Receipt validation + replay protection**: `validateReceipt` in `functions/src/index.ts:370` with SHA256 hash dedup (`/receipts` collection)
 - **Consent gate, club moderation (Perspective API), report/block, loot-box odds disclosure, A/B testing engine, Remote Config, soft-launch analytics module, 35+ analytics events** — all wired
 - **Hard-energy (Phase 4B, Remote-Config-gated, default OFF)**: `src/hooks/useHardEnergy.ts` composes `EconomyContext` lives + `getRemoteBoolean('hardEnergyEnabled')` into `{ canPlay, livesRemaining, nextLifeAtMs, startLevel(), refillWithGems(), creditAdLife() }`. `App.tsx` `GameScreenWrapper` debits a life on every level load (keyed on `route.key` + mode + level so re-renders never double-debit) and mounts `NoLivesModal` when `canPlay=false`. Rewarded-ad path uses a new `life_reward` `AdRewardType` capped at 3/day (`AD_CONFIG.MAX_LIFE_ADS_PER_DAY`). Flip is a Remote Config toggle — while `hardEnergyEnabled=false` `startLevel()` is a no-op and behaviour is unchanged.
@@ -120,13 +120,20 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 - Commission real audio (synth fallback works but sounds amateur)
 
 ### Deferred to v1.1 (NOT launch blockers)
-- Migrate AsyncStorage receipts to `expo-secure-store`
-- Consolidate `cloud-functions/` + `functions/` into one codebase
-- Per-UID Firestore rate-limit counter
-- Inline board-gen timeout banner (vs Alert)
 - Localization (UI-only, top 5 languages)
 - Maestro E2E flows beyond smoke
 - iOS lane (Apple Developer enrollment, `GoogleService-Info.plist`, Universal Links, ATT verification)
+
+### Completed v1.1 hardening (April 2026)
+- AsyncStorage receipts migrated to `expo-secure-store` (via `src/services/secureStorage.ts` with AsyncStorage fallback + auto-migration on first read)
+- `functions/` + `cloud-functions/` consolidated into single `functions/` codebase (`functions/src/index.ts` re-exports `./social`)
+- Per-UID Firestore rate-limit counter at `rateLimits/{uid}_{endpoint}_{windowStart}` (fail-open on transaction error), wired into `validateReceipt` / `clubGoalProgress` / `requestAccountDeletion` / `sendPushNotification`
+- Inline board-gen timeout banner (replaces Alert) at `src/components/BoardGenTimeoutBanner.tsx`
+- PlayerContext + EconomyContext use single-slot latest-write-wins persist queue (`src/utils/persistQueue.ts`)
+- `iap.ts` rejects (instead of resolves) on purchase failures so callers can react
+- Remaining `console.log` sweep — replaced with `src/utils/logger`
+- `useSyncExternalStore` selectors with cached snapshot for sync status (`src/services/syncStatus.ts`)
+- Retry helper (`src/services/retry.ts` with jittered backoff + permanent-error short-circuit) + `NotSyncedBanner` indicator
 
 ### Working-style reminders for Claude
 - **Small chunks**: never edit > ~150 lines per Edit / write > ~400 lines per Write — long edits time out

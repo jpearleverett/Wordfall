@@ -50,11 +50,11 @@ Earlier explore passes missed many of these. Verified via `agent_docs/pre_launch
 - **Leaderboards — full read + write.** `firestoreService.submitDailyScore` at `src/services/firestore.ts:355` + `submitWeeklyScore` at `:387` called from `src/hooks/useRewardWiring.ts:689,693`. Reads at `:300+`. Firestore rules bound 0–1,000,000. Composite indexes in `firestore.indexes.json`.
 - **VIP weekly subscription — end-to-end.** Client `applyProduct` at `src/services/commercialEntitlements.ts:207` sets `isVipSubscriber/vipExpiresAt/adsRemoved/dailyDrip`. Server-side `onSubscriptionRenew` Pub/Sub handler at `functions/src/index.ts:418` consumes Apple App Store Server Notifications v2 + Google RTDN, updates `users/{uid}.vipActive`+`vipExpiresAt` on renew/cancel/refund/expire/trial.
 - **Receipt validation + replay protection.** `validateReceipt` HTTPS callable at `functions/src/index.ts:370` with SHA256 hash dedup in `/receipts`. Rejects unauthenticated callers; attributes to `context.auth.uid` only.
-- **Push notifications — client side.** `src/services/notifications.ts:506–509` registers Expo + device tokens, persists to `users/{uid}/pushToken`. Server callable `sendPushNotification` at `cloud-functions/src/index.ts:231` with auth + 30/min rate limit + friend/club-co-member gating. `processStreakReminders` scheduled job at `:313`.
+- **Push notifications — client side.** `src/services/notifications.ts:506–509` registers Expo + device tokens, persists to `users/{uid}/pushToken`. Server callable `sendPushNotification` at `functions/src/social.ts` with auth + 30/min rate limit + per-UID Firestore rate-limit counter + friend/club-co-member gating. `processStreakReminders` scheduled job alongside.
 - **Sentry SDK wired.** `@sentry/react-native ~7.11.0`; `crashReporter.captureException` at IAP, receipt validation, AuthContext, useRewardWiring, every major Firestore mutation, board-gen timeouts. `redactUid()` PII min in CF logs. Only `EXPO_PUBLIC_SENTRY_DSN` needed to activate.
-- **6 Cloud Functions deployed across two codebases** (`firebase.json` codebase routing):
-  - `functions/` (commerce): `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress` (atomic txn, 10k/call cap), `autoKickInactiveMembers`
-  - `cloud-functions/` (social): `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage` (Perspective API)
+- **13 Cloud Functions deployed in a single `functions/` codebase** (`firebase.json` one-source):
+  - Commerce (`functions/src/index.ts`): `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress` (atomic txn, 10k/call cap), `autoKickInactiveMembers`, `requestAccountDeletion`
+  - Social (`functions/src/social.ts`, re-exported from `index.ts`): `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage` (Perspective API), `sendGift`, `claimGift`
 - **Firestore rules + indexes.** `firestore.rules` (124 lines, strict ownership + score bounds + club membership/message size 1–200 + reports admin-only + consent ledger). Just needs `firebase deploy`.
 - **Consent + UGC safeguards.** Versioned ConsentGate (ToS + Privacy), club chat long-press report/block, server-side Perspective moderation, blocked-users filter client-side, mystery-wheel odds modal, Google UMP + iOS ATT flow before ads init.
 - **Build / privacy config.** `allowBackup:false`, Proguard + shrinkResources, HTTPS deep-link `autoVerify="true"` intent filter, `NSUserTrackingUsageDescription`, blocked-permissions list. `wordfallgamesite/.well-known/assetlinks.json` exists with placeholder SHA256.
@@ -104,7 +104,10 @@ Earlier explore passes missed many of these. Verified via `agent_docs/pre_launch
 - Soft-launch UA budget: Philippines + Canada, 4–6 weeks.
 
 ### Deferred to v1.1 (explicitly NOT launch blockers)
-`expo-secure-store` receipt migration · consolidate `functions/` + `cloud-functions/` · per-UID Firestore rate-limit counter · inline board-gen timeout banner · PlayerContext/EconomyContext single-slot write queue · `iap.ts` reject-vs-resolve contract · remaining `console.log` sweep · Maestro E2E breadth · `useSyncExternalStore` context selectors · retry helper + "not synced" indicator · iOS lane (Apple Dev enrollment, `GoogleService-Info.plist`, Universal Links, ATT verification on device).
+Maestro E2E breadth · iOS lane (Apple Dev enrollment, `GoogleService-Info.plist`, Universal Links, ATT verification on device).
+
+### ✅ Completed v1.1 hardening (April 2026)
+`expo-secure-store` receipt migration (`src/services/secureStorage.ts`, auto-migrate on first read) · consolidated `functions/` + `cloud-functions/` into single `functions/` codebase (`functions/src/index.ts` re-exports `./social`) · per-UID Firestore rate-limit counter (`rateLimits/{uid}_{endpoint}_{windowStart}`, fail-open) · inline board-gen timeout banner (`src/components/BoardGenTimeoutBanner.tsx`) · PlayerContext/EconomyContext single-slot write queue (`src/utils/persistQueue.ts`) · `iap.ts` reject-vs-resolve contract · remaining `console.log` sweep · `useSyncExternalStore` context selectors (`src/services/syncStatus.ts` with cached snapshot) · retry helper (`src/services/retry.ts`) + "not synced" indicator (`src/components/NotSyncedBanner.tsx`).
 
 ---
 
@@ -268,7 +271,7 @@ i18n unlocks ~60% of non-EN revenue. Hard-energy A/B + gifting + share cards clo
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 4.12 | **Gifting** (lives/hints) to clubmates + referred friends. Cloud Function atomically debits sender pool + credits receiver with idempotency key. Rate-limit 5 gifts/day/sender. **[DONE — `sendGift`/`claimGift` callables with atomic txn + 5/day cap + idempotency (`cloud-functions/src/index.ts`); client wrapper `src/services/gifts.ts` with 5 unit tests; `PlayerSocialContext.sendHintGift`/`sendTileGift` route through `sendGiftSecure` with legacy direct-write fallback; inbox UI `src/components/GiftInbox.tsx` mounted in `ClubScreen` — claim via `claimGiftSecure`, grants applied locally through EconomyContext.]** | `cloud-functions/src/index.ts`, `src/screens/ClubScreen.tsx`, `src/components/GiftInbox.tsx`, `src/contexts/PlayerSocialContext.tsx` | 2d |
+| 4.12 | **Gifting** (lives/hints) to clubmates + referred friends. Cloud Function atomically debits sender pool + credits receiver with idempotency key. Rate-limit 5 gifts/day/sender. **[DONE — `sendGift`/`claimGift` callables with atomic txn + 5/day cap + idempotency (`functions/src/social.ts`); client wrapper `src/services/gifts.ts` with 5 unit tests; `PlayerSocialContext.sendHintGift`/`sendTileGift` route through `sendGiftSecure` with legacy direct-write fallback; inbox UI `src/components/GiftInbox.tsx` mounted in `ClubScreen` — claim via `claimGiftSecure`, grants applied locally through EconomyContext.]** | `functions/src/social.ts`, `src/screens/ClubScreen.tsx`, `src/components/GiftInbox.tsx`, `src/contexts/PlayerSocialContext.tsx` | 2d |
 | 4.13 | **Share-to-social victory card.** Off-screen grid + score + stars + "beat my score" deep link. `react-native-view-shot` → `expo-sharing`. **[DONE — `src/components/ShareCard.tsx` + `src/hooks/useShareVictory.ts` wrap `captureRef` + `Sharing.shareAsync`; fires `share_tapped` analytics; used from `PuzzleComplete` win surface.]** | `src/components/ShareCard.tsx`, `src/hooks/useShareVictory.ts`, `src/components/PuzzleComplete.tsx` | 1.5d |
 | 4.14 | **v1.1 — punted.** Stretch goal; v1.0 skips it. MVP path scoped and documented (~2.5h): pipe a structured "hint request" club-chat message (reusing `sendClubMessage`) from the stuck-board state; render in `ClubScreen` with a "Send Hint" action that calls `sendGiftSecure({ type: 'hint' })`. No snapshot plumbing required — the social signal + existing hint-gift primitive delivers 80% of the value. Full snapshot broadcast deferred to v1.0.1 after soft-launch telemetry indicates demand. | `src/screens/ClubScreen.tsx`, `src/screens/GameScreen.tsx`, `src/services/gifts.ts` | 2.5h when unpunted |
 
@@ -347,7 +350,7 @@ Apple Developer ($99/yr) deferred — iOS is v1.1.
 
 ## Critical Files by Phase (hot-path)
 
-**Phase 0 (mostly external):** `app.json`, `src/constants.ts` AD_CONFIG, `functions/src/index.ts`, `cloud-functions/src/index.ts`, `firestore.rules`, `firestore.indexes.json`, `.env`, EAS secrets, `wordfallgamesite/.well-known/assetlinks.json`.
+**Phase 0 (mostly external):** `app.json`, `src/constants.ts` AD_CONFIG, `functions/src/index.ts`, `functions/src/social.ts`, `firestore.rules`, `firestore.indexes.json`, `.env`, EAS secrets, `wordfallgamesite/.well-known/assetlinks.json`.
 
 **Phase 1:** `src/screens/SettingsScreen.tsx`, `src/services/firestore.ts`, `src/contexts/AuthContext.tsx`, `functions/src/index.ts` (new `requestAccountDeletion`), `wordfallgamesite/account-deletion/index.html` (new).
 
@@ -355,7 +358,7 @@ Apple Developer ($99/yr) deferred — iOS is v1.1.
 
 **Phase 3:** `src/data/chapters.ts`, `src/types.ts` (GenerationProfile), `src/engine/boardGenerator.ts`, `src/engine/__tests__/{profiles,fuzz}.test.ts` (new), `src/services/analytics.ts`, `src/services/difficultyAdjuster.ts`, `src/hooks/useGame.ts`, `src/components/effects/{ParticleSystem,ComboFlash}.tsx`, `src/screens/game/PlayField.tsx`.
 
-**Phase 4:** `App.tsx`, `src/i18n/index.ts` (new), `src/locales/{en,es-419,pt-BR,de,fr,ja}.json` (new), every screen + component with strings, `src/contexts/EconomyContext.tsx`, `src/services/remoteConfig.ts`, `src/components/NoLivesModal.tsx` (new), `cloud-functions/src/index.ts` (gifting), `src/components/ShareCard.tsx` (new), `src/services/eventManager.ts`, `src/data/{events,dynamicPricing}.ts`.
+**Phase 4:** `App.tsx`, `src/i18n/index.ts` (new), `src/locales/{en,es-419,pt-BR,de,fr,ja}.json` (new), every screen + component with strings, `src/contexts/EconomyContext.tsx`, `src/services/remoteConfig.ts`, `src/components/NoLivesModal.tsx` (new), `functions/src/social.ts` (gifting), `src/components/ShareCard.tsx` (new), `src/services/eventManager.ts`, `src/data/{events,dynamicPricing}.ts`.
 
 **Reused existing utilities — DO NOT rewrite:**
 - `src/services/iap.ts` (Restore Purchases already works in `ShopScreen:1403` — just surface in Settings)

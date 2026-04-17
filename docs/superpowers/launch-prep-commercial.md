@@ -86,21 +86,17 @@ Build and deploy both directories from the repo root:
 
 - `bash scripts/firebase_deploy_functions.sh`
 
-This script keeps the two current function directories separate:
-
-- `functions/` for commerce/receipt/subscription work
-- `cloud-functions/` for social/push/event work
+As of Apr 2026 the two function directories were consolidated into a single `functions/` codebase (`functions/src/index.ts` re-exports `./social`). The deploy script now installs + deploys just `functions/`.
 
 ## Suggested validation order
 
 1. `npm run typecheck`
 2. `npm test -- --ci --runInBand`
 3. Deploy Firestore rules/indexes
-4. Deploy `functions/`
-5. Deploy `cloud-functions/`
-6. Confirm `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` points at the deployed commerce functions base URL
-7. Build a fresh dev client / EAS build
-8. Test:
+4. Deploy `functions/` (ships both commerce + social callables)
+5. Confirm `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` points at the deployed commerce functions base URL
+6. Build a fresh dev client / EAS build
+7. Test:
    - purchase flow
    - restore flow
    - premium pass ownership across Shop/Mastery/Settings
