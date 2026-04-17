@@ -936,6 +936,8 @@ export const AD_CONFIG = {
   MAX_ADS_PER_DAY: 10,
   /** Maximum "watch ad for coins" ads per day */
   MAX_COIN_ADS_PER_DAY: 3,
+  /** Maximum "watch ad for +1 life" ads per day (hard-energy Phase 4B) */
+  MAX_LIFE_ADS_PER_DAY: 3,
   /** Minimum cooldown between rewarded ads (ms) */
   REWARDED_COOLDOWN_MS: 30_000, // 30 seconds
   /** Maximum interstitial ads per day */

@@ -44,6 +44,8 @@ import { useAuth } from './src/contexts/AuthContext';
 import { useEconomy } from './src/contexts/EconomyContext';
 import { useSettings } from './src/contexts/SettingsContext';
 import { usePlayer } from './src/contexts/PlayerContext';
+import { useHardEnergy } from './src/hooks/useHardEnergy';
+import { NoLivesModal } from './src/components/NoLivesModal';
 import { soundManager } from './src/services/sound';
 import { setHapticsEnabled } from './src/services/haptics';
 // ATLAS_PAGES and generateShareText moved to useRewardWiring
@@ -531,10 +533,52 @@ function GameScreenWrapper({ route, navigation }: any) {
   const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
+  const hardEnergy = useHardEnergy();
   const [showSpinPrompt, setShowSpinPrompt] = useState(false);
   const [earnedNewSpin, setEarnedNewSpin] = useState(false);
   const spinsBeforeComplete = useRef(0);
   const [pendingNavAction, setPendingNavAction] = useState<'home' | 'next' | null>(null);
+
+  // Phase 4B hard-energy gate. When the Remote Config flag is on and the
+  // player is out of lives, block the board from loading and show
+  // NoLivesModal. One debit per level load (tracked by route key + level).
+  const [showNoLives, setShowNoLives] = useState(false);
+  const debitedLevelRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hardEnergy.enabled) return;
+    const key = `${params.mode ?? 'classic'}:${params.level ?? 0}:${route.key}`;
+    if (debitedLevelRef.current === key) return;
+    debitedLevelRef.current = key;
+    if (!hardEnergy.canPlay) {
+      setShowNoLives(true);
+      return;
+    }
+    const { started } = hardEnergy.startLevel();
+    if (!started) setShowNoLives(true);
+  }, [hardEnergy, params.mode, params.level, route.key]);
+
+  const handleNoLivesClose = useCallback(() => {
+    setShowNoLives(false);
+    navigation.goBack();
+  }, [navigation]);
+
+  const handleNoLivesWatchAd = useCallback(async () => {
+    try {
+      const { adManager } = await import('./src/services/ads');
+      const result = await adManager.showRewardedAd('life_reward');
+      if (result.rewarded) {
+        hardEnergy.creditAdLife();
+        setShowNoLives(false);
+      }
+    } catch (err) {
+      if (__DEV__) console.warn('[HardEnergy] rewarded ad failed:', err);
+    }
+  }, [hardEnergy]);
+
+  const handleNoLivesSpendGems = useCallback(() => {
+    const ok = hardEnergy.refillWithGems();
+    if (ok) setShowNoLives(false);
+  }, [hardEnergy]);
 
   // Delegate reward wiring to extracted hook
   const handleCompleteInner = useRewardWiring({
@@ -815,6 +859,18 @@ function GameScreenWrapper({ route, navigation }: any) {
           </View>
         </View>
       )}
+
+      {/* Phase 4B hard-energy: shown only when Remote Config flag is on */}
+      <NoLivesModal
+        visible={showNoLives}
+        livesRemaining={hardEnergy.livesRemaining}
+        gemsAvailable={economy.gems}
+        gemRefillCost={hardEnergy.gemRefillCost}
+        nextLifeAtMs={hardEnergy.nextLifeAtMs}
+        onClose={handleNoLivesClose}
+        onWatchAd={handleNoLivesWatchAd}
+        onSpendGems={handleNoLivesSpendGems}
+      />
     </View>
   );
 }

@@ -24,7 +24,8 @@ export type AdRewardType =
   | 'undo_reward'
   | 'spin_reward'
   | 'coins_reward'
-  | 'double_reward';
+  | 'double_reward'
+  | 'life_reward';
 
 export interface AdRewardResult {
   rewarded: boolean;
@@ -38,6 +39,7 @@ export const AD_REWARD_VALUES: Record<AdRewardType, { currency: string; amount: 
   spin_reward: { currency: 'spins', amount: 1 },
   coins_reward: { currency: 'coins', amount: 50 },
   double_reward: { currency: 'double', amount: 2 },
+  life_reward: { currency: 'lives', amount: 1 },
 };
 
 // ── Daily tracking persistence ─────────────────────────────────────────────────
@@ -48,6 +50,7 @@ interface AdTracking {
   date: string; // YYYY-MM-DD
   viewCount: number;
   coinAdCount: number; // separate cap for coins_reward (max 3/day)
+  lifeAdCount: number; // separate cap for life_reward (max 3/day — hard-energy)
   lastAdTime: number; // timestamp of last ad shown
   interstitialCount: number; // separate cap for interstitials (max 5/day)
   lastInterstitialTime: number; // timestamp of last interstitial shown
@@ -67,7 +70,7 @@ async function loadTracking(): Promise<AdTracking> {
   } catch {
     // Ignore — fall through to default
   }
-  return { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
+  return { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
 }
 
 async function saveTracking(tracking: AdTracking): Promise<void> {
@@ -86,7 +89,7 @@ class AdManager {
   private rewardedAdReady = false;
   private initialized = false;
   private useMock = true;
-  private tracking: AdTracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
+  private tracking: AdTracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
 
   /**
    * Consent + audience state used to build AdMob `RequestOptions`.
@@ -287,7 +290,7 @@ class AdManager {
 
     // Refresh tracking if day rolled over
     if (this.tracking.date !== todayKey()) {
-      this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
+      this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
     }
 
     // Daily cap check
@@ -299,6 +302,12 @@ class AdManager {
     // Coins-specific daily cap (max 3 per day)
     if (rewardType === 'coins_reward' && this.tracking.coinAdCount >= AD_CONFIG.MAX_COIN_ADS_PER_DAY) {
       logger.log('[Ads] Daily coin ad cap reached');
+      return { rewarded: false, rewardType };
+    }
+
+    // Life-specific daily cap (max 3 per day — hard-energy Phase 4B)
+    if (rewardType === 'life_reward' && this.tracking.lifeAdCount >= AD_CONFIG.MAX_LIFE_ADS_PER_DAY) {
+      logger.log('[Ads] Daily life ad cap reached');
       return { rewarded: false, rewardType };
     }
 
@@ -323,6 +332,9 @@ class AdManager {
       this.tracking.lastAdTime = Date.now();
       if (rewardType === 'coins_reward') {
         this.tracking.coinAdCount++;
+      }
+      if (rewardType === 'life_reward') {
+        this.tracking.lifeAdCount++;
       }
       await saveTracking(this.tracking);
       void analytics.trackAdWatched('rewarded', rewardType);
@@ -412,7 +424,7 @@ class AdManager {
 
     // Refresh tracking if day rolled over
     if (this.tracking.date !== todayKey()) {
-      this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
+      this.tracking = { date: todayKey(), viewCount: 0, coinAdCount: 0, lifeAdCount: 0, lastAdTime: 0, interstitialCount: 0, lastInterstitialTime: 0 };
     }
 
     // Daily cap check

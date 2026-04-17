@@ -545,6 +545,15 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       case 'double':
         // Double reward is a multiplier — caller handles the actual doubling
         break;
+      case 'lives':
+        setState((prev) => ({
+          ...prev,
+          lives: {
+            current: Math.min(prev.lives.current + def.amount, LIVES.max),
+            lastRefillTime: Date.now(),
+          },
+        }));
+        break;
       default:
         if (__DEV__) console.warn('[Economy] Unknown ad reward currency:', def.currency);
     }
