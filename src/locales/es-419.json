@@ -8,6 +8,7 @@
     "save": "Save",
     "loading": "Loading...",
     "retry": "Retry",
+    "notSynced": "Changes not synced — we'll retry when you're back online.",
     "delete": "Delete",
     "restore": "Restore",
     "confirm": "Confirm",

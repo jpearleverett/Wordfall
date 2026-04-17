@@ -19,6 +19,7 @@ import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import NeonTabBar from './src/components/navigation/NeonTabBar';
 import { BoardGenBanner } from './src/components/BoardGenBanner';
+import { NotSyncedBanner } from './src/components/NotSyncedBanner';
 import { emitBoardGenNotice } from './src/utils/boardGenNotice';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { GameScreen } from './src/screens/GameScreen';
@@ -1736,6 +1737,7 @@ function AppContent() {
         economy={economy}
       />
       <BoardGenBanner />
+      <NotSyncedBanner />
     </View>
   );
 }
