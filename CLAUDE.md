@@ -98,6 +98,7 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 - **Push notifications client**: `src/services/notifications.ts` registers Expo + device push tokens, saves to Firestore at `users/{uid}/pushToken` (line 506-509). Server-side `sendPushNotification` callable exists in `cloud-functions/src/index.ts:231`
 - **Receipt validation + replay protection**: `validateReceipt` in `functions/src/index.ts:370` with SHA256 hash dedup (`/receipts` collection)
 - **Consent gate, club moderation (Perspective API), report/block, loot-box odds disclosure, A/B testing engine, Remote Config, soft-launch analytics module, 35+ analytics events** — all wired
+- **Hard-energy scaffold (Phase 4B, flip-on ready)**: `src/hooks/useHardEnergy.ts` composes `EconomyContext` lives + `getRemoteBoolean('hardEnergyEnabled')` into `{ canPlay, livesRemaining, nextLifeAtMs, startLevel(), refillWithGems(), creditAdLife() }`. While the flag is false (default) `canPlay` stays true and `startLevel()` is a no-op. UI: `src/components/NoLivesModal.tsx` — rewarded-ad CTA, gem full-refill (disabled when short), countdown to next life. GameScreen wiring is the remaining step; flip is a Remote Config toggle.
 - **Firestore rules + indexes**: `firestore.rules` (124 lines, strict), `firestore.indexes.json` — written, just need `firebase deploy`
 - **Site/legal**: `wordfallgamesite/` has privacy/terms/support + an `assetlinks.json` template (placeholder SHA256 needs Play app signing fingerprint)
 

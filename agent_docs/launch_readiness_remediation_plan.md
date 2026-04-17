@@ -259,9 +259,9 @@ i18n unlocks ~60% of non-EN revenue. Hard-energy A/B + gifting + share cards clo
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 4.8 | `lives` / `livesMax` / `livesRegenAt` in EconomyContext. AsyncStorage + Firestore sync. | `src/contexts/EconomyContext.tsx`, `src/types.ts` | 1d |
-| 4.9 | `useGame.ts`: consume a life on board start iff `remoteConfig.get('hardEnergyEnabled')===true`. Fail = life lost; win = no consume. Regen 1/30 min, cap 5. | `src/hooks/useGame.ts`, `src/services/remoteConfig.ts` | 1d |
-| 4.10 | `NoLivesModal` with 3 paths: rewarded ad (+1 life, cap 3/day) · 30 gems refill · ask clubmate (4.12) · wait (countdown). | `src/components/NoLivesModal.tsx` (new) | 1.5d |
+| 4.8 | ✅ DONE (Apr 2026). `lives`/`maxLives`/`nextLifeTime` already exposed by `src/contexts/EconomyContext.tsx` with AsyncStorage persistence + auto-refill via `computeRefilledLives`. `useHardEnergy` hook at `src/hooks/useHardEnergy.ts` composes it with `getRemoteBoolean('hardEnergyEnabled')` — returns `canPlay:true` while flag is false so no behaviour change until flip-on. | `src/contexts/EconomyContext.tsx`, `src/hooks/useHardEnergy.ts` (new) | 1d |
+| 4.9 | **Pending flip-on.** Hook surface is ready (`startLevel()`, `refillWithGems()`, `creditAdLife()`); GameScreen wiring deferred until Remote Config flag is ready to toggle. Debit happens only when `enabled=true`. | `src/hooks/useGame.ts`, `src/hooks/useHardEnergy.ts` | 1d |
+| 4.10 | ✅ DONE (Apr 2026). `src/components/NoLivesModal.tsx` — rewarded-ad CTA (spinner while awaiting ad reward), gem full-refill (disabled when short), countdown to `nextLifeAtMs`, close/wait. Pure UI — wire-up into GameScreen happens alongside 4.9. | `src/components/NoLivesModal.tsx` (new) | 1.5d |
 | 4.11 | Firebase A/B experiment: 50/50 on `hardEnergyEnabled`. Primary metric D7 × ARPDAU. Min 2-week run before decision. | Firebase Console + `src/services/experiments.ts` | 0.5d |
 
 ### 4C. Social & viral loops
