@@ -185,16 +185,16 @@ Audio, accessibility, UI/E2E test coverage. What a first-session player feels in
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 2.6 | `Typography` wrapper honoring `PixelRatio.getFontScale()` clamped 1.0–1.3. Migrate high-traffic screens first (Home, Game, Shop, Settings, Onboarding). | `src/components/common/Typography.tsx` (new) + screens + `src/constants.ts` FONTS | 2d |
-| 2.7 | Colorblind palette (Deut/Prot/Trit). Swap letter-cell hues + success/error via theme variant. Settings toggle. | `src/constants.ts` palette, `src/contexts/SettingsContext.tsx`, `src/components/LetterCell.tsx`, `src/screens/SettingsScreen.tsx` | 1.5d |
-| 2.8 | Screen-reader game-state hints on `LetterCell` ("Letter A, row 2 column 3, selected, current word WOR"). `AccessibilityInfo.announceForAccessibility` on word-found. | `src/components/LetterCell.tsx`, `src/screens/game/PlayField.tsx` | 1d |
+| 2.6 | ✅ DONE. `src/components/common/Typography.tsx` exposes a `Typography` wrapper + `installGlobalFontScaleClamp()` that clamps `PixelRatio.getFontScale()` to 1.0–1.3 app-wide via `Text.defaultProps`. Called from `App.tsx` on boot. | `src/components/common/Typography.tsx`, `App.tsx` | 2d |
+| 2.7 | ✅ DONE. Settings exposes a Colorblind Mode selector (off / Deut / Protan / Tritan). `useColors()` hook in `src/hooks/useColors.ts` resolves `getColorblindOverrides()` from `src/services/colorblind.ts` and overlays on the base palette. `SettingsContext.colorblindMode` persisted. | `src/services/colorblind.ts`, `src/hooks/useColors.ts`, `src/contexts/SettingsContext.tsx`, `src/screens/SettingsScreen.tsx` | 1.5d |
+| 2.8 | ✅ DONE. `LetterCell` has position + selection + current-word `accessibilityLabel`; `GameScreen.tsx:463` watches `solveSequence` and calls `AccessibilityInfo.announceForAccessibility` on every new word-found. | `src/components/LetterCell.tsx`, `src/screens/GameScreen.tsx` | 1d |
 
 ### 2C. UI / E2E coverage
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 2.9 | Maestro flows: `purchase_happy_path`, `club_chat_send_and_report`, `consent_accept`, `account_deletion`, `restore_purchases`. | `.maestro/*.yaml` (new) | 1.5d |
-| 2.10 | `useCommerce` integration test with mocked `react-native-iap`: happy, validation failure, duplicate transactionId, network timeout recovery. | `src/hooks/__tests__/useCommerce.test.ts` (new) | 1d |
+| 2.9 | ✅ DONE. All 10 Maestro flows present in `.maestro/`: 01_app_launch, 02_daily_puzzle, 03_shop_browse, 04_settings, 05_mode_select, 06_consent_accept, 07_restore_purchases, 08_account_deletion, 09_purchase_happy_path, 10_club_chat_send_and_report. | `.maestro/*.yaml` | 1.5d |
+| 2.10 | ✅ DONE. `src/services/__tests__/iapCommerce.integration.test.ts` covers the same commerce surface `useCommerce` orchestrates: happy, replay rejection, duplicate transactionId independence, `__DEV__` network-fallback. Hook-layer render test skipped — no rendering lib in deps (testing-library absent). | `src/services/__tests__/iapCommerce.integration.test.ts` | 1d |
 | 2.11 | Snapshot tests for Home/Game/Shop/Settings/Club. | `src/screens/__tests__/*.snap.test.tsx` | 1d |
 
 **Verification.** Delivered BGM validates at −14 ±1 LUFS (Youlean Loudness Meter), no audible loop seam. TalkBack full playthrough of daily puzzle. System-level "Large Text" → no HomeScreen/GameScreen/ShopScreen clipping. Each colorblind palette keeps success/error/selection visually distinct. All 10 Maestro flows green in CI.
@@ -211,16 +211,16 @@ User chose **tighten procedural generation** instead of hand-authoring 75 tutori
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 3.1 | Add `GenerationProfile` on each chapter: max word length, required mechanic-intro (ch1 gravity cascade, ch2 intro 4-letter, ch3 chain bonus), empty-cell density, dictionary subset (common words only ch1–3). | `src/data/chapters.ts`, `src/types.ts` | 1.5d |
-| 3.2 | Extend `boardGenerator.ts` to honor profile. Preserve seeded PRNG determinism (daily puzzles must not drift). Bump retry budget when constraints tighter. | `src/engine/boardGenerator.ts` | 1.5d |
-| 3.3 | Golden-seed tests: for ch1–5, assert every generated board for seed S satisfies profile AND `solver.ts` finds solution within budget. | `src/engine/__tests__/boardGenerator.profiles.test.ts` (new) | 1d |
-| 3.4 | Fuzz: 10,000 seeds × each chapter → 0 unsolvable, <1% solver-budget exhaustion. CI job. | `src/engine/__tests__/boardGenerator.fuzz.test.ts` (new) | 0.5d |
+| 3.1 | ✅ DONE. `src/data/chapters.ts` now defines a `profile` on every chapter with `{minWordLength, maxWordLength, introducedMechanics, emptyCellDensity, dictionaryTier}`. Type in `src/types.ts`. | `src/data/chapters.ts`, `src/types.ts` | 1.5d |
+| 3.2 | ✅ DONE. `src/engine/boardGenerator.ts` honors the chapter profile (dictionary filtering, word-length cap, empty-cell density, mechanic-intro gates) while preserving seeded-PRNG determinism. | `src/engine/boardGenerator.ts` | 1.5d |
+| 3.3 | ✅ DONE. Golden-seed profile tests at `src/engine/__tests__/boardGenerator.profiles.test.ts` — green in CI. | `src/engine/__tests__/boardGenerator.profiles.test.ts` | 1d |
+| 3.4 | ✅ DONE. Fuzz suite at `src/engine/__tests__/boardGenerator.fuzz.test.ts` runs in the normal test suite (~16s) and is green. | `src/engine/__tests__/boardGenerator.fuzz.test.ts` | 0.5d |
 
 ### 3B. Validate adaptive difficulty with real telemetry
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 3.5 | Emit `difficulty_telemetry` on every board completion/failure: `{mode, level, stars, attempts, hintsUsed, undosUsed, chainCount, timeMs, adjusterTier}`. | `src/services/analytics.ts`, `src/services/difficultyAdjuster.ts`, `src/hooks/useGame.ts` | 0.5d |
+| 3.5 | ✅ DONE. `analytics.trackDifficultyTelemetry({ mode, level, stars, attempts, hintsUsed, undosUsed, chainCount, timeMs, adjusterTier })` fires on win (from `useRewardWiring.ts:201`) and fail (from `GameScreen.tsx:1133`). | `src/services/analytics.ts`, `src/screens/GameScreen.tsx`, `src/hooks/useRewardWiring.ts` | 0.5d |
 | 3.6 | Recruit 10 Play-Internal-Test players × 50 levels each. Target distributions: easy 75%+ first-try win · medium 50–60% · hard 30–40%. | testers + BigQuery | 2d |
 | 3.7 | Retune `difficultyAdjuster.ts` thresholds from observed data. | `src/services/difficultyAdjuster.ts` | 1d |
 
@@ -228,8 +228,8 @@ User chose **tighten procedural generation** instead of hand-authoring 75 tutori
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 3.8 | Word-find choreography: spark → shimmer → absorb into score. Tie to new audio layer. | `src/components/effects/ParticleSystem.tsx`, `src/screens/game/PlayField.tsx` | 1d |
-| 3.9 | Combo-multiplier visuals: screen-tint pulse at combo ≥ 3, confetti burst at combo ≥ 5. | `src/components/effects/{NeonStarBurst,ComboFlash}.tsx` (new) | 1d |
+| 3.8 | ✅ DONE. `src/components/effects/ParticleSystem.tsx` runs spark+absorb particles on word-find; wired from `PlayField`. Audio tie-in will land with the real-asset commission in Phase 2.1. | `src/components/effects/ParticleSystem.tsx`, `src/screens/game/PlayField.tsx` | 1d |
+| 3.9 | ✅ DONE. `src/components/effects/ComboFlash.tsx` — accent-tint flash at combo ≥ 3, gold tint + confetti burst at combo ≥ 5, honours reduce-motion. Mounted in `GameScreen.tsx:1601`. | `src/components/effects/ComboFlash.tsx` | 1d |
 | 3.10 | Gravity-settle polish: tiny bounce-overshoot on land (`withSpring(damping:10)`). | `src/screens/game/PlayField.tsx`, `src/engine/gravity.ts` timings | 0.5d |
 | 3.11 | Layered BGM: high-intensity stem mixes in at combo ≥ 3, fades on miss. Requires 2.1 to have requested stems. | `src/services/sound.ts` | 1d |
 
@@ -247,10 +247,10 @@ i18n unlocks ~60% of non-EN revenue. Hard-energy A/B + gifting + share cards clo
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 4.1 | Add `i18next` + `react-i18next` + `expo-localization`. Bootstrap in `App.tsx`. | `App.tsx`, `src/i18n/index.ts` (new), `package.json` | 0.5d |
-| 4.2 | Extract UI strings to `src/locales/en.json`. High-traffic screens first (Home/Game/Shop/Settings/Club/Onboarding/Ceremony). | every `src/screens/**` + `src/components/**` with strings | 3–4d |
+| 4.1 | ✅ DONE. `src/i18n/index.ts` bootstraps `i18next` + `react-i18next` + `expo-localization`, initialized in `App.tsx`. | `App.tsx`, `src/i18n/index.ts` | 0.5d |
+| 4.2 | **In progress.** `src/locales/en.json` has ~128 lines of extracted strings covering Onboarding + GameScreen fail modal + Settings labels. Remaining high-traffic surfaces (Home, Shop, Club, Ceremony) still need extraction. | every `src/screens/**` + `src/components/**` with strings | 3–4d |
 | 4.3 | Commission translations: ES-419, PT-BR, DE, FR, JA. ~500 strings × 5 locales. Mobile-gaming tone. | external | 0d code, 1–2wk wall-clock |
-| 4.4 | Locale selector in Settings; default to device locale, fall back to EN. | `src/screens/SettingsScreen.tsx`, `src/contexts/SettingsContext.tsx` | 0.5d |
+| 4.4 | ✅ DONE. Locale selector in Settings; defaults to device locale, falls back to EN via `SettingsContext`. | `src/screens/SettingsScreen.tsx`, `src/contexts/SettingsContext.tsx` | 0.5d |
 | 4.5 | i18next `plural`/`number` formatters; audit `"You earned " + n + " coins"` → `{{count, number}}`. | across strings | 1d |
 | 4.6 | Snapshot-test each locale for top 5 screens (DE strings ~+30% wider than EN). | `src/screens/__tests__/*.locale.test.tsx` | 0.5d |
 | 4.7 | Store-listing description clearly states "English puzzles, translated UI". | Play Console | 0.1d |
