@@ -27,6 +27,8 @@ import { crashReporter } from '../services/crashReporting';
 import ChromeText from './common/ChromeText';
 import ScanLineOverlay from './common/ScanLineOverlay';
 import NeonStarBurst from './victory/NeonStarBurst';
+import { ShareCard } from './ShareCard';
+import { useShareVictory } from '../hooks/useShareVictory';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -344,6 +346,17 @@ export function PuzzleComplete({
   nextUnlockPreview = null,
 }: PuzzleCompleteProps) {
   const { height: screenHeight } = useWindowDimensions();
+
+  // Victory card share (Phase 4C). Captures the off-screen <ShareCard/>
+  // into a PNG and hands it to the system share sheet. Falls back to a
+  // plaintext Share.share when view-shot/expo-sharing are unavailable.
+  const cappedStars = (Math.max(1, Math.min(3, stars)) as 1 | 2 | 3);
+  const { ref: shareCardRef, share: shareVictoryCard } = useShareVictory({
+    level,
+    mode,
+    score,
+  });
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(30)).current;
   const ribbonAnim = useRef(new Animated.Value(0)).current;
@@ -466,6 +479,23 @@ export function PuzzleComplete({
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      {/* Off-screen renderable victory card. Positioned far outside the
+          viewport so view-shot can captureRef() the fixed 1080x1080 layout
+          without affecting the on-screen UI. */}
+      <View
+        pointerEvents="none"
+        style={styles.offscreenShareCard}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <ShareCard
+          ref={shareCardRef}
+          score={score}
+          stars={cappedStars}
+          level={level}
+          mode={mode}
+        />
+      </View>
       <Image
         source={LOCAL_IMAGES.bg3}
         style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
@@ -860,13 +890,28 @@ export function PuzzleComplete({
                   {shareText ? (
                     <Pressable
                       style={({ pressed }) => [styles.secondaryButton, styles.shareButton, pressed && styles.buttonPressed]}
-                      onPress={() => {
-                        Share.share({ message: shareText }).catch((e) => {
+                      onPress={async () => {
+                        // Prefer capturing the victory card as a PNG. If the
+                        // native capture or system share sheet isn't available
+                        // (Expo Go, unsupported platforms), fall back to the
+                        // plaintext Share.share so sharing always succeeds.
+                        let cardShared = false;
+                        try {
+                          cardShared = await shareVictoryCard();
+                        } catch (e) {
                           crashReporter.addBreadcrumb(
-                            `Share.share (puzzle_complete) failed: ${e instanceof Error ? e.message : String(e)}`,
+                            `shareVictoryCard threw: ${e instanceof Error ? e.message : String(e)}`,
                             'share',
                           );
-                        });
+                        }
+                        if (!cardShared) {
+                          Share.share({ message: shareText }).catch((e) => {
+                            crashReporter.addBreadcrumb(
+                              `Share.share (puzzle_complete) failed: ${e instanceof Error ? e.message : String(e)}`,
+                              'share',
+                            );
+                          });
+                        }
                         onShare?.();
                       }}
                       accessibilityRole="button"
@@ -907,6 +952,16 @@ const styles = StyleSheet.create({
   confettiParticle: {
     position: 'absolute',
     top: -30,
+  },
+  // Rendered off-screen so view-shot can capture the full 1080x1080 card
+  // without the user ever seeing it. zIndex kept below any interactive UI.
+  offscreenShareCard: {
+    position: 'absolute',
+    top: -10000,
+    left: -10000,
+    width: 1080,
+    height: 1080,
+    opacity: 0,
   },
   cardOuter: {
     width: '100%',
