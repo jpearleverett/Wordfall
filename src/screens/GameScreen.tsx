@@ -6,12 +6,12 @@ import {
   Image,
   LayoutAnimation,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   Share,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from 'zustand';
 import { Board, CellPosition, GameMode, VictorySummaryItem } from '../types';
 import { useGame } from '../hooks/useGame';
