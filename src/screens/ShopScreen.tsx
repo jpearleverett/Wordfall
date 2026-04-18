@@ -50,6 +50,8 @@ import {
   VIP_STREAK_BONUSES,
 } from '../data/vipBenefits';
 import { useCommerce } from '../hooks/useCommerce';
+import PiggyBankCard from '../components/PiggyBankCard';
+import { analytics } from '../services/analytics';
 
 const { width } = Dimensions.get('window');
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
@@ -356,6 +358,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       try {
         const result = await purchaseProduct(productId);
         if (result.success) {
+          if (productId === 'piggy_bank_break') {
+            void analytics.logEvent('piggy_bank_broken', {});
+          }
           Alert.alert('Purchase Complete', 'Your items have been delivered!');
         } else {
           if (result.error && result.error !== 'User cancelled') {
@@ -663,6 +668,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Piggy Bank ──────────────────────────────────────────── */}
+        <PiggyBankCard
+          onBreak={() => handlePurchase('piggy_bank_break')}
+          purchasing={purchasingId === 'piggy_bank_break'}
+        />
+
         {/* ── Flash Sale ──────────────────────────────────────────── */}
         {flashSale && (
           <View style={styles.flashSaleCard}>

@@ -9,6 +9,7 @@ import { LIVES } from '../constants';
 import { AdRewardType, AD_REWARD_VALUES } from '../services/ads';
 import { getProductById } from '../data/shopProducts';
 import { getVipStreakBonus } from '../data/vipBenefits';
+import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
 import {
   activateTemporaryEntitlement,
   applyCatalogPurchase,
@@ -84,6 +85,12 @@ interface IAPState {
   temporaryEntitlements: Partial<Record<CommercialEffectId, number>>;
   /** One-time migration guard for legacy settings-owned entitlements */
   entitlementMigrationVersion: number;
+  /** Slow-fill gem jar — fills on puzzle complete, broken via IAP. */
+  piggyBank: {
+    gems: number;
+    lastFillAt: number;
+    capacity: number;
+  };
 }
 
 export interface EconomyState extends Economy, IAPState {
@@ -143,6 +150,12 @@ export interface EconomyContextType extends Economy {
    * or no tier reached).
    */
   claimVipStreakBonus: () => { cosmetic?: { type: string; id: string } } | null;
+  // Piggy bank — slow-fill gem jar
+  piggyBank: IAPState['piggyBank'];
+  /** Add gems to the piggy bank, capped at the Remote-Config capacity. */
+  addPiggyBankGems: (amount: number) => void;
+  /** Drain the piggy bank into the main gem balance. Returns the amount credited. */
+  breakPiggyBank: () => number;
   addLives: (count: number) => void;
   hasTemporaryEntitlement: (effectId: CommercialEffectId) => boolean;
   getTemporaryEntitlementExpiry: (effectId: CommercialEffectId) => number;
@@ -188,6 +201,11 @@ const DEFAULT_ECONOMY: EconomyState = {
   vipStreakLastChecked: 0,
   temporaryEntitlements: {},
   entitlementMigrationVersion: 0,
+  piggyBank: {
+    gems: 0,
+    lastFillAt: 0,
+    capacity: 200, // default; refreshed from Remote Config at fill time
+  },
 };
 
 const EconomyContext = createContext<EconomyContextType>({
@@ -228,6 +246,9 @@ const EconomyContext = createContext<EconomyContextType>({
   claimVipDailyRewards: () => false,
   checkVipStreak: () => 0,
   claimVipStreakBonus: () => null,
+  piggyBank: DEFAULT_ECONOMY.piggyBank,
+  addPiggyBankGems: () => {},
+  breakPiggyBank: () => 0,
   addLives: () => {},
   hasTemporaryEntitlement: () => false,
   getTemporaryEntitlementExpiry: () => 0,
@@ -427,6 +448,49 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         gems: prev.totalEarned.gems + amount,
       },
     }));
+  }, []);
+
+  const addPiggyBankGems = useCallback((amount: number) => {
+    if (amount <= 0) return;
+    if (!getRemoteBoolean('piggyBankEnabled')) return;
+    const capacity = Math.max(0, Math.round(getRemoteNumber('piggyBankCapacity')));
+    setState((prev) => {
+      const current = prev.piggyBank?.gems ?? 0;
+      if (current >= capacity) return prev;
+      const nextGems = Math.min(capacity, current + amount);
+      if (nextGems === current) return prev;
+      return {
+        ...prev,
+        piggyBank: {
+          gems: nextGems,
+          lastFillAt: Date.now(),
+          capacity,
+        },
+      };
+    });
+  }, []);
+
+  const breakPiggyBank = useCallback((): number => {
+    let granted = 0;
+    setState((prev) => {
+      const gems = prev.piggyBank?.gems ?? 0;
+      if (gems <= 0) return prev;
+      granted = gems;
+      return {
+        ...prev,
+        gems: prev.gems + gems,
+        piggyBank: {
+          ...prev.piggyBank,
+          gems: 0,
+          lastFillAt: Date.now(),
+        },
+        totalEarned: {
+          ...prev.totalEarned,
+          gems: prev.totalEarned.gems + gems,
+        },
+      };
+    });
+    return granted;
   }, []);
 
   const spendGems = useCallback((amount: number): boolean => {
@@ -871,6 +935,9 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       claimVipDailyRewards,
       checkVipStreak,
       claimVipStreakBonus,
+      piggyBank: state.piggyBank ?? DEFAULT_ECONOMY.piggyBank,
+      addPiggyBankGems,
+      breakPiggyBank,
       addLives,
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
@@ -907,6 +974,8 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       claimVipDailyRewards,
       checkVipStreak,
       claimVipStreakBonus,
+      addPiggyBankGems,
+      breakPiggyBank,
       addLives,
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
@@ -947,6 +1016,8 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       claimVipDailyRewards,
       checkVipStreak,
       claimVipStreakBonus,
+      addPiggyBankGems,
+      breakPiggyBank,
       addLives,
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
@@ -978,6 +1049,8 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       claimVipDailyRewards,
       checkVipStreak,
       claimVipStreakBonus,
+      addPiggyBankGems,
+      breakPiggyBank,
       addLives,
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,

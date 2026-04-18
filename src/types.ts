@@ -503,7 +503,8 @@ export type IAPProductId =
   | 'royal_collection'
   | 'ultimate_whale'
   | 'vip_weekly'
-  | 'first_purchase_special';
+  | 'first_purchase_special'
+  | 'piggy_bank_break';
 
 export interface ShopOffer {
   id: string;

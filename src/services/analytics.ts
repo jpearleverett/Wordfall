@@ -66,7 +66,10 @@ export type AnalyticsEventName =
   | 'wrong_order_attempt'
   | 'iap_purchase'
   | 'level_up'
-  | 'tutorial_step';
+  | 'tutorial_step'
+  | 'piggy_bank_filled'
+  | 'piggy_bank_offer_shown'
+  | 'piggy_bank_broken';
 
 export type EventParams = Record<string, unknown>;
 

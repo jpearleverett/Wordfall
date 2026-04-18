@@ -23,6 +23,7 @@ import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
 import ReferralCard from '../components/ReferralCard';
+import PiggyBankCard from '../components/PiggyBankCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
 import {
@@ -787,6 +788,14 @@ export function HomeScreen({
             />
           </View>
         ) : null}
+
+        {/* Piggy Bank FOMO — compact mini-card (auto-hides unless jar ≥ 80%) */}
+        <View style={{ marginHorizontal: 16 }}>
+          <PiggyBankCard
+            compact
+            onBreak={() => onOpenShop?.()}
+          />
+        </View>
 
         {/* Come-back-tomorrow hook — early game retention */}
         {(playerStage === 'new' || playerStage === 'early') && progress.puzzlesSolved >= 1 && !dailyDone && (
