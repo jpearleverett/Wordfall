@@ -30,8 +30,8 @@ class FunnelTracker {
   }
 
   async trackStep(step: FunnelStep, metadata?: Record<string, unknown>): Promise<void> {
-    await analytics.logEvent('session_start' as any, {
-      _funnel: step,
+    await analytics.logEvent('funnel_step' as any, {
+      funnel_step: step,
       ...metadata,
       client_timestamp: Date.now(),
     });

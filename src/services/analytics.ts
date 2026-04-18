@@ -482,10 +482,10 @@ class Analytics {
     this.state.sessionStartedAt = Date.now();
     await this.persistState();
 
-    await this.logEvent('session_start', { source });
+    await this.logEvent('app_session_start' as any, { source });
 
     if (__DEV__) {
-      logger.log('[Analytics] session_start', { sessionId: this.state.sessionId, source });
+      logger.log('[Analytics] app_session_start', { sessionId: this.state.sessionId, source });
     }
   }
 
