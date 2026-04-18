@@ -23,6 +23,7 @@ import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
 import ReferralCard from '../components/ReferralCard';
+import ReferralPendingRewards from '../components/ReferralPendingRewards';
 import PiggyBankCard from '../components/PiggyBankCard';
 import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
@@ -787,6 +788,9 @@ export function HomeScreen({
             <SeasonPassHomeCard onPress={onOpenSeasonPass} />
           </View>
         )}
+
+        {/* Pending referral rewards (auto-hides when empty) */}
+        <ReferralPendingRewards />
 
         {/* Referral Card - established+ players */}
         {(playerStage === 'established' || playerStage === 'veteran') && referralCode ? (

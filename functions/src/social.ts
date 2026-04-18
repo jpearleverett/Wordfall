@@ -774,3 +774,182 @@ export const claimGift = functions.https.onCall(
 );
 
 
+// ─── Referral Reward Grant ───────────────────────────────────────────────────
+
+/**
+ * Per-referrer daily grant cap. Someone could scrape codes + spin up fake
+ * Google Play install accounts to farm rewards; 50/day keeps a viable viral
+ * loop while bounding the attack surface.
+ */
+const REFERRAL_DAILY_CAP_PER_REFERRER = 50;
+
+/**
+ * Referral reward defaults. Remote Config is the source of truth at runtime,
+ * but server-side RC reads would add a cold-start dependency; instead we
+ * mirror the client defaults here. Tuning both in lockstep is a launch
+ * checklist item.
+ */
+const REFERRAL_REWARD_GEMS_REFERRER = 25;
+const REFERRAL_REWARD_GEMS_REFERRED = 10;
+const REFERRAL_REWARD_COINS_REFERRER = 500;
+const REFERRAL_REWARD_COINS_REFERRED = 200;
+const REFERRAL_REWARD_HINTS_REFERRED = 3;
+
+/**
+ * onReferralSuccess — HTTPS Callable
+ *
+ * Called by the referred user (the callee) after they complete their first
+ * puzzle. Credits both sides of the referral:
+ *   - Referrer:  +25 gems, +500 coins, referralCount++, push notification
+ *   - Referred:  +10 gems, +200 coins, +3 hint tokens
+ *
+ * Both reward grants are written to `users/{uid}/rewards/referral_{ts}` with
+ * `{ claimed: false }` and applied locally when the inbox claim button is
+ * tapped — same pattern as gifts, clubGoals, so offline/flaky-network works.
+ *
+ * Double-claim guard: a dedup doc at
+ * `referrals/{referredUid}_{referralCode}` blocks replays at the transaction
+ * layer. Per-referrer daily rate limit caps abuse.
+ */
+export const onReferralSuccess = functions.https.onCall(
+  async (data: { referralCode: string }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Authentication required',
+      );
+    }
+    const referredUid = context.auth.uid;
+    const { referralCode } = data ?? ({} as typeof data);
+
+    if (
+      typeof referralCode !== 'string' ||
+      referralCode.length < 4 ||
+      referralCode.length > 16
+    ) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Invalid referralCode',
+      );
+    }
+
+    // Look up referrer UID via the referralCodes index (written client-side
+    // on first generate). Missing doc = legacy / unregistered code — reject.
+    const codeRef = db.collection('referralCodes').doc(referralCode.toUpperCase());
+    const codeSnap = await codeRef.get();
+    if (!codeSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Referral code not found');
+    }
+    const referrerUid = codeSnap.data()?.uid as string | undefined;
+    if (!referrerUid || typeof referrerUid !== 'string') {
+      throw new functions.https.HttpsError('failed-precondition', 'Malformed referralCodes doc');
+    }
+    if (referrerUid === referredUid) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Self-referral is not allowed',
+      );
+    }
+
+    // Per-referrer daily rate limit (spam cap).
+    const withinBudget = await checkFirestoreRateLimit(
+      referrerUid,
+      'onReferralSuccess',
+      REFERRAL_DAILY_CAP_PER_REFERRER,
+      24 * 60 * 60,
+    );
+    if (!withinBudget) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        `Referrer has reached the daily referral grant cap (${REFERRAL_DAILY_CAP_PER_REFERRER}/day)`,
+      );
+    }
+
+    const dedupId = `${referredUid}_${referralCode.toUpperCase()}`;
+    const dedupRef = db.collection('referrals').doc(dedupId);
+
+    const timestamp = Date.now();
+    const referrerRewardRef = db
+      .collection('users')
+      .doc(referrerUid)
+      .collection('rewards')
+      .doc(`referral_${timestamp}_${referredUid.slice(0, 8)}`);
+    const referredRewardRef = db
+      .collection('users')
+      .doc(referredUid)
+      .collection('rewards')
+      .doc(`referral_${timestamp}`);
+
+    const result = await db.runTransaction(async (tx) => {
+      const existing = await tx.get(dedupRef);
+      if (existing.exists) {
+        return { alreadyGranted: true as const };
+      }
+
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      tx.set(dedupRef, {
+        referrerUid,
+        referredUid,
+        referralCode: referralCode.toUpperCase(),
+        createdAt: now,
+      });
+
+      tx.set(referrerRewardRef, {
+        type: 'referral',
+        lane: 'referrer',
+        gems: REFERRAL_REWARD_GEMS_REFERRER,
+        coins: REFERRAL_REWARD_COINS_REFERRER,
+        hintTokens: 0,
+        fromUserId: referredUid,
+        referralCode: referralCode.toUpperCase(),
+        claimed: false,
+        createdAt: now,
+      });
+
+      tx.set(referredRewardRef, {
+        type: 'referral',
+        lane: 'referred',
+        gems: REFERRAL_REWARD_GEMS_REFERRED,
+        coins: REFERRAL_REWARD_COINS_REFERRED,
+        hintTokens: REFERRAL_REWARD_HINTS_REFERRED,
+        fromUserId: referrerUid,
+        referralCode: referralCode.toUpperCase(),
+        claimed: false,
+        createdAt: now,
+      });
+
+      return { alreadyGranted: false as const };
+    });
+
+    if (result.alreadyGranted) {
+      return {
+        success: true,
+        alreadyGranted: true,
+        referrerUid,
+        grantedGemsReferrer: 0,
+        grantedGemsReferred: 0,
+      };
+    }
+
+    // Best-effort push to the referrer. Failures here don't roll back the
+    // grant — the reward doc is authoritative and will appear in the inbox.
+    try {
+      await sendPushToUser(
+        referrerUid,
+        '\u{1F381} Your referral paid off!',
+        'A friend just joined Wordfall. Claim your reward in the Invite screen.',
+        { type: 'referral_success' },
+      );
+    } catch (err) {
+      functions.logger.warn('[onReferralSuccess] push failed', { referrerUid, err });
+    }
+
+    return {
+      success: true,
+      alreadyGranted: false,
+      referrerUid,
+      grantedGemsReferrer: REFERRAL_REWARD_GEMS_REFERRER,
+      grantedGemsReferred: REFERRAL_REWARD_GEMS_REFERRED,
+    };
+  },
+);

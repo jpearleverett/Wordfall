@@ -854,6 +854,97 @@ class FirestoreService {
     }
   }
 
+  // ── Referral rewards ───────────────────────────────────────────────────────
+
+  /**
+   * Upsert the referralCodes/{code} → {uid} index doc. The onReferralSuccess
+   * Cloud Function reads this collection to resolve a player-entered code back
+   * to the referrer's UID. Safe to call repeatedly; writes are merged.
+   */
+  async upsertReferralCode(userId: string, referralCode: string): Promise<boolean> {
+    if (!this.enabled || !userId || !referralCode) return false;
+    try {
+      const ref = doc(db, 'referralCodes', referralCode.toUpperCase());
+      await setDoc(
+        ref,
+        {
+          uid: userId,
+          code: referralCode.toUpperCase(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return true;
+    } catch (e) {
+      logger.warn('[Firestore] upsertReferralCode failed:', e);
+      return false;
+    }
+  }
+
+  /**
+   * List unclaimed referral reward inbox docs at users/{uid}/rewards
+   * where type === 'referral' and claimed === false.
+   */
+  async getPendingReferralRewards(
+    userId: string,
+  ): Promise<Array<{
+    id: string;
+    gems: number;
+    coins: number;
+    hintTokens: number;
+    lane: 'referrer' | 'referred';
+    fromUserId: string | null;
+    createdAt: number;
+  }>> {
+    if (!this.enabled || !userId) return [];
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'rewards'),
+        where('type', '==', 'referral'),
+        where('claimed', '==', false),
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const created = data.createdAt;
+        const createdAtMs =
+          typeof created?.toMillis === 'function'
+            ? created.toMillis()
+            : typeof created === 'number'
+              ? created
+              : Date.now();
+        return {
+          id: d.id,
+          gems: data.gems || 0,
+          coins: data.coins || 0,
+          hintTokens: data.hintTokens || 0,
+          lane: (data.lane as 'referrer' | 'referred') || 'referrer',
+          fromUserId: data.fromUserId || null,
+          createdAt: createdAtMs,
+        };
+      });
+    } catch (e) {
+      logger.warn('[Firestore] getPendingReferralRewards failed:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Flip a referral reward to claimed. The local economy grant is applied by
+   * the caller; this only touches the inbox doc.
+   */
+  async markReferralRewardClaimed(userId: string, rewardId: string): Promise<boolean> {
+    if (!this.enabled || !userId || !rewardId) return false;
+    try {
+      const ref = doc(db, 'users', userId, 'rewards', rewardId);
+      await updateDoc(ref, { claimed: true, claimedAt: serverTimestamp() });
+      return true;
+    } catch (e) {
+      logFirestoreError('markReferralRewardClaimed', 'rewards', e);
+      return false;
+    }
+  }
+
   /**
    * Check if Firebase is configured and available.
    */
