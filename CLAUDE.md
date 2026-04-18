@@ -103,9 +103,9 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 - **Site/legal**: `wordfallgamesite/` has privacy/terms/support + an `assetlinks.json` template (placeholder SHA256 needs Play app signing fingerprint)
 
 ### Real launch-blocking gaps (code-side)
-- **Social account linking**: Firebase Anonymous auth only. No Google Sign-In. Not strictly blocking but anonymous-only means a wiped device = lost paid progression.
 - **`assetlinks.json` SHA256**: replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` in `wordfallgamesite/.well-known/assetlinks.json` with the Play app signing key fingerprint (from Play Console → App signing).
 - _(resolved April 2026)_ GDPR account deletion UI + `requestAccountDeletion` Cloud Function are live; direct-client gifting upgraded to a secure `sendGift`/`claimGift` callable path with rate limits.
+- _(resolved April 2026)_ **Google Sign-In account linking** landed in code. `src/services/googleAuth.ts` exposes `linkAnonymousToGoogle()` (calls Firebase `linkWithCredential`, with `credential-already-in-use` → `signInWithCredential` recovery fallback). `AuthContext` surfaces `linkedEmail` / `canLinkGoogle` / `linkGoogle`. `SettingsScreen` shows "Sign In with Google" for anonymous users and the linked email once upgraded. Native module is lazy-required so dev APKs without it don't crash; final activation requires user-side steps (see below).
 
 ### Real launch-blocking gaps (user-side, outside this repo)
 - Register `wordfall_*` IAP SKUs in Play Console (catalog: `src/data/shopProducts.ts`)
@@ -118,6 +118,12 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 - Fill Play Console Data Safety form (draft in `agent_docs/data_safety.md`)
 - Upload store listing assets (icon, feature graphic, screenshots — copy in `agent_docs/store_listing.md`)
 - Commission real audio (synth fallback works but sounds amateur)
+- **Google Sign-In activation** (code is landed, just needs setup + rebuild):
+  1. `npm install --legacy-peer-deps @react-native-google-signin/google-signin` (then commit `package.json` + lockfile)
+  2. Google Cloud Console → Credentials → create an OAuth 2.0 **Web Client ID** for the Firebase project. Set `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in `.env` + `eas secret:create`.
+  3. Firebase Console → Authentication → Sign-in method → enable **Google**. Paste the same Web Client ID into the Google provider settings.
+  4. Play Console → Setup → App signing → copy the **SHA-1** fingerprint → Firebase Console → Project settings → Android app → Add fingerprint.
+  5. EAS rebuild dev-client APK (`EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android`) and reinstall — the service autodetects the native module and flips `canLinkGoogle` to `true`.
 
 ### Deferred to v1.1 (NOT launch blockers)
 - Localization (UI-only, top 5 languages)

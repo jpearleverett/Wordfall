@@ -79,7 +79,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const contextSettings = useSettings();
   const isAdFreeComputed = useEconomyStore(selectIsAdFreeComputed);
   const isPremiumPassFlag = useEconomyStore(selectIsPremiumPassFlag);
-  const { signOut } = useAuth();
+  const { signOut, isAnonymous, linkedEmail, canLinkGoogle, linkGoogle } = useAuth();
   const { restorePurchases } = useCommerce();
 
   const settings = settingsProp ?? contextSettings;
@@ -117,9 +117,29 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const handleSignIn = async () => {
     if (signingIn) return;
+    if (!canLinkGoogle) {
+      Alert.alert(
+        'Sign-In Unavailable',
+        'Google Sign-In is not available in this build. Please update to the latest version of Wordfall.',
+      );
+      return;
+    }
     setSigningIn(true);
     try {
+      const result = await linkGoogle();
+      if (!result.ok) {
+        if (result.code !== 'CANCELLED') {
+          Alert.alert('Sign-In Failed', result.error);
+        }
+        return;
+      }
       await Promise.resolve(onUpdateSetting('isSignedIn', true));
+      Alert.alert(
+        'Account Linked',
+        result.email
+          ? `Signed in as ${result.email}. Your progress is now backed up to the cloud.`
+          : 'Signed in. Your progress is now backed up to the cloud.',
+      );
     } finally {
       setSigningIn(false);
     }
@@ -430,10 +450,31 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
           {isSignedIn ? (
             <>
-              <TouchableOpacity style={styles.actionRow} accessibilityRole="button" accessibilityLabel="Link account">
-                <Text style={styles.settingLabel}>Link Account</Text>
-                <Text style={styles.chevron}>{'\u203A'}</Text>
-              </TouchableOpacity>
+              <View
+                style={styles.actionRow}
+                accessibilityRole="text"
+                accessibilityLabel={
+                  linkedEmail
+                    ? `Signed in as ${linkedEmail}`
+                    : isAnonymous
+                      ? 'Guest account — progress is stored on this device only'
+                      : 'Signed in'
+                }
+              >
+                <Text style={styles.settingLabel}>
+                  {linkedEmail ? 'Google Account' : 'Account'}
+                </Text>
+                <Text
+                  style={[styles.settingLabel, { color: COLORS.textMuted, fontSize: 14 }]}
+                  numberOfLines={1}
+                >
+                  {linkedEmail
+                    ? linkedEmail
+                    : isAnonymous
+                      ? 'Guest (not backed up)'
+                      : 'Signed in'}
+                </Text>
+              </View>
               <View style={styles.divider} />
               <TouchableOpacity
                 style={styles.actionRow}
@@ -473,7 +514,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               disabled={signingIn}
             >
               <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
-                {signingIn ? 'Signing in…' : 'Sign In'}
+                {signingIn ? 'Signing in…' : 'Sign In with Google'}
               </Text>
               {signingIn ? (
                 <ActivityIndicator size="small" color={COLORS.accent} />

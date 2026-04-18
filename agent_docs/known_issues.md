@@ -81,7 +81,7 @@
   - Settings UI button "Delete account & data" with double-confirm
   - Cloud Function `deleteUserData` to wipe `/users/{uid}` + subcollections + leaderboard entries + receipts
   - Local cleanup: AsyncStorage clear, sign-out, navigate to onboarding
-- [ ] **Social account linking** (recommended, not strict): Google Sign-In via `@react-native-google-signin/google-signin` + `linkWithCredential`. Without it, wiped device = lost paid progression = refund risk. Apple Sign-In can wait (Android-first).
+- [x] **Social account linking** (Apr 2026): Google Sign-In wired via `src/services/googleAuth.ts` (`linkAnonymousToGoogle` → Firebase `linkWithCredential`, with `credential-already-in-use` → `signInWithCredential` recovery fallback). `AuthContext` exposes `linkedEmail` / `canLinkGoogle` / `linkGoogle`; `SettingsScreen` surfaces "Sign In with Google" for anonymous users and the linked email once upgraded. Native module is lazy-required so dev APKs without it don't crash. Final activation (user-side): install `@react-native-google-signin/google-signin`, set `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, enable Google provider in Firebase Console, add Play app signing SHA-1 → Firebase Android app, EAS rebuild. Apple Sign-In deferred with iOS lane.
 - [ ] **`assetlinks.json` SHA256**: replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` with real Play app signing fingerprint. Two-line task once Play app signing key is generated.
 
 ### User-side / external (Phase 2)
