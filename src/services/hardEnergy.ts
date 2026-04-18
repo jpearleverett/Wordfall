@@ -1,19 +1,16 @@
 import { getRemoteBoolean } from './remoteConfig';
 
 /**
- * Hard-energy system entry point.
+ * Hard-energy decision site — Remote Config flag accessor only.
  *
- * Shipped in Phase 4B as a Remote-Config-gated A/B with default OFF. While
- * the flag is false the module is a pure no-op; no lives are consumed and
- * the existing soft-energy (coins/gems) economy runs unchanged.
+ * The full integration (life debit, regen, NoLivesModal, ad-credit) lives in
+ * `src/hooks/useHardEnergy.ts`, which composes this flag with EconomyContext
+ * lives state. Components and screens should use that hook, not the helpers
+ * below — those exist as a non-React entry point for service-layer code that
+ * needs a quick canPlay check without a hook.
  *
- * The flip-on work in a later phase will add:
- *  - lives / livesMax / livesRegenAt to EconomyContext
- *  - a NoLivesModal with rewarded-ad / gem-refill / clubmate-ask paths
- *  - regen cadence (1/30min, cap 5) + server-truth Firestore sync
- *
- * Keeping the decision site (`isHardEnergyEnabled()`) centralized means we
- * can flip the flag in Remote Config during soft launch without re-deploy.
+ * Default OFF in Remote Config. Flipping the flag enables the hook's life
+ * debit path; soft-energy (coins/gems) economy continues to run unchanged.
  */
 
 export function isHardEnergyEnabled(): boolean {
@@ -21,30 +18,31 @@ export function isHardEnergyEnabled(): boolean {
 }
 
 /**
- * Called when a player taps "Play" on a level. Under soft energy this is a
- * no-op. Under hard energy it would consume one life and return false if
- * the player is out. Today, always returns `{ canPlay: true }` because the
- * flag is off and we have no lives state yet.
+ * Non-hook canPlay check for service-layer callers. React components should
+ * use `useHardEnergy()` instead, which actually debits a life via
+ * `economy.spendLife()`. This stub returns `canPlay: true` whenever the
+ * flag is off (the production case today) and conservatively allows play
+ * when on — the hook is the source of truth for life accounting.
  */
 export function tryStartLevel(): { canPlay: boolean; livesRemaining?: number } {
   if (!isHardEnergyEnabled()) return { canPlay: true };
-  // TODO(phase-4B-flip): read economy lives + consume one. Treat 0 lives as
-  // canPlay=false so the caller can present NoLivesModal.
   return { canPlay: true };
 }
 
 /**
- * Called on level failure under hard energy to cost the player a life.
- * Under soft energy this is a no-op.
+ * Non-hook level-failed signal. The real life debit happens in
+ * `useHardEnergy.startLevel()` via `economy.spendLife()` — this stub is a
+ * no-op kept for any service-layer caller that wants to fire-and-forget.
  */
 export function onLevelFailed(): void {
   if (!isHardEnergyEnabled()) return;
-  // TODO(phase-4B-flip): debit one life, persist timestamp for regen countdown.
 }
 
 /**
- * Time-of-next-life accessor used by NoLivesModal once it ships. Until then
- * we return null so callers can treat "no info" as "soft energy active".
+ * Non-hook next-life accessor. Components should read
+ * `useHardEnergy().nextLifeAtMs` instead, which threads through
+ * `economy.nextLifeTime`. Returns null here because the service layer has
+ * no EconomyContext access.
  */
 export function getNextLifeAtMs(): number | null {
   return null;
