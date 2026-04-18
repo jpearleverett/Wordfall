@@ -504,7 +504,8 @@ export type IAPProductId =
   | 'ultimate_whale'
   | 'vip_weekly'
   | 'first_purchase_special'
-  | 'piggy_bank_break';
+  | 'piggy_bank_break'
+  | 'season_pass_premium';
 
 export interface ShopOffer {
   id: string;

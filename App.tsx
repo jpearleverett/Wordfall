@@ -36,6 +36,7 @@ import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import EventScreen from './src/screens/EventScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import MasteryScreen from './src/screens/MasteryScreen';
+import SeasonPassScreen from './src/screens/SeasonPassScreen';
 import { ConsentGate } from './src/components/ConsentGate';
 import { hasAcceptedTos } from './src/services/consent';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
@@ -122,6 +123,9 @@ function HomeStackScreen() {
       <HomeStack.Screen name="Shop" component={ShopScreen} />
       <HomeStack.Screen name="CosmeticStore" component={CosmeticStoreScreen} />
       <HomeStack.Screen name="Settings" component={SettingsScreen} />
+      <HomeStack.Screen name="SeasonPass">
+        {({ navigation }) => <SeasonPassScreen onBack={() => navigation.goBack()} />}
+      </HomeStack.Screen>
       <HomeStack.Screen name="Game" component={GameScreenWrapper} />
     </HomeStack.Navigator>
   );
@@ -1446,6 +1450,7 @@ function HomeMainScreen({ route, navigation }: any) {
         onResetProgress={handleReset}
         onOpenShop={() => navigation.navigate('Shop')}
         onOpenSettings={() => navigation.navigate('Settings')}
+        onOpenSeasonPass={() => navigation.navigate('SeasonPass')}
         onOpenWheel={() => setShowMysteryWheel(true)}
         mysteryWheelSpins={player.mysteryWheel.spinsAvailable}
         freeSpinToast={freeSpinToast}

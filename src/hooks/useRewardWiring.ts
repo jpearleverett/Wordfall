@@ -115,6 +115,8 @@ interface EconomyContextLike {
   addGems: (amount: number) => void;
   addLibraryPoints: (amount: number) => void;
   addHintTokens: (amount: number) => void;
+  addPiggyBankGems: (amount: number) => void;
+  addSeasonPassXp: (amount: number) => void;
   starterPackExpiresAt: number;
   activateStarterPack: () => void;
 }
@@ -257,6 +259,23 @@ export function useRewardWiring({
     if (piggyFill > 0) {
       economy.addPiggyBankGems(piggyFill);
       void analytics.logEvent('piggy_bank_filled', { amount: piggyFill });
+    }
+
+    // Season pass XP — scaled by star bonus + daily/perfect kickers.
+    const baseXp = Math.max(0, Math.round(getRemoteNumber('seasonPassXpPerPuzzle')));
+    if (baseXp > 0) {
+      const xpGain =
+        baseXp +
+        stars * 50 +
+        (isDaily ? 200 : 0) +
+        (isPerfect ? 150 : 0);
+      economy.addSeasonPassXp(xpGain);
+      void analytics.logEvent('season_pass_xp_gained', {
+        amount: xpGain,
+        is_daily: isDaily,
+        is_perfect: isPerfect,
+        stars,
+      });
     }
 
     // Award library points (apply XP multiplier)

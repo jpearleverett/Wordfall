@@ -67,6 +67,11 @@ export interface RemoteConfigValues {
   piggyBankFillPerPuzzle: number;
   piggyBankCapacity: number;
   piggyBankPriceUSD: number;
+  // Season pass — 50-tier XP ladder (Branch 6)
+  seasonPassEnabled: boolean;
+  seasonPassDurationDays: number;
+  seasonPassXpPerPuzzle: number;
+  seasonPassXpMultiplier: number;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -120,6 +125,11 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   piggyBankFillPerPuzzle: 2,
   piggyBankCapacity: 200,
   piggyBankPriceUSD: 4.99,
+  // Season pass — 30-day rotation, 100 XP per puzzle, no multiplier by default
+  seasonPassEnabled: true,
+  seasonPassDurationDays: 30,
+  seasonPassXpPerPuzzle: 100,
+  seasonPassXpMultiplier: 1.0,
 };
 
 // ---------------------------------------------------------------------------

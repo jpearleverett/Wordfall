@@ -9,7 +9,15 @@ import { LIVES } from '../constants';
 import { AdRewardType, AD_REWARD_VALUES } from '../services/ads';
 import { getProductById } from '../data/shopProducts';
 import { getVipStreakBonus } from '../data/vipBenefits';
+import {
+  DEFAULT_SEASON_PASS_STATE,
+  SEASON_PASS_TIERS,
+  SeasonPassState,
+  getSeasonPassTier,
+} from '../data/seasonPass';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
+import { analytics } from '../services/analytics';
+import { checkSeasonExpiry } from '../services/seasonRotation';
 import {
   activateTemporaryEntitlement,
   applyCatalogPurchase,
@@ -91,6 +99,8 @@ interface IAPState {
     lastFillAt: number;
     capacity: number;
   };
+  /** Season pass — 50-tier free + premium XP ladder, rotates every 30 days. */
+  seasonPass: SeasonPassState;
 }
 
 export interface EconomyState extends Economy, IAPState {
@@ -156,6 +166,24 @@ export interface EconomyContextType extends Economy {
   addPiggyBankGems: (amount: number) => void;
   /** Drain the piggy bank into the main gem balance. Returns the amount credited. */
   breakPiggyBank: () => number;
+  // Season pass — 50-tier XP ladder (free + premium)
+  seasonPass: SeasonPassState;
+  /** Grant season pass XP; auto-bumps currentTier when thresholds are crossed. */
+  addSeasonPassXp: (amount: number) => void;
+  /**
+   * Claim a tier's reward in one of the two lanes. Returns the reward that
+   * was granted (for UI ceremony), or null if the tier wasn't claimable.
+   * Currency/consumable rewards are credited automatically; cosmetic rewards
+   * surface via the returned descriptor for PlayerContext.unlockCosmetic().
+   */
+  claimSeasonPassTier: (
+    tier: number,
+    lane: 'free' | 'premium',
+  ) => { cosmetic?: { type: string; id: string } } | null;
+  /** Unlock the premium lane for the current season (after IAP validated). */
+  unlockSeasonPassPremium: () => void;
+  /** Replace the season state (used by season rotation on expiry). */
+  resetSeasonPass: (next: SeasonPassState) => void;
   addLives: (count: number) => void;
   hasTemporaryEntitlement: (effectId: CommercialEffectId) => boolean;
   getTemporaryEntitlementExpiry: (effectId: CommercialEffectId) => number;
@@ -206,6 +234,7 @@ const DEFAULT_ECONOMY: EconomyState = {
     lastFillAt: 0,
     capacity: 200, // default; refreshed from Remote Config at fill time
   },
+  seasonPass: DEFAULT_SEASON_PASS_STATE,
 };
 
 const EconomyContext = createContext<EconomyContextType>({
@@ -247,8 +276,13 @@ const EconomyContext = createContext<EconomyContextType>({
   checkVipStreak: () => 0,
   claimVipStreakBonus: () => null,
   piggyBank: DEFAULT_ECONOMY.piggyBank,
+  seasonPass: DEFAULT_ECONOMY.seasonPass,
   addPiggyBankGems: () => {},
   breakPiggyBank: () => 0,
+  addSeasonPassXp: () => {},
+  claimSeasonPassTier: () => null,
+  unlockSeasonPassPremium: () => {},
+  resetSeasonPass: () => {},
   addLives: () => {},
   hasTemporaryEntitlement: () => false,
   getTemporaryEntitlementExpiry: () => 0,
@@ -416,6 +450,27 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     };
   }, [loaded]);
 
+  // Season rotation: on load and on every foreground, check if the stored
+  // season has expired; if so, install the fresh default season state.
+  useEffect(() => {
+    if (!loaded) return;
+
+    const runCheck = () => {
+      const pass = latestStateRef.current.seasonPass;
+      if (!pass) return;
+      const result = checkSeasonExpiry(pass);
+      if (result.expired && result.nextSeason) {
+        setState((prev) => ({ ...prev, seasonPass: result.nextSeason! }));
+      }
+    };
+
+    runCheck();
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') runCheck();
+    });
+    return () => subscription.remove();
+  }, [loaded]);
+
   const addCoins = useCallback((amount: number) => {
     setState((prev) => ({
       ...prev,
@@ -491,6 +546,132 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       };
     });
     return granted;
+  }, []);
+
+  // ── Season pass ────────────────────────────────────────────────────────
+
+  const addSeasonPassXp = useCallback((amount: number) => {
+    if (amount <= 0) return;
+    if (!getRemoteBoolean('seasonPassEnabled')) return;
+    const multiplier = getRemoteNumber('seasonPassXpMultiplier') || 1;
+    const xpDelta = Math.round(amount * multiplier);
+    let unlockedTiers: number[] = [];
+    setState((prev) => {
+      const current = prev.seasonPass ?? DEFAULT_SEASON_PASS_STATE;
+      const nextXP = current.currentXP + xpDelta;
+      const nextTier = getSeasonPassTier(nextXP);
+      if (nextTier > current.currentTier) {
+        unlockedTiers = [];
+        for (let t = current.currentTier + 1; t <= nextTier; t++) unlockedTiers.push(t);
+      }
+      return {
+        ...prev,
+        seasonPass: {
+          ...current,
+          currentXP: nextXP,
+          currentTier: nextTier,
+        },
+      };
+    });
+    for (const tier of unlockedTiers) {
+      void analytics.logEvent('season_pass_tier_unlocked', { tier });
+    }
+  }, []);
+
+  const claimSeasonPassTier = useCallback(
+    (tier: number, lane: 'free' | 'premium') => {
+      let grant: { cosmetic?: { type: string; id: string } } | null = null;
+      setState((prev) => {
+        const pass = prev.seasonPass ?? DEFAULT_SEASON_PASS_STATE;
+        if (tier < 1 || tier > SEASON_PASS_TIERS.length) return prev;
+        if (tier > pass.currentTier) return prev;
+        if (lane === 'premium' && !pass.isPremium) return prev;
+        const claimedList =
+          lane === 'free' ? pass.claimedFreeTiers : pass.claimedPremiumTiers;
+        if (claimedList.includes(tier)) return prev;
+
+        const tierDef = SEASON_PASS_TIERS[tier - 1];
+        const reward = lane === 'free' ? tierDef.freeReward : tierDef.premiumReward;
+
+        const next: EconomyState = {
+          ...prev,
+          totalEarned: { ...prev.totalEarned },
+          boosterTokens: { ...prev.boosterTokens },
+        };
+
+        switch (reward.type) {
+          case 'coins': {
+            const amt = reward.amount ?? 0;
+            next.coins += amt;
+            next.totalEarned.coins += amt;
+            break;
+          }
+          case 'gems': {
+            const amt = reward.amount ?? 0;
+            next.gems += amt;
+            next.totalEarned.gems += amt;
+            break;
+          }
+          case 'hints': {
+            const amt = reward.amount ?? 0;
+            next.hintTokens += amt;
+            next.totalEarned.hintTokens += amt;
+            break;
+          }
+          case 'booster': {
+            const amt = reward.amount ?? 1;
+            next.boosterTokens.wildcardTile += amt;
+            break;
+          }
+          case 'rare_tile':
+          case 'mystery_box':
+            // Inventory-only rewards surface via the returned descriptor;
+            // there's no numeric slot to bump in EconomyState today. The
+            // Shop/Inventory surfaces owning these are gated on the higher
+            // premium-lane flag — wiring them is out of scope for B2.
+            break;
+          case 'cosmetic':
+            if (reward.cosmeticId) {
+              grant = { cosmetic: { type: 'frame', id: reward.cosmeticId } };
+            }
+            break;
+        }
+
+        next.seasonPass = {
+          ...pass,
+          claimedFreeTiers:
+            lane === 'free' ? [...pass.claimedFreeTiers, tier] : pass.claimedFreeTiers,
+          claimedPremiumTiers:
+            lane === 'premium'
+              ? [...pass.claimedPremiumTiers, tier]
+              : pass.claimedPremiumTiers,
+        };
+        grant = grant ?? {};
+        void analytics.logEvent('season_pass_tier_claimed', {
+          tier,
+          lane,
+          reward_type: reward.type,
+        });
+        return next;
+      });
+      return grant;
+    },
+    [],
+  );
+
+  const unlockSeasonPassPremium = useCallback(() => {
+    setState((prev) => {
+      const pass = prev.seasonPass ?? DEFAULT_SEASON_PASS_STATE;
+      if (pass.isPremium) return prev;
+      return {
+        ...prev,
+        seasonPass: { ...pass, isPremium: true },
+      };
+    });
+  }, []);
+
+  const resetSeasonPass = useCallback((next: SeasonPassState) => {
+    setState((prev) => ({ ...prev, seasonPass: next }));
   }, []);
 
   const spendGems = useCallback((amount: number): boolean => {
@@ -695,9 +876,19 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     setState((prev) => {
       const result = applyCatalogPurchase(prev, productId, options);
       grants = result.grants;
-       applied = result.applied;
-      return result.nextState;
+      applied = result.applied;
+      let next = result.nextState;
+      // Season pass premium — unlock the premium lane for the current season.
+      if (applied && productId === 'season_pass_premium') {
+        const pass = next.seasonPass ?? DEFAULT_SEASON_PASS_STATE;
+        next = { ...next, seasonPass: { ...pass, isPremium: true } };
+      }
+      return next;
     });
+
+    if (applied && productId === 'season_pass_premium') {
+      void analytics.logEvent('season_pass_premium_purchased', {});
+    }
 
     return { grants, applied };
   }, []);
@@ -938,6 +1129,11 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       piggyBank: state.piggyBank ?? DEFAULT_ECONOMY.piggyBank,
       addPiggyBankGems,
       breakPiggyBank,
+      seasonPass: state.seasonPass ?? DEFAULT_ECONOMY.seasonPass,
+      addSeasonPassXp,
+      claimSeasonPassTier,
+      unlockSeasonPassPremium,
+      resetSeasonPass,
       addLives,
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
@@ -976,6 +1172,10 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       claimVipStreakBonus,
       addPiggyBankGems,
       breakPiggyBank,
+      addSeasonPassXp,
+      claimSeasonPassTier,
+      unlockSeasonPassPremium,
+      resetSeasonPass,
       addLives,
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
@@ -1018,6 +1218,10 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       claimVipStreakBonus,
       addPiggyBankGems,
       breakPiggyBank,
+      addSeasonPassXp,
+      claimSeasonPassTier,
+      unlockSeasonPassPremium,
+      resetSeasonPass,
       addLives,
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
@@ -1051,6 +1255,10 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       claimVipStreakBonus,
       addPiggyBankGems,
       breakPiggyBank,
+      addSeasonPassXp,
+      claimSeasonPassTier,
+      unlockSeasonPassPremium,
+      resetSeasonPass,
       addLives,
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
