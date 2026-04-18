@@ -1,0 +1,45 @@
+# Flow 11 — Referral card + pending rewards claim
+#
+# Smoke-tests the two referral surfaces rendered on the Home screen:
+#   1. `ReferralCard` (always mounted once the user has a referral code) —
+#      title "Invite Friends", primary CTA "SHARE INVITE".
+#   2. `ReferralPendingRewards` (only mounted when the user has claimable
+#      referral grants from friends who completed their first puzzle) —
+#      title "Referral Rewards Ready", row-level "CLAIM" CTAs.
+#
+# Covered assertions: card is mounted; "SHARE INVITE" is tappable;
+# pending-rewards path taps the first CLAIM if present. We do NOT verify
+# that the native Share sheet opens — Maestro can't introspect system UI.
+appId: com.wordfall.game
+name: "11 — Referral card + pending rewards"
+tags:
+  - smoke
+  - social
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+# Scroll Home until the Referral card is on-screen. ReferralCard renders
+# below the hero area, so one small swipe up usually brings it into view.
+- swipe:
+    direction: UP
+    duration: 500
+- waitForAnimationToEnd
+- assertVisible: "Invite Friends"
+- assertVisible: "YOUR CODE"
+# Branch: if the referred-friend-success path has granted rewards, claim
+# the first one. Otherwise skip — fresh installs won't have any.
+- runFlow:
+    when:
+      visible: "Referral Rewards Ready"
+    commands:
+      - tapOn: "CLAIM"
+      - waitForAnimationToEnd
+# Exercise the share CTA last so we don't interrupt a pending claim flow.
+# Tapping it opens the system share sheet; we dismiss via `back` so the
+# flow finishes on Home.
+- tapOn: "SHARE INVITE"
+- waitForAnimationToEnd
+- back
+- waitForAnimationToEnd

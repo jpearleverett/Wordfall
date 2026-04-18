@@ -1,0 +1,43 @@
+# Flow 14 — Friend Leaderboard card on Home
+#
+# `FriendLeaderboardCard` is mounted on Home only when the user has
+# at least one friend (`friendIds.length > 0`). Title: "Friends
+# Leaderboard", secondary CTA: "View All ›". Tapping "View All ›"
+# navigates to `LeaderboardScreen` with `scope: 'friends'`.
+#
+# Fresh-install smoke runs won't have any friends, so this flow
+# branches: assert the card IS visible and exercise "View All ›" if
+# the test account has friends; otherwise log a no-op assertion on
+# Home so the run still passes. Pair with a seeded test account for
+# deeper coverage when available.
+appId: com.wordfall.game
+name: "14 — Friend Leaderboard card"
+tags:
+  - smoke
+  - social
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+# Card renders below ReferralCard — one swipe usually brings it up.
+- swipe:
+    direction: UP
+    duration: 500
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Friends Leaderboard"
+    commands:
+      - assertVisible: "Friends Leaderboard"
+      - assertVisible: "View All"
+      - tapOn: "View All"
+      - waitForAnimationToEnd
+      # LeaderboardScreen with scope='friends' renders the same header
+      # as the global leaderboard; the Friends tab/toggle is preselected.
+      - assertVisible: "Leaderboard"
+      - back
+      - waitForAnimationToEnd
+# If the card didn't render (no friends on this account), just assert
+# we're still on Home — the test is a no-op for this state.
+- assertVisible: "Home"

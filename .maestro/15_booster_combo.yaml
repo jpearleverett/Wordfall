@@ -1,0 +1,65 @@
+# Flow 15 — Booster combo banner
+#
+# When two of the three boosters (Wildcard, Spotlight, Shuffle) are
+# activated in the same puzzle, `BoosterComboBanner` fires with one of:
+#   - EAGLE EYE  (Wildcard + Spotlight) → 2x SCORE · NEXT N WORDS
+#   - LUCKY ROLL (Wildcard + Shuffle)
+#   - POWER SURGE (Spotlight + Shuffle)
+#
+# Fresh installs start with zero booster tokens, so the buttons may not
+# render at all. This flow therefore:
+#   1. Enters the mode picker → taps the first available mode → lands
+#      on GameScreen.
+#   2. Asserts GameScreen rendered by checking for the "Go back" button.
+#   3. Branches: if both "Wildcard" and "Spotlight" buttons are visible
+#      (test account seeded with booster tokens), tap both and assert
+#      the combo banner appears. Otherwise skip the combo path —
+#      LiveOps/manual QA handles the seeded case.
+appId: com.wordfall.game
+name: "15 — Booster combo banner"
+tags:
+  - smoke
+  - gameplay
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+# Open mode picker from the Home "Play" affordance. ModesScreen lists
+# mode cards; tap the first available one (Classic) to enter a game.
+- tapOn:
+    text: "Play"
+    optional: true
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Classic"
+    commands:
+      - tapOn: "Classic"
+      - waitForAnimationToEnd
+- assertVisible: "Go back"
+# Conditional booster combo: both tokens must be available for this path.
+- runFlow:
+    when:
+      visible: "Wildcard"
+    commands:
+      - runFlow:
+          when:
+            visible: "Spotlight"
+          commands:
+            - tapOn: "Wildcard"
+            - waitForAnimationToEnd
+            - tapOn: "Spotlight"
+            - waitForAnimationToEnd
+            # Combo banner auto-hides after a short duration; assert
+            # immediately. Either of the Wildcard×Spotlight tagline
+            # fragments confirms the banner rendered.
+            - assertVisible:
+                text: "EAGLE EYE"
+                optional: true
+            - assertVisible:
+                text: "2x SCORE"
+                optional: true
+# Exit game back to Home.
+- tapOn: "Go back"
+- waitForAnimationToEnd

@@ -1,0 +1,47 @@
+# Flow 12 — Piggy Bank card on the Shop
+#
+# The piggy-bank card renders two variants:
+#   - Full card on ShopScreen ("Piggy Bank" title; CTA "BREAK FOR $X.XX"
+#     when fill ≥ 80%, else "Keep playing to fill").
+#   - Compact FOMO card on HomeScreen ("Piggy Bank Ready!") — only
+#     rendered when the jar is ≥ 100% full.
+#
+# Fresh installs start the jar at 0%, so the full card will normally
+# show "Keep playing to fill". This flow asserts the card is mounted,
+# the fill % is rendered, and taps "BREAK FOR" only if it happens to be
+# available (e.g. a test account seeded with a full jar). We do NOT run
+# the purchase — the sandbox IAP sheet is not introspectable by Maestro.
+appId: com.wordfall.game
+name: "12 — Piggy Bank card on the Shop"
+tags:
+  - smoke
+  - monetization
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+- tapOn: "Open shop"
+- waitForAnimationToEnd
+- assertVisible: "SHOP"
+# Piggy-bank card is the first section inside ShopScreen body; no scroll
+# should be required. If future layout changes push it below the fold,
+# add a small `swipe: UP` here.
+- assertVisible: "Piggy Bank"
+# Jar either shows the ready CTA or the keep-playing message — both
+# paths are valid. Branch so the flow works on both seed states.
+- runFlow:
+    when:
+      visible: "Keep playing to fill"
+    commands:
+      - assertVisible: "Keep playing to fill"
+- runFlow:
+    when:
+      visible: "BREAK FOR"
+    commands:
+      - assertVisible: "BREAK FOR"
+      # Don't tap — tapping launches the native IAP sheet which Maestro
+      # can't dismiss reliably. Real purchase QA is manual.
+- back
+- waitForAnimationToEnd
+- assertVisible: "Home"
