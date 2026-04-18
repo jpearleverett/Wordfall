@@ -77,6 +77,13 @@
         "@types/react",
         "typescript"
       ]
+    },
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-iap"
+        ]
+      }
     }
   },
   "overrides": {
