@@ -115,6 +115,7 @@ interface EconomyContextLike {
   addGems: (amount: number) => void;
   addLibraryPoints: (amount: number) => void;
   addHintTokens: (amount: number) => void;
+  addPiggyBankGems: (amount: number) => void;
   starterPackExpiresAt: number;
   activateStarterPack: () => void;
 }
