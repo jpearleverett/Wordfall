@@ -86,6 +86,22 @@ export interface GameState {
   scoreDoubler: boolean;
   boardFreezeActive: boolean;
   premiumHintUsed: boolean;
+  /**
+   * Boosters activated in the current puzzle, in order of activation. Used to
+   * detect two-booster combos (`src/data/boosterCombos.ts`). Resets on
+   * NEW_GAME. Repeated activations of the same booster (e.g. two wildcards)
+   * only contribute one entry so combos require two *distinct* boosters.
+   */
+  boostersUsedThisPuzzle: string[];
+  /** Active booster-combo id, or null when no combo is in flight. */
+  activeComboType: string | null;
+  /**
+   * Remaining word-finds with `comboMultiplier` applied. Decremented on each
+   * successful word. When it reaches 0 the combo expires.
+   */
+  comboWordsRemaining: number;
+  /** Score multiplier applied to word-find score while a combo is active. 1 = no combo. */
+  comboMultiplier: number;
 }
 
 export type GameAction =
@@ -113,7 +129,14 @@ export type GameAction =
   | { type: 'GRANT_BOOSTER'; booster: 'wildcardTile' | 'spotlight' | 'smartShuffle' }
   | { type: 'USE_PREMIUM_HINT' }
   | { type: 'ACTIVATE_SCORE_DOUBLER' }
-  | { type: 'ACTIVATE_BOARD_FREEZE' };
+  | { type: 'ACTIVATE_BOARD_FREEZE' }
+  | {
+      type: 'ACTIVATE_BOOSTER_COMBO';
+      comboType: string;
+      multiplier: number;
+      wordsDuration: number;
+    }
+  | { type: 'EXPIRE_BOOSTER_COMBO' };
 
 export interface PlayerProgress {
   currentLevel: number;

@@ -84,7 +84,9 @@ export type AnalyticsEventName =
   | 'friend_request_sent'
   | 'friend_request_accepted'
   | 'friend_search_performed'
-  | 'friend_leaderboard_viewed';
+  | 'friend_leaderboard_viewed'
+  | 'booster_combo_activated'
+  | 'booster_combo_expired';
 
 export type EventParams = Record<string, unknown>;
 

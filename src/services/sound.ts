@@ -26,7 +26,7 @@ try {
   // crashReporter may be unavailable in test or minimal builds
 }
 
-type SoundName = 'tap' | 'gravity' | 'wordFound' | 'wordInvalid' | 'combo' | 'puzzleComplete' | 'starEarn' | 'buttonPress' | 'hintUsed' | 'undoUsed' | 'chainBonus';
+type SoundName = 'tap' | 'gravity' | 'wordFound' | 'wordInvalid' | 'combo' | 'puzzleComplete' | 'starEarn' | 'buttonPress' | 'hintUsed' | 'undoUsed' | 'chainBonus' | 'boosterCombo';
 // BGM tracks. `menu`/`gameplay`/`tense` are the historical set; `relax` and
 // `victory` were added in plan task 2.3 (BGM-by-screen context). `menu` is the
 // home-screen track in practice so no `home` alias is needed.
@@ -56,6 +56,7 @@ const REAL_SOUND_FILES: Record<SoundName, number | null> = {
   hintUsed: null,
   undoUsed: null,
   chainBonus: null,
+  boosterCombo: null,
 };
 
 const REAL_MUSIC_FILES: Record<MusicTrack, number | null> = {
@@ -111,6 +112,7 @@ const SOUND_CATEGORY: Record<SoundName, SoundCategory> = {
   hintUsed: 'sfx',
   undoUsed: 'sfx',
   chainBonus: 'ceremony',
+  boosterCombo: 'ceremony',
 };
 
 // ── Sound Definitions ──────────────────────────────────────────────
@@ -263,6 +265,21 @@ const SOUND_DEFS: Record<SoundName, ToneSpec> = {
     harmonics: [0.35, 0.15, 0.06],
     reverbMix: 0.18,
     reverbDecay: 0.15,
+  },
+
+  // Booster-combo fanfare — brighter + longer than chainBonus so the synergy
+  // banner lands with extra weight. Swap in commissioned SFX when delivered.
+  boosterCombo: {
+    freqs: [659.25, 880.0, 1046.5, 1318.5, 1760.0],
+    duration: 0.65,
+    volume: 0.24,
+    attack: 0.005,
+    decay: 0.07,
+    sustain: 0.7,
+    release: 0.22,
+    harmonics: [0.4, 0.2, 0.08],
+    reverbMix: 0.22,
+    reverbDecay: 0.22,
   },
 };
 
