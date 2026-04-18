@@ -14,7 +14,7 @@ Wordfall is a gravity-based strategic word puzzle mobile game built with **React
 - **Backend:** Firebase (Auth + Firestore + Functions) with offline fallback
 - **State:** 4 context providers + 2 extracted sub-contexts + **zustand** for game state (wraps reducer via `redux` middleware for per-component selector subscriptions) + AsyncStorage persistence (debounced) + Firestore sync
 - **Build plugins:** **React Compiler** via `babel-preset-expo` `'react-compiler'` option (scoped to `src/`), plus `react-native-worklets/plugin` (must remain last)
-- **Testing:** Jest + ts-jest, 39 test suites with 791 tests
+- **Testing:** Jest + ts-jest, 61 test suites with 981 tests
 - **Monetization:** `react-native-iap@^15.0.0` wired with full purchase flow + fraud detection; `react-native-google-mobile-ads@^16` autolinked with test IDs; segment-based dynamic offers with flash sales; $0.49 first-purchase impulse offer for non-payers
 - **Audio:** `expo-audio` only (`createAudioPlayer`). `expo-av` removed in SDK 55.
 - **Video:** `expo-video` (`useVideoPlayer` + `VideoView`) with error boundary fallback

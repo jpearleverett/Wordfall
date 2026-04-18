@@ -11,7 +11,7 @@
 
 - `npm install --legacy-peer-deps` — PASS (930 packages, 38s)
 - `npx tsc --noEmit` — PASS (clean)
-- `npm test` — PASS (39/39 suites, 791/791 tests, 21.3s)
+- `npm test` — PASS (61/61 suites, 981/981 tests, ~26s) as of April 2026 top-tier F2P parity work
 - Device smoke test — PASS (user-confirmed: APK builds via EAS, all screens load, game plays through)
 
 ---
