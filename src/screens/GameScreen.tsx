@@ -502,7 +502,13 @@ export function GameScreen({
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const prevFoundWordsRef = useRef(foundWords);
   const [movedCells, setMovedCells] = useState<CellPosition[]>([]);
-  const [clearParticles, setClearParticles] = useState<{ x: number; y: number } | null>(null);
+  // Multi-tile bloom queue — each entry is one particle instance at a cell-centered
+  // screen coordinate. Populated from `lastSubmittedCellsRef` positions when a
+  // word is found (each tile gets `tileBloomParticlesPerTile` copies, staggered
+  // 30ms apart). Entries are removed via batched filter after ~700ms.
+  const [clearParticleQueue, setClearParticleQueue] = useState<
+    Array<{ id: string; x: number; y: number }>
+  >([]);
   // Tracks transient setTimeout handles (particle bursts, score popups, etc.) so they can be cleared on unmount.
   const pendingTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const trackTimeout = useCallback(
@@ -533,6 +539,9 @@ export function GameScreen({
   const [bigWordLabel, setBigWordLabel] = useState<string | null>(null);
   const bigWordAnim = useRef(new Animated.Value(0)).current;
   const lastSubmittedWordLenRef = useRef(0);
+  // Cell positions of the most-recently-submitted word (captured pre-submit).
+  // Used by the multi-tile bloom spawn in the score-change effect.
+  const lastSubmittedCellsRef = useRef<CellPosition[]>([]);
 
   // --- Tutorial overlay state (Task 4) ---
   const [tutorialTip, setTutorialTip] = useState<{ id: string; text: string } | null>(null);
@@ -862,6 +871,80 @@ export function GameScreen({
     }
   }, []);
 
+  // Hard cap on simultaneously-rendered bloom particles. Keeps the queue
+  // bounded so a 10-letter word with perTile=2 can't balloon past this limit.
+  const MAX_BLOOM_PARTICLES = 24;
+
+  // Map a grid (row, col) to pixel-space coordinates inside the particle
+  // container (which is `absoluteFillObject` inside `gridArea`). Mirrors the
+  // cellSize math used by Grid.tsx and the gravity block so bloom particles
+  // land at each tile's visual center. Returns a safe fallback centered in
+  // the grid area when layout hasn't measured yet.
+  const cellPositionToScreen = useCallback(
+    (row: number, col: number): { x: number; y: number } => {
+      const rows = grid.length;
+      const cols = grid[0]?.length ?? 0;
+      if (cols === 0 || rows === 0 || gridAreaHeight <= 0) {
+        return { x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
+      }
+      const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
+      let cellSize = Math.floor(availableWidth / cols);
+      const frameAllowance = 58;
+      const heightAvail = gridAreaHeight - frameAllowance;
+      const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
+      cellSize = Math.min(cellSize, heightBased);
+      if (cellSize <= 0) {
+        return { x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
+      }
+      const cellStride = cellSize + CELL_GAP;
+      const gridWidth = cols * cellStride + CELL_GAP;
+      const gridHeight = rows * cellStride;
+      // Grid is centered inside gridArea (≈ SCREEN_WIDTH wide with 8px padding).
+      const gridLeft = (SCREEN_WIDTH - gridWidth) / 2;
+      const gridTop = (gridAreaHeight - gridHeight) / 2;
+      const padding = CELL_GAP / 2;
+      return {
+        x: gridLeft + padding + col * cellStride + cellSize / 2,
+        y: gridTop + row * cellStride + cellSize / 2,
+      };
+    },
+    [grid, gridAreaHeight],
+  );
+
+  // Spawn multi-tile bloom particles for a word. Each cell gets
+  // `tileBloomParticlesPerTile` particle instances, staggered 30ms per tile
+  // for a waterfall effect. Entries auto-remove from the queue after ~700ms.
+  // No-op when `tileBloomEnabled` is false (Remote Config kill-switch).
+  const spawnTileBloom = useCallback(
+    (cells: CellPosition[]) => {
+      if (cells.length === 0) return;
+      if (!getRemoteBoolean('tileBloomEnabled')) return;
+      const perTile = Math.max(
+        1,
+        Math.round(getRemoteNumber('tileBloomParticlesPerTile') || 2),
+      );
+      const maxTiles = Math.max(1, Math.floor(MAX_BLOOM_PARTICLES / perTile));
+      const tiles = cells.slice(0, maxTiles);
+      const bloomBatchId = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      tiles.forEach((cell, idx) => {
+        trackTimeout(() => {
+          const { x, y } = cellPositionToScreen(cell.row, cell.col);
+          const entries: Array<{ id: string; x: number; y: number }> = [];
+          for (let p = 0; p < perTile; p++) {
+            entries.push({ id: `${bloomBatchId}-${idx}-${p}`, x, y });
+          }
+          setClearParticleQueue(prev => [...prev, ...entries]);
+          trackTimeout(() => {
+            setClearParticleQueue(prev =>
+              prev.filter(q => !entries.some(e => e.id === q.id)),
+            );
+          }, 700);
+        }, idx * 30);
+      });
+    },
+    [cellPositionToScreen, trackTimeout],
+  );
+
   // #5 reduceMotion support
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
@@ -937,7 +1020,10 @@ export function GameScreen({
     }
   }, [combo, status, showChainCelebration, level, mode]);
 
-  // Invalid word flash animation
+  // Invalid word flash animation. Runs a brief low-amplitude screen shake
+  // (kinesthetic negative feedback — distinct from the 7+-letter celebration
+  // shake). Gated by Remote Config `invalidShakeEnabled` and skipped under
+  // reduceMotion.
   const showInvalidFlashAnim = useCallback(() => {
     setShowInvalidFlash(true);
     void errorHaptic();
@@ -955,7 +1041,20 @@ export function GameScreen({
         useNativeDriver: true,
       }),
     ]).start(() => setShowInvalidFlash(false));
-  }, [invalidFlashAnim]);
+
+    if (!reduceMotion && getRemoteBoolean('invalidShakeEnabled')) {
+      // ~120ms total, ±8px peak — reduced amplitude vs the 7+-letter shake
+      shakeAnim.setValue(0);
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 8, duration: 20, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -7, duration: 20, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 5, duration: 20, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -4, duration: 20, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 2, duration: 20, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 20, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [invalidFlashAnim, reduceMotion, shakeAnim]);
 
   // Trigger invalid flash only for true invalid-tap errors.
   useEffect(() => {
@@ -1192,14 +1291,28 @@ export function GameScreen({
             Animated.timing(bigWordAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
           ]).start(() => setBigWordLabel(null));
 
-          // Extra particle burst for 7+ letter words
-          setClearParticles({ x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 });
-          trackTimeout(() => {
-            setClearParticles(null);
-            // Second burst for extra impact
-            setClearParticles({ x: SCREEN_WIDTH / 2 + 20, y: gridAreaHeight / 2 + 40 });
-            trackTimeout(() => setClearParticles(null), 500);
-          }, 250);
+          // Per-tile bloom burst for 7+ letter words (multi-tile waterfall).
+          // Falls back to a center burst if no cleared cells were captured
+          // (e.g. chain reactions don't carry selectedCells through).
+          const bigCells = lastSubmittedCellsRef.current;
+          if (bigCells.length > 0) {
+            spawnTileBloom(bigCells);
+            // Second batch for extra celebratory impact
+            trackTimeout(() => spawnTileBloom(bigCells), 250);
+          } else {
+            const fallbackId = `big-${Date.now()}`;
+            const fallback = [
+              { id: `${fallbackId}-a`, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 },
+              { id: `${fallbackId}-b`, x: SCREEN_WIDTH / 2 + 20, y: gridAreaHeight / 2 + 40 },
+            ];
+            setClearParticleQueue(prev => [...prev, fallback[0]]);
+            trackTimeout(() => {
+              setClearParticleQueue(prev => [...prev.filter(q => q.id !== fallback[0].id), fallback[1]]);
+              trackTimeout(() => {
+                setClearParticleQueue(prev => prev.filter(q => q.id !== fallback[1].id));
+              }, 500);
+            }, 250);
+          }
         } else {
           bigWordAnim.setValue(1);
           trackTimeout(() => { bigWordAnim.setValue(0); setBigWordLabel(null); }, 1000);
@@ -1211,11 +1324,26 @@ export function GameScreen({
         void soundManager.playSound('wordFound');
       }
 
-      // #1 Word-clear particle burst (normal words)
+      // #1 Word-clear particle burst (normal words). Multi-tile bloom spawns
+      // a small particle puff at each cleared cell; falls back to a center
+      // burst if positions weren't captured (e.g. chain-reaction clears).
       if (!reduceMotion && wordLen < 7) {
-        setClearParticles({ x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 });
-        trackTimeout(() => setClearParticles(null), 500);
+        const cells = lastSubmittedCellsRef.current;
+        if (cells.length > 0) {
+          spawnTileBloom(cells);
+        } else {
+          const fallbackId = `chain-${Date.now()}`;
+          const entry = { id: fallbackId, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
+          setClearParticleQueue(prev => [...prev, entry]);
+          trackTimeout(() => {
+            setClearParticleQueue(prev => prev.filter(q => q.id !== entry.id));
+          }, 500);
+        }
       }
+
+      // Reset captured cells so the next non-submit score change (e.g. chain
+      // reactions, score doubler) falls back to the center burst.
+      lastSubmittedCellsRef.current = [];
 
       if (reduceMotion) {
         // Skip score popup animation, just show briefly
@@ -1281,6 +1409,10 @@ export function GameScreen({
 
         // Track word length for big word celebration (Task 2)
         lastSubmittedWordLenRef.current = wordLength;
+        // Snapshot the user's current selection so the score-change effect can
+        // bloom per-tile particles at each cleared cell. Copied by value
+        // because SUBMIT_WORD will clear selectedCells in the store.
+        lastSubmittedCellsRef.current = store.getState().selectedCells.slice();
 
         submitWord();
         setShowValidFlash(false);
@@ -1720,15 +1852,18 @@ export function GameScreen({
           />
         </View>
 
-        {/* #1 Word-clear particles */}
-        {clearParticles && (
+        {/* #1 Word-clear particles — multi-tile bloom queue. Each queue entry
+            renders one particle instance anchored at a cleared cell's screen
+            coordinate. Entries are removed by filter after their animation
+            finishes (see spawnTileBloom). */}
+        {clearParticleQueue.length > 0 && (
           <View style={styles.particleContainer} pointerEvents="none">
-            {Array.from({ length: 10 }).map((_, i) => (
+            {clearParticleQueue.map((p, i) => (
               <WordClearParticle
-                key={`particle-${i}-${clearParticles.x}`}
-                delay={i * 20}
-                startX={clearParticles.x}
-                startY={clearParticles.y}
+                key={p.id}
+                delay={(i % 10) * 20}
+                startX={p.x}
+                startY={p.y}
               />
             ))}
           </View>

@@ -93,6 +93,11 @@ export interface RemoteConfigValues {
   boosterCombosEnabled: boolean;
   boosterComboMultiplier: number;
   boosterComboDurationWords: number;
+
+  // Feel polish — invalid-word shake + multi-tile bloom (Branch 11)
+  invalidShakeEnabled: boolean;
+  tileBloomEnabled: boolean;
+  tileBloomParticlesPerTile: number;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -170,6 +175,11 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   boosterCombosEnabled: true,
   boosterComboMultiplier: 2.0,
   boosterComboDurationWords: 3,
+
+  // Feel polish — screen shake on invalid word + per-tile bloom particles
+  invalidShakeEnabled: true,
+  tileBloomEnabled: true,
+  tileBloomParticlesPerTile: 2,
 };
 
 // ---------------------------------------------------------------------------
