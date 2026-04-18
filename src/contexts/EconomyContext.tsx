@@ -136,7 +136,13 @@ export interface EconomyContextType extends Economy {
   vipExpiresAt: number;
   claimVipDailyRewards: () => boolean;
   checkVipStreak: () => number;
-  claimVipStreakBonus: () => boolean;
+  /**
+   * Claim this week's VIP streak bonus. Returns the cosmetic earned at the
+   * current tier (if any) so the caller can unlock it on PlayerContext.
+   * Returns `null` if the bonus was not claimable (already claimed, no VIP,
+   * or no tier reached).
+   */
+  claimVipStreakBonus: () => { cosmetic?: { type: string; id: string } } | null;
   addLives: (count: number) => void;
   hasTemporaryEntitlement: (effectId: CommercialEffectId) => boolean;
   getTemporaryEntitlementExpiry: (effectId: CommercialEffectId) => number;
@@ -221,7 +227,7 @@ const EconomyContext = createContext<EconomyContextType>({
   vipExpiresAt: 0,
   claimVipDailyRewards: () => false,
   checkVipStreak: () => 0,
-  claimVipStreakBonus: () => false,
+  claimVipStreakBonus: () => null,
   addLives: () => {},
   hasTemporaryEntitlement: () => false,
   getTemporaryEntitlementExpiry: () => 0,
@@ -730,9 +736,13 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return currentWeeks;
   }, []);
 
-  /** Claim the VIP streak bonus for the current tier. Returns true if claimed. */
-  const claimVipStreakBonus = useCallback((): boolean => {
-    let claimed = false;
+  /**
+   * Claim the VIP streak bonus for the current tier. Returns the tier's
+   * cosmetic descriptor (if any) so the caller can unlock it on the
+   * profile catalog. Returns `null` if the bonus was not claimable.
+   */
+  const claimVipStreakBonus = useCallback((): { cosmetic?: { type: string; id: string } } | null => {
+    let result: { cosmetic?: { type: string; id: string } } | null = null;
 
     setState((prev) => {
       if (prev.vipStreakBonusClaimed) return prev;
@@ -740,7 +750,9 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       const bonus = getVipStreakBonus(prev.vipStreakWeeks);
       if (!bonus) return prev;
 
-      claimed = true;
+      result = bonus.extraReward?.id
+        ? { cosmetic: { type: bonus.extraReward.type, id: bonus.extraReward.id } }
+        : {};
       return {
         ...prev,
         vipStreakBonusClaimed: true,
@@ -754,7 +766,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       };
     });
 
-    return claimed;
+    return result;
   }, []);
 
   /** Claim today's VIP daily rewards (50 gems + 3 hints). Returns true if claimed. */
