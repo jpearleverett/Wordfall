@@ -76,6 +76,10 @@ export type EconomyActions = Pick<
   | 'claimVipStreakBonus'
   | 'addPiggyBankGems'
   | 'breakPiggyBank'
+  | 'addSeasonPassXp'
+  | 'claimSeasonPassTier'
+  | 'unlockSeasonPassPremium'
+  | 'resetSeasonPass'
   | 'addLives'
   | 'hasTemporaryEntitlement'
   | 'getTemporaryEntitlementExpiry'
@@ -127,6 +131,26 @@ export const selectPiggyBankReady    = (s: EconomyState) => {
   if (capacity <= 0) return false;
   const gems = s.piggyBank?.gems ?? 0;
   return gems >= Math.floor(capacity * 0.8);
+};
+
+// Season pass — 50-tier XP ladder selectors.
+export const selectSeasonPass           = (s: EconomyState) => s.seasonPass;
+export const selectSeasonPassTier       = (s: EconomyState) => s.seasonPass?.currentTier ?? 0;
+export const selectSeasonPassXP         = (s: EconomyState) => s.seasonPass?.currentXP ?? 0;
+export const selectSeasonPassIsPremium  = (s: EconomyState) => s.seasonPass?.isPremium ?? false;
+export const selectSeasonPassClaimCounts = (s: EconomyState) => {
+  const pass = s.seasonPass;
+  if (!pass) return { free: 0, premium: 0 };
+  const currentTier = pass.currentTier;
+  const freeUnclaimed = Array.from({ length: currentTier }, (_, i) => i + 1).filter(
+    (t) => !pass.claimedFreeTiers.includes(t),
+  ).length;
+  const premiumUnclaimed = pass.isPremium
+    ? Array.from({ length: currentTier }, (_, i) => i + 1).filter(
+        (t) => !pass.claimedPremiumTiers.includes(t),
+      ).length
+    : 0;
+  return { free: freeUnclaimed, premium: premiumUnclaimed };
 };
 
 // ── Composite/computed selectors ─────────────────────────────────────────────

@@ -209,7 +209,12 @@ describe('Economy Flow Integration', () => {
       const cheapConsumables = SHOP_PRODUCTS.filter(
         p => p.fallbackPriceAmount <= 0.99 && !p.rewards.dripDays && !p.rewards.flags
       );
-      const expensiveItems = SHOP_PRODUCTS.filter(p => p.fallbackPriceAmount >= 9.99);
+      // Exclude flag-only / drip-only products — their value accrues via
+      // gated features (season pass, ad-free, etc.) rather than the raw
+      // rewards bag calculateTotalValue inspects.
+      const expensiveItems = SHOP_PRODUCTS.filter(
+        p => p.fallbackPriceAmount >= 9.99 && !p.rewards.dripDays && !p.rewards.flags,
+      );
 
       for (const cheap of cheapConsumables) {
         for (const expensive of expensiveItems) {

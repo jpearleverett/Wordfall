@@ -394,6 +394,25 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     icon: '\u{1F4E6}',
   },
 
+  // ── Season Pass Premium ──────────────────────────────────────────────────
+  // Unlocks the premium reward lane for the current season. Claim state
+  // lives in EconomyState.seasonPass — the `seasonPassPremium` flag is read
+  // by applyCatalogPurchase → EconomyContext.unlockSeasonPassPremium().
+  {
+    id: 'season_pass_premium',
+    storeProductId: 'wordfall_season_pass_premium',
+    name: 'Premium Season Pass',
+    description: 'Unlock the premium reward lane for this season.',
+    fallbackPrice: '$9.99',
+    fallbackPriceAmount: 9.99,
+    category: 'premium',
+    rewards: { flags: { seasonPassPremium: true } },
+    isNonConsumable: false,
+    originalPrice: '$14.99',
+    originalPriceAmount: 14.99,
+    icon: '\u{1F3C6}',
+  },
+
   // ── Piggy Bank (slow-fill gem jar) ───────────────────────────────────────
   // Rewards are dynamic — the accumulated gem count lives in
   // EconomyState.piggyBank and is granted by breakPiggyBank(), not by the

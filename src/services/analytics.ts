@@ -69,7 +69,12 @@ export type AnalyticsEventName =
   | 'tutorial_step'
   | 'piggy_bank_filled'
   | 'piggy_bank_offer_shown'
-  | 'piggy_bank_broken';
+  | 'piggy_bank_broken'
+  | 'season_pass_xp_gained'
+  | 'season_pass_tier_unlocked'
+  | 'season_pass_tier_claimed'
+  | 'season_pass_premium_purchased'
+  | 'season_pass_season_rolled';
 
 export type EventParams = Record<string, unknown>;
 

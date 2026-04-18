@@ -24,6 +24,7 @@ import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
 import ReferralCard from '../components/ReferralCard';
 import PiggyBankCard from '../components/PiggyBankCard';
+import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
 import {
@@ -89,6 +90,8 @@ interface HomeScreenProps {
   onOpenEvents?: () => void;
   /** Navigate to library screen */
   onOpenLibrary?: () => void;
+  /** Navigate to season pass screen */
+  onOpenSeasonPass?: () => void;
   claimedLoginToday?: boolean;
   onClaimLoginReward?: () => void;
 }
@@ -137,6 +140,7 @@ export function HomeScreen({
   activeEventBanners = [],
   onOpenEvents,
   onOpenLibrary,
+  onOpenSeasonPass,
   claimedLoginToday = false,
   onClaimLoginReward,
 }: HomeScreenProps) {
@@ -775,6 +779,13 @@ export function HomeScreen({
               </LinearGradient>
             )}
           </LinearGradient>
+        )}
+
+        {/* Season Pass — tier ladder entry point */}
+        {onOpenSeasonPass && (
+          <View style={{ marginHorizontal: 16 }}>
+            <SeasonPassHomeCard onPress={onOpenSeasonPass} />
+          </View>
         )}
 
         {/* Referral Card - established+ players */}
