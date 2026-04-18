@@ -24,11 +24,13 @@ import {
   selectCurrentLevel,
   selectDailyCompleted,
   selectTotalScore,
+  selectFriendIds,
 } from '../stores/playerStore';
 import {
   firestoreService,
   FirestoreLeaderboardEntry,
 } from '../services/firestore';
+import { analytics } from '../services/analytics';
 
 const { width } = Dimensions.get('window');
 
@@ -120,25 +122,44 @@ function firestoreToEntries(
   }));
 }
 
+type LeaderboardScope = 'global' | 'friends' | 'club';
+
 interface LeaderboardScreenProps {
   leaderboardData?: any[];
   currentUserId?: string;
   activeTab?: string;
   onChangeTab?: (tab: string) => void;
+  /** Filter scope — 'global' (default) shows Firestore top 50; 'friends'
+   *  restricts to the player's friend circle + self; 'club' is reserved for
+   *  future club-scoped cross-club comparisons. */
+  scope?: LeaderboardScope;
 }
 
-const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
+const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: { scope?: LeaderboardScope } } }> = ({
   leaderboardData,
   currentUserId: currentUserIdProp,
   activeTab: activeTabProp,
   onChangeTab: onChangeTabProp,
+  scope: scopeProp,
+  route,
 }) => {
+  const scope: LeaderboardScope = scopeProp ?? route?.params?.scope ?? 'global';
   const { user } = useAuth();
   const currentLevel = usePlayerStore(selectCurrentLevel);
   const dailyCompleted = usePlayerStore(selectDailyCompleted);
   const totalScore = usePlayerStore(selectTotalScore);
+  const friendIds = usePlayerStore(selectFriendIds);
   const { sendChallenge } = usePlayerActions();
   const currentUserId = currentUserIdProp ?? user?.uid ?? '';
+
+  useEffect(() => {
+    if (scope === 'friends') {
+      analytics.logEvent('friend_leaderboard_viewed', {
+        friend_count: friendIds.length,
+        surface: 'leaderboard_screen',
+      });
+    }
+  }, [scope, friendIds.length]);
 
   const [activeTime, setActiveTime] = useState<TimeTab>('Daily');
   const [refreshing, setRefreshing] = useState(false);
@@ -251,35 +272,91 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     setRefreshing(false);
   }, [activeTime, fetchLeaderboard]);
 
+  const [searchMode, setSearchMode] = useState<'code' | 'name'>('code');
+  const [nameSearchResults, setNameSearchResults] = useState<Array<{ userId: string; displayName: string }>>([]);
+
   const handleAddFriend = useCallback(async () => {
     if (!addFriendInput.trim()) return;
     setAddingFriend(true);
+
+    if (searchMode === 'name') {
+      const results = await firestoreService.searchUsersByDisplayName(
+        addFriendInput.trim(),
+        currentUserId,
+        10,
+      );
+      setNameSearchResults(results);
+      setAddingFriend(false);
+      analytics.logEvent('friend_search_performed', {
+        query_length: addFriendInput.trim().length,
+        results: results.length,
+      });
+      if (results.length === 0) {
+        Alert.alert('No matches', 'No players found with that display name.');
+      }
+      return;
+    }
+
     const result = await firestoreService.addFriend(currentUserId, addFriendInput.trim());
     setAddingFriend(false);
     if (result) {
+      analytics.logEvent('friend_request_sent', { method: 'code' });
       Alert.alert(
         'Friend Request Sent!',
-        `Request sent to ${result.friendName}. They will appear in your friends list once accepted.`
+        `Request sent to ${result.friendName}. They will appear in your friends list once accepted.`,
       );
       setAddFriendInput('');
       setShowAddFriend(false);
     } else {
       Alert.alert(
         'Could Not Add Friend',
-        'Friend code not found, or you already have a pending request with this player.'
+        'Friend code not found, or you already have a pending request with this player.',
       );
     }
-  }, [addFriendInput, currentUserId]);
+  }, [addFriendInput, currentUserId, searchMode]);
+
+  const handleSendRequestToSearchResult = useCallback(async (
+    targetUid: string,
+    targetName: string,
+  ) => {
+    setAddingFriend(true);
+    const result = await firestoreService.createFriendRequest(currentUserId, targetUid);
+    setAddingFriend(false);
+    if (result && typeof result === 'object' && 'friendshipId' in result) {
+      analytics.logEvent('friend_request_sent', { method: 'name' });
+      Alert.alert('Friend Request Sent!', `Request sent to ${targetName}.`);
+      setAddFriendInput('');
+      setNameSearchResults([]);
+      setShowAddFriend(false);
+    } else if (result === 'self') {
+      Alert.alert('Invalid Request', "You can't send a friend request to yourself.");
+    } else if (result === 'exists') {
+      Alert.alert('Already Requested', 'You already have a pending or accepted request with this player.');
+    } else {
+      Alert.alert('Request Failed', 'Could not send friend request. Please try again.');
+    }
+  }, [currentUserId]);
 
   // Determine which entries to show — prefer Firestore, fall back to mock
   const entries: LeaderboardEntry[] = useMemo(() => {
-    if (isFirestoreAvailable && firestoreEntries.length > 0) {
-      return firestoreEntries;
-    }
-    // Offline fallback
-    if (activeTime === 'Daily') return mockDailyEntries;
-    if (activeTime === 'Weekly') return mockWeeklyEntries;
-    return mockAllTimeEntries;
+    const base =
+      isFirestoreAvailable && firestoreEntries.length > 0
+        ? firestoreEntries
+        : activeTime === 'Daily'
+          ? mockDailyEntries
+          : activeTime === 'Weekly'
+            ? mockWeeklyEntries
+            : mockAllTimeEntries;
+
+    if (scope !== 'friends') return base;
+
+    // Friends scope: keep only rows whose id is in friendIds or is the current
+    // user, then re-rank from 1. Mock entries (prefixed `mock_`) are dropped.
+    const allowed = new Set<string>([currentUserId, ...friendIds]);
+    const filtered = base.filter((e) => allowed.has(e.id));
+    filtered.sort((a, b) => b.score - a.score);
+    filtered.forEach((e, i) => { e.rank = i + 1; });
+    return filtered;
   }, [
     isFirestoreAvailable,
     firestoreEntries,
@@ -287,6 +364,9 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     mockDailyEntries,
     mockWeeklyEntries,
     mockAllTimeEntries,
+    scope,
+    currentUserId,
+    friendIds,
   ]);
 
   const getRankColor = (rank: number): string => {
@@ -385,7 +465,9 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           style={{ width: 28, height: 28 }}
           resizeMode="contain"
         />
-        <Text style={styles.headerTitle}>LEADERBOARD</Text>
+        <Text style={styles.headerTitle}>
+          {scope === 'friends' ? 'FRIENDS' : 'LEADERBOARD'}
+        </Text>
       </View>
 
       {/* Time Tabs */}
@@ -452,33 +534,71 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       </View>
 
       {showAddFriend && (
-        <View style={styles.addFriendRow}>
-          <TextInput
-            style={styles.addFriendInput}
-            placeholder="Enter friend code..."
-            placeholderTextColor={COLORS.textMuted}
-            value={addFriendInput}
-            onChangeText={setAddFriendInput}
-            autoCapitalize="characters"
-            maxLength={12}
-          />
-          <TouchableOpacity
-            style={[
-              styles.addFriendSubmit,
-              addingFriend && { opacity: 0.5 },
-            ]}
-            onPress={handleAddFriend}
-            disabled={addingFriend}
-            accessibilityRole="button"
-            accessibilityLabel="Send friend request"
-          >
-            {addingFriend ? (
-              <ActivityIndicator size="small" color={COLORS.bg} />
-            ) : (
-              <Text style={styles.addFriendSubmitText}>Send</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <>
+          <View style={styles.searchModeTabs}>
+            <TouchableOpacity
+              style={[styles.searchModeTab, searchMode === 'code' && styles.searchModeTabActive]}
+              onPress={() => { setSearchMode('code'); setNameSearchResults([]); setAddFriendInput(''); }}
+            >
+              <Text style={[styles.searchModeTabText, searchMode === 'code' && styles.searchModeTabTextActive]}>
+                By Code
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.searchModeTab, searchMode === 'name' && styles.searchModeTabActive]}
+              onPress={() => { setSearchMode('name'); setNameSearchResults([]); setAddFriendInput(''); }}
+            >
+              <Text style={[styles.searchModeTabText, searchMode === 'name' && styles.searchModeTabTextActive]}>
+                By Name
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.addFriendRow}>
+            <TextInput
+              style={styles.addFriendInput}
+              placeholder={searchMode === 'code' ? 'Enter friend code...' : 'Search by display name...'}
+              placeholderTextColor={COLORS.textMuted}
+              value={addFriendInput}
+              onChangeText={setAddFriendInput}
+              autoCapitalize={searchMode === 'code' ? 'characters' : 'none'}
+              maxLength={searchMode === 'code' ? 12 : 40}
+            />
+            <TouchableOpacity
+              style={[
+                styles.addFriendSubmit,
+                addingFriend && { opacity: 0.5 },
+              ]}
+              onPress={handleAddFriend}
+              disabled={addingFriend}
+              accessibilityRole="button"
+              accessibilityLabel={searchMode === 'code' ? 'Send friend request' : 'Search by name'}
+            >
+              {addingFriend ? (
+                <ActivityIndicator size="small" color={COLORS.bg} />
+              ) : (
+                <Text style={styles.addFriendSubmitText}>
+                  {searchMode === 'code' ? 'Send' : 'Search'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          {searchMode === 'name' && nameSearchResults.length > 0 && (
+            <View style={styles.searchResultsCard}>
+              {nameSearchResults.map((r) => (
+                <View key={r.userId} style={styles.searchResultRow}>
+                  <Text style={styles.searchResultName} numberOfLines={1}>{r.displayName}</Text>
+                  <TouchableOpacity
+                    style={styles.searchResultBtn}
+                    onPress={() => handleSendRequestToSearchResult(r.userId, r.displayName)}
+                    disabled={addingFriend}
+                  >
+                    <Text style={styles.searchResultBtnText}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+        </>
       )}
 
       {!isFirestoreAvailable && (
@@ -510,9 +630,13 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         ) : entries.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>{'🏆'}</Text>
-            <Text style={styles.emptyText}>No leaderboard data yet</Text>
+            <Text style={styles.emptyText}>
+              {scope === 'friends' ? 'No friend scores yet' : 'No leaderboard data yet'}
+            </Text>
             <Text style={styles.emptySubtext}>
-              Play puzzles to appear on the leaderboard!
+              {scope === 'friends'
+                ? 'Add friends with "+ Add Friend" above, or have them play today\'s daily.'
+                : 'Play puzzles to appear on the leaderboard!'}
             </Text>
           </View>
         ) : (
@@ -801,6 +925,67 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.bodyBold,
     color: COLORS.bg,
+  },
+  searchModeTabs: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 6,
+    gap: 6,
+  },
+  searchModeTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(17, 22, 56, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+  },
+  searchModeTabActive: {
+    backgroundColor: COLORS.accent + '20',
+    borderColor: COLORS.accent + '50',
+  },
+  searchModeTabText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textMuted,
+  },
+  searchModeTabTextActive: {
+    color: COLORS.accent,
+  },
+  searchResultsCard: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(17, 22, 56, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 4,
+  },
+  searchResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  searchResultName: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textPrimary,
+  },
+  searchResultBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: COLORS.accent + '20',
+    borderWidth: 1,
+    borderColor: COLORS.accent + '40',
+  },
+  searchResultBtnText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
   },
   offlineBanner: {
     marginHorizontal: 16,

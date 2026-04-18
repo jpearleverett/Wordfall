@@ -49,11 +49,21 @@ service cloud.firestore {
         && request.resource.data.score <= 1000000;
     }
 
-    // Friendships: participants can read/write
+    // Friendships: either participant can create a pending request, but
+    // accepting (status: 'pending' → 'accepted') is restricted to the
+    // non-requester so senders can't self-accept their own pending ask.
+    // Deletes are allowed by either participant (decline / unfriend).
     match /friendships/{friendshipId} {
       allow read: if request.auth != null && request.auth.uid in resource.data.users;
-      allow create: if request.auth != null && request.auth.uid in request.resource.data.users;
-      allow update: if request.auth != null && request.auth.uid in resource.data.users;
+      allow create: if request.auth != null
+        && request.auth.uid in request.resource.data.users
+        && request.resource.data.status == 'pending'
+        && request.resource.data.requestedBy == request.auth.uid;
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.users
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'accepted'
+        && resource.data.requestedBy != request.auth.uid;
       allow delete: if request.auth != null && request.auth.uid in resource.data.users;
     }
 

@@ -83,6 +83,11 @@ export interface RemoteConfigValues {
   // Shared club goals — Clash-style collective progress (Branch 8)
   sharedClubGoalsEnabled: boolean;
   sharedGoalsPerWeek: number;
+
+  // Friend leaderboard + add-friend search (Branch 9)
+  friendsEnabled: boolean;
+  maxFriendsPerUser: number;
+  friendLeaderboardHomeCardEnabled: boolean;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -150,6 +155,11 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
 
   sharedClubGoalsEnabled: true,
   sharedGoalsPerWeek: 1,
+
+  // Friend leaderboard — home widget + displayName search, enabled by default
+  friendsEnabled: true,
+  maxFriendsPerUser: 100,
+  friendLeaderboardHomeCardEnabled: true,
 };
 
 // ---------------------------------------------------------------------------

@@ -80,7 +80,11 @@ export type AnalyticsEventName =
   | 'referral_reward_claimed'
   | 'shared_goal_progress'
   | 'shared_goal_completed'
-  | 'shared_goal_reward_claimed';
+  | 'shared_goal_reward_claimed'
+  | 'friend_request_sent'
+  | 'friend_request_accepted'
+  | 'friend_search_performed'
+  | 'friend_leaderboard_viewed';
 
 export type EventParams = Record<string, unknown>;
 
