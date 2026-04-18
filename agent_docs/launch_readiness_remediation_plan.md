@@ -135,8 +135,8 @@ Live builds, receipt validation, push, real ads, crash reporting, deep-link veri
 | 0.1 | Register 20 `wordfall_*` IAPs in Play Console, IDs matching `src/data/shopProducts.ts`. Enable country-tier pricing (IN/BR/MX/ID/PH −30…−50%). VIP weekly = auto-renewable subscription in a new group "Wordfall VIP". | Play Console | 0.5d |
 | 0.2 | Grant **Android Publisher** role to `<firebase-project>@appspot.gserviceaccount.com` in Play Console → Users and permissions. | Play Console | 0.1d |
 | 0.3 | Upload FCM server key in Firebase Console → Cloud Messaging. | Firebase Console | 0.1d |
-| 0.4 | `firebase deploy --only functions:commerce` (wires `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`). | shell | 0.25d |
-| 0.5 | `firebase deploy --only functions:social` (wires `sendPushNotification`, `moderateClubMessage`, etc.). | shell | 0.25d |
+| 0.4 | `firebase deploy --only functions` (single consolidated codebase — commerce: `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion`; social: `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift`). Use `scripts/firebase_deploy_functions.sh`. | shell | 0.25d |
+| 0.5 | _merged into 0.4 above (Apr 2026 consolidation)._ | — | — |
 | 0.6 | `firebase deploy --only firestore:rules,firestore:indexes`. | shell | 0.1d |
 | 0.7 | AdMob **app IDs** (`app.json`) and rewarded + interstitial **unit IDs** (via `EXPO_PUBLIC_ADMOB_REWARDED_ID*` / `..._INTERSTITIAL_ID*` env vars) are already real on the user's side. Action: verify those env vars are set in EAS secrets so production AABs don't fall through to the dev-only Google test fallback in `src/constants.ts` AD_CONFIG. | EAS secrets | 0.1d |
 | 0.8 | Replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` in `wordfallgamesite/.well-known/assetlinks.json` with Play app signing SHA-256, republish Cloudflare Pages. | site repo | 0.1d |

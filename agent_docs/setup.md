@@ -25,4 +25,4 @@ EAS project already configured (`projectId: b6dd187c-d46c-4331-bb15-5c7ffced89b3
 - **FCM credentials for Android push notifications**: `expo-notifications` handles local notifications today. Remote push needs the FCM server key uploaded to Firebase Console → Cloud Messaging → Project Settings, plus the `google-services.json` already present.
 - **iOS setup pending**: `GoogleService-Info.plist` referenced in `app.json` but not yet committed (download from Firebase Console when ready). iOS Universal Links also pending — scheme works; HTTPS needs domain + apple-app-site-association.
 - Professional audio assets to replace synthesized tones (drop `.mp3` files in `assets/audio/`).
-- E2E tests (Detox/Maestro — unit coverage is strong).
+- Maestro E2E runner on CI — all 10 flows authored under `.maestro/` (app launch, daily puzzle, shop browse, settings, mode select, consent, restore, deletion, purchase, club chat) but they still need to be executed on a Linux runner with an Android emulator attached. Unit coverage (865 tests) remains the primary gate.
