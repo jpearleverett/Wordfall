@@ -41,6 +41,7 @@ import {
 import { funnelTracker } from '../services/funnelTracker';
 import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
 import { getFlashSale, FlashSale } from '../data/dynamicPricing';
+import { getProductById } from '../data/shopProducts';
 import { soundManager } from '../services/sound';
 import {
   getVipStreakBonus,
@@ -568,9 +569,24 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     return item.price;
   };
 
+  /** Anchor price + discount badge derived from SHOP_PRODUCTS.originalPrice */
+  const getAnchor = (
+    item: ShopItem,
+  ): { originalPrice: string; discountPercent: number } | null => {
+    if (!item.iapProductId) return null;
+    const product = getProductById(item.iapProductId);
+    if (!product?.originalPrice || !product.originalPriceAmount) return null;
+    const discount = Math.round(
+      (1 - product.fallbackPriceAmount / product.originalPriceAmount) * 100,
+    );
+    if (discount <= 0) return null;
+    return { originalPrice: product.originalPrice, discountPercent: discount };
+  };
+
   const renderItemCard = (item: ShopItem) => {
     const productId = item.iapProductId ?? item.id;
     const displayPrice = getDisplayPrice(item);
+    const anchor = getAnchor(item);
 
     return (
       <TouchableOpacity
@@ -601,6 +617,14 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         )}
         <Text style={styles.itemIcon}>{item.icon}</Text>
         <Text style={styles.itemName}>{item.name}</Text>
+        {anchor && (
+          <View style={styles.itemAnchorRow}>
+            <Text style={styles.itemAnchorPrice}>{anchor.originalPrice}</Text>
+            <View style={styles.itemDiscountBadge}>
+              <Text style={styles.itemDiscountText}>{anchor.discountPercent}% OFF</Text>
+            </View>
+          </View>
+        )}
         <View style={styles.priceTag}>
           <LinearGradient
             colors={[...GRADIENTS.button.primary]}
@@ -1922,6 +1946,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     overflow: 'hidden',
+  },
+  itemAnchorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  itemAnchorPrice: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textDecorationLine: 'line-through' as const,
+  },
+  itemDiscountBadge: {
+    backgroundColor: COLORS.coral,
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  itemDiscountText: {
+    fontSize: 9,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    letterSpacing: 0.5,
   },
   priceText: {
     fontSize: 14,

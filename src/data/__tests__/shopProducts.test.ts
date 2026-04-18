@@ -183,6 +183,43 @@ describe('getNonConsumableIds', () => {
   });
 });
 
+describe('price anchoring', () => {
+  it('every non-subscription product has originalPrice + originalPriceAmount', () => {
+    const missing: string[] = [];
+    for (const product of SHOP_PRODUCTS) {
+      if (product.category === 'subscription') continue;
+      if (!product.originalPrice || product.originalPriceAmount == null) {
+        missing.push(product.id);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('originalPriceAmount is strictly greater than fallbackPriceAmount', () => {
+    for (const product of SHOP_PRODUCTS) {
+      if (product.originalPriceAmount == null) continue;
+      expect(product.originalPriceAmount).toBeGreaterThan(product.fallbackPriceAmount);
+    }
+  });
+
+  it('discount is between 10% and 80% (store listings block larger claims)', () => {
+    for (const product of SHOP_PRODUCTS) {
+      if (product.originalPriceAmount == null) continue;
+      const discount = 1 - product.fallbackPriceAmount / product.originalPriceAmount;
+      expect(discount).toBeGreaterThanOrEqual(0.1);
+      expect(discount).toBeLessThanOrEqual(0.8);
+    }
+  });
+
+  it('originalPrice string parses to a number that matches originalPriceAmount', () => {
+    for (const product of SHOP_PRODUCTS) {
+      if (product.originalPrice == null || product.originalPriceAmount == null) continue;
+      const parsed = parseFloat(product.originalPrice.replace(/[^0-9.]/g, ''));
+      expect(parsed).toBeCloseTo(product.originalPriceAmount, 2);
+    }
+  });
+});
+
 describe('storeIdToInternalId / internalIdToStoreId', () => {
   it('converts store ID to internal ID', () => {
     expect(storeIdToInternalId('wordfall_starter_pack')).toBe('starter_pack');
