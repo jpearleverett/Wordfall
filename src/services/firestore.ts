@@ -577,6 +577,143 @@ class FirestoreService {
     }
   }
 
+  /**
+   * Fetch today's daily-score entries for a set of friend UIDs plus the
+   * current user. Returns `{ userId, displayName, score }` rows sorted by
+   * score desc for the home friend-leaderboard card. Resolves to [] when
+   * Firestore is not configured or the id set is empty.
+   */
+  async getFriendDailyScores(
+    userId: string,
+    friendIds: string[],
+    date?: string,
+  ): Promise<Array<{ userId: string; displayName: string; score: number }>> {
+    if (!this.enabled || !userId) return [];
+    try {
+      const targetDate = date || getTodayDateString();
+      const ids = Array.from(new Set([userId, ...friendIds])).slice(0, 30);
+      if (ids.length === 0) return [];
+      const docIds = ids.map((uid) => `${uid}_${targetDate}`);
+
+      const results: Array<{ userId: string; displayName: string; score: number }> = [];
+      for (let i = 0; i < docIds.length; i += 10) {
+        const batch = docIds.slice(i, i + 10);
+        const q = query(
+          collection(db, 'dailyScores'),
+          where(documentId(), 'in', batch),
+        );
+        const snap = await getDocs(q);
+        for (const d of snap.docs) {
+          const data = d.data();
+          if (typeof data.userId !== 'string') continue;
+          results.push({
+            userId: data.userId,
+            displayName: data.displayName || 'Player',
+            score: typeof data.score === 'number' ? data.score : 0,
+          });
+        }
+      }
+      return results.sort((a, b) => b.score - a.score);
+    } catch (e) {
+      logger.warn('[Firestore] getFriendDailyScores failed:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Prefix-search the users collection by displayName. Returns up to
+   * `maxResults` matches (case-sensitive against the stored displayName;
+   * users enter their own capitalization). Excludes self.
+   */
+  async searchUsersByDisplayName(
+    query_: string,
+    selfUserId: string,
+    maxResults = 10,
+  ): Promise<Array<{ userId: string; displayName: string }>> {
+    if (!this.enabled) return [];
+    const trimmed = query_.trim();
+    if (trimmed.length < 2) return [];
+    try {
+      // Firestore range query for prefix: >= prefix, < prefix + \uf8ff
+      const q = query(
+        collection(db, 'users'),
+        where('displayName', '>=', trimmed),
+        where('displayName', '<', trimmed + '\uf8ff'),
+        firestoreLimit(maxResults),
+      );
+      const snap = await getDocs(q);
+      return snap.docs
+        .filter((d) => d.id !== selfUserId)
+        .map((d) => ({
+          userId: d.id,
+          displayName: d.data().displayName || 'Player',
+        }));
+    } catch (e) {
+      logger.warn('[Firestore] searchUsersByDisplayName failed:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Create a pending friendship. Returns the friendship doc id on success,
+   * `null` if already-friends or already-pending, or `'self'` if the user
+   * tries to friend themselves. Mirror of `addFriend` but takes a direct
+   * UID instead of a friend code.
+   */
+  async createFriendRequest(
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<'self' | 'exists' | { friendshipId: string } | null> {
+    if (!this.enabled || !fromUserId || !toUserId) return null;
+    if (fromUserId === toUserId) return 'self';
+    try {
+      const friendshipId = [fromUserId, toUserId].sort().join('_');
+      const ref = doc(db, 'friendships', friendshipId);
+      const existing = await getDoc(ref);
+      if (existing.exists()) {
+        const data = existing.data();
+        if (data.status === 'pending' && data.requestedBy !== fromUserId) {
+          await updateDoc(ref, { status: 'accepted' });
+          return { friendshipId };
+        }
+        return 'exists';
+      }
+      await setDoc(ref, {
+        users: [fromUserId, toUserId].sort(),
+        status: 'pending',
+        requestedBy: fromUserId,
+        createdAt: serverTimestamp(),
+      });
+      return { friendshipId };
+    } catch (e) {
+      logFirestoreError('createFriendRequest', 'friendships', e);
+      return null;
+    }
+  }
+
+  /**
+   * Accept or decline a pending friend request. Declining removes the doc
+   * so the sender can retry later; accepting flips `status` to 'accepted'.
+   */
+  async respondToFriendRequest(
+    friendshipId: string,
+    accept: boolean,
+  ): Promise<boolean> {
+    if (!this.enabled || !friendshipId) return false;
+    try {
+      const ref = doc(db, 'friendships', friendshipId);
+      if (accept) {
+        await updateDoc(ref, { status: 'accepted' });
+      } else {
+        await deleteDoc(ref);
+      }
+      return true;
+    } catch (e) {
+      logFirestoreError('respondToFriendRequest', 'friendships', e);
+      return false;
+    }
+  }
+
   // ── Gifting ───────────────────────────────────────────────────────────────
 
   /**

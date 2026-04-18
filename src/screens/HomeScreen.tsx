@@ -24,6 +24,7 @@ import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
 import NeonStreakFlame from '../components/home/NeonStreakFlame';
 import ReferralCard from '../components/ReferralCard';
 import ReferralPendingRewards from '../components/ReferralPendingRewards';
+import FriendLeaderboardCard from '../components/FriendLeaderboardCard';
 import PiggyBankCard from '../components/PiggyBankCard';
 import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
@@ -93,6 +94,8 @@ interface HomeScreenProps {
   onOpenLibrary?: () => void;
   /** Navigate to season pass screen */
   onOpenSeasonPass?: () => void;
+  /** Navigate to the friend-scoped Leaderboard screen */
+  onOpenFriendLeaderboard?: () => void;
   claimedLoginToday?: boolean;
   onClaimLoginReward?: () => void;
 }
@@ -142,6 +145,7 @@ export function HomeScreen({
   onOpenEvents,
   onOpenLibrary,
   onOpenSeasonPass,
+  onOpenFriendLeaderboard,
   claimedLoginToday = false,
   onClaimLoginReward,
 }: HomeScreenProps) {
@@ -803,6 +807,9 @@ export function HomeScreen({
             />
           </View>
         ) : null}
+
+        {/* Friends Leaderboard — auto-hides when the player has no friends */}
+        <FriendLeaderboardCard onViewAll={onOpenFriendLeaderboard} />
 
         {/* Piggy Bank FOMO — compact mini-card (auto-hides unless jar ≥ 80%) */}
         <View style={{ marginHorizontal: 16 }}>
