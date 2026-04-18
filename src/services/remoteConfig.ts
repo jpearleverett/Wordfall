@@ -88,6 +88,11 @@ export interface RemoteConfigValues {
   friendsEnabled: boolean;
   maxFriendsPerUser: number;
   friendLeaderboardHomeCardEnabled: boolean;
+
+  // Booster combo synergies (Branch 10)
+  boosterCombosEnabled: boolean;
+  boosterComboMultiplier: number;
+  boosterComboDurationWords: number;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -160,6 +165,11 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   friendsEnabled: true,
   maxFriendsPerUser: 100,
   friendLeaderboardHomeCardEnabled: true,
+
+  // Booster combos — 2x score for next 3 words after a two-booster activation
+  boosterCombosEnabled: true,
+  boosterComboMultiplier: 2.0,
+  boosterComboDurationWords: 3,
 };
 
 // ---------------------------------------------------------------------------

@@ -116,3 +116,7 @@ export const selectSolveSequence = (s: GameState) => s.solveSequence;
 export const selectMode = (s: GameState) => s.mode;
 export const selectBoardFreezeActive = (s: GameState) => s.boardFreezeActive;
 export const selectScoreDoubler = (s: GameState) => s.scoreDoubler;
+export const selectBoostersUsedThisPuzzle = (s: GameState) => s.boostersUsedThisPuzzle;
+export const selectActiveComboType = (s: GameState) => s.activeComboType;
+export const selectComboWordsRemaining = (s: GameState) => s.comboWordsRemaining;
+export const selectComboMultiplier = (s: GameState) => s.comboMultiplier;

@@ -95,6 +95,10 @@ function createInitialState(
     scoreDoubler: false,
     boardFreezeActive: false,
     premiumHintUsed: false,
+    boostersUsedThisPuzzle: [],
+    activeComboType: null,
+    comboWordsRemaining: 0,
+    comboMultiplier: 1,
   };
 }
 
@@ -228,12 +232,16 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
         letter: '*',
       };
     }
+    const nextUsed = state.boostersUsedThisPuzzle.includes('wildcardTile')
+      ? state.boostersUsedThisPuzzle
+      : [...state.boostersUsedThisPuzzle, 'wildcardTile'];
     return {
       ...state,
       board: { ...board, grid: newGrid },
       wildcardMode: false,
       wildcardCells: [position],
       boosterCounts: { ...state.boosterCounts, wildcardTile: state.boosterCounts.wildcardTile - 1 },
+      boostersUsedThisPuzzle: nextUsed,
     };
   }
 
@@ -400,13 +408,21 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
-      // Score (with optional score doubler)
+      // Score (with optional score doubler + optional booster-combo multiplier)
       const comboLevel = state.combo + 1;
       let wordScore = calculateScore(matchingWord.word, comboLevel, mode);
       const scoreDoublerConsumed = state.scoreDoubler;
       if (scoreDoublerConsumed) {
         wordScore *= 2;
       }
+      const boosterComboActive = state.comboWordsRemaining > 0 && state.comboMultiplier > 1;
+      if (boosterComboActive) {
+        wordScore = Math.floor(wordScore * state.comboMultiplier);
+      }
+      const nextComboWordsRemaining = boosterComboActive
+        ? state.comboWordsRemaining - 1
+        : state.comboWordsRemaining;
+      const comboExpired = boosterComboActive && nextComboWordsRemaining <= 0;
 
       // Check win condition
       const allFound = newWords.every(w => w.found);
@@ -478,6 +494,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         solveSequence: [...state.solveSequence, solveStep],
         scoreDoubler: scoreDoublerConsumed ? false : state.scoreDoubler,
         boardFreezeActive: newBoardFreezeActive,
+        comboWordsRemaining: comboExpired ? 0 : nextComboWordsRemaining,
+        activeComboType: comboExpired ? null : state.activeComboType,
+        comboMultiplier: comboExpired ? 1 : state.comboMultiplier,
       };
     }
 
@@ -577,11 +596,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.status !== 'playing') return state;
       if (!state.wildcardMode) return state;
       const { position } = action;
+      const nextUsed = state.boostersUsedThisPuzzle.includes('wildcardTile')
+        ? state.boostersUsedThisPuzzle
+        : [...state.boostersUsedThisPuzzle, 'wildcardTile'];
       return {
         ...state,
         wildcardMode: false,
         wildcardCells: [position],
         boosterCounts: { ...state.boosterCounts, wildcardTile: state.boosterCounts.wildcardTile - 1 },
+        boostersUsedThisPuzzle: nextUsed,
       };
     }
 
@@ -597,11 +620,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       });
 
+      const nextUsed = state.boostersUsedThisPuzzle.includes('spotlight')
+        ? state.boostersUsedThisPuzzle
+        : [...state.boostersUsedThisPuzzle, 'spotlight'];
       return {
         ...state,
         spotlightActive: true,
         spotlightLetters: [...relevantLetters],
         boosterCounts: { ...state.boosterCounts, spotlight: state.boosterCounts.spotlight - 1 },
+        boostersUsedThisPuzzle: nextUsed,
       };
     }
 
@@ -646,6 +673,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // expensive mode-specific solvability check that could false-negative
         // when the solver found spurious paths through newly-shuffled letters.
         if (remainingWords.every(w => isWordInGrid(newGrid, w))) {
+          const nextUsed = state.boostersUsedThisPuzzle.includes('smartShuffle')
+            ? state.boostersUsedThisPuzzle
+            : [...state.boostersUsedThisPuzzle, 'smartShuffle'];
           return {
             ...state,
             board: { ...state.board, grid: newGrid },
@@ -653,6 +683,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             // Reset spotlight since board letters changed
             spotlightActive: false,
             spotlightLetters: [],
+            boostersUsedThisPuzzle: nextUsed,
           };
         }
       }
@@ -730,6 +761,26 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         boardFreezeActive: true,
+      };
+    }
+
+    case 'ACTIVATE_BOOSTER_COMBO': {
+      if (state.status !== 'playing') return state;
+      const { comboType, multiplier, wordsDuration } = action;
+      return {
+        ...state,
+        activeComboType: comboType,
+        comboMultiplier: multiplier,
+        comboWordsRemaining: wordsDuration,
+      };
+    }
+
+    case 'EXPIRE_BOOSTER_COMBO': {
+      return {
+        ...state,
+        activeComboType: null,
+        comboMultiplier: 1,
+        comboWordsRemaining: 0,
       };
     }
 
@@ -906,6 +957,17 @@ export function useGame(
     store.dispatch({ type: 'ACTIVATE_BOARD_FREEZE' });
   }, [store]);
 
+  const activateBoosterCombo = useCallback(
+    (comboType: string, multiplier: number, wordsDuration: number) => {
+      store.dispatch({ type: 'ACTIVATE_BOOSTER_COMBO', comboType, multiplier, wordsDuration });
+    },
+    [store],
+  );
+
+  const expireBoosterCombo = useCallback(() => {
+    store.dispatch({ type: 'EXPIRE_BOOSTER_COMBO' });
+  }, [store]);
+
   return {
     store,
     selectCell,
@@ -925,6 +987,8 @@ export function useGame(
     usePremiumHint,
     activateScoreDoubler,
     activateBoardFreeze,
+    activateBoosterCombo,
+    expireBoosterCombo,
     isStuck,
     stars,
     foundWords,

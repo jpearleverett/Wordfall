@@ -78,6 +78,17 @@ export async function boosterActivateHaptic(): Promise<void> {
   setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 80);
 }
 
+/**
+ * Combo haptic — Success + Heavy + Heavy triple pulse. Distinct from a lone
+ * booster activation so the two-booster synergy feels meatier.
+ */
+export async function boosterComboHaptic(): Promise<void> {
+  if (!hapticsEnabled) return;
+  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 90);
+  setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 180);
+}
+
 export async function streakMilestoneHaptic(): Promise<void> {
   // Rhythmic celebration for streak milestones
   if (!hapticsEnabled) return;

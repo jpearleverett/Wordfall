@@ -29,7 +29,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import { wordFoundHaptic, comboHaptic, errorHaptic, successHaptic } from '../services/haptics';
+import { wordFoundHaptic, comboHaptic, errorHaptic, successHaptic, boosterComboHaptic } from '../services/haptics';
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
 import {
@@ -51,6 +51,9 @@ import {
   selectIsAdFreeComputed,
 } from '../stores/economyStore';
 import { analytics } from '../services/analytics';
+import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
+import BoosterComboBanner from '../components/BoosterComboBanner';
+import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCombos';
 import { getTheme } from '../data/cosmetics';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
@@ -418,6 +421,8 @@ export function GameScreen({
     activateWildcard,
     activateSpotlight,
     activateSmartShuffle,
+    activateBoosterCombo,
+    expireBoosterCombo,
     isStuck,
     stars,
     foundWords,
@@ -450,6 +455,10 @@ export function GameScreen({
   const lastSelectionResetTap = useStore(store, s => s.lastSelectionResetTap);
   const boardFreezeActive = useStore(store, s => s.boardFreezeActive);
   const scoreDoubler = useStore(store, s => s.scoreDoubler);
+  const boostersUsedThisPuzzle = useStore(store, s => s.boostersUsedThisPuzzle);
+  const activeComboType = useStore(store, s => s.activeComboType);
+  const comboWordsRemaining = useStore(store, s => s.comboWordsRemaining);
+  const comboMultiplierValue = useStore(store, s => s.comboMultiplier);
 
   const [showComplete, setShowComplete] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
@@ -1456,11 +1465,53 @@ export function GameScreen({
     }
   }, [tooltipsShown, markTooltipShown, queueCeremony]);
 
+  // Booster-combo expiration analytics: when `activeComboType` transitions
+  // from a truthy id back to null, fire one `booster_combo_expired` event.
+  // Reducer owns the actual transition (combo expires after N words); this
+  // effect only reports it.
+  const prevComboRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevComboRef.current;
+    if (prev && !activeComboType) {
+      void analytics.logEvent('booster_combo_expired', {
+        combo: prev,
+        level,
+        mode,
+      });
+    }
+    prevComboRef.current = activeComboType;
+  }, [activeComboType, level, mode]);
+
   // Booster handlers — spend from persistent economy inventory
   // Booster handlers use useStableCallback (not useCallback) so their
   // identity is stable across renders. Otherwise they'd be recreated on
   // every economy change (which is most renders), defeating BoosterBarMemo's
   // React.memo compare and making the booster bar re-render with every tap.
+
+  // Two-booster synergy: when a second distinct booster is used in the same
+  // puzzle, activate a combo (2x score on next N words). Gated behind the
+  // `boosterCombosEnabled` Remote Config flag so soft-launch can flip it off
+  // if KPI data regresses. The reducer is source-of-truth for the multiplier
+  // + expiration; we only dispatch here + fire feedback.
+  const checkAndActivateCombo = useStableCallback((justUsed: BoosterType) => {
+    if (!getRemoteBoolean('boosterCombosEnabled')) return;
+    const prior = store.getState().boostersUsedThisPuzzle as BoosterType[];
+    const combo: ComboType | null = detectCombo(prior, justUsed);
+    if (!combo) return;
+    const multiplier = getRemoteNumber('boosterComboMultiplier') || 2;
+    const duration = Math.max(1, Math.round(getRemoteNumber('boosterComboDurationWords') || 3));
+    activateBoosterCombo(combo, multiplier, duration);
+    void boosterComboHaptic();
+    void soundManager.playSound('boosterCombo');
+    void analytics.logEvent('booster_combo_activated', {
+      combo,
+      multiplier,
+      duration_words: duration,
+      level,
+      mode,
+    });
+  });
+
   const handleWildcard = useStableCallback(() => {
     if ((boosterTokens?.wildcardTile ?? 0) <= 0) return;
     spendBoosterToken('wildcardTile');
@@ -1469,6 +1520,7 @@ export function GameScreen({
     void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
     checkFirstBooster();
     activateWildcard();
+    checkAndActivateCombo('wildcardTile');
   });
 
   const handleSpotlight = useStableCallback(() => {
@@ -1479,6 +1531,7 @@ export function GameScreen({
     void analytics.logEvent('booster_used', { level, mode, booster: 'spotlight' });
     checkFirstBooster();
     activateSpotlight();
+    checkAndActivateCombo('spotlight');
   });
 
   const handleSmartShuffle = useStableCallback(() => {
@@ -1489,6 +1542,7 @@ export function GameScreen({
     void analytics.logEvent('booster_used', { level, mode, booster: 'smartShuffle' });
     checkFirstBooster();
     activateSmartShuffle();
+    checkAndActivateCombo('smartShuffle');
   });
 
   // NOTE: chainScale/chainBgColor/chainShadowColor/chainBorderColor and the
@@ -1543,6 +1597,14 @@ export function GameScreen({
             </Text>
           </View>
         </View>
+      )}
+
+      {activeComboType && (
+        <BoosterComboBanner
+          comboType={activeComboType as ComboType}
+          wordsRemaining={comboWordsRemaining}
+          multiplier={comboMultiplierValue}
+        />
       )}
 
       <GameHeader
