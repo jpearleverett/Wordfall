@@ -92,6 +92,15 @@ service cloud.firestore {
       match /goals/{goalId} {
         allow read: if request.auth != null;
       }
+
+      // Shared club goals — Clash-style collective-progress goals. Readable
+      // by any club member; writes are Admin-SDK only (onPuzzleComplete +
+      // rotateClubGoals manage all progress/completion state server-side).
+      match /sharedGoals/{goalId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.memberIds;
+        allow write: if false;
+      }
     }
 
     // Reports (user-generated reports of other users or messages)

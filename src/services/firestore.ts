@@ -854,6 +854,102 @@ class FirestoreService {
     }
   }
 
+  // ── Shared club goals ──────────────────────────────────────────────────────
+
+  /**
+   * List active shared goals for a club. Returns progress, target, and
+   * per-member contributions (for the breakdown UI). Shared goals live at
+   * clubs/{clubId}/sharedGoals; the onPuzzleComplete Cloud Function writes
+   * them, and the weekly rotateClubGoals job archives + refreshes them.
+   */
+  async getSharedClubGoals(
+    clubId: string,
+  ): Promise<Array<{
+    id: string;
+    label: string;
+    target: number;
+    progress: number;
+    trackingKey: string;
+    duration: number;
+    completed: boolean;
+    memberContributions: Record<string, number>;
+    rewardCoins: number;
+    rewardGems: number;
+  }>> {
+    if (!this.enabled || !clubId) return [];
+    try {
+      const q = query(
+        collection(db, 'clubs', clubId, 'sharedGoals'),
+        where('active', '==', true),
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          label: data.label ?? 'Shared Goal',
+          target: data.target ?? 0,
+          progress: data.progress ?? 0,
+          trackingKey: data.trackingKey ?? '',
+          duration: data.duration ?? 7,
+          completed: data.completed === true,
+          memberContributions: (data.memberContributions as Record<string, number>) ?? {},
+          rewardCoins: data.rewardCoins ?? 800,
+          rewardGems: data.rewardGems ?? 30,
+        };
+      });
+    } catch (e) {
+      logger.warn('[Firestore] getSharedClubGoals failed:', e);
+      return [];
+    }
+  }
+
+  /**
+   * List unclaimed shared-goal reward inbox docs at users/{uid}/rewards
+   * where type === 'shared_goal_complete' and claimed === false.
+   */
+  async getPendingSharedGoalRewards(
+    userId: string,
+  ): Promise<Array<{ id: string; goalLabel: string; coins: number; gems: number }>> {
+    if (!this.enabled || !userId) return [];
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'rewards'),
+        where('type', '==', 'shared_goal_complete'),
+        where('claimed', '==', false),
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          goalLabel: data.goalLabel ?? 'Club Goal',
+          coins: data.coins ?? 0,
+          gems: data.gems ?? 0,
+        };
+      });
+    } catch (e) {
+      logger.warn('[Firestore] getPendingSharedGoalRewards failed:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Flip a shared-goal reward to claimed. Local economy grant is applied by
+   * the caller — same pattern as the referral inbox.
+   */
+  async markSharedGoalRewardClaimed(userId: string, rewardId: string): Promise<boolean> {
+    if (!this.enabled || !userId || !rewardId) return false;
+    try {
+      const ref = doc(db, 'users', userId, 'rewards', rewardId);
+      await updateDoc(ref, { claimed: true, claimedAt: serverTimestamp() });
+      return true;
+    } catch (e) {
+      logFirestoreError('markSharedGoalRewardClaimed', 'rewards', e);
+      return false;
+    }
+  }
+
   // ── Referral rewards ───────────────────────────────────────────────────────
 
   /**

@@ -77,7 +77,10 @@ export type AnalyticsEventName =
   | 'season_pass_season_rolled'
   | 'referral_code_applied'
   | 'referral_success_grant'
-  | 'referral_reward_claimed';
+  | 'referral_reward_claimed'
+  | 'shared_goal_progress'
+  | 'shared_goal_completed'
+  | 'shared_goal_reward_claimed';
 
 export type EventParams = Record<string, unknown>;
 
