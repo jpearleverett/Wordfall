@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   Animated,
   Image,
@@ -6,6 +6,13 @@ import {
   Text,
   View,
 } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withSequence,
+} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
@@ -110,47 +117,45 @@ export const LetterCell = React.memo(function LetterCell({
   // If memoization is working we expect ~1 render per tap.
   perfCountCellRender();
   const palette = useColors();
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const movedAnim = useRef(new Animated.Value(0)).current;
+  // Scale-pop + moved-overlay animations are driven on the Reanimated
+  // worklet runtime so state changes on multiple cells at once (valid-word
+  // drag, chain clear) don't serialize through the JS bridge. The outer
+  // wrapper below keeps the legacy Animated.Value for `fallAnim` because
+  // that shared animated value is owned by GameScreen's gravity block
+  // (fallAnimMap) — migrating it would cascade into a much larger diff.
+  const scaleAnim = useSharedValue(1);
+  const movedAnim = useSharedValue(0);
 
   useEffect(() => {
-    // One Animated.start() call per selection change. Scale pop is the only
+    // One withSequence call per selection change. Scale pop is the only
     // active feedback now — the decorative rings (ripple/overcharge/glow)
     // were removed because their mount/unmount dominated the native commit
     // phase when multiple cells changed state at once.
     if (isSelected) {
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 0.86,
-          duration: 60,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1.08,
-          friction: 3.5,
-          tension: 260,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // friction 3.5 / tension 260 → damping ≈ 7 / stiffness 260 for a
+      // similarly bouncy pop (Reanimated uses damping+stiffness directly).
+      scaleAnim.value = withSequence(
+        withTiming(0.86, { duration: 60 }),
+        withSpring(1.08, { damping: 7, stiffness: 260 }),
+      );
     } else {
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 6,
-        useNativeDriver: true,
-      }).start();
+      scaleAnim.value = withSpring(1, { damping: 12, stiffness: 180 });
     }
   }, [isSelected, scaleAnim]);
 
   useEffect(() => {
     if (isMoved) {
-      movedAnim.setValue(1);
-      Animated.timing(movedAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }).start();
+      movedAnim.value = 1;
+      movedAnim.value = withTiming(0, { duration: 400 });
     }
   }, [isMoved, movedAnim]);
+
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleAnim.value }],
+  }));
+  const movedOpacityStyle = useAnimatedStyle(() => ({
+    opacity: movedAnim.value,
+  }));
 
   const borderRadius = size * 0.20;
   const insetBR = Math.max(borderRadius - 2, 2);
@@ -255,23 +260,25 @@ export const LetterCell = React.memo(function LetterCell({
        */}
 
       {isMoved && (
-        <Animated.View
+        <Reanimated.View
           pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: -2,
-            left: -2,
-            right: -2,
-            bottom: -2,
-            borderRadius: borderRadius + 2,
-            borderWidth: 1.5,
-            borderColor: palette.accent,
-            opacity: movedAnim,
-          }}
+          style={[
+            {
+              position: 'absolute',
+              top: -2,
+              left: -2,
+              right: -2,
+              bottom: -2,
+              borderRadius: borderRadius + 2,
+              borderWidth: 1.5,
+              borderColor: palette.accent,
+            },
+            movedOpacityStyle,
+          ]}
         />
       )}
 
-      <Animated.View
+      <Reanimated.View
         style={[
           styles.cell,
           {
@@ -280,7 +287,6 @@ export const LetterCell = React.memo(function LetterCell({
             borderRadius,
             borderColor,
             borderWidth: isSelected || isValidWord ? 2 : isWildcard ? 1.5 : 1,
-            transform: [{ scale: scaleAnim }],
             shadowColor,
             shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.4,
             // shadowRadius was 16/8 — halved because the grid renders up to
@@ -290,6 +296,7 @@ export const LetterCell = React.memo(function LetterCell({
             shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 4 : 2 },
             elevation: (isSelected || isValidWord) ? 8 : 4,
           },
+          scaleStyle,
         ]}
       >
         {/* Body gradient — the tile's primary color fill. Kept. */}
@@ -423,7 +430,7 @@ export const LetterCell = React.memo(function LetterCell({
           </View>
         )}
 
-      </Animated.View>
+      </Reanimated.View>
     </Animated.View>
   );
 });
