@@ -85,6 +85,9 @@ interface PlayerContextLike {
   consecutiveFailures: number;
   performanceMetrics: any;
   referralCode: string;
+  referredBy: string | null;
+  referralRewardGranted?: boolean;
+  recordReferralSuccess: () => Promise<boolean>;
   featuresUnlocked: string[];
   seasonalQuest: SeasonalQuestState;
 
@@ -371,6 +374,12 @@ export function useRewardWiring({
           spinsAvailable: (player.mysteryWheel?.spinsAvailable ?? 0) + 1,
         },
       });
+      // If this player was referred by someone, trigger the Cloud Function
+      // grant loop. Server-side dedup guarantees at-most-once even if this
+      // fires again on a flaky network retry.
+      if (player.referredBy && !player.referralRewardGranted) {
+        void player.recordReferralSuccess();
+      }
     }
 
     // Activate starter pack timer after enough puzzles to understand value

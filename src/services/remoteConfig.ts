@@ -72,6 +72,13 @@ export interface RemoteConfigValues {
   seasonPassDurationDays: number;
   seasonPassXpPerPuzzle: number;
   seasonPassXpMultiplier: number;
+
+  // Referral rewards — Cloud Function grant loop (Branch 7)
+  referralEnabled: boolean;
+  referralRewardGemsReferrer: number;
+  referralRewardGemsReferred: number;
+  referralRewardCoinsReferrer: number;
+  referralMaxPerDay: number;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -130,6 +137,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   seasonPassDurationDays: 30,
   seasonPassXpPerPuzzle: 100,
   seasonPassXpMultiplier: 1.0,
+
+  referralEnabled: true,
+  referralRewardGemsReferrer: 25,
+  referralRewardGemsReferred: 10,
+  referralRewardCoinsReferrer: 500,
+  referralMaxPerDay: 50,
 };
 
 // ---------------------------------------------------------------------------

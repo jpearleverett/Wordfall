@@ -127,5 +127,33 @@ service cloud.firestore {
     match /rateLimits/{docId} {
       allow read, write: if false;
     }
+
+    // Referral code → uid index. Anyone authenticated can read (so the app
+    // can preview a code before applying it), but only the owning user can
+    // write their own entry so a malicious client can't hijack someone
+    // else's code mapping.
+    match /referralCodes/{code} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Referral dedup docs (server-only via Admin SDK). Written inside the
+    // atomic onReferralSuccess txn to prevent double-grant; exposing them
+    // to clients would let attackers clear dedup entries and replay grants.
+    match /referrals/{dedupId} {
+      allow read, write: if false;
+    }
+
+    // Reward inbox (server writes via Admin SDK; recipient can read + flip
+    // claimed true). Grants are written by onReferralSuccess / gifts flow.
+    // Clients can update but not create/delete — they can only acknowledge
+    // rewards the server has already written.
+    match /users/{userId}/rewards/{rewardId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow create, delete: if false;
+    }
   }
 }

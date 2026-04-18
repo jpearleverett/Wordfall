@@ -23,6 +23,9 @@ import { createProgressMethods } from './PlayerProgressContext';
 import { createSocialMethods } from './PlayerSocialContext';
 import { generateReferralCode, REFERRAL_MILESTONES } from '../data/referralSystem';
 import { createPersistQueue } from '../utils/persistQueue';
+import { firestoreService } from '../services/firestore';
+import { recordReferralSuccessSecure } from '../services/referralRewards';
+import { analytics } from '../services/analytics';
 import {
   getTitle,
   getTitleLabel,
@@ -210,6 +213,8 @@ export interface PlayerData {
   referredBy: string | null;
   referredPlayerIds: string[];
   referralMilestonesClaimed: number[];
+  /** Set once the Cloud Function onReferralSuccess has succeeded for this user. */
+  referralRewardGranted?: boolean;
 
   // Prestige
   prestige: import('../types').PrestigeState;
@@ -336,7 +341,8 @@ export interface PlayerContextType extends PlayerData {
 
   // Referral
   applyReferralCode: (code: string) => boolean;
-  recordReferralSuccess: () => void;
+  /** Fires the Cloud Function grant. Returns true if a grant was newly triggered. */
+  recordReferralSuccess: () => Promise<boolean>;
   claimReferralMilestone: (count: number) => boolean;
 
   // Seasonal Quest
@@ -509,6 +515,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   referredBy: null,
   referredPlayerIds: [],
   referralMilestonesClaimed: [],
+  referralRewardGranted: false,
 
   // Prestige
   prestige: DEFAULT_PRESTIGE_STATE,
@@ -578,7 +585,7 @@ const PlayerContext = createContext<PlayerContextType>({
   recomputeSegments: () => {},
   updateEventProgress: () => {},
   applyReferralCode: () => false,
-  recordReferralSuccess: () => {},
+  recordReferralSuccess: async () => false,
   claimReferralMilestone: () => false,
   updateSeasonalQuest: () => {},
   notifyFriendActivity: () => {},
@@ -850,13 +857,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // NOTE: Segment recomputation useEffect moved below recomputeSegments definition to fix TS2448
 
-  // Generate referral code on first load if not already set
+  // Generate referral code on first load if not already set, and mirror the
+  // code→uid mapping into Firestore so the onReferralSuccess Cloud Function
+  // can resolve inbound codes back to this user.
   useEffect(() => {
     if (!loaded || !user) return;
+    let nextCode: string | null = null;
     setData((prev) => {
-      if (prev.referralCode) return prev; // already generated
-      return { ...prev, referralCode: generateReferralCode(user.uid) };
+      if (prev.referralCode) {
+        nextCode = prev.referralCode;
+        return prev;
+      }
+      nextCode = generateReferralCode(user.uid);
+      return { ...prev, referralCode: nextCode };
     });
+    if (nextCode) {
+      firestoreService
+        .upsertReferralCode(user.uid, nextCode)
+        .catch(() => undefined);
+    }
   }, [loaded, user]);
 
   // ── Mirror state into the zustand store ───────────────────────────────────
@@ -1312,14 +1331,45 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         referredBy: code,
       };
     });
+    if (applied) {
+      analytics.logEvent('referral_code_applied', { code });
+    }
     return applied;
   }, []);
 
-  const recordReferralSuccess = useCallback(() => {
-    setData((prev) => ({
-      ...prev,
-      referralCount: prev.referralCount + 1,
-    }));
+  const recordReferralSuccess = useCallback(async (): Promise<boolean> => {
+    const current = dataRef.current;
+    const code = current.referredBy;
+    if (!code) return false;
+    if (current.referralRewardGranted) return false;
+
+    try {
+      const result = await recordReferralSuccessSecure(code);
+      setData((prev) => ({
+        ...prev,
+        referralRewardGranted: true,
+        // Keep the local referralCount bump for back-compat with legacy
+        // milestone UI; the server-side source of truth is the inbox docs
+        // written to the referrer.
+        referralCount: prev.referralCount + (result.alreadyGranted ? 0 : 1),
+      }));
+      analytics.logEvent('referral_success_grant', {
+        already_granted: result.alreadyGranted,
+        referrer_uid: result.referrerUid,
+        gems_referred: result.grantedGemsReferred,
+      });
+      return !result.alreadyGranted;
+    } catch (err) {
+      // Network or permission error — leave referralRewardGranted false so
+      // the next first-puzzle-complete retry can attempt again. Server-side
+      // dedup doc guarantees at-most-once grant regardless of retries.
+      analytics.logEvent('referral_success_grant', {
+        already_granted: false,
+        referrer_uid: 'error',
+        gems_referred: 0,
+      });
+      return false;
+    }
   }, []);
 
   const claimReferralMilestone = useCallback((count: number): boolean => {
