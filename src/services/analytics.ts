@@ -428,7 +428,7 @@ class Analytics {
     await this.ensureEventsLoaded();
 
     // Auto-open a session when events start firing outside a session
-    if (!this.state.sessionId && event !== 'session_start' && event !== 'session_end') {
+    if (!this.state.sessionId && event !== 'app_session_start' && event !== 'session_end') {
       await this.startSession('foreground');
     }
 

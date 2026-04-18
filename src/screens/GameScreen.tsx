@@ -5,13 +5,11 @@ import {
   Animated,
   Image,
   LayoutAnimation,
-  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
   Share,
-  UIManager,
   View,
 } from 'react-native';
 import { useStore } from 'zustand';
@@ -66,13 +64,6 @@ import { GameFlashes } from './game/GameFlashes';
 import { ComboFlash } from '../components/effects/ComboFlash';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
-
-if (
-  Platform.OS === 'android' &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 interface GameScreenProps {
   board: Board;
