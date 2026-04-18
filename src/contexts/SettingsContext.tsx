@@ -13,6 +13,7 @@ export type ColorblindMode =
 interface Settings {
   sfxVolume: number;
   musicVolume: number;
+  ceremonyVolume: number;
   hapticsEnabled: boolean;
   notificationsEnabled: boolean;
   theme: ThemeOption;
@@ -43,6 +44,7 @@ interface SettingsContextType extends Settings {
 const DEFAULT_SETTINGS: Settings = {
   sfxVolume: 0.8,
   musicVolume: 0.5,
+  ceremonyVolume: 0.8,
   hapticsEnabled: true,
   notificationsEnabled: true,
   theme: 'dark',

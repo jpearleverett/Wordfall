@@ -137,6 +137,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const sfxVolume = settings?.sfxVolume ?? 80;
   const musicVolume = settings?.musicVolume ?? 60;
+  const ceremonyVolume = settings?.ceremonyVolume ?? 80;
   const hapticsEnabled = settings?.hapticsEnabled ?? settings?.haptics ?? true;
   const notificationsEnabled = settings?.notificationsEnabled ?? settings?.notifications ?? true;
   const selectedTheme = settings?.theme ?? 'dark';
@@ -297,6 +298,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           {renderVolumeControl('SFX Volume', 'sfxVolume', sfxVolume)}
           <View style={styles.divider} />
           {renderVolumeControl('Music Volume', 'musicVolume', musicVolume)}
+          <View style={styles.divider} />
+          {renderVolumeControl('Ceremony Volume', 'ceremonyVolume', ceremonyVolume)}
         </View>
 
         {/* Gameplay Section */}

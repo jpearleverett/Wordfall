@@ -1006,7 +1006,11 @@ export function GameScreen({
   gameStateRef.current = { status: status, foundWords, totalWords, score: score };
 
   useEffect(() => {
-    void soundManager.playMusic(mode === 'timePressure' ? 'tense' : 'gameplay');
+    // BGM-by-screen context (plan task 2.3): crossfade via default 400ms
+    // window. `relax` and `victory` are dedicated tracks; timePressure keeps
+    // the tense bed; everything else uses the gameplay loop.
+    const bgm = mode === 'timePressure' ? 'tense' : mode === 'relax' ? 'relax' : 'gameplay';
+    void soundManager.playMusic(bgm);
     void analytics.logEvent('puzzle_start', {
       level,
       mode,
@@ -1295,7 +1299,11 @@ export function GameScreen({
     if (status === 'won' && !completionHandled.current) {
       completionHandled.current = true;
       void successHaptic();
+      // Duck BGM under the ceremony SFX so puzzleComplete rings clearly,
+      // then swap to the victory bed while the complete modal animates in.
+      soundManager.duckMusicFor(1200, 0.35);
       void soundManager.playSound('puzzleComplete');
+      void soundManager.playMusic('victory');
       const finalScore = score;
       const finalStars = stars;
       const finalMaxCombo = maxCombo;

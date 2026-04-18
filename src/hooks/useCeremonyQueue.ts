@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CeremonyItem } from '../types';
 import { analytics } from '../services/analytics';
+import { soundManager } from '../services/sound';
 
 /** Maximum ceremonies to show per puzzle completion to prevent modal fatigue */
 const MAX_CEREMONIES_PER_BATCH = 2;
@@ -85,6 +86,12 @@ export function useCeremonyQueue({
     if (activeCeremony) {
       ceremonyShownAtRef.current = Date.now();
       void analytics.trackCeremonyShown(activeCeremony.type);
+
+      // Duck BGM while a ceremony is on-screen so fanfare cuts through. Auto-
+      // dismissal clears the duck via its own timer; manual dismissal resets
+      // on handleDismiss below.
+      const duckWindow = activeCeremony.autoDismissMs ?? 2500;
+      soundManager.duckMusicFor(duckWindow, 0.35);
 
       // Auto-dismiss Tier 2 ceremonies after their specified duration
       if (activeCeremony.autoDismissMs) {

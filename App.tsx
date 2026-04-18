@@ -1591,11 +1591,19 @@ function AppContent() {
 
   useEffect(() => {
     if (!settings.loaded) return;
-    soundManager.setSfxVolume(settings.sfxVolume);
-    soundManager.setMusicVolume(settings.musicVolume);
-    soundManager.setMuted(settings.sfxVolume <= 0 && settings.musicVolume <= 0);
+    // Settings store volumes as 0–100 (percentages) from the UI control, while
+    // the historical context default (0.8 / 0.5) was a 0–1 fraction. Normalize
+    // defensively so both shapes route correctly.
+    const toFraction = (v: number): number => (v > 1 ? v / 100 : v);
+    const sfx = toFraction(settings.sfxVolume);
+    const music = toFraction(settings.musicVolume);
+    const ceremony = toFraction(settings.ceremonyVolume ?? 0.8);
+    soundManager.setSfxVolume(sfx);
+    soundManager.setMusicVolume(music);
+    soundManager.setCeremonyVolume(ceremony);
+    soundManager.setMuted(sfx <= 0 && music <= 0 && ceremony <= 0);
     setHapticsEnabled(settings.hapticsEnabled);
-  }, [settings.loaded, settings.sfxVolume, settings.musicVolume, settings.hapticsEnabled]);
+  }, [settings.loaded, settings.sfxVolume, settings.musicVolume, settings.ceremonyVolume, settings.hapticsEnabled]);
 
   // Privacy: propagate user-chosen toggles to analytics + ads services.
   useEffect(() => {

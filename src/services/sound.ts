@@ -27,7 +27,10 @@ try {
 }
 
 type SoundName = 'tap' | 'gravity' | 'wordFound' | 'wordInvalid' | 'combo' | 'puzzleComplete' | 'starEarn' | 'buttonPress' | 'hintUsed' | 'undoUsed' | 'chainBonus';
-type MusicTrack = 'menu' | 'gameplay' | 'tense';
+// BGM tracks. `menu`/`gameplay`/`tense` are the historical set; `relax` and
+// `victory` were added in plan task 2.3 (BGM-by-screen context). `menu` is the
+// home-screen track in practice so no `home` alias is needed.
+type MusicTrack = 'menu' | 'gameplay' | 'tense' | 'relax' | 'victory';
 
 // ── Real-file asset registry (Phase 2A) ────────────────────────────
 // When the composer deliverable lands in assets/audio/, flip an entry
@@ -59,6 +62,8 @@ const REAL_MUSIC_FILES: Record<MusicTrack, number | null> = {
   menu: null,
   gameplay: null,
   tense: null,
+  relax: null,
+  victory: null,
 };
 
 type ToneSpec = {
@@ -88,6 +93,25 @@ type ProgressionSpec = {
 
 const SAMPLE_RATE = 44100;
 const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+// Plan task 2.4: route celebratory fanfare SFX through the `ceremony` bus so
+// players can trim UI celebration without killing core gameplay feedback.
+// Core gameplay cues (tap, gravity, word-found, errors, button clicks) stay
+// on the `sfx` bus. Extend this map when adding new SoundNames.
+type SoundCategory = 'sfx' | 'ceremony';
+const SOUND_CATEGORY: Record<SoundName, SoundCategory> = {
+  tap: 'sfx',
+  gravity: 'sfx',
+  wordFound: 'sfx',
+  wordInvalid: 'sfx',
+  combo: 'ceremony',
+  puzzleComplete: 'ceremony',
+  starEarn: 'ceremony',
+  buttonPress: 'sfx',
+  hintUsed: 'sfx',
+  undoUsed: 'sfx',
+  chainBonus: 'ceremony',
+};
 
 // ── Sound Definitions ──────────────────────────────────────────────
 
@@ -274,6 +298,28 @@ const MUSIC_DEFS: Record<MusicTrack, ProgressionSpec> = {
     ],
     stepDuration: 0.75,
     volume: 0.1,
+  },
+  // Slow, airy pad — meditative relax-mode backdrop.
+  relax: {
+    chords: [
+      [196.00, 246.94, 293.66, 349.23],
+      [220.00, 261.63, 329.63, 392.00],
+      [174.61, 220.00, 261.63, 329.63],
+      [196.00, 246.94, 293.66, 349.23],
+    ],
+    stepDuration: 1.6,
+    volume: 0.09,
+  },
+  // Triumphant major-key fanfare loop — plays on level/puzzle complete surface.
+  victory: {
+    chords: [
+      [261.63, 329.63, 392.00, 523.25],
+      [349.23, 440.00, 523.25, 659.25],
+      [293.66, 369.99, 440.00, 587.33],
+      [261.63, 329.63, 392.00, 523.25],
+    ],
+    stepDuration: 1.0,
+    volume: 0.12,
   },
 };
 
@@ -618,6 +664,18 @@ class SoundManager {
   private currentTrack: MusicTrack | null = null;
   private sfxVolume: number = 1.0;
   private musicVolume: number = 0.5;
+  // Plan task 2.4: ceremony SFX (level-up, star-earn, etc.) route through a
+  // separate bus so players can lower the UI fanfare without muting core
+  // gameplay feedback. Default matches sfx so behaviour is unchanged until the
+  // Settings UI wires it in.
+  private ceremonyVolume: number = 1.0;
+  // Plan task 2.3: duck BGM under ceremony SFX. `duckLevel` is the active
+  // multiplier (1.0 = no duck, 0.4 = typical duck). `duckUntil` is an epoch-ms
+  // deadline; recomputed each call so overlapping requests extend the duck
+  // instead of racing.
+  private duckLevel: number = 1.0;
+  private duckUntil: number = 0;
+  private duckTimer: ReturnType<typeof setTimeout> | null = null;
   private muted: boolean = false;
   private initialized: boolean = false;
   private preWarmed: boolean = false;
@@ -806,8 +864,16 @@ class SoundManager {
     }
   }
 
+  /** Which volume bus a given SoundName plays through. */
+  private volumeForCategory(category: SoundCategory): number {
+    return category === 'ceremony' ? this.ceremonyVolume : this.sfxVolume;
+  }
+
   async playSound(name: SoundName): Promise<void> {
     if (this.muted || !this.initialized) return;
+
+    const category = SOUND_CATEGORY[name] ?? 'sfx';
+    const targetVol = this.volumeForCategory(category);
 
     let player = this.sounds.get(name);
 
@@ -820,7 +886,7 @@ class SoundManager {
         if (realSource != null) {
           const realPlayer = this.tryCreateRealPlayer(realSource, `sfx:${name}`);
           if (realPlayer) {
-            realPlayer.volume = this.sfxVolume;
+            realPlayer.volume = targetVol;
             this.sounds.set(name, realPlayer);
             player = realPlayer;
           }
@@ -836,7 +902,7 @@ class SoundManager {
         try {
           if (this.useNewApi && createAudioPlayerFn) {
             player = createAudioPlayerFn(uri);
-            player.volume = this.sfxVolume;
+            player.volume = targetVol;
             this.sounds.set(name, player);
           }
         } catch (e) {
@@ -849,7 +915,7 @@ class SoundManager {
     if (!player) return;
 
     try {
-      player.volume = this.sfxVolume;
+      player.volume = targetVol;
       player.seekTo(0);
       player.play();
     } catch (e) {
@@ -857,58 +923,164 @@ class SoundManager {
     }
   }
 
-  async playMusic(track: MusicTrack): Promise<void> {
+  /**
+   * Effective BGM volume including the active duck level.
+   * Ceremony SFX call duckMusicFor() to drop this temporarily.
+   */
+  private effectiveMusicVolume(): number {
+    return this.musicVolume * this.duckLevel;
+  }
+
+  /**
+   * Build a fresh AudioPlayer for a music track (real-file or synth fallback).
+   * Returns null on total failure.
+   */
+  private buildMusicPlayer(track: MusicTrack): any | null {
+    if (!(this.useNewApi && createAudioPlayerFn)) return null;
+    let player: any = null;
+    const realSource = this.getRealMusicSource(track);
+    if (realSource != null) {
+      player = this.tryCreateRealPlayer(realSource, `bgm:${track}`);
+    }
+    if (!player) {
+      try {
+        const uri = this.getMusicUri(track);
+        player = createAudioPlayerFn(uri);
+      } catch (e) {
+        if (__DEV__) logger.warn(`[sound] failed to build synth BGM for ${track}:`, e);
+        return null;
+      }
+    }
+    return player;
+  }
+
+  /**
+   * Plan task 2.3: crossfade between BGM tracks over ~400ms. If a track is
+   * already playing, we ramp its volume to zero while ramping the new track
+   * from zero to the effective music volume, then dispose the old player.
+   */
+  async playMusic(track: MusicTrack, options?: { crossfadeMs?: number }): Promise<void> {
     if (this.muted || !this.initialized) return;
     if (this.currentTrack === track) return;
-    await this.stopMusic();
+
+    const crossfadeMs = options?.crossfadeMs ?? 400;
+    const steps = 8;
+    const stepMs = crossfadeMs / steps;
+    const targetVol = this.effectiveMusicVolume();
+
+    const newPlayer = this.buildMusicPlayer(track);
+    const oldPlayer = this.currentMusic;
+
+    if (!newPlayer) {
+      // Total failure — leave existing music alone; breadcrumb already dropped.
+      return;
+    }
+
     try {
-      if (this.useNewApi && createAudioPlayerFn) {
-        // Prefer real bundled BGM when available; synth fallback otherwise.
-        let player: any = null;
-        const realSource = this.getRealMusicSource(track);
-        if (realSource != null) {
-          player = this.tryCreateRealPlayer(realSource, `bgm:${track}`);
-        }
-        if (!player) {
-          const uri = this.getMusicUri(track);
-          player = createAudioPlayerFn(uri);
-        }
-        player.volume = this.musicVolume;
-        player.loop = true;
-        player.play();
-        this.currentMusic = player;
-      }
-      this.currentTrack = track;
+      newPlayer.volume = 0;
+      newPlayer.loop = true;
+      newPlayer.play();
     } catch (e) {
-      logger.warn(`Failed to play music "${track}":`, e);
+      logger.warn(`Failed to start music "${track}":`, e);
+      return;
+    }
+
+    this.currentMusic = newPlayer;
+    this.currentTrack = track;
+
+    // Ramp both players over `steps` tick; skip hardware work if crossfade is disabled.
+    for (let i = 1; i <= steps; i++) {
+      await new Promise<void>(resolve => setTimeout(resolve, stepMs));
+      const t = i / steps;
+      try {
+        newPlayer.volume = targetVol * t;
+        if (oldPlayer) oldPlayer.volume = Math.max(0, targetVol * (1 - t));
+      } catch (_e) {
+        // Volume setter can throw once an old player is disposed — tolerated.
+      }
+    }
+
+    if (oldPlayer) {
+      try {
+        oldPlayer.pause();
+        oldPlayer.remove();
+      } catch (_e) {
+        // Silent cleanup
+      }
     }
   }
 
-  async stopMusic(): Promise<void> {
-    if (this.currentMusic) {
-      try {
-        this.currentMusic.pause();
-        this.currentMusic.remove();
-      } catch (_e) {
-        // Silently handle errors during cleanup
+  async stopMusic(options?: { fadeMs?: number }): Promise<void> {
+    if (!this.currentMusic) return;
+    const player = this.currentMusic;
+    const fadeMs = options?.fadeMs ?? 0;
+    if (fadeMs > 0) {
+      const steps = 6;
+      const stepMs = fadeMs / steps;
+      const startVol = this.effectiveMusicVolume();
+      for (let i = 1; i <= steps; i++) {
+        await new Promise<void>(resolve => setTimeout(resolve, stepMs));
+        try { player.volume = Math.max(0, startVol * (1 - i / steps)); } catch (_e) { /* ignore */ }
       }
-      this.currentMusic = null;
-      this.currentTrack = null;
     }
+    try {
+      player.pause();
+      player.remove();
+    } catch (_e) {
+      // Silently handle errors during cleanup
+    }
+    this.currentMusic = null;
+    this.currentTrack = null;
+  }
+
+  /**
+   * Plan task 2.3: duck background music while a ceremony SFX plays. Subsequent
+   * calls within the duck window extend it rather than race. Call before
+   * playing a ceremony sound with the expected ceremony duration.
+   */
+  duckMusicFor(durationMs: number, duckLevel: number = 0.4): void {
+    const now = Date.now();
+    const newDeadline = now + Math.max(0, durationMs);
+    if (newDeadline <= this.duckUntil) {
+      // Existing duck extends past this request — nothing to do.
+      return;
+    }
+    this.duckUntil = newDeadline;
+    this.duckLevel = Math.max(0, Math.min(1, duckLevel));
+    if (this.currentMusic) {
+      try { this.currentMusic.volume = this.effectiveMusicVolume(); } catch (_e) { /* ignore */ }
+    }
+    if (this.duckTimer) clearTimeout(this.duckTimer);
+    this.duckTimer = setTimeout(() => {
+      this.duckLevel = 1.0;
+      this.duckUntil = 0;
+      this.duckTimer = null;
+      if (this.currentMusic) {
+        try { this.currentMusic.volume = this.effectiveMusicVolume(); } catch (_e) { /* ignore */ }
+      }
+    }, this.duckUntil - Date.now());
   }
 
   setSfxVolume(vol: number): void {
     this.sfxVolume = Math.max(0, Math.min(1, vol));
-    this.sounds.forEach((player) => {
-      player.volume = this.sfxVolume;
-    });
+    // Volume is re-applied per-play from the category bus, so pre-cached
+    // players don't need updating here. Keeping the old re-apply for players
+    // already mid-loop would collapse ceremony volumes onto sfx.
   }
 
   setMusicVolume(vol: number): void {
     this.musicVolume = Math.max(0, Math.min(1, vol));
     if (this.currentMusic) {
-      this.currentMusic.volume = this.musicVolume;
+      this.currentMusic.volume = this.effectiveMusicVolume();
     }
+  }
+
+  setCeremonyVolume(vol: number): void {
+    this.ceremonyVolume = Math.max(0, Math.min(1, vol));
+  }
+
+  getCeremonyVolume(): number {
+    return this.ceremonyVolume;
   }
 
   setMuted(muted: boolean): void {
