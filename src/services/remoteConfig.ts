@@ -79,6 +79,10 @@ export interface RemoteConfigValues {
   referralRewardGemsReferred: number;
   referralRewardCoinsReferrer: number;
   referralMaxPerDay: number;
+
+  // Shared club goals — Clash-style collective progress (Branch 8)
+  sharedClubGoalsEnabled: boolean;
+  sharedGoalsPerWeek: number;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -143,6 +147,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   referralRewardGemsReferred: 10,
   referralRewardCoinsReferrer: 500,
   referralMaxPerDay: 50,
+
+  sharedClubGoalsEnabled: true,
+  sharedGoalsPerWeek: 1,
 };
 
 // ---------------------------------------------------------------------------

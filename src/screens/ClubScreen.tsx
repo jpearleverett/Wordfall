@@ -26,6 +26,7 @@ import { firestoreService, ClubMessage } from '../services/firestore';
 import { getTitleLabel } from '../data/cosmetics';
 import ClubGoalCard from '../components/ClubGoalCard';
 import ClubLeaderboard from '../components/ClubLeaderboard';
+import ClubSharedGoals from '../components/ClubSharedGoals';
 import { GiftInbox } from '../components/GiftInbox';
 import {
   generateClubGoal,
@@ -301,6 +302,12 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     return goal;
   }, [data?.activeGoal, data?.tier, data?.memberCount, data?.members]);
 
+  const memberNames = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const m of data?.members || []) map[m.id] = m.name;
+    return map;
+  }, [data?.members]);
+
   // Mock leaderboard entries for display when none provided
   const leaderboardEntries = useMemo<ClubLeaderboardEntry[]>(() => {
     if (data?.leaderboardEntries && data.leaderboardEntries.length > 0) {
@@ -502,6 +509,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             <ClubGoalCard goal={clubGoal} playerContribution={playerContribution} />
           </>
         )}
+
+        {/* Shared Club Goals (Clash-style collective progress) */}
+        <ClubSharedGoals clubId={clubId ?? null} memberNames={memberNames} />
 
         {/* Your Contribution */}
         <Text style={styles.sectionTitle}>{t('club.yourContribution')}</Text>

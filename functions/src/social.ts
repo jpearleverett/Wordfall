@@ -24,16 +24,38 @@ import * as admin from 'firebase-admin';
 const db = admin.firestore();
 
 // ─── Club Goal Templates ─────────────────────────────────────────────────────
+//
+// `mode: 'personal'` (default) — every member tracks their own progress and
+//   claims their own reward when their local count crosses the target.
+// `mode: 'shared'` — the whole club contributes to ONE progress bar; when it
+//   crosses target, every member receives a reward doc. Shared goals live at
+//   clubs/{clubId}/sharedGoals/{goalId} (not the per-member `goals/` tree).
 
-const CLUB_GOAL_TEMPLATES = [
-  { id: 'words', label: 'Club Word Hunt', target: 500, trackingKey: 'wordsFound', duration: 7 },
-  { id: 'stars', label: 'Star Chasers', target: 100, trackingKey: 'starsEarned', duration: 7 },
-  { id: 'perfects', label: 'Perfect Together', target: 20, trackingKey: 'perfectSolves', duration: 7 },
-  { id: 'chains', label: 'Chain Masters', target: 50, trackingKey: 'chainsTriggered', duration: 3 },
-  { id: 'puzzles', label: 'Puzzle Marathon', target: 200, trackingKey: 'puzzlesSolved', duration: 7 },
-  { id: 'score', label: 'Score Surge', target: 50000, trackingKey: 'totalScore', duration: 3 },
-  { id: 'nohint', label: 'No-Hint Heroes', target: 30, trackingKey: 'noHintClears', duration: 7 },
-  { id: 'combos', label: 'Combo Frenzy', target: 80, trackingKey: 'combosTriggered', duration: 3 },
+type ClubGoalMode = 'personal' | 'shared';
+
+interface ClubGoalTemplate {
+  id: string;
+  label: string;
+  target: number;
+  trackingKey: string;
+  duration: number;
+  mode: ClubGoalMode;
+}
+
+const CLUB_GOAL_TEMPLATES: ClubGoalTemplate[] = [
+  // Personal goals — existing catalog
+  { id: 'words', label: 'Club Word Hunt', target: 500, trackingKey: 'wordsFound', duration: 7, mode: 'personal' },
+  { id: 'stars', label: 'Star Chasers', target: 100, trackingKey: 'starsEarned', duration: 7, mode: 'personal' },
+  { id: 'perfects', label: 'Perfect Together', target: 20, trackingKey: 'perfectSolves', duration: 7, mode: 'personal' },
+  { id: 'chains', label: 'Chain Masters', target: 50, trackingKey: 'chainsTriggered', duration: 3, mode: 'personal' },
+  { id: 'puzzles', label: 'Puzzle Marathon', target: 200, trackingKey: 'puzzlesSolved', duration: 7, mode: 'personal' },
+  { id: 'score', label: 'Score Surge', target: 50000, trackingKey: 'totalScore', duration: 3, mode: 'personal' },
+  { id: 'nohint', label: 'No-Hint Heroes', target: 30, trackingKey: 'noHintClears', duration: 7, mode: 'personal' },
+  { id: 'combos', label: 'Combo Frenzy', target: 80, trackingKey: 'combosTriggered', duration: 3, mode: 'personal' },
+  // Shared goals — Clash-of-Clans style collective progress
+  { id: 'shared_cascade', label: 'Club Cascade Challenge', target: 100, trackingKey: 'chainsTriggered', duration: 7, mode: 'shared' },
+  { id: 'shared_marathon', label: 'Word Marathon', target: 5000, trackingKey: 'wordsFound', duration: 7, mode: 'shared' },
+  { id: 'shared_squad', label: 'Perfect Squad', target: 50, trackingKey: 'perfectSolves', duration: 7, mode: 'shared' },
 ];
 
 // ─── 1. onPuzzleComplete ─────────────────────────────────────────────────────
@@ -42,6 +64,32 @@ const CLUB_GOAL_TEMPLATES = [
  * Triggered when a user completes a puzzle.
  * Updates their club's cooperative goal progress.
  */
+function computeGoalIncrement(
+  trackingKey: string,
+  result: admin.firestore.DocumentData,
+): number {
+  switch (trackingKey) {
+    case 'puzzlesSolved':
+      return 1;
+    case 'wordsFound':
+      return result.wordsFound ?? 0;
+    case 'starsEarned':
+      return result.stars ?? 0;
+    case 'perfectSolves':
+      return result.isPerfect ? 1 : 0;
+    case 'totalScore':
+      return result.score ?? 0;
+    case 'chainsTriggered':
+      return result.chainCount ?? 0;
+    case 'noHintClears':
+      return result.hintsUsed === 0 ? 1 : 0;
+    case 'combosTriggered':
+      return (result.maxCombo ?? 0) > 1 ? 1 : 0;
+    default:
+      return 0;
+  }
+}
+
 export const onPuzzleComplete = functions.firestore
   .document('users/{userId}/puzzleResults/{resultId}')
   .onCreate(async (snap, context) => {
@@ -55,50 +103,36 @@ export const onPuzzleComplete = functions.firestore
 
     const clubId = userData.clubId;
 
-    // Get active club goals
-    const goalsSnap = await db
-      .collection(`clubs/${clubId}/goals`)
-      .where('active', '==', true)
-      .get();
+    // Personal (per-member) goals and shared (cluster-level) goals live in
+    // two separate subcollections — fetch both concurrently.
+    const [personalSnap, sharedSnap] = await Promise.all([
+      db.collection(`clubs/${clubId}/goals`).where('active', '==', true).get(),
+      db.collection(`clubs/${clubId}/sharedGoals`).where('active', '==', true).get(),
+    ]);
 
-    if (goalsSnap.empty) return;
+    if (personalSnap.empty && sharedSnap.empty) return;
 
     const batch = db.batch();
 
-    for (const goalDoc of goalsSnap.docs) {
+    for (const goalDoc of personalSnap.docs) {
       const goal = goalDoc.data();
-      let increment = 0;
-
-      switch (goal.trackingKey) {
-        case 'puzzlesSolved':
-          increment = 1;
-          break;
-        case 'wordsFound':
-          increment = result.wordsFound ?? 0;
-          break;
-        case 'starsEarned':
-          increment = result.stars ?? 0;
-          break;
-        case 'perfectSolves':
-          increment = result.isPerfect ? 1 : 0;
-          break;
-        case 'totalScore':
-          increment = result.score ?? 0;
-          break;
-        case 'chainsTriggered':
-          increment = result.chainCount ?? 0;
-          break;
-        case 'noHintClears':
-          increment = result.hintsUsed === 0 ? 1 : 0;
-          break;
-        case 'combosTriggered':
-          increment = result.maxCombo > 1 ? 1 : 0;
-          break;
-      }
-
+      const increment = computeGoalIncrement(goal.trackingKey, result);
       if (increment > 0) {
         batch.update(goalDoc.ref, {
           progress: admin.firestore.FieldValue.increment(increment),
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    for (const goalDoc of sharedSnap.docs) {
+      const goal = goalDoc.data();
+      const increment = computeGoalIncrement(goal.trackingKey, result);
+      if (increment > 0) {
+        batch.update(goalDoc.ref, {
+          progress: admin.firestore.FieldValue.increment(increment),
+          [`memberContributions.${userId}`]:
+            admin.firestore.FieldValue.increment(increment),
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
@@ -111,14 +145,19 @@ export const onPuzzleComplete = functions.firestore
 
     await batch.commit();
 
-    // Check if any goals completed
-    for (const goalDoc of goalsSnap.docs) {
+    // Personal goal completion — reward the single member whose count
+    // crossed the target (preserved legacy behaviour: the batch above only
+    // increments once per puzzle so the post-write snapshot is authoritative).
+    for (const goalDoc of personalSnap.docs) {
       const goal = goalDoc.data();
-      const currentProgress = (goal.progress ?? 0) + (goal.trackingKey === 'puzzlesSolved' ? 1 : 0);
+      const inc = computeGoalIncrement(goal.trackingKey, result);
+      const currentProgress = (goal.progress ?? 0) + inc;
       if (currentProgress >= goal.target && !goal.completed) {
-        await goalDoc.ref.update({ completed: true, completedAt: admin.firestore.FieldValue.serverTimestamp() });
+        await goalDoc.ref.update({
+          completed: true,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
 
-        // Award rewards to all club members
         const membersSnap = await db.collection(`clubs/${clubId}/members`).get();
         const rewardBatch = db.batch();
         for (const memberDoc of membersSnap.docs) {
@@ -133,6 +172,54 @@ export const onPuzzleComplete = functions.firestore
         }
         await rewardBatch.commit();
       }
+    }
+
+    // Shared goal completion — guard against races by flipping `completed`
+    // inside a transaction and enumerating memberIds from the CLUB doc (not
+    // a subcollection) so late-joining members don't get retroactive rewards.
+    for (const goalDoc of sharedSnap.docs) {
+      const goal = goalDoc.data();
+      if (goal.completed) continue;
+      const inc = computeGoalIncrement(goal.trackingKey, result);
+      const projectedProgress = (goal.progress ?? 0) + inc;
+      if (projectedProgress < goal.target) continue;
+
+      const claimedMembers = await db.runTransaction(async (tx) => {
+        const freshGoal = await tx.get(goalDoc.ref);
+        const data = freshGoal.data();
+        if (!data || data.completed) return null;
+        if ((data.progress ?? 0) < data.target) return null;
+
+        const clubRef = db.doc(`clubs/${clubId}`);
+        const clubSnap = await tx.get(clubRef);
+        const memberIds = (clubSnap.data()?.memberIds as string[]) ?? [];
+
+        tx.update(goalDoc.ref, {
+          completed: true,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          finalMemberIds: memberIds,
+        });
+        return memberIds;
+      });
+
+      if (!claimedMembers || claimedMembers.length === 0) continue;
+
+      const rewardBatch = db.batch();
+      for (const memberId of claimedMembers) {
+        rewardBatch.set(
+          db.doc(`users/${memberId}/rewards/sharedgoal_${goalDoc.id}`),
+          {
+            type: 'shared_goal_complete',
+            goalId: goalDoc.id,
+            goalLabel: goal.label,
+            coins: goal.rewardCoins ?? 800,
+            gems: goal.rewardGems ?? 30,
+            claimed: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        );
+      }
+      await rewardBatch.commit();
     }
   });
 
@@ -448,24 +535,43 @@ export const rotateClubGoals = functions.pubsub
   .onRun(async () => {
     const clubsSnap = await db.collection('clubs').get();
 
+    const personalTemplates = CLUB_GOAL_TEMPLATES.filter((t) => t.mode === 'personal');
+    const sharedTemplates = CLUB_GOAL_TEMPLATES.filter((t) => t.mode === 'shared');
+
     for (const clubDoc of clubsSnap.docs) {
       const batch = db.batch();
 
-      // Archive old goals
-      const oldGoals = await db
+      // Archive old personal goals
+      const oldPersonal = await db
         .collection(`clubs/${clubDoc.id}/goals`)
         .where('active', '==', true)
         .get();
-
-      for (const goalDoc of oldGoals.docs) {
-        batch.update(goalDoc.ref, { active: false, archivedAt: admin.firestore.FieldValue.serverTimestamp() });
+      for (const goalDoc of oldPersonal.docs) {
+        batch.update(goalDoc.ref, {
+          active: false,
+          archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
       }
 
-      // Pick 2 random new goals
-      const shuffled = [...CLUB_GOAL_TEMPLATES].sort(() => Math.random() - 0.5);
-      const newGoals = shuffled.slice(0, 2);
+      // Archive old shared goals
+      const oldShared = await db
+        .collection(`clubs/${clubDoc.id}/sharedGoals`)
+        .where('active', '==', true)
+        .get();
+      for (const goalDoc of oldShared.docs) {
+        batch.update(goalDoc.ref, {
+          active: false,
+          archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
-      for (const template of newGoals) {
+      // 2 personal + 1 shared per week
+      const shuffledPersonal = [...personalTemplates].sort(() => Math.random() - 0.5);
+      const shuffledShared = [...sharedTemplates].sort(() => Math.random() - 0.5);
+      const newPersonal = shuffledPersonal.slice(0, 2);
+      const newShared = shuffledShared.slice(0, 1);
+
+      for (const template of newPersonal) {
         const goalRef = db.collection(`clubs/${clubDoc.id}/goals`).doc();
         batch.set(goalRef, {
           ...template,
@@ -474,6 +580,23 @@ export const rotateClubGoals = functions.pubsub
           completed: false,
           rewardCoins: template.duration <= 3 ? 300 : 600,
           rewardGems: template.duration <= 3 ? 10 : 20,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          expiresAt: new Date(Date.now() + template.duration * 24 * 60 * 60 * 1000),
+        });
+      }
+
+      for (const template of newShared) {
+        const goalRef = db.collection(`clubs/${clubDoc.id}/sharedGoals`).doc();
+        batch.set(goalRef, {
+          ...template,
+          active: true,
+          progress: 0,
+          completed: false,
+          memberContributions: {},
+          // Shared goals reward the whole club — bump vs personal so the
+          // incentive matches the higher target.
+          rewardCoins: 800,
+          rewardGems: 30,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           expiresAt: new Date(Date.now() + template.duration * 24 * 60 * 60 * 1000),
         });
