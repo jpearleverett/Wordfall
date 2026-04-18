@@ -42,8 +42,10 @@ export interface ShopProduct {
   rewards: ProductRewards;
   /** Whether this is a one-time (non-consumable) purchase */
   isNonConsumable: boolean;
-  /** Optional original price to show a discount */
+  /** Optional original price to show a discount (display string, e.g. "$4.99") */
   originalPrice?: string;
+  /** Numeric original price; lets UI compute % off without re-parsing */
+  originalPriceAmount?: number;
   icon: string;
 }
 
@@ -66,6 +68,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: true,
     originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
     icon: '🎁',
   },
 
@@ -86,6 +89,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
     icon: '\u{1F381}',
   },
   {
@@ -103,6 +107,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       boosters: [{ type: 'boardPreview', count: 1 }],
     },
     isNonConsumable: false,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
     icon: '\u{1F4D6}',
   },
   {
@@ -118,6 +124,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       dailyDrip: { coins: 100, gems: 5, hintTokens: 3 },
     },
     isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
     icon: '\u{1F4E6}',
   },
 
@@ -137,6 +145,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$6.99',
+    originalPriceAmount: 6.99,
     icon: '\u{1F3D4}\u{FE0F}',
   },
   {
@@ -159,6 +168,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$12.99',
+    originalPriceAmount: 12.99,
     icon: '\u{1F9ED}',
   },
 
@@ -173,6 +183,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { hintTokens: 5 },
     isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
     icon: '\u{1F4A1}',
   },
   {
@@ -185,6 +197,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { hintTokens: 10 },
     isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
     icon: '\u{1F4A1}',
   },
   {
@@ -197,6 +211,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { hintTokens: 25 },
     isNonConsumable: false,
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
     icon: '\u{1F4A1}',
   },
   {
@@ -209,6 +225,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { hintTokens: 50 },
     isNonConsumable: false,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
     icon: '\u{1F4A1}',
   },
   {
@@ -221,6 +239,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { hintTokens: 15 },
     isNonConsumable: false,
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
     icon: '\u{1F4A1}',
   },
   {
@@ -233,6 +253,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { hintTokens: 30 },
     isNonConsumable: false,
+    originalPrice: '$7.99',
+    originalPriceAmount: 7.99,
     icon: '\u{1F4A1}',
   },
   {
@@ -245,6 +267,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { hintTokens: 75 },
     isNonConsumable: false,
+    originalPrice: '$14.99',
+    originalPriceAmount: 14.99,
     icon: '\u{1F4A1}',
   },
 
@@ -259,6 +283,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { undoTokens: 5 },
     isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
     icon: '\u21A9\uFE0F',
   },
   {
@@ -271,6 +297,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { undoTokens: 10 },
     isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
     icon: '\u21A9\uFE0F',
   },
   {
@@ -283,6 +311,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { undoTokens: 25 },
     isNonConsumable: false,
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
     icon: '\u21A9\uFE0F',
   },
   {
@@ -295,6 +325,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { undoTokens: 50 },
     isNonConsumable: false,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
     icon: '\u21A9\uFE0F',
   },
   {
@@ -307,6 +339,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { undoTokens: 15 },
     isNonConsumable: false,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
     icon: '\u21A9\uFE0F',
   },
   {
@@ -319,6 +353,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { undoTokens: 30 },
     isNonConsumable: false,
+    originalPrice: '$7.99',
+    originalPriceAmount: 7.99,
     icon: '\u21A9\uFE0F',
   },
   {
@@ -331,6 +367,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'consumables',
     rewards: { undoTokens: 75 },
     isNonConsumable: false,
+    originalPrice: '$14.99',
+    originalPriceAmount: 14.99,
     icon: '\u21A9\uFE0F',
   },
 
@@ -351,6 +389,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       ],
     },
     isNonConsumable: false,
+    originalPrice: '$7.99',
+    originalPriceAmount: 7.99,
     icon: '\u{1F4E6}',
   },
 
@@ -365,6 +405,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { gems: 30 },
     isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
     icon: '\u{1F48E}',
   },
   {
@@ -377,6 +419,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { gems: 50 },
     isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
     icon: '\u{1F48E}',
   },
   {
@@ -389,6 +433,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { gems: 120 },
     isNonConsumable: false,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
     icon: '\u{1F48E}',
   },
   {
@@ -401,6 +447,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { gems: 200 },
     isNonConsumable: false,
+    originalPrice: '$7.99',
+    originalPriceAmount: 7.99,
     icon: '\u{1F48E}',
   },
   {
@@ -413,6 +461,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { gems: 250 },
     isNonConsumable: false,
+    originalPrice: '$7.99',
+    originalPriceAmount: 7.99,
     icon: '\u{1F48E}',
   },
   {
@@ -425,6 +475,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { gems: 400 },
     isNonConsumable: false,
+    originalPrice: '$11.99',
+    originalPriceAmount: 11.99,
     icon: '\u{1F48E}',
   },
   {
@@ -437,6 +489,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { gems: 500 },
     isNonConsumable: false,
+    originalPrice: '$14.99',
+    originalPriceAmount: 14.99,
     icon: '\u{1F48E}',
   },
   {
@@ -449,6 +503,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { gems: 1000 },
     isNonConsumable: false,
+    originalPrice: '$29.99',
+    originalPriceAmount: 29.99,
     icon: '\u{1F48E}',
   },
 
@@ -463,6 +519,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { coins: 500 },
     isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
     icon: '\u{1FA99}',
   },
   {
@@ -475,6 +533,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { coins: 2000 },
     isNonConsumable: false,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
     icon: '\u{1FA99}',
   },
   {
@@ -487,6 +547,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'currency',
     rewards: { coins: 5000 },
     isNonConsumable: false,
+    originalPrice: '$7.99',
+    originalPriceAmount: 7.99,
     icon: '\u{1FA99}',
   },
 
@@ -512,6 +574,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$24.99',
+    originalPriceAmount: 24.99,
     icon: '\u{1F3C6}',
   },
   {
@@ -524,6 +587,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'premium',
     rewards: { flags: { premiumPass: true } },
     isNonConsumable: true,
+    originalPrice: '$7.99',
+    originalPriceAmount: 7.99,
     icon: '\u{1F451}',
   },
   {
@@ -536,6 +601,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     category: 'premium',
     rewards: { flags: { adsRemoved: true } },
     isNonConsumable: true,
+    originalPrice: '$7.99',
+    originalPriceAmount: 7.99,
     icon: '\u{1F6AB}',
   },
 
@@ -562,6 +629,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$79.99',
+    originalPriceAmount: 79.99,
     icon: '\u{1F451}',
   },
   {
@@ -586,6 +654,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$199.99',
+    originalPriceAmount: 199.99,
     icon: '\u{1F525}',
   },
 
@@ -605,6 +674,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       undoTokens: 5,
     },
     isNonConsumable: false,
+    originalPrice: '$5.99',
+    originalPriceAmount: 5.99,
     icon: '\u2694\uFE0F',
   },
   {
@@ -627,6 +698,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       ],
     },
     isNonConsumable: false,
+    originalPrice: '$11.99',
+    originalPriceAmount: 11.99,
     icon: '\u{1F3C6}',
   },
   {
@@ -650,6 +723,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       decorations: ['frame_event_exclusive'],
     },
     isNonConsumable: false,
+    originalPrice: '$14.99',
+    originalPriceAmount: 14.99,
     icon: '\u{1F389}',
   },
   {
@@ -674,6 +749,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$29.99',
+    originalPriceAmount: 29.99,
     icon: '\u{1F31F}',
   },
 
@@ -692,6 +768,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       hintTokens: 5,
     },
     isNonConsumable: false,
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
     icon: '\u26A1',
   },
   {
@@ -713,6 +791,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       ],
     },
     isNonConsumable: false,
+    originalPrice: '$8.99',
+    originalPriceAmount: 8.99,
     icon: '\u{1F4AA}',
   },
   {
@@ -737,6 +817,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$17.99',
+    originalPriceAmount: 17.99,
     icon: '\u{1F4E6}',
   },
 
@@ -763,6 +844,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$49.99',
+    originalPriceAmount: 49.99,
     icon: '\u{1F48E}',
   },
   {
@@ -794,6 +876,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     },
     isNonConsumable: false,
     originalPrice: '$119.99',
+    originalPriceAmount: 119.99,
     icon: '\u{1F525}',
   },
 

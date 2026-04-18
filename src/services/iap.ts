@@ -35,6 +35,10 @@ export interface IAPProduct {
   /** Numeric price amount */
   priceAmount: number;
   currency: string;
+  /** Anchor price (struck-through MSRP) sourced from SHOP_PRODUCTS.originalPrice */
+  originalPrice?: string;
+  /** Numeric anchor price; lets UI compute % off without re-parsing */
+  originalPriceAmount?: number;
 }
 
 export interface PurchaseResult {
@@ -240,6 +244,8 @@ class IAPManager {
           price: sp.displayPrice ?? shopProduct?.fallbackPrice ?? '',
           priceAmount: sp.price ?? shopProduct?.fallbackPriceAmount ?? 0,
           currency: sp.currency ?? 'USD',
+          originalPrice: shopProduct?.originalPrice,
+          originalPriceAmount: shopProduct?.originalPriceAmount,
         };
         this.products.set(sp.id, product);
         // Also store by internal ID for quick lookup
@@ -799,6 +805,8 @@ class IAPManager {
         price: sp.fallbackPrice,
         priceAmount: sp.fallbackPriceAmount,
         currency: 'USD',
+        originalPrice: sp.originalPrice,
+        originalPriceAmount: sp.originalPriceAmount,
       };
       this.products.set(sp.storeProductId, product);
       this.products.set(sp.id, product);
