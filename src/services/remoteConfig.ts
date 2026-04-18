@@ -60,6 +60,8 @@ export interface RemoteConfigValues {
   eventCalendarOverride: string;   // JSON string; empty = use built-in calendar
   dailyDealOverride: string;       // JSON string; empty = use hashed defaults
   interstitialIntervalSeconds: number; // mirror of interstitialIntervalMs but named per plan 0.11
+  // Login calendar A/B — '30day' (default) vs '7day' (legacy)
+  loginCalendarVariant: string;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -106,6 +108,8 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   eventCalendarOverride: '',
   dailyDealOverride: '',
   interstitialIntervalSeconds: 90,
+  // Login calendar variant — '30day' escalating cycle by default
+  loginCalendarVariant: '30day',
 };
 
 // ---------------------------------------------------------------------------

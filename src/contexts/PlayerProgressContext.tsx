@@ -15,6 +15,7 @@ import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
 import { isProfileCosmeticId, resolveLegacyCosmeticId } from '../data/cosmetics';
+import { getLoginCycleLength } from '../data/loginCalendar';
 import { updatePlayerMetrics } from '../engine/difficultyAdjuster';
 import { PlayerMetrics } from '../types';
 
@@ -227,7 +228,8 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         ? prev.dailyLoginDates
         : [...prev.dailyLoginDates, today];
 
-      const loginCycleDay = (newLoginDates.length - 1) % 7 + 1;
+      const cycleLength = getLoginCycleLength();
+      const loginCycleDay = ((newLoginDates.length - 1) % cycleLength) + 1;
 
       // Check if a streak milestone was just crossed
       const prevStreak = streaks.currentStreak;

@@ -1395,6 +1395,9 @@ function HomeMainScreen({ route, navigation }: any) {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
     }
+    if (rewards.cosmetic) {
+      player.unlockCosmetic(rewards.cosmetic);
+    }
     player.updateProgress({
       loginCycleDay: player.loginCycleDay + 1,
       lastLoginRewardClaimDate: claimDate,
