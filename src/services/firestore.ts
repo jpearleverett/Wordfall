@@ -79,6 +79,7 @@
 import { db, isFirebaseConfigured } from '../config/firebase';
 import { logger } from '../utils/logger';
 import { crashReporter } from './crashReporting';
+import { withRetry } from './retry';
 
 /**
  * Log a Firestore mutation failure to both the local logger (dev visibility)
@@ -161,7 +162,7 @@ export interface FirestoreGift {
   fromUserId: string;
   fromDisplayName: string;
   toUserId: string;
-  type: 'hint' | 'tile';
+  type: 'hint' | 'tile' | 'life';
   amount: number;
   claimed: boolean;
   createdAt: any;
@@ -367,15 +368,19 @@ class FirestoreService {
       // Only overwrite if the new score is higher
       const existing = await getDoc(docRef);
       if (existing.exists() && existing.data().score >= score) return;
-      await setDoc(docRef, {
-        userId,
-        displayName,
-        score,
-        stars,
-        level,
-        date: today,
-        timestamp: serverTimestamp(),
-      });
+      await withRetry(
+        () =>
+          setDoc(docRef, {
+            userId,
+            displayName,
+            score,
+            stars,
+            level,
+            date: today,
+            timestamp: serverTimestamp(),
+          }),
+        { label: 'submitDailyScore' },
+      );
     } catch (e) {
       logFirestoreError('submitDailyScore', 'dailyScores', e);
     }
@@ -396,13 +401,17 @@ class FirestoreService {
       const docRef = doc(db, 'weeklyScores', docId);
       const existing = await getDoc(docRef);
       const prevScore = existing.exists() ? existing.data().score || 0 : 0;
-      await setDoc(docRef, {
-        userId,
-        displayName,
-        score: prevScore + score,
-        weekId,
-        timestamp: serverTimestamp(),
-      });
+      await withRetry(
+        () =>
+          setDoc(docRef, {
+            userId,
+            displayName,
+            score: prevScore + score,
+            weekId,
+            timestamp: serverTimestamp(),
+          }),
+        { label: 'submitWeeklyScore' },
+      );
     } catch (e) {
       logFirestoreError('submitWeeklyScore', 'weeklyScores', e);
     }

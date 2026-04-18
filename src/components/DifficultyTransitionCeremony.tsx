@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,6 +25,7 @@ export function DifficultyTransitionCeremony({
   to,
   onDismiss,
 }: DifficultyTransitionCeremonyProps) {
+  const { t } = useTranslation();
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.6);
   const arrow = useSharedValue(0);
@@ -54,7 +56,7 @@ export function DifficultyTransitionCeremony({
       )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
-          <Text style={[styles.ribbon, { color: toMeta.color }]}>NEW CHALLENGE TIER</Text>
+          <Text style={[styles.ribbon, { color: toMeta.color }]}>{t('ceremony.newChallengeTier')}</Text>
 
           <View style={styles.transitionRow}>
             <View style={[styles.tierBadge, { borderColor: fromMeta.color, backgroundColor: fromMeta.color + '20' }]}>
@@ -77,7 +79,7 @@ export function DifficultyTransitionCeremony({
           </View>
 
           <Text style={styles.description}>
-            Puzzles will be tougher — but the rewards are bigger!
+            {t('ceremony.tougherRewardsBigger')}
           </Text>
 
           <Pressable
@@ -88,7 +90,7 @@ export function DifficultyTransitionCeremony({
               colors={[toMeta.color, toMeta.color + 'CC']}
               style={[styles.button, SHADOWS.glow(toMeta.color)]}
             >
-              <Text style={styles.buttonText}>BRING IT ON</Text>
+              <Text style={styles.buttonText}>{t('ceremony.bringItOn')}</Text>
             </LinearGradient>
           </Pressable>
         </LinearGradient>

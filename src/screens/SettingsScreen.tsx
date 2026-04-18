@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -14,11 +15,27 @@ import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useCommerce } from '../hooks/useCommerce';
 import {
   useEconomyStore,
   selectIsAdFreeComputed,
   selectIsPremiumPassFlag,
 } from '../stores/economyStore';
+import {
+  requestAccountDeletion,
+  clearLocalUserData,
+  isAccountDeletionConfigured,
+} from '../services/accountDeletion';
+import type { ColorblindMode } from '../contexts/SettingsContext';
+import { COLORBLIND_MODE_LABELS } from '../services/colorblind';
+import i18n, { SUPPORTED_LOCALES, LOCALE_LABELS, type SupportedLocale } from '../i18n';
+
+const COLORBLIND_MODES: ColorblindMode[] = [
+  'off',
+  'deuteranopia',
+  'protanopia',
+  'tritanopia',
+];
 
 const THEMES = [
   { id: 'dark', name: 'Dark', color: '#0a0e27' },
@@ -58,10 +75,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onResetProgress: onResetProgressProp,
   onSignOut: onSignOutProp,
 }) => {
+  const { t } = useTranslation();
   const contextSettings = useSettings();
   const isAdFreeComputed = useEconomyStore(selectIsAdFreeComputed);
   const isPremiumPassFlag = useEconomyStore(selectIsPremiumPassFlag);
-  const { signOut } = useAuth();
+  const { signOut, isAnonymous, linkedEmail, canLinkGoogle, linkGoogle } = useAuth();
+  const { restorePurchases } = useCommerce();
 
   const settings = settingsProp ?? contextSettings;
   const onUpdateSetting = onUpdateSettingProp ?? ((key: string, value: any) => contextSettings.updateSetting(key as any, value));
@@ -70,12 +89,57 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const [signingIn, setSigningIn] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleRestorePurchases = async () => {
+    if (restoring) return;
+    setRestoring(true);
+    try {
+      const { results, restoredCount } = await restorePurchases();
+      // restorePurchases() resolves on every path; failed attempts surface as
+      // a row with productId='restore_failed' (see iap.ts contract comment).
+      const failureRow = results.find((r) => r.productId === 'restore_failed' && !r.success);
+      if (failureRow) {
+        Alert.alert('Restore Failed', failureRow.error ?? 'Could not restore purchases. Please try again.');
+      } else if (results.length === 0) {
+        Alert.alert('No Purchases Found', 'There are no purchases to restore on this account.');
+      } else {
+        Alert.alert(
+          'Purchases Restored',
+          t('common.purchasesRestored', { count: restoredCount }),
+        );
+      }
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const handleSignIn = async () => {
     if (signingIn) return;
+    if (!canLinkGoogle) {
+      Alert.alert(
+        'Sign-In Unavailable',
+        'Google Sign-In is not available in this build. Please update to the latest version of Wordfall.',
+      );
+      return;
+    }
     setSigningIn(true);
     try {
+      const result = await linkGoogle();
+      if (!result.ok) {
+        if (result.code !== 'CANCELLED') {
+          Alert.alert('Sign-In Failed', result.error);
+        }
+        return;
+      }
       await Promise.resolve(onUpdateSetting('isSignedIn', true));
+      Alert.alert(
+        'Account Linked',
+        result.email
+          ? `Signed in as ${result.email}. Your progress is now backed up to the cloud.`
+          : 'Signed in. Your progress is now backed up to the cloud.',
+      );
     } finally {
       setSigningIn(false);
     }
@@ -93,9 +157,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const sfxVolume = settings?.sfxVolume ?? 80;
   const musicVolume = settings?.musicVolume ?? 60;
+  const ceremonyVolume = settings?.ceremonyVolume ?? 80;
   const hapticsEnabled = settings?.hapticsEnabled ?? settings?.haptics ?? true;
   const notificationsEnabled = settings?.notificationsEnabled ?? settings?.notifications ?? true;
   const selectedTheme = settings?.theme ?? 'dark';
+  const colorblindMode: ColorblindMode = settings?.colorblindMode ?? 'off';
   const isSignedIn = settings?.isSignedIn ?? false;
   const adsRemoved = isAdFreeComputed ?? false;
   const premiumPass = isPremiumPassFlag ?? false;
@@ -106,10 +172,74 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     onUpdateSetting(key, newValue);
   };
 
+  const performAccountDeletion = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      const result = await requestAccountDeletion();
+      if (!result.ok) {
+        Alert.alert(
+          'Deletion Failed',
+          result.error ??
+            'We could not complete the deletion. Please contact support so we can finish it manually.',
+        );
+        return;
+      }
+      await clearLocalUserData();
+      try {
+        await signOut();
+      } catch {
+        // signOut errors are non-fatal — auth state will settle on next launch
+      }
+      Alert.alert(
+        'Account Deleted',
+        'Your account and all associated data have been deleted. We are sorry to see you go.',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const confirmDeleteAccount = () => {
+    if (deleting) return;
+    if (!isAccountDeletionConfigured()) {
+      Alert.alert(
+        'Unavailable',
+        `Account deletion is temporarily unavailable from the app. Please email ${SUPPORT_EMAIL} and we will delete your account within 30 days.`,
+      );
+      return;
+    }
+    Alert.alert(
+      'Delete Account?',
+      'This permanently deletes your profile, progress, club memberships, and friends list. Purchase records are retained in anonymized form for tax and fraud auditing only.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are You Absolutely Sure?',
+              'This cannot be undone. Any unspent gems, purchased VIP time, and tournament progress will be lost.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: () => void performAccountDeletion(),
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   const confirmResetProgress = () => {
     Alert.alert(
-      'Reset Progress',
-      'This will permanently delete all your game progress. This action cannot be undone.',
+      'Reset Local Data',
+      'This clears on-device progress only. Your account, purchases, and cloud-synced stats stay intact. Use "Delete Account & Data" below if you want full erasure.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Reset', style: 'destructive', onPress: onResetProgress },
@@ -188,6 +318,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           {renderVolumeControl('SFX Volume', 'sfxVolume', sfxVolume)}
           <View style={styles.divider} />
           {renderVolumeControl('Music Volume', 'musicVolume', musicVolume)}
+          <View style={styles.divider} />
+          {renderVolumeControl('Ceremony Volume', 'ceremonyVolume', ceremonyVolume)}
         </View>
 
         {/* Gameplay Section */}
@@ -202,6 +334,76 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           {renderToggle('Haptics', hapticsEnabled, 'haptics')}
           <View style={styles.divider} />
           {renderToggle('Notifications', notificationsEnabled, 'notifications')}
+        </View>
+
+        {/* Accessibility Section */}
+        <Text style={styles.sectionTitle}>{t('settings.accessibility')}</Text>
+        <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <Text style={[styles.settingLabel, { marginBottom: 4 }]}>Colorblind Mode</Text>
+            <Text style={[styles.dangerSubtext, { textAlign: 'left', marginBottom: 12 }]}>
+              Swaps letter-cell, selection, and valid-word colors so they remain distinct.
+            </Text>
+          </View>
+          {COLORBLIND_MODES.map((mode, idx) => (
+            <React.Fragment key={mode}>
+              {idx > 0 && <View style={styles.divider} />}
+              <TouchableOpacity
+                style={styles.themeRow}
+                onPress={() => onUpdateSetting('colorblindMode', mode)}
+                accessibilityRole="radio"
+                accessibilityLabel={`Colorblind mode: ${COLORBLIND_MODE_LABELS[mode]}`}
+                accessibilityState={{ selected: colorblindMode === mode }}
+              >
+                <Text style={styles.settingLabel}>{COLORBLIND_MODE_LABELS[mode]}</Text>
+                <View style={styles.radioOuter}>
+                  {colorblindMode === mode && <View style={styles.radioInner} />}
+                </View>
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
+        </View>
+
+        {/* Language Section */}
+        <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
+        <View style={styles.card}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <Text style={[styles.dangerSubtext, { textAlign: 'left', marginBottom: 12 }]}>
+              UI language. Puzzles remain English.
+            </Text>
+          </View>
+          {SUPPORTED_LOCALES.map((loc, idx) => (
+            <React.Fragment key={loc}>
+              {idx > 0 && <View style={styles.divider} />}
+              <TouchableOpacity
+                style={styles.themeRow}
+                onPress={() => {
+                  onUpdateSetting('language', loc);
+                  void i18n.changeLanguage(loc);
+                }}
+                accessibilityRole="radio"
+                accessibilityLabel={`Language: ${LOCALE_LABELS[loc as SupportedLocale]}`}
+                accessibilityState={{ selected: (settings?.language ?? 'en') === loc }}
+              >
+                <Text style={styles.settingLabel}>{LOCALE_LABELS[loc as SupportedLocale]}</Text>
+                <View style={styles.radioOuter}>
+                  {(settings?.language ?? 'en') === loc && <View style={styles.radioInner} />}
+                </View>
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
         </View>
 
         {/* Theme Section */}
@@ -238,7 +440,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </View>
 
         {/* Account Section */}
-        <Text style={styles.sectionTitle}>Account</Text>
+        <Text style={styles.sectionTitle}>{t('settings.account')}</Text>
         <View style={styles.card}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
@@ -248,10 +450,31 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
           {isSignedIn ? (
             <>
-              <TouchableOpacity style={styles.actionRow} accessibilityRole="button" accessibilityLabel="Link account">
-                <Text style={styles.settingLabel}>Link Account</Text>
-                <Text style={styles.chevron}>{'\u203A'}</Text>
-              </TouchableOpacity>
+              <View
+                style={styles.actionRow}
+                accessibilityRole="text"
+                accessibilityLabel={
+                  linkedEmail
+                    ? `Signed in as ${linkedEmail}`
+                    : isAnonymous
+                      ? 'Guest account — progress is stored on this device only'
+                      : 'Signed in'
+                }
+              >
+                <Text style={styles.settingLabel}>
+                  {linkedEmail ? 'Google Account' : 'Account'}
+                </Text>
+                <Text
+                  style={[styles.settingLabel, { color: COLORS.textMuted, fontSize: 14 }]}
+                  numberOfLines={1}
+                >
+                  {linkedEmail
+                    ? linkedEmail
+                    : isAnonymous
+                      ? 'Guest (not backed up)'
+                      : 'Signed in'}
+                </Text>
+              </View>
               <View style={styles.divider} />
               <TouchableOpacity
                 style={styles.actionRow}
@@ -291,7 +514,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               disabled={signingIn}
             >
               <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
-                {signingIn ? 'Signing in…' : 'Sign In'}
+                {signingIn ? 'Signing in…' : 'Sign In with Google'}
               </Text>
               {signingIn ? (
                 <ActivityIndicator size="small" color={COLORS.accent} />
@@ -348,6 +571,26 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </Text>
             </View>
           </View>
+          <View style={styles.divider} />
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => void handleRestorePurchases()}
+            accessibilityRole="button"
+            accessibilityLabel="Restore previous purchases"
+            accessibilityHint="Re-applies purchases made on this account. Use this after reinstalling or switching devices."
+            accessibilityState={{ busy: restoring }}
+            disabled={restoring}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
+              {restoring ? `${t('common.loading')}` : t('settings.restorePurchases')}
+            </Text>
+            {restoring ? (
+              <ActivityIndicator size="small" color={COLORS.accent} />
+            ) : (
+              <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Parental Controls */}
@@ -466,7 +709,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         {/* Danger Zone */}
         <Text style={[styles.sectionTitle, { color: COLORS.coral }]}>
-          Danger Zone
+          {t('settings.dangerZone')}
         </Text>
         <View style={[styles.card, styles.dangerCard]}>
           <LinearGradient
@@ -479,12 +722,35 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             style={styles.dangerButton}
             onPress={confirmResetProgress}
             accessibilityRole="button"
-            accessibilityLabel="Reset progress. This will permanently delete all data"
+            accessibilityLabel="Reset local data. Clears on-device progress only"
           >
-            <Text style={styles.dangerButtonText}>Reset Progress</Text>
+            <Text style={styles.dangerButtonText}>{t('settings.resetLocalData')}</Text>
             <Text style={styles.dangerSubtext}>
-              This will permanently delete all data
+              Clears on-device progress only. Account and purchases are kept.
             </Text>
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <TouchableOpacity
+            style={styles.dangerButton}
+            onPress={confirmDeleteAccount}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account and data. Permanently erases your cloud profile"
+            accessibilityState={{ busy: deleting, disabled: deleting }}
+            disabled={deleting}
+          >
+            <Text style={styles.dangerButtonText}>
+              {deleting ? `${t('common.loading')}` : t('settings.deleteAccount')}
+            </Text>
+            <Text style={styles.dangerSubtext}>
+              Permanently erases your profile, progress, and cloud data. Cannot be undone.
+            </Text>
+            {deleting ? (
+              <ActivityIndicator
+                size="small"
+                color={COLORS.coral}
+                style={styles.dangerSpinner}
+              />
+            ) : null}
           </TouchableOpacity>
         </View>
 
@@ -729,6 +995,10 @@ const styles = StyleSheet.create({
   dangerSubtext: {
     fontSize: 12,
     color: COLORS.textMuted,
+    textAlign: 'center',
+  },
+  dangerSpinner: {
+    marginTop: 8,
   },
   bottomSpacer: {
     height: 40,

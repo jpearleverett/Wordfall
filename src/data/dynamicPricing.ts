@@ -10,6 +10,7 @@ import {
   EngagementSegment,
 } from '../services/playerSegmentation';
 import { ShopProduct } from './shopProducts';
+import { getRemoteString } from '../services/remoteConfig';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -333,10 +334,95 @@ const FLASH_SALE_POOL: {
 ];
 
 /**
+ * Remote-Config-driven daily deal override. JSON schema (Phase 4D):
+ * {
+ *   "productId": "starter_pack",
+ *   "name": "Launch Week Deal",
+ *   "icon": "🎁",
+ *   "description": "500 Coins + 50 Gems + 10 Hints",
+ *   "originalPriceAmount": 4.99,
+ *   "discountPercent": 50,
+ *   "endTime": <epoch ms, optional — when set, hoursRemaining reflects it>,
+ *   "disabled": false   // set true to force "no deal today"
+ * }
+ * If empty or malformed, fall through to the built-in hashed default.
+ */
+interface RemoteDailyDeal {
+  productId: string;
+  name: string;
+  icon: string;
+  description: string;
+  originalPriceAmount: number;
+  discountPercent: number;
+  endTime?: number;
+  disabled?: boolean;
+  originalPrice?: string;
+}
+
+function parseRemoteDailyDeal(): RemoteDailyDeal | null {
+  const raw = getRemoteString('dailyDealOverride');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const d = parsed as Partial<RemoteDailyDeal>;
+    if (d.disabled === true) return { ...d, disabled: true } as RemoteDailyDeal;
+    if (
+      typeof d.productId !== 'string' ||
+      typeof d.name !== 'string' ||
+      typeof d.icon !== 'string' ||
+      typeof d.description !== 'string' ||
+      typeof d.originalPriceAmount !== 'number' ||
+      typeof d.discountPercent !== 'number'
+    ) {
+      return null;
+    }
+    if (
+      d.originalPriceAmount <= 0 ||
+      d.discountPercent < 0 ||
+      d.discountPercent > 90
+    ) {
+      return null;
+    }
+    return d as RemoteDailyDeal;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Deterministically pick a flash sale for a given date.
  * Returns null roughly 30% of days (no sale).
+ *
+ * Honors the `dailyDealOverride` Remote Config key: authoring a JSON blob
+ * there swaps the deal globally without a rebuild (`disabled: true` suppresses
+ * the default hashed deal for the day).
  */
 export function getFlashSale(date: Date): FlashSale | null {
+  const override = parseRemoteDailyDeal();
+  if (override?.disabled) return null;
+  if (override) {
+    const saleAmount = override.originalPriceAmount * (1 - override.discountPercent / 100);
+    const hoursRemaining = override.endTime
+      ? Math.max(0, Math.ceil((override.endTime - date.getTime()) / 3600000))
+      : (() => {
+          const midnight = new Date(date);
+          midnight.setHours(23, 59, 59, 999);
+          return Math.max(0, Math.ceil((midnight.getTime() - date.getTime()) / 3600000));
+        })();
+    return {
+      productId: override.productId,
+      name: override.name,
+      icon: override.icon,
+      description: override.description,
+      originalPrice: override.originalPrice ?? `$${override.originalPriceAmount.toFixed(2)}`,
+      originalPriceAmount: override.originalPriceAmount,
+      discountPercent: override.discountPercent,
+      salePrice: `$${saleAmount.toFixed(2)}`,
+      hoursRemaining,
+    };
+  }
+
   const dayOfYear =
     Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000);
   // Use day-of-year as seed — deterministic per day

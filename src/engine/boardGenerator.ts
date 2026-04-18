@@ -1,4 +1,4 @@
-import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition, GameMode } from '../types';
+import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition, GameMode, GenerationProfile } from '../types';
 import { applyGravity } from './gravity';
 import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating, isSolvableShrinkingBoard } from './solver';
 import { getWordsByLength } from '../words';
@@ -151,9 +151,26 @@ function fillEmptyCells(grid: Grid, rng: () => number): void {
 function selectWords(
   config: BoardConfig,
   rng: () => number,
-  mode?: GameMode
+  mode?: GameMode,
+  profile?: GenerationProfile,
 ): string[] {
   let pool = getWordsByLength(config.minWordLength, config.maxWordLength);
+
+  // Profile-driven dictionary tiering (applied before mode filters so mode
+  // can still tighten further for timePressure/expert).
+  if (profile?.dictionaryTier === 'common') {
+    // "Common" tutorial tier: bias to 3-5 letter words — our dictionary's
+    // shorter buckets skew toward everyday vocabulary.
+    const commonPool = pool.filter(w => w.length <= 5);
+    if (commonPool.length >= config.wordCount * 3) {
+      pool = commonPool;
+    }
+  } else if (profile?.dictionaryTier === 'expert') {
+    const expertPool = pool.filter(w => w.length >= 5);
+    if (expertPool.length >= config.wordCount * 3) {
+      pool = expertPool;
+    }
+  }
 
   // Mode-specific word pool filtering
   if (mode === 'timePressure') {
@@ -312,9 +329,10 @@ function checkSolvability(
 function attemptGenerate(
   config: BoardConfig,
   rng: () => number,
-  mode?: GameMode
+  mode?: GameMode,
+  profile?: GenerationProfile,
 ): Board | null {
-  const words = selectWords(config, rng, mode);
+  const words = selectWords(config, rng, mode, profile);
   if (words.length < config.wordCount) return null;
 
   const grid = createEmptyGrid(config.rows, config.cols);
@@ -392,7 +410,8 @@ const GENERATION_TIMEOUT_MS = 5000;
 export function generateBoard(
   config: BoardConfig,
   seed?: number,
-  mode?: GameMode
+  mode?: GameMode,
+  profile?: GenerationProfile,
 ): Board {
   const baseSeed = seed ?? Date.now();
   const startTime = Date.now();
@@ -403,6 +422,17 @@ export function generateBoard(
     }
   };
 
+  // Apply profile word-length clamps. Profile tightens config bounds where
+  // specified, never loosens. Keeps dictionary selection deterministic.
+  const clampedConfig: BoardConfig = (() => {
+    if (!profile) return config;
+    const min = Math.max(config.minWordLength, profile.minWordLength ?? config.minWordLength);
+    const max = Math.min(config.maxWordLength, profile.maxWordLength ?? config.maxWordLength);
+    // Guard against invalid ranges (profile too tight).
+    if (min > max) return config;
+    return { ...config, minWordLength: min, maxWordLength: max };
+  })();
+
   // shrinkingBoard: add 1 buffer ring (filler perimeter for the initial visual shrink).
   // Words are placed in the interior and the shrink-aware solver validates that
   // at least one clearing order exists where words survive each shrink phase.
@@ -411,20 +441,20 @@ export function generateBoard(
   let effectiveConfig: BoardConfig;
   if (mode === 'shrinkingBoard') {
     effectiveConfig = {
-      ...config,
-      rows: Math.max(config.rows, 5) + 2,
-      cols: Math.max(config.cols, 5) + 2,
-      wordCount: Math.max(config.wordCount, 3),
+      ...clampedConfig,
+      rows: Math.max(clampedConfig.rows, 5) + 2,
+      cols: Math.max(clampedConfig.cols, 5) + 2,
+      wordCount: Math.max(clampedConfig.wordCount, 3),
     };
   } else {
-    effectiveConfig = config;
+    effectiveConfig = clampedConfig;
   }
 
   // Primary attempts with full config
   for (let attempt = 0; attempt < 80; attempt++) {
     checkTimeout();
     const rng = createRng(baseSeed + attempt * 7919);
-    const board = attemptGenerate(effectiveConfig, rng, mode);
+    const board = attemptGenerate(effectiveConfig, rng, mode, profile);
     if (board) return board;
   }
 
@@ -438,7 +468,7 @@ export function generateBoard(
   for (let attempt = 0; attempt < 60; attempt++) {
     checkTimeout();
     const rng = createRng(baseSeed + 1000 + attempt * 7919);
-    const board = attemptGenerate(fallbackConfig, rng, mode);
+    const board = attemptGenerate(fallbackConfig, rng, mode, profile);
     if (board) return board;
   }
 
@@ -452,11 +482,12 @@ export function generateBoard(
   for (let attempt = 0; attempt < 60; attempt++) {
     checkTimeout();
     const rng = createRng(baseSeed + 2000 + attempt * 7919);
-    const board = attemptGenerate(fallback2Config, rng, mode);
+    const board = attemptGenerate(fallback2Config, rng, mode, profile);
     if (board) return board;
   }
 
-  // Last resort: generate a minimal 2-word board (always attempted even after timeout)
+  // Last resort: generate a minimal 2-word board (always attempted even after timeout).
+  // Profile is NOT applied here — this is a true emergency fallback.
   const minimalConfig: BoardConfig = {
     rows: 5,
     cols: 5,

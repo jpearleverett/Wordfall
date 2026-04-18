@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,6 +14,7 @@ interface LevelUpCeremonyProps {
 }
 
 export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
+  const { t } = useTranslation();
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.5);
   const level = useSharedValue(0);
@@ -53,7 +55,7 @@ export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
             ]}
           />
 
-          <Text style={styles.ribbon}>LEVEL UP!</Text>
+          <Text style={styles.ribbon}>{t('ceremony.levelUp')}</Text>
 
           <Animated.View
             style={[
@@ -70,9 +72,9 @@ export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
             </LinearGradient>
           </Animated.View>
 
-          <Text style={styles.title}>Level {newLevel} Reached!</Text>
+          <Text style={styles.title}>{t('ceremony.levelReached', { level: newLevel })}</Text>
           <Text style={styles.description}>
-            Keep pushing forward — new challenges and rewards await!
+            {t('ceremony.keepPushingForward')}
           </Text>
 
           <Pressable
@@ -83,7 +85,7 @@ export function LevelUpCeremony({ newLevel, onDismiss }: LevelUpCeremonyProps) {
               colors={[COLORS.gold, '#ffaa00']}
               style={[styles.button, SHADOWS.glow(COLORS.gold)]}
             >
-              <Text style={styles.buttonText}>CONTINUE</Text>
+              <Text style={styles.buttonText}>{t('ceremony.continue')}</Text>
             </LinearGradient>
           </Pressable>
         </LinearGradient>

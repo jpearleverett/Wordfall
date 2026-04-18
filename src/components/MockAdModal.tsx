@@ -21,6 +21,7 @@ const REWARD_LABELS: Record<AdRewardType, string> = {
   spin_reward: '+1 Mystery Wheel Spin',
   coins_reward: '+50 Coins',
   double_reward: 'Double Rewards',
+  life_reward: '+1 Life',
 };
 
 interface MockAdModalProps {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PlayerProgress, DEFAULT_PROGRESS } from '../types';
+import { logger } from '../utils/logger';
 
 const PROGRESS_KEY = '@wordfall_progress';
 
@@ -19,7 +20,7 @@ export function useStorage() {
         setProgress({ ...DEFAULT_PROGRESS, ...JSON.parse(data) });
       }
     } catch (e) {
-      console.warn('Failed to load progress:', e);
+      logger.warn('Failed to load progress:', e);
     } finally {
       setLoaded(true);
     }
@@ -31,7 +32,7 @@ export function useStorage() {
       setProgress(newProgress);
       await AsyncStorage.setItem(PROGRESS_KEY, JSON.stringify(newProgress));
     } catch (e) {
-      console.warn('Failed to save progress:', e);
+      logger.warn('Failed to save progress:', e);
     }
   }, [progress]);
 

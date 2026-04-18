@@ -44,6 +44,8 @@ export type AnalyticsEventName =
   | 'retention_check'
   | 'funnel_step'
   | 'cohort_event'
+  // Difficulty tuning (Phase 3.5 — seed for plan task 3.7)
+  | 'difficulty_telemetry'
   // Legacy events (kept for backward compat with existing callsites)
   | 'mode_started'
   | 'daily_login'
@@ -586,6 +588,30 @@ class Analytics {
     await this.logEvent('puzzle_fail', params);
   }
 
+  /**
+   * Fire a difficulty-tuning telemetry sample. Called on both win and loss
+   * so `difficultyAdjuster.ts` thresholds can be retuned against observed
+   * distributions (plan task 3.7). Pair with user segment via
+   * `setUserProperty('difficulty_tier', ...)` elsewhere.
+   */
+  async trackDifficultyTelemetry(params: {
+    mode: string;
+    level: number;
+    outcome: 'win' | 'fail' | 'timeout' | 'abandon';
+    stars?: number;
+    attempts?: number;
+    hints_used?: number;
+    undos_used?: number;
+    max_combo?: number;
+    chain_count?: number;
+    time_ms?: number;
+    words_found?: number;
+    words_total?: number;
+    adjuster_tier?: string;
+  }): Promise<void> {
+    await this.logEvent('difficulty_telemetry', params);
+  }
+
   async trackPuzzleAbandon(params: {
     level: number;
     mode: string;
@@ -781,6 +807,8 @@ class Analytics {
     player_stage?: 'new' | 'early' | 'established' | 'veteran';
     is_payer?: boolean;
     total_spend?: number;
+    /** Phase 4.11 — Firebase A/B segmentation for hard-energy cohort */
+    hard_energy_enabled?: boolean;
   }): Promise<void> {
     await this.ensureLoaded();
 

@@ -551,7 +551,7 @@ class NotificationManager {
       if (__DEV__) console.log('[Notifications] Push token saved to Firestore for user:', userId);
     } catch (error) {
       // Silent fallback — remote push is best-effort
-      console.warn('[Notifications] Failed to save token to Firestore:', error);
+      logger.warn('[Notifications] Failed to save token to Firestore:', error);
     }
   }
 
@@ -686,7 +686,7 @@ class NotificationManager {
         try {
           listener(data);
         } catch (e) {
-          console.warn(`[Notifications] Category listener error for ${category}:`, e);
+          logger.warn(`[Notifications] Category listener error for ${category}:`, e);
         }
       }
     }

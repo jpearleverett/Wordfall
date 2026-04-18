@@ -108,6 +108,19 @@ function GameGridImpl({
     return set;
   }, [selectedCells]);
 
+  // Current word under construction from selected cells — threaded to each
+  // selected LetterCell so screen readers announce "selected, position 3,
+  // current word WOR" instead of just the letter.
+  const currentWord = useMemo(() => {
+    if (selectedCells.length === 0) return '';
+    let word = '';
+    for (const c of selectedCells) {
+      const cell = grid[c.row]?.[c.col];
+      if (cell) word += cell.letter;
+    }
+    return word;
+  }, [selectedCells, grid]);
+
   const hintedSet = useMemo(() => {
     const set = new Set<string>();
     hintedCells.forEach(c => set.add(`${c.row},${c.col}`));
@@ -525,6 +538,9 @@ function GameGridImpl({
                         isWildcard={wildcardSet.has(`${row},${col}`)}
                         isSpotlightDimmed={spotlightDimmedCells?.has(`${row},${col}`) || false}
                         fallAnim={cellFallAnim}
+                        row={row}
+                        col={col}
+                        currentWord={isSelected ? currentWord : undefined}
                       />
                     );
                   })}

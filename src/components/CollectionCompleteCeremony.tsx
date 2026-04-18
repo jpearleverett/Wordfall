@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +21,7 @@ export function CollectionCompleteCeremony({
   reward,
   onDismiss,
 }: CollectionCompleteCeremonyProps) {
+  const { t } = useTranslation();
   const fadeAnim = useSharedValue(0);
   const scaleAnim = useSharedValue(0.6);
   const decorationsMounted = useDeferredMount(280);
@@ -47,10 +49,10 @@ export function CollectionCompleteCeremony({
       )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
-          <Text style={styles.ribbon}>COLLECTION COMPLETE</Text>
+          <Text style={styles.ribbon}>{t('ceremony.collectionComplete')}</Text>
           <Text style={styles.icon}>{collectionIcon}</Text>
           <Text style={styles.name}>{collectionName}</Text>
-          <Text style={styles.subtitle}>You found every item!</Text>
+          <Text style={styles.subtitle}>{t('ceremony.foundEveryItem')}</Text>
 
           <View style={styles.rewardRow}>
             <View style={styles.rewardChip}>
@@ -67,7 +69,7 @@ export function CollectionCompleteCeremony({
 
           <Pressable style={({ pressed }) => [pressed && styles.buttonPressed]} onPress={onDismiss}>
             <LinearGradient colors={GRADIENTS.button.gold} style={styles.button}>
-              <Text style={styles.buttonText}>WONDERFUL!</Text>
+              <Text style={styles.buttonText}>{t('ceremony.wonderful')}</Text>
             </LinearGradient>
           </Pressable>
         </LinearGradient>

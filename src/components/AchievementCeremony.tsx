@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,6 +31,7 @@ export function AchievementCeremony({
   reward,
   onDismiss,
 }: AchievementCeremonyProps) {
+  const { t } = useTranslation();
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.6);
   const badge = useSharedValue(0);
@@ -56,7 +58,7 @@ export function AchievementCeremony({
       )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
-          <Text style={[styles.ribbon, { color: tierColor }]}>ACHIEVEMENT UNLOCKED</Text>
+          <Text style={[styles.ribbon, { color: tierColor }]}>{t('ceremony.achievementUnlocked')}</Text>
 
           <Animated.View
             style={[
@@ -93,14 +95,14 @@ export function AchievementCeremony({
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={onDismiss}
             accessibilityRole="button"
-            accessibilityLabel="Claim achievement reward"
+            accessibilityLabel={t('ceremony.claimA11y')}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <LinearGradient
               colors={[tierColor, tierColor + 'CC']}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>CLAIM</Text>
+              <Text style={styles.buttonText}>{t('ceremony.claim')}</Text>
             </LinearGradient>
           </Pressable>
         </LinearGradient>

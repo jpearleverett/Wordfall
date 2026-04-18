@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -25,6 +26,7 @@ import { firestoreService, ClubMessage } from '../services/firestore';
 import { getTitleLabel } from '../data/cosmetics';
 import ClubGoalCard from '../components/ClubGoalCard';
 import ClubLeaderboard from '../components/ClubLeaderboard';
+import { GiftInbox } from '../components/GiftInbox';
 import {
   generateClubGoal,
   ActiveClubGoal,
@@ -69,6 +71,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   onJoinClub = () => {},
   onLeaveClub = () => {},
 }) => {
+  const { t } = useTranslation();
   const clubIdFromStore = usePlayerStore(selectClubId);
   const equippedTitle = usePlayerStore(selectEquippedTitle);
   const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
@@ -118,12 +121,12 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       if (message.userId === currentUserId) {
         // Let the author delete their own message
         Alert.alert(
-          'Your message',
-          'Delete this message?',
+          t('club.yourMessage'),
+          t('club.deleteMessagePrompt'),
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('common.cancel'), style: 'cancel' },
             {
-              text: 'Delete',
+              text: t('common.delete'),
               style: 'destructive',
               onPress: async () => {
                 setChatMessages((prev) => prev.filter((m) => m.id !== message.id));
@@ -136,23 +139,23 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       }
 
       Alert.alert(
-        message.displayName || 'Player',
-        'Choose an action',
+        message.displayName || t('club.player'),
+        t('club.chooseAction'),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: 'Report message',
+            text: t('club.reportMessage'),
             onPress: () => confirmReportMessage(message),
           },
           {
-            text: 'Block user',
+            text: t('club.blockUser'),
             style: 'destructive',
             onPress: () => confirmBlockUser(message.userId, message.displayName),
           },
         ],
       );
     },
-    [user?.uid],
+    [user?.uid, t],
   );
 
   const confirmReportMessage = useCallback(
@@ -165,10 +168,10 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         'other',
       ];
       Alert.alert(
-        'Report message',
-        'Why are you reporting this message?',
+        t('club.reportMessage'),
+        t('club.whyReport'),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           ...reasons.map((r) => ({
             text: r.charAt(0).toUpperCase() + r.slice(1),
             onPress: async () => {
@@ -182,17 +185,17 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                 message.message,
               );
               Alert.alert(
-                ok ? 'Reported' : 'Could not report',
+                ok ? t('club.reported') : t('club.couldNotReport'),
                 ok
-                  ? 'Thanks — our team will review it.'
-                  : 'Please try again later.',
+                  ? t('club.reportThanks')
+                  : t('club.tryAgainLater'),
               );
             },
           })),
         ],
       );
     },
-    [clubId, user?.uid],
+    [clubId, user?.uid, t],
   );
 
   const confirmBlockUser = useCallback(
@@ -333,7 +336,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     >
       <View style={styles.noClubHero}>
         <Text style={styles.noClubIcon}>🏠</Text>
-        <Text style={styles.noClubTitle}>Join or Create a Club</Text>
+        <Text style={styles.noClubTitle}>{t('club.joinOrCreate')}</Text>
         <Text style={styles.noClubDesc}>
           Team up with friends, compete in weekly challenges, and climb the
           leaderboards together!
@@ -342,12 +345,12 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 
       {/* Search */}
       <View style={styles.searchSection}>
-        <Text style={styles.sectionTitle}>Find a Club</Text>
+        <Text style={styles.sectionTitle}>{t('club.findClub')}</Text>
         <View style={styles.searchBar}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search clubs..."
+            placeholder={t('club.searchPlaceholder')}
             placeholderTextColor={COLORS.textMuted}
             value={searchText}
             onChangeText={setSearchText}
@@ -367,7 +370,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
               end={{ x: 1, y: 0 }}
               style={styles.joinButton}
             >
-              <Text style={styles.joinButtonText}>Search & Join</Text>
+              <Text style={styles.joinButtonText}>{t('club.searchAndJoin')}</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}
@@ -375,12 +378,12 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 
       {/* Create */}
       <View style={styles.createSection}>
-        <Text style={styles.sectionTitle}>Create a Club</Text>
+        <Text style={styles.sectionTitle}>{t('club.createClub')}</Text>
         {showCreate ? (
           <View style={styles.createForm}>
             <TextInput
               style={styles.createInput}
-              placeholder="Enter club name..."
+              placeholder={t('club.createPlaceholder')}
               placeholderTextColor={COLORS.textMuted}
               value={createName}
               onChangeText={setCreateName}
@@ -396,7 +399,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                 accessibilityRole="button"
                 accessibilityLabel="Cancel club creation"
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -411,7 +414,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                 accessibilityRole="button"
                 accessibilityLabel="Create club"
               >
-                <Text style={styles.confirmBtnText}>Create</Text>
+                <Text style={styles.confirmBtnText}>{t('club.create')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -423,7 +426,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             accessibilityLabel="Create new club"
           >
             <Text style={styles.createButtonIcon}>+</Text>
-            <Text style={styles.createButtonText}>Create New Club</Text>
+            <Text style={styles.createButtonText}>{t('club.createNewClub')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -453,7 +456,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           </LinearGradient>
           <Text style={styles.clubName}>{data.name}</Text>
           <Text style={styles.clubMemberCount}>
-            {data.memberCount} / {data.maxMembers} Members
+            {t('club.memberCountLabel', { current: data.memberCount, max: data.maxMembers })}
           </Text>
         </View>
 
@@ -464,7 +467,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           end={{ x: 1, y: 1 }}
           style={styles.weeklyScoreCard}
         >
-          <Text style={styles.weeklyScoreLabel}>Weekly Club Score</Text>
+          <Text style={styles.weeklyScoreLabel}>{t('club.weeklyClubScore')}</Text>
           <Text style={styles.weeklyScoreValue}>
             {data.weeklyScore.toLocaleString()}
           </Text>
@@ -480,25 +483,28 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           >
             <Text style={styles.clubPuzzleIcon}>🧩</Text>
             <View style={styles.clubPuzzleInfo}>
-              <Text style={styles.clubPuzzleTitle}>Club Puzzle</Text>
+              <Text style={styles.clubPuzzleTitle}>{t('club.clubPuzzle')}</Text>
               <Text style={styles.clubPuzzleDesc}>
-                Solve today's club challenge
+                {t('club.clubPuzzleDesc')}
               </Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </LinearGradient>
         </TouchableOpacity>
 
+        {/* Pending Gifts */}
+        <GiftInbox />
+
         {/* Club Cooperative Goal */}
         {clubGoal && (
           <>
-            <Text style={styles.sectionTitle}>Club Goal</Text>
+            <Text style={styles.sectionTitle}>{t('club.clubGoal')}</Text>
             <ClubGoalCard goal={clubGoal} playerContribution={playerContribution} />
           </>
         )}
 
         {/* Your Contribution */}
-        <Text style={styles.sectionTitle}>Your Contribution</Text>
+        <Text style={styles.sectionTitle}>{t('club.yourContribution')}</Text>
         <LinearGradient
           colors={[...GRADIENTS.surfaceCard] as [string, string]}
           start={{ x: 0, y: 0 }}
@@ -510,21 +516,21 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
               <Text style={styles.contributeStatValue}>
                 {playerContribution.toLocaleString()}
               </Text>
-              <Text style={styles.contributeStatLabel}>Contributed</Text>
+              <Text style={styles.contributeStatLabel}>{t('club.contributed')}</Text>
             </View>
             <View style={styles.contributeDivider} />
             <View style={styles.contributeStat}>
               <Text style={styles.contributeStatValue}>
                 {puzzlesSolved ?? 0}
               </Text>
-              <Text style={styles.contributeStatLabel}>Puzzles</Text>
+              <Text style={styles.contributeStatLabel}>{t('club.puzzles')}</Text>
             </View>
             <View style={styles.contributeDivider} />
             <View style={styles.contributeStat}>
               <Text style={styles.contributeStatValue}>
                 {(starsByLevel ? Object.values(starsByLevel as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0).toLocaleString()}
               </Text>
-              <Text style={styles.contributeStatLabel}>Stars</Text>
+              <Text style={styles.contributeStatLabel}>{t('club.stars')}</Text>
             </View>
           </View>
           <Text style={styles.contributeHint}>
@@ -533,11 +539,11 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </LinearGradient>
 
         {/* Club Leaderboard */}
-        <Text style={styles.sectionTitle}>Weekly Rankings</Text>
+        <Text style={styles.sectionTitle}>{t('club.weeklyRankings')}</Text>
         <ClubLeaderboard entries={leaderboardEntries} currentClubId={clubId} />
 
         {/* Members with Weekly Scores */}
-        <Text style={styles.sectionTitle}>Members</Text>
+        <Text style={styles.sectionTitle}>{t('club.members')}</Text>
         <LinearGradient
           colors={[...GRADIENTS.surfaceCard] as [string, string]}
           start={{ x: 0, y: 0 }}
@@ -587,7 +593,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </LinearGradient>
 
         {/* Emoji Reactions */}
-        <Text style={styles.sectionTitle}>Quick Reactions</Text>
+        <Text style={styles.sectionTitle}>{t('club.quickReactions')}</Text>
         <View style={styles.emojiBar}>
           {REACTION_EMOJIS.map((emoji) => (
             <TouchableOpacity key={emoji} style={styles.emojiBtn} accessibilityRole="button" accessibilityLabel={`React with ${emoji}`}>
@@ -608,7 +614,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         )}
 
         {/* Club Chat */}
-        <Text style={styles.sectionTitle}>Club Chat</Text>
+        <Text style={styles.sectionTitle}>{t('club.clubChat')}</Text>
         <LinearGradient
           colors={[...GRADIENTS.surfaceCard] as [string, string]}
           start={{ x: 0, y: 0 }}
@@ -667,7 +673,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
               <View style={styles.chatInputRow}>
                 <TextInput
                   style={styles.chatInput}
-                  placeholder="Type a message..."
+                  placeholder={t('club.chatPlaceholder')}
                   placeholderTextColor={COLORS.textMuted}
                   value={chatInput}
                   onChangeText={setChatInput}
@@ -683,7 +689,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                   accessibilityRole="button"
                   accessibilityLabel="Send message"
                 >
-                  <Text style={styles.chatSendBtnText}>Send</Text>
+                  <Text style={styles.chatSendBtnText}>{t('club.send')}</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -700,7 +706,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 
         {/* Leave Club */}
         <TouchableOpacity style={styles.leaveButton} onPress={onLeaveClub}>
-          <Text style={styles.leaveButtonText}>Leave Club</Text>
+          <Text style={styles.leaveButtonText}>{t('club.leave')}</Text>
         </TouchableOpacity>
 
         <View style={styles.bottomSpacer} />
@@ -712,7 +718,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     <View style={styles.container}>
       <AmbientBackdrop variant="club" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>CLUB</Text>
+        <Text style={styles.headerTitle}>{t('club.header')}</Text>
       </View>
       {clubId && data ? renderClub() : renderNoClub()}
     </View>

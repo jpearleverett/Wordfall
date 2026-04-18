@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Pressable,
@@ -100,6 +101,7 @@ export function ReplayViewer({
   isDaily,
   onClose,
 }: ReplayViewerProps) {
+  const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState(-1); // -1 = initial state
   const [isPlaying, setIsPlaying] = useState(false);
   const [showAfterGravity, setShowAfterGravity] = useState(false);
@@ -250,7 +252,7 @@ export function ReplayViewer({
         <View style={styles.header}>
           <Text style={styles.title}>Solve Replay</Text>
           <Text style={styles.subtitle}>
-            Level {level} | {steps.length} move{steps.length !== 1 ? 's' : ''} | {'*'.repeat(stars)}
+            Level {level} | {t('common.movesCount', { count: steps.length })} | {'*'.repeat(stars)}
           </Text>
         </View>
 

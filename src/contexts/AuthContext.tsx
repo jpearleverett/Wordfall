@@ -2,11 +2,25 @@ import React, { createContext, useContext, useEffect, useState, useMemo, useCall
 import { auth, isFirebaseConfigured } from '../config/firebase';
 import { signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
 import { crashReporter } from '../services/crashReporting';
+import {
+  getLinkedGoogleEmail,
+  isGoogleSignInAvailable,
+  linkAnonymousToGoogle,
+  signOutGoogle,
+  type GoogleLinkResult,
+} from '../services/googleAuth';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAnonymous: boolean;
+  /** Email of the linked Google account, or `null` if the user is anonymous / unlinked. */
+  linkedEmail: string | null;
+  /** True when Google Sign-In is available (native module loaded + web client ID set). */
+  canLinkGoogle: boolean;
+  /** Launch the Google Sign-In → `linkWithCredential` flow. */
+  linkGoogle: () => Promise<GoogleLinkResult>;
+  /** Sign out of Firebase + Google. A fresh anonymous session is created immediately afterwards. */
   signOut: () => Promise<void>;
 }
 
@@ -14,6 +28,9 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   isAnonymous: true,
+  linkedEmail: null,
+  canLinkGoogle: false,
+  linkGoogle: async () => ({ ok: false, error: 'Auth not initialised' }),
   signOut: async () => {},
 });
 
@@ -48,9 +65,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
+  const linkGoogle = useCallback(async (): Promise<GoogleLinkResult> => {
+    const result = await linkAnonymousToGoogle();
+    if (result.ok) {
+      // Force an immediate user refresh so `linkedEmail` / `isAnonymous`
+      // propagate before the next auth-state tick.
+      setUser(result.user);
+    }
+    return result;
+  }, []);
+
   const signOutUser = useCallback(async () => {
     try {
-      await auth.signOut();
+      await signOutGoogle();
     } catch (e) {
       if (__DEV__) console.warn('Sign out failed:', e);
       crashReporter.captureException(
@@ -65,9 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       isAnonymous: user?.isAnonymous ?? true,
+      linkedEmail: getLinkedGoogleEmail(user),
+      canLinkGoogle: isGoogleSignInAvailable(),
+      linkGoogle,
       signOut: signOutUser,
     }),
-    [user, loading, signOutUser],
+    [user, loading, linkGoogle, signOutUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

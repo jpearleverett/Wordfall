@@ -5,12 +5,7 @@
   },
   "functions": [
     {
-      "source": "functions",
-      "codebase": "commerce"
-    },
-    {
-      "source": "cloud-functions",
-      "codebase": "social"
+      "source": "functions"
     }
   ]
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -226,6 +227,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   premiumPass: premiumPassProp,
   navigation,
 }) => {
+  const { t } = useTranslation();
   const settings = useSettings();
   // Narrow zustand subscriptions — ShopScreen no longer re-renders on every
   // economy churn; only on the slices it actually reads.
@@ -427,13 +429,16 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     setRestoringPurchases(true);
     try {
       const { results, restoredCount } = await restorePurchases();
-      if (results.length === 0) {
+      // restorePurchases() resolves on every path; failed attempts surface
+      // as a row with productId='restore_failed' (see iap.ts contract).
+      const failureRow = results.find((r) => r.productId === 'restore_failed' && !r.success);
+      if (failureRow) {
+        Alert.alert('Restore Failed', failureRow.error ?? 'Could not restore purchases. Please try again.');
+      } else if (results.length === 0) {
         Alert.alert('No Purchases Found', 'There are no purchases to restore.');
       } else {
         Alert.alert('Purchases Restored', `${restoredCount} purchase(s) restored successfully.`);
       }
-    } catch (error: any) {
-      Alert.alert('Restore Failed', error?.message ?? 'Could not restore purchases. Please try again.');
     } finally {
       setRestoringPurchases(false);
     }
@@ -806,7 +811,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           <View style={styles.vipHeader}>
             <Text style={styles.vipIcon}>{'\u{1F48E}'}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.vipTitle}>VIP WEEKLY</Text>
+              <Text style={styles.vipTitle}>{t('shop.vipWeekly')}</Text>
               <Text style={styles.vipSubtitle}>The ultimate Wordfall experience</Text>
             </View>
             {isVip && (
@@ -893,9 +898,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               <View style={styles.vipStreakHeader}>
                 <Text style={styles.vipStreakIcon}>{'\u{1F451}'}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.vipStreakTitle}>VIP STREAK</Text>
+                  <Text style={styles.vipStreakTitle}>{t('shop.vipStreak')}</Text>
                   <Text style={styles.vipStreakWeeks}>
-                    {streakWeeks} {streakWeeks === 1 ? 'week' : 'weeks'} subscribed
+                    {t('common.weeksSubscribed', { count: streakWeeks })}
                   </Text>
                 </View>
                 {currentBonus && (
@@ -1046,7 +1051,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         </ScrollView>
 
         {/* ── Rotating Exclusive Shop ────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Exclusive Cosmetics</Text>
+        <Text style={styles.sectionTitle}>{t('shop.exclusiveCosmetics')}</Text>
         <Text style={styles.rotatingSubtitle}>
           {rotatingHoursLeft > 0
             ? `Leaving in ${rotatingHoursLeft}h — won't return for months!`
@@ -1115,23 +1120,23 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         )}
 
         {/* ── Hint Bundles ───────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Hint Bundles</Text>
+        <Text style={styles.sectionTitle}>{t('shop.hintBundles')}</Text>
         {renderItemRow(HINT_BUNDLES)}
 
         {/* ── Undo Bundles ───────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Undo Bundles</Text>
+        <Text style={styles.sectionTitle}>{t('shop.undoBundles')}</Text>
         {renderItemRow(UNDO_BUNDLES)}
 
         {/* ── Coin Packs ─────────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Coin Packs</Text>
+        <Text style={styles.sectionTitle}>{t('shop.coinPacks')}</Text>
         {renderItemRow(COIN_PACKS)}
 
         {/* ── Gem Packs ──────────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Gem Packs</Text>
+        <Text style={styles.sectionTitle}>{t('shop.gemPacks')}</Text>
         {renderItemRow(GEM_PACKS)}
 
         {/* ── Premium ────────────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Premium</Text>
+        <Text style={styles.sectionTitle}>{t('shop.premium')}</Text>
         <View style={styles.premiumSection}>
           <TouchableOpacity
             style={styles.premiumCard}
@@ -1149,7 +1154,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             />
             <Text style={styles.premiumIcon}>{'\u{1F4D6}'}</Text>
             <View style={styles.premiumInfo}>
-              <Text style={styles.premiumName}>Chapter Bundle</Text>
+              <Text style={styles.premiumName}>{t('shop.chapterBundle')}</Text>
               <Text style={styles.premiumDesc}>
                 Theme decoration + 20 gems + 10 hints + 1 Board Preview
               </Text>
@@ -1185,7 +1190,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             />
             <Text style={styles.premiumIcon}>{'\u{1F4E6}'}</Text>
             <View style={styles.premiumInfo}>
-              <Text style={styles.premiumName}>Daily Value Pack</Text>
+              <Text style={styles.premiumName}>{t('shop.dailyValuePack')}</Text>
               <Text style={styles.premiumDesc}>
                 Bonus rewards every day for 30 days
               </Text>
@@ -1224,7 +1229,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             />
             <Text style={styles.premiumIcon}>{'\u{1F451}'}</Text>
             <View style={styles.premiumInfo}>
-              <Text style={styles.premiumName}>Premium Pass</Text>
+              <Text style={styles.premiumName}>{t('shop.premiumPass')}</Text>
               <Text style={styles.premiumDesc}>
                 Unlock premium rewards this season
               </Text>
@@ -1269,7 +1274,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             />
             <Text style={styles.premiumIcon}>{'\u{1F6AB}'}</Text>
             <View style={styles.premiumInfo}>
-              <Text style={styles.premiumName}>Remove Ads</Text>
+              <Text style={styles.premiumName}>{t('shop.removeAds')}</Text>
               <Text style={styles.premiumDesc}>
                 Enjoy an ad-free experience forever
               </Text>
@@ -1297,7 +1302,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         </View>
 
         {/* ── Coin Shop (spend coins on consumables) ─────────────────── */}
-        <Text style={styles.sectionTitle}>Spend Coins</Text>
+        <Text style={styles.sectionTitle}>{t('shop.spendCoins')}</Text>
         <Text style={styles.coinShopSubtitle}>
           {'\u{1FA99}'} {coins.toLocaleString()} coins available
         </Text>
@@ -1372,7 +1377,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           );
         })}
 
-        <Text style={styles.sectionTitle}>{'\u23F0'} Limited Rentals</Text>
+        <Text style={styles.sectionTitle}>{'\u23F0'} {t('shop.limitedRentals')}</Text>
         <Text style={styles.rentalSubtitle}>
           Timed rentals and temporary boosts return in a future update after their gameplay hooks are fully wired.
         </Text>
@@ -1400,7 +1405,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           {restoringPurchases ? (
             <ActivityIndicator size="small" color={COLORS.textSecondary} />
           ) : (
-            <Text style={styles.restoreText}>Restore Purchases</Text>
+            <Text style={styles.restoreText}>{t('shop.restorePurchases')}</Text>
           )}
         </TouchableOpacity>
 

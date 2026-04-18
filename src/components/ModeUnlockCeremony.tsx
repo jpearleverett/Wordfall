@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +24,7 @@ export function ModeUnlockCeremony({
   onDismiss,
   onTryNow,
 }: ModeUnlockCeremonyProps) {
+  const { t } = useTranslation();
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.7);
   const iconProgress = useSharedValue(0);
@@ -60,7 +62,7 @@ export function ModeUnlockCeremony({
           style={[styles.card, SHADOWS.strong]}
         >
           <View style={[styles.iconGlow, { backgroundColor: modeColor + '20' }]} />
-          <Text style={styles.unlockLabel}>NEW MODE UNLOCKED</Text>
+          <Text style={styles.unlockLabel}>{t('ceremony.newModeUnlocked')}</Text>
           <Animated.View style={iconStyle}>
             <View style={[styles.iconCircle, { borderColor: modeColor + '50', backgroundColor: modeColor + '15' }]}>
               <Text style={styles.icon}>{modeIcon}</Text>
@@ -80,7 +82,7 @@ export function ModeUnlockCeremony({
                   end={{ x: 1, y: 0 }}
                   style={[styles.tryButton, SHADOWS.glow(modeColor)]}
                 >
-                  <Text style={styles.tryButtonText}>TRY IT NOW</Text>
+                  <Text style={styles.tryButtonText}>{t('ceremony.tryItNow')}</Text>
                 </LinearGradient>
               </Pressable>
             )}
@@ -88,7 +90,7 @@ export function ModeUnlockCeremony({
               style={({ pressed }) => [styles.laterButton, pressed && styles.pressed]}
               onPress={dismiss}
             >
-              <Text style={styles.laterButtonText}>Later</Text>
+              <Text style={styles.laterButtonText}>{t('ceremony.later')}</Text>
             </Pressable>
           </View>
         </LinearGradient>

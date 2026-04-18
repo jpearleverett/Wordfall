@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
@@ -31,6 +32,7 @@ const TIER_ICONS: Record<string, string> = {
 };
 
 const ClubGoalCard: React.FC<ClubGoalCardProps> = ({ goal, playerContribution = 0 }) => {
+  const { t } = useTranslation();
   const [timeLeft, setTimeLeft] = useState(() => getClubGoalTimeRemaining(goal.endDate));
 
   useEffect(() => {
@@ -125,7 +127,7 @@ const ClubGoalCard: React.FC<ClubGoalCardProps> = ({ goal, playerContribution = 
               {rt.rewards.exclusiveFrame && (
                 <Text style={styles.tierExclusive}>+ Frame</Text>
               )}
-              {claimed && <Text style={styles.claimedBadge}>Claimed</Text>}
+              {claimed && <Text style={styles.claimedBadge}>{t('club.gifts.claimed')}</Text>}
             </View>
           );
         })}
@@ -134,7 +136,7 @@ const ClubGoalCard: React.FC<ClubGoalCardProps> = ({ goal, playerContribution = 
       {/* Top Contributors */}
       {topContributors.length > 0 && (
         <View style={styles.contributorsSection}>
-          <Text style={styles.contributorsTitle}>Top Contributors</Text>
+          <Text style={styles.contributorsTitle}>{t('club.topContributors')}</Text>
           <View style={styles.contributorsRow}>
             {topContributors.map((c, idx) => (
               <View key={c.userId} style={styles.contributor}>
@@ -152,7 +154,7 @@ const ClubGoalCard: React.FC<ClubGoalCardProps> = ({ goal, playerContribution = 
           </View>
           {contributorCount > 3 && (
             <Text style={styles.moreContributors}>
-              +{contributorCount - 3} more members contributing
+              {t('common.moreContributors', { count: contributorCount - 3 })}
             </Text>
           )}
         </View>
@@ -161,7 +163,7 @@ const ClubGoalCard: React.FC<ClubGoalCardProps> = ({ goal, playerContribution = 
       {/* Player Contribution */}
       {playerContribution > 0 && (
         <View style={styles.myContribution}>
-          <Text style={styles.myContributionLabel}>Your contribution</Text>
+          <Text style={styles.myContributionLabel}>{t('club.yourContributionShort')}</Text>
           <Text style={styles.myContributionValue}>{playerContribution.toLocaleString()}</Text>
         </View>
       )}

@@ -195,6 +195,18 @@ export function useRewardWiring({
       words_found: wordsFound,
       score,
     });
+    // Phase 3.5: seed difficulty-tuning dataset. Reads what the reward hook
+    // has on hand — richer timing/hint data is still captured on the fail
+    // path in GameScreen. Pair with BigQuery later to retune thresholds.
+    void analytics.trackDifficultyTelemetry({
+      mode,
+      level,
+      outcome: 'win',
+      stars,
+      max_combo: maxCombo,
+      words_found: wordsFound,
+      words_total: wordsFound,
+    });
     void analytics.updateUserProperties({
       player_level: Math.max(level + 1, player.currentLevel),
       total_puzzles_solved: player.puzzlesSolved + 1,

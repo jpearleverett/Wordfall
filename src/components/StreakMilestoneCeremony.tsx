@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +16,7 @@ interface StreakMilestoneCeremonyProps {
 }
 
 export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMilestoneCeremonyProps) {
+  const { t } = useTranslation();
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.5);
   const fire = useSharedValue(1);
@@ -48,15 +50,15 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
       )}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
-          <Text style={styles.ribbon}>STREAK MILESTONE</Text>
+          <Text style={styles.ribbon}>{t('ceremony.streakMilestone')}</Text>
 
           <AnimatedText style={[styles.fireEmoji, fireStyle]}>
             🔥
           </AnimatedText>
 
           <Text style={styles.milestoneCount}>{milestone}</Text>
-          <Text style={styles.milestoneLabel}>DAYS</Text>
-          <Text style={styles.subtitle}>Incredible dedication!</Text>
+          <Text style={styles.milestoneLabel}>{t('ceremony.days')}</Text>
+          <Text style={styles.subtitle}>{t('ceremony.incredibleDedication')}</Text>
 
           <View style={styles.rewardRow}>
             <View style={styles.rewardChip}>
@@ -73,7 +75,7 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
 
           {'cosmetic' in reward && (
             <View style={styles.cosmeticBadge}>
-              <Text style={styles.cosmeticText}>+ Exclusive cosmetic reward</Text>
+              <Text style={styles.cosmeticText}>{t('ceremony.exclusiveCosmeticReward')}</Text>
             </View>
           )}
 
@@ -85,7 +87,7 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
               colors={[COLORS.orange, '#ff6b35']}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>AMAZING!</Text>
+              <Text style={styles.buttonText}>{t('ceremony.amazing')}</Text>
             </LinearGradient>
           </Pressable>
         </LinearGradient>

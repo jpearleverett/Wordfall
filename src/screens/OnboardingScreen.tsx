@@ -10,6 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { VideoBackground } from '../components/common/VideoBackground';
@@ -29,6 +30,7 @@ interface OnboardingScreenProps {
 type Phase = 'welcome' | 'tutorial' | 'celebrate';
 
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => {} }) => {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>('welcome');
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -168,15 +170,15 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
           <View style={styles.glowRingOuter} />
           <View style={styles.glowRingInner} />
           <Text style={styles.welcomeEmoji}>🎮</Text>
-          <Text style={styles.welcomeTitle}>Welcome to</Text>
+          <Text style={styles.welcomeTitle}>{t('onboarding.welcomeTo')}</Text>
           <Text style={styles.welcomeTitleAccent}>WORDFALL</Text>
-          <Text style={styles.welcomeSubtext}>A gravity-based word puzzle where every word changes the board</Text>
+          <Text style={styles.welcomeSubtext}>{t('onboarding.welcomeTagline')}</Text>
 
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
             onPress={() => transitionTo('tutorial')}
             accessibilityRole="button"
-            accessibilityLabel="Learn to play tutorial"
+            accessibilityLabel={t('onboarding.learnToPlay')}
           >
             <LinearGradient
               colors={[...GRADIENTS.button.primary]}
@@ -184,12 +186,12 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
               end={{ x: 1, y: 0 }}
               style={[styles.startButton, SHADOWS.glow(COLORS.accent)]}
             >
-              <Text style={styles.startButtonText}>LEARN TO PLAY</Text>
+              <Text style={styles.startButtonText}>{t('onboarding.learnToPlay')}</Text>
             </LinearGradient>
           </Pressable>
 
-          <Pressable style={styles.skipLink} onPress={onComplete} accessibilityRole="button" accessibilityLabel="Skip tutorial">
-            <Text style={styles.skipText}>Skip tutorial</Text>
+          <Pressable style={styles.skipLink} onPress={onComplete} accessibilityRole="button" accessibilityLabel={t('onboarding.skipTutorial')}>
+            <Text style={styles.skipText}>{t('onboarding.skipTutorial')}</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -201,9 +203,12 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
     return (
       <View style={styles.container}>
         <Animated.View style={[styles.tutorialContainer, { opacity: fadeAnim }]}>
-          <Text style={styles.tutorialTitle}>Find the hidden words!</Text>
+          <Text style={styles.tutorialTitle}>{t('onboarding.tutorialFindWords')}</Text>
           <Text style={styles.tutorialProgress}>
-            Words found: {wordsFound}/{TUTORIAL_STEPS.filter(s => s.waitForAction === 'word_submitted').length}
+            {t('onboarding.tutorialProgress', {
+              found: wordsFound,
+              total: TUTORIAL_STEPS.filter(s => s.waitForAction === 'word_submitted').length,
+            })}
           </Text>
 
           <View style={styles.gridContainer}>
@@ -222,8 +227,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
             />
           )}
           {currentStep?.waitForAction === 'dismiss' && (
-            <TouchableOpacity style={styles.dismissOverlay} onPress={advanceTutorialStep} accessibilityRole="button" accessibilityLabel="Tap to continue tutorial">
-              <Text style={styles.dismissText}>Tap to continue</Text>
+            <TouchableOpacity style={styles.dismissOverlay} onPress={advanceTutorialStep} accessibilityRole="button" accessibilityLabel={t('onboarding.tapToContinue')}>
+              <Text style={styles.dismissText}>{t('onboarding.tapToContinue')}</Text>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -237,17 +242,14 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
         <Animated.View style={[styles.centerContent, { opacity: fadeAnim }]}>
           <Animated.View style={[styles.glowCircleGreen, { transform: [{ scale: pulseAnim }] }]} />
           <Text style={styles.celebrateEmoji}>🎉</Text>
-          <Text style={styles.celebrateTitle}>AMAZING!</Text>
-          <Text style={styles.celebrateSubtext}>
-            You've learned the basics of Wordfall!{'\n'}
-            Now let's play for real.
-          </Text>
+          <Text style={styles.celebrateTitle}>{t('onboarding.celebrateTitle')}</Text>
+          <Text style={styles.celebrateSubtext}>{t('onboarding.celebrateMessage')}</Text>
 
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
             onPress={onComplete}
             accessibilityRole="button"
-            accessibilityLabel="Start playing"
+            accessibilityLabel={t('onboarding.letsPlay')}
           >
             <LinearGradient
               colors={[COLORS.green, COLORS.teal] as [string, string]}
@@ -255,7 +257,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
               end={{ x: 1, y: 0 }}
               style={[styles.startButton, SHADOWS.glow(COLORS.green)]}
             >
-              <Text style={styles.startButtonText}>LET'S PLAY!</Text>
+              <Text style={styles.startButtonText}>{t('onboarding.letsPlay')}</Text>
             </LinearGradient>
           </Pressable>
         </Animated.View>
@@ -270,7 +272,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
     <View style={styles.container}>
       <Animated.View style={[styles.centerContent, { opacity: fadeAnim }]}>
         <Pressable onPress={onComplete}>
-          <Text style={styles.readyTitle}>Loading...</Text>
+          <Text style={styles.readyTitle}>{t('common.loading')}</Text>
         </Pressable>
       </Animated.View>
     </View>

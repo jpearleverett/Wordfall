@@ -7,8 +7,9 @@
  */
 
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils/logger';
 import { crashReporter } from './crashReporting';
+import { secureStorage } from './secureStorage';
 
 const FIREBASE_FUNCTIONS_URL =
   (typeof process !== 'undefined' &&
@@ -105,7 +106,7 @@ function hashReceipt(receipt: string): string {
 
 async function loadReceiptHashes(): Promise<Set<string>> {
   try {
-    const stored = await AsyncStorage.getItem(RECEIPT_HASH_STORAGE_KEY);
+    const stored = await secureStorage.getItem(RECEIPT_HASH_STORAGE_KEY);
     if (stored) {
       return new Set(JSON.parse(stored) as string[]);
     }
@@ -128,12 +129,12 @@ async function saveReceiptHash(hash: string): Promise<void> {
       // Keep only the last 500 hashes to bound storage
       const arr = Array.from(hashes);
       const trimmed = arr.length > 500 ? arr.slice(arr.length - 500) : arr;
-      await AsyncStorage.setItem(
+      await secureStorage.setItem(
         RECEIPT_HASH_STORAGE_KEY,
         JSON.stringify(trimmed),
       );
     } catch {
-      console.warn('[ReceiptValidation] Failed to persist receipt hash');
+      logger.warn('[ReceiptValidation] Failed to persist receipt hash');
     }
   }, () => {
     // Previous write failed — still attempt this one
@@ -246,7 +247,7 @@ export async function validateReceipt(
   const knownHashes = await loadReceiptHashes();
 
   if (knownHashes.has(hash)) {
-    console.warn(
+    logger.warn(
       '[ReceiptValidation] Duplicate receipt detected (possible replay attack):',
       productId,
     );

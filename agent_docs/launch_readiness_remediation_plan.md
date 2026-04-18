@@ -1,406 +1,474 @@
-# Wordfall — Launch-Readiness Remediation Plan
+# Wordfall — Final Launch-Readiness Plan (merged)
+
+> **Working-style note for Claude (self-reminder):** Break every task into SMALL chunks. Never attempt more than ~10–15 min of work in a single pass. Long edits/writes time out. After each chunk: save, commit locally if appropriate, then continue. Never Edit > ~150 lines in one call or Write > ~400 lines. This rule applies to every phase below, and to writing/editing this plan itself.
+
+---
 
 ## Context
 
-Wordfall is a gravity-based word puzzle (Expo SDK 55, RN 0.83.4, React 19.2, TS ~5.8, zustand state, Reanimated 4.2.1 + worklets, Firebase optional, AdMob, react-native-iap, 791 unit tests). The question asked: is it Candy Crush / Royal Match / Clash of Clans level of polish and launch-ready, and if not, what does it need?
+Wordfall is a gravity-based word puzzle (Expo SDK 55, RN 0.83.4, React 19.2, TS ~5.8, zustand + 24-action reducer, Reanimated 4.2.1, Firebase optional, AdMob + react-native-iap, 791 unit tests, 39 suites). The user — an indie developer — asked for an expert assessment of whether the game is ready to ship at Candy Crush / Royal Match / Clash-of-Clans tier, what's missing, and a phased plan with step-by-step outside-env instructions.
 
-**Honest verdict after deep code exploration:** the engineering substrate is genuinely strong (solver, gravity, board generator, IAP service, shop UI, clubs, ceremony system, consent/privacy compliance, Firestore rules, 0 `@ts-ignore`, 0 `TODO`/`FIXME` in core logic), but there are real **launch blockers** outside the code (Play Console IAP registration, Cloud Function deploys, FCM key, AdMob real IDs, assetlinks.json hosting) and real **polish gaps inside the code** — chief among them: `assets/audio/` is empty except for a README (the game runs on synthesized ADSR tones), no account-deletion UI (Play Store requirement since 2022), no i18n, no UI/E2E coverage beyond 5 Maestro smoke flows, limited accessibility (no dynamic type, no colorblind mode), and an unvalidated adaptive-difficulty model.
+This plan is the **merge of two independent deep-scans** of the repo (mine + a second agent's), reconciled against the canonical `agent_docs/pre_launch_audit.md`, `agent_docs/known_issues.md`, and `CLAUDE.md`. Items the user has already completed outside this repo are **explicitly excluded** from the scope — see the "Already-Done Inventory" below. Target: **global Android launch in ~3 months**. iOS deferred.
 
-**Target chosen by user:** Global launch (~3 months) — full Phase 0–4 scope. Professional audio commission. Hard-energy as remote-config A/B. Keep procedural puzzles but tighten constraints.
+## Verdict
 
-**Branch for implementation:** `claude/assess-game-readiness-iImfQ`.
+- **Engineering substrate: A-.** 791/791 tests green, clean tsc, React Compiler on, Reanimated ceremonies, Sentry wired, IAP + AdMob + Firestore + Cloud Functions + receipt validation + VIP lifecycle + leaderboards + consent + club moderation + soft-launch analytics — all real, all wired.
+- **Candy-Crush-parity polish: C+.** `assets/audio/` is empty (synthesized fallback), no account-deletion UI, no i18n, no Dynamic Type / colorblind mode, procedural-only chapters not yet validated against real difficulty telemetry, no gifting / share card, no live event authoring pipeline, no soft-launch cohort plan executed.
+- **Launch blockers (hard):** 1 code-side remaining (`assetlinks.json` SHA256 swap — two-line edit once Play app signing is set up), ~10 user-side console tasks, plus audio commission. GDPR delete, Restore-in-Settings, gifting hardening, secure-store receipts, Google Sign-In linking, and all Phase 2 polish (audio wiring, a11y, colorblind, Maestro smoke) are all landed as of April 2026.
+- **Ship-ready?** Not yet. Closer than most indie teams ever get, but ~3 months of focused work + soft-launch tuning separates it from a confident global push.
 
----
-
-## Framework Used: GameRefinery / Deconstructor-of-Fun 7-Pillar F2P Launch-Readiness model
-
-Cross-referenced against the Hooked Model (Trigger → Action → Variable Reward → Investment) for retention depth. Scores are honest — Candy Crush = 10, Expo default demo = 1.
+## 7-Pillar Scorecard (GameRefinery × Hooked)
 
 | # | Pillar | Score | Key gap |
 |---|--------|-------|---------|
-| 1 | Core Game Loop | 7.5 / 10 | Audio assets empty; game feel capped |
-| 2 | Meta Game & Progression | 6 / 10 | Procedural-only puzzles; adaptive difficulty unvalidated |
-| 3 | Retention Systems | 6.5 / 10 | No hard energy lever; remote push not deployed |
-| 4 | Monetization (code / live) | 7 / 10 code / 3 / 10 live | Play Console SKUs unregistered; Cloud Fns not deployed |
-| 5 | Social Layer | 5.5 / 10 | Social Cloud Fns not deployed; no gifting; thin share UI |
-| 6 | Live Ops | 5 / 10 | No live experiments; no seasonal rotation spec |
-| 7 | Technical & Compliance | 7 / 10 | Account-deletion UI+endpoint missing; no dynamic type; no Sentry DSN |
-| + | Localization (cross-cut) | 1 / 10 | All strings hardcoded English |
+| 1 | Core Game Loop | 7.5/10 | Audio placeholders; juice pass not dialed in |
+| 2 | Meta & Progression | 6.5/10 | Procedural-only; adaptive difficulty unvalidated; no per-chapter generation profile |
+| 3 | Retention Systems | 6.5/10 | No hard-energy A/B live; remote push not deployed; no gifting |
+| 4 | Monetization | 7/10 code · 3/10 live | IAP SKUs unregistered; no country-tier pricing; no starter-bundle A/B |
+| 5 | Social Layer | 5.5/10 | No gifting, no share-card deep link, thin viral surface |
+| 6 | Live Ops | 5/10 | No Remote-Config-driven event calendar; no seasonal rotation spec |
+| 7 | Tech & Compliance | 7/10 | Account-deletion UI+endpoint missing; web-form fallback missing; no Dynamic Type / colorblind |
+| + | Localization (cross-cut) | 1/10 | Strings hardcoded EN |
 
-**Ready to ship?** No — not at Candy Crush parity. The game is closer to a strong soft-launch candidate than a worldwide-launch candidate. With the ~3-month plan below it will reach launch parity.
-
----
-
-## Phase structure
-
-Phases are ordered **by dependency and risk**, not time. Phases 0–1 are hard launch gates (external config + store compliance). Phase 2 attacks day-1 churn drivers. Phase 3 raises core-loop polish to competitor parity. Phase 4 adds global reach + retention levers. Phase 5 is post-launch live ops.
-
-Estimates are senior-dev-days of coding work. External wall-clock (audio commission, translator turnaround, Play Console review) runs in parallel and is called out separately.
+**Score at Candy-Crush parity ≈ 9/10 across all pillars.** This plan drives pillars 1, 3, 5, 6, 7 into the 8–9 band. Pillars 2 & 4 land in the 7–8 band (chapter volume + offer A/B are post-launch work).
 
 ---
 
-## Phase 0 — External Setup (no code; unblocks everything)
+## Already-Done Inventory — DO NOT RE-IMPLEMENT
 
-Live-build testing, receipt validation, push notifications, real ads, and crash reporting are all gated on external services. Do this first because nothing later is verifiable without it.
+Earlier explore passes missed many of these. Verified via `agent_docs/pre_launch_audit.md` + targeted grep in April 2026. Use these file:line pointers if you need to extend them.
 
-| # | Task | Files / surface | Effort |
-|---|------|-----------------|--------|
-| 0.1 | Register 20 `wordfall_*` IAP SKUs in Play Console, match IDs exactly to `src/data/shopProducts.ts`. Set country-tier pricing (IN/BR/MX/ID/PH at 30–50% discount). | Play Console only | 0.5d |
-| 0.2 | Grant Android Publisher role to `<firebase-project>@appspot.gserviceaccount.com` in Play Console → Users and permissions (required for `validateReceipt` to call Google Play Developer API). | Play Console only | 0.1d |
-| 0.3 | Upload FCM server key in Firebase Console → Cloud Messaging → Project Settings. | Firebase Console only | 0.1d |
-| 0.4 | Deploy commerce Cloud Functions (`firebase deploy --only functions:commerce`). Affects `validateReceipt`. | `functions/src/index.ts` already committed | 0.25d |
-| 0.5 | Deploy social Cloud Functions (`firebase deploy --only functions:social`). Affects `sendPushNotification`, `clubGoalProgress`, `moderateClubMessage`. | `cloud-functions/src/index.ts` already committed | 0.25d |
-| 0.6 | Deploy Firestore rules + indexes (`firebase deploy --only firestore:rules,firestore:indexes`). | `firestore.rules`, `firestore.indexes.json` committed | 0.1d |
-| 0.7 | Swap AdMob test app IDs for real ones in `app.json` plugin config + set `EXPO_PUBLIC_ADMOB_REWARDED_ID`, `EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID` in `.env` and EAS secrets. Rebuild dev APK. | `app.json`, `src/constants.ts` AD_CONFIG | 0.5d |
-| 0.8 | Host `/.well-known/assetlinks.json` on `wordfallgame.app` so Android App Links `autoVerify="true"` binds the domain. | `wordfallgamesite/` Cloudflare Pages | 0.25d |
-| 0.9 | Create Sentry project, add `EXPO_PUBLIC_SENTRY_DSN` to `.env` and EAS secrets. All `crashReporter.captureException` sites already wired — just need DSN. | env only | 0.25d |
-| 0.10 | Configure Google UMP consent form (GDPR message) in AdMob Console. `AdsConsent.requestInfoUpdate` + `showForm` already called at app start. | AdMob Console only | 0.1d |
+### User has done outside the repo
+- Google Play Console account created + verified
+- Firebase project (Blaze billing) wired via `EXPO_PUBLIC_FIREBASE_*` + `google-services.json`
+- Sentry.io account created (DSN env var still pending)
+- `wordfallgame.app` Cloudflare Pages site live with `/privacy`, `/terms`, `/support` (real entity Iridescent Games, date April 16 2026, NY jurisdiction, `info@iridescent-games.com`)
+- EAS dev-client APK builds + smoke-tested on real Android device (all screens load, full puzzle plays through)
+- Support email alias `info@iridescent-games.com` active
 
-**Dependencies:** 0.4 requires 0.2; 0.7 requires new EAS build.
-
-**Verification:**
-- Install internal-test-track AAB on a real Android device.
-- Complete a full test purchase (Play Console license-tester account) and confirm `validateReceipt` Cloud Function logs show a successful validation.
-- Send a push notification from `sendPushNotification` callable; arrives on device.
-- Trigger a rewarded-video ad via `src/services/ads.ts`; confirm real AdMob dashboard impression.
-- Throw a test error via `crashReporter.captureException(new Error('sentry-smoke'))`; confirm Sentry receives it.
-- Tap the Play-Store-provided deep link URL; Android routes straight into app (no browser disambiguation).
-
-**Pillars moved:** 4 (live monetization), 6 (live ops backbone), 7 (crash reporting).
+### Wired in code (don't re-implement)
+- **Leaderboards — full read + write.** `firestoreService.submitDailyScore` at `src/services/firestore.ts:355` + `submitWeeklyScore` at `:387` called from `src/hooks/useRewardWiring.ts:689,693`. Reads at `:300+`. Firestore rules bound 0–1,000,000. Composite indexes in `firestore.indexes.json`.
+- **VIP weekly subscription — end-to-end.** Client `applyProduct` at `src/services/commercialEntitlements.ts:207` sets `isVipSubscriber/vipExpiresAt/adsRemoved/dailyDrip`. Server-side `onSubscriptionRenew` Pub/Sub handler at `functions/src/index.ts:418` consumes Apple App Store Server Notifications v2 + Google RTDN, updates `users/{uid}.vipActive`+`vipExpiresAt` on renew/cancel/refund/expire/trial.
+- **Receipt validation + replay protection.** `validateReceipt` HTTPS callable at `functions/src/index.ts:370` with SHA256 hash dedup in `/receipts`. Rejects unauthenticated callers; attributes to `context.auth.uid` only.
+- **Push notifications — client side.** `src/services/notifications.ts:506–509` registers Expo + device tokens, persists to `users/{uid}/pushToken`. Server callable `sendPushNotification` at `functions/src/social.ts` with auth + 30/min rate limit + per-UID Firestore rate-limit counter + friend/club-co-member gating. `processStreakReminders` scheduled job alongside.
+- **Sentry SDK wired.** `@sentry/react-native ~7.11.0`; `crashReporter.captureException` at IAP, receipt validation, AuthContext, useRewardWiring, every major Firestore mutation, board-gen timeouts. `redactUid()` PII min in CF logs. Only `EXPO_PUBLIC_SENTRY_DSN` needed to activate.
+- **13 Cloud Functions deployed in a single `functions/` codebase** (`firebase.json` one-source):
+  - Commerce (`functions/src/index.ts`): `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress` (atomic txn, 10k/call cap), `autoKickInactiveMembers`, `requestAccountDeletion`
+  - Social (`functions/src/social.ts`, re-exported from `index.ts`): `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage` (Perspective API), `sendGift`, `claimGift`
+- **Firestore rules + indexes.** `firestore.rules` (124 lines, strict ownership + score bounds + club membership/message size 1–200 + reports admin-only + consent ledger). Just needs `firebase deploy`.
+- **Consent + UGC safeguards.** Versioned ConsentGate (ToS + Privacy), club chat long-press report/block, server-side Perspective moderation, blocked-users filter client-side, mystery-wheel odds modal, Google UMP + iOS ATT flow before ads init.
+- **Build / privacy config.** `allowBackup:false`, Proguard + shrinkResources, HTTPS deep-link `autoVerify="true"` intent filter, `NSUserTrackingUsageDescription`, blocked-permissions list. `wordfallgamesite/.well-known/assetlinks.json` exists with placeholder SHA256.
+- **Analytics / experiments.** `src/services/analytics.ts` + `funnelTracker.ts` + `experiments.ts` + `remoteConfig.ts` + `softLaunchAnalytics.ts`. 35+ events, `trackAdRevenue`, `shop_product_tapped` funnel, `analytics.setEnabled` toggle, deterministic bucketing, D1/D7/D30 retention events.
+- **Accessibility baseline.** 226 accessibilityLabel instances; `Button.tsx` a11y defaults + 44pt hitSlop; palette raised to ~4.5:1 text contrast; loading state + `busy` on Settings sign-in/out.
+- **Restore Purchases** flow **exists** in `ShopScreen.tsx:1403` — just not surfaced in Settings.
+- **Bundle** optimized (assets/ 23 MB → 2.4 MB, all images webp, bg video optimized).
 
 ---
 
-## Phase 1 — Store-Compliance Must-Haves
+## Real Launch Gaps (consolidated, deduped vs Already-Done)
 
-Without this, Play Store submission fails policy review. All other polish is wasted if the store rejects the binary.
+### Code-side (small, hard blockers)
+1. **GDPR account deletion** — Settings button + `requestAccountDeletion` Cloud Function + local cleanup. Play Store Data-Safety requirement.
+2. **Restore Purchases in Settings** — already works in ShopScreen; Play policy wants it discoverable under Account.
+3. **"Reset Progress" → "Reset local data"** rename in `SettingsScreen.tsx:109` (confusing vs true deletion).
+4. **`assetlinks.json` SHA256** — replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` once Play app signing fingerprint is issued.
+
+### Code-side (polish — ship gates the other agent flagged, I agree)
+5. Audio loader wiring in `src/services/sound.ts` (real files + BGM-by-screen + crossfade + per-category volume + audio-load breadcrumb).
+6. `Typography` wrapper for Dynamic Type (`PixelRatio.getFontScale()` clamp 1.0–1.3).
+7. Colorblind palette variants (Deut/Prot/Trit) as Settings option.
+8. Screen-reader game-state hints on `LetterCell` + `AccessibilityInfo.announceForAccessibility` on word-found.
+9. Per-chapter `GenerationProfile` in `src/data/chapters.ts` + honored in `src/engine/boardGenerator.ts` (tutorial-arc curation without hand-authoring).
+10. Golden-seed + 10k-fuzz tests on board generator.
+11. `difficulty_telemetry` analytics event + retune `difficultyAdjuster.ts` against real data.
+12. Gifting (lives/hints) Cloud Function with idempotency key + daily cap.
+13. Share-to-social victory card (`react-native-view-shot` + `expo-sharing`) with challenge deep link.
+14. Remote-Config event calendar + daily deals override (LiveOps without rebuilds).
+15. Hard-energy system gated behind `remoteConfig.hardEnergyEnabled` (A/B, default OFF).
+16. i18n scaffolding (`i18next` + `expo-localization`) + ES-419, PT-BR, DE, FR, JA for top-5 screens (UI only, puzzles stay EN).
+
+### User-side (consoles + external — hard blockers)
+- Register 20 `wordfall_*` IAP SKUs in Play Console (IDs match `src/data/shopProducts.ts`); set country-tier pricing (IN/BR/MX/ID/PH at 30–50% discount).
+- Grant Android Publisher role to `<firebase-project>@appspot.gserviceaccount.com` in Play Console → Users and permissions.
+- Upload FCM server key to Firebase → Cloud Messaging.
+- Set `EXPO_PUBLIC_SENTRY_DSN` via `eas secret:create` + `.env`.
+- AdMob app IDs in `app.json` and rewarded + interstitial unit IDs (via `EXPO_PUBLIC_ADMOB_REWARDED_ID*` / `..._INTERSTITIAL_ID*` env vars) are already real on the user's side. Only remaining AdMob step is verifying those env vars are present in EAS secrets for production AABs (Google test unit fallback in `src/constants.ts` is dev-only).
+- Author Google UMP consent message in AdMob → Privacy & messaging.
+- Run `firebase deploy --only firestore:rules,firestore:indexes,functions` once.
+- Fill Play Console Data Safety form (draft: `agent_docs/data_safety.md`).
+- Upload store listing assets (512×512 icon, 1024×500 feature graphic, 8 phone screenshots; copy in `agent_docs/store_listing.md`).
+- Set Play target audience to 13+.
+- Content rating questionnaire (include mystery-wheel odds disclosure).
+- Commission audio (3 BGM with gameplay stems + 20+ SFX).
+- Stand up `wordfallgame.app/account-deletion` web-form fallback (Play requires a deletion path reachable **without** installing the app).
+- Soft-launch UA budget: Philippines + Canada, 4–6 weeks.
+
+### Deferred to v1.1 (explicitly NOT launch blockers)
+Maestro E2E breadth · iOS lane (Apple Dev enrollment, `GoogleService-Info.plist`, Universal Links, ATT verification on device).
+
+### ✅ Completed v1.1 hardening (April 2026)
+`expo-secure-store` receipt migration (`src/services/secureStorage.ts`, auto-migrate on first read) · consolidated `functions/` + `cloud-functions/` into single `functions/` codebase (`functions/src/index.ts` re-exports `./social`) · per-UID Firestore rate-limit counter (`rateLimits/{uid}_{endpoint}_{windowStart}`, fail-open) · inline board-gen timeout banner (`src/components/BoardGenTimeoutBanner.tsx`) · PlayerContext/EconomyContext single-slot write queue (`src/utils/persistQueue.ts`) · `iap.ts` reject-vs-resolve contract · remaining `console.log` sweep · `useSyncExternalStore` context selectors (`src/services/syncStatus.ts` with cached snapshot) · retry helper (`src/services/retry.ts`) + "not synced" indicator (`src/components/NotSyncedBanner.tsx`) · **Google Sign-In account linking** (`src/services/googleAuth.ts` lazy-loads `@react-native-google-signin/google-signin`, calls Firebase `linkWithCredential` with `credential-already-in-use` → `signInWithCredential` recovery fallback; `AuthContext` exposes `linkedEmail` / `canLinkGoogle` / `linkGoogle`; `SettingsScreen` shows "Sign In with Google" for anonymous users and the linked email once upgraded — native module + `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` + Firebase Google provider + Play SHA-1 are the remaining user-side activation steps, tracked in `CLAUDE.md`).
+
+---
+
+## Phase Overview
+
+| Phase | Focus | Dev-days | Wall-clock | Hard blocker? |
+|-------|-------|----------|------------|---------------|
+| 0 | External setup (consoles, deploy, DSN, AdMob IDs, assetlinks) | ~2 | 1–3d Play review | Yes |
+| 1 | Store-compliance code gates (account deletion, restore-in-settings, web form, "reset local data") | ~3 | parallel | Yes |
+| 2 | Day-1 churn killers (audio, a11y, UI/E2E tests) | ~9 | 2–4wk audio | Yes |
+| 3 | Top-tier polish (GenerationProfile + golden-seed + adaptive-difficulty tuning + juice + BGM stems) | ~9 | 1wk playtest | Strongly-recommend |
+| 4 | Global reach + retention levers (i18n, hard-energy A/B, gifting, share card, LiveOps calendar) | ~16 | 1–2wk translation | Strongly-recommend |
+| 5 | Soft launch in PH + Canada, tune against KPI gate, then global ramp | ~5 (ongoing) | 4–6wk cohort | Yes (soft launch) |
+
+Rough 3-month solo calendar: wk 1–2 Phase 0+1 · wk 3–5 Phase 2 (audio lands wk 4–5) · wk 6–7 Phase 3 · wk 8–11 Phase 4 (translations land wk 10) · wk 12 soft launch + Phase 5 kickoff.
+
+---
+
+## Phase 0 — External Setup (unblocks everything)
+
+Live builds, receipt validation, push, real ads, crash reporting, deep-link verification are all gated on external services. Do this first — nothing downstream is verifiable without it.
+
+| # | Task | Where | Effort |
+|---|------|-------|--------|
+| 0.1 | Register 20 `wordfall_*` IAPs in Play Console, IDs matching `src/data/shopProducts.ts`. Enable country-tier pricing (IN/BR/MX/ID/PH −30…−50%). VIP weekly = auto-renewable subscription in a new group "Wordfall VIP". | Play Console | 0.5d |
+| 0.2 | Grant **Android Publisher** role to `<firebase-project>@appspot.gserviceaccount.com` in Play Console → Users and permissions. | Play Console | 0.1d |
+| 0.3 | Upload FCM server key in Firebase Console → Cloud Messaging. | Firebase Console | 0.1d |
+| 0.4 | `firebase deploy --only functions` (single consolidated codebase — commerce: `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion`; social: `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift`). Use `scripts/firebase_deploy_functions.sh`. | shell | 0.25d |
+| 0.5 | _merged into 0.4 above (Apr 2026 consolidation)._ | — | — |
+| 0.6 | `firebase deploy --only firestore:rules,firestore:indexes`. | shell | 0.1d |
+| 0.7 | AdMob **app IDs** (`app.json`) and rewarded + interstitial **unit IDs** (via `EXPO_PUBLIC_ADMOB_REWARDED_ID*` / `..._INTERSTITIAL_ID*` env vars) are already real on the user's side. Action: verify those env vars are set in EAS secrets so production AABs don't fall through to the dev-only Google test fallback in `src/constants.ts` AD_CONFIG. | EAS secrets | 0.1d |
+| 0.8 | Replace `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` in `wordfallgamesite/.well-known/assetlinks.json` with Play app signing SHA-256, republish Cloudflare Pages. | site repo | 0.1d |
+| 0.9 | Create Sentry project, add `EXPO_PUBLIC_SENTRY_DSN` to `.env` + `eas secret:create`. | Sentry + shell | 0.25d |
+| 0.10 | Configure Google UMP consent form (GDPR) in AdMob → Privacy & messaging. | AdMob Console | 0.1d |
+| 0.11 | Create Remote Config defaults: `hardEnergyEnabled`(bool,false), `starterBundlePrice`(string,"0.49"), `eventCalendarOverride`(json,null), `interstitialIntervalSeconds`(int), `dailyDealOverride`(json,null). | Firebase Console | 0.25d |
+
+**Verification.** Install internal-test AAB → completion full test purchase (license tester) → Cloud Function logs show `validateReceipt` success · `sendPushNotification` call arrives on device · rewarded ad triggers real impression in AdMob dashboard · `crashReporter.captureException(new Error('sentry-smoke'))` reaches Sentry · tap Play-Store-provided deep link → app opens without browser disambiguation (App Links verified).
+
+**Pillars moved:** 4 (live monetization), 6 (live-ops backbone), 7 (crash reporting).
+
+---
+
+## Phase 1 — Store-Compliance Code Gates
+
+Play policy scanner fails if any of the below is missing. Every item is small.
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 1.1 | **Account Deletion UI** in `SettingsScreen.tsx` under Account section. Two-step confirmation + auth re-prompt. Calls new `requestAccountDeletion` callable. Mirror a web-form fallback on `wordfallgame.app/account-deletion`. | `src/screens/SettingsScreen.tsx`, `src/services/firestore.ts`, `src/contexts/AuthContext.tsx` | 1d |
-| 1.2 | **Server-side erasure Cloud Function** `requestAccountDeletion`. Purges `players/{uid}`, `users/{uid}/*` subcollections, club membership + authored chat messages, consent records, blocked-users list, and Firebase Auth record. Purchase receipt ledger retained with UID → one-way hash for tax/fraud audit. Respond within 30d per Play policy. | `functions/src/index.ts` | 1d |
-| 1.3 | Surface **Restore Purchases** in Settings (not only in ShopScreen:1403). VIP subscription + Ad Removal are durable SKUs — Play/Apple both require a discoverable restore path. | `src/screens/SettingsScreen.tsx`, `src/services/iap.ts` (reuse existing flow) | 0.25d |
-| 1.4 | Add a **Data Deletion web-form endpoint** on `wordfallgame.app/account-deletion` (Play Store requires a method reachable *without* installing the app). Simple form → email to `info@iridescent-games.com` → internal SLA to call the callable on the user's behalf. | `wordfallgamesite/account-deletion/index.html` | 0.5d |
-| 1.5 | Fill in Play Console **Data Safety form** using `agent_docs/data_safety.md` as source of truth. Confirm data-types declared match what the app actually sends (Firebase Analytics, AdMob ad ID, Sentry crash traces). | Play Console only | 0.5d |
-| 1.6 | Confirm Play Console **target audience = 13+** (current app has no under-13 age gate; changing to <13 would require a COPPA gate in `OnboardingScreen.tsx` before any analytics init). | Play Console only | 0.1d |
-| 1.7 | Audit `src/screens/SettingsScreen.tsx:109` "Reset Progress" — rename to "Reset local data" to avoid confusion with account deletion. | `src/screens/SettingsScreen.tsx` | 0.1d |
+| 1.1 | **Account-Deletion UI** under Settings → Account. Two-step confirm + re-auth prompt. Calls `requestAccountDeletion` callable. **[DONE — `requestAccountDeletion` imported into `SettingsScreen` with two-step confirm; handler purges local storage + signs out.]** | `src/screens/SettingsScreen.tsx`, `src/contexts/AuthContext.tsx`, `src/services/firestore.ts` | 1d |
+| 1.2 | **`requestAccountDeletion` Cloud Function.** Purges `players/{uid}`, `users/{uid}/*`, club membership + authored messages, consent ledger, `blockedUsers`, Firebase Auth record. Purchase-receipt ledger retained with UID→one-way SHA256 hash (tax / fraud audit). SLA ≤ 30d per Play policy. **[DONE — `functions/src/index.ts` L785 `requestAccountDeletion` HTTPS endpoint.]** | `functions/src/index.ts` | 1d |
+| 1.3 | **Surface Restore Purchases in Settings** (flow exists in `ShopScreen.tsx:1403` — reuse). **[DONE — `handleRestorePurchases` wired in `SettingsScreen.tsx:95` via `useCommerce().restorePurchases`.]** | `src/screens/SettingsScreen.tsx`, `src/services/iap.ts` | 0.25d |
+| 1.4 | **Data-deletion web-form** at `wordfallgame.app/account-deletion` (Play policy: deletion reachable **without** installing the app). Form → email to `info@iridescent-games.com` → internal SLA invokes the callable on the user's behalf. **[DONE — `wordfallgamesite/account-deletion/index.html` (348 lines) published via Cloudflare Pages.]** | `wordfallgamesite/account-deletion/index.html` (new) | 0.5d |
+| 1.5 | Rename Settings:109 "Reset Progress" → **"Reset local data"** (avoid confusion with deletion). **[DONE — label + accessibilityLabel now "Reset local data" at `SettingsScreen.tsx:680`.]** | `src/screens/SettingsScreen.tsx` | 0.1d |
+| 1.6 | Fill Play Console Data Safety form from `agent_docs/data_safety.md`. Verify declared types match what the app actually sends (Firebase Analytics, AdMob ad ID, Sentry crash traces). | Play Console | 0.5d |
+| 1.7 | Confirm Play target audience = 13+. | Play Console | 0.1d |
 
-**Dependencies:** 1.1 depends on 1.2 deployment (don't ship a button that 500s). 1.3 is pure UI-reuse.
+**Verification.** Seed a test account with progress + purchases + club membership + chat message → trigger deletion → Firestore shows user doc + subcollections gone; `/receipts` retains hashed-UID rows only; Auth record deleted; push to old token fails gracefully. Restore Purchases from clean install → VIP + Ad Removal flags restored. Play pre-launch report returns no policy violation.
 
-**Verification:**
-- Manually create a test account, populate with progress + purchases + club membership, trigger deletion flow. Inspect Firestore — user doc + subcollections gone; receipt ledger retains hashed UID only. Auth record gone. Push to device fails gracefully.
-- Restore Purchases from a clean install after a prior purchase — VIP and Ad Removal flags restored.
-- Play Console Pre-launch Report returns no policy violations.
-- Submit to Play Console internal test track; confirm policy auto-scan passes.
-
-**Pillars moved:** 7 (Compliance, Store).
+**Pillars moved:** 7 (Compliance/Store).
 
 ---
 
 ## Phase 2 — Day-1 Churn Killers
 
-Real audio, accessibility, and UI test coverage. These are the retention fundamentals a first-session player feels within 60 seconds.
+Audio, accessibility, UI/E2E test coverage. What a first-session player feels in the first 60s.
 
 ### 2A. Audio (biggest single polish uplift)
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 2.1 | Commission **20 SFX + 4 BGM** per `assets/audio/README.md` spec. MP3 44.1 kHz, −14 LUFS integrated, seamless BGM loops. Synthwave aesthetic brief. | External (audio house / composer) | 0d code, 2–4wk wall-clock |
-| 2.2 | Drop assets into `assets/audio/`, wire loader in `src/services/sound.ts`. Keep synthesized fallback as last resort so dev builds still work without assets. | `src/services/sound.ts` | 1d |
-| 2.3 | Loop BGM by screen context: `bgm-home` on HomeScreen focus, `bgm-gameplay` on GameScreen, `bgm-relax` in relax mode, `bgm-victory` on puzzle complete. Crossfade 400ms between tracks; duck under ceremony SFX. | `src/services/sound.ts`, `src/screens/HomeScreen.tsx`, `src/screens/GameScreen.tsx`, `src/hooks/useCeremonyQueue.ts` | 1d |
-| 2.4 | Wire per-category volume: `sfxVolume` vs `musicVolume` vs `ceremonyVolume`. Currently only global music volume is actually applied. Settings sliders exist; they just don't route into `soundManager` correctly. | `src/services/sound.ts`, `src/screens/SettingsScreen.tsx`, `src/contexts/SettingsContext.tsx` | 0.5d |
-| 2.5 | Add **audio-load error breadcrumb** to Sentry so missing assets don't silently fail. | `src/services/sound.ts` | 0.25d |
+| 2.1 | Commission 20 SFX + 4 BGM per `assets/audio/README.md`. MP3 44.1 kHz, −14 LUFS, seamless loops. Synthwave aesthetic. **Request gameplay BGM stems (base + high-intensity)** so 3.11 can layer them. | composer | 0d code, 2–4wk wall-clock |
+| 2.2 | ✅ DONE. `REAL_SOUND_FILES` / `REAL_MUSIC_FILES` registries in `src/services/sound.ts` default to null; `playSound` + `buildMusicPlayer` prefer the bundled asset via `createAudioPlayerFn` when wired, fall through to the synth WAV URI on failure. Drop `.mp3` files into `assets/audio/` and flip the registry entry to `require('../../assets/audio/<file>.mp3')`. | `src/services/sound.ts` | 1d |
+| 2.3 | ✅ DONE. `playMusic` crossfades over 400 ms in 8 steps between the outgoing and incoming track; `stopMusic` supports an optional fade-out. MusicTrack extended with `relax` + `victory`. `GameScreen` picks `relax` in relax mode, `tense` in timePressure, `gameplay` otherwise, and hops to `victory` on win. `useCeremonyQueue` calls `soundManager.duckMusicFor(autoDismissMs ?? 2500, 0.35)` every time a ceremony mounts, and the win handler ducks for 1200 ms around the `puzzleComplete` SFX. | `src/services/sound.ts`, `src/screens/GameScreen.tsx`, `src/hooks/useCeremonyQueue.ts` | 1d |
+| 2.4 | ✅ DONE. `SOUND_CATEGORY` maps each SoundName to `sfx` or `ceremony`; `playSound` resolves the bus per-play so `setSfxVolume`/`setCeremonyVolume` never cross-contaminate already-cached players. `SettingsContext.ceremonyVolume` added (default 0.8); `App.tsx` volume bridge pushes all three categories (with 0–1 vs 0–100 normalization) and treats all-zero as mute. `SettingsScreen` gained a third "Ceremony Volume" slider under SFX + Music. | `src/services/sound.ts`, `src/contexts/SettingsContext.tsx`, `src/screens/SettingsScreen.tsx`, `App.tsx` | 0.5d |
+| 2.5 | ✅ DONE. `tryCreateRealPlayer` in `src/services/sound.ts` drops a Sentry breadcrumb + captures the exception with `{feature:'audio_real_file_load', asset:<label>}` tags before falling back to synthesis, so a missing `assets/audio/*.mp3` surfaces in crash reporting instead of going silent. | `src/services/sound.ts` | 0.25d |
 
 ### 2B. Accessibility
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 2.6 | **Dynamic Type / text scaling** via a `Typography` wrapper honoring `PixelRatio.getFontScale()` clamped 1.0–1.3. Migrate all hardcoded font sizes to the wrapper over time; start with high-traffic screens. | `src/components/common/Typography.tsx` (new), then `src/screens/HomeScreen.tsx`, `src/screens/GameScreen.tsx`, `src/screens/SettingsScreen.tsx`, `src/constants.ts` FONTS | 2d |
-| 2.7 | **Colorblind palette option** (Deuteranopia, Protanopia, Tritanopia). Swap letter-cell hue gradients + success/error colors via theme variant. Selectable in Settings. | `src/constants.ts` palette, `src/screens/SettingsScreen.tsx`, `src/contexts/SettingsContext.tsx`, `src/components/LetterCell.tsx` | 1.5d |
-| 2.8 | Screen-reader game-state hints on `LetterCell` ("Letter A at row 2 column 3. Selected. Current word: WOR"). Announce word-found events via `AccessibilityInfo.announceForAccessibility`. | `src/components/LetterCell.tsx`, `src/screens/game/PlayField.tsx` | 1d |
+| 2.6 | ✅ DONE. `src/components/common/Typography.tsx` exposes a `Typography` wrapper + `installGlobalFontScaleClamp()` that clamps `PixelRatio.getFontScale()` to 1.0–1.3 app-wide via `Text.defaultProps`. Called from `App.tsx` on boot. | `src/components/common/Typography.tsx`, `App.tsx` | 2d |
+| 2.7 | ✅ DONE. Settings exposes a Colorblind Mode selector (off / Deut / Protan / Tritan). `useColors()` hook in `src/hooks/useColors.ts` resolves `getColorblindOverrides()` from `src/services/colorblind.ts` and overlays on the base palette. `SettingsContext.colorblindMode` persisted. | `src/services/colorblind.ts`, `src/hooks/useColors.ts`, `src/contexts/SettingsContext.tsx`, `src/screens/SettingsScreen.tsx` | 1.5d |
+| 2.8 | ✅ DONE. `LetterCell` has position + selection + current-word `accessibilityLabel`; `GameScreen.tsx:463` watches `solveSequence` and calls `AccessibilityInfo.announceForAccessibility` on every new word-found. | `src/components/LetterCell.tsx`, `src/screens/GameScreen.tsx` | 1d |
 
-### 2C. UI / E2E test coverage
+### 2C. UI / E2E coverage
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 2.9 | Maestro flows: `purchase_happy_path`, `club_chat_send_and_report`, `consent_accept`, `account_deletion`, `restore_purchases`. | `.maestro/*.yaml` | 1.5d |
-| 2.10 | Integration test for `useCommerce` with mocked `react-native-iap` covering: happy purchase, validation failure, duplicate transaction ID, network timeout recovery. | `src/hooks/__tests__/useCommerce.test.ts` (new) | 1d |
-| 2.11 | Snapshot tests for the 5 highest-traffic screens (Home, Game, Shop, Settings, Club) to catch unintentional UI regressions. | `src/screens/__tests__/*.snap.test.tsx` | 1d |
+| 2.9 | ✅ DONE. All 10 Maestro flows present in `.maestro/`: 01_app_launch, 02_daily_puzzle, 03_shop_browse, 04_settings, 05_mode_select, 06_consent_accept, 07_restore_purchases, 08_account_deletion, 09_purchase_happy_path, 10_club_chat_send_and_report. | `.maestro/*.yaml` | 1.5d |
+| 2.10 | ✅ DONE. Two-layer coverage: (a) `src/services/__tests__/iapCommerce.integration.test.ts` — happy, replay rejection, duplicate transactionId independence, `__DEV__` network-fallback at the service layer; (b) `src/hooks/__tests__/useCommerce.integration.test.ts` — `iapManager.purchase`/`restorePurchases` exercised in mock mode (happy, duplicate-receipt replay guard, pre-seeded hash failure, non-consumable restore via `ad_removal`). Hook-layer render test skipped — no RN testing library in deps. | `src/services/__tests__/iapCommerce.integration.test.ts`, `src/hooks/__tests__/useCommerce.integration.test.ts` | 1d |
+| 2.11 | ⏸ DEFERRED to v1.1 alongside Maestro E2E breadth. Current jest env is `testEnvironment: 'node'` with a deliberate stub-only RN mock (`src/__mocks__/react-native.ts`) — 865 unit/engine tests all run in that model. Standing up a render harness for 5 screens would require a full `jsdom`/`@testing-library/react-native` infra swap + mocks for every expo-* + reanimated + gesture-handler + firebase + iap + admob + view-shot module each screen touches, then brittle snapshots that churn on every layout tweak. ROI is poor versus Maestro E2E (which is already the phase-gate verification). Revisit post-soft-launch when stability > velocity. | `src/screens/__tests__/*.snap.test.tsx` | 1d |
 
-**Dependencies:** 2.2 depends on 2.1 (assets arriving). 2.9 depends on Phase 0 (real test SKUs in Play Console). 2.11 can run in parallel.
+**Verification.** Delivered BGM validates at −14 ±1 LUFS (Youlean Loudness Meter), no audible loop seam. TalkBack full playthrough of daily puzzle. System-level "Large Text" → no HomeScreen/GameScreen/ShopScreen clipping. Each colorblind palette keeps success/error/selection visually distinct. All 10 Maestro flows green in CI.
 
-**Verification:**
-- LUFS measurement of all delivered BGM within −14 ±1 LUFS. No audible seam at loop point.
-- Enable TalkBack on a physical Android device, complete daily puzzle end-to-end with screen reader only.
-- Enable system-level "Large Text" accessibility; confirm no Text component clips or overflows on HomeScreen / GameScreen / ShopScreen.
-- Toggle each colorblind palette; confirm success/error/selection colors remain distinguishable.
-- Maestro suite green on CI for all 10 flows (5 existing + 5 new).
-
-**Pillars moved:** 1 (Core Loop game-feel), 7 (Accessibility + Test coverage).
+**Pillars moved:** 1 (Core Loop feel), 7 (a11y + test coverage).
 
 ---
 
-## Phase 3 — Top-Tier Polish
+## Phase 3 — Top-Tier Polish (Procedural Curation + Juice)
 
-The user chose **improve procedural generation instead of hand-authoring 75 puzzles**. Constrain the generator so chapters 1–5 feel like curated tutorials, validate `difficultyAdjuster.ts` with real telemetry, and add juice to the moment-to-moment feel.
+User chose **tighten procedural generation** instead of hand-authoring 75 tutorial puzzles. Constrain chapters 1–5 to feel curated, validate `difficultyAdjuster.ts` with real telemetry, and land a juice pass on moment-to-moment feel.
 
-### 3A. Tighten procedural generation for onboarding arc
+### 3A. Per-chapter GenerationProfile
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 3.1 | Add a **per-chapter `GenerationProfile`** to `chapters.ts` specifying: max word length, required mechanic-intro (e.g., chapter 1 must have at least one gravity cascade; chapter 2 must introduce a 4-letter word; chapter 3 introduces chain bonus), empty-cell density, dictionary subset (common words only for ch1–3). | `src/data/chapters.ts`, `src/types.ts` | 1.5d |
-| 3.2 | Extend `src/engine/boardGenerator.ts` to honor `GenerationProfile`. Keep seeded PRNG determinism (daily puzzles must not drift). Retry budget cap raised when constraints are tighter. | `src/engine/boardGenerator.ts` | 1.5d |
-| 3.3 | Golden-seed tests: for chapters 1–5, assert that the generated board for seed S always satisfies the profile (word length caps, mechanic intro present). Also asserts `solver.ts` finds a solution within budget on every generated board. | `src/engine/__tests__/boardGenerator.profiles.test.ts` (new) | 1d |
-| 3.4 | Fuzz test: 10 000 seeds × each chapter → 0 unsolvable, < 1 % solver-budget exhaustion. CI job. | `src/engine/__tests__/boardGenerator.fuzz.test.ts` (new) | 0.5d |
+| 3.1 | ✅ DONE. `src/data/chapters.ts` now defines a `profile` on every chapter with `{minWordLength, maxWordLength, introducedMechanics, emptyCellDensity, dictionaryTier}`. Type in `src/types.ts`. | `src/data/chapters.ts`, `src/types.ts` | 1.5d |
+| 3.2 | ✅ DONE. `src/engine/boardGenerator.ts` honors the chapter profile (dictionary filtering, word-length cap, empty-cell density, mechanic-intro gates) while preserving seeded-PRNG determinism. | `src/engine/boardGenerator.ts` | 1.5d |
+| 3.3 | ✅ DONE. Golden-seed profile tests at `src/engine/__tests__/boardGenerator.profiles.test.ts` — green in CI. | `src/engine/__tests__/boardGenerator.profiles.test.ts` | 1d |
+| 3.4 | ✅ DONE. Fuzz suite at `src/engine/__tests__/boardGenerator.fuzz.test.ts` runs in the normal test suite (~16s) and is green. | `src/engine/__tests__/boardGenerator.fuzz.test.ts` | 0.5d |
 
 ### 3B. Validate adaptive difficulty with real telemetry
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 3.5 | Emit `difficulty_telemetry` analytics event on every board completion/failure with `{mode, level, stars, attempts, hintsUsed, undosUsed, chainCount, timeMs, adjusterTier}`. Used to retune `difficultyAdjuster.ts` thresholds. | `src/services/analytics.ts`, `src/services/difficultyAdjuster.ts`, `src/hooks/useGame.ts` | 0.5d |
-| 3.6 | Recruit 10 Play-Console-internal-test players, have them play 50 levels each. Pull telemetry, evaluate whether the adjuster actually moves the curve: target distributions — easy 75%+ first-try win, medium 50–60%, hard 30–40%. | External (testers) + analysis | 2d |
-| 3.7 | Retune `difficultyAdjuster.ts` thresholds based on observed data; re-run to confirm. | `src/services/difficultyAdjuster.ts` | 1d |
+| 3.5 | ✅ DONE. `analytics.trackDifficultyTelemetry({ mode, level, stars, attempts, hintsUsed, undosUsed, chainCount, timeMs, adjusterTier })` fires on win (from `useRewardWiring.ts:201`) and fail (from `GameScreen.tsx:1133`). | `src/services/analytics.ts`, `src/screens/GameScreen.tsx`, `src/hooks/useRewardWiring.ts` | 0.5d |
+| 3.6 | Recruit 10 Play-Internal-Test players × 50 levels each. Target distributions: easy 75%+ first-try win · medium 50–60% · hard 30–40%. | testers + BigQuery | 2d |
+| 3.7 | Retune `difficultyAdjuster.ts` thresholds from observed data. | `src/services/difficultyAdjuster.ts` | 1d |
 
 ### 3C. Juice pass on core loop
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 3.8 | Word-find choreography upgrade: spark → shimmer → absorb into score. Tie to new audio layer. | `src/components/effects/ParticleSystem.tsx`, `src/screens/game/PlayField.tsx` | 1d |
-| 3.9 | Combo-multiplier visual feedback: screen-tint pulse on combo ≥ 3, confetti burst at combo ≥ 5. | `src/components/effects/NeonStarBurst.tsx` (reuse), new `src/components/effects/ComboFlash.tsx` | 1d |
-| 3.10 | Gravity-settle animation polish: tiny bounce-overshoot when letters land (Reanimated `withSpring(damping: 10)`). | `src/screens/game/PlayField.tsx`, `src/engine/gravity.ts` animation timings | 0.5d |
-| 3.11 | Layered BGM: add a "high-intensity" stem that mixes in when combo ≥ 3 and fades out on miss. Depends on 2.1 audio commission brief including stems. | `src/services/sound.ts`, audio brief | 1d |
+| 3.8 | ✅ DONE. `src/components/effects/ParticleSystem.tsx` runs spark+absorb particles on word-find; wired from `PlayField`. Audio tie-in will land with the real-asset commission in Phase 2.1. | `src/components/effects/ParticleSystem.tsx`, `src/screens/game/PlayField.tsx` | 1d |
+| 3.9 | ✅ DONE. `src/components/effects/ComboFlash.tsx` — accent-tint flash at combo ≥ 3, gold tint + confetti burst at combo ≥ 5, honours reduce-motion. Mounted in `GameScreen.tsx:1601`. | `src/components/effects/ComboFlash.tsx` | 1d |
+| 3.10 | ✅ DONE. Fall-in spring at `GameScreen.tsx:1091` uses `tension:180, friction:9` for a subtle landing bounce-overshoot. Reduce-motion users skip the spring block. | `src/screens/GameScreen.tsx` | 0.5d |
+| 3.11 | Layered BGM: high-intensity stem mixes in at combo ≥ 3, fades on miss. Requires 2.1 to have requested stems. | `src/services/sound.ts` | 1d |
 
-**Dependencies:** 3.5–3.7 require Phase 0 Firebase Analytics live. 3.11 requires audio commission brief to request stems (tell the composer during Phase 2.1, not after).
+**Verification.** CI: golden-seed + fuzz green. Telemetry from 2nd-pass cohort lands within target distributions. Recorded juice demo: fresh eyes say "oh, that's satisfying".
 
-**Verification:**
-- Golden-seed + fuzz tests pass in CI.
-- Telemetry-driven tuning: 2nd-pass tester cohort reports "felt well-paced" qualitatively and quantitatively within target distributions.
-- Recorded video of juice pass shown to a fresh pair of eyes — do they say "oh, that's satisfying"?
-
-**Pillars moved:** 1 (Core Loop feel), 2 (Meta/Progression validation).
+**Pillars moved:** 1 (Core Loop), 2 (Meta/Progression validation).
 
 ---
 
 ## Phase 4 — Global Reach & Long-Tail Retention
 
-i18n unlocks ~60% of addressable non-EN revenue. Hard-energy A/B + gifting + share cards close the social-viral and session-frequency gaps vs. Candy Crush. Live-event authoring pipeline lets you run LiveOps without shipping builds.
+i18n unlocks ~60% of non-EN revenue. Hard-energy A/B + gifting + share cards close the session-frequency + viral gaps. LiveOps pipeline runs seasonal events without builds.
 
-### 4A. Localization
-
-| # | Task | Files | Effort |
-|---|------|-------|--------|
-| 4.1 | Add `i18next` + `react-i18next` + `expo-localization`. Bootstrap in `App.tsx`. | `App.tsx`, `src/i18n/index.ts` (new), `package.json` | 0.5d |
-| 4.2 | Extract all UI strings to `src/locales/en.json`. Start with high-traffic screens (Home, Game, Shop, Settings, Club, Onboarding, Ceremony), then long-tail. Use `ts-i18n-extract` or similar. | every `src/screens/**`, every `src/components/**` | 3–4d |
-| 4.3 | Commission professional translations for ES-419, PT-BR, DE, FR, JA (covers ~50% of non-EN revenue at launch). ~500 strings × 5 locales. | External translators | 0d code, 1–2wk wall-clock |
-| 4.4 | Add locale selector in Settings. Default to device locale; fall back to EN. | `src/screens/SettingsScreen.tsx`, `src/contexts/SettingsContext.tsx` | 0.5d |
-| 4.5 | Plural/gender rules where relevant (English's "1 star / 2 stars" is simple; others aren't). Use i18next `plural` formatter. | across extracted strings | 0.5d |
-| 4.6 | Audit all string concatenation that breaks translation ("You earned " + n + " coins" → `{{count, number}}` interpolation). | across strings | 1d |
-| 4.7 | Snapshot-test each locale for top 5 screens — catch layout-breaking long strings (DE tends to be +30% longer than EN). | `src/screens/__tests__/*.locale.test.tsx` | 0.5d |
-
-### 4B. Hard-Energy A/B (remote-config-gated, default off)
+### 4A. Localization (UI only — puzzles stay EN)
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 4.8 | Add `lives` / `livesMax` / `livesRegenAt` to `EconomyContext`. Persist via AsyncStorage + Firestore sync. | `src/contexts/EconomyContext.tsx`, `src/types.ts` | 1d |
-| 4.9 | `useGame.ts` consumes a life on board start if `remoteConfig.get('hardEnergyEnabled') === true`. Board failure = life lost; board win = no life consumed. Regen 1 life / 30 min. Cap 5. | `src/hooks/useGame.ts`, `src/services/remoteConfig.ts` | 1d |
-| 4.10 | "No lives" modal with 3 paths: watch rewarded ad (+1 life, capped 3/day), spend 30 gems (full refill), ask clubmate (depends on 4.13 gifting), wait (shows countdown). | `src/components/NoLivesModal.tsx` (new) | 1.5d |
-| 4.11 | Firebase A/B experiment: 50/50 split on `hardEnergyEnabled`. Target D7 retention + ARPDAU. Minimum 2-week run before decision. | Firebase Console + `src/services/experiments.ts` | 0.5d |
+| 4.1 | ✅ DONE. `src/i18n/index.ts` bootstraps `i18next` + `react-i18next` + `expo-localization`, initialized in `App.tsx`. | `App.tsx`, `src/i18n/index.ts` | 0.5d |
+| 4.2 | ✅ DONE (Apr 2026). `src/locales/en.json` covers Onboarding (full), GameScreen fail modal (full), Settings labels, HomeScreen (full), ShopScreen section titles + premium product names, MysteryWheel title, MasteryScreen season-time strings, ClubScreen hero + depth (chat alerts, leaderboard, member-row, report/block flow), ContextualOffer (all 6 offer types with nested offer.* namespace), NoLivesModal (full lives.* namespace), PuzzleComplete (final score, stat labels, rewards, welcome, claim, tomorrow preview, share, primary/home CTA), GiftInbox (gifts.* namespace + pluralized sender copy), ClubLeaderboard (title, reward preview, member-count plural, empty state, YOU badge), ClubGoalCard (top contributors, claimed badge, "+N more members contributing" plural, your contribution), 7 ceremony components (Achievement/CollectionComplete/DifficultyTransition/FeatureUnlock/LevelUp/ModeUnlock/StreakMilestone — ribbons, descriptions, CTA buttons routed through ceremony.* namespace; MilestoneCeremony is prop-driven so caller strings already i18n'd). | every `src/screens/**` + `src/components/**` with strings | 3–4d |
+| 4.3 | Commission translations: ES-419, PT-BR, DE, FR, JA. ~500 strings × 5 locales. Mobile-gaming tone. | external | 0d code, 1–2wk wall-clock |
+| 4.4 | ✅ DONE. Locale selector in Settings; defaults to device locale, falls back to EN via `SettingsContext`. | `src/screens/SettingsScreen.tsx`, `src/contexts/SettingsContext.tsx` | 0.5d |
+| 4.5 | ✅ DONE (UI plural-safety). Migrated all hardcoded English plural concatenations to i18next `_one/_other` plural keys. Sites: `SettingsScreen.tsx:105` (purchasesRestored), `HomeScreen.tsx:627` (freeSpinsAvailable), `MysteryWheel.tsx:152` (spinsAvailable), `MasteryScreen.tsx:192,214` (daysRemainingSeason, daysLeftRewards), `PuzzleComplete.tsx:259,273` (chaptersAway, starsAway), `ReplayViewer.tsx:254` (movesCount), `ReferralCard.tsx:121` (friendsReferred), `ShopScreen.tsx:900` (weeksSubscribed). Share-text in `replayGenerator.ts:48,49` intentionally kept English per plan 4.7 ("English puzzles, translated UI"). | across strings | 1d |
+| 4.6 | ✅ DONE (Apr 2026 — pivoted from screen snapshots). All 5 non-EN locales (`src/locales/{es-419,pt-BR,de,fr,ja}.json`) seeded as verbatim en.json stubs and registered in `src/i18n/index.ts` so the locale selector genuinely swaps at runtime (pre-fix, non-EN selections silently fell back to EN). `src/__tests__/locales.test.ts` enforces 3 regressions: (1) key-parity — every locale mirrors en.json's flattened key set; (2) interpolation-token integrity — each translated string preserves the exact `{{placeholder}}` tokens as EN; (3) plural-pair guard — every `_one` key has a matching `_other`. 11/11 tests green. When real translations land in 4.3 the structural guard fires on any dropped/renamed key. Screen-dimension snapshots deferred to after 4.3 when actual per-locale copy exists to width-test. | `src/locales/*.json`, `src/i18n/index.ts`, `src/__tests__/locales.test.ts` | 0.5d |
+| 4.7 | Store-listing description clearly states "English puzzles, translated UI". | Play Console | 0.1d |
+
+### 4B. Hard-Energy A/B (Remote-Config-gated, default OFF)
+
+| # | Task | Files | Effort |
+|---|------|-------|--------|
+| 4.8 | ✅ DONE (Apr 2026). `lives`/`maxLives`/`nextLifeTime` already exposed by `src/contexts/EconomyContext.tsx` with AsyncStorage persistence + auto-refill via `computeRefilledLives`. `useHardEnergy` hook at `src/hooks/useHardEnergy.ts` composes it with `getRemoteBoolean('hardEnergyEnabled')` — returns `canPlay:true` while flag is false so no behaviour change until flip-on. | `src/contexts/EconomyContext.tsx`, `src/hooks/useHardEnergy.ts` (new) | 1d |
+| 4.9 | ✅ DONE (Apr 2026). `App.tsx` `GameScreenWrapper` debits a life on every level load via `useHardEnergy().startLevel()` — keyed on `route.key` + mode + level so re-renders never double-debit. When `canPlay=false` the board is blocked and `NoLivesModal` opens. New `life_reward` AdRewardType + 3/day cap (`AD_CONFIG.MAX_LIFE_ADS_PER_DAY`) lets `onWatchAd` grant +1 life via `adManager.showRewardedAd`. Still flip-off safe — `hardEnergyEnabled=false` keeps `startLevel()` a no-op. | `App.tsx`, `src/hooks/useHardEnergy.ts`, `src/services/ads.ts`, `src/constants.ts`, `src/contexts/EconomyContext.tsx` | 1d |
+| 4.10 | ✅ DONE (Apr 2026). `src/components/NoLivesModal.tsx` — rewarded-ad CTA (spinner while awaiting ad reward), gem full-refill (disabled when short), countdown to `nextLifeAtMs`, close/wait. Pure UI — wire-up into GameScreen happens alongside 4.9. | `src/components/NoLivesModal.tsx` (new) | 1.5d |
+| 4.11 | **Code half DONE.** Client emits `hard_energy_enabled` user property at every `app_launch` (`App.tsx:914-924`) so Firebase Analytics + A/B Testing can segment retention/revenue by the Remote Config cohort the user actually saw. `analytics.updateUserProperties` signature extended to accept the boolean. Console step still TODO: create the 50/50 Firebase A/B experiment in Console → Remote Config → A/B Testing using `hard_energy_enabled` as the breakdown dimension and D7 retention × ARPDAU as primary metrics. Min 2-week run before decision. | Firebase Console + `App.tsx`, `src/services/analytics.ts` | 0.5d |
 
 ### 4C. Social & viral loops
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 4.12 | **Gifting mechanic**: send lives / hints to clubmates + referred friends. Cloud Function atomically debits sender pool + credits receiver with idempotency key. Rate-limit 5 gifts/day per sender. | `cloud-functions/src/index.ts`, `src/screens/ClubScreen.tsx` | 2d |
-| 4.13 | Share-to-social victory card. Generate an off-screen image (letter grid + score + star rating + "beat my score" deep link) via `react-native-view-shot`, then `expo-sharing`. | `src/components/ShareCard.tsx` (new), `src/screens/GameScreen.tsx` win handler | 1.5d |
-| 4.14 | Asymmetric "ask for hint" — tap on a stuck tile, broadcasts to club chat with a puzzle snapshot, clubmate replies with a hint. Stretch goal. | `src/screens/ClubScreen.tsx`, `cloud-functions/src/index.ts` | 2d |
+| 4.12 | **Gifting** (lives/hints) to clubmates + referred friends. Cloud Function atomically debits sender pool + credits receiver with idempotency key. Rate-limit 5 gifts/day/sender. **[DONE — `sendGift`/`claimGift` callables with atomic txn + 5/day cap + idempotency (`functions/src/social.ts`); client wrapper `src/services/gifts.ts` with 5 unit tests; `PlayerSocialContext.sendHintGift`/`sendTileGift` route through `sendGiftSecure` with legacy direct-write fallback; inbox UI `src/components/GiftInbox.tsx` mounted in `ClubScreen` — claim via `claimGiftSecure`, grants applied locally through EconomyContext.]** | `functions/src/social.ts`, `src/screens/ClubScreen.tsx`, `src/components/GiftInbox.tsx`, `src/contexts/PlayerSocialContext.tsx` | 2d |
+| 4.13 | **Share-to-social victory card.** Off-screen grid + score + stars + "beat my score" deep link. `react-native-view-shot` → `expo-sharing`. **[DONE — `src/components/ShareCard.tsx` + `src/hooks/useShareVictory.ts` wrap `captureRef` + `Sharing.shareAsync`; fires `share_tapped` analytics; used from `PuzzleComplete` win surface.]** | `src/components/ShareCard.tsx`, `src/hooks/useShareVictory.ts`, `src/components/PuzzleComplete.tsx` | 1.5d |
+| 4.14 | **v1.1 — punted.** Stretch goal; v1.0 skips it. MVP path scoped and documented (~2.5h): pipe a structured "hint request" club-chat message (reusing `sendClubMessage`) from the stuck-board state; render in `ClubScreen` with a "Send Hint" action that calls `sendGiftSecure({ type: 'hint' })`. No snapshot plumbing required — the social signal + existing hint-gift primitive delivers 80% of the value. Full snapshot broadcast deferred to v1.0.1 after soft-launch telemetry indicates demand. | `src/screens/ClubScreen.tsx`, `src/screens/GameScreen.tsx`, `src/services/gifts.ts` | 2.5h when unpunted |
 
 ### 4D. LiveOps authoring pipeline
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 4.15 | Remote-Config-driven event calendar. JSON schema documented; fetched at app start; falls back to `src/data/events.ts` local default. | `src/services/eventManager.ts`, `src/services/remoteConfig.ts`, `src/data/events.ts` | 2d |
-| 4.16 | Remote-Config-driven daily deals + flash sales (currently hard-coded date hash in `src/data/dynamicPricing.ts`). Allows tuning without builds. | `src/data/dynamicPricing.ts`, `src/services/remoteConfig.ts` | 1d |
-| 4.17 | "Event editor" internal JSON template doc in `agent_docs/live_ops.md` so non-engineers can ship new events via Firebase Remote Config edit. | `agent_docs/live_ops.md` (new) | 0.5d |
+| 4.15 | Remote-Config-driven event calendar. JSON schema documented. Fetched on app start. Falls back to `src/data/events.ts`. **[DONE — `parseRemoteEvents` in `src/services/eventManager.ts` consumes `eventCalendarOverride`; malformed/empty falls back to built-in calendar.]** | `src/services/eventManager.ts`, `src/services/remoteConfig.ts`, `src/data/events.ts` | 2d |
+| 4.16 | Remote-Config-driven daily deals + flash sales (replace hard-coded date hash in `src/data/dynamicPricing.ts`). Tune without builds. **[DONE — `parseRemoteDailyDeal` + `dailyDealOverride` wired in `getFlashSale`; covered by `src/data/__tests__/dynamicPricing.override.test.ts` (6 cases).]** | `src/data/dynamicPricing.ts`, `src/services/remoteConfig.ts` | 1d |
+| 4.17 | "Event editor" JSON template doc so non-engineers can ship events via Remote Config edit. **[DONE — `agent_docs/live_ops.md` documents both overrides + troubleshooting + verification steps.]** | `agent_docs/live_ops.md` (new) | 0.5d |
 
-**Dependencies:** 4.10 optionally depends on 4.12 for the "ask clubmate" path. 4.12 depends on Phase 0 social Cloud Functions deployed.
+**Verification.** Locale swap → all top-5 screens render cleanly, no clipped labels. Flip `hardEnergyEnabled=true` → lives consume/regen correctly, ad refill works, no bypass. Two-account gifting → ledgers balance, idempotency stops double-credit. Victory share card renders on Android share sheet; deep link opens on recipient device. Fake event authored in Remote Config appears in-app without rebuild.
 
-**Verification:**
-- Change device locale to ES-419 / PT-BR / DE / FR / JA; open all main screens, confirm no untranslated strings, no clipped labels.
-- Flip `hardEnergyEnabled=true` in Remote Config; confirm lives consumed correctly, regen timer accurate, rewarded-ad refill works, no way to bypass.
-- Two-account test: send a gift, receive it, confirm ledgers balance, idempotency key prevents double-credit.
-- Victory share card renders correctly on Android share sheet; deep link opens on recipient device.
-- Create a fake event in Remote Config; confirm app picks it up without rebuild.
-
-**Pillars moved:** 3 (Retention), 5 (Social), 6 (Live Ops), Localization (cross-cutting).
+**Pillars moved:** 3 (Retention), 5 (Social), 6 (Live Ops), + Localization.
 
 ---
 
-## Phase 5 — Post-Launch Live Ops (first 4 weeks live)
+## Phase 5 — Soft Launch + First 4 Weeks Live
+
+**Why soft-launch:** global launch is a one-shot marketing moment. Only spend it on a product proven in the wild.
+
+### 5A. Market selection
+
+Ship to **Philippines + Canada** on the Play internal track → open track. PH = large, English, cheap ($0.20 CPI, large sample). Canada = US-like behavior ($1.50 CPI) — best signal for predicting global KPIs.
+
+### 5B. Soft-launch ship gate (must hit all before global)
+
+| Metric | Minimum to ship | Best-in-class (word puzzle) |
+|--------|-----------------|------------------------------|
+| D1 retention | 40% | 50%+ |
+| D7 retention | 18% | 25%+ |
+| D30 retention | 6% | 10%+ |
+| Session length | 6 min | 10 min |
+| Sessions/day | 2.5 | 4+ |
+| Payer % | 2% | 5% |
+| ARPDAU | $0.08 | $0.20+ |
+| LTV D60 | $1.50 | $3+ |
+| Crash-free users | 99.5% | 99.9% |
+
+Hit all minimums for 2 consecutive weeks = global-ready.
+
+### 5C. First 4 weeks of live ops (while soft-launch runs)
 
 | # | Task | Effort |
 |---|------|--------|
-| 5.1 | First A/B: starter-bundle price $0.49 vs $0.99 vs $1.99. Optimize for D7 conversion, not just D1 revenue. | 1d setup + 2wk runtime |
-| 5.2 | First holiday-themed event (seasonal skin pack + limited offer + leaderboard). Use the authoring pipeline from 4.15. | 2d |
-| 5.3 | Hard-energy A/B decision gate (after 2-week run at scale): ship or revert. Key metric = D7 retention × ARPDAU. | 0.5d analysis |
-| 5.4 | Push-notification tuning: segment by last-seen cohort, time-of-day optimization, stop push to 3-day-silent users until a reactivation offer. | 1d |
-| 5.5 | Funnel drop-off review at 2-week mark — onboarding, first-purchase, daily-return. Fix the biggest funnel leak. | 1d |
-| 5.6 | Price-tier localization per country (India / Brazil / Mexico / Indonesia / Philippines lower elasticity — 30–50 % discount). | Play Console only |
-| 5.7 | Soft deprecation of synthesized-audio fallback if audit confirms zero users ever hit it. | 0.25d |
+| 5.1 | First A/B: starter bundle $0.49 vs $0.99 vs $1.99 (Remote Config `starterBundlePrice`). Primary metric D7 conversion, not D1 revenue. | 1d setup + 2wk run |
+| 5.2 | First holiday-themed event via 4.15 pipeline (seasonal skin + limited offer + leaderboard). | 2d |
+| 5.3 | Hard-energy A/B decision gate at 2wk. Ship or revert based on D7 × ARPDAU. | 0.5d analysis |
+| 5.4 | Push tuning: segment by last-seen cohort, TOD optimization, stop push to 3-day silent users until reactivation offer. | 1d |
+| 5.5 | Funnel drop-off review (onboarding → first-purchase → daily-return). Fix biggest leak. | 1d |
+| 5.6 | Country-tier price fine-tune for IN/BR/MX/ID/PH. | Play Console |
+| 5.7 | Deprecate synth audio fallback if telemetry shows zero users hit it. | 0.25d |
 
-**Verification:** weekly retention review, crash-free-sessions > 99.5%, ARPDAU tracking trend, first cohort LTV curve stabilizing by D14.
+**Verification.** Weekly review: crash-free-sessions > 99.5% · D1/D7/D30 trending to gate · first cohort LTV curve stabilizing by D14 · at least one A/B produces statistically significant result.
 
-**Pillars moved:** 3, 4, 6.
+**Pillars moved:** 3, 4, 6 (ongoing).
 
 ---
 
-## Outside-the-Environment Step-by-Step Checklist (for you, the human)
+## Budget Rollup (approximate, solo-dev launching in ~3 months)
 
-Everything below is *outside* Claude's control. Do these in roughly this order; many can run in parallel with code work.
+| Line item | Cost |
+|-----------|------|
+| Audio commission (3 BGM w/ stems + 20 SFX) | $1,500–3,500 |
+| Translations (5 locales × ~500 strings × $0.10/word) | $1,500–3,000 |
+| Store creatives (trailer editor, screenshot headlines, feature graphic) | $500–1,500 |
+| Legal review of privacy/ToS (one-time) | $500–1,500 |
+| UA budget for soft launch (PH + Canada, 4–6wk, ~500–1000 installs/wk clean cohort) | $2,000–5,000 |
+| Firebase Blaze spend during soft launch | $50–200 |
+| Misc (Fiverr gigs, icon review, Youlean Loudness Meter → free) | $500 |
+| **Total to global launch** | **~$6,500–15,000** |
+
+Apple Developer ($99/yr) deferred — iOS is v1.1.
+
+---
+
+## Critical Files by Phase (hot-path)
+
+**Phase 0 (mostly external):** `app.json`, `src/constants.ts` AD_CONFIG, `functions/src/index.ts`, `functions/src/social.ts`, `firestore.rules`, `firestore.indexes.json`, `.env`, EAS secrets, `wordfallgamesite/.well-known/assetlinks.json`.
+
+**Phase 1:** `src/screens/SettingsScreen.tsx`, `src/services/firestore.ts`, `src/contexts/AuthContext.tsx`, `functions/src/index.ts` (new `requestAccountDeletion`), `wordfallgamesite/account-deletion/index.html` (new).
+
+**Phase 2:** `src/services/sound.ts`, `src/screens/{Home,Game}Screen.tsx`, `src/hooks/useCeremonyQueue.ts`, `src/components/common/Typography.tsx` (new), `src/constants.ts` FONTS + palette, `src/components/LetterCell.tsx`, `src/screens/game/PlayField.tsx`, `src/contexts/SettingsContext.tsx`, `.maestro/*.yaml` (new), `src/hooks/__tests__/useCommerce.test.ts` (new).
+
+**Phase 3:** `src/data/chapters.ts`, `src/types.ts` (GenerationProfile), `src/engine/boardGenerator.ts`, `src/engine/__tests__/{profiles,fuzz}.test.ts` (new), `src/services/analytics.ts`, `src/services/difficultyAdjuster.ts`, `src/hooks/useGame.ts`, `src/components/effects/{ParticleSystem,ComboFlash}.tsx`, `src/screens/game/PlayField.tsx`.
+
+**Phase 4:** `App.tsx`, `src/i18n/index.ts` (new), `src/locales/{en,es-419,pt-BR,de,fr,ja}.json` (new), every screen + component with strings, `src/contexts/EconomyContext.tsx`, `src/services/remoteConfig.ts`, `src/components/NoLivesModal.tsx` (new), `functions/src/social.ts` (gifting), `src/components/ShareCard.tsx` (new), `src/services/eventManager.ts`, `src/data/{events,dynamicPricing}.ts`.
+
+**Reused existing utilities — DO NOT rewrite:**
+- `src/services/iap.ts` (Restore Purchases already works in `ShopScreen:1403` — just surface in Settings)
+- `src/services/crashReporting.ts` (Sentry wired, needs DSN only)
+- `src/services/ads.ts` (AdMob wired, needs real IDs only)
+- `src/services/notifications.ts` (push token saved to Firestore — needs FCM key only)
+- `src/hooks/useCeremonyQueue.ts` (25+ ceremonies already queued)
+- `src/services/{analytics,funnelTracker,experiments,remoteConfig,softLaunchAnalytics}.ts` (35+ events firing)
+
+---
+
+## End-to-End Verification (gate between phases)
+
+1. **Phase 0 smoke:** `npm test && npm run typecheck` pass · dev APK installs · internal-test-track Play pre-launch report clean · one real test purchase validates server-side · one real push arrives · Sentry ingests smoke error · Play deep link opens app (App Links verified).
+2. **Phase 1 compliance:** account-deletion flow purges Firestore, keeps hashed receipts, deletes Auth record · Restore Purchases from clean install recovers VIP + Ad Removal · Play policy scan passes.
+3. **Phase 2 day-1:** TalkBack full playthrough · Dynamic Type + colorblind toggles cause no regressions · all 10 Maestro flows green · BGM LUFS-valid + seam-free · per-category volume sliders effective.
+4. **Phase 3 polish:** golden-seed + 10k-fuzz green in CI · tester cohort telemetry lands in target difficulty distributions · juice-pass demo lands subjectively.
+5. **Phase 4 global:** 5 locales verified with no clipped UI · hard-energy A/B runs correctly under flag · gifting ledger balances + idempotency prevents double-credit · share card + deep link round-trips · Remote-Config event appears without rebuild.
+6. **Phase 5 live:** 2 consecutive weeks meeting every KPI in the Phase 5B gate · at least one A/B produces a statistically significant result · no P0/P1 open.
+
+---
+
+## Risk Register
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Play policy rejects on deletion flow wording | Medium | 1wk delay | Use Play's pre-launch report before submit; copy wording from accepted apps |
+| Audio composer misses deadline | Medium | 2–4wk delay | Kick off brief during Phase 0, not Phase 2; synth fallback keeps dev flowing |
+| Soft-launch KPIs miss gate | Medium | 4–8wk iteration | Budget 2 tuning passes; hard-energy A/B is pre-wired to flip on if retention saggy |
+| Firebase spending surprise | Low | $ only | Budget alerts at $50/$100/$500 |
+| Play Integrity blocks legit users | Medium | support load | Require "Basic" integrity only; require "Strong" only for purchases |
+| Translator quality misses gaming jargon | Medium | PR risk | Native-speaker QA pass in-app before launch |
+| Hard-energy harms casual D30 | Medium | retention | Ship as A/B default-OFF; 2wk min run; ship only if D7 × ARPDAU positive |
+| Country-tier pricing arbitrage (VPN payers) | Low | revenue | Play enforces IP-at-purchase + receipt validation on server |
+| Clubs chat abuse | Medium | PR risk | Perspective API wired + report/block + admin reports collection already live |
+
+---
+
+## Outside-the-Environment Step-by-Step (human actions, roughly in order)
 
 ### Before Phase 0
-
-1. **Google Play Console** — create developer account ($25 one-time), create app listing "Wordfall", set package `com.wordfall.game`, target audience 13+.
-2. **Firebase Console** — create production project (distinct from any dev project), add Android app with package `com.wordfall.game`, download `google-services.json`, replace the current one committed at repo root.
-3. **AdMob** — create app linked to Firebase, create ad units (rewarded, interstitial), note real IDs.
-4. **Sentry** — create project "wordfall-android", copy DSN.
-5. **Domain / Cloudflare Pages** — confirm `wordfallgame.app` is under your control; verify the privacy + ToS pages deployed from `wordfallgamesite/`.
-
-### During Phase 0
-
-6. Register all 20 IAP SKUs in Play Console (IDs must exactly match `src/data/shopProducts.ts`). Set base prices; enable country tiering.
-7. Grant Android Publisher role to `<firebase-project>@appspot.gserviceaccount.com` in Play Console → Users and permissions.
-8. Upload FCM server key in Firebase Console → Cloud Messaging.
-9. Configure the Google UMP consent form in AdMob Console (choose GDPR message template).
-10. Create Firebase Remote Config parameters: `hardEnergyEnabled` (bool, default false), `starterBundlePrice` (string, default "0.49"), `eventCalendarOverride` (json, default null).
-11. Upload `.well-known/assetlinks.json` to `wordfallgame.app`. Use Android Studio's App Links Assistant to generate the file content with your app's SHA-256 cert fingerprint.
+1. Create 20 IAP products in Play Console (IDs match `src/data/shopProducts.ts`); set base prices; enable country tiering.
+2. Grant Android Publisher to `<firebase-project>@appspot.gserviceaccount.com`.
+3. Upload FCM server key in Firebase → Cloud Messaging.
+4. Author UMP consent form in AdMob.
+5. Get real AdMob app IDs + ad unit IDs (rewarded + interstitial).
+6. Copy Sentry DSN.
+7. Generate Play app signing SHA-256 (Play Console → Setup → App signing).
+8. Create Remote Config defaults: `hardEnergyEnabled=false`, `starterBundlePrice="0.49"`, `eventCalendarOverride=null`, `interstitialIntervalSeconds`, `dailyDealOverride=null`.
 
 ### During Phase 1
-
-12. Build a simple `wordfallgame.app/account-deletion` HTML form (name + email + reason). Pipe submissions to `info@iridescent-games.com`.
-13. Confirm `info@iridescent-games.com` actually exists and forwards somewhere you read.
-14. Complete Play Console Data Safety form using `agent_docs/data_safety.md` answers.
+9. Stand up `wordfallgame.app/account-deletion` HTML form → email to `info@iridescent-games.com`.
+10. Confirm the email alias forwards to an inbox you actually read.
+11. Complete Play Console Data Safety form from `agent_docs/data_safety.md`.
+12. Content rating questionnaire (include mystery-wheel odds disclosure).
 
 ### During Phase 2 — audio commission
-
-15. Write a creative brief for the composer: synthwave aesthetic, ref tracks, target mood per BGM (home = ambient, gameplay = focused, relax = chill, victory = triumphant), LUFS target, per-SFX purpose from `assets/audio/README.md`. **Request stems** for the gameplay BGM (base + high-intensity layer) so Phase 3.11 can layer them.
-16. Get 2–3 quotes. Fiverr Pro or boutique composers ~$500–1500 for the full package. Pay 50% deposit, 50% on delivery.
-17. Arrange for 1 revision round built into the contract.
-18. When deliverables arrive: validate LUFS (Youlean Loudness Meter free tool), test loop seamlessness in DAW/Audacity, drop into `assets/audio/`, commit.
+13. Write composer brief: synthwave, 5–10 reference tracks, per-BGM mood (home ambient · gameplay focused · relax chill · victory triumphant), −14 LUFS, seamless loops, **gameplay stems (base + high-intensity)**.
+14. Fiverr Pro / AudioJungle custom / direct outreach — 2–3 quotes, $500–1,500.
+15. Contract 1 revision round; 50% deposit / 50% on delivery.
+16. Validate LUFS (Youlean Loudness Meter) + loop seamlessness in Audacity; drop into `assets/audio/`.
 
 ### During Phase 3 — playtest cohort
-
-19. Recruit 10 testers via Play Console Internal Test track. Mix of puzzle-game veterans and casual players.
-20. Provide them a Discord channel or Google Form for qualitative feedback.
-21. After 1 week, pull `difficulty_telemetry` events from Firebase → BigQuery (or export), analyze in a spreadsheet.
+17. Recruit 10 testers via Play Internal Test (mix of puzzle vets + casuals).
+18. Discord channel or Google Form for qualitative feedback.
+19. Pull `difficulty_telemetry` events from Firebase → BigQuery after 1 week; analyze distributions.
 
 ### During Phase 4 — localization
+20. Commission ES-419 / PT-BR / DE / FR / JA (Gengo / OneHourTranslation / Lokalise). Request "mobile-gaming tone". Provide context glossary ("STAR" = currency, etc.).
+21. Native-speaker QA pass in-app before global push.
 
-22. Commission translations: Gengo / OneHourTranslation / Smartling — usually $0.08–0.12/word × ~500 strings × 5 locales ≈ $1500–3000. Request "mobile gaming tone" explicitly.
-23. Provide context notes (e.g., "STAR" = gameplay currency, not celestial body) to avoid mis-translations.
-24. After return: run a native-speaker QA pass in-app before launch (even paid pros miss game-specific jargon).
-
-### iOS (v1.1+, can defer)
-
-25. Apple Developer enrollment ($99/year).
-26. App Store Connect — create app record, bundle ID `com.wordfall.app`.
-27. Download `GoogleService-Info.plist` from Firebase Console, commit to repo root.
-28. Host `apple-app-site-association` at `https://wordfallgame.app/.well-known/apple-app-site-association` for iOS Universal Links.
-29. First iOS EAS build + TestFlight.
-30. ATT prompt verification on real iOS 14.5+ device.
+### Store creatives (run in parallel from Phase 2 onward)
+22. Icon review at 48×48 (does it read clearly?).
+23. 8 Android phone screenshots with headline overlay; optional 7"/10" tablet.
+24. 30s preview video + 2-minute feature video (gameplay editor ~$500 if you don't edit).
+25. 1024×500 feature graphic.
+26. ASO keyword research (Sensor Tower / AppTweak free tier): target 3 high-volume / low-comp — "word game", "word puzzle", "spelling".
 
 ### Legal / ops
+27. Tax reporting + Play payout profile set.
+28. Retain hashed purchase ledger ≥ 7 years.
+29. SLA for account-deletion web-form ≤ 72 hours.
 
-31. Confirm tax reporting / Play Store payout profile (Payments Profile in Play Console).
-32. Retain hashed purchase ledger for 7 years minimum (US tax / Play Store dispute requirements).
-33. Establish a support SLA for account-deletion web-form requests (recommend ≤ 72 hours).
-
----
-
-## Critical Files (hot-path summary for implementation)
-
-Touched in this plan — organized by phase so you can see dependencies at a glance.
-
-**Phase 0** (mostly external):
-- `app.json`, `src/constants.ts` (AD_CONFIG)
-- `functions/src/index.ts`, `cloud-functions/src/index.ts`
-- `firestore.rules`, `firestore.indexes.json`
-- `.env`, EAS secrets
-- `wordfallgamesite/.well-known/assetlinks.json` (new)
-
-**Phase 1**:
-- `src/screens/SettingsScreen.tsx`
-- `src/services/firestore.ts`, `src/contexts/AuthContext.tsx`
-- `functions/src/index.ts` (new `requestAccountDeletion` callable)
-- `wordfallgamesite/account-deletion/index.html` (new)
-
-**Phase 2**:
-- `src/services/sound.ts` (audio wiring, per-category volume)
-- `src/screens/HomeScreen.tsx`, `src/screens/GameScreen.tsx` (BGM context)
-- `src/components/common/Typography.tsx` (new), `src/constants.ts` FONTS
-- `src/components/LetterCell.tsx`, `src/screens/game/PlayField.tsx` (colorblind + a11y hints)
-- `src/contexts/SettingsContext.tsx`
-- `.maestro/*.yaml` (new flows)
-- `src/hooks/__tests__/useCommerce.test.ts` (new)
-
-**Phase 3**:
-- `src/data/chapters.ts`, `src/types.ts` (GenerationProfile)
-- `src/engine/boardGenerator.ts`
-- `src/engine/__tests__/boardGenerator.profiles.test.ts`, `boardGenerator.fuzz.test.ts` (new)
-- `src/services/analytics.ts`, `src/services/difficultyAdjuster.ts`, `src/hooks/useGame.ts`
-- `src/components/effects/ParticleSystem.tsx`, new `ComboFlash.tsx`
-- `src/screens/game/PlayField.tsx` (juice + spring)
-
-**Phase 4**:
-- `App.tsx`, `src/i18n/index.ts` (new)
-- `src/locales/{en,es-419,pt-BR,de,fr,ja}.json` (new)
-- Every screen + component with user-facing strings
-- `src/contexts/EconomyContext.tsx`, `src/hooks/useGame.ts`, `src/services/remoteConfig.ts`
-- `src/components/NoLivesModal.tsx` (new)
-- `cloud-functions/src/index.ts` (gifting callable)
-- `src/components/ShareCard.tsx` (new), `src/screens/GameScreen.tsx` win handler
-- `src/services/eventManager.ts`, `src/data/events.ts`, `src/data/dynamicPricing.ts`
-
-**Reused existing utilities (do NOT rewrite):**
-- `src/services/iap.ts` (ShopScreen:1403 already has Restore Purchases — just re-expose in Settings)
-- `src/services/crashReporting.ts` (Sentry wire-up done — just needs DSN)
-- `src/services/ads.ts` (AdMob wired — just needs real IDs)
-- `src/services/notifications.ts` (local + remote scaffolded — just needs FCM key)
-- `src/hooks/useCeremonyQueue.ts` (25+ ceremony types already queued properly)
-- `src/services/funnelTracker.ts`, `src/services/analytics.ts` (35+ events already firing)
+### iOS (v1.1, defer)
+Apple Developer enrollment → App Store Connect record (`com.wordfall.app`) → `GoogleService-Info.plist` committed → iOS EAS build → TestFlight → ATT on-device → Universal Links via apple-app-site-association.
 
 ---
 
-## End-to-End Verification (how to prove the whole thing works)
+## Working-Style Reminders for Claude
 
-Run after each phase before advancing:
-
-1. **Phase 0 smoke**: `npm test && npm run typecheck` pass; EAS dev client APK installs; internal-test-track build on Play Console passes Pre-launch Report; one real IAP test purchase completes and receipt validates server-side; one real push notification arrives on device; one Sentry test error ingested.
-2. **Phase 1 compliance**: Manual account-deletion flow from a test account — confirm Firestore purge, Auth record gone, hashed purchase ledger retained. Restore Purchases from clean install recovers VIP. Play Console Data Safety + policy review pass.
-3. **Phase 2 day-1**: TalkBack full playthrough; Dynamic Type + colorblind palette toggles work without regressions; all 10 Maestro flows green in CI; LUFS-normalized audio loops seamlessly; per-category volume sliders work.
-4. **Phase 3 polish**: Golden-seed tests + 10 000-seed fuzz pass in CI; tester cohort telemetry shows target difficulty distributions; subjective "feels juicy" confirmation.
-5. **Phase 4 global**: 5 locales verified in-app with no clipped UI; hard-energy A/B runs correctly under Remote Config flag; gifting ledger balances; share card renders and opens deep link on recipient device; event authored via Remote Config edit appears in app without rebuild.
-6. **Phase 5 live**: Crash-free-sessions > 99.5% at 2-week mark; D1 > 35%, D7 > 15%, D30 > 5% (industry benchmarks for casual puzzle); at least one A/B produces a statistically significant result.
-
----
-
-## Effort Totals (senior-dev-days of coding work)
-
-| Phase | Coding | Wall-clock (external) |
-|-------|--------|-----------------------|
-| 0 | ~2d | Play Console review can be 1–3 days |
-| 1 | ~3d | Data Safety form review |
-| 2 | ~9d | Audio commission 2–4 weeks |
-| 3 | ~9d | Playtest cohort 1 week |
-| 4 | ~16d | Translation 1–2 weeks |
-| 5 | ~5d (ongoing) | A/B runtime 2 weeks each |
-
-Rough 3-month solo-dev calendar: weeks 1–2 Phase 0 + 1; weeks 3–5 Phase 2 (audio arrives week 4–5); weeks 6–7 Phase 3; weeks 8–11 Phase 4 (translations arrive week 10); week 12 soft launch + Phase 5 kickoff.
+- **Small chunks always.** One sub-task = one Claude session. Plan files + long edits get written in ≤ ~400-line Writes / ≤ ~150-line Edits. Split before you time out.
+- **Commit at logical boundaries.** Push to `claude/<slug>` only. Never push to `main`. User merges PRs.
+- **Reuse don't reinvent.** Search before writing. Many "missing" features are wired — see Already-Done Inventory.
+- **Verify on device.** Tests prove correctness; they don't prove fun. Pair every code change with a manual check on the physical APK.
+- **Trust but verify subagents.** Read the diff of anything a subagent writes before declaring done.
+- **Never use `--no-verify` / `--no-gpg-sign`.** If a hook fails, fix the underlying issue.
+- **Always read `agent_docs/pre_launch_audit.md` first** when starting a session — it's the canonical "what's done" doc. Earlier explore passes missed it.
+- **Document external setup as you go** in `agent_docs/setup.md` so future sessions can retrace.
+- **Android-first.** Don't add Apple-side work unless the user explicitly brings iOS into scope.
 
 ---
 
-## Known Risks & Open Assumptions
+## One-Page Cheat Sheet
 
-- **Audio commission wall-clock** is the critical path for Phase 2. Start the creative brief during Phase 0, not Phase 2.
-- **Hard-energy A/B** may increase early monetization but hurt casual-player D30 retention. Genuine business decision; don't ship until A/B result is conclusive.
-- **Procedural-only first 5 chapters** (user chose this over hand-authoring) caps the perceived "premium feel". Mitigation: `GenerationProfile` constraints + juice pass + telemetry-tuned difficulty. Reconsider hand-authoring post-launch if D1 funnel leaks at chapter 1–3.
-- **Account-deletion retention policy** (1.2) assumes hashed purchase-ledger retention for tax / fraud. If your jurisdiction requires full erasure, swap to a tombstoned UID model — single-line change in the Cloud Function.
-- **Cloud Functions codebase split** (`functions/` vs `cloud-functions/`) — `agent_docs/pre_launch_audit.md` line 48 flags consolidation as v1.1 polish. Leave split; consolidate post-launch if desired.
+| Want to… | Do this first |
+|----------|---------------|
+| Start tomorrow | Phase 0 tasks 0.1 → 0.11, in one afternoon |
+| Know if it's ready | Not yet. 3 months: Phase 0–1 (wk 1–2) → 2 (wk 3–5) → 3 (wk 6–7) → 4 (wk 8–11) → 5 soft-launch (wk 12+) |
+| Hit Candy-Crush polish | Audio is the single biggest gap. Kick off the composer brief Day 1 of Phase 0. |
+| Spend money well | Audio $2k · translation $2.5k · UA $3k · legal $1k · creatives $1k · misc $0.5k ≈ $10k |
+| Single biggest retention lever | Hard-energy A/B — pre-wire as Remote Config, flip on only if soft-launch D7 < 18% |
+| Biggest revenue lever | Country-tier pricing + starter-bundle A/B — both land during Phase 0 + Phase 5 |
+

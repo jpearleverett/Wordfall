@@ -1,11 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils/logger';
 
 type ThemeOption = 'dark' | 'midnight' | 'ocean' | 'forest' | 'sunset';
+
+export type ColorblindMode =
+  | 'off'
+  | 'deuteranopia'
+  | 'protanopia'
+  | 'tritanopia';
 
 interface Settings {
   sfxVolume: number;
   musicVolume: number;
+  ceremonyVolume: number;
   hapticsEnabled: boolean;
   notificationsEnabled: boolean;
   theme: ThemeOption;
@@ -13,6 +21,8 @@ interface Settings {
   premiumPass: boolean;
   showTutorial: boolean;
   language: string;
+  // Accessibility
+  colorblindMode: ColorblindMode;
   // Privacy
   analyticsEnabled: boolean;
   personalizedAdsEnabled: boolean;
@@ -34,6 +44,7 @@ interface SettingsContextType extends Settings {
 const DEFAULT_SETTINGS: Settings = {
   sfxVolume: 0.8,
   musicVolume: 0.5,
+  ceremonyVolume: 0.8,
   hapticsEnabled: true,
   notificationsEnabled: true,
   theme: 'dark',
@@ -41,6 +52,7 @@ const DEFAULT_SETTINGS: Settings = {
   premiumPass: false,
   showTutorial: true,
   language: 'en',
+  colorblindMode: 'off',
   // Privacy — default-on for non-EU; the consent flow (UMP) can flip
   // personalizedAdsEnabled off based on jurisdiction. Users can toggle both
   // from Settings at any time.
@@ -78,7 +90,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           setSettings((prev) => ({ ...prev, ...parsed }));
         }
       } catch (e) {
-        console.warn('Failed to load settings from AsyncStorage:', e);
+        logger.warn('Failed to load settings from AsyncStorage:', e);
       }
       setLoaded(true);
     };
@@ -93,7 +105,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       try {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
       } catch (e) {
-        console.warn('Failed to save settings to AsyncStorage:', e);
+        logger.warn('Failed to save settings to AsyncStorage:', e);
       }
     };
     persist();

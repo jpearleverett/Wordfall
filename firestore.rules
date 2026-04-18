@@ -120,5 +120,12 @@ service cloud.firestore {
     match /leaderboards/{leaderboardId} {
       allow read: if request.auth != null;
     }
+
+    // Rate-limit counters (server-side only — clients must never read/write).
+    // Cloud Functions bump these atomically under checkFirestoreRateLimit;
+    // exposing them to clients would let attackers clear their own bucket.
+    match /rateLimits/{docId} {
+      allow read, write: if false;
+    }
   }
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,69 +49,18 @@ interface ContextualOfferProps {
   onDismiss: () => void;
 }
 
-const OFFER_CONFIG: Record<OfferType, {
-  ribbon: string;
-  icon: string;
-  title: string;
-  description: string;
-  buttonText: string;
-  accentColor: string;
-  priceLabel: string;
-}> = {
-  hint_rescue: {
-    ribbon: 'STUCK?',
-    icon: '\u{1F4A1}',
-    title: 'Hint Rescue Pack',
-    description: 'Get 5 hints to help crack this level. You\'re closer than you think!',
-    buttonText: 'GET 5 HINTS',
-    accentColor: COLORS.accent,
-    priceLabel: '5 gems',
-  },
-  life_refill: {
-    ribbon: 'OUT OF LIVES',
-    icon: '\u{2764}\u{FE0F}',
-    title: 'Instant Refill',
-    description: 'Don\'t wait! Get all 5 lives back instantly.',
-    buttonText: 'REFILL NOW',
-    accentColor: COLORS.coral,
-    priceLabel: '10 gems',
-  },
-  streak_shield: {
-    ribbon: 'STREAK AT RISK',
-    icon: '\u{1F6E1}\u{FE0F}',
-    title: 'Protect Your Streak',
-    description: 'Your {streak}-day streak expires tonight. Shield it!',
-    buttonText: 'ACTIVATE SHIELD',
-    accentColor: COLORS.orange,
-    priceLabel: '30 gems',
-  },
-  close_finish: {
-    ribbon: 'SO CLOSE!',
-    icon: '\u{1F525}',
-    title: 'Just 1 Word Away',
-    description: 'You\'re one word from victory! A hint could seal the deal.',
-    buttonText: 'GET A HINT',
-    accentColor: COLORS.green,
-    priceLabel: '3 gems',
-  },
-  post_puzzle: {
-    ribbon: 'LOW ON HINTS',
-    icon: '\u{1F4A1}',
-    title: 'Stock Up',
-    description: 'Great solve! Grab hints for the next challenge.',
-    buttonText: 'GET 10 HINTS',
-    accentColor: COLORS.accent,
-    priceLabel: '10 gems',
-  },
-  booster_pack: {
-    ribbon: 'TOUGH LEVEL AHEAD',
-    icon: '\u{26A1}',
-    title: 'Power-Up Pack',
-    description: 'Get Spotlight + Wildcard + Shuffle for this {difficulty} puzzle!',
-    buttonText: 'GET 3 BOOSTERS',
-    accentColor: COLORS.purple,
-    priceLabel: '15 gems',
-  },
+/**
+ * Non-string structural config (icon + color). User-facing copy lives in
+ * `src/locales/*.json` under the `offer.*` namespace; the component looks it
+ * up at render time via `useTranslation`.
+ */
+const OFFER_VISUAL: Record<OfferType, { icon: string; accentColor: string; i18nKey: string }> = {
+  hint_rescue: { icon: '\u{1F4A1}', accentColor: COLORS.accent, i18nKey: 'hintRescue' },
+  life_refill: { icon: '\u{2764}\u{FE0F}', accentColor: COLORS.coral, i18nKey: 'lifeRefill' },
+  streak_shield: { icon: '\u{1F6E1}\u{FE0F}', accentColor: COLORS.orange, i18nKey: 'streakShield' },
+  close_finish: { icon: '\u{1F525}', accentColor: COLORS.green, i18nKey: 'closeFinish' },
+  post_puzzle: { icon: '\u{1F4A1}', accentColor: COLORS.accent, i18nKey: 'postPuzzle' },
+  booster_pack: { icon: '\u{26A1}', accentColor: COLORS.purple, i18nKey: 'boosterPack' },
 };
 
 export function ContextualOffer({
@@ -120,22 +70,22 @@ export function ContextualOffer({
   onAccept,
   onDismiss,
 }: ContextualOfferProps) {
+  const { t } = useTranslation();
   const fade = useSharedValue(0);
   const slideY = useSharedValue(40);
   const pulse = useSharedValue(1);
 
   const [secondsLeft, setSecondsLeft] = useState(expiresInSeconds);
 
-  const config = OFFER_CONFIG[type];
-
-  // Template variable replacement
-  let description = config.description;
-  if (context?.streakDays) {
-    description = description.replace('{streak}', String(context.streakDays));
-  }
-  if (context?.difficulty) {
-    description = description.replace('{difficulty}', context.difficulty);
-  }
+  const visual = OFFER_VISUAL[type];
+  const ribbon = t(`offer.${visual.i18nKey}.ribbon`);
+  const title = t(`offer.${visual.i18nKey}.title`);
+  const buttonText = t(`offer.${visual.i18nKey}.button`);
+  const priceLabel = t(`offer.${visual.i18nKey}.price`);
+  const description = t(`offer.${visual.i18nKey}.description`, {
+    streak: context?.streakDays ?? '',
+    difficulty: context?.difficulty ?? '',
+  });
 
   // Countdown timer
   useEffect(() => {
@@ -190,18 +140,18 @@ export function ContextualOffer({
     >
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
-          <Text style={[styles.ribbon, { color: config.accentColor }]}>{config.ribbon}</Text>
+          <Text style={[styles.ribbon, { color: visual.accentColor }]}>{ribbon}</Text>
 
-          <View style={[styles.iconContainer, { backgroundColor: config.accentColor + '20', borderColor: config.accentColor + '40' }]}>
-            <Text style={styles.icon}>{config.icon}</Text>
+          <View style={[styles.iconContainer, { backgroundColor: visual.accentColor + '20', borderColor: visual.accentColor + '40' }]}>
+            <Text style={styles.icon}>{visual.icon}</Text>
           </View>
 
-          <Text style={styles.title}>{config.title}</Text>
+          <Text style={styles.title}>{title}</Text>
           <Text style={styles.description}>{description}</Text>
 
           {/* FOMO countdown timer */}
-          <View style={styles.timerContainer} accessibilityRole="timer" accessibilityLabel={`Offer expires in ${minutes} minutes and ${seconds} seconds`}>
-            <Text style={styles.timerLabel}>Offer expires in</Text>
+          <View style={styles.timerContainer} accessibilityRole="timer" accessibilityLabel={`${t('offer.expiresIn')} ${minutes} minutes and ${seconds} seconds`}>
+            <Text style={styles.timerLabel}>{t('offer.expiresIn')}</Text>
             <AnimatedText
               style={[
                 styles.timerText,
@@ -217,19 +167,19 @@ export function ContextualOffer({
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={onAccept}
             accessibilityRole="button"
-            accessibilityLabel={`${config.buttonText} for ${config.priceLabel}`}
+            accessibilityLabel={`${buttonText} for ${priceLabel}`}
           >
             <LinearGradient
-              colors={[config.accentColor, config.accentColor + 'CC']}
-              style={[styles.button, SHADOWS.glow(config.accentColor)]}
+              colors={[visual.accentColor, visual.accentColor + 'CC']}
+              style={[styles.button, SHADOWS.glow(visual.accentColor)]}
             >
-              <Text style={styles.buttonText}>{config.buttonText}</Text>
-              <Text style={styles.priceText}>{config.priceLabel}</Text>
+              <Text style={styles.buttonText}>{buttonText}</Text>
+              <Text style={styles.priceText}>{priceLabel}</Text>
             </LinearGradient>
           </Pressable>
 
-          <Pressable style={styles.dismissButton} onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Dismiss offer">
-            <Text style={styles.dismissText}>No thanks</Text>
+          <Pressable style={styles.dismissButton} onPress={onDismiss} accessibilityRole="button" accessibilityLabel={t('offer.dismissA11y')}>
+            <Text style={styles.dismissText}>{t('offer.noThanks')}</Text>
           </Pressable>
         </LinearGradient>
       </Animated.View>

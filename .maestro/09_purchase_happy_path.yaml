@@ -1,0 +1,39 @@
+# Flow 09 — Purchase happy path (mock mode)
+#
+# Exercises a shop purchase in the dev-build mock-IAP path. Mock mode
+# simulates a 1-second success and writes a receipt hash to local
+# storage; no real Play billing is invoked. Run against a debug build
+# that has NOT set EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL so the receipt
+# validator enters its __DEV__ fallback and accepts the mock receipt.
+#
+# For real-store coverage, run this flow against an internal-test AAB
+# signed into a Play license-tester account.
+appId: com.wordfall.game
+name: "09 — Purchase happy path"
+tags:
+  - commerce
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+- tapOn: "Open shop"
+- waitForAnimationToEnd
+- assertVisible: "SHOP"
+# Tap the featured Starter Pack (always visible at the top of Shop).
+- tapOn: "Buy Starter Pack: 500 coins, 50 gems, 10 hints, and exclusive decoration for $1.99"
+# Mock-mode purchase takes ~1s. Wait for the confirmation toast/alert.
+- extendedWaitUntil:
+    visible:
+      text: "Purchase"
+    timeout: 5000
+# Dismiss any success dialog if present
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+      - waitForAnimationToEnd
+- assertVisible: "SHOP"
+- back
+- waitForAnimationToEnd

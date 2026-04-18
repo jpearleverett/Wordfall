@@ -17,6 +17,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['tree', 'leaf', 'sun', 'rain', 'seed', 'root', 'stem', 'bark', 'soil', 'vine', 'fern', 'moss'],
     wingId: 'nature',
     icon: '🌱',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 4,
+      introducedMechanics: ['gravityCascade'],
+      emptyCellDensity: 0.15,
+      dictionaryTier: 'common',
+    },
   },
   {
     id: 2,
@@ -29,6 +36,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['pine', 'oak', 'elm', 'fox', 'deer', 'owl', 'nest', 'bush', 'glen', 'dale', 'hare', 'crow'],
     wingId: 'nature',
     icon: '🌲',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 4,
+      introducedMechanics: ['fourLetter', 'gravityCascade'],
+      emptyCellDensity: 0.1,
+      dictionaryTier: 'common',
+    },
   },
   {
     id: 3,
@@ -41,6 +55,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['rose', 'lily', 'tulip', 'daisy', 'petal', 'bloom', 'bud', 'herb', 'sage', 'mint', 'plot', 'gate'],
     wingId: 'nature',
     icon: '🌷',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 5,
+      introducedMechanics: ['chainBonus', 'fourLetter'],
+      emptyCellDensity: 0.08,
+      dictionaryTier: 'common',
+    },
   },
   {
     id: 4,
@@ -53,6 +74,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['field', 'grass', 'creek', 'pond', 'ridge', 'trail', 'grove', 'marsh', 'brook', 'cliff', 'bluff', 'vale'],
     wingId: 'nature',
     icon: '🌾',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['chainBonus', 'denseBoard'],
+      emptyCellDensity: 0.05,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 5,
@@ -65,6 +93,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['peak', 'stone', 'cloud', 'wind', 'storm', 'snow', 'frost', 'eagle', 'crest', 'slope', 'ledge', 'range'],
     wingId: 'nature',
     icon: '🏔️',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords', 'denseBoard'],
+      emptyCellDensity: 0.03,
+      dictionaryTier: 'standard',
+    },
   },
 
   // ── Wing 2: Science (Chapters 6-10) ────────────────────────────────────────

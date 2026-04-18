@@ -18,6 +18,9 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import NeonTabBar from './src/components/navigation/NeonTabBar';
+import { BoardGenBanner } from './src/components/BoardGenBanner';
+import { NotSyncedBanner } from './src/components/NotSyncedBanner';
+import { emitBoardGenNotice } from './src/utils/boardGenNotice';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import ModesScreen from './src/screens/ModesScreen';
@@ -44,11 +47,23 @@ import { useAuth } from './src/contexts/AuthContext';
 import { useEconomy } from './src/contexts/EconomyContext';
 import { useSettings } from './src/contexts/SettingsContext';
 import { usePlayer } from './src/contexts/PlayerContext';
+import { useHardEnergy } from './src/hooks/useHardEnergy';
+import { NoLivesModal } from './src/components/NoLivesModal';
 import { soundManager } from './src/services/sound';
 import { setHapticsEnabled } from './src/services/haptics';
 // ATLAS_PAGES and generateShareText moved to useRewardWiring
 import { notificationManager } from './src/services/notifications';
+import { installGlobalFontScaleClamp } from './src/components/common/Typography';
+import { initI18n } from './src/i18n';
 import { Providers } from './src/App/Providers';
+
+// Clamp system font scaling once at module init so large-text settings can't
+// break tight layouts (grid, HUD, shop pricing). See Typography.tsx for why.
+installGlobalFontScaleClamp();
+
+// Bootstrap i18n from device locale. Resolves to EN fallback for unsupported
+// device languages. Fire-and-forget: errors land in the crash reporter.
+void initI18n().catch(() => { /* fallback EN is already active */ });
 import { CeremonyRouter } from './src/App/CeremonyRouter';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { MysteryWheel } from './src/components/MysteryWheel';
@@ -66,6 +81,7 @@ import {
   triggerWinStreakMilestoneNotification,
 } from './src/services/notificationTriggers';
 import { eventManager } from './src/services/eventManager';
+import { getRemoteBoolean } from './src/services/remoteConfig';
 import { getChapterExtended, getLevelConfigExtended } from './src/engine/puzzleGenerator';
 import {
   getPersonalizedHomeContent,
@@ -177,7 +193,7 @@ function EventScreenWrapperNav({ navigation }: any) {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
           const modeConfig = MODE_CONFIGS[mode];
-          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          emitBoardGenNotice();
           navigation.navigate('Game', {
             board, level: player.currentLevel, mode,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
@@ -489,7 +505,7 @@ function ModesScreenWrapper({ navigation }: any) {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           board = generateBoard(easyConfig, Date.now());
           const modeConfig = MODE_CONFIGS[mode];
-          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          emitBoardGenNotice();
           navigation.navigate('Game', {
             board, level: modeLevel, mode,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
@@ -521,10 +537,52 @@ function GameScreenWrapper({ route, navigation }: any) {
   const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
+  const hardEnergy = useHardEnergy();
   const [showSpinPrompt, setShowSpinPrompt] = useState(false);
   const [earnedNewSpin, setEarnedNewSpin] = useState(false);
   const spinsBeforeComplete = useRef(0);
   const [pendingNavAction, setPendingNavAction] = useState<'home' | 'next' | null>(null);
+
+  // Phase 4B hard-energy gate. When the Remote Config flag is on and the
+  // player is out of lives, block the board from loading and show
+  // NoLivesModal. One debit per level load (tracked by route key + level).
+  const [showNoLives, setShowNoLives] = useState(false);
+  const debitedLevelRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hardEnergy.enabled) return;
+    const key = `${params.mode ?? 'classic'}:${params.level ?? 0}:${route.key}`;
+    if (debitedLevelRef.current === key) return;
+    debitedLevelRef.current = key;
+    if (!hardEnergy.canPlay) {
+      setShowNoLives(true);
+      return;
+    }
+    const { started } = hardEnergy.startLevel();
+    if (!started) setShowNoLives(true);
+  }, [hardEnergy, params.mode, params.level, route.key]);
+
+  const handleNoLivesClose = useCallback(() => {
+    setShowNoLives(false);
+    navigation.goBack();
+  }, [navigation]);
+
+  const handleNoLivesWatchAd = useCallback(async () => {
+    try {
+      const { adManager } = await import('./src/services/ads');
+      const result = await adManager.showRewardedAd('life_reward');
+      if (result.rewarded) {
+        hardEnergy.creditAdLife();
+        setShowNoLives(false);
+      }
+    } catch (err) {
+      if (__DEV__) console.warn('[HardEnergy] rewarded ad failed:', err);
+    }
+  }, [hardEnergy]);
+
+  const handleNoLivesSpendGems = useCallback(() => {
+    const ok = hardEnergy.refillWithGems();
+    if (ok) setShowNoLives(false);
+  }, [hardEnergy]);
 
   // Delegate reward wiring to extracted hook
   const handleCompleteInner = useRewardWiring({
@@ -588,7 +646,7 @@ function GameScreenWrapper({ route, navigation }: any) {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
           const modeConfig = MODE_CONFIGS[fallbackMode];
-          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          emitBoardGenNotice();
           navigation.replace('Game', {
             board, level: fallbackLevel, mode: fallbackMode, isDaily: false,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
@@ -657,7 +715,7 @@ function GameScreenWrapper({ route, navigation }: any) {
           const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
           const board = generateBoard(easyConfig, Date.now());
           const modeConfig = MODE_CONFIGS[fallbackMode];
-          Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+          emitBoardGenNotice();
           navigation.replace('Game', {
             board, level: nextModeLevel, mode: fallbackMode, isDaily: false,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
@@ -805,6 +863,18 @@ function GameScreenWrapper({ route, navigation }: any) {
           </View>
         </View>
       )}
+
+      {/* Phase 4B hard-energy: shown only when Remote Config flag is on */}
+      <NoLivesModal
+        visible={showNoLives}
+        livesRemaining={hardEnergy.livesRemaining}
+        gemsAvailable={economy.gems}
+        gemRefillCost={hardEnergy.gemRefillCost}
+        nextLifeAtMs={hardEnergy.nextLifeAtMs}
+        onClose={handleNoLivesClose}
+        onWatchAd={handleNoLivesWatchAd}
+        onSpendGems={handleNoLivesSpendGems}
+      />
     </View>
   );
 }
@@ -844,6 +914,11 @@ function HomeMainScreen({ route, navigation }: any) {
 
       void analytics.startSession('app_launch');
       void analytics.trackAppOpen();
+      // hard_energy_enabled lets Firebase A/B Testing slice retention/revenue
+      // by the Remote Config flag the client actually observed at boot.
+      const hardEnergyOn = (() => {
+        try { return getRemoteBoolean('hardEnergyEnabled'); } catch { return false; }
+      })();
       void analytics.updateUserProperties({
         player_level: player.currentLevel,
         total_puzzles_solved: player.puzzlesSolved,
@@ -851,6 +926,7 @@ function HomeMainScreen({ route, navigation }: any) {
         player_stage: playerStageFromPuzzles(player.puzzlesSolved),
         is_payer: false, // Updated when IAP completes
         total_spend: 0,
+        hard_energy_enabled: hardEnergyOn,
       });
       void analytics.logEvent('streak_count', {
         currentStreak: player.streaks.currentStreak,
@@ -1243,7 +1319,7 @@ function HomeMainScreen({ route, navigation }: any) {
               const easyConfig = { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' as const };
               const board = generateBoard(easyConfig, Date.now());
               setLoading(false);
-              Alert.alert('Heads up', 'Puzzle took too long to generate. Trying an easier one...');
+              emitBoardGenNotice();
               navigation.navigate('Game', { board, level: player.currentLevel, mode: 'classic', isDaily: false });
             } catch {
               Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
@@ -1280,8 +1356,8 @@ function HomeMainScreen({ route, navigation }: any) {
 
   const handleReset = useCallback(() => {
     Alert.alert(
-      'Reset Progress',
-      'Are you sure? This will erase all saved progress.',
+      'Reset Local Data',
+      'This clears on-device progress only. Your account and purchases are preserved.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -1515,11 +1591,19 @@ function AppContent() {
 
   useEffect(() => {
     if (!settings.loaded) return;
-    soundManager.setSfxVolume(settings.sfxVolume);
-    soundManager.setMusicVolume(settings.musicVolume);
-    soundManager.setMuted(settings.sfxVolume <= 0 && settings.musicVolume <= 0);
+    // Settings store volumes as 0–100 (percentages) from the UI control, while
+    // the historical context default (0.8 / 0.5) was a 0–1 fraction. Normalize
+    // defensively so both shapes route correctly.
+    const toFraction = (v: number): number => (v > 1 ? v / 100 : v);
+    const sfx = toFraction(settings.sfxVolume);
+    const music = toFraction(settings.musicVolume);
+    const ceremony = toFraction(settings.ceremonyVolume ?? 0.8);
+    soundManager.setSfxVolume(sfx);
+    soundManager.setMusicVolume(music);
+    soundManager.setCeremonyVolume(ceremony);
+    soundManager.setMuted(sfx <= 0 && music <= 0 && ceremony <= 0);
     setHapticsEnabled(settings.hapticsEnabled);
-  }, [settings.loaded, settings.sfxVolume, settings.musicVolume, settings.hapticsEnabled]);
+  }, [settings.loaded, settings.sfxVolume, settings.musicVolume, settings.ceremonyVolume, settings.hapticsEnabled]);
 
   // Privacy: propagate user-chosen toggles to analytics + ads services.
   useEffect(() => {
@@ -1660,6 +1744,8 @@ function AppContent() {
         onDismiss={handleDismissCeremony}
         economy={economy}
       />
+      <BoardGenBanner />
+      <NotSyncedBanner />
     </View>
   );
 }

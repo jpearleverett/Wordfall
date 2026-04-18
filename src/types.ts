@@ -161,6 +161,40 @@ export const DEFAULT_CURRENCIES: Currencies = {
 };
 
 // ============ CHAPTERS ============
+/**
+ * Per-chapter generation constraints that steer procedural board generation
+ * toward a curated "feel" without hand-authoring puzzles. Early tutorial
+ * chapters use tight profiles (short words, common dictionary, clear mechanic
+ * intros); later chapters loosen constraints for variety.
+ */
+export interface GenerationProfile {
+  /** Lower bound on placed word length. Default 3. */
+  minWordLength?: number;
+  /** Upper bound on placed word length. Default 9. */
+  maxWordLength?: number;
+  /**
+   * Mechanics this chapter should showcase so the generator biases toward
+   * boards where the mechanic is likely to trigger. Purely advisory; does
+   * not change engine rules (which are driven by mode).
+   */
+  introducedMechanics?: Array<
+    | 'gravityCascade'
+    | 'fourLetter'
+    | 'chainBonus'
+    | 'wildcards'
+    | 'longWords'
+    | 'denseBoard'
+  >;
+  /** 0..1 — fraction of cells intentionally left empty at gen time. */
+  emptyCellDensity?: number;
+  /**
+   * 'common' restricts to high-frequency dictionary subset (safer for
+   * beginners). 'standard' uses the full dictionary. 'expert' biases toward
+   * rarer words. Default 'standard'.
+   */
+  dictionaryTier?: 'common' | 'standard' | 'expert';
+}
+
 export interface Chapter {
   id: number;
   name: string;
@@ -172,6 +206,8 @@ export interface Chapter {
   themeWords: string[];
   wingId: string;
   icon: string;
+  /** Optional generation constraints. When absent, defaults apply. */
+  profile?: GenerationProfile;
 }
 
 // ============ GAME MODES ============

@@ -14,6 +14,33 @@ import { getTitleLabel } from '../data/cosmetics';
 
 const getToday = (): string => new Date().toISOString().split('T')[0];
 
+/**
+ * Deliver a gift via the secure Cloud Function callable; fall back to the
+ * legacy direct-Firestore write only if the callable errors (e.g. it isn't
+ * deployed yet on the `social` codebase). Both paths write the same schema
+ * to the `gifts/` collection, so `getPendingGifts` sees them identically.
+ */
+async function deliverGift(
+  fromUserId: string,
+  fromDisplayName: string,
+  toUserId: string,
+  type: 'hint' | 'tile' | 'life',
+  amount: number,
+): Promise<void> {
+  try {
+    const { sendGiftSecure } = await import('../services/gifts');
+    await sendGiftSecure({ toUserId, type, amount, fromDisplayName });
+  } catch (err) {
+    if (__DEV__) console.warn('[PlayerSocial] sendGiftSecure failed, falling back to direct write:', err);
+    try {
+      const { firestoreService } = await import('../services/firestore');
+      await firestoreService.sendGift(fromUserId, fromDisplayName, toUserId, type === 'life' ? 'hint' : type, amount);
+    } catch (fallbackErr) {
+      if (__DEV__) console.warn('[PlayerSocial] legacy sendGift fallback also failed:', fallbackErr);
+    }
+  }
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface PlayerSocialData {
@@ -70,18 +97,13 @@ export function createSocialMethods<T extends PlayerSocialData>(
         lastGiftDate: today,
       };
     });
-    // Deliver via Firestore if available
+    // Deliver via secure Cloud Function (falls back to direct Firestore write
+    // if the callable isn't deployed yet — same schema either way, so the
+    // recipient's `getPendingGifts` query keeps working).
     if (success && user) {
       const data = getData();
-      import('../services/firestore').then(({ firestoreService }) => {
-        void firestoreService.sendGift(
-          user.uid,
-          getTitleLabel(data.equippedTitle) || 'A friend',
-          friendId,
-          'hint',
-          1
-        );
-      });
+      const fromDisplayName = getTitleLabel(data.equippedTitle) || 'A friend';
+      void deliverGift(user.uid, fromDisplayName, friendId, 'hint', 1);
     }
     return success;
   };
@@ -99,18 +121,12 @@ export function createSocialMethods<T extends PlayerSocialData>(
         lastGiftDate: today,
       };
     });
-    // Deliver via Firestore if available
+    // Deliver via secure Cloud Function (falls back to direct Firestore write
+    // if the callable isn't deployed yet).
     if (success && user) {
       const data = getData();
-      import('../services/firestore').then(({ firestoreService }) => {
-        void firestoreService.sendGift(
-          user.uid,
-          getTitleLabel(data.equippedTitle) || 'A friend',
-          friendId,
-          'tile',
-          1
-        );
-      });
+      const fromDisplayName = getTitleLabel(data.equippedTitle) || 'A friend';
+      void deliverGift(user.uid, fromDisplayName, friendId, 'tile', 1);
     }
     return success;
   };

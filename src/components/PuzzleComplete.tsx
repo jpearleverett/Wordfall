@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Image,
@@ -27,6 +28,8 @@ import { crashReporter } from '../services/crashReporting';
 import ChromeText from './common/ChromeText';
 import ScanLineOverlay from './common/ScanLineOverlay';
 import NeonStarBurst from './victory/NeonStarBurst';
+import { ShareCard } from './ShareCard';
+import { useShareVictory } from '../hooks/useShareVictory';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -234,6 +237,7 @@ const CONFETTI_COLORS = [
 ];
 
 function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: number; statsAnim: Animated.Value }) {
+  const { t } = useTranslation();
   // Narrow zustand subscriptions — PuzzleComplete is hit by the 15+ setData
   // burst on every win; reading individual slices keeps it from re-rendering
   // on unrelated player state churn.
@@ -252,13 +256,13 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
         if (chaptersAway <= 3) {
           const wingIdx = wingChapterThresholds.indexOf(threshold);
           const wingName = LIBRARY.wingNames[wingIdx] ?? 'new';
-          return `${chaptersAway} chapter${chaptersAway === 1 ? '' : 's'} away from the ${wingName} library wing!`;
+          return t('common.chaptersAway', { count: chaptersAway, wing: wingName });
         }
         break;
       }
     }
     return null;
-  }, [currentChapter]);
+  }, [currentChapter, t]);
 
   // Star milestone proximity
   const starMilestoneMsg = useMemo(() => {
@@ -266,13 +270,13 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
       if (totalStars < milestone.stars) {
         const starsAway = milestone.stars - totalStars;
         if (starsAway <= 15) {
-          return `${starsAway} star${starsAway === 1 ? '' : 's'} until ${milestone.name}!`;
+          return t('common.starsAway', { count: starsAway, milestone: milestone.name });
         }
         break;
       }
     }
     return null;
-  }, [totalStars]);
+  }, [totalStars, t]);
 
   const milestoneMsg = wingMilestoneMsg || starMilestoneMsg;
 
@@ -302,8 +306,8 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
             <Text style={hookStyles.streakNumber}>{currentStreak}</Text>
           </View>
           <View style={hookStyles.streakRight}>
-            <Text style={hookStyles.streakLabel}>Day Streak</Text>
-            <Text style={hookStyles.streakCta}>Keep it going!</Text>
+            <Text style={hookStyles.streakLabel}>{t('result.dayStreak')}</Text>
+            <Text style={hookStyles.streakCta}>{t('result.keepItGoing')}</Text>
           </View>
         </LinearGradient>
       )}
@@ -343,7 +347,19 @@ export function PuzzleComplete({
   totalGemsAwarded = 0,
   nextUnlockPreview = null,
 }: PuzzleCompleteProps) {
+  const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
+
+  // Victory card share (Phase 4C). Captures the off-screen <ShareCard/>
+  // into a PNG and hands it to the system share sheet. Falls back to a
+  // plaintext Share.share when view-shot/expo-sharing are unavailable.
+  const cappedStars = (Math.max(1, Math.min(3, stars)) as 1 | 2 | 3);
+  const { ref: shareCardRef, share: shareVictoryCard } = useShareVictory({
+    level,
+    mode,
+    score,
+  });
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(30)).current;
   const ribbonAnim = useRef(new Animated.Value(0)).current;
@@ -466,6 +482,23 @@ export function PuzzleComplete({
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      {/* Off-screen renderable victory card. Positioned far outside the
+          viewport so view-shot can captureRef() the fixed 1080x1080 layout
+          without affecting the on-screen UI. */}
+      <View
+        pointerEvents="none"
+        style={styles.offscreenShareCard}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <ShareCard
+          ref={shareCardRef}
+          score={score}
+          stars={cappedStars}
+          level={level}
+          mode={mode}
+        />
+      </View>
       <Image
         source={LOCAL_IMAGES.bg3}
         style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
@@ -586,7 +619,7 @@ export function PuzzleComplete({
                 style={styles.scorePanel}
               >
                 <ScanLineOverlay opacity={0.02} height={80} />
-                <Text style={styles.scoreLabel}>FINAL SCORE</Text>
+                <Text style={styles.scoreLabel}>{t('result.finalScore')}</Text>
                 <View accessibilityLabel={`Final score: ${score}`}>
                   <AnimatedScore targetScore={score} />
                 </View>
@@ -605,21 +638,21 @@ export function PuzzleComplete({
                   colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
                   style={styles.statCard}
                 >
-                  <Text style={styles.statCardLabel}>Moves</Text>
+                  <Text style={styles.statCardLabel}>{t('result.moves')}</Text>
                   <Text style={styles.statCardValue}>{moves}</Text>
                 </LinearGradient>
                 <LinearGradient
                   colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
                   style={styles.statCard}
                 >
-                  <Text style={styles.statCardLabel}>Best Combo</Text>
+                  <Text style={styles.statCardLabel}>{t('result.bestCombo')}</Text>
                   <Text style={styles.statCardValue}>{combo > 1 ? `${combo}x` : '—'}</Text>
                 </LinearGradient>
                 <LinearGradient
                   colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
                   style={styles.statCard}
                 >
-                  <Text style={styles.statCardLabel}>Stars</Text>
+                  <Text style={styles.statCardLabel}>{t('result.stars')}</Text>
                   <Text style={styles.statCardValue}>{stars}/3</Text>
                 </LinearGradient>
               </Animated.View>
@@ -633,7 +666,7 @@ export function PuzzleComplete({
                   },
                 ]}
               >
-                <Text style={styles.rewardsTitle}>Rewards</Text>
+                <Text style={styles.rewardsTitle}>{t('result.rewards')}</Text>
                 <View style={styles.rewardRow}>
                   <LinearGradient
                     colors={['#1a2050', '#222860'] as [string, string, ...string[]]}
@@ -705,8 +738,8 @@ export function PuzzleComplete({
                 <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.gold + '20', borderColor: COLORS.gold + '40', opacity: statsAnim }]}>
                   <Text style={styles.levelUpEmoji}>{'\uD83C\uDF89'}</Text>
                   <View>
-                    <Text style={[styles.levelUpText, { color: COLORS.gold }]}>WELCOME TO WORDFALL!</Text>
-                    <Text style={styles.levelUpSubtext}>Your adventure begins</Text>
+                    <Text style={[styles.levelUpText, { color: COLORS.gold }]}>{t('result.welcomeToWordfall')}</Text>
+                    <Text style={styles.levelUpSubtext}>{t('result.adventureBegins')}</Text>
                   </View>
                 </Animated.View>
               )}
@@ -736,7 +769,7 @@ export function PuzzleComplete({
                         </View>
                         {item.action && (
                           <View style={[styles.summaryItemCta, { borderColor: item.accentColor + '50' }]}>
-                            <Text style={[styles.summaryItemCtaText, { color: item.accentColor }]}>Claim</Text>
+                            <Text style={[styles.summaryItemCtaText, { color: item.accentColor }]}>{t('result.claim')}</Text>
                           </View>
                         )}
                       </View>
@@ -799,7 +832,7 @@ export function PuzzleComplete({
                       </Text>
                       <Text style={styles.nextUnlockSublabel}>
                         {nextUnlockPreview.unlockLevel - level <= 1
-                          ? 'Unlocks NEXT LEVEL!'
+                          ? t('result.unlocksNextLevel')
                           : `${nextUnlockPreview.unlockLevel - level} levels away`}
                       </Text>
                     </View>
@@ -841,7 +874,7 @@ export function PuzzleComplete({
                     end={{ x: 1, y: 0 }}
                     style={styles.primaryButton}
                   >
-                    <Text style={styles.primaryButtonText}>{isDaily ? 'PLAY ANOTHER MODE' : 'NEXT LEVEL'}</Text>
+                    <Text style={styles.primaryButtonText}>{isDaily ? t('result.playAnotherMode') : t('result.next').toUpperCase()}</Text>
                   </LinearGradient>
                 </Pressable>
                 {showTomorrowPreview && (
@@ -849,30 +882,45 @@ export function PuzzleComplete({
                     colors={['rgba(100,180,255,0.12)', 'rgba(100,180,255,0.04)'] as [string, string]}
                     style={styles.tomorrowPreview}
                   >
-                    <Text style={styles.tomorrowPreviewTitle}>Come back tomorrow!</Text>
-                    <Text style={styles.tomorrowPreviewText}>Daily Bonus + Free Mystery Spin await you</Text>
+                    <Text style={styles.tomorrowPreviewTitle}>{t('result.comeBackTomorrow')}</Text>
+                    <Text style={styles.tomorrowPreviewText}>{t('result.dailyBonusAwaits')}</Text>
                   </LinearGradient>
                 )}
                 <View style={styles.secondaryRow}>
-                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome} accessibilityRole="button" accessibilityLabel="Go to home screen">
-                    <Text style={styles.secondaryButtonText}>Home</Text>
+                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome} accessibilityRole="button" accessibilityLabel={t('result.goHomeA11y')}>
+                    <Text style={styles.secondaryButtonText}>{t('result.home')}</Text>
                   </Pressable>
                   {shareText ? (
                     <Pressable
                       style={({ pressed }) => [styles.secondaryButton, styles.shareButton, pressed && styles.buttonPressed]}
-                      onPress={() => {
-                        Share.share({ message: shareText }).catch((e) => {
+                      onPress={async () => {
+                        // Prefer capturing the victory card as a PNG. If the
+                        // native capture or system share sheet isn't available
+                        // (Expo Go, unsupported platforms), fall back to the
+                        // plaintext Share.share so sharing always succeeds.
+                        let cardShared = false;
+                        try {
+                          cardShared = await shareVictoryCard();
+                        } catch (e) {
                           crashReporter.addBreadcrumb(
-                            `Share.share (puzzle_complete) failed: ${e instanceof Error ? e.message : String(e)}`,
+                            `shareVictoryCard threw: ${e instanceof Error ? e.message : String(e)}`,
                             'share',
                           );
-                        });
+                        }
+                        if (!cardShared) {
+                          Share.share({ message: shareText }).catch((e) => {
+                            crashReporter.addBreadcrumb(
+                              `Share.share (puzzle_complete) failed: ${e instanceof Error ? e.message : String(e)}`,
+                              'share',
+                            );
+                          });
+                        }
                         onShare?.();
                       }}
                       accessibilityRole="button"
                       accessibilityLabel="Share results"
                     >
-                      <Text style={styles.shareButtonText}>Share</Text>
+                      <Text style={styles.shareButtonText}>{t('result.share')}</Text>
                     </Pressable>
                   ) : null}
                   {onChallengeFriend && (
@@ -907,6 +955,16 @@ const styles = StyleSheet.create({
   confettiParticle: {
     position: 'absolute',
     top: -30,
+  },
+  // Rendered off-screen so view-shot can capture the full 1080x1080 card
+  // without the user ever seeing it. zIndex kept below any interactive UI.
+  offscreenShareCard: {
+    position: 'absolute',
+    top: -10000,
+    left: -10000,
+    width: 1080,
+    height: 1080,
+    opacity: 0,
   },
   cardOuter: {
     width: '100%',

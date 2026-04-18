@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
   Animated,
@@ -59,6 +60,7 @@ import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
 import { getModeTutorial } from '../data/modeTutorials';
 import { PostLossModal } from '../components/PostLossModal';
 import { GameFlashes } from './game/GameFlashes';
+import { ComboFlash } from '../components/effects/ComboFlash';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
 
@@ -368,6 +370,7 @@ export function GameScreen({
   totalGemsAwarded = 0,
   nextUnlockPreview = null,
 }: GameScreenProps) {
+  const { t } = useTranslation();
   // Narrow zustand subscriptions — re-render only when the slice actually
   // read changes. usePlayer() / useEconomy() would re-render this 1700-line
   // component on every economy/player mutation across the app.
@@ -452,6 +455,26 @@ export function GameScreen({
   const [showFailed, setShowFailed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [gridAreaHeight, setGridAreaHeight] = useState(0);
+
+  // Announce every newly-found word to screen readers (TalkBack / VoiceOver).
+  // solveSequence grows by one entry per valid word; we watch its length and
+  // emit the `wordFound` string from the most recent step.
+  const lastAnnouncedIdxRef = useRef(-1);
+  useEffect(() => {
+    const len = solveSequence.length;
+    if (len === 0) {
+      lastAnnouncedIdxRef.current = -1;
+      return;
+    }
+    if (lastAnnouncedIdxRef.current >= len - 1) return;
+    lastAnnouncedIdxRef.current = len - 1;
+    const step = solveSequence[len - 1];
+    if (step?.wordFound) {
+      AccessibilityInfo.announceForAccessibility(
+        `Found word ${step.wordFound}. ${foundWords} of ${totalWords} complete.`,
+      );
+    }
+  }, [solveSequence, foundWords, totalWords]);
   const gridHeightLocked = useRef(false);
   const chainAnim = useRef(new Animated.Value(0)).current;
   const [chainVisible, setChainVisible] = useState(false);
@@ -983,7 +1006,11 @@ export function GameScreen({
   gameStateRef.current = { status: status, foundWords, totalWords, score: score };
 
   useEffect(() => {
-    void soundManager.playMusic(mode === 'timePressure' ? 'tense' : 'gameplay');
+    // BGM-by-screen context (plan task 2.3): crossfade via default 400ms
+    // window. `relax` and `victory` are dedicated tracks; timePressure keeps
+    // the tense bed; everything else uses the gameplay loop.
+    const bgm = mode === 'timePressure' ? 'tense' : mode === 'relax' ? 'relax' : 'gameplay';
+    void soundManager.playMusic(bgm);
     void analytics.logEvent('puzzle_start', {
       level,
       mode,
@@ -1059,15 +1086,16 @@ export function GameScreen({
           anim.setValue(offsetPx);
 
           const delay = colDelayMap.get(cell.col) ?? 0;
-          // Animate to 0 (final position) with gravity-like feel:
-          // timing for the main fall, then spring for landing bounce
+          // Animate to 0 (final position) with gravity-like feel.
+          // Phase 3.10: friction dropped 12 → 9 for a subtle landing bounce
+          // overshoot (reduceMotion users already skip this block at line 1048).
           animations.push(
             Animated.sequence([
               Animated.delay(delay),
               Animated.spring(anim, {
                 toValue: 0,
                 tension: 180,
-                friction: 12,
+                friction: 9,
                 useNativeDriver: true,
               }),
             ])
@@ -1095,6 +1123,9 @@ export function GameScreen({
 
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && showFailed) {
+      const puzzleStartTime = store.getState().puzzleStartTime;
+      const chainCount = store.getState().chainCount;
+      const timeMs = puzzleStartTime > 0 ? Date.now() - puzzleStartTime : 0;
       void analytics.logEvent('puzzle_fail', {
         level,
         mode,
@@ -1103,8 +1134,19 @@ export function GameScreen({
         totalWords,
         score: score,
       });
+      void analytics.trackDifficultyTelemetry({
+        mode,
+        level,
+        outcome: status === 'timeout' ? 'timeout' : 'fail',
+        hints_used: hintsUsed,
+        max_combo: maxCombo,
+        chain_count: chainCount,
+        time_ms: timeMs,
+        words_found: foundWords,
+        words_total: totalWords,
+      });
     }
-  }, [status, showFailed, level, mode, foundWords, totalWords, score]);
+  }, [status, showFailed, level, mode, foundWords, totalWords, score, hintsUsed, maxCombo, store]);
 
   // Score popup when score changes (word found) + particle burst (#1) + big word celebration (Task 2)
   useEffect(() => {
@@ -1257,7 +1299,11 @@ export function GameScreen({
     if (status === 'won' && !completionHandled.current) {
       completionHandled.current = true;
       void successHaptic();
+      // Duck BGM under the ceremony SFX so puzzleComplete rings clearly,
+      // then swap to the victory bed while the complete modal animates in.
+      soundManager.duckMusicFor(1200, 0.35);
       void soundManager.playSound('puzzleComplete');
+      void soundManager.playMusic('victory');
       const finalScore = score;
       const finalStars = stars;
       const finalMaxCombo = maxCombo;
@@ -1558,6 +1604,10 @@ export function GameScreen({
         bigWordAnim={bigWordAnim}
       />
 
+      {/* Combo tint pulse + confetti at combo >=5 (Phase 3.9). Reads
+          reduceMotion-aware; renders noop below the combo-3 threshold. */}
+      <ComboFlash combo={combo} reduceMotion={reduceMotion} />
+
 
       {/* Word bank — reads selection state from the zustand store directly.
           Renders above the grid area in its original layout position. */}
@@ -1777,31 +1827,35 @@ export function GameScreen({
             {/* Near-miss encouragement */}
             {foundWords > 0 && foundWords >= totalWords - 1 ? (
               <>
-                <Text style={styles.failedTitle}>SO CLOSE!</Text>
+                <Text style={styles.failedTitle}>{t('result.soClose')}</Text>
                 <Text style={styles.failedSubtext}>
-                  You found {foundWords} of {totalWords} words — just {totalWords - foundWords} more!
+                  {t('result.foundWordsAlmost', {
+                    found: foundWords,
+                    total: totalWords,
+                    remaining: totalWords - foundWords,
+                  })}
                 </Text>
               </>
             ) : foundWords > 0 ? (
               <>
                 <Text style={styles.failedTitle}>
-                  {status === 'timeout' ? '⏱ TIME\'S UP!' : 'KEEP GOING!'}
+                  {status === 'timeout' ? `⏱ ${t('result.timeUpShort')}` : t('result.keepGoing')}
                 </Text>
                 <Text style={styles.failedSubtext}>
-                  You found {foundWords} of {totalWords} words. You're making progress!
+                  {t('result.foundWordsProgress', { found: foundWords, total: totalWords })}
                 </Text>
               </>
             ) : (
               <>
                 <Text style={styles.failedTitle}>
-                  {status === 'timeout' ? '⏱ TIME\'S UP!' : '❌ PUZZLE FAILED'}
+                  {status === 'timeout' ? `⏱ ${t('result.timeUpShort')}` : `❌ ${t('result.puzzleFailed')}`}
                 </Text>
                 <Text style={styles.failedSubtext}>
                   {status === 'timeout'
-                    ? 'You ran out of time. Try again?'
+                    ? t('result.ranOutOfTime')
                     : mode === 'perfectSolve'
-                      ? 'Perfect mode requires zero mistakes.'
-                      : `You used all ${effectiveMaxMoves} moves.`}
+                      ? t('result.perfectZeroMistakes')
+                      : t('result.usedAllMoves', { count: effectiveMaxMoves })}
                 </Text>
               </>
             )}
@@ -1814,18 +1868,18 @@ export function GameScreen({
                     { width: `${Math.max((foundWords / totalWords) * 100, 2)}%` },
                   ]} />
                 </View>
-                <Text style={styles.failedProgressText}>{foundWords}/{totalWords} words</Text>
+                <Text style={styles.failedProgressText}>{t('result.wordsCounter', { found: foundWords, total: totalWords })}</Text>
               </View>
             )}
             <View style={styles.failedStats}>
-              <Text style={styles.failedStat}>Score: {score}</Text>
+              <Text style={styles.failedStat}>{t('result.score', { score })}</Text>
             </View>
             <View style={styles.failedButtons}>
               <Pressable
                 style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
                 onPress={handleRetry}
               >
-                <Text style={styles.retryButtonText}>TRY AGAIN</Text>
+                <Text style={styles.retryButtonText}>{t('result.tryAgain').toUpperCase()}</Text>
               </Pressable>
               {/* Watch ad for a free hint — shown after failure when player has no hints */}
               {!isAdFree && adManager.canShowAd('hint_reward') && hintsLeft === 0 && (
@@ -1833,7 +1887,7 @@ export function GameScreen({
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={handleWatchAdForHint}
                 >
-                  <Text style={styles.adHintButtonText}>{'\uD83C\uDFAC'} Watch Ad for Free Hint</Text>
+                  <Text style={styles.adHintButtonText}>{'\uD83C\uDFAC'} {t('result.watchAdFreeHint')}</Text>
                 </Pressable>
               )}
               {undosLeft > 0 && history.length > 0 && (
@@ -1841,14 +1895,14 @@ export function GameScreen({
                   style={({ pressed }) => [styles.undoRecoverButton, pressed && styles.buttonPressed]}
                   onPress={handleUndo}
                 >
-                  <Text style={styles.undoRecoverText}>↩ UNDO LAST MOVE</Text>
+                  <Text style={styles.undoRecoverText}>↩ {t('result.undoLastMove')}</Text>
                 </Pressable>
               )}
               <Pressable
                 style={({ pressed }) => [styles.homeButton, pressed && styles.buttonPressed]}
                 onPress={onHome}
               >
-                <Text style={styles.homeButtonText}>HOME</Text>
+                <Text style={styles.homeButtonText}>{t('result.home').toUpperCase()}</Text>
               </Pressable>
             </View>
           </View>

@@ -19,4 +19,4 @@ grid gestures, game sub-components, contexts, engine, or utility hooks.
 
 15 screens live in `src/screens/`. Game sub-components live in `src/screens/game/` (PlayField, GameFlashes, GameBanners). Ceremonies, backdrops, effects live in `src/components/{,common,home,victory,effects,game,modes,events,navigation,economy}/`.
 
-**Two cloud functions directories exist**: `cloud-functions/` (club goals, leaderboards, streak reminders, push) and `functions/` (validateReceipt, subscription renewals, club goal progress, inactive member cleanup). Don't confuse them.
+**Cloud Functions live in one codebase**: `functions/src/index.ts` (commerce: `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion`) re-exports `./social` which holds all social callables (`onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift`). Consolidated Apr 2026 (used to be split across `functions/` + `cloud-functions/`).

@@ -1,0 +1,51 @@
+# Flow 10 — Club chat: send + report
+#
+# Club chat is reached via deep link (wordfallgame.app/club?clubId=...).
+# This flow openLink's into a seeded test club, types a message, sends,
+# long-presses another member's message to report, and asserts the
+# report-reason Alert appears. Reporting is cancelled (no real write)
+# so the flow is safe to re-run.
+#
+# Prereqs: a test club with at least one seeded message from a non-self
+# user id must exist in the Firestore test project. Set TEST_CLUB_ID
+# via maestro parameters when invoking:
+#   maestro test .maestro/10_club_chat_send_and_report.yaml -e TEST_CLUB_ID=abcd1234
+appId: com.wordfall.game
+name: "10 — Club chat send + report"
+env:
+  TEST_CLUB_ID: "demo"
+tags:
+  - social
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+- openLink: "wordfall://club?clubId=${TEST_CLUB_ID}"
+- waitForAnimationToEnd
+- assertVisible: "Club Chat"
+- tapOn: "Chat message input"
+- inputText: "Maestro smoke ping"
+- tapOn: "Send message"
+- waitForAnimationToEnd
+- assertVisible: "Maestro smoke ping"
+# Long-press the first visible remote message (seeded) to surface the
+# report/block Alert. The Alert title is the sender's displayName, so
+# we assert on the action label instead.
+- longPressOn:
+    index: 1
+    text: ".*"
+- extendedWaitUntil:
+    visible:
+      text: "Report message"
+    timeout: 5000
+- tapOn: "Report message"
+- extendedWaitUntil:
+    visible:
+      text: "Why are you reporting this message?"
+    timeout: 5000
+# Cancel so no real report is written
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- back
+- waitForAnimationToEnd
