@@ -1,0 +1,52 @@
+# Flow 13 — Season Pass home card → tier ladder
+#
+# `SeasonPassHomeCard` renders on Home below WeeklyGoals. It shows the
+# current season name, "Tier X / 50" subtitle, XP progress label ("N / N
+# XP" or "Max tier reached!"), and a CTA "Claim rewards ›" (when there
+# are unclaimed tiers) or "View Pass ›" (when caught up).
+#
+# Tapping the card opens `SeasonPassScreen` with headerTitle "SEASON
+# PASS" and a 50-tier ladder. This flow smoke-tests navigation from
+# Home → SeasonPassScreen and verifies the headerTitle renders, then
+# backs out. We do NOT tap CLAIM (may debit state) and do NOT tap
+# UPGRADE TO PREMIUM (launches native IAP sheet).
+appId: com.wordfall.game
+name: "13 — Season Pass home card → tier ladder"
+tags:
+  - smoke
+  - monetization
+---
+- launchApp:
+    clearState: false
+- waitForAnimationToEnd
+- runFlow: subflows/skip_onboarding.yaml
+# SeasonPassHomeCard lives below the WeeklyGoals section — a swipe or
+# two may be required depending on how many surfaces are mounted.
+- swipe:
+    direction: UP
+    duration: 500
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Tier"
+    commands:
+      - assertVisible: "Tier"
+- runFlow:
+    when:
+      visible: "Claim rewards"
+    commands:
+      - tapOn: "Claim rewards"
+- runFlow:
+    when:
+      visible: "View Pass"
+    commands:
+      - tapOn: "View Pass"
+- waitForAnimationToEnd
+# Either CTA lands us on SeasonPassScreen with its header title.
+- assertVisible: "SEASON PASS"
+# Verify the ladder UI rendered — at least one tier row should be
+# visible with the "Tier X / 50" header subtitle pattern.
+- assertVisible: "/ 50"
+- back
+- waitForAnimationToEnd
+- assertVisible: "Home"

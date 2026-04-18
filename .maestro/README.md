@@ -1,11 +1,21 @@
 # Wordfall — Maestro E2E
 
-Five smoke flows covering the golden paths a player walks through in
-the first minute of installing Wordfall: launch, daily puzzle entry,
-shop browse, settings toggle, and mode picker. The flows are
-intentionally shallow — they verify navigation and rendering, not
-deep gameplay correctness (that's what the 791-test Jest suite is
-for).
+Fifteen smoke flows covering the golden paths a player walks through
+in the first minute of installing Wordfall plus the new v1.0
+monetization/social/polish surfaces:
+
+- **01–10** — Core golden paths: launch, daily puzzle, shop, settings,
+  mode picker, consent, restore, account deletion, purchase happy path,
+  club chat send+report.
+- **11 — Referral card + pending rewards** (`11_referral_claim.yaml`)
+- **12 — Piggy Bank card on Shop** (`12_piggy_bank_break.yaml`)
+- **13 — Season Pass home card → tier ladder** (`13_season_pass_claim.yaml`)
+- **14 — Friend Leaderboard card** (`14_friend_leaderboard.yaml`)
+- **15 — Booster combo banner** (`15_booster_combo.yaml`)
+
+The flows are intentionally shallow — they verify navigation and
+rendering, not deep gameplay correctness (that's what the 981-test
+Jest suite is for).
 
 ## Install Maestro CLI
 
@@ -120,6 +130,32 @@ The flows address UI elements by, in order of preference:
    because text is too ambiguous (e.g. multiple "Claim" buttons on
    the same screen), add the `testID` prop and reference it with
    `tapOn: { id: "my-button" }`.
+
+## New-surface coverage notes (flows 11–15)
+
+Each of the five new flows branches on UI state because a fresh-install
+device won't have pending referral rewards, a full piggy bank, an
+unlocked season tier, any friends, or any booster tokens. The flows
+therefore assert the card/screen is mounted and exercise the deeper
+path only when it's reachable. Seeded test accounts give fuller
+coverage — see `agent_docs/soft_launch_plan.md` for seed scripts.
+
+- **Referral claim** — asserts `ReferralCard` mounts; taps `CLAIM` only
+  if `ReferralPendingRewards` renders. Share-sheet dismissal uses
+  `back` since Maestro can't introspect the system sheet.
+- **Piggy bank** — asserts card + fill label; branches on the "BREAK
+  FOR $X.XX" CTA vs "Keep playing to fill" message. Never taps BREAK
+  (launches native IAP sheet).
+- **Season pass** — navigates Home → `SeasonPassScreen`; asserts
+  "SEASON PASS" headerTitle + `/ 50` tier marker. Never taps CLAIM or
+  UPGRADE TO PREMIUM.
+- **Friend leaderboard** — branches on card visibility (fresh installs
+  have no friends, so the card is suppressed). When present, taps
+  "View All ›" → `LeaderboardScreen` with friends scope.
+- **Booster combo** — enters a game from `ModesScreen`; taps Wildcard +
+  Spotlight only if both booster buttons render (both need a token
+  available). Asserts `EAGLE EYE` or `2x SCORE` combo banner copy
+  appears when the combo fires.
 
 ## Coverage boundaries — what these flows do NOT cover
 
