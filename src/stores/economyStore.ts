@@ -74,6 +74,8 @@ export type EconomyActions = Pick<
   | 'claimVipDailyRewards'
   | 'checkVipStreak'
   | 'claimVipStreakBonus'
+  | 'addPiggyBankGems'
+  | 'breakPiggyBank'
   | 'addLives'
   | 'hasTemporaryEntitlement'
   | 'getTemporaryEntitlementExpiry'
@@ -115,6 +117,17 @@ export const selectStarterPackExpiresAt = (s: EconomyState) => s.starterPackExpi
 export const selectDailyValuePackExpiry = (s: EconomyState) => s.dailyValuePackExpiry;
 export const selectTemporaryEntitlements = (s: EconomyState) =>
   s.temporaryEntitlements;
+
+// Piggy bank — slow-fill gem jar selectors.
+export const selectPiggyBankGems     = (s: EconomyState) => s.piggyBank?.gems ?? 0;
+export const selectPiggyBankCapacity = (s: EconomyState) =>
+  s.piggyBank?.capacity ?? 0;
+export const selectPiggyBankReady    = (s: EconomyState) => {
+  const capacity = s.piggyBank?.capacity ?? 0;
+  if (capacity <= 0) return false;
+  const gems = s.piggyBank?.gems ?? 0;
+  return gems >= Math.floor(capacity * 0.8);
+};
 
 // ── Composite/computed selectors ─────────────────────────────────────────────
 // `Date.now()` makes these time-sensitive: the value only changes when the

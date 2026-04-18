@@ -394,6 +394,26 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     icon: '\u{1F4E6}',
   },
 
+  // ── Piggy Bank (slow-fill gem jar) ───────────────────────────────────────
+  // Rewards are dynamic — the accumulated gem count lives in
+  // EconomyState.piggyBank and is granted by breakPiggyBank(), not by the
+  // generic applyProduct reward path. The rewards.gems value here only
+  // satisfies the "has at least one reward" invariant for SHOP_PRODUCTS tests.
+  {
+    id: 'piggy_bank_break',
+    storeProductId: 'wordfall_piggy_bank_break',
+    name: 'Break the Piggy Bank',
+    description: 'Claim every gem you\u2019ve saved up in the jar.',
+    fallbackPrice: '$4.99',
+    fallbackPriceAmount: 4.99,
+    category: 'currency',
+    rewards: { gems: 1 },
+    isNonConsumable: false,
+    originalPrice: '$7.49',
+    originalPriceAmount: 7.49,
+    icon: '\u{1FAD9}',
+  },
+
   // ── Currency: Gems ───────────────────────────────────────────────────────
   {
     id: 'gems_30',

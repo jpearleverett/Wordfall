@@ -54,6 +54,11 @@ export interface CommercialStateShape {
   vipStreakLastChecked: number;
   temporaryEntitlements: Partial<Record<CommercialEffectId, number>>;
   entitlementMigrationVersion: number;
+  piggyBank?: {
+    gems: number;
+    lastFillAt: number;
+    capacity: number;
+  };
 }
 
 export interface PlayerGrantSummary {
@@ -167,12 +172,15 @@ export function applyCatalogPurchase<TState extends CommercialStateShape>(
   };
 
   const rewards = product.rewards;
+  // For piggy_bank_break the generic reward path is skipped — the real grant
+  // is the accumulated jar contents, applied below.
+  const isPiggyBankBreak = productId === 'piggy_bank_break';
 
-  if (rewards.coins) {
+  if (!isPiggyBankBreak && rewards.coins) {
     nextState.coins += rewards.coins;
     nextState.totalEarned.coins += rewards.coins;
   }
-  if (rewards.gems) {
+  if (!isPiggyBankBreak && rewards.gems) {
     nextState.gems += rewards.gems;
     nextState.totalEarned.gems += rewards.gems;
   }
@@ -213,6 +221,22 @@ export function applyCatalogPurchase<TState extends CommercialStateShape>(
   if (rewards.dripDays) {
     nextState.dailyValuePackExpiry = now + rewards.dripDays * MILLIS_PER_DAY;
     nextState.dailyValuePackLastClaim = '';
+  }
+
+  // Piggy bank break — credit the accumulated jar and reset.
+  // The jar's gems are the true reward; rewards.gems above is a placeholder
+  // that ensures the generic "has at least one reward" invariant holds.
+  if (productId === 'piggy_bank_break' && prevState.piggyBank) {
+    const jarGems = prevState.piggyBank.gems ?? 0;
+    if (jarGems > 0) {
+      nextState.gems += jarGems;
+      nextState.totalEarned.gems += jarGems;
+    }
+    nextState.piggyBank = {
+      ...prevState.piggyBank,
+      gems: 0,
+      lastFillAt: now,
+    };
   }
 
   nextState.purchaseHistory.push({

@@ -27,6 +27,7 @@ import {
 import { firestoreService } from '../services/firestore';
 import { crashReporter } from '../services/crashReporting';
 import { getTitleLabel } from '../data/cosmetics';
+import { getRemoteNumber } from '../services/remoteConfig';
 
 // Helper: get difficulty name for a level
 function getDifficultyForLevel(level: number): string {
@@ -246,6 +247,16 @@ export function useRewardWiring({
     if (isPerfect) {
       economy.addGems(ECONOMY.perfectClearGems);
       totalGemsAwarded += ECONOMY.perfectClearGems;
+    }
+
+    // Slow-fill piggy bank — accumulates gems per puzzle complete (capped
+    // at RC `piggyBankCapacity`; each add is a no-op once full). The grant
+    // path is separate from `addGems` so the jar doesn't inflate the victory
+    // tally or totalEarned.gems on fill — only on break.
+    const piggyFill = Math.max(0, Math.round(getRemoteNumber('piggyBankFillPerPuzzle')));
+    if (piggyFill > 0) {
+      economy.addPiggyBankGems(piggyFill);
+      void analytics.logEvent('piggy_bank_filled', { amount: piggyFill });
     }
 
     // Award library points (apply XP multiplier)

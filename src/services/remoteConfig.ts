@@ -62,6 +62,11 @@ export interface RemoteConfigValues {
   interstitialIntervalSeconds: number; // mirror of interstitialIntervalMs but named per plan 0.11
   // Login calendar A/B — '30day' (default) vs '7day' (legacy)
   loginCalendarVariant: string;
+  // Piggy bank slow-fill gem jar (Branch 5)
+  piggyBankEnabled: boolean;
+  piggyBankFillPerPuzzle: number;
+  piggyBankCapacity: number;
+  piggyBankPriceUSD: number;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -110,6 +115,11 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   interstitialIntervalSeconds: 90,
   // Login calendar variant — '30day' escalating cycle by default
   loginCalendarVariant: '30day',
+  // Piggy bank — 2 gems per puzzle, 200-gem cap, $4.99 to break
+  piggyBankEnabled: true,
+  piggyBankFillPerPuzzle: 2,
+  piggyBankCapacity: 200,
+  piggyBankPriceUSD: 4.99,
 };
 
 // ---------------------------------------------------------------------------
