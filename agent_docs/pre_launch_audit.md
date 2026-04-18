@@ -1,8 +1,8 @@
 # Wordfall — Remaining Launch Tasks
 
-> **Status:** All code-side blockers and the overwhelming majority of polish items from the original pre-launch audit have shipped on branch `claude/game-launch-readiness-bxmxE`. What remains is external setup (Play Console, Firebase deploy, hosted URLs, store assets) plus a small v1.1 polish list that was explicitly deferred.
+> **Status:** All code-side blockers and the overwhelming majority of polish items from the original pre-launch audit have shipped on branch `claude/game-launch-readiness-bxmxE`. The April 2026 top-tier F2P parity plan also shipped in 13 follow-up branches (piggy bank, 50-tier season pass, 30-day login calendar, VIP cosmetic track, universal price anchoring, referral reward grant, shared club goals, friend leaderboard, booster combo synergies, invalid-word screen shake, multi-tile bloom particles, Reanimated migration, Maestro E2E expansion — see CLAUDE.md "Top-tier F2P parity" section). What remains is external setup (Play Console, Firebase deploy, hosted URLs, store assets, audio commission) plus a small v1.1 polish list that was explicitly deferred.
 >
-> **Last verified:** 2026-04-16.
+> **Last verified:** 2026-04-18 (post top-tier parity work, 61 test suites / 981 tests green).
 
 ---
 
@@ -51,7 +51,7 @@ Each of these is explicitly acceptable for v1.0 per the original audit. Track in
 - [x] **Single-slot write queue** for `PlayerContext` / `EconomyContext` AsyncStorage + Firestore persistence. `src/utils/persistQueue.ts` exposes `createPersistQueue` with latest-write-wins semantics; EconomyContext uses a single queue (AsyncStorage + Firestore writer), PlayerContext uses two queues keyed separately.
 - [x] **`iap.ts` purchase-promise rejection contract.** Purchase failures now reject; callers handle with try/catch.
 - [x] **Remaining `console.log` sweep.** Migrated remaining sites to `src/utils/logger`.
-- [x] **Maestro E2E coverage expansion.** All 10 flows present in `.maestro/`: 01_app_launch, 02_daily_puzzle, 03_shop_browse, 04_settings, 05_mode_select, 06_consent_accept, 07_restore_purchases, 08_account_deletion, 09_purchase_happy_path, 10_club_chat_send_and_report. Running the suite on CI hardware is still a v1.1 polish item (needs a Linux runner with Android emulator).
+- [x] **Maestro E2E coverage expansion.** 15 flows present in `.maestro/`: 01_app_launch, 02_daily_puzzle, 03_shop_browse, 04_settings, 05_mode_select, 06_consent_accept, 07_restore_purchases, 08_account_deletion, 09_purchase_happy_path, 10_club_chat_send_and_report, 11_referral_claim, 12_piggy_bank_break, 13_season_pass_claim, 14_friend_leaderboard, 15_booster_combo. Each new-surface flow branches on UI state so fresh-install runs stay green. Running the suite on CI hardware is still a v1.1 polish item (needs a Linux runner with Android emulator).
 - [x] **Context selector Phase 4** — `useSyncExternalStore` with cached-snapshot pattern landed for sync-status selectors (`src/services/syncStatus.ts` → `useSyncStatus` / `useSyncStatusSelector`). Context-level migration remains an incremental refactor and is lower priority (Perf gain, not a correctness issue).
 - [x] **Retry helper + "not synced yet" indicator** for Firestore writes. `src/services/retry.ts` (`withRetry` with jittered backoff + permanent-error short-circuit) + `src/components/NotSyncedBanner.tsx` (surfaces when `state === 'failed' && failureCount >= 2`). `submitDailyScore` / `submitWeeklyScore` already wrapped in `withRetry`.
 

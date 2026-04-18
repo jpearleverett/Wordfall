@@ -2,7 +2,7 @@
 
 Gravity-based word puzzle (React Native + Expo). Find hidden words on a letter grid; cleared letters fall, creating chain opportunities. 10 modes, 40 authored chapters (~600 puzzles), clubs, VIP, prestige.
 
-**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**39 suites, 791 tests**).
+**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**61 suites, 981 tests**).
 
 For detailed architecture see `agent_docs/architecture.md` — it's a short **index** that routes you to per-domain slices (state, engine, screens, cloud) so you only read what the current question needs.
 
@@ -11,7 +11,7 @@ For detailed architecture see `agent_docs/architecture.md` — it's a short **in
 ```bash
 npx expo start --dev-client            # Metro bundler (Expo Go NOT supported)
 npm run typecheck                      # tsc --noEmit
-npm test                               # jest (791 tests)
+npm test                               # jest (981 tests)
 npm install --legacy-peer-deps         # .npmrc sets this by default
 EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  # Rebuild dev client APK (Termux requires the env var)
 ```
@@ -91,9 +91,9 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 ### What the codebase ALREADY has wired (don't re-implement, just verify)
 - **Leaderboards**: `firestoreService.submitDailyScore` / `submitWeeklyScore` are called from `src/hooks/useRewardWiring.ts:689,693` on puzzle complete; reads in `src/services/firestore.ts:300+`
 - **VIP subscription end-to-end**: `vip_weekly` product → `applyProduct` in `src/services/commercialEntitlements.ts:207` sets `isVipSubscriber/vipExpiresAt`. Server-side renewal/expiry handled by `onSubscriptionRenew` (Apple SSN v2 + Google RTDN) in `functions/src/index.ts:418`
-- **Cloud Functions** (13 total, single codebase at `functions/` — see `firebase.json`):
+- **Cloud Functions** (14 total, single codebase at `functions/` — see `firebase.json`):
   - Commerce: `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion` (in `functions/src/index.ts`)
-  - Social: `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift` (in `functions/src/social.ts`, re-exported from `index.ts`)
+  - Social: `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift`, `onReferralSuccess` (in `functions/src/social.ts`, re-exported from `index.ts`). `onPuzzleComplete` + `rotateClubGoals` both understand `mode: 'shared'` goals (Clash-style collective club challenges); `onReferralSuccess` closes the referral reward grant loop with 50/day/UID rate limit and double-claim guard.
 - **Gifting (secure path)**: `sendGift` + `claimGift` HTTPS callables in `functions/src/social.ts` — atomic txn, 5/day/sender cap (`users/{uid}/giftQuota`), idempotency-key replay guard. Client wrapper `src/services/gifts.ts` (`sendGiftSecure`/`claimGiftSecure`). `PlayerSocialContext.sendHintGift`/`sendTileGift` route through `sendGiftSecure` with a fallback to the legacy `firestoreService.sendGift` direct write (same `gifts/` schema) so it stays safe pre-deploy. Inbox UI: `src/components/GiftInbox.tsx` mounted inside `ClubScreen`; reads `firestoreService.getPendingGifts`, claim via `claimGiftSecure`, grant applied locally through EconomyContext (`addHintTokens` / `addBoosterToken('wildcardTile')` / `addLives`).
 - **Push notifications client**: `src/services/notifications.ts` registers Expo + device push tokens, saves to Firestore at `users/{uid}/pushToken` (line 506-509). Server-side `sendPushNotification` callable exists in `functions/src/social.ts`
 - **Receipt validation + replay protection**: `validateReceipt` in `functions/src/index.ts:370` with SHA256 hash dedup (`/receipts` collection)
@@ -127,8 +127,33 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 
 ### Deferred to v1.1 (NOT launch blockers)
 - Localization (UI-only, top 5 languages)
-- Maestro E2E flows beyond smoke
 - iOS lane (Apple Developer enrollment, `GoogleService-Info.plist`, Universal Links, ATT verification)
+- Maestro CI wiring (flows 01–15 are authored; hosted CI runner with Android emulator is the remaining step)
+
+### Top-tier F2P parity (April 2026 — 13 branches merged)
+Plan lived at `/root/.claude/plans/ok-great-make-a-quizzical-dawn.md`. All 4 workstreams shipped except audio commissioning (D5 — blocked on external audio delivery).
+
+- **A1 assetlinks SHA** — placeholder still present; user drops fingerprint from Play Console (`wordfallgamesite/.well-known/assetlinks.json`)
+- **A2 launch runbook** — `agent_docs/launch_runbook.md` (Firebase deploy, EAS secret commands, rollback)
+- **A3 EAS secret runbook** — in `launch_runbook.md`
+- **A4 hard-energy Phase 4B** — stubs cleaned; real debit flows through `useHardEnergy` hook (Remote-Config gated, default OFF)
+- **A5 audio brief** — `agent_docs/audio_brief.md` (11 SFX + 5 BGM specs, drop-in wire-up pointers)
+- **A6 art brief** — `agent_docs/art_brief.md`
+- **A7 soft-launch plan** — `agent_docs/soft_launch_plan.md` (PH+CA cohort, week-2/4/6 KPI gates, Remote Config kill-switches)
+- **A8 Maestro E2E expansion** — flows 11–15 for referral claim / piggy bank / season pass / friend leaderboard / booster combo
+- **B1 Piggy Bank** — `src/components/PiggyBankCard.tsx` + `piggy_bank_break` SKU; fill on puzzle complete (capped); home compact variant when ready; 4 Remote Config knobs
+- **B2 Season Pass** — `src/screens/SeasonPassScreen.tsx` + `SeasonPassHomeCard`, 50-tier ladder, free+premium lanes, `season_pass_premium` SKU, `season_pass_unlock` ceremony; season rotation in `src/services/seasonRotation.ts`
+- **B3 30-day login calendar** — `loginCalendar.ts` extended with 7/14/21/30-day milestones; `loginCalendarVariant` RC for A/B
+- **B4 VIP cosmetic track** — `extraReward` fleshed out across all 6 VIP streak tiers (badge → title → frames → animated frame → trophy + emote pack)
+- **B5 Price anchoring** — `originalPrice` + `originalPriceAmount` on 46 products; strikethrough + % off rendered uniformly
+- **C1 Referral rewards** — `onReferralSuccess` Cloud Function + `ReferralPendingRewards` UI; reward grants on referred user's first puzzle complete with 50/day rate limit and double-claim guard
+- **C2 Shared club goals** — `mode: 'shared'` in `CLUB_GOAL_TEMPLATES`; collective progress in `clubs/{clubId}/sharedGoals/{goalId}`; rotator mixes personal + shared weekly
+- **C3 Friend-tier leaderboard** — `FriendLeaderboardCard` on home, `AddFriendScreen`, `searchUsersByDisplayName`/`createFriendRequest`/`respondToFriendRequest`; leaderboard scope='friends'
+- **D1 Booster combo synergies** — EAGLE EYE (Wildcard+Spotlight) / LUCKY ROLL (Wildcard+Shuffle) / POWER SURGE (Spotlight+Shuffle); 2x score multiplier, 3-puzzle duration; `BoosterComboBanner` + haptics
+- **D2 Invalid-word screen shake** — 6-frame ±8px sequence in `showInvalidFlashAnim`, `invalidShakeEnabled` RC + reduce-motion honored
+- **D3 Multi-tile bloom particles** — per-tile stagger (30ms) via `clearParticleQueue`; cap 24 particles; `cellPositionToScreen` helper shared with gravity block
+- **D4 Animation migration** — `LetterCell` + `BoardGenBanner` moved to Reanimated `useSharedValue` + `withSpring`/`withSequence` (ceremony-consistent feel)
+- **D5 Audio wire-up** — NOT SHIPPED; waits on real audio delivery per A5 brief
 
 ### Completed v1.1 hardening (April 2026)
 - AsyncStorage receipts migrated to `expo-secure-store` (via `src/services/secureStorage.ts` with AsyncStorage fallback + auto-migration on first read)
