@@ -8,10 +8,14 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
-import { LOGIN_CALENDAR_REWARDS, getNextLoginRewardPreview } from '../data/loginCalendar';
+import {
+  getActiveLoginCalendar,
+  getLoginCycleLength,
+  getNextLoginRewardPreview,
+} from '../data/loginCalendar';
 
 interface LoginCalendarProps {
-  /** Current day in the 7-day cycle (1-7) */
+  /** Current day in the active login cycle (1..cycleLength) */
   currentDay: number;
   /** Whether today's reward has already been claimed */
   claimedToday: boolean;
@@ -67,7 +71,7 @@ const DayCircle = React.memo(function DayCircle({
       >
         {icon}
       </Text>
-      {day === 7 && (
+      {day % 7 === 0 && (
         <Text style={styles.jackpotBadge}>★</Text>
       )}
     </View>
@@ -106,7 +110,9 @@ const LoginCalendar: React.FC<LoginCalendarProps> = ({
   }, [claimedToday, pulseAnim]);
 
   const nextReward = getNextLoginRewardPreview(currentDay);
-  const wrappedCurrent = ((currentDay - 1) % 7) + 1;
+  const cycleLength = getLoginCycleLength();
+  const wrappedCurrent = ((currentDay - 1) % cycleLength) + 1;
+  const calendar = getActiveLoginCalendar();
 
   return (
     <LinearGradient
@@ -116,7 +122,7 @@ const LoginCalendar: React.FC<LoginCalendarProps> = ({
       <Text style={styles.title}>Daily Login</Text>
 
       <View style={styles.daysRow}>
-        {LOGIN_CALENDAR_REWARDS.map((reward) => {
+        {calendar.map((reward) => {
           const isClaimed =
             reward.day < wrappedCurrent ||
             (reward.day === wrappedCurrent && claimedToday);

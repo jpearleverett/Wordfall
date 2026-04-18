@@ -300,8 +300,6 @@ export function HomeScreen({
     () => Math.min(100, (progress.currentStreak / nextMilestone) * 100),
     [progress.currentStreak, nextMilestone],
   );
-  const currentRewardDay = ((loginCycleDay - 1) % 7) + 1;
-
   // Progressive disclosure flags
   // Progressive disclosure: segment-aware when available, falls back to playerStage
   const hasSegmentContent = segmentHomeContent.length > 0;
