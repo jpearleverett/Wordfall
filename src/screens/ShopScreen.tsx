@@ -47,6 +47,7 @@ import {
   getVipStreakBonus,
   getNextVipStreakMilestone,
   getVipStreakProgress,
+  VIP_STREAK_BONUSES,
 } from '../data/vipBenefits';
 import { useCommerce } from '../hooks/useCommerce';
 
@@ -248,6 +249,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     addBoosterToken,
     processAdReward,
     claimVipDailyRewards,
+    claimVipStreakBonus,
   } = useEconomyActions();
   const { unlockCosmetic } = usePlayerActions();
   const adsRemoved = adsRemovedProp ?? isAdFreeComputed;
@@ -962,9 +964,17 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   accessibilityRole="button"
                   accessibilityLabel={`Claim VIP streak weekly bonus: ${currentBonus?.bonusGems} gems and ${currentBonus?.bonusHints} hints`}
                   onPress={() => {
+                    const result = claimVipStreakBonus();
+                    if (!result) return;
+                    if (result.cosmetic?.id) {
+                      unlockCosmetic(result.cosmetic.id);
+                    }
+                    const cosmeticLine = result.cosmetic
+                      ? `\n+ exclusive ${result.cosmetic.type}: ${result.cosmetic.id.replace(/_/g, ' ')}`
+                      : '';
                     Alert.alert(
                       'VIP Streak Bonus!',
-                      `You earned +${currentBonus.bonusGems} gems and +${currentBonus.bonusHints} hints for being a ${currentBonus.label}!`,
+                      `You earned +${currentBonus.bonusGems} gems and +${currentBonus.bonusHints} hints for being a ${currentBonus.label}!${cosmeticLine}`,
                     );
                   }}
                   activeOpacity={0.7}
@@ -987,6 +997,52 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             </View>
           );
         })()}
+
+        {/* ── VIP Cosmetic Ladder ───────────────────────────────────── */}
+        {isVip && (
+          <View style={styles.vipLadderCard}>
+            <Text style={styles.vipLadderTitle}>Exclusive VIP Cosmetics</Text>
+            <Text style={styles.vipLadderSubtitle}>
+              Keep your VIP streak alive to unlock every tier.
+            </Text>
+            {VIP_STREAK_BONUSES.map((tier) => {
+              const reached = vipStreakWeeks >= tier.weeksRequired;
+              const cosmetic = tier.extraReward;
+              if (!cosmetic?.id) return null;
+              const typeGlyph =
+                cosmetic.type === 'frame'
+                  ? '\u{1F3F5}'
+                  : cosmetic.type === 'title'
+                    ? '\u{1F3C6}'
+                    : cosmetic.type === 'decoration'
+                      ? '\u{1F3C6}'
+                      : '\u2728';
+              return (
+                <View key={tier.weeksRequired} style={styles.vipLadderRow}>
+                  <Text style={styles.vipLadderWeeks}>
+                    Week {tier.weeksRequired}
+                  </Text>
+                  <View style={styles.vipLadderBody}>
+                    <Text style={styles.vipLadderCosmetic}>
+                      {typeGlyph} {cosmetic.id.replace(/_/g, ' ')}
+                    </Text>
+                    <Text style={styles.vipLadderTypeLabel}>
+                      {cosmetic.type}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.vipLadderStatus,
+                      reached && styles.vipLadderStatusUnlocked,
+                    ]}
+                  >
+                    {reached ? 'Unlocked' : 'Locked'}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {/* ── Featured Offers ────────────────────────────────────────── */}
         <ScrollView
@@ -1717,6 +1773,65 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
     textAlign: 'center',
+  },
+
+  // ── VIP cosmetic ladder ─────────────────────────────────────────────
+  vipLadderCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.purple + '30',
+  },
+  vipLadderTitle: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    color: COLORS.purple,
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  vipLadderSubtitle: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginBottom: 10,
+  },
+  vipLadderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: COLORS.purple + '20',
+  },
+  vipLadderWeeks: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textPrimary,
+    width: 64,
+  },
+  vipLadderBody: {
+    flex: 1,
+  },
+  vipLadderCosmetic: {
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    textTransform: 'capitalize',
+  },
+  vipLadderTypeLabel: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 1,
+  },
+  vipLadderStatus: {
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
+  },
+  vipLadderStatusUnlocked: {
+    color: COLORS.green,
   },
 
   // ── Rotating shop ─────────────────────────────────────────────────────

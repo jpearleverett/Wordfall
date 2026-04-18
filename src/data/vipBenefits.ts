@@ -19,12 +19,12 @@ export interface VipStreakBonus {
 // ─── Streak bonus tiers ──────────────────────────────────────────────────────
 
 export const VIP_STREAK_BONUSES: VipStreakBonus[] = [
-  { weeksRequired: 1, label: 'VIP Welcome', bonusGems: 10, bonusHints: 1 },
-  { weeksRequired: 2, label: 'Loyal Member', bonusGems: 25, bonusHints: 2 },
-  { weeksRequired: 4, label: 'Dedicated VIP', bonusGems: 50, bonusHints: 5, extraReward: { type: 'frame', id: 'vip_silver' } },
-  { weeksRequired: 8, label: 'Elite VIP', bonusGems: 100, bonusHints: 10, extraReward: { type: 'frame', id: 'vip_gold' } },
-  { weeksRequired: 12, label: 'VIP Champion', bonusGems: 150, bonusHints: 15, extraReward: { type: 'title', id: 'vip_champion' } },
-  { weeksRequired: 26, label: 'VIP Legend', bonusGems: 250, bonusHints: 25, extraReward: { type: 'decoration', id: 'vip_trophy' } },
+  { weeksRequired: 1,  label: 'VIP Welcome',   bonusGems: 10,  bonusHints: 1,  extraReward: { type: 'title',      id: 'vip_welcome' } },
+  { weeksRequired: 2,  label: 'Loyal Member',  bonusGems: 25,  bonusHints: 2,  extraReward: { type: 'title',      id: 'vip_devoted' } },
+  { weeksRequired: 4,  label: 'Dedicated VIP', bonusGems: 50,  bonusHints: 5,  extraReward: { type: 'frame',      id: 'vip_silver' } },
+  { weeksRequired: 8,  label: 'Elite VIP',     bonusGems: 100, bonusHints: 10, extraReward: { type: 'frame',      id: 'vip_gold' } },
+  { weeksRequired: 12, label: 'VIP Champion',  bonusGems: 150, bonusHints: 15, extraReward: { type: 'title',      id: 'vip_champion' } },
+  { weeksRequired: 26, label: 'VIP Legend',    bonusGems: 250, bonusHints: 25, extraReward: { type: 'decoration', id: 'vip_trophy' } },
 ];
 
 // ─── Helper functions ────────────────────────────────────────────────────────
