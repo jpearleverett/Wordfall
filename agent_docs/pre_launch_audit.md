@@ -109,7 +109,7 @@ All of the following are committed on `claude/game-launch-readiness-bxmxE`. Kept
 - `allowBackup: false` — AsyncStorage (receipt hashes, VIP flags) no longer snapshotted by Google Backup
 - Proguard + `shrinkResources` enabled for Android release via `expo-build-properties`
 - Android HTTPS deep-link intent-filter (`https://wordfallgame.app`) with `autoVerify="true"`
-- `NSUserTrackingUsageDescription` + `expo-tracking-transparency` plugin in `app.json` for iOS
+- `NSUserTrackingUsageDescription` retained in `ios.infoPlist` for when the iOS lane opens; the `expo-tracking-transparency` config plugin was removed from `app.json` in Apr 2026 (Android-first launch — re-add with `npm install expo-tracking-transparency` + plugin entry when iOS ships)
 
 ### Accessibility
 - `Button.tsx` accepts `accessibilityLabel`, `accessibilityRole`, `accessibilityHint`, `accessibilityState`, `hitSlop`, `testID` with sane defaults (44pt hit-slop, label falls back to title)
