@@ -153,6 +153,28 @@ export const selectSeasonPassClaimCounts = (s: EconomyState) => {
   return { free: freeUnclaimed, premium: premiumUnclaimed };
 };
 
+export const selectSeasonPassFreeUnclaimed = (s: EconomyState): number => {
+  const pass = s.seasonPass;
+  if (!pass) return 0;
+  const currentTier = pass.currentTier;
+  let count = 0;
+  for (let t = 1; t <= currentTier; t++) {
+    if (!pass.claimedFreeTiers.includes(t)) count++;
+  }
+  return count;
+};
+
+export const selectSeasonPassPremiumUnclaimed = (s: EconomyState): number => {
+  const pass = s.seasonPass;
+  if (!pass || !pass.isPremium) return 0;
+  const currentTier = pass.currentTier;
+  let count = 0;
+  for (let t = 1; t <= currentTier; t++) {
+    if (!pass.claimedPremiumTiers.includes(t)) count++;
+  }
+  return count;
+};
+
 // ── Composite/computed selectors ─────────────────────────────────────────────
 // `Date.now()` makes these time-sensitive: the value only changes when the
 // next render reads it AND state has changed. Same idempotency guarantee as
