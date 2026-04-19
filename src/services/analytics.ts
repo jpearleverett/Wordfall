@@ -50,7 +50,7 @@ export type AnalyticsEventName =
   | 'mode_started'
   | 'daily_login'
   | 'streak_count'
-  | 'session_start'
+  | 'app_session_start'
   | 'undo_used'
   | 'chain_count'
   | 'gravity_interaction'
@@ -482,7 +482,7 @@ class Analytics {
     this.state.sessionStartedAt = Date.now();
     await this.persistState();
 
-    await this.logEvent('app_session_start' as any, { source });
+    await this.logEvent('app_session_start', { source });
 
     if (__DEV__) {
       logger.log('[Analytics] app_session_start', { sessionId: this.state.sessionId, source });
