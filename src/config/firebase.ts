@@ -2,9 +2,15 @@ import { initializeApp, getApps } from 'firebase/app';
 import {
   getAuth,
   initializeAuth,
-  getReactNativePersistence,
   type Auth,
+  type Persistence,
 } from 'firebase/auth';
+// getReactNativePersistence is shipped at runtime by firebase/auth v11 but
+// missing from its TypeScript exports (known upstream types gap).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getReactNativePersistence } = require('firebase/auth') as {
+  getReactNativePersistence: (storage: unknown) => Persistence;
+};
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
