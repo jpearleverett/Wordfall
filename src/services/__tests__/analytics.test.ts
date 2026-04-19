@@ -54,7 +54,7 @@ describe('Analytics service', () => {
       await analytics.logEvent('puzzle_complete', { level: 1 });
 
       const events = await analytics.getBufferedEvents(100);
-      const sessionStart = events.find(e => e.event === 'session_start');
+      const sessionStart = events.find(e => e.event === 'app_session_start');
       expect(sessionStart).toBeDefined();
     });
 
@@ -83,7 +83,7 @@ describe('Analytics service', () => {
       const analytics = await getAnalytics();
       await analytics.startSession('app_launch');
       const events = await analytics.getBufferedEvents(100);
-      const sessionEvent = events.find(e => e.event === 'session_start');
+      const sessionEvent = events.find(e => e.event === 'app_session_start');
       expect(sessionEvent).toBeDefined();
       expect(sessionEvent!.sessionId).toBeTruthy();
     });
