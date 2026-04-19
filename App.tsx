@@ -800,6 +800,24 @@ function GameScreenWrapper({ route, navigation }: any) {
     setPendingNavAction(null);
   }, [pendingNavAction, navigation, handleNextLevel]);
 
+  // Memoised so GameScreen (wrapped in React.memo) doesn't receive a fresh
+  // callback identity on every GameScreenWrapper render.
+  const handleNavigate = useCallback((screen: string, params?: Record<string, unknown>) => {
+    const screenRoutes: Record<string, { tab: string; screen: string }> = {
+      Mastery: { tab: 'Profile', screen: 'Mastery' },
+      Library: { tab: 'Library', screen: 'LibraryMain' },
+    };
+    const route = screenRoutes[screen];
+    if (route) {
+      navigation.navigate(route.tab as never, {
+        screen: route.screen,
+        ...(params ? { params } : {}),
+      } as never);
+    } else {
+      navigation.navigate(screen as never);
+    }
+  }, [navigation]);
+
   return (
     <View style={{ flex: 1 }}>
       <GameScreen
@@ -825,22 +843,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         totalCoinsAwarded={completionData.totalCoinsAwarded}
         totalGemsAwarded={completionData.totalGemsAwarded}
         nextUnlockPreview={completionData.nextUnlockPreview}
-        onNavigate={(screen: string, params?: Record<string, unknown>) => {
-          // Map nested screens to their parent tab for cross-tab navigation
-          const screenRoutes: Record<string, { tab: string; screen: string }> = {
-            Mastery: { tab: 'Profile', screen: 'Mastery' },
-            Library: { tab: 'Library', screen: 'LibraryMain' },
-          };
-          const route = screenRoutes[screen];
-          if (route) {
-            navigation.navigate(route.tab as never, {
-              screen: route.screen,
-              ...(params ? { params } : {}),
-            } as never);
-          } else {
-            navigation.navigate(screen as never);
-          }
-        }}
+        onNavigate={handleNavigate}
       />
 
       {/* Post-puzzle spin prompt */}

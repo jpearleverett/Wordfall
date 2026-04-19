@@ -394,7 +394,7 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
 );
 const ClearParticleLayer = React.memo(ClearParticleLayerImpl);
 
-export function GameScreen({
+function GameScreenImpl({
   board,
   level,
   isDaily = false,
@@ -2156,6 +2156,12 @@ export function GameScreen({
     </GameStoreContext.Provider>
   );
 }
+
+// React.memo isolates GameScreen from GameScreenWrapper re-renders that
+// aren't relevant to gameplay (e.g. PlayerContext / EconomyContext value
+// identity churn from unrelated state ticks). Props are all primitives or
+// stable callbacks, so the default shallow compare is sufficient.
+export const GameScreen = React.memo(GameScreenImpl);
 
 const styles = StyleSheet.create({
   container: {
