@@ -1,5 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import { COLORS, FONTS } from '../../constants';
 
 interface GravityTrailEffectProps {
@@ -20,23 +25,105 @@ interface GravityTrailEffectProps {
   triggerKey: number;
 }
 
-interface Ghost {
-  id: string;
-  letter: string;
-  x: number;
-  y: number;
-  startOpacity: number;
-  opacity: Animated.Value;
-  translateY: Animated.Value;
-}
-
 const GHOST_OFFSETS = [
   { rowOffset: 1, startOpacity: 0.2 },
   { rowOffset: 2, startOpacity: 0.1 },
   { rowOffset: 3, startOpacity: 0.05 },
 ];
 
+// Fixed-size ghost pool. Large enough for worst-case chain clears
+// (8 moved cells × 3 GHOST_OFFSETS = 24) without per-clear allocations.
+// Previous implementation allocated new Animated.Value instances per ghost
+// on every word found, which created JS→native bridge traffic at the exact
+// moment the gravity animation was trying to run smoothly.
+const MAX_GHOSTS = 24;
+
 const TRAIL_DURATION = 500;
+
+interface SlotData {
+  active: boolean;
+  letter: string;
+  x: number;
+  y: number;
+  startOpacity: number;
+  // Bumped per activation so GhostSlot effects know when to restart. Using a
+  // counter rather than triggerKey keeps each slot independent — a later
+  // trigger won't retrigger slots that weren't reassigned.
+  runId: number;
+}
+
+const EMPTY_SLOT: SlotData = {
+  active: false,
+  letter: '',
+  x: 0,
+  y: 0,
+  startOpacity: 0,
+  runId: 0,
+};
+
+function makeEmptySlots(): SlotData[] {
+  return Array.from({ length: MAX_GHOSTS }, () => EMPTY_SLOT);
+}
+
+/**
+ * Single ghost slot. Owns its own Reanimated shared values so animation
+ * updates stay on the UI thread and do not re-render the parent. The slot
+ * is persistent (always mounted) — only its `active` flag toggles visibility
+ * so we don't pay remount cost every word clear.
+ */
+interface GhostSlotProps {
+  slot: SlotData;
+  cellSize: number;
+}
+
+function GhostSlotImpl({ slot, cellSize }: GhostSlotProps) {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (!slot.active) {
+      opacity.value = 0;
+      translateY.value = 0;
+      return;
+    }
+    opacity.value = slot.startOpacity;
+    translateY.value = 0;
+    // Worklet-driven fades + drifts. withTiming runs entirely on the UI
+    // thread so the JS thread can service taps / reducer dispatches during
+    // the trail animation.
+    opacity.value = withTiming(0, { duration: TRAIL_DURATION });
+    translateY.value = withTiming(cellSize * 0.3, { duration: TRAIL_DURATION });
+  }, [slot.active, slot.runId, slot.startOpacity, cellSize, opacity, translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  if (!slot.active) return null;
+
+  return (
+    <Reanimated.View
+      style={[
+        styles.ghost,
+        {
+          width: cellSize,
+          height: cellSize,
+          left: slot.x - cellSize / 2,
+          top: slot.y - cellSize / 2,
+          borderRadius: cellSize * 0.15,
+        },
+        animatedStyle,
+      ]}
+    >
+      <Text style={[styles.ghostLetter, { fontSize: cellSize * 0.45 }]}>
+        {slot.letter}
+      </Text>
+    </Reanimated.View>
+  );
+}
+
+const GhostSlot = React.memo(GhostSlotImpl);
 
 const GravityTrailEffect: React.FC<GravityTrailEffectProps> = ({
   movedCells,
@@ -45,72 +132,50 @@ const GravityTrailEffect: React.FC<GravityTrailEffectProps> = ({
   gridPadding,
   triggerKey,
 }) => {
-  const [ghosts, setGhosts] = useState<Ghost[]>([]);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [slots, setSlots] = useState<SlotData[]>(makeEmptySlots);
   const prevTriggerKeyRef = useRef(triggerKey);
+  const runIdRef = useRef(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (triggerKey === prevTriggerKeyRef.current) return;
     prevTriggerKeyRef.current = triggerKey;
-
     if (movedCells.length === 0) return;
 
-    const newGhosts: Ghost[] = [];
+    runIdRef.current += 1;
+    const runId = runIdRef.current;
 
-    for (const cell of movedCells) {
+    const next: SlotData[] = makeEmptySlots();
+    let idx = 0;
+    outer: for (const cell of movedCells) {
       for (const { rowOffset, startOpacity } of GHOST_OFFSETS) {
+        if (idx >= MAX_GHOSTS) break outer;
         const ghostRow = cell.toRow - rowOffset;
         if (ghostRow < 0) continue;
-
         const x =
           gridPadding + cell.col * (cellSize + cellGap) + cellSize / 2;
         const y =
           gridPadding + ghostRow * (cellSize + cellGap) + cellSize / 2;
-
-        const opacity = new Animated.Value(startOpacity);
-        const translateY = new Animated.Value(0);
-
-        newGhosts.push({
-          id: `${triggerKey}-${cell.col}-${cell.toRow}-${rowOffset}`,
+        next[idx] = {
+          active: true,
           letter: cell.letter,
           x,
           y,
           startOpacity,
-          opacity,
-          translateY,
-        });
+          runId,
+        };
+        idx++;
       }
     }
 
-    setGhosts(newGhosts);
+    setSlots(next);
 
-    // Animate all ghosts
-    const animations: Animated.CompositeAnimation[] = [];
-    newGhosts.forEach((ghost) => {
-      animations.push(
-        Animated.timing(ghost.opacity, {
-          toValue: 0,
-          duration: TRAIL_DURATION,
-          useNativeDriver: true,
-        }),
-      );
-      animations.push(
-        Animated.timing(ghost.translateY, {
-          toValue: cellSize * 0.3,
-          duration: TRAIL_DURATION,
-          useNativeDriver: true,
-        }),
-      );
-    });
-
-    Animated.parallel(animations).start();
-
-    // Clean up after animation completes
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    // Clear slots after the trail finishes so stale letters aren't held in
+    // state. Shared-value cleanup happens automatically when each slot's
+    // `active` flag flips back to false.
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      setGhosts([]);
+      setSlots(makeEmptySlots());
       timeoutRef.current = null;
     }, TRAIL_DURATION);
 
@@ -122,37 +187,10 @@ const GravityTrailEffect: React.FC<GravityTrailEffectProps> = ({
     };
   }, [triggerKey, movedCells, cellSize, cellGap, gridPadding]);
 
-  if (ghosts.length === 0) return null;
-
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {ghosts.map((ghost) => (
-        <Animated.View
-          key={ghost.id}
-          style={[
-            styles.ghost,
-            {
-              width: cellSize,
-              height: cellSize,
-              left: ghost.x - cellSize / 2,
-              top: ghost.y - cellSize / 2,
-              borderRadius: cellSize * 0.15,
-              opacity: ghost.opacity,
-              transform: [{ translateY: ghost.translateY }],
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.ghostLetter,
-              {
-                fontSize: cellSize * 0.45,
-              },
-            ]}
-          >
-            {ghost.letter}
-          </Text>
-        </Animated.View>
+      {slots.map((slot, i) => (
+        <GhostSlot key={i} slot={slot} cellSize={cellSize} />
       ))}
     </View>
   );

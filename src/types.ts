@@ -102,6 +102,14 @@ export interface GameState {
   comboWordsRemaining: number;
   /** Score multiplier applied to word-find score while a combo is active. 1 = no combo. */
   comboMultiplier: number;
+  /**
+   * When true, `SUBMIT_WORD` captures `gridStateBefore` / `gridStateAfter`
+   * snapshots on every solve step (for replay rendering + share text).
+   * When false (the default) the snapshots are omitted to save two full
+   * grid string-copies per word — perf-critical during chain clears.
+   * Enabled per-puzzle by GameScreen for dailies / event puzzles.
+   */
+  captureReplay: boolean;
 }
 
 export type GameAction =
@@ -136,7 +144,23 @@ export type GameAction =
       multiplier: number;
       wordsDuration: number;
     }
-  | { type: 'EXPIRE_BOOSTER_COMBO' };
+  | { type: 'EXPIRE_BOOSTER_COMBO' }
+  /**
+   * Dispatched from a `useEffect` when a shrinking-board shrink leaves the
+   * puzzle unsolvable (see Fix B in the April 2026 perf pass). Carries
+   * shrinkCount so the reducer ignores stale dispatches — if another
+   * shrink has occurred since the check started, the check is outdated.
+   */
+  | { type: 'MARK_FAILED'; shrinkCount: number }
+  /**
+   * Dispatched from the deferred chain-detection effect (Fix A in the
+   * April 2026 perf pass). Carries `forSolveCount` — the number of words
+   * solved at the time the check started — so the reducer can ignore
+   * stale dispatches if another word was submitted meanwhile. Chain
+   * detection used to run synchronously in SUBMIT_WORD with 2 × N × DFS
+   * per word; now it runs one commit after gravity starts.
+   */
+  | { type: 'INCREMENT_CHAIN'; forSolveCount: number };
 
 export interface PlayerProgress {
   currentLevel: number;

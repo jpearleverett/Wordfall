@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useState, useRef, forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
@@ -13,7 +13,8 @@ import {
   View,
 } from 'react-native';
 import { useStore } from 'zustand';
-import { Board, CellPosition, GameMode, VictorySummaryItem } from '../types';
+import { useShallow } from 'zustand/react/shallow';
+import { Board, CellPosition, GameMode, GameState, VictorySummaryItem } from '../types';
 import { useGame } from '../hooks/useGame';
 import { GameStoreContext } from '../stores/gameStore';
 import { GameHeader } from '../components/GameHeader';
@@ -339,6 +340,60 @@ function WordClearParticle({ delay, startX, startY }: { delay: number; startX: n
   );
 }
 
+// ── Bloom particle queue, extracted from GameScreen (Fix F) ────────────────
+// Previously the queue lived in GameScreen's state, so every push/remove
+// re-rendered the 2690-line parent. Moving it here isolates re-renders to
+// this tiny overlay. GameScreen talks to it through an imperative ref
+// handle so the coordinating code reads the same as before.
+interface ClearParticleEntry {
+  id: string;
+  x: number;
+  y: number;
+}
+
+export interface ClearParticleLayerHandle {
+  push(entries: ClearParticleEntry[]): void;
+  removeIds(ids: string[]): void;
+}
+
+interface ClearParticleLayerProps {
+  style: any;
+}
+
+const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticleLayerProps>(
+  function ClearParticleLayerImpl({ style }, ref) {
+    const [queue, setQueue] = useState<ClearParticleEntry[]>([]);
+
+    useImperativeHandle(ref, () => ({
+      push(entries) {
+        if (entries.length === 0) return;
+        setQueue(prev => [...prev, ...entries]);
+      },
+      removeIds(ids) {
+        if (ids.length === 0) return;
+        const idSet = new Set(ids);
+        setQueue(prev => prev.filter(q => !idSet.has(q.id)));
+      },
+    }), []);
+
+    if (queue.length === 0) return null;
+
+    return (
+      <View style={style} pointerEvents="none">
+        {queue.map((p, i) => (
+          <WordClearParticle
+            key={p.id}
+            delay={(i % 10) * 20}
+            startX={p.x}
+            startY={p.y}
+          />
+        ))}
+      </View>
+    );
+  },
+);
+const ClearParticleLayer = React.memo(ClearParticleLayerImpl);
+
 export function GameScreen({
   board,
   level,
@@ -420,7 +475,7 @@ export function GameScreen({
     totalWords,
     remainingWords,
     solveSequence,
-  } = useGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
+  } = useGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit, isDaily);
 
   // ── Narrow zustand selectors — GameScreen only re-renders when these
   //    coarse slices change (per word/action, NOT per cell tap). ─────────
@@ -434,11 +489,11 @@ export function GameScreen({
   const undosLeft = useStore(store, s => s.undosLeft);
   const timeRemaining = useStore(store, s => s.timeRemaining);
   const grid = useStore(store, s => s.board.grid);
-  const words = useStore(store, s => s.board.words);
-  const history = useStore(store, s => s.history);
+  const words = useStore(store, useShallow((s: GameState) => s.board.words));
+  const history = useStore(store, useShallow((s: GameState) => s.history));
   const wildcardMode = useStore(store, s => s.wildcardMode);
   const spotlightActive = useStore(store, s => s.spotlightActive);
-  const spotlightLetters = useStore(store, s => s.spotlightLetters);
+  const spotlightLetters = useStore(store, useShallow((s: GameState) => s.spotlightLetters));
   const gravityDirection = useStore(store, s => s.gravityDirection);
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const perfectRun = useStore(store, s => s.perfectRun);
@@ -446,7 +501,7 @@ export function GameScreen({
   const lastSelectionResetTap = useStore(store, s => s.lastSelectionResetTap);
   const boardFreezeActive = useStore(store, s => s.boardFreezeActive);
   const scoreDoubler = useStore(store, s => s.scoreDoubler);
-  const boostersUsedThisPuzzle = useStore(store, s => s.boostersUsedThisPuzzle);
+  const boostersUsedThisPuzzle = useStore(store, useShallow((s: GameState) => s.boostersUsedThisPuzzle));
   const activeComboType = useStore(store, s => s.activeComboType);
   const comboWordsRemaining = useStore(store, s => s.comboWordsRemaining);
   const comboMultiplierValue = useStore(store, s => s.comboMultiplier);
@@ -493,13 +548,10 @@ export function GameScreen({
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const prevFoundWordsRef = useRef(foundWords);
   const [movedCells, setMovedCells] = useState<CellPosition[]>([]);
-  // Multi-tile bloom queue — each entry is one particle instance at a cell-centered
-  // screen coordinate. Populated from `lastSubmittedCellsRef` positions when a
-  // word is found (each tile gets `tileBloomParticlesPerTile` copies, staggered
-  // 30ms apart). Entries are removed via batched filter after ~700ms.
-  const [clearParticleQueue, setClearParticleQueue] = useState<
-    Array<{ id: string; x: number; y: number }>
-  >([]);
+  // Multi-tile bloom queue — owned by the sibling `ClearParticleLayer` so
+  // pushes/removes don't re-render the 2700-line GameScreen parent. We talk
+  // to it through an imperative handle (Fix F, April 2026 perf pass).
+  const particleLayerRef = useRef<ClearParticleLayerHandle | null>(null);
   // Tracks transient setTimeout handles (particle bursts, score popups, etc.) so they can be cleared on unmount.
   const pendingTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const trackTimeout = useCallback(
@@ -920,15 +972,14 @@ export function GameScreen({
       tiles.forEach((cell, idx) => {
         trackTimeout(() => {
           const { x, y } = cellPositionToScreen(cell.row, cell.col);
-          const entries: Array<{ id: string; x: number; y: number }> = [];
+          const entries: ClearParticleEntry[] = [];
           for (let p = 0; p < perTile; p++) {
             entries.push({ id: `${bloomBatchId}-${idx}-${p}`, x, y });
           }
-          setClearParticleQueue(prev => [...prev, ...entries]);
+          particleLayerRef.current?.push(entries);
+          const ids = entries.map(e => e.id);
           trackTimeout(() => {
-            setClearParticleQueue(prev =>
-              prev.filter(q => !entries.some(e => e.id === q.id)),
-            );
+            particleLayerRef.current?.removeIds(ids);
           }, 700);
         }, idx * 30);
       });
@@ -1003,10 +1054,10 @@ export function GameScreen({
   useEffect(() => {
     if (combo > 1 && status === 'playing') {
       showChainCelebration();
-      void analytics.logEvent('chain_count', {
-        level,
-        mode,
-        combo: combo,
+      // Defer analytics off the frame the chain popup is animating on.
+      const chainPayload = { level, mode, combo: combo };
+      requestAnimationFrame(() => {
+        void analytics.logEvent('chain_count', chainPayload);
       });
     }
   }, [combo, status, showChainCelebration, level, mode]);
@@ -1142,10 +1193,11 @@ export function GameScreen({
         ? getMovedCellPositions(previousGrid, grid)
         : [];
       void soundManager.playSound('gravity');
-      void analytics.logEvent('gravity_interaction', {
-        level,
-        mode,
-        movedCells: moved.length,
+      // Defer analytics serialization off the gravity frame so the event
+      // dispatch doesn't compete with the animation that just started.
+      const analyticsPayload = { level, mode, movedCells: moved.length };
+      requestAnimationFrame(() => {
+        void analytics.logEvent('gravity_interaction', analyticsPayload);
       });
       setMovedCells(moved);
 
@@ -1292,15 +1344,19 @@ export function GameScreen({
             trackTimeout(() => spawnTileBloom(bigCells), 250);
           } else {
             const fallbackId = `big-${Date.now()}`;
-            const fallback = [
+            // Push both entries in a single batch so the sibling layer
+            // commits once (Fix F). Removals are likewise batched via
+            // a single trackTimeout chain.
+            const fallback: ClearParticleEntry[] = [
               { id: `${fallbackId}-a`, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 },
               { id: `${fallbackId}-b`, x: SCREEN_WIDTH / 2 + 20, y: gridAreaHeight / 2 + 40 },
             ];
-            setClearParticleQueue(prev => [...prev, fallback[0]]);
+            particleLayerRef.current?.push([fallback[0]]);
             trackTimeout(() => {
-              setClearParticleQueue(prev => [...prev.filter(q => q.id !== fallback[0].id), fallback[1]]);
+              particleLayerRef.current?.removeIds([fallback[0].id]);
+              particleLayerRef.current?.push([fallback[1]]);
               trackTimeout(() => {
-                setClearParticleQueue(prev => prev.filter(q => q.id !== fallback[1].id));
+                particleLayerRef.current?.removeIds([fallback[1].id]);
               }, 500);
             }, 250);
           }
@@ -1324,10 +1380,10 @@ export function GameScreen({
           spawnTileBloom(cells);
         } else {
           const fallbackId = `chain-${Date.now()}`;
-          const entry = { id: fallbackId, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
-          setClearParticleQueue(prev => [...prev, entry]);
+          const entry: ClearParticleEntry = { id: fallbackId, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
+          particleLayerRef.current?.push([entry]);
           trackTimeout(() => {
-            setClearParticleQueue(prev => prev.filter(q => q.id !== entry.id));
+            particleLayerRef.current?.removeIds([entry.id]);
           }, 500);
         }
       }
@@ -1846,19 +1902,9 @@ export function GameScreen({
         {/* #1 Word-clear particles — multi-tile bloom queue. Each queue entry
             renders one particle instance anchored at a cleared cell's screen
             coordinate. Entries are removed by filter after their animation
-            finishes (see spawnTileBloom). */}
-        {clearParticleQueue.length > 0 && (
-          <View style={styles.particleContainer} pointerEvents="none">
-            {clearParticleQueue.map((p, i) => (
-              <WordClearParticle
-                key={p.id}
-                delay={(i % 10) * 20}
-                startX={p.x}
-                startY={p.y}
-              />
-            ))}
-          </View>
-        )}
+            finishes (see spawnTileBloom). Owned by the sibling component so
+            push/remove doesn't re-render GameScreen (Fix F, April 2026). */}
+        <ClearParticleLayer ref={particleLayerRef} style={styles.particleContainer} />
 
         {/* #4 Undo cyan tint flash overlay */}
         {showUndoFlash && (

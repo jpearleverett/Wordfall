@@ -11,10 +11,11 @@
  */
 import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
 import { Animated, View, StyleSheet } from 'react-native';
+import { useShallow } from 'zustand/react/shallow';
 import { GameGrid } from '../../components/Grid';
 import { WordBank } from '../../components/WordBank';
 import { useGameStore, useGameDispatch } from '../../stores/gameStore';
-import { CellPosition, GameMode, GravityDirection } from '../../types';
+import { CellPosition, GameMode, GameState, GravityDirection } from '../../types';
 import { CELL_GAP, MAX_GRID_WIDTH, COLORS } from '../../constants';
 import { matchesWord } from '../../hooks/useGame';
 import { profilerOnRender, perfMark, perfDragStart, perfDragEnd } from '../../utils/perfInstrument';
@@ -54,6 +55,25 @@ function buildRemainingWordSet(words: Array<{ word: string; found: boolean }>): 
   return new Set(words.filter((word) => !word.found).map((word) => word.word));
 }
 
+/**
+ * Shared wildcard-aware validity check used by both PlayField (to drive
+ * the valid-word flash) and ConnectedWordBank (to style the current word).
+ * Extracted so the two components' memoization logic stays in one place.
+ */
+function computeIsValidWord(
+  currentWord: string,
+  selectedCells: CellPosition[],
+  wildcardCells: CellPosition[],
+  words: Array<{ word: string; found: boolean }>,
+  remainingWordSet: Set<string>,
+  rawWord?: string,
+): boolean {
+  if (selectedCells.length === 0) return false;
+  if (wildcardCells.length === 0) return remainingWordSet.has(currentWord);
+  const compareWord = rawWord ?? currentWord;
+  return words.some(w => !w.found && matchesWord(compareWord, w.word, selectedCells, wildcardCells));
+}
+
 function PlayFieldImpl({
   mode,
   onCellInteraction,
@@ -72,10 +92,10 @@ function PlayFieldImpl({
   const dispatch = useGameDispatch();
 
   // ── Narrow selectors — only these trigger PlayField re-renders ─────────
-  const selectedCells = useGameStore(s => s.selectedCells);
+  const selectedCells = useGameStore(useShallow((s: GameState) => s.selectedCells));
   const grid = useGameStore(s => s.board.grid);
-  const words = useGameStore(s => s.board.words);
-  const wildcardCells = useGameStore(s => s.wildcardCells);
+  const words = useGameStore(useShallow((s: GameState) => s.board.words));
+  const wildcardCells = useGameStore(useShallow((s: GameState) => s.wildcardCells));
   const wildcardMode = useGameStore(s => s.wildcardMode);
   const gravityDirection = useGameStore(s => s.gravityDirection);
 
@@ -89,11 +109,10 @@ function PlayFieldImpl({
 
   // Wildcard-aware validity check — when wildcards are active, fall back to
   // matchesWord which skips letter comparison for wildcard cell positions.
-  const isValidWord = useMemo(() => {
-    if (selectedCells.length === 0) return false;
-    if (wildcardCells.length === 0) return remainingWordSet.has(currentWord);
-    return words.some(w => !w.found && matchesWord(currentWord, w.word, selectedCells, wildcardCells));
-  }, [selectedCells, currentWord, wildcardCells, words, remainingWordSet]);
+  const isValidWord = useMemo(
+    () => computeIsValidWord(currentWord, selectedCells, wildcardCells, words, remainingWordSet),
+    [selectedCells, currentWord, wildcardCells, words, remainingWordSet],
+  );
 
   // ── Notify GameScreen of valid-word / selection changes ────────────────
   useEffect(() => {
@@ -185,10 +204,10 @@ export const PlayField = React.memo(PlayFieldImpl);
  * for found status).
  */
 function ConnectedWordBankImpl() {
-  const selectedCells = useGameStore(s => s.selectedCells);
+  const selectedCells = useGameStore(useShallow((s: GameState) => s.selectedCells));
   const grid = useGameStore(s => s.board.grid);
-  const words = useGameStore(s => s.board.words);
-  const wildcardCells = useGameStore(s => s.wildcardCells);
+  const words = useGameStore(useShallow((s: GameState) => s.board.words));
+  const wildcardCells = useGameStore(useShallow((s: GameState) => s.wildcardCells));
 
   const wildcardSet = useMemo(
     () => new Set(wildcardCells.map(c => `${c.row},${c.col}`)),
@@ -206,13 +225,17 @@ function ConnectedWordBankImpl() {
 
   const remainingWordSet = useMemo(() => buildRemainingWordSet(words), [words]);
 
-  // Wildcard-aware validity: use raw letters + matchesWord for wildcard comparison
-  const isValidWord = useMemo(() => {
-    if (selectedCells.length === 0) return false;
-    if (wildcardCells.length === 0) return remainingWordSet.has(currentWord);
-    const rawWord = selectedCells.map(({ row, col }) => grid[row]?.[col]?.letter ?? '').join('');
-    return words.some(w => !w.found && matchesWord(rawWord, w.word, selectedCells, wildcardCells));
-  }, [selectedCells, currentWord, grid, wildcardCells, words, remainingWordSet]);
+  // Wildcard-aware validity: use raw letters + matchesWord for wildcard comparison.
+  // Shares the core logic with PlayField via computeIsValidWord so the two
+  // components can't drift apart.
+  const rawWord = useMemo(
+    () => selectedCells.map(({ row, col }) => grid[row]?.[col]?.letter ?? '').join(''),
+    [selectedCells, grid],
+  );
+  const isValidWord = useMemo(
+    () => computeIsValidWord(currentWord, selectedCells, wildcardCells, words, remainingWordSet, rawWord),
+    [selectedCells, currentWord, wildcardCells, words, remainingWordSet, rawWord],
+  );
 
   return (
     <View style={styles.wordArea}>

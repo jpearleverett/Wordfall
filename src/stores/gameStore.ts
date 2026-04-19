@@ -43,13 +43,14 @@ export function createGameStore(
   mode: GameMode = 'classic',
   maxMoves: number = 0,
   timeLimit: number = 0,
+  captureReplay: boolean = false,
 ) {
   // Wrap with perf instrumentation in dev (same as useGame did).
   const timedReducer = __DEV__
     ? instrumentReducer(gameReducer)
     : gameReducer;
 
-  const initial = createInitialState(initialBoard, level, mode, maxMoves, timeLimit);
+  const initial = createInitialState(initialBoard, level, mode, maxMoves, timeLimit, captureReplay);
 
   return createStore(redux(timedReducer, initial));
 }
