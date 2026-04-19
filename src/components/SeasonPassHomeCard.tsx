@@ -14,7 +14,8 @@ import {
   selectSeasonPassTier,
   selectSeasonPassXP,
   selectSeasonPassIsPremium,
-  selectSeasonPassClaimCounts,
+  selectSeasonPassFreeUnclaimed,
+  selectSeasonPassPremiumUnclaimed,
 } from '../stores/economyStore';
 import { getXPProgress, MAX_SEASON_TIER, getCurrentSeason } from '../data/seasonPass';
 import { getRemoteBoolean } from '../services/remoteConfig';
@@ -27,11 +28,12 @@ const SeasonPassHomeCard: React.FC<SeasonPassHomeCardProps> = ({ onPress }) => {
   const tier = useEconomyStore(selectSeasonPassTier);
   const xp = useEconomyStore(selectSeasonPassXP);
   const isPremium = useEconomyStore(selectSeasonPassIsPremium);
-  const claimCounts = useEconomyStore(selectSeasonPassClaimCounts);
+  const freeUnclaimed = useEconomyStore(selectSeasonPassFreeUnclaimed);
+  const premiumUnclaimed = useEconomyStore(selectSeasonPassPremiumUnclaimed);
 
   const progress = useMemo(() => getXPProgress(xp, tier), [xp, tier]);
   const season = useMemo(() => getCurrentSeason(), []);
-  const unclaimed = claimCounts.free + claimCounts.premium;
+  const unclaimed = freeUnclaimed + premiumUnclaimed;
 
   if (!getRemoteBoolean('seasonPassEnabled')) return null;
 
