@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import {
   GameState,
   GameAction,
@@ -53,6 +54,7 @@ function createInitialState(
   mode: GameMode = 'classic',
   maxMoves: number = 0,
   timeRemaining: number = 0,
+  captureReplay: boolean = false,
 ): GameState {
   return {
     board: {
@@ -99,8 +101,13 @@ function createInitialState(
     activeComboType: null,
     comboWordsRemaining: 0,
     comboMultiplier: 1,
+    captureReplay,
   };
 }
+
+// Shared sentinel used when captureReplay is false so every solve step can
+// share the same empty 2D array reference instead of allocating fresh ones.
+const EMPTY_SNAPSHOT: string[][] = [];
 
 /**
  * Convert a Grid to a 2D string array snapshot for replay.
@@ -247,6 +254,18 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
 
   if (!board.grid[position.row]?.[position.col]) return state;
 
+  // Only rewrite lastInvalidTap / lastSelectionResetTap when the target value
+  // differs from the current one. Writing `null` over an already-null field
+  // creates a new state object reference for GameScreen's zustand subscribers
+  // to compare, and (worse) causes a re-render when the previous value was
+  // non-null even though the user was just making another normal tap.
+  const clearInvalidTap = state.lastInvalidTap === null
+    ? undefined
+    : { lastInvalidTap: null };
+  const clearSelectionResetTap = state.lastSelectionResetTap === null
+    ? undefined
+    : { lastSelectionResetTap: null };
+
   // If tapping an already selected cell, deselect from that point
   const existingIndex = selectedCells.findIndex(
     c => c.row === position.row && c.col === position.col
@@ -255,10 +274,10 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
     const newSelected = selectedCells.slice(0, existingIndex);
     return {
       ...state,
+      ...clearInvalidTap,
+      ...clearSelectionResetTap,
       selectedCells: newSelected,
       selectionDirection: newSelected.length < 2 ? null : selectionDirection,
-      lastInvalidTap: null,
-      lastSelectionResetTap: null,
     };
   }
 
@@ -266,10 +285,10 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
   if (selectedCells.length === 0) {
     return {
       ...state,
+      ...clearInvalidTap,
+      ...clearSelectionResetTap,
       selectedCells: [position],
       selectionDirection: null,
-      lastInvalidTap: null,
-      lastSelectionResetTap: null,
     };
   }
 
@@ -282,11 +301,14 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
   );
 
   if (!adjacent) {
+    // A non-adjacent tap resets the selection and records the tap as a
+    // "selection reset" marker so GameScreen can flash it. The reset tap
+    // intentionally overrides the clear above.
     return {
       ...state,
+      ...clearInvalidTap,
       selectedCells: [position],
       selectionDirection: null,
-      lastInvalidTap: null,
       lastSelectionResetTap: position,
     };
   }
@@ -294,10 +316,10 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
   const newSelected = [...selectedCells, position];
   return {
     ...state,
+    ...clearInvalidTap,
+    ...clearSelectionResetTap,
     selectedCells: newSelected,
     selectionDirection: newDir,
-    lastInvalidTap: null,
-    lastSelectionResetTap: null,
   };
 }
 
@@ -397,16 +419,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         i === wordIndex ? { ...w, found: true } : { ...w }
       );
 
-      // Chain detection
-      const remainingAfter = board.words.filter(w => !w.found && w.word !== matchingWord.word);
-      let newChainCount = state.chainCount;
-      if (remainingAfter.length > 0 && mode !== 'noGravity' && mode !== 'shrinkingBoard') {
-        const findableBefore = remainingAfter.filter(w => findWordInGrid(gridAfterRemoval, w.word, 1).length > 0);
-        const findableAfter = remainingAfter.filter(w => findWordInGrid(newGrid, w.word, 1).length > 0);
-        if (findableAfter.length > findableBefore.length) {
-          newChainCount = state.chainCount + 1;
-        }
-      }
+      // Chain detection now runs in a deferred useEffect (Fix A, April 2026
+      // perf pass) instead of synchronously here. The old path ran 2 × N
+      // findWordInGrid calls inside the reducer, blocking the frame that
+      // gravity wanted to animate on. The deferred effect reads the same
+      // grids from history + solveSequence and dispatches INCREMENT_CHAIN
+      // one commit later, which is below the perceptible threshold
+      // (the chain popup's entry animation takes ~200ms).
+      const newChainCount = state.chainCount;
 
       // Score (with optional score doubler + optional booster-combo multiplier)
       const comboLevel = state.combo + 1;
@@ -440,18 +460,18 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           newBoardFreezeActive = false;
           newWordsUntilShrink = 2; // reset countdown without shrinking
         } else {
-          // Time to shrink — remove outer ring, no gravity (cells stay in place)
+          // Time to shrink — remove outer ring, no gravity (cells stay in place).
+          // The "did we just make the puzzle unwinnable?" check
+          // (areAllWordsIndependentlyFindable, ~N × DFS over the grid) used
+          // to run synchronously here, blocking the frame the shrink
+          // animates on. It's now deferred to a useEffect keyed on
+          // shrinkCount which dispatches MARK_FAILED if the shrink was
+          // lethal. The failure modal animates in over ~200ms so a
+          // one-frame deferral is invisible.
           const outerRing = getOuterRing(newGrid);
           if (outerRing.length > 0) {
             newGrid = removeCells(newGrid, outerRing);
             newShrinkCount = state.shrinkCount + 1;
-
-            // Check if remaining words are still findable (no gravity, so check independently)
-            const remainingWordStrings = newWords.filter(w => !w.found).map(w => w.word);
-            const stillSolvable = areAllWordsIndependentlyFindable(newGrid, remainingWordStrings);
-            if (!stillSolvable) {
-              newStatus = 'failed';
-            }
           }
           newWordsUntilShrink = 2; // reset countdown
         }
@@ -462,12 +482,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const usedWildcard = selectedCells.some(c => wildcardSet.has(`${c.row},${c.col}`));
       const newWildcardCells = usedWildcard ? [] : state.wildcardCells;
 
-      // Record solve step for replay
+      // Record solve step for replay. Snapshot capture is opt-in
+      // (captureReplay on state) because gridToSnapshot is ~1ms per call and
+      // most puzzles never have their replay viewed. Dailies/events opt in.
+      const captureReplay = state.captureReplay;
       const solveStep: SolveStep = {
         wordFound: matchingWord.word,
         cellPositions: selectedCells.map(c => [c.row, c.col] as [number, number]),
-        gridStateBefore: gridToSnapshot(board.grid),
-        gridStateAfter: gridToSnapshot(newGrid),
+        gridStateBefore: captureReplay ? gridToSnapshot(board.grid) : EMPTY_SNAPSHOT,
+        gridStateAfter: captureReplay ? gridToSnapshot(newGrid) : EMPTY_SNAPSHOT,
         timestamp: Date.now() - state.puzzleStartTime,
         score: wordScore,
         combo: comboLevel,
@@ -575,6 +598,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         action.mode || 'classic',
         action.maxMoves || 0,
         action.timeRemaining || 0,
+        // Carry captureReplay across NEW_GAME so successive puzzles in a
+        // session inherit the flag (daily replays stay daily; classic stays
+        // lightweight).
+        state.captureReplay,
       );
 
     case 'RESET_COMBO':
@@ -651,40 +678,57 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const vowels = 'AEIOU';
       const consonants = 'BCDFGHJKLMNPQRSTVWXYZ';
 
-      // Try up to 10 shuffles to find a solvable board
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const newGrid = cloneGrid(grid);
-        for (let r = 0; r < newGrid.length; r++) {
-          for (let c = 0; c < newGrid[0].length; c++) {
-            if (newGrid[r][c] && !wordCellSet.has(`${r},${c}`)) {
+      // Single-pass shuffle (Fix D, April 2026). Because wordCellSet is
+      // preserved, every remaining word's path is identical after the
+      // shuffle — so `isWordInGrid` is guaranteed to succeed for all of
+      // them. We still run the check on the first attempt as a
+      // defence-in-depth assertion; only in the (impossible at current
+      // time of writing) case where the assertion fails do we fall back
+      // to the legacy multi-attempt loop. This cuts the worst-case
+      // booster latency from 10 × N × DFS scans to N × DFS scans.
+      const randomiseNonWordCells = (src: typeof grid) => {
+        const out = cloneGrid(src);
+        for (let r = 0; r < out.length; r++) {
+          for (let c = 0; c < out[0].length; c++) {
+            if (out[r][c] && !wordCellSet.has(`${r},${c}`)) {
               const useVowel = Math.random() < 0.35;
               const pool = useVowel ? vowels : consonants;
-              newGrid[r][c] = {
-                ...newGrid[r][c]!,
+              out[r][c] = {
+                ...out[r][c]!,
                 letter: pool[Math.floor(Math.random() * pool.length)],
               };
             }
           }
         }
+        return out;
+      };
 
-        // Word-path cells were preserved, so the original solve order is still
-        // valid. Just verify every remaining word is still findable (it always
-        // will be since we only changed non-word cells). This replaces the
-        // expensive mode-specific solvability check that could false-negative
-        // when the solver found spurious paths through newly-shuffled letters.
+      const applyShuffle = (newGrid: typeof grid) => {
+        const nextUsed = state.boostersUsedThisPuzzle.includes('smartShuffle')
+          ? state.boostersUsedThisPuzzle
+          : [...state.boostersUsedThisPuzzle, 'smartShuffle'];
+        return {
+          ...state,
+          board: { ...state.board, grid: newGrid },
+          boosterCounts: { ...state.boosterCounts, smartShuffle: state.boosterCounts.smartShuffle - 1 },
+          // Reset spotlight since board letters changed
+          spotlightActive: false,
+          spotlightLetters: [],
+          boostersUsedThisPuzzle: nextUsed,
+        };
+      };
+
+      const firstAttempt = randomiseNonWordCells(grid);
+      if (remainingWords.every(w => isWordInGrid(firstAttempt, w))) {
+        return applyShuffle(firstAttempt);
+      }
+
+      // Defensive fallback: the assertion only fires if a word path overlapped
+      // itself and got disturbed by the shuffle. Retry up to 9 more times.
+      for (let attempt = 1; attempt < 10; attempt++) {
+        const newGrid = randomiseNonWordCells(grid);
         if (remainingWords.every(w => isWordInGrid(newGrid, w))) {
-          const nextUsed = state.boostersUsedThisPuzzle.includes('smartShuffle')
-            ? state.boostersUsedThisPuzzle
-            : [...state.boostersUsedThisPuzzle, 'smartShuffle'];
-          return {
-            ...state,
-            board: { ...state.board, grid: newGrid },
-            boosterCounts: { ...state.boosterCounts, smartShuffle: state.boosterCounts.smartShuffle - 1 },
-            // Reset spotlight since board letters changed
-            spotlightActive: false,
-            spotlightLetters: [],
-            boostersUsedThisPuzzle: nextUsed,
-          };
+          return applyShuffle(newGrid);
         }
       }
 
@@ -784,6 +828,25 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'MARK_FAILED': {
+      // Dispatched from the deferred shrink-solvability effect. Ignore
+      // stale checks (an older shrink number) so a slow check from N-1
+      // can't retroactively fail the player after they've already
+      // recovered in the N-th shrink.
+      if (state.status !== 'playing') return state;
+      if (action.shrinkCount !== state.shrinkCount) return state;
+      return { ...state, status: 'failed' };
+    }
+
+    case 'INCREMENT_CHAIN': {
+      // Dispatched from the deferred chain-detection effect. Ignore
+      // stale increments — if another word was submitted between when
+      // the effect started and now, `solveSequence.length` will have
+      // moved on and this dispatch applies to an older board state.
+      if (action.forSolveCount !== state.solveSequence.length) return state;
+      return { ...state, chainCount: state.chainCount + 1 };
+    }
+
     default:
       return state;
   }
@@ -798,12 +861,13 @@ export function useGame(
   mode: GameMode = 'classic',
   maxMoves: number = 0,
   timeLimit: number = 0,
+  captureReplay: boolean = false,
 ) {
   // Create a zustand store wrapping the existing gameReducer. Created once on
   // mount — subsequent puzzles are loaded via NEW_GAME dispatch which resets
   // the store state without recreating the store instance.
   const store = useMemo(
-    () => createGameStore(initialBoard, level, mode, maxMoves, timeLimit),
+    () => createGameStore(initialBoard, level, mode, maxMoves, timeLimit, captureReplay),
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
@@ -811,11 +875,12 @@ export function useGame(
   const status = useStore(store, s => s.status);
   const timeRemaining = useStore(store, s => s.timeRemaining);
   const grid = useStore(store, s => s.board.grid);
-  const words = useStore(store, s => s.board.words);
+  const words = useStore(store, useShallow((s: GameState) => s.board.words));
   const gravityDirection = useStore(store, s => s.gravityDirection);
   const moves = useStore(store, s => s.moves);
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const hintsUsed = useStore(store, s => s.hintsUsed);
+  const shrinkCount = useStore(store, s => s.shrinkCount);
 
   // ── Derived (changes per word, not per tap) ──────────────────────────
   const foundWords = useMemo(() => words.filter(w => w.found).length, [words]);
@@ -824,7 +889,76 @@ export function useGame(
     () => words.filter(w => !w.found).map(w => w.word),
     [words],
   );
-  const solveSequence = useStore(store, s => s.solveSequence);
+  const solveSequence = useStore(store, useShallow((s: GameState) => s.solveSequence));
+
+  // ── Deferred chain detection (Fix A) ─────────────────────────────────
+  // Runs one commit after SUBMIT_WORD returns. Reads the last history
+  // entry (pre-submit grid), derives the post-removal grid and the
+  // post-gravity grid, and increments chainCount when gravity made more
+  // remaining words findable than the no-gravity case did. Skipped in
+  // noGravity / shrinkingBoard modes where gravity doesn't run.
+  const prevSolveSequenceLenRef = useRef(0);
+  useEffect(() => {
+    const len = solveSequence.length;
+    if (len === 0 || len === prevSolveSequenceLenRef.current) {
+      prevSolveSequenceLenRef.current = len;
+      return;
+    }
+    prevSolveSequenceLenRef.current = len;
+    if (mode === 'noGravity' || mode === 'shrinkingBoard') return;
+
+    const fullState = store.getState();
+    // The pre-submit grid is the last history entry's grid.
+    const history = fullState.history;
+    if (history.length === 0) return;
+    const gridPreSubmit = history[history.length - 1].grid;
+    const step = solveSequence[len - 1];
+    if (!step) return;
+
+    // Reconstruct gridAfterRemoval by removing the found word's cells
+    // from the pre-submit grid. This matches exactly what the reducer
+    // used to compute at SUBMIT_WORD time.
+    const removedCells: CellPosition[] = step.cellPositions.map(([row, col]) => ({ row, col }));
+    const gridAfterRemoval = removeCells(gridPreSubmit, removedCells);
+
+    const remainingAfter = words.filter(w => !w.found && w.word !== step.wordFound);
+    if (remainingAfter.length === 0) return;
+
+    let findableBefore = 0;
+    let findableAfter = 0;
+    for (const w of remainingAfter) {
+      if (findWordInGrid(gridAfterRemoval, w.word, 1).length > 0) findableBefore++;
+      if (findWordInGrid(grid, w.word, 1).length > 0) findableAfter++;
+    }
+    if (findableAfter > findableBefore) {
+      store.dispatch({ type: 'INCREMENT_CHAIN', forSolveCount: len });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [solveSequence.length]);
+
+  // ── Deferred shrink-solvability check (Fix B) ────────────────────────
+  // The reducer performs the shrink synchronously (so the visual board
+  // shrink is in the same frame as the word clear) but does NOT check
+  // whether the shrink left the puzzle solvable — that's ~N × DFS of
+  // `areAllWordsIndependentlyFindable` and was the top reducer-time
+  // contributor in shrinkingBoard mode. We run the check here in an
+  // effect, one commit later, and dispatch `MARK_FAILED` if the puzzle
+  // became unwinnable. The failure modal animates in over ~200ms so a
+  // one-frame deferral is invisible to the player.
+  useEffect(() => {
+    if (mode !== 'shrinkingBoard') return;
+    if (shrinkCount === 0) return;
+    if (status !== 'playing') return;
+    if (remainingWords.length === 0) return;
+
+    const stillSolvable = areAllWordsIndependentlyFindable(grid, remainingWords);
+    if (!stillSolvable) {
+      store.dispatch({ type: 'MARK_FAILED', shrinkCount });
+    }
+    // We intentionally depend on `shrinkCount` rather than `grid` so the
+    // check only runs when the board actually shrank (not on every word).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shrinkCount]);
 
   // ── Stars ────────────────────────────────────────────────────────────
   const stars =
