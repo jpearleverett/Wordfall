@@ -833,7 +833,7 @@ export type AnalyticsEvent =
   | 'club_joined'
   | 'share_tapped'
   // Session
-  | 'session_start'
+  | 'app_session_start'
   | 'session_end'
   // A/B testing
   | 'experiment_assigned'
