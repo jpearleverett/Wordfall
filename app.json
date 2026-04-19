@@ -26,7 +26,6 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.wordfall.app",
       "buildNumber": "2",
-      "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:wordfallgame.app"
       ],

@@ -428,7 +428,7 @@ class Analytics {
     await this.ensureEventsLoaded();
 
     // Auto-open a session when events start firing outside a session
-    if (!this.state.sessionId && event !== 'session_start' && event !== 'session_end') {
+    if (!this.state.sessionId && event !== 'app_session_start' && event !== 'session_end') {
       await this.startSession('foreground');
     }
 
@@ -482,10 +482,10 @@ class Analytics {
     this.state.sessionStartedAt = Date.now();
     await this.persistState();
 
-    await this.logEvent('session_start', { source });
+    await this.logEvent('app_session_start' as any, { source });
 
     if (__DEV__) {
-      logger.log('[Analytics] session_start', { sessionId: this.state.sessionId, source });
+      logger.log('[Analytics] app_session_start', { sessionId: this.state.sessionId, source });
     }
   }
 

@@ -2,10 +2,8 @@ import React, { useMemo, useRef, useCallback } from 'react';
 import {
   Animated,
   Image,
-  Platform,
   StyleSheet,
   Text,
-  UIManager,
   View,
 } from 'react-native';
 import {
@@ -25,13 +23,6 @@ const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rg
 const GRADIENT_START = { x: 0, y: 0 };
 const GRADIENT_END = { x: 1, y: 1 };
 const EMPTY_FLEX = { flex: 1 } as const;
-
-if (
-  Platform.OS === 'android' &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 interface GridProps {
   grid: GridType;

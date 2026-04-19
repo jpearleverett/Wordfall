@@ -112,8 +112,19 @@ export function __resetSyncStatusForTest(): void {
 // latest emitted snapshot in a module-scoped cache so getSnapshot can
 // return a stable object reference between emit() calls.
 let cachedSnapshot: SyncSnapshot = { ...snapshot };
+function snapshotsEqual(a: SyncSnapshot, b: SyncSnapshot): boolean {
+  return (
+    a.state === b.state &&
+    a.pendingOps === b.pendingOps &&
+    a.failureCount === b.failureCount &&
+    a.lastSyncedAt === b.lastSyncedAt &&
+    a.lastError === b.lastError
+  );
+}
 function refreshCache(): void {
-  cachedSnapshot = { ...snapshot };
+  if (!snapshotsEqual(snapshot, cachedSnapshot)) {
+    cachedSnapshot = { ...snapshot };
+  }
 }
 function getCachedSnapshot(): SyncSnapshot {
   return cachedSnapshot;
