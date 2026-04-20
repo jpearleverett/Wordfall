@@ -10,8 +10,7 @@
  * (status, score, combo) which change per word, not per tap.
  */
 import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
-import Reanimated from 'react-native-reanimated';
+import { Animated, View, StyleSheet } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { GameGrid } from '../../components/Grid';
 import { WordBank } from '../../components/WordBank';
@@ -40,10 +39,10 @@ interface PlayFieldProps {
   showValidFlash: boolean;
   /** Spotlight dimmed cell set (or empty set when inactive) */
   spotlightDimmedSet: Set<string>;
-  /** Per-cell gravity fall detail keyed by cellId. Drives UI-thread fall animation in LetterCell. */
-  fallDetailMap: Map<string, { fallRows: number; delayMs: number }>;
-  /** Monotonic counter bumped once per gravity event. */
-  fallTick: number;
+  /** Fall animation map from gravity animation effect */
+  fallAnimMap: Map<string, Animated.Value>;
+  /** Whether fall animation is active */
+  fallActive: boolean;
   /** Moved cells for post-gravity highlight */
   movedCells: CellPosition[];
   /** Whether user is dragging (for grid glow effect) */
@@ -84,8 +83,8 @@ function PlayFieldImpl({
   gridScaleStyle,
   showValidFlash,
   spotlightDimmedSet,
-  fallDetailMap,
-  fallTick,
+  fallAnimMap,
+  fallActive,
   movedCells,
   isDragging,
   setIsDragging,
@@ -167,7 +166,7 @@ function PlayFieldImpl({
   return (
     <>
       {/* Grid wrapper with scale animations */}
-      <Reanimated.View style={gridScaleStyle}>
+      <Animated.View style={gridScaleStyle}>
         <React.Profiler id="Grid" onRender={profilerOnRender}>
           <GameGrid
             grid={grid}
@@ -185,12 +184,12 @@ function PlayFieldImpl({
             spotlightDimmedCells={spotlightDimmedSet}
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
             noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
-            fallDetailMap={fallDetailMap}
-            fallTick={fallTick}
+            fallAnimMap={fallAnimMap}
+            fallActive={fallActive}
             wildcardMode={wildcardMode}
           />
         </React.Profiler>
-      </Reanimated.View>
+      </Animated.View>
     </>
   );
 }

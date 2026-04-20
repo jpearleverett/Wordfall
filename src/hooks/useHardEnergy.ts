@@ -48,8 +48,7 @@ export interface HardEnergyApi extends HardEnergySnapshot {
 export function useHardEnergy(): HardEnergyApi {
   // Narrow zustand subscriptions replace the full `useEconomy()` read so
   // life ticks / coin / VIP / season-pass mutations no longer re-render
-  // callers of this hook (GameScreenWrapper + NoLivesModal). Actions are
-  // stable references from EconomyActionsContext.
+  // callers of this hook (GameScreenWrapper + NoLivesModal).
   const livesCurrent = useEconomyStore(selectLivesCurrent);
   const nextLifeTime = useEconomyStore(selectNextLifeTime);
   const { spendLife, refillLives, addLives } = useEconomyActions();

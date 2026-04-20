@@ -14,14 +14,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createStackNavigator } from '@react-navigation/stack';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import NeonTabBar from './src/components/navigation/NeonTabBar';
 import { BoardGenBanner } from './src/components/BoardGenBanner';
 import { NotSyncedBanner } from './src/components/NotSyncedBanner';
 import { emitBoardGenNotice } from './src/utils/boardGenNotice';
-import { useStableCallback } from './src/utils/hooks';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import ModesScreen from './src/screens/ModesScreen';
@@ -100,27 +99,20 @@ import { useCeremonyQueue } from './src/hooks/useCeremonyQueue';
 import { getLoginCalendarDay } from './src/data/loginCalendar';
 
 const Tab = createBottomTabNavigator();
-const HomeStack = createNativeStackNavigator();
-const PlayStack = createNativeStackNavigator();
-const CollectionsStack = createNativeStackNavigator();
-const LibraryStack = createNativeStackNavigator();
-const ProfileStack = createNativeStackNavigator();
-const RootStack = createNativeStackNavigator();
+const HomeStack = createStackNavigator();
+const PlayStack = createStackNavigator();
+const CollectionsStack = createStackNavigator();
+const LibraryStack = createStackNavigator();
+const ProfileStack = createStackNavigator();
+const RootStack = createStackNavigator();
 
 const screenOptions = {
   headerShown: false,
-  // native-stack uses `contentStyle` for the screen background (JS stack
-  // used `cardStyle`). Same effect, different field name.
-  contentStyle: { backgroundColor: COLORS.bg },
+  cardStyle: { backgroundColor: COLORS.bg },
   // Freeze screens that are pushed behind the current one. Without this, every
   // previous screen keeps running its backdrop animations, setIntervals, and
   // effects in the background — a 5-screen stack = 5x animation load.
   freezeOnBlur: true,
-  // Unmount inactive screens below the top of the stack (native-stack
-  // default is true but explicit is safer against future regressions).
-  // Paired with freezeOnBlur so backgrounded screens drop their native
-  // views AND pause their JS effects.
-  detachInactiveScreens: true,
 };
 
 // Home Tab Stack
@@ -145,7 +137,7 @@ function EventScreenWrapperNav({ navigation }: any) {
   const player = usePlayer();
   const economy = useEconomy();
 
-  const handlePlayEventPuzzle = useStableCallback(() => {
+  const handlePlayEventPuzzle = useCallback(() => {
     const mode: GameMode = 'classic';
 
     // Energy check (same pattern as ModesScreenWrapper)
@@ -226,14 +218,12 @@ function EventScreenWrapperNav({ navigation }: any) {
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
-  });
-
-  const handleOpenEventShop = useStableCallback(() => navigation.navigate('Home', { screen: 'Shop' }));
+  }, [player, economy, navigation]);
 
   return (
     <EventScreen
       onPlayEventPuzzle={handlePlayEventPuzzle}
-      onOpenEventShop={handleOpenEventShop}
+      onOpenEventShop={() => navigation.navigate('Home', { screen: 'Shop' })}
     />
   );
 }
@@ -429,10 +419,7 @@ function ModesScreenWrapper({ navigation }: any) {
   const player = usePlayer();
   const economy = useEconomy();
 
-  // useStableCallback so ModesScreen (if it ever gets memoized) + the
-  // inline `onOpenLeaderboard` below don't see a fresh handler every
-  // time PlayerContext or EconomyContext value identity churns.
-  const handleSelectMode = useStableCallback((modeId: string) => {
+  const handleSelectMode = useCallback((modeId: string) => {
     const mode = modeId as GameMode;
 
     // Energy check — free modes (daily, endless, relax) cost 0 energy
@@ -543,11 +530,9 @@ function ModesScreenWrapper({ navigation }: any) {
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
-  });
+  }, [player.currentLevel, navigation, player, economy]);
 
-  const handleOpenLeaderboard = useStableCallback(() => navigation.navigate('Leaderboard'));
-
-  return <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={handleOpenLeaderboard} />;
+  return <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={() => navigation.navigate('Leaderboard')} />;
 }
 
 // Wrapper to pass navigation params to GameScreen with full context wiring
@@ -612,16 +597,11 @@ function GameScreenWrapper({ route, navigation }: any) {
     navigation,
   });
 
-  // useStableCallback (not useCallback) so the identity stays stable even
-  // when player/economy context values rebuild. The memoized GameScreen
-  // relies on prop-identity stability — without this, every life tick /
-  // coin change in PlayerContext rebuilt `handleComplete` / `handleNext`
-  // / `handleHome`, broke GameScreen's React.memo, and re-rendered the
-  // full 2700-line puzzle tree.
-  const handleComplete = useStableCallback((stars: number, score: number, maxCombo: number) => {
+  const handleComplete = useCallback((stars: number, score: number, maxCombo: number) => {
+    // Track spins before completion to detect if a new one is awarded
     spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
     handleCompleteInner(stars, score, maxCombo);
-  });
+  }, [handleCompleteInner, player.mysteryWheel.spinsAvailable]);
 
   const handleNextLevel = useCallback(() => {
     try {
@@ -783,23 +763,23 @@ function GameScreenWrapper({ route, navigation }: any) {
   }, [player.mysteryWheel.spinsAvailable]);
 
   // Only show spin prompt when a NEW spin was earned this puzzle, not for old spins
-  const handleHomeWithPrompt = useStableCallback(() => {
+  const handleHomeWithPrompt = useCallback(() => {
     if (earnedNewSpin) {
       setPendingNavAction('home');
       setShowSpinPrompt(true);
     } else {
       navigation.goBack();
     }
-  });
+  }, [earnedNewSpin, navigation]);
 
-  const handleNextWithPrompt = useStableCallback(() => {
+  const handleNextWithPrompt = useCallback(() => {
     if (earnedNewSpin) {
       setPendingNavAction('next');
       setShowSpinPrompt(true);
     } else {
       handleNextLevel();
     }
-  });
+  }, [earnedNewSpin, handleNextLevel]);
 
   const handleSpinPromptAccept = useCallback(() => {
     setShowSpinPrompt(false);
