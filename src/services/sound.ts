@@ -26,63 +26,229 @@ try {
   // crashReporter may be unavailable in test or minimal builds
 }
 
+// ── Sound-name union (72 SFX slots) ─────────────────────────────────
+// Organized by domain. Every slot has (a) a `null` entry in REAL_SOUND_FILES,
+// (b) a synth fallback in SOUND_DEFS, and (c) a category in SOUND_CATEGORY.
+// Slots marked "dormant" below have no live trigger yet — the file will load
+// when dropped in, but nothing will play until the trigger is wired in a
+// follow-up. All other slots have active trigger sites.
 type SoundName =
-  | 'tap'
-  | 'gravity'
-  | 'wordFound'
-  | 'wordInvalid'
-  | 'combo'         // repurposed: 7+ letter "big word" sting (NOT a successive-find combo)
-  | 'puzzleComplete'
-  | 'starEarn'
-  | 'buttonPress'
-  | 'hintUsed'
-  | 'undoUsed'
-  | 'boosterCombo'  // Eagle Eye / Lucky Roll / Power Surge activation
-  | 'lastWord'      // one-shot sting when remaining words transitions 2 -> 1
-  | 'flawlessBadge' // inline FLAWLESS pill reveal on victory screen
-  | 'flawlessMilestone'; // full-screen flawless-streak milestone ceremony fanfare
-// BGM tracks. `menu`/`gameplay`/`tense` are the historical set; `relax` and
-// `victory` were added in plan task 2.3 (BGM-by-screen context). `menu` is the
-// home-screen track in practice so no `home` alias is needed.
-type MusicTrack = 'menu' | 'gameplay' | 'tense' | 'relax' | 'victory';
+  // — Core gameplay taps & selection —
+  | 'tap'              // every letter cell tap
+  | 'tapRare'          // tap lands on a rare/wildcard tile (dormant)
+  | 'buttonPress'      // any UI button
+  | 'backButton'       // back / close (dormant — uses buttonPress today)
+  | 'toggleOn'         // settings toggle on (dormant)
+  | 'toggleOff'        // settings toggle off (dormant)
+  // — Word events —
+  | 'wordFound'        // any valid list-word resolves
+  | 'combo'            // 7+ letter "big word" sting (NOT successive-find combo)
+  | 'wordFoundRare'    // word contained a rare/wildcard tile (dormant)
+  | 'wordInvalid'      // optional — rarely fires; synth fallback fine
+  // — Physics / board —
+  | 'gravity'          // letters falling after a clear
+  | 'boardShuffle'     // smart shuffle booster activation (dormant)
+  | 'boardStuck'       // dead-end detection banner (dormant)
+  // — Boosters —
+  | 'boosterWildcard'  // wildcard booster activated (dormant — uses buttonPress)
+  | 'boosterSpotlight' // spotlight booster activated (dormant — uses buttonPress)
+  | 'boosterShuffle'   // shuffle booster activated (dormant — uses buttonPress)
+  | 'hintUsed'         // hint booster activated
+  | 'undoUsed'         // undo booster activated
+  | 'boosterCombo'     // Eagle Eye / Lucky Roll / Power Surge activation
+  | 'boosterComboMega' // combo still active after 3rd word (dormant)
+  // — Puzzle completion & stars —
+  | 'puzzleComplete'   // victory screen entrance
+  | 'puzzleCompletePerfect' // flawless completion (dormant — uses flawlessBadge)
+  | 'starEarn'         // per-star reveal (staggered 140/340/560 ms)
+  | 'bonusCountdownTick' // coin-tally tick during post-puzzle bonus (dormant)
+  | 'bonusCountdownEnd'  // final total reveal after tally (dormant)
+  // — Failure states —
+  | 'puzzleFailStuck'  // unwinnable board state (dormant)
+  | 'puzzleFailTime'   // Time Pressure mode timeout (dormant)
+  | 'puzzleFailInstant' // Perfect-Solve mode violation (dormant)
+  // — Timer warnings —
+  | 'timerWarning30s'  // 30s remaining in Time Pressure (dormant)
+  | 'timerWarning10s'  // 10s remaining — more urgent (dormant)
+  // — Ceremony fanfares (tiered) —
+  | 'fanfareMinor'     // quest_step_complete, first_rare_tile, wildcard_earned (dormant)
+  | 'fanfareMedium'    // level_up, streak_milestone, difficulty_transition (dormant)
+  | 'fanfareMajor'     // mode_unlock, first_win, first_booster (dormant)
+  | 'fanfareEpic'      // feature_unlock, wing_complete, collection_complete (dormant)
+  | 'fanfareLegendary' // prestige, perfect_milestone (dormant)
+  | 'fanfareJackpot'   // mystery_wheel_jackpot (dormant)
+  // — Option A dopamine layer —
+  | 'lastWord'         // one-shot sting when remaining words transitions 2 -> 1
+  | 'flawlessBadge'    // inline FLAWLESS pill reveal on victory screen
+  | 'flawlessMilestone' // full-screen flawless-streak milestone ceremony
+  // — Economy pings —
+  | 'coinSmall'        // < 100 coins earned (dormant)
+  | 'coinMedium'       // 100–500 coins (dormant)
+  | 'coinLarge'        // 500+ coins, big reward drop (dormant)
+  | 'gemEarned'        // any gem earned (dormant)
+  | 'hintTokenEarned'  // hint added to inventory (dormant)
+  | 'boosterTokenEarned' // booster added to inventory (dormant)
+  | 'lifeRefilled'     // life restored (dormant)
+  // — Shop & IAP —
+  | 'shopOpen'         // shop screen entered (dormant — uses buttonPress)
+  | 'purchaseSuccess'  // IAP transaction success (dormant)
+  | 'purchaseFail'     // IAP failed / cancelled (dormant)
+  | 'highValueUnlock'  // $9.99+ purchase reveal (dormant)
+  // — Piggy bank —
+  | 'piggyFill'        // coin added to piggy on puzzle complete (dormant)
+  | 'piggyReady'       // piggy full, ready-to-break (dormant)
+  | 'piggyBreak'       // smash / break ceremony (dormant)
+  // — Mystery wheel —
+  | 'wheelSpin'        // wheel starts spinning (dormant)
+  | 'wheelTick'        // each segment passing the pointer (dormant)
+  | 'wheelStop'        // final stop on segment (dormant)
+  // — Progression pings —
+  | 'xpGain'           // season-pass XP added (dormant)
+  | 'tierUnlock'       // season-pass tier crossed (dormant)
+  | 'loginClaim'       // login-calendar daily reward claimed (dormant)
+  | 'chapterComplete'  // last puzzle in chapter cleared (dormant)
+  // — Social & club —
+  | 'giftReceived'     // gift appears in inbox (dormant)
+  | 'giftSent'         // send-gift success (dormant)
+  | 'clubGoalProgress' // player contribution to club goal (dormant)
+  | 'clubGoalComplete' // club goal reached (dormant)
+  | 'friendBeatScore'  // push — friend overtook your score (dormant)
+  | 'referralSuccess'  // referred friend completed first puzzle (dormant)
+  // — Offers & urgency —
+  | 'offerAppear'      // contextual offer banner slides in (dormant)
+  | 'offerTick'        // offer countdown final 10s (dormant)
+  | 'notificationBanner' // in-app toast / push (dormant)
+  // — Tutorial / FTUE —
+  | 'tutorialAppear'   // tutorial overlay fades in (dormant)
+  | 'tutorialAdvance'  // tutorial step advance (dormant)
+  | 'ftueFirstWin';    // first-ever puzzle solved (dormant — uses fanfareMajor fallback)
 
-// ── Real-file asset registry ──────────────────────────────────────
+// ── BGM-track union (10 slots) ──────────────────────────────────────
+type MusicTrack =
+  | 'menu'             // home screen, menus
+  | 'gameplay'         // standard gameplay
+  | 'gameplayAlt'      // alternate gameplay loop (dormant — rotation to prevent fatigue)
+  | 'tense'            // Time Pressure + last-word crossfade
+  | 'relax'            // relax mode
+  | 'victory'          // post-puzzle win
+  | 'defeat'           // post-puzzle loss / stuck (dormant)
+  | 'shop'             // shop, piggy-bank, IAP flows (dormant)
+  | 'social'           // club / friends / leaderboard (dormant)
+  | 'event';           // season pass / limited-time events (dormant)
+
+// ── Real-file asset registry (72 SFX + 10 BGM = 82 slots) ────────
 // Drop an MP3 into `assets/audio/<filename>.mp3` (see `assets/audio/README.md`
 // for the canonical filename per slot), then flip `null` to
 // `require('../../assets/audio/<filename>.mp3')`. The runtime prefers the
 // bundled file and falls back to synthesis per-slot, so partial deliveries
 // still ship — the game is playable on synth fallback the whole time.
 //
-// Canonical filenames (14 SFX + 5 BGM = 19 total):
-//   SFX: tap.mp3, gravity.mp3, word_found.mp3, word_invalid.mp3, combo.mp3,
-//        puzzle_complete.mp3, star_earn.mp3, button_press.mp3, hint_used.mp3,
-//        undo_used.mp3, booster_combo.mp3, last_word.mp3, flawless_badge.mp3,
-//        flawless_milestone.mp3
-//   BGM: bgm_menu.mp3, bgm_gameplay.mp3, bgm_tense.mp3, bgm_relax.mp3,
-//        bgm_victory.mp3
+// Note: some slots are "dormant" — the file will load when dropped in but
+// nothing plays until a trigger site is added. See `assets/audio/README.md`
+// for the live-vs-dormant breakdown.
 const REAL_SOUND_FILES: Record<SoundName, number | null> = {
+  // Core taps & selection
   tap: null,
-  gravity: null,
-  wordFound: null,
-  wordInvalid: null,
-  combo: null,
-  puzzleComplete: null,
-  starEarn: null,
+  tapRare: null,
   buttonPress: null,
+  backButton: null,
+  toggleOn: null,
+  toggleOff: null,
+  // Word events
+  wordFound: null,
+  combo: null,
+  wordFoundRare: null,
+  wordInvalid: null,
+  // Physics / board
+  gravity: null,
+  boardShuffle: null,
+  boardStuck: null,
+  // Boosters
+  boosterWildcard: null,
+  boosterSpotlight: null,
+  boosterShuffle: null,
   hintUsed: null,
   undoUsed: null,
   boosterCombo: null,
+  boosterComboMega: null,
+  // Puzzle completion & stars
+  puzzleComplete: null,
+  puzzleCompletePerfect: null,
+  starEarn: null,
+  bonusCountdownTick: null,
+  bonusCountdownEnd: null,
+  // Failure states
+  puzzleFailStuck: null,
+  puzzleFailTime: null,
+  puzzleFailInstant: null,
+  // Timer warnings
+  timerWarning30s: null,
+  timerWarning10s: null,
+  // Ceremony fanfares
+  fanfareMinor: null,
+  fanfareMedium: null,
+  fanfareMajor: null,
+  fanfareEpic: null,
+  fanfareLegendary: null,
+  fanfareJackpot: null,
+  // Option A dopamine layer
   lastWord: null,
   flawlessBadge: null,
   flawlessMilestone: null,
+  // Economy
+  coinSmall: null,
+  coinMedium: null,
+  coinLarge: null,
+  gemEarned: null,
+  hintTokenEarned: null,
+  boosterTokenEarned: null,
+  lifeRefilled: null,
+  // Shop & IAP
+  shopOpen: null,
+  purchaseSuccess: null,
+  purchaseFail: null,
+  highValueUnlock: null,
+  // Piggy bank
+  piggyFill: null,
+  piggyReady: null,
+  piggyBreak: null,
+  // Mystery wheel
+  wheelSpin: null,
+  wheelTick: null,
+  wheelStop: null,
+  // Progression
+  xpGain: null,
+  tierUnlock: null,
+  loginClaim: null,
+  chapterComplete: null,
+  // Social & club
+  giftReceived: null,
+  giftSent: null,
+  clubGoalProgress: null,
+  clubGoalComplete: null,
+  friendBeatScore: null,
+  referralSuccess: null,
+  // Offers & urgency
+  offerAppear: null,
+  offerTick: null,
+  notificationBanner: null,
+  // Tutorial / FTUE
+  tutorialAppear: null,
+  tutorialAdvance: null,
+  ftueFirstWin: null,
 };
 
 const REAL_MUSIC_FILES: Record<MusicTrack, number | null> = {
   menu: null,
   gameplay: null,
+  gameplayAlt: null,
   tense: null,
   relax: null,
   victory: null,
+  defeat: null,
+  shop: null,
+  social: null,
+  event: null,
 };
 
 type ToneSpec = {
@@ -119,20 +285,95 @@ const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345
 // on the `sfx` bus. Extend this map when adding new SoundNames.
 type SoundCategory = 'sfx' | 'ceremony';
 const SOUND_CATEGORY: Record<SoundName, SoundCategory> = {
+  // Core taps & selection — all sfx
   tap: 'sfx',
-  gravity: 'sfx',
-  wordFound: 'sfx',
-  wordInvalid: 'sfx',
-  combo: 'ceremony',
-  puzzleComplete: 'ceremony',
-  starEarn: 'ceremony',
+  tapRare: 'sfx',
   buttonPress: 'sfx',
+  backButton: 'sfx',
+  toggleOn: 'sfx',
+  toggleOff: 'sfx',
+  // Word events — sfx for resolve, ceremony for emphasis
+  wordFound: 'sfx',
+  combo: 'ceremony',
+  wordFoundRare: 'ceremony',
+  wordInvalid: 'sfx',
+  // Physics / board — sfx
+  gravity: 'sfx',
+  boardShuffle: 'sfx',
+  boardStuck: 'sfx',
+  // Boosters — activate is sfx, combo reward is ceremony
+  boosterWildcard: 'sfx',
+  boosterSpotlight: 'sfx',
+  boosterShuffle: 'sfx',
   hintUsed: 'sfx',
   undoUsed: 'sfx',
   boosterCombo: 'ceremony',
+  boosterComboMega: 'ceremony',
+  // Puzzle completion & stars — all ceremony
+  puzzleComplete: 'ceremony',
+  puzzleCompletePerfect: 'ceremony',
+  starEarn: 'ceremony',
+  bonusCountdownTick: 'sfx',
+  bonusCountdownEnd: 'ceremony',
+  // Failure states — ceremony (emotional moment)
+  puzzleFailStuck: 'ceremony',
+  puzzleFailTime: 'ceremony',
+  puzzleFailInstant: 'ceremony',
+  // Timer warnings — sfx (core gameplay feedback)
+  timerWarning30s: 'sfx',
+  timerWarning10s: 'sfx',
+  // Ceremony fanfares — all ceremony
+  fanfareMinor: 'ceremony',
+  fanfareMedium: 'ceremony',
+  fanfareMajor: 'ceremony',
+  fanfareEpic: 'ceremony',
+  fanfareLegendary: 'ceremony',
+  fanfareJackpot: 'ceremony',
+  // Option A dopamine layer — all ceremony
   lastWord: 'ceremony',
   flawlessBadge: 'ceremony',
   flawlessMilestone: 'ceremony',
+  // Economy — ceremony (celebration)
+  coinSmall: 'sfx',
+  coinMedium: 'ceremony',
+  coinLarge: 'ceremony',
+  gemEarned: 'ceremony',
+  hintTokenEarned: 'sfx',
+  boosterTokenEarned: 'sfx',
+  lifeRefilled: 'sfx',
+  // Shop & IAP — purchase is ceremony, shop-open is sfx
+  shopOpen: 'sfx',
+  purchaseSuccess: 'ceremony',
+  purchaseFail: 'sfx',
+  highValueUnlock: 'ceremony',
+  // Piggy bank — fill is sfx, ready/break are ceremony
+  piggyFill: 'sfx',
+  piggyReady: 'ceremony',
+  piggyBreak: 'ceremony',
+  // Mystery wheel — spin/tick sfx, stop ceremony
+  wheelSpin: 'sfx',
+  wheelTick: 'sfx',
+  wheelStop: 'ceremony',
+  // Progression — ceremony
+  xpGain: 'sfx',
+  tierUnlock: 'ceremony',
+  loginClaim: 'ceremony',
+  chapterComplete: 'ceremony',
+  // Social & club — ceremony for received / complete, sfx for send/progress
+  giftReceived: 'ceremony',
+  giftSent: 'sfx',
+  clubGoalProgress: 'sfx',
+  clubGoalComplete: 'ceremony',
+  friendBeatScore: 'sfx',
+  referralSuccess: 'ceremony',
+  // Offers & urgency — sfx
+  offerAppear: 'sfx',
+  offerTick: 'sfx',
+  notificationBanner: 'sfx',
+  // Tutorial / FTUE — sfx for steps, ceremony for first win
+  tutorialAppear: 'sfx',
+  tutorialAdvance: 'sfx',
+  ftueFirstWin: 'ceremony',
 };
 
 // ── Sound Definitions ──────────────────────────────────────────────
@@ -337,6 +578,98 @@ const SOUND_DEFS: Record<SoundName, ToneSpec> = {
     reverbMix: 0.28,
     reverbDecay: 0.40,
   },
+
+  // ── Dormant slots (live synth fallback; trigger sites wired in follow-up) ──
+
+  // Taps & selection variants
+  tapRare:      { freqs: [1600, 2400], duration: 0.12, volume: 0.20, attack: 0.002, decay: 0.02, sustain: 0.3, release: 0.07, harmonics: [0.5, 0.2] },
+  backButton:   { freqs: [600, 800],   duration: 0.09, volume: 0.16, attack: 0.002, decay: 0.02, sustain: 0.2, release: 0.05, harmonics: [0.2] },
+  toggleOn:     { freqs: [800, 1100],  duration: 0.07, volume: 0.14, attack: 0.002, decay: 0.01, sustain: 0.3, release: 0.03, pitchSlide: 1.3 },
+  toggleOff:    { freqs: [1100, 800],  duration: 0.07, volume: 0.14, attack: 0.002, decay: 0.01, sustain: 0.3, release: 0.03, pitchSlide: 0.8 },
+
+  // Word-event variants
+  wordFoundRare: { freqs: [523.25, 659.25, 783.99, 1046.5, 1318.5], duration: 0.45, volume: 0.23, attack: 0.005, decay: 0.05, sustain: 0.7, release: 0.16, harmonics: [0.4, 0.2, 0.08], reverbMix: 0.22, reverbDecay: 0.18 },
+
+  // Physics / board
+  boardShuffle: { freqs: [220, 440, 660, 880], duration: 0.50, volume: 0.18, attack: 0.01, decay: 0.08, sustain: 0.5, release: 0.18, pitchSlide: 1.5, harmonics: [0.3, 0.15] },
+  boardStuck:   { freqs: [220, 185, 155],      duration: 0.40, volume: 0.18, attack: 0.02, decay: 0.1,  sustain: 0.5, release: 0.15, harmonics: [0.3, 0.15] },
+
+  // Per-booster flavor (distinct from generic buttonPress)
+  boosterWildcard:  { freqs: [880, 1174.66, 1568], duration: 0.30, volume: 0.20, attack: 0.005, decay: 0.04, sustain: 0.6, release: 0.12, harmonics: [0.35, 0.15, 0.06], reverbMix: 0.15, reverbDecay: 0.10 },
+  boosterSpotlight: { freqs: [1046.5, 1568],       duration: 0.28, volume: 0.19, attack: 0.004, decay: 0.03, sustain: 0.6, release: 0.12, harmonics: [0.3, 0.1] },
+  boosterShuffle:   { freqs: [440, 660, 554, 784], duration: 0.35, volume: 0.18, attack: 0.008, decay: 0.05, sustain: 0.55, release: 0.14, harmonics: [0.3, 0.12], pulse: 10 },
+  boosterComboMega: { freqs: [523.25, 659.25, 880, 1046.5, 1318.5, 1760, 2093], duration: 0.85, volume: 0.26, attack: 0.006, decay: 0.08, sustain: 0.75, release: 0.28, harmonics: [0.45, 0.25, 0.10, 0.04], reverbMix: 0.28, reverbDecay: 0.30 },
+
+  // Completion variants
+  puzzleCompletePerfect: { freqs: [523.25, 659.25, 783.99, 1046.5, 1318.5, 1760.0, 2093.0], duration: 1.50, volume: 0.26, attack: 0.01, decay: 0.10, sustain: 0.75, release: 0.45, harmonics: [0.5, 0.25, 0.12, 0.05], reverbMix: 0.32, reverbDecay: 0.50 },
+  bonusCountdownTick:    { freqs: [1760, 2093], duration: 0.06, volume: 0.12, attack: 0.002, decay: 0.01, sustain: 0.3, release: 0.03 },
+  bonusCountdownEnd:     { freqs: [523.25, 1046.5, 2093], duration: 0.50, volume: 0.22, attack: 0.005, decay: 0.06, sustain: 0.7, release: 0.18, harmonics: [0.35, 0.15], reverbMix: 0.18, reverbDecay: 0.15 },
+
+  // Failure states
+  puzzleFailStuck:   { freqs: [329.63, 277.18, 233.08, 196.00], duration: 0.90, volume: 0.20, attack: 0.02, decay: 0.15, sustain: 0.5, release: 0.25, harmonics: [0.35, 0.18], reverbMix: 0.22, reverbDecay: 0.28 },
+  puzzleFailTime:    { freqs: [440, 415.30, 392.00, 369.99], duration: 0.80, volume: 0.20, attack: 0.015, decay: 0.12, sustain: 0.5, release: 0.22, pulse: 4, harmonics: [0.3, 0.15] },
+  puzzleFailInstant: { freqs: [523.25, 415.30, 329.63], duration: 0.35, volume: 0.22, attack: 0.005, decay: 0.05, sustain: 0.6, release: 0.15, pitchSlide: 0.7, harmonics: [0.35, 0.15] },
+
+  // Timer warnings (pulsed to suggest ticking)
+  timerWarning30s: { freqs: [880, 1046.5], duration: 0.35, volume: 0.18, attack: 0.004, decay: 0.04, sustain: 0.5, release: 0.12, pulse: 6, harmonics: [0.25] },
+  timerWarning10s: { freqs: [1046.5, 1318.5], duration: 0.30, volume: 0.22, attack: 0.003, decay: 0.03, sustain: 0.6, release: 0.10, pulse: 12, harmonics: [0.3, 0.1] },
+
+  // Ceremony fanfare tiers (escalating from minor to jackpot)
+  fanfareMinor:     { freqs: [523.25, 659.25, 783.99], duration: 0.55, volume: 0.22, attack: 0.008, decay: 0.06, sustain: 0.7, release: 0.18, harmonics: [0.3, 0.12], reverbMix: 0.15, reverbDecay: 0.15 },
+  fanfareMedium:    { freqs: [523.25, 659.25, 783.99, 1046.5], duration: 0.75, volume: 0.23, attack: 0.008, decay: 0.08, sustain: 0.7, release: 0.22, harmonics: [0.35, 0.15, 0.06], reverbMix: 0.20, reverbDecay: 0.20 },
+  fanfareMajor:     { freqs: [392.0, 523.25, 659.25, 783.99, 1046.5], duration: 1.00, volume: 0.24, attack: 0.01, decay: 0.08, sustain: 0.72, release: 0.30, harmonics: [0.4, 0.2, 0.08], reverbMix: 0.24, reverbDecay: 0.28 },
+  fanfareEpic:      { freqs: [329.63, 415.30, 523.25, 659.25, 830.61, 1046.5], duration: 1.30, volume: 0.26, attack: 0.012, decay: 0.10, sustain: 0.74, release: 0.38, harmonics: [0.45, 0.22, 0.10, 0.04], reverbMix: 0.28, reverbDecay: 0.40 },
+  fanfareLegendary: { freqs: [261.63, 329.63, 392.0, 523.25, 659.25, 783.99, 1046.5], duration: 1.60, volume: 0.28, attack: 0.015, decay: 0.12, sustain: 0.75, release: 0.50, harmonics: [0.5, 0.25, 0.12, 0.05], reverbMix: 0.32, reverbDecay: 0.55 },
+  fanfareJackpot:   { freqs: [523.25, 659.25, 783.99, 987.77, 1174.66, 1396.91, 1760.0, 2093.0], duration: 2.00, volume: 0.30, attack: 0.015, decay: 0.15, sustain: 0.78, release: 0.60, harmonics: [0.55, 0.28, 0.14, 0.06, 0.02], reverbMix: 0.38, reverbDecay: 0.70 },
+
+  // Economy pings
+  coinSmall:       { freqs: [1760, 2349], duration: 0.14, volume: 0.17, attack: 0.003, decay: 0.02, sustain: 0.4, release: 0.06, harmonics: [0.25] },
+  coinMedium:      { freqs: [1318.5, 1760, 2093], duration: 0.30, volume: 0.20, attack: 0.004, decay: 0.03, sustain: 0.55, release: 0.10, harmonics: [0.3, 0.12] },
+  coinLarge:       { freqs: [1046.5, 1318.5, 1760, 2349, 2637], duration: 0.70, volume: 0.23, attack: 0.005, decay: 0.05, sustain: 0.7, release: 0.22, harmonics: [0.35, 0.15, 0.06], reverbMix: 0.15, reverbDecay: 0.15 },
+  gemEarned:       { freqs: [1568, 2093, 2637], duration: 0.40, volume: 0.21, attack: 0.003, decay: 0.04, sustain: 0.65, release: 0.15, harmonics: [0.4, 0.18, 0.06], reverbMix: 0.22, reverbDecay: 0.18 },
+  hintTokenEarned: { freqs: [880, 1318.5], duration: 0.25, volume: 0.18, attack: 0.004, decay: 0.03, sustain: 0.55, release: 0.10, harmonics: [0.3, 0.1] },
+  boosterTokenEarned: { freqs: [1046.5, 1568], duration: 0.25, volume: 0.18, attack: 0.004, decay: 0.03, sustain: 0.55, release: 0.10, harmonics: [0.3, 0.1] },
+  lifeRefilled:    { freqs: [659.25, 880, 1108.73], duration: 0.35, volume: 0.19, attack: 0.008, decay: 0.04, sustain: 0.6, release: 0.14, harmonics: [0.3, 0.12] },
+
+  // Shop & IAP
+  shopOpen:         { freqs: [523.25, 783.99, 1046.5], duration: 0.40, volume: 0.19, attack: 0.01, decay: 0.05, sustain: 0.6, release: 0.15, harmonics: [0.3, 0.12], reverbMix: 0.15, reverbDecay: 0.12 },
+  purchaseSuccess:  { freqs: [523.25, 659.25, 783.99, 1046.5, 1318.5], duration: 0.80, volume: 0.24, attack: 0.008, decay: 0.08, sustain: 0.72, release: 0.25, harmonics: [0.4, 0.2, 0.08], reverbMix: 0.22, reverbDecay: 0.22 },
+  purchaseFail:     { freqs: [440, 369.99], duration: 0.35, volume: 0.18, attack: 0.01, decay: 0.05, sustain: 0.5, release: 0.15, pitchSlide: 0.85, harmonics: [0.3] },
+  highValueUnlock:  { freqs: [392.0, 523.25, 659.25, 783.99, 1046.5, 1318.5, 1760.0], duration: 1.40, volume: 0.27, attack: 0.012, decay: 0.12, sustain: 0.76, release: 0.45, harmonics: [0.5, 0.25, 0.12, 0.05], reverbMix: 0.32, reverbDecay: 0.50 },
+
+  // Piggy bank
+  piggyFill:   { freqs: [1568, 2093], duration: 0.15, volume: 0.16, attack: 0.003, decay: 0.02, sustain: 0.4, release: 0.06, harmonics: [0.25] },
+  piggyReady:  { freqs: [1046.5, 1318.5, 1568], duration: 0.50, volume: 0.22, attack: 0.006, decay: 0.06, sustain: 0.65, release: 0.18, harmonics: [0.35, 0.15], reverbMix: 0.18, reverbDecay: 0.15, pulse: 3 },
+  piggyBreak:  { freqs: [220, 440, 880, 1760, 2349], duration: 1.10, volume: 0.26, attack: 0.005, decay: 0.12, sustain: 0.6, release: 0.40, harmonics: [0.5, 0.25, 0.12], reverbMix: 0.28, reverbDecay: 0.35 },
+
+  // Mystery wheel
+  wheelSpin:  { freqs: [440, 554.37, 659.25], duration: 1.20, volume: 0.18, attack: 0.05, decay: 0.20, sustain: 0.55, release: 0.25, pitchSlide: 1.8, harmonics: [0.3, 0.12] },
+  wheelTick:  { freqs: [1760], duration: 0.04, volume: 0.12, attack: 0.001, decay: 0.01, sustain: 0.3, release: 0.02 },
+  wheelStop:  { freqs: [783.99, 1046.5], duration: 0.40, volume: 0.22, attack: 0.005, decay: 0.05, sustain: 0.7, release: 0.16, harmonics: [0.35, 0.15], reverbMix: 0.20, reverbDecay: 0.18 },
+
+  // Progression pings
+  xpGain:          { freqs: [1568, 2093], duration: 0.16, volume: 0.14, attack: 0.003, decay: 0.02, sustain: 0.4, release: 0.06, harmonics: [0.2] },
+  tierUnlock:      { freqs: [523.25, 659.25, 880, 1108.73, 1318.5], duration: 0.90, volume: 0.24, attack: 0.01, decay: 0.09, sustain: 0.72, release: 0.28, harmonics: [0.4, 0.2, 0.08], reverbMix: 0.24, reverbDecay: 0.25 },
+  loginClaim:      { freqs: [880, 1108.73, 1318.5], duration: 0.45, volume: 0.20, attack: 0.006, decay: 0.05, sustain: 0.65, release: 0.16, harmonics: [0.3, 0.12], reverbMix: 0.18, reverbDecay: 0.15 },
+  chapterComplete: { freqs: [392.0, 523.25, 659.25, 783.99, 1046.5, 1318.5], duration: 1.40, volume: 0.26, attack: 0.012, decay: 0.12, sustain: 0.75, release: 0.42, harmonics: [0.45, 0.22, 0.10, 0.04], reverbMix: 0.30, reverbDecay: 0.45 },
+
+  // Social & club
+  giftReceived:     { freqs: [659.25, 880, 1108.73], duration: 0.55, volume: 0.21, attack: 0.008, decay: 0.06, sustain: 0.68, release: 0.20, harmonics: [0.35, 0.15], reverbMix: 0.20, reverbDecay: 0.18 },
+  giftSent:         { freqs: [1108.73, 880, 659.25], duration: 0.35, volume: 0.18, attack: 0.005, decay: 0.04, sustain: 0.55, release: 0.14, pitchSlide: 0.7, harmonics: [0.25, 0.1] },
+  clubGoalProgress: { freqs: [880, 1046.5], duration: 0.18, volume: 0.15, attack: 0.003, decay: 0.02, sustain: 0.5, release: 0.08, harmonics: [0.25] },
+  clubGoalComplete: { freqs: [523.25, 659.25, 783.99, 1046.5], duration: 0.95, volume: 0.24, attack: 0.01, decay: 0.08, sustain: 0.72, release: 0.30, harmonics: [0.4, 0.2, 0.08], reverbMix: 0.24, reverbDecay: 0.25 },
+  friendBeatScore:  { freqs: [440, 554.37], duration: 0.40, volume: 0.18, attack: 0.008, decay: 0.05, sustain: 0.5, release: 0.18, pulse: 5, harmonics: [0.3, 0.12] },
+  referralSuccess:  { freqs: [523.25, 659.25, 783.99, 987.77], duration: 0.70, volume: 0.22, attack: 0.008, decay: 0.07, sustain: 0.7, release: 0.22, harmonics: [0.35, 0.15, 0.06], reverbMix: 0.20, reverbDecay: 0.20 },
+
+  // Offers & urgency
+  offerAppear:        { freqs: [880, 1108.73, 1318.5], duration: 0.35, volume: 0.18, attack: 0.006, decay: 0.04, sustain: 0.6, release: 0.14, harmonics: [0.3, 0.12] },
+  offerTick:          { freqs: [1046.5, 1568], duration: 0.10, volume: 0.14, attack: 0.002, decay: 0.01, sustain: 0.35, release: 0.04 },
+  notificationBanner: { freqs: [1108.73, 1318.5], duration: 0.22, volume: 0.16, attack: 0.004, decay: 0.03, sustain: 0.5, release: 0.10, harmonics: [0.25] },
+
+  // Tutorial / FTUE
+  tutorialAppear:  { freqs: [523.25, 659.25], duration: 0.30, volume: 0.16, attack: 0.01, decay: 0.04, sustain: 0.55, release: 0.12, harmonics: [0.25, 0.1] },
+  tutorialAdvance: { freqs: [880, 1046.5], duration: 0.10, volume: 0.14, attack: 0.002, decay: 0.01, sustain: 0.35, release: 0.04 },
+  ftueFirstWin:    { freqs: [392.0, 523.25, 659.25, 783.99, 1046.5, 1318.5, 1568.0], duration: 1.50, volume: 0.27, attack: 0.012, decay: 0.12, sustain: 0.75, release: 0.48, harmonics: [0.5, 0.25, 0.12, 0.05], reverbMix: 0.32, reverbDecay: 0.50 },
 };
 
 // ── Music Definitions ──────────────────────────────────────────────
@@ -390,6 +723,61 @@ const MUSIC_DEFS: Record<MusicTrack, ProgressionSpec> = {
       [349.23, 440.00, 523.25, 659.25],
       [293.66, 369.99, 440.00, 587.33],
       [261.63, 329.63, 392.00, 523.25],
+    ],
+    stepDuration: 1.0,
+    volume: 0.12,
+  },
+  // Alternate gameplay — same key, different voicing, for session-length variety.
+  gameplayAlt: {
+    chords: [
+      [196.0, 261.63, 329.63],
+      [220.0, 293.66, 369.99],
+      [174.61, 233.08, 293.66],
+      [196.0, 261.63, 329.63],
+    ],
+    stepDuration: 1.1,
+    volume: 0.11,
+  },
+  // Defeat — minor, slow, sad-but-not-punishing (plays on stuck/timeout).
+  defeat: {
+    chords: [
+      [220.0, 261.63, 329.63],
+      [196.0, 233.08, 293.66],
+      [174.61, 220.0, 277.18],
+      [164.81, 196.0, 246.94],
+    ],
+    stepDuration: 1.3,
+    volume: 0.10,
+  },
+  // Shop — upbeat commerce vibe, jaunty, slightly playful.
+  shop: {
+    chords: [
+      [329.63, 415.30, 523.25],
+      [349.23, 440.00, 554.37],
+      [392.00, 493.88, 622.25],
+      [329.63, 415.30, 523.25],
+    ],
+    stepDuration: 0.9,
+    volume: 0.12,
+  },
+  // Social — friendly, welcoming, community feel.
+  social: {
+    chords: [
+      [261.63, 329.63, 392.00],
+      [293.66, 369.99, 440.00],
+      [329.63, 415.30, 493.88],
+      [293.66, 369.99, 440.00],
+    ],
+    stepDuration: 1.15,
+    volume: 0.11,
+  },
+  // Event — themed, slightly more dramatic, season-pass energy.
+  event: {
+    chords: [
+      [261.63, 329.63, 392.00, 523.25],
+      [293.66, 369.99, 440.00, 587.33],
+      [329.63, 415.30, 493.88, 659.25],
+      [349.23, 440.00, 523.25, 698.46],
     ],
     stepDuration: 1.0,
     volume: 0.12,

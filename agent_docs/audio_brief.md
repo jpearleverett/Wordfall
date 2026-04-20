@@ -6,7 +6,9 @@
 >
 > **Format spec:** all assets MP3 (192 kbps CBR), mono, 44.1 kHz, normalized to -14 LUFS short-term (mobile-friendly, headroom-preserving), peak -1 dBTP. Loop points pre-baked in BGM where applicable.
 >
-> **Total scope:** 14 SFX + 5 BGM = **19 files**.
+> **Total scope:** 72 SFX + 10 BGM = **82 files**. See `assets/audio/README.md` for the at-a-glance drop-in manifest with live/dormant status per slot. This brief details the Tier 1 / Tier 2 / Tier 3 commissions with full tone direction; dormant slots beyond what's listed inline here have synth fallbacks in `src/services/sound.ts:SOUND_DEFS` that you can reference for pitch / length hints.
+>
+> **Commission in 3 waves** if budget requires staging — see §"Priority shipping plan" in the README. Wave 1 (~22 files) is enough to ship to Google Play; Waves 2–3 land in post-launch.
 
 ---
 
@@ -27,9 +29,9 @@
 
 ---
 
-## SFX Library — 14 files
+## SFX Library — 72 files total (14 detailed below, 58 abbreviated in the README)
 
-Drop into `assets/audio/`. Filenames must match exactly (case-sensitive, underscores not hyphens).
+Drop into `assets/audio/`. Filenames must match exactly (case-sensitive, underscores not hyphens). The 14 slots below have full tone direction; the remaining 58 are listed in `assets/audio/README.md` with one-line triggers — use the synth fallbacks at `src/services/sound.ts:SOUND_DEFS` as pitch/length references when commissioning those.
 
 ### Tier 1 — high-frequency interactions
 
@@ -116,7 +118,9 @@ These three are the core of Wordfall's honest-to-genre dopamine architecture. Ev
 
 ---
 
-## BGM Tracks — 5 files
+## BGM Tracks — 10 files total (5 detailed below, 5 abbreviated in the README)
+
+The 5 slots below are the launch-day essentials. The remaining 5 (`bgm_gameplay_alt`, `bgm_defeat`, `bgm_shop`, `bgm_social`, `bgm_event`) are in the drop-in manifest with short tone direction — commission in Wave 2/3.
 
 Drop into `assets/audio/`. All loopable (composer should mark loop points).
 
@@ -199,9 +203,10 @@ When you receive deliverables:
 ## Budget Reference
 
 Industry rates (April 2026):
-- **SFX:** $50–$150 per asset (14 SFX = $700–$2,100)
-- **BGM short loop:** $300–$800 per track (5 BGM = $1,500–$4,000)
-- **Total mid-tier:** $2,200–$6,100
-- **Total premium (named composer):** $6,000–$18,000
+- **SFX:** $50–$150 per asset (72 SFX = $3,600–$10,800)
+- **BGM short loop:** $300–$800 per track (10 BGM = $3,000–$8,000)
+- **Full scope (82 files):** $6,600–$18,800 mid-tier; $14,000–$36,000 premium named composer
+- **Wave 1 only (~22 launch essentials):** $2,000–$5,000 — enough to ship to Google Play
+- **Budget-tier alternative:** royalty-free libraries (Pixabay, Freesound, Kenney.nl) curated at ~$200–500 for Wave 1, a weekend of work. Good enough for soft launch; re-commission higher tiers after KPIs confirm retention.
 
-Budget $3,000–$9,000 for a quality result; allow 3–5 weeks lead time. Partial delivery is fine — the game works on synth fallback per-slot, so you can ship what's ready and add the rest in a follow-up round.
+Partial delivery is fine — the game works on synth fallback per-slot, so you can ship what's ready and add the rest in a follow-up round without any code changes beyond flipping `null` to `require()`.
