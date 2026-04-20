@@ -21,6 +21,7 @@ import NeonTabBar from './src/components/navigation/NeonTabBar';
 import { BoardGenBanner } from './src/components/BoardGenBanner';
 import { NotSyncedBanner } from './src/components/NotSyncedBanner';
 import { emitBoardGenNotice } from './src/utils/boardGenNotice';
+import { useStableCallback } from './src/utils/hooks';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import ModesScreen from './src/screens/ModesScreen';
@@ -144,7 +145,7 @@ function EventScreenWrapperNav({ navigation }: any) {
   const player = usePlayer();
   const economy = useEconomy();
 
-  const handlePlayEventPuzzle = useCallback(() => {
+  const handlePlayEventPuzzle = useStableCallback(() => {
     const mode: GameMode = 'classic';
 
     // Energy check (same pattern as ModesScreenWrapper)
@@ -225,12 +226,14 @@ function EventScreenWrapperNav({ navigation }: any) {
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
-  }, [player, economy, navigation]);
+  });
+
+  const handleOpenEventShop = useStableCallback(() => navigation.navigate('Home', { screen: 'Shop' }));
 
   return (
     <EventScreen
       onPlayEventPuzzle={handlePlayEventPuzzle}
-      onOpenEventShop={() => navigation.navigate('Home', { screen: 'Shop' })}
+      onOpenEventShop={handleOpenEventShop}
     />
   );
 }
@@ -426,7 +429,10 @@ function ModesScreenWrapper({ navigation }: any) {
   const player = usePlayer();
   const economy = useEconomy();
 
-  const handleSelectMode = useCallback((modeId: string) => {
+  // useStableCallback so ModesScreen (if it ever gets memoized) + the
+  // inline `onOpenLeaderboard` below don't see a fresh handler every
+  // time PlayerContext or EconomyContext value identity churns.
+  const handleSelectMode = useStableCallback((modeId: string) => {
     const mode = modeId as GameMode;
 
     // Energy check — free modes (daily, endless, relax) cost 0 energy
@@ -537,9 +543,11 @@ function ModesScreenWrapper({ navigation }: any) {
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
-  }, [player.currentLevel, navigation, player, economy]);
+  });
 
-  return <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={() => navigation.navigate('Leaderboard')} />;
+  const handleOpenLeaderboard = useStableCallback(() => navigation.navigate('Leaderboard'));
+
+  return <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={handleOpenLeaderboard} />;
 }
 
 // Wrapper to pass navigation params to GameScreen with full context wiring
@@ -604,11 +612,16 @@ function GameScreenWrapper({ route, navigation }: any) {
     navigation,
   });
 
-  const handleComplete = useCallback((stars: number, score: number, maxCombo: number) => {
-    // Track spins before completion to detect if a new one is awarded
+  // useStableCallback (not useCallback) so the identity stays stable even
+  // when player/economy context values rebuild. The memoized GameScreen
+  // relies on prop-identity stability — without this, every life tick /
+  // coin change in PlayerContext rebuilt `handleComplete` / `handleNext`
+  // / `handleHome`, broke GameScreen's React.memo, and re-rendered the
+  // full 2700-line puzzle tree.
+  const handleComplete = useStableCallback((stars: number, score: number, maxCombo: number) => {
     spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
     handleCompleteInner(stars, score, maxCombo);
-  }, [handleCompleteInner, player.mysteryWheel.spinsAvailable]);
+  });
 
   const handleNextLevel = useCallback(() => {
     try {
@@ -770,23 +783,23 @@ function GameScreenWrapper({ route, navigation }: any) {
   }, [player.mysteryWheel.spinsAvailable]);
 
   // Only show spin prompt when a NEW spin was earned this puzzle, not for old spins
-  const handleHomeWithPrompt = useCallback(() => {
+  const handleHomeWithPrompt = useStableCallback(() => {
     if (earnedNewSpin) {
       setPendingNavAction('home');
       setShowSpinPrompt(true);
     } else {
       navigation.goBack();
     }
-  }, [earnedNewSpin, navigation]);
+  });
 
-  const handleNextWithPrompt = useCallback(() => {
+  const handleNextWithPrompt = useStableCallback(() => {
     if (earnedNewSpin) {
       setPendingNavAction('next');
       setShowSpinPrompt(true);
     } else {
       handleNextLevel();
     }
-  }, [earnedNewSpin, handleNextLevel]);
+  });
 
   const handleSpinPromptAccept = useCallback(() => {
     setShowSpinPrompt(false);
