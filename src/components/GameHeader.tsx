@@ -10,7 +10,6 @@ import { LOCAL_IMAGES } from '../utils/localAssets';
 interface GameHeaderProps {
   level: number;
   score: number;
-  combo: number;
   moves: number;
   hintsLeft: number;
   undosLeft: number;
@@ -34,7 +33,6 @@ interface GameHeaderProps {
 export const GameHeader = React.memo(function GameHeader({
   level,
   score,
-  combo,
   moves,
   hintsLeft,
   undosLeft,
@@ -149,11 +147,6 @@ export const GameHeader = React.memo(function GameHeader({
             >
               {score.toLocaleString()}
             </Animated.Text>
-            {combo > 1 && (
-              <View style={styles.comboChip}>
-                <Text style={styles.comboTag}>{combo}x</Text>
-              </View>
-            )}
           </View>
 
           {/* Action buttons */}
@@ -381,27 +374,6 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: COLORS.accentGlow,
     textShadowRadius: 18,
-  },
-  comboChip: {
-    backgroundColor: 'rgba(255, 82, 82, 0.25)',
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 82, 82, 0.40)',
-    marginBottom: 2,
-    shadowColor: COLORS.coral,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  comboTag: {
-    color: COLORS.coral,
-    fontSize: 10,
-    fontFamily: 'SpaceGrotesk_700Bold',
-    textShadowColor: COLORS.coralGlow,
-    textShadowRadius: 4,
   },
   actionsRow: {
     flexDirection: 'row',

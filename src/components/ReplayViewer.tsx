@@ -224,7 +224,7 @@ export function ReplayViewer({
     return {
       gridState: step.gridStateBefore,
       highlightedCells: highlighted,
-      stepLabel: `${step.wordFound} (+${step.score}${step.combo > 1 ? ` ${step.combo}x` : ''})`,
+      stepLabel: `${step.wordFound} (+${step.score})`,
     };
   }, [currentStep, showAfterGravity, steps]);
 
@@ -305,7 +305,7 @@ export function ReplayViewer({
                   {step.wordFound}
                 </Text>
                 <Text style={styles.stepScore}>
-                  +{step.score}{step.combo > 1 ? ` (${step.combo}x)` : ''}
+                  +{step.score}
                 </Text>
               </View>
               {index < currentStep && (

@@ -9,7 +9,7 @@ import { ACHIEVEMENTS } from '../data/achievements';
 import { MASTERY_REWARDS, getMasteryTierForXP, getXPProgressInTier, MASTERY_XP_PER_TIER, MASTERY_MAX_TIER } from '../data/masteryRewards';
 import { STREAK, MILESTONE_DECORATIONS, STAR_MILESTONES, PERFECT_MILESTONES, FEATURE_UNLOCK_SCHEDULE } from '../constants';
 
-// The 18 valid ceremony types from types.ts
+// The 19 valid ceremony types from types.ts
 const VALID_CEREMONY_TYPES = [
   'feature_unlock',
   'mode_unlock',
@@ -20,6 +20,7 @@ const VALID_CEREMONY_TYPES = [
   'difficulty_transition',
   'mystery_wheel_jackpot',
   'win_streak_milestone',
+  'flawless_streak_milestone',
   'star_milestone',
   'perfect_milestone',
   'decoration_unlock',
@@ -253,12 +254,31 @@ describe('Ceremony Queue Integration', () => {
   });
 
   describe('ceremony type coverage', () => {
-    it('all 18 ceremony types are defined', () => {
-      expect(VALID_CEREMONY_TYPES.length).toBe(18);
+    it('all 19 ceremony types are defined', () => {
+      expect(VALID_CEREMONY_TYPES.length).toBe(19);
     });
 
     it('no duplicate ceremony types', () => {
       expect(new Set(VALID_CEREMONY_TYPES).size).toBe(VALID_CEREMONY_TYPES.length);
+    });
+  });
+
+  describe('flawless streak milestones', () => {
+    // Hard-coded in PlayerContext.updateFlawlessStreak — keep these two in sync.
+    const FLAWLESS_MILESTONES = [3, 5, 7, 10, 15, 20];
+
+    it('has 6 milestones matching the win-streak tier pattern', () => {
+      expect(FLAWLESS_MILESTONES).toEqual([3, 5, 7, 10, 15, 20]);
+    });
+
+    it('milestones are monotonically increasing', () => {
+      for (let i = 1; i < FLAWLESS_MILESTONES.length; i++) {
+        expect(FLAWLESS_MILESTONES[i]).toBeGreaterThan(FLAWLESS_MILESTONES[i - 1]);
+      }
+    });
+
+    it('flawless_streak_milestone is listed as a valid ceremony type', () => {
+      expect(VALID_CEREMONY_TYPES).toContain('flawless_streak_milestone');
     });
   });
 

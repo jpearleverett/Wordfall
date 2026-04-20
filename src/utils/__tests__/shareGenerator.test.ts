@@ -13,54 +13,51 @@ describe('generateShareText', () => {
   ];
 
   it('generates correct header for regular levels', () => {
-    const text = generateShareText(grid, 42, 3, 1200, 2, false);
+    const text = generateShareText(grid, 42, 3, 1200, false);
     expect(text).toContain('WORDFALL Level 42');
     expect(text).toContain('★★★');
   });
 
   it('generates correct header for daily mode', () => {
-    const text = generateShareText(grid, 1, 2, 800, 1, true);
+    const text = generateShareText(grid, 1, 2, 800, true);
     expect(text).toContain('WORDFALL Daily');
     expect(text).toContain('★★☆');
   });
 
   it('includes star rating', () => {
-    const text1 = generateShareText(grid, 1, 1, 500, 1, false);
+    const text1 = generateShareText(grid, 1, 1, 500, false);
     expect(text1).toContain('★☆☆');
 
-    const text2 = generateShareText(grid, 1, 2, 500, 1, false);
+    const text2 = generateShareText(grid, 1, 2, 500, false);
     expect(text2).toContain('★★☆');
 
-    const text3 = generateShareText(grid, 1, 3, 500, 1, false);
+    const text3 = generateShareText(grid, 1, 3, 500, false);
     expect(text3).toContain('★★★');
   });
 
   it('maps vowels to blue squares and consonants to yellow squares', () => {
-    const text = generateShareText(grid, 1, 3, 500, 1, false);
-    // Grid has vowels A, U and consonants C, T, D, G, S, N, null
-    // Row 0: C(consonant)=yellow, A(vowel)=blue, T(consonant)=yellow
+    const text = generateShareText(grid, 1, 3, 500, false);
     expect(text).toContain('🟨🟦🟨');
   });
 
   it('maps null cells to black squares', () => {
-    const text = generateShareText(grid, 1, 3, 500, 1, false);
-    // Row 1 has null in middle: D, null, G -> 🟨⬛🟨
+    const text = generateShareText(grid, 1, 3, 500, false);
     expect(text).toContain('🟨⬛🟨');
   });
 
   it('includes score', () => {
-    const text = generateShareText(grid, 1, 3, 1500, 1, false);
+    const text = generateShareText(grid, 1, 3, 1500, false);
     expect(text).toContain('Score: 1500');
   });
 
-  it('includes combo when > 1', () => {
-    const text = generateShareText(grid, 1, 3, 1500, 3, false);
-    expect(text).toContain('Combo: 3x');
+  it('includes "Flawless" tag when flawless flag is true', () => {
+    const text = generateShareText(grid, 1, 3, 1500, false, undefined, true);
+    expect(text).toContain('Flawless');
   });
 
-  it('does not include combo when 1', () => {
-    const text = generateShareText(grid, 1, 3, 1500, 1, false);
-    expect(text).not.toContain('Combo');
+  it('does not include "Flawless" tag when flag is false or omitted', () => {
+    const text = generateShareText(grid, 1, 3, 1500, false);
+    expect(text).not.toContain('Flawless');
   });
 
   it('handles empty grid', () => {
@@ -68,7 +65,7 @@ describe('generateShareText', () => {
       [null, null],
       [null, null],
     ];
-    const text = generateShareText(emptyGrid, 1, 0, 0, 0, false);
+    const text = generateShareText(emptyGrid, 1, 0, 0, false);
     expect(text).toContain('⬛⬛');
     expect(text).toContain('WORDFALL Level 1');
   });

@@ -102,6 +102,7 @@ export const selectTooltipsShown      = (s: PlayerData) => s.tooltipsShown;
 export const selectFailCountByLevel   = (s: PlayerData) => s.failCountByLevel;
 export const selectMysteryWheel       = (s: PlayerData) => s.mysteryWheel;
 export const selectWinStreak          = (s: PlayerData) => s.winStreak;
+export const selectFlawlessStreak     = (s: PlayerData) => s.flawlessStreak;
 export const selectEventProgress      = (s: PlayerData) => s.eventProgress;
 export const selectPuzzleEnergy       = (s: PlayerData) => s.puzzleEnergy;
 export const selectSegments           = (s: PlayerData) => s.segments;

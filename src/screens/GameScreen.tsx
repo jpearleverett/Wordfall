@@ -25,10 +25,10 @@ import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, CHAIN_INTENSITY, getDifficultyTier, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import { wordFoundHaptic, comboHaptic, errorHaptic, successHaptic, boosterComboHaptic } from '../services/haptics';
+import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic } from '../services/haptics';
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
 import {
@@ -62,7 +62,6 @@ import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
 import { getModeTutorial } from '../data/modeTutorials';
 import { PostLossModal } from '../components/PostLossModal';
 import { GameFlashes } from './game/GameFlashes';
-import { ComboFlash } from '../components/effects/ComboFlash';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
 
@@ -73,7 +72,7 @@ interface GameScreenProps {
   mode?: GameMode;
   maxMoves?: number;
   timeLimit?: number;
-  onComplete: (stars: number, score: number, maxCombo: number) => void;
+  onComplete: (stars: number, score: number, perfectRun: boolean) => void;
   onNextLevel: () => void;
   onHome: () => void;
   // Completion data (passed from App.tsx wrapper after handleComplete)
@@ -481,8 +480,6 @@ function GameScreenImpl({
   //    coarse slices change (per word/action, NOT per cell tap). ─────────
   const status = useStore(store, s => s.status);
   const score = useStore(store, s => s.score);
-  const combo = useStore(store, s => s.combo);
-  const maxCombo = useStore(store, s => s.maxCombo);
   const moves = useStore(store, s => s.moves);
   const hintsLeft = useStore(store, s => s.hintsLeft);
   const hintsUsed = useStore(store, s => s.hintsUsed);
@@ -531,8 +528,6 @@ function GameScreenImpl({
     }
   }, [solveSequence, foundWords, totalWords]);
   const gridHeightLocked = useRef(false);
-  const chainAnim = useRef(new Animated.Value(0)).current;
-  const [chainVisible, setChainVisible] = useState(false);
   const validFlashAnim = useRef(new Animated.Value(0)).current;
   const [showValidFlash, setShowValidFlash] = useState(false);
   const invalidFlashAnim = useRef(new Animated.Value(0)).current;
@@ -995,72 +990,6 @@ function GameScreenImpl({
     return () => sub.remove();
   }, []);
 
-  // Chain celebration animation with screen shake (skips animation when reduceMotion)
-  const showChainCelebration = useCallback(() => {
-    setChainVisible(true);
-    chainAnim.setValue(0);
-    void comboHaptic();
-    void soundManager.playSound('combo');
-
-    if (reduceMotion) {
-      // Skip animation, just show briefly then hide
-      chainAnim.setValue(1);
-      trackTimeout(() => {
-        chainAnim.setValue(0);
-        setChainVisible(false);
-      }, ANIM.chainPopupDuration);
-      return;
-    }
-
-    // Screen shake for chain — escalates with combo count
-    const isLongShake = combo >= 6;
-    const shakeSequence = isLongShake
-      ? Animated.sequence([
-          Animated.timing(shakeAnim, { toValue: 12, duration: 40, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -10, duration: 40, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 8, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -6, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 5, duration: 30, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -3, duration: 30, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 2, duration: 25, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 0, duration: 25, useNativeDriver: true }),
-        ])
-      : Animated.sequence([
-          Animated.timing(shakeAnim, { toValue: 8, duration: 40, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -6, duration: 40, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 5, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -3, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 2, duration: 30, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 0, duration: 30, useNativeDriver: true }),
-        ]);
-    shakeSequence.start();
-    Animated.sequence([
-      Animated.spring(chainAnim, {
-        toValue: 1,
-        friction: 4,
-        tension: 200,
-        useNativeDriver: true,
-      }),
-      Animated.delay(ANIM.chainPopupDuration),
-      Animated.timing(chainAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => setChainVisible(false));
-  }, [chainAnim, shakeAnim, combo, reduceMotion]);
-
-  // Show chain celebration on combo > 1
-  useEffect(() => {
-    if (combo > 1 && status === 'playing') {
-      showChainCelebration();
-      // Defer analytics off the frame the chain popup is animating on.
-      const chainPayload = { level, mode, combo: combo };
-      requestAnimationFrame(() => {
-        void analytics.logEvent('chain_count', chainPayload);
-      });
-    }
-  }, [combo, status, showChainCelebration, level, mode]);
 
   // Invalid word flash animation. Runs a brief low-amplitude screen shake
   // (kinesthetic negative feedback — distinct from the 7+-letter celebration
@@ -1272,10 +1201,35 @@ function GameScreenImpl({
     prevFoundWordsRef.current = foundWords;
   }, [foundWords, status]);
 
+  // Last-word tension hook (plan task 2). When `remainingWords` transitions to
+  // exactly 1, crossfade to the tense BGM, fire a one-shot sting, and run a
+  // medium haptic. Guarded by a ref so it fires once per transition even if the
+  // effect re-runs. `starEarn` is currently the synth fallback; swap to
+  // `last_word_sting` when real audio lands.
+  const lastWordTensionFiredRef = useRef(false);
+  useEffect(() => {
+    const remaining = totalWords - foundWords;
+    if (remaining !== 1 || status !== 'playing') {
+      if (remaining !== 1) lastWordTensionFiredRef.current = false;
+      return;
+    }
+    if (lastWordTensionFiredRef.current) return;
+    lastWordTensionFiredRef.current = true;
+    void soundManager.playMusic('tense', { crossfadeMs: 600 });
+    void soundManager.playSound('starEarn');
+    void lastWordHaptic();
+    const puzzleStartTime = store.getState().puzzleStartTime;
+    const timeIntoPuzzleMs = puzzleStartTime > 0 ? Date.now() - puzzleStartTime : 0;
+    void analytics.logEvent('last_word_tension_entered', {
+      level,
+      mode,
+      timeIntoPuzzleMs,
+    });
+  }, [foundWords, totalWords, status, level, mode, store]);
+
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && showFailed) {
       const puzzleStartTime = store.getState().puzzleStartTime;
-      const chainCount = store.getState().chainCount;
       const timeMs = puzzleStartTime > 0 ? Date.now() - puzzleStartTime : 0;
       void analytics.logEvent('puzzle_fail', {
         level,
@@ -1290,14 +1244,12 @@ function GameScreenImpl({
         level,
         outcome: status === 'timeout' ? 'timeout' : 'fail',
         hints_used: hintsUsed,
-        max_combo: maxCombo,
-        chain_count: chainCount,
         time_ms: timeMs,
         words_found: foundWords,
         words_total: totalWords,
       });
     }
-  }, [status, showFailed, level, mode, foundWords, totalWords, score, hintsUsed, maxCombo, store]);
+  }, [status, showFailed, level, mode, foundWords, totalWords, score, hintsUsed, store]);
 
   // Score popup when score changes (word found) + particle burst (#1) + big word celebration (Task 2)
   useEffect(() => {
@@ -1305,14 +1257,13 @@ function GameScreenImpl({
     prevScoreRef.current = score;
     if (diff > 0 && status === 'playing') {
       const wordLen = lastSubmittedWordLenRef.current;
-      const label = combo > 1 ? `+${diff} (${combo}x!)` : `+${diff}`;
-      setScorePopup({ points: diff, label });
+      setScorePopup({ points: diff, label: `+${diff}` });
       void wordFoundHaptic();
 
       // Big word celebration variance (Task 2)
       if (wordLen >= 7) {
         void soundManager.playSound('combo');
-        void comboHaptic();
+        void successHaptic();
         // Show "AMAZING!" / "INCREDIBLE!" overlay
         const labels = ['AMAZING!', 'INCREDIBLE!', 'PHENOMENAL!', 'SPECTACULAR!'];
         setBigWordLabel(labels[Math.floor(Math.random() * labels.length)]);
@@ -1494,14 +1445,14 @@ function GameScreenImpl({
       void soundManager.playMusic('victory');
       const finalScore = score;
       const finalStars = stars;
-      const finalMaxCombo = maxCombo;
+      const finalPerfectRun = perfectRun;
       const timer = setTimeout(() => {
         setShowComplete(true);
-        onCompleteRef.current(finalStars, finalScore, finalMaxCombo);
+        onCompleteRef.current(finalStars, finalScore, finalPerfectRun);
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [status, stars, score, maxCombo]);
+  }, [status, stars, score, perfectRun]);
 
   // Reset grid height lock when board changes (new puzzle/level)
   useEffect(() => {
@@ -1789,7 +1740,6 @@ function GameScreenImpl({
       <GameHeader
         level={level}
         score={score}
-        combo={combo}
         moves={moves}
         hintsLeft={hintsAvailable}
         undosLeft={undosAvailable}
@@ -1824,30 +1774,22 @@ function GameScreenImpl({
         actionLabel="Return home"
         onReset={onHome}
       >
-      {/* Chain celebrations, valid/invalid flash, score popup, big word
-          celebration — all extracted into a single memoized subtree so
-          this branch doesn't re-reconcile on every SELECT_CELL. All
-          Animated.Values are ref-stable and compared referentially by
-          React.memo; the primitive props only change on word submit /
-          combo increment. */}
+      {/* Valid/invalid flash, score popup, big-word celebration — extracted
+          into a single memoized subtree so this branch doesn't re-reconcile
+          on every SELECT_CELL. All Animated.Values are ref-stable and
+          compared referentially by React.memo; primitive props only change
+          on word submit. */}
       <GameFlashes
-        chainVisible={chainVisible}
-        combo={combo}
         showValidFlash={showValidFlash}
         showInvalidFlash={showInvalidFlash}
         scorePopup={scorePopup}
         lastSubmittedWordLen={lastSubmittedWordLenRef.current}
         bigWordLabel={bigWordLabel}
-        chainAnim={chainAnim}
         validFlashAnim={validFlashAnim}
         invalidFlashAnim={invalidFlashAnim}
         scorePopupAnim={scorePopupAnim}
         bigWordAnim={bigWordAnim}
       />
-
-      {/* Combo tint pulse + confetti at combo >=5 (Phase 3.9). Reads
-          reduceMotion-aware; renders noop below the combo-3 threshold. */}
-      <ComboFlash combo={combo} reduceMotion={reduceMotion} />
 
 
       {/* Word bank — reads selection state from the zustand store directly.
@@ -1947,7 +1889,6 @@ function GameScreenImpl({
           score={score}
           moves={moves}
           stars={stars}
-          combo={maxCombo}
           level={level}
           isDaily={isDaily}
           mode={mode}

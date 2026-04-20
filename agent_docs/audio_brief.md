@@ -144,6 +144,27 @@ These will land with the upcoming feature branches. If budget allows, commission
 - `season_pass_tier_unlock.mp3` — battle pass tier reached (ascending fanfare, ~1s)
 - `referral_reward.mp3` — friend joined and reward landed (warm, social-positive, ~600ms)
 
+### Last-word + Flawless dopamine layer (April 2026 — replaces chain/combo popups)
+
+Wordfall no longer tries to be match-3. Chain/combo popups were ripped; two new
+moments carry the same emotional weight within the game's actual rules
+(single-solution word-search with gravity).
+
+- `last_word_sting.mp3` — fires once when `remainingWords` transitions `2 → 1`.
+  500–800ms soft tension riser, subtle but distinct from `wordFound`. Pair with
+  a BGM crossfade to the tense bed. Currently using `starEarn` synth as the
+  stand-in; flip `src/services/sound.ts` once the real asset lands (either by
+  swapping `starEarn`'s `REAL_SOUND_FILES` entry or by adding a dedicated
+  `lastWord` slot to the `SoundName` union).
+- `flawless_badge.mp3` — plays when the "FLAWLESS" badge reveals on the victory
+  screen (~400–600ms bright chime, gold-hued, celebratory but brief — the
+  full-screen fanfare is reserved for flawless-streak milestones at 3/5/7/
+  10/15/20 solves in a row). Currently borrows the `starEarn` synth as
+  placeholder; rescued the orphaned slot.
+
+Both are Tier 1 additions — commission alongside the 11 SFX above rather than
+as a separate round.
+
 ---
 
 ## Delivery Format

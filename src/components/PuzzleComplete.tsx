@@ -25,9 +25,11 @@ import {
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { VideoBackground } from './common/VideoBackground';
 import { crashReporter } from '../services/crashReporting';
+import { soundManager } from '../services/sound';
 import ChromeText from './common/ChromeText';
 import ScanLineOverlay from './common/ScanLineOverlay';
 import NeonStarBurst from './victory/NeonStarBurst';
+import FlawlessBadge from './victory/FlawlessBadge';
 import { ShareCard } from './ShareCard';
 import { useShareVictory } from '../hooks/useShareVictory';
 
@@ -35,7 +37,6 @@ interface PuzzleCompleteProps {
   score: number;
   moves: number;
   stars: number;
-  combo: number;
   level: number;
   isDaily: boolean;
   mode?: GameMode;
@@ -319,7 +320,6 @@ export function PuzzleComplete({
   score,
   moves,
   stars,
-  combo,
   level,
   isDaily,
   mode = 'classic',
@@ -441,6 +441,15 @@ export function PuzzleComplete({
     return () => clearTimeout(timer);
   }, [actionsAnim, cardAnim, fadeAnim, glitchAnim, ribbonAnim, statsAnim]);
 
+  // Flawless badge audio sting: plays once when the badge reveals (rescues the
+  // previously-orphaned `starEarn` slot). Swap to a dedicated `flawless_badge`
+  // asset when the composer deliverable lands.
+  useEffect(() => {
+    if (starsRevealed && perfectRun) {
+      void soundManager.playSound('starEarn');
+    }
+  }, [starsRevealed, perfectRun]);
+
   const title = useMemo(() => {
     if (isDaily) return 'Daily Triumph';
     if (perfectRun) return 'Perfect Clear';
@@ -453,8 +462,6 @@ export function PuzzleComplete({
 
   const subtitle = perfectRun
     ? 'You solved it without mistakes and kept the board perfectly under control.'
-    : combo > 1
-    ? `Your best chain reached ${combo}x and kept the board flowing beautifully.`
     : 'A clean clear with strong sequencing and smart gravity reads.';
 
   const difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
@@ -611,6 +618,13 @@ export function PuzzleComplete({
                 </View>
               </View>
 
+              {/* Flawless badge — reveals after the third star. Every clean
+                  solve gets this; streak milestones get a full-screen ceremony
+                  on top. */}
+              {perfectRun && (
+                <FlawlessBadge visible={starsRevealed} delay={700} />
+              )}
+
               {/* Chrome score panel with CRT scan lines */}
               <LinearGradient
                 colors={GRADIENTS.scorePanel as unknown as [string, string, ...string[]]}
@@ -640,13 +654,6 @@ export function PuzzleComplete({
                 >
                   <Text style={styles.statCardLabel}>{t('result.moves')}</Text>
                   <Text style={styles.statCardValue}>{moves}</Text>
-                </LinearGradient>
-                <LinearGradient
-                  colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}
-                  style={styles.statCard}
-                >
-                  <Text style={styles.statCardLabel}>{t('result.bestCombo')}</Text>
-                  <Text style={styles.statCardValue}>{combo > 1 ? `${combo}x` : '—'}</Text>
                 </LinearGradient>
                 <LinearGradient
                   colors={GRADIENTS.surface as unknown as [string, string, ...string[]]}

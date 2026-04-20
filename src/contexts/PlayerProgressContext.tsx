@@ -119,7 +119,7 @@ export interface PlayerProgressMethods {
   popCeremony: () => CeremonyItem | null;
   recordFailure: (level: number) => void;
   needsBreather: () => boolean;
-  checkAchievements: (extraData?: { maxCombo?: number }) => CeremonyItem[];
+  checkAchievements: (extraData?: Record<string, unknown>) => CeremonyItem[];
   completeAchievement: (achievementId: string) => void;
   checkComebackRewards: () => string[];
   recordPerformanceMetrics: (level: number, stars: number, completionTimeSeconds: number) => void;
@@ -482,7 +482,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     return data.consecutiveFailures >= 2 || data.lastLevelStars === 1;
   };
 
-  const checkAchievements = (extraData?: { maxCombo?: number }): CeremonyItem[] => {
+  const checkAchievements = (_extraData?: Record<string, unknown>): CeremonyItem[] => {
     const data = getData();
     const ceremonies: CeremonyItem[] = [];
     const valueMap: Record<string, number> = {
@@ -490,7 +490,6 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       puzzle_solver: data.puzzlesSolved,
       perfect_player: data.perfectSolves,
       high_scorer: data.totalScore,
-      chain_reaction: extraData?.maxCombo || 0,
       streak_master: data.streaks.currentStreak,
       daily_devotee: data.dailyCompleted.length,
       atlas_scholar: Object.keys(data.collections.atlasPages).length,

@@ -14,14 +14,22 @@ interface WordChipProps {
   // single biggest contributor to WordBank's 10-20ms per-tap cost.
   isActive: boolean;
   isValidWord: boolean;
+  /**
+   * Last-remaining-word pulse. True when this is the only unfound chip in the
+   * puzzle — drives a looping scale pulse so the final word telegraphs the
+   * "one away from winning" moment.
+   */
+  isLastRemaining: boolean;
   index: number;
 }
 
-const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValidWord, index }: WordChipProps) {
+const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValidWord, isLastRemaining, index }: WordChipProps) {
   const foundAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const lastRemainingAnim = useRef(new Animated.Value(1)).current;
   const wasFound = useRef(false);
+  const lastRemainingLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     if (wordPlacement.found && !wasFound.current) {
@@ -60,6 +68,42 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   }, [wordPlacement.found]);
 
   useEffect(() => {
+    // Last-remaining-word pulse: loop scale 1.0 → 1.08 → 1.0 while this is the
+    // only unfound chip. Stop + reset when the condition is no longer true.
+    if (lastRemainingLoopRef.current) {
+      lastRemainingLoopRef.current.stop();
+      lastRemainingLoopRef.current = null;
+    }
+    if (isLastRemaining && !wordPlacement.found) {
+      lastRemainingAnim.setValue(1);
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(lastRemainingAnim, {
+            toValue: 1.08,
+            duration: 520,
+            useNativeDriver: true,
+          }),
+          Animated.timing(lastRemainingAnim, {
+            toValue: 1.0,
+            duration: 520,
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      lastRemainingLoopRef.current = loop;
+      loop.start();
+    } else {
+      lastRemainingAnim.setValue(1);
+    }
+    return () => {
+      if (lastRemainingLoopRef.current) {
+        lastRemainingLoopRef.current.stop();
+        lastRemainingLoopRef.current = null;
+      }
+    };
+  }, [isLastRemaining, wordPlacement.found]);
+
+  useEffect(() => {
     // Stop any running animation before starting a new one
     glowAnim.stopAnimation();
 
@@ -93,9 +137,14 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
       style={[
         styles.wordChip,
         getChipStyle(),
-        { transform: [{ scale: scaleAnim }] },
+        isLastRemaining && !wordPlacement.found && styles.wordChipLastRemaining,
+        {
+          transform: [
+            { scale: Animated.multiply(scaleAnim, lastRemainingAnim) },
+          ],
+        },
       ]}
-      accessibilityLabel={`${wordPlacement.word}, ${wordPlacement.found ? 'found' : 'not found'}`}
+      accessibilityLabel={`${wordPlacement.word}, ${wordPlacement.found ? 'found' : 'not found'}${isLastRemaining && !wordPlacement.found ? ', last remaining' : ''}`}
     >
       {/* Background gradient + glass edge clipped to chip shape */}
       <View style={styles.chipBackground}>
@@ -237,26 +286,31 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
         contentContainerStyle={styles.wordList}
         style={styles.wordListScroll}
       >
-        {words.map((wordPlacement, index) => {
-          // Compute isActive here so we pass a stable boolean to WordChip.
-          // When currentWord changes from "AB" → "ABC", only chips whose
-          // boolean flipped re-render; the rest are skipped by React.memo.
-          const isActive = !wordPlacement.found && currentWord === wordPlacement.word;
-          // isValidWord only affects a chip's rendering when it's also the
-          // active one. Passing `false` to all other chips keeps their props
-          // stable when the *global* isValidWord flips, avoiding a cascade
-          // of re-renders across all 4-6 chips on every valid-word moment.
-          const chipIsValid = isActive && isValidWord;
-          return (
-            <WordChip
-              key={`${wordPlacement.word}-${index}`}
-              wordPlacement={wordPlacement}
-              isActive={isActive}
-              isValidWord={chipIsValid}
-              index={index}
-            />
-          );
-        })}
+        {(() => {
+          const unfoundCount = words.filter(w => !w.found).length;
+          return words.map((wordPlacement, index) => {
+            // Compute isActive here so we pass a stable boolean to WordChip.
+            // When currentWord changes from "AB" → "ABC", only chips whose
+            // boolean flipped re-render; the rest are skipped by React.memo.
+            const isActive = !wordPlacement.found && currentWord === wordPlacement.word;
+            // isValidWord only affects a chip's rendering when it's also the
+            // active one. Passing `false` to all other chips keeps their props
+            // stable when the *global* isValidWord flips, avoiding a cascade
+            // of re-renders across all 4-6 chips on every valid-word moment.
+            const chipIsValid = isActive && isValidWord;
+            const isLastRemaining = unfoundCount === 1 && !wordPlacement.found;
+            return (
+              <WordChip
+                key={`${wordPlacement.word}-${index}`}
+                wordPlacement={wordPlacement}
+                isActive={isActive}
+                isValidWord={chipIsValid}
+                isLastRemaining={isLastRemaining}
+                index={index}
+              />
+            );
+          });
+        })()}
       </ScrollView>
     </View>
   );
@@ -390,6 +444,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
+    elevation: 8,
+  },
+  wordChipLastRemaining: {
+    borderColor: COLORS.gold,
+    borderWidth: 2,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 14,
     elevation: 8,
   },
   wordText: {

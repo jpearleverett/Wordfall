@@ -91,6 +91,17 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           onDismiss={onDismiss}
         />
       )}
+      {activeCeremony?.type === 'flawless_streak_milestone' && (
+        <MilestoneCeremony
+          ribbon="FLAWLESS STREAK!"
+          icon={'\u{1F31F}'}
+          title={activeCeremony.data.label || `${activeCeremony.data.streak} Flawless!`}
+          description={`You solved ${activeCeremony.data.streak} puzzles in a row without hints, undos, or shuffle.`}
+          accentColor={COLORS.gold}
+          buttonText="INCREDIBLE"
+          onDismiss={onDismiss}
+        />
+      )}
       {activeCeremony?.type === 'first_rare_tile' && (
         <MilestoneCeremony
           ribbon="FIRST RARE TILE!"
