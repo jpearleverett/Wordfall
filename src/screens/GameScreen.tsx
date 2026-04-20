@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useImperativeHandle, useMemo, useState, 
 import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
-  Animated,
   Image,
   LayoutAnimation,
   Pressable,
@@ -12,6 +11,14 @@ import {
   Share,
   View,
 } from 'react-native';
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withSequence,
+  withDelay,
+} from 'react-native-reanimated';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { Board, CellPosition, GameMode, GameState, VictorySummaryItem } from '../types';
@@ -309,21 +316,34 @@ const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
 const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', '#ff9100'];
 
 function WordClearParticle({ delay, startX, startY }: { delay: number; startX: number; startY: number }) {
-  const anim = useRef(new Animated.Value(0)).current;
+  const anim = useSharedValue(0);
   const angle = useRef(Math.random() * Math.PI * 2).current;
   const distance = useRef(40 + Math.random() * 60).current;
   const size = useRef(4 + Math.random() * 6).current;
   const color = useRef(PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)]).current;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.delay(delay),
-      Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
-    ]).start();
-  }, []);
+    anim.value = 0;
+    anim.value = delay > 0
+      ? withDelay(delay, withTiming(1, { duration: 400 }))
+      : withTiming(1, { duration: 400 });
+  }, [anim, delay]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const v = anim.value;
+    const opacity = v <= 0.2 ? v * 5 : (1 - v) / 0.8;
+    return {
+      opacity,
+      transform: [
+        { translateX: v * Math.cos(angle) * distance },
+        { translateY: v * Math.sin(angle) * distance },
+        { scale: v <= 0.3 ? 0.3 + (1.2 - 0.3) * (v / 0.3) : 1.2 - (1.2 - 0.2) * ((v - 0.3) / 0.7) },
+      ],
+    };
+  });
 
   return (
-    <Animated.View style={{
+    <Reanimated.View style={[{
       position: 'absolute',
       left: startX,
       top: startY,
@@ -331,13 +351,7 @@ function WordClearParticle({ delay, startX, startY }: { delay: number; startX: n
       height: size,
       borderRadius: size / 2,
       backgroundColor: color,
-      opacity: anim.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
-      transform: [
-        { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * distance] }) },
-        { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * distance] }) },
-        { scale: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.3, 1.2, 0.2] }) },
-      ],
-    }} />
+    }, animatedStyle]} />
   );
 }
 
@@ -537,9 +551,12 @@ function GameScreenImpl({
   // owns the shake animation since it's also used for non-popup events
   // (invalid tap, big-word impact).
   const submitFeedbackLayerRef = useRef<SubmitFeedbackLayerHandle | null>(null);
-  const validFlashAnim = useRef(new Animated.Value(0)).current;
+  // Valid / invalid word flash — Reanimated shared values drive the
+  // overlay opacity on the UI thread. Booleans still gate conditional
+  // rendering.
+  const validFlashAnim = useSharedValue(0);
   const [showValidFlash, setShowValidFlash] = useState(false);
-  const invalidFlashAnim = useRef(new Animated.Value(0)).current;
+  const invalidFlashAnim = useSharedValue(0);
   const [showInvalidFlash, setShowInvalidFlash] = useState(false);
   const prevScoreRef = useRef(score);
   const [showIdleHint, setShowIdleHint] = useState(false);
@@ -547,7 +564,9 @@ function GameScreenImpl({
   const [showModeIntro, setShowModeIntro] = useState(true);
   const [showModeTutorial, setShowModeTutorial] = useState(false);
   const modeTutorialSteps = useMemo(() => getModeTutorial(mode), [mode]);
-  const shakeAnim = useRef(new Animated.Value(0)).current;
+  // Screen shake — shared value so multi-keyframe sequences run on the
+  // UI thread without bridge traffic per keyframe.
+  const shakeAnim = useSharedValue(0);
   const prevFoundWordsRef = useRef(foundWords);
   const [movedCells, setMovedCells] = useState<CellPosition[]>([]);
   // Multi-tile bloom queue — owned by the sibling `ClearParticleLayer` so
@@ -571,14 +590,21 @@ function GameScreenImpl({
     pendingTimeoutsRef.current.forEach(clearTimeout);
     pendingTimeoutsRef.current.clear();
   }, []);
-  const gridScaleAnim = useRef(new Animated.Value(1)).current;
-  const undoFlashAnim = useRef(new Animated.Value(0)).current;
+  // Grid scale + undo pulse combine into a single Reanimated transform
+  // on the PlayField wrapper. Undo flash overlay uses its own shared
+  // value for opacity interpolation.
+  const gridScaleAnim = useSharedValue(1);
+  const undoFlashAnim = useSharedValue(0);
   const [showUndoFlash, setShowUndoFlash] = useState(false);
-  const undoPulseAnim = useRef(new Animated.Value(1)).current;
+  const undoPulseAnim = useSharedValue(1);
 
-  // --- Per-tile gravity fall animation state ---
-  const fallAnimMap = useRef(new Map<string, Animated.Value>()).current;
-  const [fallActive, setFallActive] = useState(false);
+  // Per-cell gravity fall state. The map gets replaced (not mutated) on
+  // each gravity event so React sees a fresh reference; the tick bumps
+  // so LetterCell can distinguish "fell again by the same rows" from
+  // "no new gravity this render." LetterCell owns the actual Reanimated
+  // shared value that animates translateY on the UI thread.
+  const [fallDetailMap, setFallDetailMap] = useState<Map<string, { fallRows: number; delayMs: number }>>(() => new Map());
+  const [fallTick, setFallTick] = useState(0);
 
   // Big-word celebration visual is owned by SubmitFeedbackLayer. GameScreen
   // only tracks the submitted word length so the score-change effect can
@@ -893,19 +919,26 @@ function GameScreenImpl({
     difficulty,
   ]);
 
-  // Memoize the composed grid scale to avoid creating a new style object each render
-  const gridScaleStyle = useMemo(() => ({
-    transform: [{ scale: Animated.multiply(gridScaleAnim, undoPulseAnim) }],
-  }), [gridScaleAnim, undoPulseAnim]);
+  // Composed grid scale (submit pulse × undo pulse) as a Reanimated
+  // animated style so the transform runs on the UI thread without
+  // bridge traffic per keyframe.
+  const gridScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: gridScaleAnim.value * undoPulseAnim.value }],
+  }));
 
-  // Memoize the root shake container style so the Animated.View ref stays
-  // stable across the thousands of re-renders a puzzle triggers (one per
-  // cell selection). The shakeAnim ref is stable so the style needs only
-  // to be computed once.
-  const shakeContainerStyle = useMemo(
-    () => [styles.container, { transform: [{ translateX: shakeAnim }] }],
-    [shakeAnim],
-  );
+  // Root shake container translateX — also Reanimated-driven.
+  const shakeContainerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shakeAnim.value }],
+  }));
+
+  // Undo flash overlay opacity — peaks at 0.2 at the midpoint of the
+  // 150 ms timing animation and fades back to 0.
+  const undoFlashOverlayStyle = useAnimatedStyle(() => {
+    const v = undoFlashAnim.value;
+    // Piecewise-linear: 0 -> 0.2 at v=0.5, 0.2 -> 0 at v=1.
+    const opacity = v <= 0.5 ? v * 0.4 : (1 - v) * 0.4;
+    return { opacity };
+  });
 
   // Stable onLayout callback — uses ref to lock on first measurement and prevent re-renders
   const handleGridLayout = useCallback((e: { nativeEvent: { layout: { height: number } } }) => {
@@ -1007,26 +1040,25 @@ function GameScreenImpl({
     void soundManager.playSound('combo');
     if (reduceMotion) return;
     const isLongShake = combo >= 6;
-    const shakeSequence = isLongShake
-      ? Animated.sequence([
-          Animated.timing(shakeAnim, { toValue: 12, duration: 40, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -10, duration: 40, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 8, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -6, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 5, duration: 30, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -3, duration: 30, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 2, duration: 25, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 0, duration: 25, useNativeDriver: true }),
-        ])
-      : Animated.sequence([
-          Animated.timing(shakeAnim, { toValue: 8, duration: 40, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -6, duration: 40, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 5, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -3, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 2, duration: 30, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 0, duration: 30, useNativeDriver: true }),
-        ]);
-    shakeSequence.start();
+    shakeAnim.value = isLongShake
+      ? withSequence(
+          withTiming(12, { duration: 40 }),
+          withTiming(-10, { duration: 40 }),
+          withTiming(8, { duration: 35 }),
+          withTiming(-6, { duration: 35 }),
+          withTiming(5, { duration: 30 }),
+          withTiming(-3, { duration: 30 }),
+          withTiming(2, { duration: 25 }),
+          withTiming(0, { duration: 25 }),
+        )
+      : withSequence(
+          withTiming(8, { duration: 40 }),
+          withTiming(-6, { duration: 40 }),
+          withTiming(5, { duration: 35 }),
+          withTiming(-3, { duration: 35 }),
+          withTiming(2, { duration: 30 }),
+          withTiming(0, { duration: 30 }),
+        );
   }, [shakeAnim, combo, reduceMotion]);
 
   // Fire chain shake + analytics on combo > 1. The visual popup is driven
@@ -1050,33 +1082,28 @@ function GameScreenImpl({
     setShowInvalidFlash(true);
     void errorHaptic();
     void soundManager.playSound('wordInvalid');
-    invalidFlashAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(invalidFlashAnim, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(invalidFlashAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => setShowInvalidFlash(false));
+    invalidFlashAnim.value = 0;
+    invalidFlashAnim.value = withSequence(
+      withTiming(1, { duration: 100 }),
+      withTiming(0, { duration: 200 }),
+    );
+    // Deferred hide of the overlay — withTiming's callback would work
+    // but setTimeout keeps the setState on the JS thread in a single spot.
+    trackTimeout(() => setShowInvalidFlash(false), 320);
 
     if (!reduceMotion && getRemoteBoolean('invalidShakeEnabled')) {
       // ~120ms total, ±8px peak — reduced amplitude vs the 7+-letter shake
-      shakeAnim.setValue(0);
-      Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 8, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -7, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 5, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -4, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 2, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 20, useNativeDriver: true }),
-      ]).start();
+      shakeAnim.value = 0;
+      shakeAnim.value = withSequence(
+        withTiming(8, { duration: 20 }),
+        withTiming(-7, { duration: 20 }),
+        withTiming(5, { duration: 20 }),
+        withTiming(-4, { duration: 20 }),
+        withTiming(2, { duration: 20 }),
+        withTiming(0, { duration: 20 }),
+      );
     }
-  }, [invalidFlashAnim, reduceMotion, shakeAnim]);
+  }, [invalidFlashAnim, reduceMotion, shakeAnim, trackTimeout]);
 
   // Trigger invalid flash only for true invalid-tap errors.
   useEffect(() => {
@@ -1183,67 +1210,24 @@ function GameScreenImpl({
 
       // Per-tile gravity fall animation
       if (!reduceMotion && moved.length > 0) {
-        const rows = grid.length;
-        const cols = grid[0]?.length ?? 0;
-        // Compute cellStride (same formula as Grid.tsx)
-        const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-        let cellSize = Math.floor(availableWidth / cols);
-        if (gridAreaHeight > 0) {
-          const frameAllowance = 58;
-          const heightAvail = gridAreaHeight - frameAllowance;
-          const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
-          cellSize = Math.min(cellSize, heightBased);
-        }
-        const cellStride = cellSize + CELL_GAP;
-
-        // Stagger delay per column for wave effect
+        // Build the per-cell fall detail map (stagger delay + fallRows).
+        // LetterCell will pick this up via prop and drive its own
+        // Reanimated shared value — no JS→native bridge traffic per tile.
         const staggerDelay = ANIM.gravityStagger || 30;
         const movedCols = new Set(moved.map(c => c.col));
         const colOrder = Array.from(movedCols).sort((a, b) => a - b);
         const colDelayMap = new Map<number, number>();
         colOrder.forEach((c, i) => colDelayMap.set(c, i * staggerDelay));
 
-        const animations: Animated.CompositeAnimation[] = [];
+        const nextDetailMap = new Map<string, { fallRows: number; delayMs: number }>();
         for (const cell of moved) {
-          // Get or create Animated.Value for this cell
-          let anim = fallAnimMap.get(cell.cellId);
-          if (!anim) {
-            anim = new Animated.Value(0);
-            fallAnimMap.set(cell.cellId, anim);
-          }
-          // Set offset so tile visually appears at old position
-          // fallRows > 0 means tile fell down, so start with negative translateY (above)
-          const offsetPx = -(cell.fallRows * cellStride);
-          anim.setValue(offsetPx);
-
-          const delay = colDelayMap.get(cell.col) ?? 0;
-          // Animate to 0 (final position) with gravity-like feel.
-          // Phase 3.10: friction dropped 12 → 9 for a subtle landing bounce
-          // overshoot (reduceMotion users already skip this block at line 1048).
-          animations.push(
-            Animated.sequence([
-              Animated.delay(delay),
-              Animated.spring(anim, {
-                toValue: 0,
-                tension: 180,
-                friction: 9,
-                useNativeDriver: true,
-              }),
-            ])
-          );
+          nextDetailMap.set(cell.cellId, {
+            fallRows: cell.fallRows,
+            delayMs: colDelayMap.get(cell.col) ?? 0,
+          });
         }
-        setFallActive(true);
-        Animated.parallel(animations).start(() => {
-          setFallActive(false);
-          // Clean up animated values for cells no longer on the grid
-          const activeCellIds = new Set<string>();
-          grid.forEach(row =>
-            row.forEach(c => { if (c) activeCellIds.add(c.id); })
-          );
-          for (const id of fallAnimMap.keys()) {
-            if (!activeCellIds.has(id)) fallAnimMap.delete(id);
-          }
-        });
+        setFallDetailMap(nextDetailMap);
+        setFallTick(t => t + 1);
       }
 
       const timer = setTimeout(() => setMovedCells([]), 400);
@@ -1298,14 +1282,14 @@ function GameScreenImpl({
       if (!reduceMotion) {
         // Extra screen shake for 7+ letter words (stays in GameScreen
         // because shakeAnim is shared with other events).
-        Animated.sequence([
-          Animated.timing(shakeAnim, { toValue: 14, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -12, duration: 35, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 10, duration: 30, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: -7, duration: 30, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 4, duration: 25, useNativeDriver: true }),
-          Animated.timing(shakeAnim, { toValue: 0, duration: 25, useNativeDriver: true }),
-        ]).start();
+        shakeAnim.value = withSequence(
+          withTiming(14, { duration: 35 }),
+          withTiming(-12, { duration: 35 }),
+          withTiming(10, { duration: 30 }),
+          withTiming(-7, { duration: 30 }),
+          withTiming(4, { duration: 25 }),
+          withTiming(0, { duration: 25 }),
+        );
 
         // Per-tile bloom burst for 7+ letter words (multi-tile waterfall).
         const bigCells = lastSubmittedCellsRef.current;
@@ -1369,23 +1353,19 @@ function GameScreenImpl({
       // Show green flash (skip animation if reduceMotion)
       setShowValidFlash(true);
       if (!reduceMotion) {
-        validFlashAnim.setValue(0);
-        Animated.timing(validFlashAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
+        validFlashAnim.value = 0;
+        validFlashAnim.value = withTiming(1, { duration: 300 });
       }
 
       validFlashTimerRef.current = setTimeout(() => {
         validFlashTimerRef.current = null;
         // #3 Grid scale pop: 1.0 -> 0.97 -> 1.0 around submit
         if (!reduceMotion) {
-          gridScaleAnim.setValue(1);
-          Animated.sequence([
-            Animated.timing(gridScaleAnim, { toValue: 0.97, duration: 80, useNativeDriver: true }),
-            Animated.timing(gridScaleAnim, { toValue: 1.0, duration: 120, useNativeDriver: true }),
-          ]).start();
+          gridScaleAnim.value = 1;
+          gridScaleAnim.value = withSequence(
+            withTiming(0.97, { duration: 80 }),
+            withTiming(1.0, { duration: 120 }),
+          );
         }
 
         // Track word length for big word celebration (Task 2)
@@ -1488,21 +1468,18 @@ function GameScreenImpl({
     // #4 Undo rewind effect — cyan tint flash + scale pulse
     if (!reduceMotion) {
       setShowUndoFlash(true);
-      undoFlashAnim.setValue(0);
-      Animated.timing(undoFlashAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }).start(() => {
+      undoFlashAnim.value = 0;
+      undoFlashAnim.value = withTiming(1, { duration: 150 });
+      trackTimeout(() => {
         setShowUndoFlash(false);
-        undoFlashAnim.setValue(0);
-      });
+        undoFlashAnim.value = 0;
+      }, 160);
 
-      undoPulseAnim.setValue(1);
-      Animated.sequence([
-        Animated.timing(undoPulseAnim, { toValue: 1.02, duration: 80, useNativeDriver: true }),
-        Animated.timing(undoPulseAnim, { toValue: 1.0, duration: 100, useNativeDriver: true }),
-      ]).start();
+      undoPulseAnim.value = 1;
+      undoPulseAnim.value = withSequence(
+        withTiming(1.02, { duration: 80 }),
+        withTiming(1.0, { duration: 100 }),
+      );
     }
 
     LayoutAnimation.configureNext(
@@ -1516,7 +1493,7 @@ function GameScreenImpl({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, grantUndo, level, mode, undosAvailable, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
+  }, [undoMove, grantUndo, level, mode, undosAvailable, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length, trackTimeout]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
@@ -1688,7 +1665,7 @@ function GameScreenImpl({
   return (
     <GameStoreContext.Provider value={store}>
     <React.Profiler id="GameScreen" onRender={profilerOnRender}>
-    <Animated.View style={shakeContainerStyle}>
+    <Reanimated.View style={[styles.container, shakeContainerStyle]}>
     <SafeAreaView style={styles.container}>
       <AmbientBackdrop variant="game" />
       {/* Mode intro banner - absolute overlay so it doesn't shift layout */}
@@ -1801,8 +1778,8 @@ function GameScreenImpl({
           gridScaleStyle={gridScaleStyle}
           showValidFlash={showValidFlash}
           spotlightDimmedSet={spotlightDimmedSet}
-          fallAnimMap={fallAnimMap}
-          fallActive={fallActive}
+          fallDetailMap={fallDetailMap}
+          fallTick={fallTick}
           movedCells={movedCells}
           isDragging={isDragging}
           setIsDragging={setIsDragging}
@@ -1840,16 +1817,8 @@ function GameScreenImpl({
 
         {/* #4 Undo cyan tint flash overlay */}
         {showUndoFlash && (
-          <Animated.View
-            style={[
-              styles.undoFlashOverlay,
-              {
-                opacity: undoFlashAnim.interpolate({
-                  inputRange: [0, 0.5, 1],
-                  outputRange: [0, 0.2, 0],
-                }),
-              },
-            ]}
+          <Reanimated.View
+            style={[styles.undoFlashOverlay, undoFlashOverlayStyle]}
             pointerEvents="none"
           />
         )}
@@ -2083,7 +2052,7 @@ function GameScreenImpl({
         />
       )}
     </SafeAreaView>
-    </Animated.View>
+    </Reanimated.View>
     </React.Profiler>
     </GameStoreContext.Provider>
   );

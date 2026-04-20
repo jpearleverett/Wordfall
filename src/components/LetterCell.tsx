@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
-  Animated,
   Image,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import Reanimated, {
   withTiming,
   withSpring,
   withSequence,
+  withDelay,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../constants';
@@ -87,8 +87,19 @@ interface LetterCellProps {
   isMoved?: boolean;
   isWildcard?: boolean;
   isSpotlightDimmed?: boolean;
-  /** Animated.Value driving gravity fall translateY (pixels, animates to 0) */
-  fallAnim?: Animated.Value;
+  /**
+   * Gravity fall drivers (April 2026 perf pass). `fallFromRows` is the
+   * number of grid rows this tile fell by (positive). The tile starts
+   * rendered `fallFromRows * (size + CELL_GAP)` above its final position
+   * and springs back to zero. `fallDelayMs` staggers tiles by column.
+   * `fallTick` is a monotonic counter bumped once per gravity event so
+   * LetterCell can distinguish "fell again by the same amount" from "no
+   * new gravity this render." All animation happens UI-thread via
+   * Reanimated — no JS→native bridge traffic per tile.
+   */
+  fallFromRows?: number;
+  fallDelayMs?: number;
+  fallTick?: number;
   /** Grid row index (0-based). Used to build screen-reader position hints. */
   row?: number;
   /** Grid column index (0-based). Used to build screen-reader position hints. */
@@ -108,7 +119,9 @@ export const LetterCell = React.memo(function LetterCell({
   isMoved = false,
   isWildcard = false,
   isSpotlightDimmed = false,
-  fallAnim,
+  fallFromRows,
+  fallDelayMs,
+  fallTick,
   row,
   col,
   currentWord,
@@ -117,14 +130,35 @@ export const LetterCell = React.memo(function LetterCell({
   // If memoization is working we expect ~1 render per tap.
   perfCountCellRender();
   const palette = useColors();
-  // Scale-pop + moved-overlay animations are driven on the Reanimated
-  // worklet runtime so state changes on multiple cells at once (valid-word
-  // drag, chain clear) don't serialize through the JS bridge. The outer
-  // wrapper below keeps the legacy Animated.Value for `fallAnim` because
-  // that shared animated value is owned by GameScreen's gravity block
-  // (fallAnimMap) — migrating it would cascade into a much larger diff.
+  // All per-cell animations run on the Reanimated worklet runtime so
+  // state changes on multiple cells at once (valid-word drag, chain
+  // clear, gravity) don't serialize through the JS bridge. The outer
+  // wrapper's translateY is fed from `fallTranslateY` — triggered by a
+  // `fallTick` counter bumped once per gravity event in GameScreen.
   const scaleAnim = useSharedValue(1);
   const movedAnim = useSharedValue(0);
+  const fallTranslateY = useSharedValue(0);
+  const lastFallTickRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (fallTick === undefined) return;
+    if (fallTick === lastFallTickRef.current) return;
+    lastFallTickRef.current = fallTick;
+    if (!fallFromRows || fallFromRows <= 0) {
+      // Cell did not fall this pass — clear any residual offset.
+      fallTranslateY.value = 0;
+      return;
+    }
+    // Start above the final position and spring back. Matches the visual
+    // profile of the old Animated.spring({ tension: 180, friction: 9 }).
+    const stride = size + 6; // CELL_GAP is 6 in constants.ts
+    const offsetPx = -(fallFromRows * stride);
+    fallTranslateY.value = offsetPx;
+    const delay = fallDelayMs ?? 0;
+    fallTranslateY.value = delay > 0
+      ? withDelay(delay, withSpring(0, { damping: 12, stiffness: 180 }))
+      : withSpring(0, { damping: 12, stiffness: 180 });
+  }, [fallTick, fallFromRows, fallDelayMs, size, fallTranslateY]);
 
   useEffect(() => {
     // One withSequence call per selection change. Scale pop is the only
@@ -201,27 +235,20 @@ export const LetterCell = React.memo(function LetterCell({
     };
   }, [isValidWord, isSelected, isHinted, isWildcard, palette]);
 
-  // CRITICAL: always use Animated.View, never swap between View and Animated.View
-  // based on props. A component-type swap forces React to unmount the entire
-  // cell subtree (12+ native views per cell) and remount a fresh one. When
-  // fallActive toggles (on every word clear), the old code swapped all 50
-  // cells between View and Animated.View — 50 × full-subtree remounts per word.
-  // That was the single biggest cause of chain-clear lag on the puzzle screen.
-  //
-  // When fallAnim is undefined the transform is simply omitted and Animated.View
-  // behaves identically to a plain View. The tiny cost of always using
-  // Animated.View is trivial compared to the remount storm.
-  const outerStyle = useMemo(() => {
-    const s: any = {};
-    if (isSpotlightDimmed) s.opacity = 0.3;
-    if (fallAnim) s.transform = [{ translateY: fallAnim }];
-    return s;
-  }, [isSpotlightDimmed, fallAnim]);
+  // The outer wrapper is always a Reanimated.View regardless of props —
+  // swapping component types forces a full subtree remount, which used
+  // to dominate commit time during chain clears. The `outerAnimatedStyle`
+  // combines spotlight-dim opacity + gravity-fall translateY so both
+  // drivers run UI-thread without allocating new layouts.
+  const outerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: isSpotlightDimmed ? 0.3 : 1,
+    transform: [{ translateY: fallTranslateY.value }],
+  }));
 
   return (
-    <Animated.View
+    <Reanimated.View
       pointerEvents="none"
-      style={outerStyle}
+      style={outerAnimatedStyle}
       accessibilityRole="button"
       accessibilityLabel={buildA11yLabel({
         letter,
@@ -431,7 +458,7 @@ export const LetterCell = React.memo(function LetterCell({
         )}
 
       </Reanimated.View>
-    </Animated.View>
+    </Reanimated.View>
   );
 });
 

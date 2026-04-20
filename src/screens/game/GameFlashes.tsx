@@ -1,5 +1,10 @@
 import React from 'react';
-import { Animated, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import Reanimated, {
+  useAnimatedStyle,
+  SharedValue,
+  interpolate,
+} from 'react-native-reanimated';
 import { COLORS } from '../../constants';
 
 /**
@@ -7,22 +12,15 @@ import { COLORS } from '../../constants';
  * that GameScreen's body re-run on SELECT_CELL doesn't have to rebuild
  * the overlay JSX.
  *
- * As of the April 2026 perf pass, chain celebration / score popup /
- * big-word label / neon-pulse / VHS-glitch overlays were moved to their
- * own sibling (`SubmitFeedbackLayer`) which subscribes to the store
- * directly and uses Reanimated on the UI thread. Only the valid/invalid
- * flashes remain here; they still use legacy `Animated.Value` because
- * they're driven off setState changes (`showValidFlash`/`showInvalidFlash`)
- * in GameScreen rather than store state.
+ * All overlays now use Reanimated shared values (UI-thread) rather than
+ * legacy `Animated.Value`. Chain celebration / score popup / big-word
+ * label / neon-pulse / VHS-glitch overlays live in SubmitFeedbackLayer.
  */
 interface GameFlashesProps {
-  /** Whether the green "valid word" full-screen flash is active. */
   showValidFlash: boolean;
-  /** Whether the red "invalid word" full-screen flash is active. */
   showInvalidFlash: boolean;
-  // ── Animated.Value drivers (ref-backed, stable references) ──
-  validFlashAnim: Animated.Value;
-  invalidFlashAnim: Animated.Value;
+  validFlashAnim: SharedValue<number>;
+  invalidFlashAnim: SharedValue<number>;
 }
 
 function GameFlashesImpl({
@@ -31,28 +29,26 @@ function GameFlashesImpl({
   validFlashAnim,
   invalidFlashAnim,
 }: GameFlashesProps) {
-  const validFlashOpacity = validFlashAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.3],
-  });
+  const validFlashStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(validFlashAnim.value, [0, 1], [0, 0.3]),
+  }));
 
-  const invalidFlashOpacity = invalidFlashAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.25],
-  });
+  const invalidFlashStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(invalidFlashAnim.value, [0, 1], [0, 0.25]),
+  }));
 
   return (
     <>
       {showValidFlash && (
-        <Animated.View
-          style={[styles.validFlashOverlay, { opacity: validFlashOpacity }]}
+        <Reanimated.View
+          style={[styles.validFlashOverlay, validFlashStyle]}
           pointerEvents="none"
         />
       )}
 
       {showInvalidFlash && (
-        <Animated.View
-          style={[styles.invalidFlashOverlay, { opacity: invalidFlashOpacity }]}
+        <Reanimated.View
+          style={[styles.invalidFlashOverlay, invalidFlashStyle]}
           pointerEvents="none"
         />
       )}
