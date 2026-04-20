@@ -660,8 +660,8 @@ export const STREAK = {
 
 // Collection
 export const COLLECTION = {
-  rareTilePityTimer: 25, // guaranteed within 25 puzzles (was 10)
-  rareTileBaseChance: 0.04, // 4% base chance (was 15%)
+  rareTilePityTimer: 10, // guaranteed within 10 puzzles
+  rareTileBaseChance: 0.08, // 8% base chance
   rareTileHardBonus: 0.03, // +3% for hard/expert (was 10%)
   rareTilePerfectBonus: 0.05, // +5% for perfect clears (was 15%)
   duplicatesForWildcard: 5,
