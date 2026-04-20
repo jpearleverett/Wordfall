@@ -64,19 +64,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
       { level: 'gold', threshold: 100000, reward: { coins: 2000, gems: 60 } },
     ],
   },
-  {
-    id: 'chain_reaction',
-    name: 'Chain Reaction',
-    description: 'Achieve combo chains',
-    icon: '⚡',
-    category: 'puzzle',
-    tiers: [
-      { level: 'bronze', threshold: 3, reward: { coins: 200, gems: 5 } },
-      { level: 'silver', threshold: 5, reward: { coins: 500, gems: 15 } },
-      { level: 'gold', threshold: 8, reward: { coins: 1000, gems: 30 } },
-    ],
-  },
-
   // Streak achievements
   {
     id: 'streak_master',

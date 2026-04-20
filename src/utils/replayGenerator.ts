@@ -56,12 +56,10 @@ export function generateReplayText(
 
     // Detect gravity shift: compare gridStateAfter with what a simple removal would produce
     const hadGravity = detectGravityShift(step);
-    const isChain = step.combo > 1;
     const isLast = index === steps.length - 1;
 
     const annotations: string[] = [];
     if (hadGravity) annotations.push('\u2B07\uFE0F');
-    if (isChain) annotations.push(`\uD83D\uDD17 ${step.combo}x`);
     if (isLast && stars >= 3) annotations.push('\u2B50 Perfect!');
 
     const suffix = annotations.length > 0 ? ' ' + annotations.join(' ') : '';
@@ -106,7 +104,7 @@ export function generateReplayEmoji(
       }).join('')
     ).join('\n');
 
-    const wordLabel = `${step.wordFound}${step.combo > 1 ? ` (${step.combo}x)` : ''}`;
+    const wordLabel = step.wordFound;
     grids.push(`${wordLabel}\n${gridEmoji}`);
   }
 

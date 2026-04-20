@@ -18,7 +18,6 @@ function makeStep(overrides: Partial<SolveStep> = {}): SolveStep {
       ['D', 'O', 'G'],
     ],
     score: 100,
-    combo: 1,
     timestamp: 5000,
     ...overrides,
   };
@@ -37,7 +36,6 @@ function makeSteps(): SolveStep[] {
         ['', '', ''],
         ['D', 'O', 'G'],
       ],
-      combo: 1,
       timestamp: 3000,
     }),
     makeStep({
@@ -51,7 +49,6 @@ function makeSteps(): SolveStep[] {
         ['', '', ''],
         ['', '', ''],
       ],
-      combo: 2,
       timestamp: 7000,
     }),
   ];

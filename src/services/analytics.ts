@@ -46,13 +46,17 @@ export type AnalyticsEventName =
   | 'cohort_event'
   // Difficulty tuning (Phase 3.5 — seed for plan task 3.7)
   | 'difficulty_telemetry'
+  // Flawless / last-word dopamine hooks (replaces chain/combo popups)
+  | 'puzzle_flawless_complete'
+  | 'flawless_streak_milestone'
+  | 'flawless_streak_broken'
+  | 'last_word_tension_entered'
   // Legacy events (kept for backward compat with existing callsites)
   | 'mode_started'
   | 'daily_login'
   | 'streak_count'
   | 'app_session_start'
   | 'undo_used'
-  | 'chain_count'
   | 'gravity_interaction'
   | 'rare_tile_earned'
   | 'atlas_word_found'
@@ -595,6 +599,7 @@ class Analytics {
     undos_used: number;
     words_found: number;
     score: number;
+    flawless?: boolean;
   }): Promise<void> {
     await this.logEvent('puzzle_complete', params);
   }
@@ -622,8 +627,6 @@ class Analytics {
     attempts?: number;
     hints_used?: number;
     undos_used?: number;
-    max_combo?: number;
-    chain_count?: number;
     time_ms?: number;
     words_found?: number;
     words_total?: number;

@@ -190,36 +190,6 @@ describe('Puzzle Lifecycle Integration', () => {
       expect(state.score).toBe(expectedScore);
     });
 
-    it('combo multiplier applies on consecutive words', () => {
-      const board = generateBoard(MEDIUM_CONFIG, 42);
-      let state = createInitialState(board, 1);
-
-      // Find and submit first word
-      const wp1 = board.words[0];
-      let paths = findWordInGrid(state.board.grid, wp1.word, 1);
-      for (const pos of paths[0]) {
-        state = gameReducer(state, { type: 'SELECT_CELL', position: pos });
-      }
-      state = gameReducer(state, { type: 'SUBMIT_WORD' });
-      const scoreAfterFirst = state.score;
-      expect(state.combo).toBe(1);
-
-      // Find and submit second word (should have combo bonus)
-      const wp2 = board.words[1];
-      paths = findWordInGrid(state.board.grid, wp2.word, 1);
-      if (paths.length > 0) {
-        for (const pos of paths[0]) {
-          state = gameReducer(state, { type: 'SELECT_CELL', position: pos });
-        }
-        state = gameReducer(state, { type: 'SUBMIT_WORD' });
-        expect(state.combo).toBe(2);
-
-        // Second word should get combo bonus: base * (1 + 0.5 * comboLevel)
-        const baseScore2 = 100 + 20 * wp2.word.length;
-        const expectedWithCombo = Math.floor(baseScore2 * (1 + 0.5 * 1));
-        expect(state.score).toBe(scoreAfterFirst + expectedWithCombo);
-      }
-    });
   });
 
   describe('noGravity mode', () => {

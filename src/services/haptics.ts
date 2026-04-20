@@ -89,6 +89,17 @@ export async function boosterComboHaptic(): Promise<void> {
   setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 180);
 }
 
+/**
+ * Last-word tension — plays once when the 2nd-to-last word is found, signalling
+ * the puzzle is one move from resolving. Medium impact + a short follow-up
+ * pulse so it feels distinct from a regular word-found haptic.
+ */
+export async function lastWordHaptic(): Promise<void> {
+  if (!hapticsEnabled) return;
+  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 140);
+}
+
 export async function streakMilestoneHaptic(): Promise<void> {
   // Rhythmic celebration for streak milestones
   if (!hapticsEnabled) return;

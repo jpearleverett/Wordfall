@@ -53,7 +53,6 @@ describe('createInitialState', () => {
     expect(state.status).toBe('playing');
     expect(state.score).toBe(0);
     expect(state.moves).toBe(0);
-    expect(state.combo).toBe(0);
     expect(state.selectedCells).toEqual([]);
     expect(state.level).toBe(1);
     expect(state.mode).toBe('classic');
@@ -421,22 +420,6 @@ describe('gameReducer - scoring', () => {
     expect(state.score).toBe(140);
   });
 
-  it('applies combo multiplier on consecutive words', () => {
-    const board = makeSimpleBoard();
-    let state = createInitialState(board, 1);
-    // Find GO
-    state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 0, col: 0 } });
-    state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 0, col: 1 } });
-    state = gameReducer(state, { type: 'SUBMIT_WORD' });
-    const scoreAfterFirst = state.score;
-    // Find HI (combo level 2, so bonus = 50% of base)
-    state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 1, col: 0 } });
-    state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 1, col: 1 } });
-    state = gameReducer(state, { type: 'SUBMIT_WORD' });
-    // Second word should have combo bonus
-    expect(state.score).toBeGreaterThan(scoreAfterFirst + 140);
-  });
-
   it('gravityFlip mode rotates direction after word', () => {
     const board = makeSimpleBoard();
     let state = createInitialState(board, 1, 'gravityFlip');
@@ -493,15 +476,3 @@ describe('gameReducer - SPOTLIGHT_ACTIVATE', () => {
   });
 });
 
-describe('gameReducer - RESET_COMBO', () => {
-  it('resets combo to 0', () => {
-    const board = makeSimpleBoard();
-    let state = createInitialState(board, 1);
-    state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 0, col: 0 } });
-    state = gameReducer(state, { type: 'SELECT_CELL', position: { row: 0, col: 1 } });
-    state = gameReducer(state, { type: 'SUBMIT_WORD' });
-    expect(state.combo).toBe(1);
-    state = gameReducer(state, { type: 'RESET_COMBO' });
-    expect(state.combo).toBe(0);
-  });
-});

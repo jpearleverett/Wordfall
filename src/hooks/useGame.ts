@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -72,12 +72,9 @@ function createInitialState(
     history: [],
     status: 'playing',
     level,
-    combo: 0,
-    maxCombo: 0,
     mode,
     timeRemaining,
     perfectRun: true,
-    chainCount: 0,
     gravityDirection: 'down',
     shrinkCount: 0,
     wordsUntilShrink: 2,
@@ -163,20 +160,15 @@ export function matchesWord(
 
 function calculateScore(
   word: string,
-  comboLevel: number,
   mode: GameMode,
 ): number {
-  const baseScore = SCORE.wordFound + word.length * SCORE.bonusPerLetter;
-  const comboBonus = Math.floor(baseScore * (comboLevel - 1) * SCORE.comboMultiplier);
-  let total = baseScore + comboBonus;
+  let total = SCORE.wordFound + word.length * SCORE.bonusPerLetter;
 
-  // Apply mode score multiplier
   const modeConfig = MODE_CONFIGS[mode];
   if (modeConfig) {
     total = Math.floor(total * modeConfig.rules.scoreMultiplier);
   }
 
-  // Expert mode extra bonus
   if (mode === 'expert') {
     total = Math.floor(total * 1.5);
   }
@@ -419,18 +411,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         i === wordIndex ? { ...w, found: true } : { ...w }
       );
 
-      // Chain detection now runs in a deferred useEffect (Fix A, April 2026
-      // perf pass) instead of synchronously here. The old path ran 2 × N
-      // findWordInGrid calls inside the reducer, blocking the frame that
-      // gravity wanted to animate on. The deferred effect reads the same
-      // grids from history + solveSequence and dispatches INCREMENT_CHAIN
-      // one commit later, which is below the perceptible threshold
-      // (the chain popup's entry animation takes ~200ms).
-      const newChainCount = state.chainCount;
-
-      // Score (with optional score doubler + optional booster-combo multiplier)
-      const comboLevel = state.combo + 1;
-      let wordScore = calculateScore(matchingWord.word, comboLevel, mode);
+      // Score (base + optional score doubler + optional booster-combo multiplier)
+      let wordScore = calculateScore(matchingWord.word, mode);
       const scoreDoublerConsumed = state.scoreDoubler;
       if (scoreDoublerConsumed) {
         wordScore *= 2;
@@ -493,7 +475,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         gridStateAfter: captureReplay ? gridToSnapshot(newGrid) : EMPTY_SNAPSHOT,
         timestamp: Date.now() - state.puzzleStartTime,
         score: wordScore,
-        combo: comboLevel,
       };
 
       return {
@@ -503,9 +484,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectionDirection: null,
         score: state.score + wordScore,
         moves: newMoves,
-        combo: comboLevel,
-        maxCombo: Math.max(state.maxCombo, comboLevel),
-        chainCount: newChainCount,
         history: [...state.history, historyEntry],
         status: newStatus,
         gravityDirection: newGravityDirection,
@@ -577,7 +555,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         undosLeft: state.undosLeft - 1,
         history: state.history.slice(0, -1),
         solveSequence: state.solveSequence.slice(0, -1),
-        combo: 0,
         perfectRun: false,
         status: 'playing',
         gravityDirection: prevDirection,
@@ -603,12 +580,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // lightweight).
         state.captureReplay,
       );
-
-    case 'RESET_COMBO':
-      return {
-        ...state,
-        combo: 0,
-      };
 
     case 'TICK_TIMER': {
       if (state.status !== 'playing' || state.timeRemaining <= 0) return state;
@@ -838,15 +809,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, status: 'failed' };
     }
 
-    case 'INCREMENT_CHAIN': {
-      // Dispatched from the deferred chain-detection effect. Ignore
-      // stale increments — if another word was submitted between when
-      // the effect started and now, `solveSequence.length` will have
-      // moved on and this dispatch applies to an older board state.
-      if (action.forSolveCount !== state.solveSequence.length) return state;
-      return { ...state, chainCount: state.chainCount + 1 };
-    }
-
     default:
       return state;
   }
@@ -890,51 +852,6 @@ export function useGame(
     [words],
   );
   const solveSequence = useStore(store, useShallow((s: GameState) => s.solveSequence));
-
-  // ── Deferred chain detection (Fix A) ─────────────────────────────────
-  // Runs one commit after SUBMIT_WORD returns. Reads the last history
-  // entry (pre-submit grid), derives the post-removal grid and the
-  // post-gravity grid, and increments chainCount when gravity made more
-  // remaining words findable than the no-gravity case did. Skipped in
-  // noGravity / shrinkingBoard modes where gravity doesn't run.
-  const prevSolveSequenceLenRef = useRef(0);
-  useEffect(() => {
-    const len = solveSequence.length;
-    if (len === 0 || len === prevSolveSequenceLenRef.current) {
-      prevSolveSequenceLenRef.current = len;
-      return;
-    }
-    prevSolveSequenceLenRef.current = len;
-    if (mode === 'noGravity' || mode === 'shrinkingBoard') return;
-
-    const fullState = store.getState();
-    // The pre-submit grid is the last history entry's grid.
-    const history = fullState.history;
-    if (history.length === 0) return;
-    const gridPreSubmit = history[history.length - 1].grid;
-    const step = solveSequence[len - 1];
-    if (!step) return;
-
-    // Reconstruct gridAfterRemoval by removing the found word's cells
-    // from the pre-submit grid. This matches exactly what the reducer
-    // used to compute at SUBMIT_WORD time.
-    const removedCells: CellPosition[] = step.cellPositions.map(([row, col]) => ({ row, col }));
-    const gridAfterRemoval = removeCells(gridPreSubmit, removedCells);
-
-    const remainingAfter = words.filter(w => !w.found && w.word !== step.wordFound);
-    if (remainingAfter.length === 0) return;
-
-    let findableBefore = 0;
-    let findableAfter = 0;
-    for (const w of remainingAfter) {
-      if (findWordInGrid(gridAfterRemoval, w.word, 1).length > 0) findableBefore++;
-      if (findWordInGrid(grid, w.word, 1).length > 0) findableAfter++;
-    }
-    if (findableAfter > findableBefore) {
-      store.dispatch({ type: 'INCREMENT_CHAIN', forSolveCount: len });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solveSequence.length]);
 
   // ── Deferred shrink-solvability check (Fix B) ────────────────────────
   // The reducer performs the shrink synchronously (so the visual board

@@ -58,7 +58,7 @@ export const CHAPTERS: Chapter[] = [
     profile: {
       minWordLength: 3,
       maxWordLength: 5,
-      introducedMechanics: ['chainBonus', 'fourLetter'],
+      introducedMechanics: ['fourLetter'],
       emptyCellDensity: 0.08,
       dictionaryTier: 'common',
     },
@@ -77,7 +77,7 @@ export const CHAPTERS: Chapter[] = [
     profile: {
       minWordLength: 3,
       maxWordLength: 6,
-      introducedMechanics: ['chainBonus', 'denseBoard'],
+      introducedMechanics: ['denseBoard'],
       emptyCellDensity: 0.05,
       dictionaryTier: 'standard',
     },

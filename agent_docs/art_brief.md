@@ -35,21 +35,21 @@
 ### 1. App Icon Refresh (1 file × multiple sizes)
 - **Purpose:** Play Store listing + device home screen
 - **Sizes:** 512×512 (Play Store), 1024×1024 (App Store reserve), Android adaptive icon foreground (108×108) + background (108×108)
-- **Concept:** the letter "W" formed from falling tiles with one tile mid-fall — captures the gravity mechanic instantly. Or alternative: a stylized cascade of 4–5 tiles spelling fragments
+- **Concept:** the letter "W" formed from falling tiles with one tile mid-fall — captures the gravity mechanic instantly. Or alternative: a stylized stack of 4–5 letter tiles with one tile descending into an empty cell (honoring the "clear + fall" core loop, not a match-3 cascade)
 - **Delivery format:** PNG with transparency for adaptive layers; SVG source if possible
 - **Existing reference:** `assets/wordfalllogo.png` shows the wordmark style
 
 ### 2. Feature Graphic (1 file)
 - **Purpose:** Play Store header banner
 - **Size:** 1024×500
-- **Concept:** dramatic hero shot of the game board mid-cascade — letters falling, chain explosion, word "WORDFALL" forming naturally from the fallen tiles. Background = neon city / abstract space
+- **Concept:** dramatic hero shot of the game board mid-gravity — letters falling into cleared spaces, word "WORDFALL" forming naturally from the fallen tiles, a traced path glowing across the grid. Background = neon city / abstract space. **Do NOT depict match-3-style chain explosions — the game is a word search, not a match-3.**
 - **Delivery format:** PNG, 16-color-rich
 
 ### 3. Phone Screenshots (8 files)
 - **Purpose:** Play Store listing carousel
 - **Size:** 1080×1920 (portrait)
 - **Concepts (in order):**
-  1. **Hero shot** — gameplay mid-chain, screen-shake frame, big "3x CHAIN!" overlay; tagline "Find words. Watch them fall."
+  1. **Hero shot** — gameplay mid-gravity (letters visibly falling into cleared spaces), the gold "FLAWLESS" badge or a last-word gold-pulsing chip in frame; tagline "Find words. Watch them fall."
   2. **Mode variety** — collage of 4 modes (Classic, Time Pressure, Gravity Flip, Daily); tagline "10 ways to play."
   3. **Boosters** — wildcard tile mid-deploy with sparkle; tagline "Power-ups when you're stuck."
   4. **Chapters** — chapter-select map with theme-art previews; tagline "40 chapters. 600+ puzzles."

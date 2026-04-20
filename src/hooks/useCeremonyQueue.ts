@@ -93,6 +93,12 @@ export function useCeremonyQueue({
       const duckWindow = activeCeremony.autoDismissMs ?? 2500;
       soundManager.duckMusicFor(duckWindow, 0.35);
 
+      // Ceremony-specific fanfare. Add cases here when more ceremony types
+      // get dedicated audio; default is no extra sound beyond the BGM duck.
+      if (activeCeremony.type === 'flawless_streak_milestone') {
+        void soundManager.playSound('flawlessMilestone');
+      }
+
       // Auto-dismiss Tier 2 ceremonies after their specified duration
       if (activeCeremony.autoDismissMs) {
         if (autoDismissTimerRef.current) clearTimeout(autoDismissTimerRef.current);

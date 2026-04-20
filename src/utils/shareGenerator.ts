@@ -11,9 +11,9 @@ export function generateShareText(
   level: number,
   stars: number,
   score: number,
-  combo: number,
   isDaily: boolean,
   referralCode?: string,
+  flawless?: boolean,
 ): string {
   const starEmojis = '★'.repeat(stars) + '☆'.repeat(3 - stars);
   const header = isDaily
@@ -32,7 +32,7 @@ export function generateShareText(
   ).join('\n');
 
   const stats = [`Score: ${score}`];
-  if (combo > 1) stats.push(`Combo: ${combo}x`);
+  if (flawless) stats.push('Flawless');
 
   const link = referralCode ? buildReferralLink(referralCode) : buildDailyLink();
   return `${header}\n${gridEmojis}\n${stats.join(' | ')}\nPlay Wordfall! ${link}`;

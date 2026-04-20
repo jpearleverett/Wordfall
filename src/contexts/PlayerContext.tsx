@@ -195,6 +195,16 @@ export interface PlayerData {
     rewardsClaimed: number[];
   };
 
+  // Flawless Streak (consecutive flawless puzzles — no hints/undos/shuffle).
+  // Cross-session; increments on distinct calendar days so same-day replays
+  // don't inflate the count. Breaks on any non-flawless completion.
+  flawlessStreak: {
+    currentStreak: number;
+    bestStreak: number;
+    lastFlawlessDate: string | null;
+    rewardsClaimed: number[];
+  };
+
   // Event Progress
   eventProgress: Record<string, { progress: number; claimedTiers: string[]; startedAt: number }>;
 
@@ -299,7 +309,7 @@ export interface PlayerContextType extends PlayerData {
   needsBreather: () => boolean;
 
   // Achievements checking
-  checkAchievements: (extraData?: { maxCombo?: number }) => CeremonyItem[];
+  checkAchievements: (extraData?: Record<string, unknown>) => CeremonyItem[];
 
   // Gifting
   sendHintGift: (friendId: string) => boolean;
@@ -311,6 +321,9 @@ export interface PlayerContextType extends PlayerData {
 
   // Win Streak
   updateWinStreak: (won: boolean) => void;
+
+  // Flawless Streak
+  updateFlawlessStreak: (wasFlawless: boolean) => void;
 
   // Puzzle Energy
   useEnergy: (mode: string) => boolean;
@@ -492,6 +505,14 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
     rewardsClaimed: [],
   },
 
+  // Flawless Streak
+  flawlessStreak: {
+    currentStreak: 0,
+    bestStreak: 0,
+    lastFlawlessDate: null,
+    rewardsClaimed: [],
+  },
+
   // Event Progress
   eventProgress: {},
 
@@ -575,6 +596,7 @@ const PlayerContext = createContext<PlayerContextType>({
   updateMysteryWheel: () => {},
   awardFreeSpin: () => {},
   updateWinStreak: () => {},
+  updateFlawlessStreak: () => {},
   useEnergy: () => false,
   refillEnergy: () => false,
   getTimeUntilNextEnergy: () => 0,
@@ -1298,6 +1320,77 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ── Flawless Streak ───────────────────────────────────────────────────
+  // Cross-session counter of consecutive flawless puzzles (no hints, no undos,
+  // no shuffle, no wrong-trace). Mirrors updateWinStreak but only counts
+  // distinct calendar days so same-day replays don't inflate the streak.
+  // Milestones (3/5/7/10/15/20) queue a `flawless_streak_milestone` ceremony.
+
+  const updateFlawlessStreak = useCallback((wasFlawless: boolean) => {
+    setData((prev) => {
+      if (!wasFlawless) {
+        if (prev.flawlessStreak.currentStreak > 0) {
+          void analytics.logEvent('flawless_streak_broken', {
+            streakLost: prev.flawlessStreak.currentStreak,
+            bestStreak: prev.flawlessStreak.bestStreak,
+          });
+        }
+        return {
+          ...prev,
+          flawlessStreak: {
+            ...prev.flawlessStreak,
+            currentStreak: 0,
+            lastFlawlessDate: null,
+          },
+        };
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      if (prev.flawlessStreak.lastFlawlessDate === today) {
+        // Same-day replay — don't re-credit the streak.
+        return prev;
+      }
+
+      const newStreak = prev.flawlessStreak.currentStreak + 1;
+      const newBest = Math.max(newStreak, prev.flawlessStreak.bestStreak);
+
+      const milestones = [3, 5, 7, 10, 15, 20];
+      let pendingCeremonies = prev.pendingCeremonies;
+      let rewardsClaimed = prev.flawlessStreak.rewardsClaimed;
+      for (const milestone of milestones) {
+        if (newStreak >= milestone && !rewardsClaimed.includes(milestone)) {
+          const labels: Record<number, string> = {
+            3: 'Flawless Trio', 5: 'Immaculate', 7: 'Pristine',
+            10: 'Masterclass', 15: 'Virtuoso', 20: 'Untouchable',
+          };
+          pendingCeremonies = [
+            ...pendingCeremonies,
+            {
+              type: 'flawless_streak_milestone' as const,
+              data: { streak: milestone, label: labels[milestone] || `${milestone} Flawless!` },
+            },
+          ];
+          rewardsClaimed = [...rewardsClaimed, milestone];
+          void analytics.logEvent('flawless_streak_milestone', {
+            milestone,
+            streak: newStreak,
+          });
+        }
+      }
+
+      return {
+        ...prev,
+        pendingCeremonies,
+        flawlessStreak: {
+          currentStreak: newStreak,
+          bestStreak: newBest,
+          lastFlawlessDate: today,
+          rewardsClaimed,
+        },
+      };
+    });
+  }, []);
+
   // ── Event Progress ────────────────────────────────────────────────────
 
   const updateEventProgressCb = useCallback((eventId: string, progress: number, claimedTiers?: string[]) => {
@@ -1710,6 +1803,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
+      updateFlawlessStreak,
       useEnergy,
       refillEnergy,
       getTimeUntilNextEnergy,
@@ -1770,6 +1864,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
+      updateFlawlessStreak,
       useEnergy,
       refillEnergy,
       getTimeUntilNextEnergy,
@@ -1835,6 +1930,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
+      updateFlawlessStreak,
       useEnergy,
       refillEnergy,
       getTimeUntilNextEnergy,
@@ -1894,6 +1990,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
+      updateFlawlessStreak,
       useEnergy,
       refillEnergy,
       getTimeUntilNextEnergy,

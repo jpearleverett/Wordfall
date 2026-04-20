@@ -519,12 +519,10 @@ export const STARTER_PACK_DELAY_PUZZLES = 5;
 export const SCORE = {
   wordFound: 100,
   bonusPerLetter: 20,
-  comboMultiplier: 0.5,
   perfectClear: 500,
   noHints: 200,
   starThresholds: [0.5, 0.75, 1.0],
   timeBonus: 10, // points per second remaining
-  chainBonus: 150, // bonus for gravity-revealed chain
 };
 
 // Hints & Undos
@@ -540,7 +538,6 @@ export const ANIM = {
   cellSelectDuration: 150,
   wordFoundDuration: 500,
   celebrationDuration: 1200,
-  chainPopupDuration: 800,
   starAnimDelay: [200, 500, 800],
   // Synthwave effects
   glitchDuration: 150,
@@ -889,14 +886,6 @@ export const MATERIALS = {
     shimmerOpacity: 0.3,
   },
 };
-
-// Chain combo visual intensity tiers
-export const CHAIN_INTENSITY = {
-  1: { borderGlow: false, pulse: false, glitch: false },
-  2: { borderGlow: true, pulse: false, glitch: false, color: COLORS.accent },
-  3: { borderGlow: true, pulse: true, glitch: false, colors: [COLORS.accent, COLORS.purple, COLORS.cyan] },
-  4: { borderGlow: true, pulse: true, glitch: true, colors: [COLORS.accent, COLORS.purple, COLORS.cyan, COLORS.gold] },
-} as const;
 
 // Background evolution by player level
 export const BACKGROUND_EVOLUTION = {

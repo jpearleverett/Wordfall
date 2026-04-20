@@ -94,10 +94,10 @@ export function useGameDispatch(): (action: GameAction) => void {
 export const selectSelectedCells = (s: GameState) => s.selectedCells;
 export const selectGrid = (s: GameState) => s.board.grid;
 export const selectWords = (s: GameState) => s.board.words;
+export const selectRemainingWordsCount = (s: GameState) =>
+  s.board.words.filter(w => !w.found).length;
 export const selectStatus = (s: GameState) => s.status;
 export const selectScore = (s: GameState) => s.score;
-export const selectCombo = (s: GameState) => s.combo;
-export const selectMaxCombo = (s: GameState) => s.maxCombo;
 export const selectMoves = (s: GameState) => s.moves;
 export const selectHintsLeft = (s: GameState) => s.hintsLeft;
 export const selectHintsUsed = (s: GameState) => s.hintsUsed;

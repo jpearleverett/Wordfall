@@ -6,7 +6,7 @@ grid gestures, game sub-components, contexts, engine, or utility hooks.
 | File | Role |
 |------|------|
 | `src/screens/game/ConnectedWordBank` | (exported from PlayField.tsx) WordBank with store-driven `currentWord`/`isValidWord`. Rendered above grid area. |
-| `src/screens/game/GameFlashes.tsx` | Memoized subtree: chain popup, neon pulse, VHS glitch, valid/invalid flash, score popup, big-word label. Animated.Values passed by stable ref. |
+| `src/screens/game/GameFlashes.tsx` | Memoized subtree: valid/invalid flash, score popup, big-word label. Chain popup / neon pulse / VHS glitch were ripped in Apr 2026 (Option A refactor). Animated.Values passed by stable ref. |
 | `src/screens/game/GameBanners.tsx` | Memoized subtree: 7 conditional banners (gravity, shrink, wildcard, idle hint, ad hint, stuck ×2). |
 | `src/hooks/useRewardWiring.ts` | All post-puzzle rewards: coins/gems, rare tiles, ceremonies, mastery, quests |
 | `src/contexts/PlayerContext.tsx` | Master player data. **Persistence is debounced** (300ms coalesce + AppState flush). |

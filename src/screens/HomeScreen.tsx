@@ -27,6 +27,7 @@ import ReferralPendingRewards from '../components/ReferralPendingRewards';
 import FriendLeaderboardCard from '../components/FriendLeaderboardCard';
 import PiggyBankCard from '../components/PiggyBankCard';
 import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
+import FlawlessStreakCard from '../components/FlawlessStreakCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
 import {
@@ -38,6 +39,7 @@ import {
   selectReferralCode,
   selectReferralCount,
   selectReferralMilestonesClaimed,
+  selectFlawlessStreak,
 } from '../stores/playerStore';
 import { getNextMilestone } from '../data/onboardingMilestones';
 
@@ -153,6 +155,7 @@ export function HomeScreen({
   // Narrow zustand subscriptions — re-render only on the slices actually read.
   const onboardingMilestones = usePlayerStore(selectOnboardingMilestones);
   const mysteryWheelData = usePlayerStore(selectMysteryWheel);
+  const flawlessStreak = usePlayerStore(selectFlawlessStreak);
   const seasonalQuestState = usePlayerStore(selectSeasonalQuest);
   const referralCode = usePlayerStore(selectReferralCode);
   const referralCount = usePlayerStore(selectReferralCount);
@@ -792,6 +795,15 @@ export function HomeScreen({
             <SeasonPassHomeCard onPress={onOpenSeasonPass} />
           </View>
         )}
+
+        {/* Flawless Streak — consecutive clean solves. Active card shines gold;
+            empty state teaches what earns the streak. */}
+        <View style={{ marginHorizontal: 16 }}>
+          <FlawlessStreakCard
+            currentStreak={flawlessStreak?.currentStreak ?? 0}
+            bestStreak={flawlessStreak?.bestStreak ?? 0}
+          />
+        </View>
 
         {/* Pending referral rewards (auto-hides when empty) */}
         <ReferralPendingRewards />

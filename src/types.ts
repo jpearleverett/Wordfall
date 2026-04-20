@@ -60,13 +60,10 @@ export interface GameState {
   history: { grid: Grid; words: WordPlacement[]; wordsUntilShrink?: number; shrinkCount?: number }[];
   status: GameStatus;
   level: number;
-  combo: number;
-  maxCombo: number;
   maxMoves: number;
   mode: GameMode;
   timeRemaining: number;
   perfectRun: boolean;
-  chainCount: number;
   gravityDirection: GravityDirection;
   shrinkCount: number;
   wordsUntilShrink: number;
@@ -126,7 +123,6 @@ export type GameAction =
   | { type: 'USE_HINT' }
   | { type: 'UNDO_MOVE' }
   | { type: 'NEW_GAME'; board: Board; level: number; mode?: GameMode; maxMoves?: number; timeRemaining?: number }
-  | { type: 'RESET_COMBO' }
   | { type: 'TICK_TIMER' }
   | { type: 'USE_BOOSTER'; booster: string }
   | { type: 'WILDCARD_PLACE'; position: CellPosition }
@@ -151,16 +147,7 @@ export type GameAction =
    * shrinkCount so the reducer ignores stale dispatches — if another
    * shrink has occurred since the check started, the check is outdated.
    */
-  | { type: 'MARK_FAILED'; shrinkCount: number }
-  /**
-   * Dispatched from the deferred chain-detection effect (Fix A in the
-   * April 2026 perf pass). Carries `forSolveCount` — the number of words
-   * solved at the time the check started — so the reducer can ignore
-   * stale dispatches if another word was submitted meanwhile. Chain
-   * detection used to run synchronously in SUBMIT_WORD with 2 × N × DFS
-   * per word; now it runs one commit after gravity starts.
-   */
-  | { type: 'INCREMENT_CHAIN'; forSolveCount: number };
+  | { type: 'MARK_FAILED'; shrinkCount: number };
 
 export interface PlayerProgress {
   currentLevel: number;
@@ -227,7 +214,6 @@ export interface GenerationProfile {
   introducedMechanics?: Array<
     | 'gravityCascade'
     | 'fourLetter'
-    | 'chainBonus'
     | 'wildcards'
     | 'longWords'
     | 'denseBoard'
@@ -707,6 +693,7 @@ export interface CeremonyItem {
     | 'difficulty_transition'
     | 'mystery_wheel_jackpot'
     | 'win_streak_milestone'
+    | 'flawless_streak_milestone'
     | 'star_milestone'
     | 'perfect_milestone'
     | 'decoration_unlock'
@@ -871,7 +858,6 @@ export type AnalyticsEvent =
   | 'gravity_interaction'
   | 'dead_end_hit'
   | 'wrong_order_attempt'
-  | 'chain_count'
   | 'atlas_word_found'
   | 'rare_tile_earned'
   | 'stamp_collected'
@@ -924,7 +910,6 @@ export interface SolveStep {
   gridStateAfter: string[][]; // after gravity
   timestamp: number; // ms since puzzle start
   score: number;
-  combo: number;
 }
 
 export interface ReplayData {

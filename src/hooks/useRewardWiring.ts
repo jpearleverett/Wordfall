@@ -105,10 +105,17 @@ interface PlayerContextLike {
   recordDailyComplete: (dateString: string) => void;
   queueCeremony: (ceremony: CeremonyItem) => void;
   checkFeatureUnlocks: (level: number) => CeremonyItem[];
-  checkAchievements: (extraData?: { maxCombo?: number }) => CeremonyItem[];
+  checkAchievements: (extraData?: Record<string, unknown>) => CeremonyItem[];
   unlockMode: (modeId: string) => void;
   awardFreeSpin: () => void;
   updateWinStreak: (won: boolean) => void;
+  updateFlawlessStreak: (wasFlawless: boolean) => void;
+  flawlessStreak: {
+    currentStreak: number;
+    bestStreak: number;
+    lastFlawlessDate: string | null;
+    rewardsClaimed: number[];
+  };
   collectStamp: (albumId: string, stampIndex: number) => void;
   unlockDecoration: (decorationId: string) => void;
 }
@@ -157,7 +164,7 @@ export interface CompletionData {
 
 /**
  * Extracts the massive handleComplete logic from App.tsx.
- * Returns a stable `handleComplete(stars, score)` callback that:
+ * Returns a stable `handleComplete(stars, score, perfectRun)` callback that:
  * - Awards coins/gems/library points
  * - Handles daily completion
  * - Checks rare tile drops
@@ -176,7 +183,7 @@ export function useRewardWiring({
   params,
   navigation,
 }: UseRewardWiringParams) {
-  const handleComplete = useCallback((stars: number, score: number, maxCombo: number = 0) => {
+  const handleComplete = useCallback((stars: number, score: number, perfectRun: boolean = false) => {
     try {
     const level = params.level || 0;
     const mode = (params.mode || 'classic') as GameMode;
@@ -187,8 +194,11 @@ export function useRewardWiring({
     const prevHighest = player.highestLevel;
     const isFirstWin = player.puzzlesSolved === 0;
 
-    // Record puzzle completion in PlayerContext
-    const isPerfect = stars === 3;
+    // "Flawless" = no hints, no undos, no shuffle, no wrong-trace (tracked by
+    // `perfectRun` on the game state). Distinct from 3 stars, which is a
+    // quantitative move-count threshold. A player can earn 3 stars while using
+    // one hint; only `perfectRun` counts as flawless.
+    const isPerfect = perfectRun;
     const boardData = params.board as Board | undefined;
     const wordsFound = boardData ? boardData.words.length : 0;
     void analytics.trackPuzzleComplete({
@@ -200,6 +210,7 @@ export function useRewardWiring({
       undos_used: 0,
       words_found: wordsFound,
       score,
+      flawless: perfectRun,
     });
     // Phase 3.5: seed difficulty-tuning dataset. Reads what the reward hook
     // has on hand — richer timing/hint data is still captured on the fail
@@ -209,7 +220,6 @@ export function useRewardWiring({
       level,
       outcome: 'win',
       stars,
-      max_combo: maxCombo,
       words_found: wordsFound,
       words_total: wordsFound,
     });
@@ -550,7 +560,7 @@ export function useRewardWiring({
 
     // Achievements — demoted to Tier 3 (no ceremony, silent).
     // The reward/unlock still happens in checkAchievements, we just don't queue modals.
-    const achievementCeremonies = player.checkAchievements({ maxCombo });
+    const achievementCeremonies = player.checkAchievements();
     for (const ceremony of achievementCeremonies) {
       // Track analytics but don't show a modal — player discovers via Profile/badges
       if (ceremony.data?.achievementId && ceremony.data?.tier) {
@@ -701,6 +711,18 @@ export function useRewardWiring({
     // Update win streak
     player.updateWinStreak(true);
 
+    // Update flawless streak (increments on distinct calendar days; resets on
+    // any non-flawless completion). Fires analytics inside the callback.
+    player.updateFlawlessStreak(perfectRun);
+    if (perfectRun) {
+      void analytics.logEvent('puzzle_flawless_complete', {
+        level,
+        score,
+        mode,
+        streakAfter: (player.flawlessStreak?.currentStreak || 0) + 1,
+      });
+    }
+
     // Award seasonal stamp based on puzzles solved this season
     const currentAlbum = getCurrentSeasonAlbum();
     if (currentAlbum) {
@@ -730,7 +752,7 @@ export function useRewardWiring({
     // Generate share text (include referral code for viral deep link)
     const grid = params.board ? (params.board as Board).grid : null;
     const shareText = grid
-      ? generateShareText(grid, level, stars, score, 0, isDaily, player.referralCode || undefined)
+      ? generateShareText(grid, level, stars, score, isDaily, player.referralCode || undefined, perfectRun)
       : '';
 
     // Firestore social layer: submit scores + sync profile
