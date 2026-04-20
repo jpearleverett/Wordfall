@@ -185,6 +185,10 @@ export interface PlayerData {
   lastGiftDate: string;
   tileGiftsSentToday: number;
 
+  // First-purchase hard-modal offer — null until the modal has rendered
+  // once for this player. Any non-null value prevents re-trigger forever.
+  firstPurchaseModalShownAt: number | null;
+
   // Mystery Wheel
   mysteryWheel: {
     spinsAvailable: number;
@@ -503,6 +507,8 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   hintGiftsSentToday: 0,
   lastGiftDate: '',
   tileGiftsSentToday: 0,
+
+  firstPurchaseModalShownAt: null,
 
   // Mystery Wheel
   mysteryWheel: {

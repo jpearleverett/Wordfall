@@ -91,7 +91,10 @@ export type AnalyticsEventName =
   | 'friend_leaderboard_viewed'
   | 'booster_combo_activated'
   | 'booster_combo_expired'
-  | 'settings_account_row_tapped';
+  | 'settings_account_row_tapped'
+  | 'first_purchase_modal_shown'
+  | 'first_purchase_modal_accepted'
+  | 'first_purchase_modal_dismissed';
 
 export type EventParams = Record<string, unknown>;
 

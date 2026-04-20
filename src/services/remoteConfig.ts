@@ -104,6 +104,13 @@ export interface RemoteConfigValues {
   tileBloomEnabled: boolean;
   tileBloomParticlesPerTile: number;
 
+  // First-purchase hard-modal offer — interrupts post-puzzle at level
+  // [min, max] for non-payers exactly once per user. Set enabled=false to
+  // kill the interrupt (offer still available via shelf).
+  firstPurchaseModalEnabled: boolean;
+  firstPurchaseModalMinLevel: number;
+  firstPurchaseModalMaxLevel: number;
+
   // Launch-readiness wave (April 2026) — kill switches for each new system
   autoAdvanceEnabled: boolean;
   autoAdvanceDelayMs: number;
@@ -199,6 +206,13 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   invalidShakeEnabled: true,
   tileBloomEnabled: true,
   tileBloomParticlesPerTile: 2,
+
+  // First-purchase hard-modal offer — interrupt fires post-puzzle at
+  // levels 5–6 for non-payers exactly once per user (guarded by
+  // `firstPurchaseModalShownAt` in PlayerData).
+  firstPurchaseModalEnabled: true,
+  firstPurchaseModalMinLevel: 5,
+  firstPurchaseModalMaxLevel: 6,
 
   // Launch-readiness wave — new systems enabled by default, tunable via RC
   autoAdvanceEnabled: true,
