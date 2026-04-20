@@ -31,6 +31,7 @@ import {
   FirestoreLeaderboardEntry,
 } from '../services/firestore';
 import { analytics } from '../services/analytics';
+import { SendGiftButton } from '../components/social/SendGiftButton';
 
 const { width } = Dimensions.get('window');
 
@@ -721,6 +722,14 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
                         >
                           <Text style={styles.challengeButtonText}>{'\u2694\uFE0F'}</Text>
                         </TouchableOpacity>
+                      )}
+                      {!isCurrentUser && (scope === 'friends' || friendIds.includes(entry.id)) && (
+                        <SendGiftButton
+                          recipientId={entry.id}
+                          recipientName={entry.name}
+                          relationship="friend"
+                          compact
+                        />
                       )}
                     </View>
                   </View>

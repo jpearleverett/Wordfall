@@ -9,6 +9,7 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
@@ -26,6 +27,7 @@ import {
   clearLocalUserData,
   isAccountDeletionConfigured,
 } from '../services/accountDeletion';
+import { analytics } from '../services/analytics';
 import type { ColorblindMode } from '../contexts/SettingsContext';
 import { COLORBLIND_MODE_LABELS } from '../services/colorblind';
 import i18n, { SUPPORTED_LOCALES, LOCALE_LABELS, type SupportedLocale } from '../i18n';
@@ -48,6 +50,8 @@ const THEMES = [
 const PRIVACY_POLICY_URL = 'https://wordfallgame.app/privacy';
 const TERMS_OF_SERVICE_URL = 'https://wordfallgame.app/terms';
 const SUPPORT_EMAIL = 'info@iridescent-games.com';
+const MANAGE_SUBSCRIPTIONS_URL =
+  'https://play.google.com/store/account/subscriptions?package=com.iridescent_games.wordfall';
 
 async function openUrlSafe(url: string, fallbackTitle: string) {
   try {
@@ -94,6 +98,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const handleRestorePurchases = async () => {
     if (restoring) return;
+    void analytics.logEvent('settings_account_row_tapped', { action: 'restore' });
     setRestoring(true);
     try {
       const { results, restoredCount } = await restorePurchases();
@@ -117,6 +122,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const handleSignIn = async () => {
     if (signingIn) return;
+    void analytics.logEvent('settings_account_row_tapped', { action: 'link_google' });
     if (!canLinkGoogle) {
       Alert.alert(
         'Sign-In Unavailable',
@@ -200,8 +206,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
+  const handleManageSubscription = async () => {
+    void analytics.logEvent('settings_account_row_tapped', { action: 'manage_subscription' });
+    await openUrlSafe(MANAGE_SUBSCRIPTIONS_URL, 'Manage Subscription');
+  };
+
   const confirmDeleteAccount = () => {
     if (deleting) return;
+    void analytics.logEvent('settings_account_row_tapped', { action: 'delete_account' });
     if (!isAccountDeletionConfigured()) {
       Alert.alert(
         'Unavailable',
@@ -523,6 +535,64 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               )}
             </TouchableOpacity>
           )}
+
+          <View style={styles.divider} />
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => void handleRestorePurchases()}
+            accessibilityRole="button"
+            accessibilityLabel="Restore previous purchases"
+            accessibilityHint="Re-applies purchases made on this account. Use this after reinstalling or switching devices."
+            accessibilityState={{ busy: restoring }}
+            disabled={restoring}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
+              {restoring ? `${t('common.loading')}` : t('settings.restorePurchases')}
+            </Text>
+            {restoring ? (
+              <ActivityIndicator size="small" color={COLORS.accent} />
+            ) : (
+              <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
+            )}
+          </TouchableOpacity>
+
+          {Platform.OS === 'android' ? (
+            <>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => void handleManageSubscription()}
+                accessibilityRole="button"
+                accessibilityLabel="Manage subscription"
+                accessibilityHint="Opens the Google Play subscription management page."
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.settingLabel}>Manage Subscription</Text>
+                <Text style={styles.chevron}>{'\u203A'}</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+
+          <View style={styles.divider} />
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={confirmDeleteAccount}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account and data. Permanently erases your cloud profile"
+            accessibilityState={{ busy: deleting, disabled: deleting }}
+            disabled={deleting}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.settingLabel, { color: COLORS.coral }]}>
+              {deleting ? `${t('common.loading')}` : t('settings.deleteAccount')}
+            </Text>
+            {deleting ? (
+              <ActivityIndicator size="small" color={COLORS.coral} />
+            ) : (
+              <Text style={[styles.chevron, { color: COLORS.coral }]}>{'\u203A'}</Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Purchases Section */}
@@ -571,26 +641,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </Text>
             </View>
           </View>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => void handleRestorePurchases()}
-            accessibilityRole="button"
-            accessibilityLabel="Restore previous purchases"
-            accessibilityHint="Re-applies purchases made on this account. Use this after reinstalling or switching devices."
-            accessibilityState={{ busy: restoring }}
-            disabled={restoring}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
-              {restoring ? `${t('common.loading')}` : t('settings.restorePurchases')}
-            </Text>
-            {restoring ? (
-              <ActivityIndicator size="small" color={COLORS.accent} />
-            ) : (
-              <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
-            )}
-          </TouchableOpacity>
         </View>
 
         {/* Parental Controls */}
@@ -727,30 +777,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <Text style={styles.dangerButtonText}>{t('settings.resetLocalData')}</Text>
             <Text style={styles.dangerSubtext}>
               Clears on-device progress only. Account and purchases are kept.
+              Use "Delete Account" above for full erasure.
             </Text>
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.dangerButton}
-            onPress={confirmDeleteAccount}
-            accessibilityRole="button"
-            accessibilityLabel="Delete account and data. Permanently erases your cloud profile"
-            accessibilityState={{ busy: deleting, disabled: deleting }}
-            disabled={deleting}
-          >
-            <Text style={styles.dangerButtonText}>
-              {deleting ? `${t('common.loading')}` : t('settings.deleteAccount')}
-            </Text>
-            <Text style={styles.dangerSubtext}>
-              Permanently erases your profile, progress, and cloud data. Cannot be undone.
-            </Text>
-            {deleting ? (
-              <ActivityIndicator
-                size="small"
-                color={COLORS.coral}
-                style={styles.dangerSpinner}
-              />
-            ) : null}
           </TouchableOpacity>
         </View>
 

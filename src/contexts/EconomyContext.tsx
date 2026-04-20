@@ -18,6 +18,7 @@ import {
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
 import { analytics } from '../services/analytics';
 import { checkSeasonExpiry } from '../services/seasonRotation';
+import { logger } from '../utils/logger';
 import {
   activateTemporaryEntitlement,
   applyCatalogPurchase,
@@ -320,7 +321,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
           setState((prev) => ({ ...prev, ...parsed }));
         }
       } catch (e) {
-        if (__DEV__) console.warn('Failed to load economy from AsyncStorage:', e);
+        logger.warn('Failed to load economy from AsyncStorage:', e);
       }
       setLoaded(true);
     };
@@ -353,7 +354,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
           setState((prev) => ({ ...prev, ...firestoreData }));
         }
       } catch (e) {
-        if (__DEV__) console.warn('Firestore economy sync failed, using local data:', e);
+        logger.warn('Firestore economy sync failed, using local data:', e);
       }
     };
 
@@ -400,7 +401,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       try {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
       } catch (e) {
-        if (__DEV__) console.warn('Failed to save economy to AsyncStorage:', e);
+        logger.warn('Failed to save economy to AsyncStorage:', e);
       }
       const u = userRef.current;
       if (u) {
@@ -408,7 +409,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
           const docRef = doc(db, 'users', u.uid, 'economy', 'current');
           await setDoc(docRef, payload, { merge: true });
         } catch (e) {
-          if (__DEV__) console.warn('Failed to sync economy to Firestore:', e);
+          logger.warn('Failed to sync economy to Firestore:', e);
         }
       }
     }, 'economy'),
@@ -814,7 +815,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         }));
         break;
       default:
-        if (__DEV__) console.warn('[Economy] Unknown ad reward currency:', def.currency);
+        logger.warn('[Economy] Unknown ad reward currency:', def.currency);
     }
   }, [addCoins, addHintTokens]);
 

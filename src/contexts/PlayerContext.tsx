@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
+import { logger } from '../utils/logger';
 import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { CeremonyItem, PlayerMetrics, PuzzleEnergyState, WeeklyGoalsState } from '../types';
 import { SeasonalQuestState, DEFAULT_SEASONAL_QUEST_STATE } from '../data/seasonalQuests';
@@ -183,6 +184,10 @@ export interface PlayerData {
   hintGiftsSentToday: number;
   lastGiftDate: string;
   tileGiftsSentToday: number;
+
+  // First-purchase hard-modal offer — null until the modal has rendered
+  // once for this player. Any non-null value prevents re-trigger forever.
+  firstPurchaseModalShownAt: number | null;
 
   // Mystery Wheel
   mysteryWheel: {
@@ -503,6 +508,8 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   lastGiftDate: '',
   tileGiftsSentToday: 0,
 
+  firstPurchaseModalShownAt: null,
+
   // Mystery Wheel
   mysteryWheel: {
     spinsAvailable: 1, // Start with 1 free spin
@@ -718,7 +725,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       try {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
       } catch (e) {
-        if (__DEV__) console.warn('Failed to save player data to AsyncStorage:', e);
+        logger.warn('Failed to save player data to AsyncStorage:', e);
       }
     }, 'player-local'),
   );
@@ -728,7 +735,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const docRef = doc(db, 'users', uid, 'data', 'player');
         await setDoc(docRef, payload, { merge: true });
       } catch (e) {
-        if (__DEV__) console.warn('Failed to sync player data to Firestore:', e);
+        logger.warn('Failed to sync player data to Firestore:', e);
         throw e; // let queue log; next enqueue will retry with fresh data
       }
     }, 'player-firestore'),
@@ -754,7 +761,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           setData((prev) => ({ ...prev, ...parsed } as PlayerData));
         }
       } catch (e) {
-        if (__DEV__) console.warn('Failed to load player data from AsyncStorage:', e);
+        logger.warn('Failed to load player data from AsyncStorage:', e);
       }
       setLoaded(true);
     };
@@ -785,7 +792,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
         setCloudSyncStatus('synced');
       } catch (e) {
-        if (__DEV__) console.warn('Firestore player sync failed, using local data:', e);
+        logger.warn('Firestore player sync failed, using local data:', e);
         setCloudSyncStatus('offline');
       }
     };

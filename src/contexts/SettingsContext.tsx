@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
+import { notificationManager } from '../services/notifications';
+import { auth as firebaseAuth } from '../config/firebase';
 
 type ThemeOption = 'dark' | 'midnight' | 'ocean' | 'forest' | 'sunset';
 
@@ -110,6 +112,29 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
     persist();
   }, [settings, loaded]);
+
+  // Sync push-token presence in Firestore with the notifications toggle.
+  // Transition true → false: delete the token so server senders stop targeting
+  // this user. Transition false → true: re-register for remote push.
+  // First render (prevNotif === null) is skipped so we don't delete a token
+  // that's not there yet on a fresh install.
+  const prevNotifRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!loaded) return;
+    const prev = prevNotifRef.current;
+    prevNotifRef.current = settings.notificationsEnabled;
+    if (prev === null) return; // skip initial
+
+    const uid = firebaseAuth?.currentUser?.uid;
+    if (!uid) return; // anonymous user with no Firestore token yet
+
+    if (prev === true && settings.notificationsEnabled === false) {
+      // Fire-and-forget; best-effort
+      notificationManager.deletePushToken(uid).catch(() => {});
+    } else if (prev === false && settings.notificationsEnabled === true) {
+      notificationManager.registerForRemotePush(uid).catch(() => {});
+    }
+  }, [settings.notificationsEnabled, loaded]);
 
   const updateSetting = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {

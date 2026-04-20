@@ -253,7 +253,7 @@ class NotificationManager {
       }
 
       this.initialized = true;
-      if (__DEV__) console.log('[Notifications] Initialized successfully');
+      logger.log('[Notifications] Initialized successfully');
       return true;
     } catch (error) {
       logger.warn('[Notifications] Init failed:', error);
@@ -288,7 +288,7 @@ class NotificationManager {
         }
 
         if (freqData.count >= MAX_NOTIFICATIONS_PER_DAY) {
-          if (__DEV__) console.log(`[Notifications] Frequency cap reached (${MAX_NOTIFICATIONS_PER_DAY}/day), skipping ${category}`);
+          logger.log(`[Notifications] Frequency cap reached (${MAX_NOTIFICATIONS_PER_DAY}/day), skipping ${category}`);
           return null;
         }
 
@@ -368,7 +368,7 @@ class NotificationManager {
       });
 
       this.scheduledIds.set(category, id);
-      if (__DEV__) console.log(`[Notifications] Scheduled (${category}): ${title} — ${body}`);
+      logger.log(`[Notifications] Scheduled (${category}): ${title} — ${body}`);
       return id;
     } catch (error) {
       logger.warn('[Notifications] Schedule failed:', error);
@@ -390,7 +390,7 @@ class NotificationManager {
     }
 
     this.scheduledIds.delete(category);
-    if (__DEV__) console.log(`[Notifications] Cancelled: ${category}`);
+    logger.log(`[Notifications] Cancelled: ${category}`);
   }
 
   /**
@@ -404,7 +404,7 @@ class NotificationManager {
     }
 
     this.scheduledIds.clear();
-    if (__DEV__) console.log('[Notifications] All cancelled');
+    logger.log('[Notifications] All cancelled');
   }
 
   // ─── Convenience Schedulers ───────────────────────────────────────────────
@@ -468,12 +468,12 @@ class NotificationManager {
    */
   async registerForRemotePush(userId?: string): Promise<string | null> {
     if (!Notifications) {
-      if (__DEV__) console.log('[Notifications] Module not available — cannot register for remote push');
+      logger.log('[Notifications] Module not available — cannot register for remote push');
       return null;
     }
 
     if (!this.permissionGranted) {
-      if (__DEV__) console.log('[Notifications] Permission not granted — cannot register for remote push');
+      logger.log('[Notifications] Permission not granted — cannot register for remote push');
       return null;
     }
 
@@ -511,7 +511,7 @@ class NotificationManager {
       // Set up notification response listener (user taps a notification)
       this.setupResponseListener();
 
-      if (__DEV__) console.log('[Notifications] Remote push registered — Expo token:', expoToken);
+      logger.log('[Notifications] Remote push registered — Expo token:', expoToken);
       return expoToken;
     } catch (error) {
       logger.warn('[Notifications] Failed to register for remote push:', error);
@@ -531,7 +531,7 @@ class NotificationManager {
     try {
       const { isFirebaseConfigured } = await import('../config/firebase');
       if (!isFirebaseConfigured) {
-        if (__DEV__) console.log('[Notifications] Firebase not configured — token not saved to Firestore');
+        logger.log('[Notifications] Firebase not configured — token not saved to Firestore');
         return;
       }
 
@@ -548,10 +548,37 @@ class NotificationManager {
         updatedAt: Date.now(),
       }, { merge: true });
 
-      if (__DEV__) console.log('[Notifications] Push token saved to Firestore for user:', userId);
+      logger.log('[Notifications] Push token saved to Firestore for user:', userId);
     } catch (error) {
       // Silent fallback — remote push is best-effort
       logger.warn('[Notifications] Failed to save token to Firestore:', error);
+    }
+  }
+
+  /**
+   * Delete the user's push token from Firestore so server-side senders
+   * (sendPushNotification, processStreakReminders) stop targeting them.
+   * Called when the user toggles notifications OFF in Settings.
+   *
+   * Best-effort: failures are logged but never thrown — we don't want to
+   * block a settings toggle on a network round-trip.
+   */
+  async deletePushToken(userId: string): Promise<void> {
+    try {
+      const { isFirebaseConfigured } = await import('../config/firebase');
+      if (!isFirebaseConfigured) {
+        logger.log('[Notifications] Firebase not configured — deletePushToken noop');
+        return;
+      }
+      const { getFirestore, doc, deleteDoc } = await import('firebase/firestore');
+      const { getApp } = await import('firebase/app');
+      const app = getApp();
+      const db = getFirestore(app);
+      await deleteDoc(doc(db, 'users', userId, 'pushToken', 'current'));
+      this.expoPushToken = null;
+      logger.log('[Notifications] Push token deleted from Firestore for user:', userId);
+    } catch (error) {
+      logger.warn('[Notifications] Failed to delete push token from Firestore:', error);
     }
   }
 
@@ -614,7 +641,7 @@ class NotificationManager {
         updatedAt: Date.now(),
       });
 
-      if (__DEV__) console.log('[Notifications] Push token sent to server for user:', userId);
+      logger.log('[Notifications] Push token sent to server for user:', userId);
     } catch (error) {
       // Silent fallback — remote push is best-effort
       logger.warn('[Notifications] Failed to send token to server:', error);
@@ -634,18 +661,18 @@ class NotificationManager {
     const category = data.category as NotificationCategory | undefined;
 
     if (__DEV__) {
-      if (__DEV__) console.log('[Notifications] Remote notification received:', data);
+      logger.log('[Notifications] Remote notification received:', data);
     }
 
     if (!category) {
-      if (__DEV__) console.log('[Notifications] Remote notification has no category — ignoring');
+      logger.log('[Notifications] Remote notification has no category — ignoring');
       return;
     }
 
     // Route to specific handler based on category
     switch (category) {
       case 'streak_reminder': {
-        if (__DEV__) console.log('[Notifications] Handling streak_reminder — prompting daily play');
+        logger.log('[Notifications] Handling streak_reminder — prompting daily play');
         // The UI layer listens via addResponseListener to navigate to daily puzzle
         this.lastRemotePayload = { category, ...data };
         break;
@@ -653,27 +680,27 @@ class NotificationManager {
       case 'friend_activity': {
         const friendName = data.friendName as string | undefined;
         const event = data.event as string | undefined;
-        if (__DEV__) console.log(`[Notifications] Handling friend_activity — friend: ${friendName}, event: ${event}`);
+        logger.log(`[Notifications] Handling friend_activity — friend: ${friendName}, event: ${event}`);
         this.lastRemotePayload = { category, ...data };
         break;
       }
       case 'event_starting': {
         const eventName = data.eventName as string | undefined;
-        if (__DEV__) console.log(`[Notifications] Handling event_start — event: ${eventName}`);
+        logger.log(`[Notifications] Handling event_start — event: ${eventName}`);
         this.lastRemotePayload = { category, ...data };
         break;
       }
       case 'comeback': {
-        if (__DEV__) console.log('[Notifications] Handling comeback — applying comeback bonus');
+        logger.log('[Notifications] Handling comeback — applying comeback bonus');
         this.lastRemotePayload = { category, ...data };
         break;
       }
       default: {
         if (NOTIFICATION_TEMPLATES[category]) {
-          if (__DEV__) console.log(`[Notifications] Handling remote notification category: ${category}`);
+          logger.log(`[Notifications] Handling remote notification category: ${category}`);
           this.lastRemotePayload = { category, ...data };
         } else {
-          if (__DEV__) console.log(`[Notifications] Unknown remote notification category: ${category}`);
+          logger.log(`[Notifications] Unknown remote notification category: ${category}`);
         }
         break;
       }

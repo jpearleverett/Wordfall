@@ -95,7 +95,13 @@ export default function Modal({ visible, onClose, title, children }: ModalProps)
               style={styles.card}
             >
               <View style={styles.header}>
-                {title ? <Text style={styles.title}>{title}</Text> : <View />}
+                {title ? (
+                  <Text style={styles.title} numberOfLines={2}>
+                    {title}
+                  </Text>
+                ) : (
+                  <View />
+                )}
                 <TouchableOpacity
                   onPress={onClose}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

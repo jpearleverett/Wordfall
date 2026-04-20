@@ -28,6 +28,7 @@ import ClubGoalCard from '../components/ClubGoalCard';
 import ClubLeaderboard from '../components/ClubLeaderboard';
 import ClubSharedGoals from '../components/ClubSharedGoals';
 import { GiftInbox } from '../components/GiftInbox';
+import { SendGiftButton } from '../components/social/SendGiftButton';
 import {
   generateClubGoal,
   ActiveClubGoal,
@@ -591,6 +592,14 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                   </View>
                   {member.isOnline && (
                     <View style={styles.onlineDot} />
+                  )}
+                  {member.id !== user?.uid && (
+                    <SendGiftButton
+                      recipientId={member.id}
+                      recipientName={member.name}
+                      relationship="clubmate"
+                      compact
+                    />
                   )}
                 </View>
               </View>

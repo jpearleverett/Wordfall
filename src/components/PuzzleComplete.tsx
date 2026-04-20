@@ -1307,7 +1307,7 @@ const styles = StyleSheet.create({
   stayButtonText: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
-    fontFamily: FONTS.body,
+    fontFamily: FONTS.bodyRegular,
     letterSpacing: 1,
     textDecorationLine: 'underline',
   },

@@ -721,7 +721,8 @@ export interface CeremonyItem {
     | 'library_teaser'
     | 'starter_pack_unlocked'
     | 'tomorrow_preview'
-    | 'daily_quest_claim';
+    | 'daily_quest_claim'
+    | 'first_purchase_offer';
   data: Record<string, any>;
   /** If set, ceremony auto-dismisses after this many ms (Tier 2 behavior). */
   autoDismissMs?: number;

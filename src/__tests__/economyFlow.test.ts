@@ -49,7 +49,8 @@ describe('Economy Flow Integration', () => {
           (r.boosters && r.boosters.length > 0) ||
           (r.flags && Object.keys(r.flags).length > 0) ||
           (r.dripDays && r.dripDays > 0) ||
-          (r.dailyDrip);
+          (r.dailyDrip) ||
+          (r.streakFreezeDays && r.streakFreezeDays > 0);
         expect(hasReward).toBeTruthy();
 
         // Numeric rewards must be positive when present

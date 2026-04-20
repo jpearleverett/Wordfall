@@ -7,6 +7,7 @@ import { StreakMilestoneCeremony } from '../components/StreakMilestoneCeremony';
 import { CollectionCompleteCeremony } from '../components/CollectionCompleteCeremony';
 import { MilestoneCeremony } from '../components/MilestoneCeremony';
 import PrestigeResetCeremony from '../components/PrestigeResetCeremony';
+import { FirstPurchaseOfferModal } from '../components/FirstPurchaseOfferModal';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { CeremonyItem } from '../types';
 import { COLORS } from '../constants';
@@ -225,6 +226,9 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           buttonText="NICE"
           onDismiss={onDismiss}
         />
+      )}
+      {activeCeremony?.type === 'first_purchase_offer' && (
+        <FirstPurchaseOfferModal onDismiss={onDismiss} />
       )}
       {activeCeremony?.type === 'starter_pack_unlocked' && (
         <MilestoneCeremony

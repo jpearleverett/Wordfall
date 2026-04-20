@@ -11,7 +11,7 @@
  * back onto week 1). When '30day' wrap is day 30.
  */
 
-import { getRemoteString } from '../services/remoteConfig';
+import { getRemoteNumber, getRemoteString } from '../services/remoteConfig';
 
 export interface LoginCalendarReward {
   day: number;
@@ -101,6 +101,27 @@ export function getActiveLoginCalendar(): LoginCalendarReward[] {
 /** Cycle length (7 or 30) for the active variant. */
 export function getLoginCycleLength(): number {
   return getActiveLoginCalendar().length;
+}
+
+/**
+ * Days to shift the Login Calendar wrap point so it doesn't coincide with
+ * the Season Pass 30-day rotation. Only applies to the 30-day variant —
+ * the 7-day A/B leaves wrap at day 7 to keep that variant's semantics intact.
+ *
+ * When offset > 0: new-player first login shows as `offset + 1` on the
+ * calendar grid (richer rewards than day 1). Wrap happens after
+ * `(cycleLength - offset)` distinct login days, so a perfect daily player
+ * hits the Day-30 grand prize ~5 calendar days before the Season Pass
+ * rotation instead of on the same day.
+ */
+export function getLoginCalendarOffsetDays(): number {
+  if (getLoginCalendarVariant() !== '30day') return 0;
+  const raw = getRemoteNumber('loginCalendarOffsetDays');
+  const length = LOGIN_CALENDAR_REWARDS_30.length;
+  // Clamp to [0, length-1] so we never produce a negative or wrap-breaking
+  // value regardless of what Remote Config returns.
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(0, Math.min(length - 1, Math.floor(raw)));
 }
 
 /**

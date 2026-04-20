@@ -88,6 +88,8 @@ interface PlayerContextLike {
   referralCode: string;
   referredBy: string | null;
   referralRewardGranted?: boolean;
+  /** Null until the first-purchase hard modal has rendered exactly once. */
+  firstPurchaseModalShownAt: number | null;
   recordReferralSuccess: () => Promise<boolean>;
   featuresUnlocked: string[];
   seasonalQuest: SeasonalQuestState;
@@ -131,6 +133,8 @@ interface EconomyContextLike {
   addSeasonPassXp: (amount: number) => void;
   starterPackExpiresAt: number;
   activateStarterPack: () => void;
+  /** Full purchase history — used to detect non-payer segment for first-purchase offer (only length is read). */
+  purchaseHistory: readonly unknown[];
 }
 
 interface UseRewardWiringParams {
@@ -586,6 +590,25 @@ export function useRewardWiring({
       player.queueCeremony({ ...ceremony, autoDismissMs: 3000 });
       if (ceremony.data?.featureId) {
         void analytics.trackFeatureUnlocked(ceremony.data.featureId, newLevel);
+      }
+    }
+
+    // First-purchase hard modal — interrupts post-puzzle exactly once for
+    // non-payers at levels `firstPurchaseModalMinLevel..MaxLevel` (default 5–6).
+    // Any prior purchase (purchaseHistory non-empty) or a non-null
+    // `firstPurchaseModalShownAt` permanently disables the trigger.
+    if (
+      getRemoteBoolean('firstPurchaseModalEnabled') &&
+      player.firstPurchaseModalShownAt === null &&
+      economy.purchaseHistory.length === 0
+    ) {
+      const minLvl = getRemoteNumber('firstPurchaseModalMinLevel');
+      const maxLvl = getRemoteNumber('firstPurchaseModalMaxLevel');
+      if (newLevel >= minLvl && newLevel <= maxLvl) {
+        player.queueCeremony({
+          type: 'first_purchase_offer',
+          data: { productId: 'first_purchase_special' },
+        });
       }
     }
 

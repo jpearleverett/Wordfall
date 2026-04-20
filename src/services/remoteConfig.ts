@@ -62,6 +62,11 @@ export interface RemoteConfigValues {
   interstitialIntervalSeconds: number; // mirror of interstitialIntervalMs but named per plan 0.11
   // Login calendar A/B — '30day' (default) vs '7day' (legacy)
   loginCalendarVariant: string;
+  // Phase-offset Login Calendar wrap so perfect-daily players don't hit
+  // Login Calendar day-30 + Season Pass rotation on the same calendar day.
+  // Applied only when the active variant is '30day'. Default 5 (wrap
+  // lands ~5 days before Season Pass rotation). Set 0 to disable.
+  loginCalendarOffsetDays: number;
   // Piggy bank slow-fill gem jar (Branch 5)
   piggyBankEnabled: boolean;
   piggyBankFillPerPuzzle: number;
@@ -98,6 +103,13 @@ export interface RemoteConfigValues {
   invalidShakeEnabled: boolean;
   tileBloomEnabled: boolean;
   tileBloomParticlesPerTile: number;
+
+  // First-purchase hard-modal offer — interrupts post-puzzle at level
+  // [min, max] for non-payers exactly once per user. Set enabled=false to
+  // kill the interrupt (offer still available via shelf).
+  firstPurchaseModalEnabled: boolean;
+  firstPurchaseModalMinLevel: number;
+  firstPurchaseModalMaxLevel: number;
 
   // Launch-readiness wave (April 2026) — kill switches for each new system
   autoAdvanceEnabled: boolean;
@@ -156,6 +168,10 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   interstitialIntervalSeconds: 90,
   // Login calendar variant — '30day' escalating cycle by default
   loginCalendarVariant: '30day',
+  // Offset the 30-day Login Calendar wrap point by 5 days so it doesn't
+  // coincide with the Season Pass 30-day rotation. Ignored for the 7-day
+  // A/B variant. Flip to 0 via Remote Config to disable.
+  loginCalendarOffsetDays: 5,
   // Piggy bank — 2 gems per puzzle, 200-gem cap, $4.99 to break
   piggyBankEnabled: true,
   piggyBankFillPerPuzzle: 2,
@@ -190,6 +206,13 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   invalidShakeEnabled: true,
   tileBloomEnabled: true,
   tileBloomParticlesPerTile: 2,
+
+  // First-purchase hard-modal offer — interrupt fires post-puzzle at
+  // levels 5–6 for non-payers exactly once per user (guarded by
+  // `firstPurchaseModalShownAt` in PlayerData).
+  firstPurchaseModalEnabled: true,
+  firstPurchaseModalMinLevel: 5,
+  firstPurchaseModalMaxLevel: 6,
 
   // Launch-readiness wave — new systems enabled by default, tunable via RC
   autoAdvanceEnabled: true,
