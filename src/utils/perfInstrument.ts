@@ -31,7 +31,12 @@
  * compare timings with instrumentation off.
  */
 
-const PERF_ENABLED = __DEV__;
+// Perf logs are on in dev builds by default. To capture release-mode numbers
+// without touching source, start Metro with `EXPO_PUBLIC_FORCE_PERF_LOGS=1`
+// (or set it in `.env`) — Expo inlines `EXPO_PUBLIC_*` env vars at bundle
+// time so the check resolves to a literal. Production builds without the
+// env var have PERF_ENABLED=false and zero cost.
+const PERF_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_FORCE_PERF_LOGS === '1';
 
 // Thresholds — only log entries that exceed these, so the console doesn't
 // drown in noise. Adjust if you want more/fewer events.
