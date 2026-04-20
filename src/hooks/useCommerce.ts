@@ -30,7 +30,7 @@ function currentMonthKey(): string {
 export function useCommerce() {
   const { user } = useAuth();
   const { applyValidatedPurchase } = useEconomyActions();
-  const { unlockDecoration, unlockCosmetic } = usePlayerActions();
+  const { unlockDecoration, unlockCosmetic, activateStreakShield } = usePlayerActions();
   const settings = useSettings();
   const [commerceStatus, setCommerceStatus] = useState<CommerceStatus>(() => iapManager.getStatus());
 
@@ -51,7 +51,7 @@ export function useCommerce() {
     };
   }, [refreshStatus]);
 
-  const applyPlayerGrants = useCallback((grants: { cosmetics: string[]; decorations: string[] }) => {
+  const applyPlayerGrants = useCallback((grants: { cosmetics: string[]; decorations: string[]; streakFreezeDays?: number }) => {
     for (const decorationId of grants.decorations) {
       unlockDecoration(decorationId);
     }
@@ -59,7 +59,11 @@ export function useCommerce() {
     for (const cosmeticId of grants.cosmetics) {
       unlockCosmetic(cosmeticId);
     }
-  }, [unlockDecoration, unlockCosmetic]);
+
+    if (grants.streakFreezeDays && grants.streakFreezeDays > 0) {
+      activateStreakShield();
+    }
+  }, [unlockDecoration, unlockCosmetic, activateStreakShield]);
 
   const recordSpend = useCallback((priceAmount: number) => {
     if (!settings.spendingLimitEnabled) return;

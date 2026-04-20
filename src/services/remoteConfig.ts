@@ -98,6 +98,16 @@ export interface RemoteConfigValues {
   invalidShakeEnabled: boolean;
   tileBloomEnabled: boolean;
   tileBloomParticlesPerTile: number;
+
+  // Launch-readiness wave (April 2026) — kill switches for each new system
+  autoAdvanceEnabled: boolean;
+  autoAdvanceDelayMs: number;
+  closeFinishPremiumEnabled: boolean;
+  closeFinishPremiumGemCost: number;
+  dailyQuestsEnabled: boolean;
+  cosmeticPerksEnabled: boolean;
+  streakShieldOfferEnabled: boolean;
+  prestigeCeremonyEnabled: boolean;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -180,6 +190,16 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   invalidShakeEnabled: true,
   tileBloomEnabled: true,
   tileBloomParticlesPerTile: 2,
+
+  // Launch-readiness wave — new systems enabled by default, tunable via RC
+  autoAdvanceEnabled: true,
+  autoAdvanceDelayMs: 3500,
+  closeFinishPremiumEnabled: true,
+  closeFinishPremiumGemCost: 9,
+  dailyQuestsEnabled: true,
+  cosmeticPerksEnabled: true,
+  streakShieldOfferEnabled: true,
+  prestigeCeremonyEnabled: true,
 };
 
 // ---------------------------------------------------------------------------

@@ -106,6 +106,7 @@ export interface PlayerProgressMethods {
   updateStreak: () => void;
   useGraceDay: () => boolean;
   useStreakShield: () => boolean;
+  activateStreakShield: () => void;
   updateMissionProgress: (missionId: string, progress: number) => void;
   claimMissionReward: (missionId: string) => void;
   generateDailyMissions: () => void;
@@ -207,8 +208,16 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
           )
         : 0;
 
+      // Streak-shield window: purchased shield is valid for 72h after purchase.
+      const SHIELD_WINDOW_MS = 72 * 60 * 60 * 1000;
+      const shieldLastMs = streaks.lastShieldDate
+        ? new Date(streaks.lastShieldDate).getTime()
+        : 0;
+      const shieldFresh = streaks.streakShieldAvailable && (Date.now() - shieldLastMs) < SHIELD_WINDOW_MS;
+
       let newStreak: number;
       let graceUsed = false;
+      let shieldConsumed = false;
       if (diffDays === 1) {
         newStreak = streaks.currentStreak + 1;
       } else if (diffDays === 0) {
@@ -216,6 +225,11 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       } else if (diffDays === 2 && streaks.graceDaysUsed < 1) {
         newStreak = streaks.currentStreak + 1;
         graceUsed = true;
+      } else if (diffDays >= 2 && shieldFresh) {
+        // Shield saves the streak: preserve current count, no increment since
+        // the missed day didn't include a puzzle. Consume the shield.
+        newStreak = streaks.currentStreak;
+        shieldConsumed = true;
       } else {
         newStreak = 1;
       }
@@ -265,7 +279,8 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
           currentStreak: newStreak,
           bestStreak: Math.max(streaks.bestStreak, newStreak),
           lastPlayDate: today,
-          graceDaysUsed: newGraceDaysUsed,
+          graceDaysUsed: shieldConsumed ? streaks.graceDaysUsed : newGraceDaysUsed,
+          streakShieldAvailable: shieldConsumed ? false : streaks.streakShieldAvailable,
         },
         lastActiveDate: today,
       };
@@ -307,6 +322,19 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       };
     });
     return success;
+  };
+
+  const activateStreakShield = (): void => {
+    // Grants a streak-shield charge (single-use). Called by commerce after a
+    // streak_freeze SKU purchase, and by the in-game streak_shield offer.
+    setData((prev) => ({
+      ...prev,
+      streaks: {
+        ...prev.streaks,
+        streakShieldAvailable: true,
+        lastShieldDate: new Date().toISOString().slice(0, 10),
+      },
+    }));
   };
 
   const updateMissionProgress = (missionId: string, progress: number): void => {
@@ -609,6 +637,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     updateStreak,
     useGraceDay,
     useStreakShield,
+    activateStreakShield,
     updateMissionProgress,
     claimMissionReward,
     generateDailyMissions,

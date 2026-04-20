@@ -7,6 +7,14 @@ import { useAuth } from './AuthContext';
 import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { CeremonyItem, PlayerMetrics, PuzzleEnergyState, WeeklyGoalsState } from '../types';
 import { SeasonalQuestState, DEFAULT_SEASONAL_QUEST_STATE } from '../data/seasonalQuests';
+import {
+  DailyQuestsState,
+  DEFAULT_DAILY_QUESTS_STATE,
+  DailyQuestEvent,
+  getQuestTemplate,
+  getTodayLocal,
+  pickDailyQuests,
+} from '../data/dailyQuests';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { COLLECTION, ENERGY, FEATURE_UNLOCK_SCHEDULE, MODE_CONFIGS, STAR_MILESTONES, STREAK } from '../constants';
@@ -235,6 +243,9 @@ export interface PlayerData {
   // Seasonal Quest
   seasonalQuest: SeasonalQuestState;
 
+  // Daily Quests (3 rotating tasks, refresh at local midnight)
+  dailyQuests: DailyQuestsState;
+
   // Cloud sync
   lastModified: number;
 }
@@ -260,10 +271,16 @@ export interface PlayerContextType extends PlayerData {
   claimMissionReward: (missionId: string) => void;
   generateDailyMissions: () => void;
 
+  // Daily Quests (3 rotating tasks, refresh at local midnight)
+  ensureDailyQuests: (uid?: string) => void;
+  recordDailyQuestEvent: (event: DailyQuestEvent) => void;
+  claimDailyQuest: (templateId: string) => { coins?: number; gems?: number; hintTokens?: number; boosterTokens?: number; xp?: number } | null;
+
   // Streaks
   updateStreak: () => void;
   useGraceDay: () => boolean;
   useStreakShield: () => boolean;
+  activateStreakShield: () => void;
 
   // Cosmetics
   equipCosmetic: (type: 'theme' | 'frame' | 'title', id: string) => void;
@@ -547,6 +564,9 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   // Seasonal Quest
   seasonalQuest: DEFAULT_SEASONAL_QUEST_STATE,
 
+  // Daily Quests
+  dailyQuests: DEFAULT_DAILY_QUESTS_STATE,
+
   // Cloud sync
   lastModified: 0,
 };
@@ -566,9 +586,13 @@ const PlayerContext = createContext<PlayerContextType>({
   updateMissionProgress: () => {},
   claimMissionReward: () => {},
   generateDailyMissions: () => {},
+  ensureDailyQuests: () => {},
+  recordDailyQuestEvent: () => {},
+  claimDailyQuest: () => null,
   updateStreak: () => {},
   useGraceDay: () => false,
   useStreakShield: () => false,
+  activateStreakShield: () => {},
   equipCosmetic: () => {},
   unlockCosmetic: () => {},
   restoreWing: () => {},
@@ -924,6 +948,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     updateStreak,
     useGraceDay,
     useStreakShield,
+    activateStreakShield,
     updateMissionProgress,
     claimMissionReward,
     generateDailyMissions,
@@ -961,6 +986,72 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const updateProgress = useCallback((updates: Partial<PlayerData>) => {
     setData((prev) => ({ ...prev, ...updates }));
   }, []);
+
+  // ── Daily Quests ───────────────────────────────────────────────────────
+
+  const ensureDailyQuests = useCallback((overrideUid?: string) => {
+    const today = getTodayLocal();
+    const uid = overrideUid ?? user?.uid ?? 'anonymous';
+    setData((prev) => {
+      if (prev.dailyQuests.date === today && prev.dailyQuests.quests.length > 0) {
+        return prev;
+      }
+      return {
+        ...prev,
+        dailyQuests: {
+          date: today,
+          quests: pickDailyQuests(uid, today, 3),
+        },
+      };
+    });
+  }, [user?.uid]);
+
+  const recordDailyQuestEvent = useCallback((event: DailyQuestEvent) => {
+    setData((prev) => {
+      const state = prev.dailyQuests;
+      if (!state.quests.length) return prev;
+      let changed = false;
+      const nextQuests = state.quests.map((q) => {
+        if (q.claimed) return q;
+        const tpl = getQuestTemplate(q.templateId);
+        if (!tpl) return q;
+        if (q.progress >= tpl.target) return q;
+        const inc = tpl.matcher(event);
+        if (inc <= 0) return q;
+        changed = true;
+        return { ...q, progress: Math.min(tpl.target, q.progress + inc) };
+      });
+      if (!changed) return prev;
+      return {
+        ...prev,
+        dailyQuests: { ...state, quests: nextQuests },
+      };
+    });
+  }, []);
+
+  const claimDailyQuest = useCallback((templateId: string) => {
+    const prev = getData();
+    const quest = prev.dailyQuests.quests.find((q) => q.templateId === templateId);
+    if (!quest || quest.claimed) return null;
+    const tpl = getQuestTemplate(templateId);
+    if (!tpl) return null;
+    if (quest.progress < tpl.target) return null;
+
+    setData((p) => ({
+      ...p,
+      dailyQuests: {
+        ...p.dailyQuests,
+        quests: p.dailyQuests.quests.map((q) =>
+          q.templateId === templateId ? { ...q, claimed: true } : q,
+        ),
+      },
+      pendingCeremonies: [
+        ...p.pendingCeremonies,
+        { type: 'daily_quest_claim' as const, data: { templateId, reward: tpl.reward } },
+      ],
+    }));
+    return tpl.reward;
+  }, [getData]);
 
   // ── Collections ─────────────────────────────────────────────────────────
 
@@ -1528,7 +1619,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Queue prestige ceremony
       const ceremony: CeremonyItem = {
         type: 'prestige',
-        data: { level: newPrestigeLevel, label: rewards.label, icon: rewards.icon },
+        data: {
+          level: newPrestigeLevel,
+          label: rewards.label,
+          icon: rewards.icon,
+          xpMultiplier: rewards.xpMultiplier,
+          permanentBonuses: rewards.permanentBonuses,
+          cosmeticReward: rewards.cosmeticReward,
+        },
       };
 
       success = true;
@@ -1773,9 +1871,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateMissionProgress,
       claimMissionReward,
       generateDailyMissions,
+      ensureDailyQuests,
+      recordDailyQuestEvent,
+      claimDailyQuest,
       updateStreak,
       useGraceDay,
       useStreakShield,
+      activateStreakShield,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
@@ -1834,9 +1936,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateMissionProgress,
       claimMissionReward,
       generateDailyMissions,
+      ensureDailyQuests,
+      recordDailyQuestEvent,
+      claimDailyQuest,
       updateStreak,
       useGraceDay,
       useStreakShield,
+      activateStreakShield,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
@@ -1900,9 +2006,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateMissionProgress,
       claimMissionReward,
       generateDailyMissions,
+      ensureDailyQuests,
+      recordDailyQuestEvent,
+      claimDailyQuest,
       updateStreak,
       useGraceDay,
       useStreakShield,
+      activateStreakShield,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
@@ -1960,9 +2070,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateMissionProgress,
       claimMissionReward,
       generateDailyMissions,
+      ensureDailyQuests,
+      recordDailyQuestEvent,
+      claimDailyQuest,
       updateStreak,
       useGraceDay,
       useStreakShield,
+      activateStreakShield,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,

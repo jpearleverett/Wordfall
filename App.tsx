@@ -68,7 +68,7 @@ void initI18n().catch(() => { /* fallback EN is already active */ });
 import { CeremonyRouter } from './src/App/CeremonyRouter';
 import { SessionEndReminder } from './src/components/SessionEndReminder';
 import { MysteryWheel } from './src/components/MysteryWheel';
-import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT } from './src/data/mysteryWheel';
+import { WheelSegment, MysteryWheelState, SPIN_COST_GEMS, SPIN_BUNDLE_COUNT, checkDailyFreeSpin } from './src/data/mysteryWheel';
 import { analytics } from './src/services/analytics';
 import { crashReporter } from './src/services/crashReporting';
 import { funnelTracker } from './src/services/funnelTracker';
@@ -961,6 +961,7 @@ function HomeMainScreen({ route, navigation }: any) {
       }
       player.updateStreak();
       player.generateDailyMissions();
+      player.ensureDailyQuests(user?.uid);
       player.initWeeklyGoals();
 
       // Check for any feature/mode unlocks the player has earned but not yet seen
@@ -1458,6 +1459,7 @@ function HomeMainScreen({ route, navigation }: any) {
         onOpenSeasonPass={() => navigation.navigate('SeasonPass')}
         onOpenWheel={() => setShowMysteryWheel(true)}
         mysteryWheelSpins={player.mysteryWheel.spinsAvailable}
+        dailyFreeSpinAvailable={checkDailyFreeSpin(player.mysteryWheel.lastDailySpinDate)}
         freeSpinToast={freeSpinToast}
         onBuyDeal={(deal) => {
           const canAfford = economy.canAfford(deal.currency, deal.salePrice);
@@ -1487,6 +1489,16 @@ function HomeMainScreen({ route, navigation }: any) {
         playerStage={playerStage}
         weeklyGoals={player.weeklyGoals}
         dailyMissions={player.missions.dailyMissions}
+        dailyQuests={player.dailyQuests.quests}
+        onClaimDailyQuest={(templateId) => {
+          const reward = player.claimDailyQuest(templateId);
+          if (!reward) return;
+          if (reward.coins) economy.addCoins(reward.coins);
+          if (reward.gems) economy.addGems(reward.gems);
+          if (reward.hintTokens) economy.addHintTokens(reward.hintTokens);
+          if (reward.boosterTokens) economy.addBoosterToken('wildcardTile', reward.boosterTokens);
+          if (reward.xp) economy.addSeasonPassXp(reward.xp);
+        }}
         recommendation={recommendation}
         segmentHomeContent={segmentHomeContent}
         segmentWelcomeMessage={segmentWelcomeMessage}

@@ -81,7 +81,7 @@ function GameFlashesImpl({
       {/* Score popup with word-length scaling */}
       {scorePopup && (() => {
         const wordLen = lastSubmittedWordLen;
-        const popupScale = wordLen >= 7 ? 1.6 : wordLen >= 5 ? 1.3 : 1.0;
+        const popupScale = wordLen >= 7 ? 1.6 : wordLen >= 5 ? 1.3 : 1.15;
         return (
           <Animated.View
             style={[

@@ -24,6 +24,8 @@ export interface ProductRewards {
   dripDays?: number;
   /** Daily drip rewards (awarded each day) */
   dailyDrip?: { coins?: number; gems?: number; hintTokens?: number };
+  /** Streak shield charges granted (consumable — single-use per missed day) */
+  streakFreezeDays?: number;
 }
 
 export interface ShopProduct {
@@ -91,6 +93,22 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     originalPrice: '$4.99',
     originalPriceAmount: 4.99,
     icon: '\u{1F381}',
+  },
+  {
+    id: 'streak_freeze',
+    storeProductId: 'wordfall_streak_freeze',
+    name: 'Streak Freeze',
+    description: 'Protect your streak for one missed day. Single-use shield.',
+    fallbackPrice: '$0.99',
+    fallbackPriceAmount: 0.99,
+    category: 'consumables',
+    rewards: {
+      streakFreezeDays: 1,
+    },
+    isNonConsumable: false,
+    originalPrice: '$1.99',
+    originalPriceAmount: 1.99,
+    icon: '\u{1F6E1}\u{FE0F}',
   },
   {
     id: 'chapter_bundle',
