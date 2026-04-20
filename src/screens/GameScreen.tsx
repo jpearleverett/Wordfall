@@ -65,6 +65,7 @@ import { GameFlashes } from './game/GameFlashes';
 import { ComboFlash } from '../components/effects/ComboFlash';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
+import { SubmitFeedbackLayer, SubmitFeedbackLayerHandle } from './game/SubmitFeedbackLayer';
 
 interface GameScreenProps {
   board: Board;
@@ -531,14 +532,15 @@ function GameScreenImpl({
     }
   }, [solveSequence, foundWords, totalWords]);
   const gridHeightLocked = useRef(false);
-  const chainAnim = useRef(new Animated.Value(0)).current;
-  const [chainVisible, setChainVisible] = useState(false);
+  // Chain popup, score popup, and big-word label are now owned by the
+  // sibling SubmitFeedbackLayer (April 2026 perf pass). GameScreen still
+  // owns the shake animation since it's also used for non-popup events
+  // (invalid tap, big-word impact).
+  const submitFeedbackLayerRef = useRef<SubmitFeedbackLayerHandle | null>(null);
   const validFlashAnim = useRef(new Animated.Value(0)).current;
   const [showValidFlash, setShowValidFlash] = useState(false);
   const invalidFlashAnim = useRef(new Animated.Value(0)).current;
   const [showInvalidFlash, setShowInvalidFlash] = useState(false);
-  const scorePopupAnim = useRef(new Animated.Value(0)).current;
-  const [scorePopup, setScorePopup] = useState<{ points: number; label: string } | null>(null);
   const prevScoreRef = useRef(score);
   const [showIdleHint, setShowIdleHint] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -578,9 +580,9 @@ function GameScreenImpl({
   const fallAnimMap = useRef(new Map<string, Animated.Value>()).current;
   const [fallActive, setFallActive] = useState(false);
 
-  // --- Big word celebration state (Task 2) ---
-  const [bigWordLabel, setBigWordLabel] = useState<string | null>(null);
-  const bigWordAnim = useRef(new Animated.Value(0)).current;
+  // Big-word celebration visual is owned by SubmitFeedbackLayer. GameScreen
+  // only tracks the submitted word length so the score-change effect can
+  // tell the layer + decide whether to fire the big-word shake.
   const lastSubmittedWordLenRef = useRef(0);
   // Cell positions of the most-recently-submitted word (captured pre-submit).
   // Used by the multi-tile bloom spawn in the score-change effect.
@@ -995,24 +997,15 @@ function GameScreenImpl({
     return () => sub.remove();
   }, []);
 
-  // Chain celebration animation with screen shake (skips animation when reduceMotion)
-  const showChainCelebration = useCallback(() => {
-    setChainVisible(true);
-    chainAnim.setValue(0);
+  // Screen shake on chain celebration. The popup visual (and the
+  // accompanying neon-pulse + VHS-glitch overlays) live inside
+  // SubmitFeedbackLayer, which owns its own `chainAnim` shared value and
+  // runs the fade on the UI thread. GameScreen still owns shake since
+  // it's shared with big-word / invalid-tap events.
+  const showChainShake = useCallback(() => {
     void comboHaptic();
     void soundManager.playSound('combo');
-
-    if (reduceMotion) {
-      // Skip animation, just show briefly then hide
-      chainAnim.setValue(1);
-      trackTimeout(() => {
-        chainAnim.setValue(0);
-        setChainVisible(false);
-      }, ANIM.chainPopupDuration);
-      return;
-    }
-
-    // Screen shake for chain — escalates with combo count
+    if (reduceMotion) return;
     const isLongShake = combo >= 6;
     const shakeSequence = isLongShake
       ? Animated.sequence([
@@ -1034,33 +1027,20 @@ function GameScreenImpl({
           Animated.timing(shakeAnim, { toValue: 0, duration: 30, useNativeDriver: true }),
         ]);
     shakeSequence.start();
-    Animated.sequence([
-      Animated.spring(chainAnim, {
-        toValue: 1,
-        friction: 4,
-        tension: 200,
-        useNativeDriver: true,
-      }),
-      Animated.delay(ANIM.chainPopupDuration),
-      Animated.timing(chainAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => setChainVisible(false));
-  }, [chainAnim, shakeAnim, combo, reduceMotion]);
+  }, [shakeAnim, combo, reduceMotion]);
 
-  // Show chain celebration on combo > 1
+  // Fire chain shake + analytics on combo > 1. The visual popup is driven
+  // separately inside SubmitFeedbackLayer from the same combo state.
   useEffect(() => {
     if (combo > 1 && status === 'playing') {
-      showChainCelebration();
+      showChainShake();
       // Defer analytics off the frame the chain popup is animating on.
       const chainPayload = { level, mode, combo: combo };
       requestAnimationFrame(() => {
         void analytics.logEvent('chain_count', chainPayload);
       });
     }
-  }, [combo, status, showChainCelebration, level, mode]);
+  }, [combo, status, showChainShake, level, mode]);
 
   // Invalid word flash animation. Runs a brief low-amplitude screen shake
   // (kinesthetic negative feedback — distinct from the 7+-letter celebration
@@ -1299,125 +1279,79 @@ function GameScreenImpl({
     }
   }, [status, showFailed, level, mode, foundWords, totalWords, score, hintsUsed, maxCombo, store]);
 
-  // Score popup when score changes (word found) + particle burst (#1) + big word celebration (Task 2)
+  // Score-change reaction: haptic + sound + shake + particle bloom.
+  // The score popup, big-word label, and their animations are owned by
+  // SubmitFeedbackLayer — we just push the numbers into it via ref.
+  // GameScreen no longer re-renders for the popups.
   useEffect(() => {
     const diff = score - prevScoreRef.current;
     prevScoreRef.current = score;
-    if (diff > 0 && status === 'playing') {
-      const wordLen = lastSubmittedWordLenRef.current;
-      const label = combo > 1 ? `+${diff} (${combo}x!)` : `+${diff}`;
-      setScorePopup({ points: diff, label });
-      void wordFoundHaptic();
+    if (diff <= 0 || status !== 'playing') return;
 
-      // Big word celebration variance (Task 2)
-      if (wordLen >= 7) {
-        void soundManager.playSound('combo');
-        void comboHaptic();
-        // Show "AMAZING!" / "INCREDIBLE!" overlay
-        const labels = ['AMAZING!', 'INCREDIBLE!', 'PHENOMENAL!', 'SPECTACULAR!'];
-        setBigWordLabel(labels[Math.floor(Math.random() * labels.length)]);
-        bigWordAnim.setValue(0);
-        if (!reduceMotion) {
-          // Extra screen shake for 7+ letter words
-          Animated.sequence([
-            Animated.timing(shakeAnim, { toValue: 14, duration: 35, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: -12, duration: 35, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 10, duration: 30, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: -7, duration: 30, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 4, duration: 25, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 0, duration: 25, useNativeDriver: true }),
-          ]).start();
+    const wordLen = lastSubmittedWordLenRef.current;
+    void wordFoundHaptic();
+    submitFeedbackLayerRef.current?.onWordScored(diff, combo, wordLen);
 
-          Animated.sequence([
-            Animated.spring(bigWordAnim, { toValue: 1, friction: 4, tension: 200, useNativeDriver: true }),
-            Animated.delay(800),
-            Animated.timing(bigWordAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-          ]).start(() => setBigWordLabel(null));
+    if (wordLen >= 7) {
+      void soundManager.playSound('combo');
+      void comboHaptic();
+      if (!reduceMotion) {
+        // Extra screen shake for 7+ letter words (stays in GameScreen
+        // because shakeAnim is shared with other events).
+        Animated.sequence([
+          Animated.timing(shakeAnim, { toValue: 14, duration: 35, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -12, duration: 35, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 10, duration: 30, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -7, duration: 30, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 4, duration: 25, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 0, duration: 25, useNativeDriver: true }),
+        ]).start();
 
-          // Per-tile bloom burst for 7+ letter words (multi-tile waterfall).
-          // Falls back to a center burst if no cleared cells were captured
-          // (e.g. chain reactions don't carry selectedCells through).
-          const bigCells = lastSubmittedCellsRef.current;
-          if (bigCells.length > 0) {
-            spawnTileBloom(bigCells);
-            // Second batch for extra celebratory impact
-            trackTimeout(() => spawnTileBloom(bigCells), 250);
-          } else {
-            const fallbackId = `big-${Date.now()}`;
-            // Push both entries in a single batch so the sibling layer
-            // commits once (Fix F). Removals are likewise batched via
-            // a single trackTimeout chain.
-            const fallback: ClearParticleEntry[] = [
-              { id: `${fallbackId}-a`, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 },
-              { id: `${fallbackId}-b`, x: SCREEN_WIDTH / 2 + 20, y: gridAreaHeight / 2 + 40 },
-            ];
-            particleLayerRef.current?.push([fallback[0]]);
-            trackTimeout(() => {
-              particleLayerRef.current?.removeIds([fallback[0].id]);
-              particleLayerRef.current?.push([fallback[1]]);
-              trackTimeout(() => {
-                particleLayerRef.current?.removeIds([fallback[1].id]);
-              }, 500);
-            }, 250);
-          }
+        // Per-tile bloom burst for 7+ letter words (multi-tile waterfall).
+        const bigCells = lastSubmittedCellsRef.current;
+        if (bigCells.length > 0) {
+          spawnTileBloom(bigCells);
+          trackTimeout(() => spawnTileBloom(bigCells), 250);
         } else {
-          bigWordAnim.setValue(1);
-          trackTimeout(() => { bigWordAnim.setValue(0); setBigWordLabel(null); }, 1000);
-        }
-      } else if (wordLen >= 5) {
-        void soundManager.playSound('combo');
-        void soundManager.playSound('wordFound');
-      } else {
-        void soundManager.playSound('wordFound');
-      }
-
-      // #1 Word-clear particle burst (normal words). Multi-tile bloom spawns
-      // a small particle puff at each cleared cell; falls back to a center
-      // burst if positions weren't captured (e.g. chain-reaction clears).
-      if (!reduceMotion && wordLen < 7) {
-        const cells = lastSubmittedCellsRef.current;
-        if (cells.length > 0) {
-          spawnTileBloom(cells);
-        } else {
-          const fallbackId = `chain-${Date.now()}`;
-          const entry: ClearParticleEntry = { id: fallbackId, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
-          particleLayerRef.current?.push([entry]);
+          const fallbackId = `big-${Date.now()}`;
+          const fallback: ClearParticleEntry[] = [
+            { id: `${fallbackId}-a`, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 },
+            { id: `${fallbackId}-b`, x: SCREEN_WIDTH / 2 + 20, y: gridAreaHeight / 2 + 40 },
+          ];
+          particleLayerRef.current?.push([fallback[0]]);
           trackTimeout(() => {
-            particleLayerRef.current?.removeIds([entry.id]);
-          }, 500);
+            particleLayerRef.current?.removeIds([fallback[0].id]);
+            particleLayerRef.current?.push([fallback[1]]);
+            trackTimeout(() => {
+              particleLayerRef.current?.removeIds([fallback[1].id]);
+            }, 500);
+          }, 250);
         }
       }
-
-      // Reset captured cells so the next non-submit score change (e.g. chain
-      // reactions, score doubler) falls back to the center burst.
-      lastSubmittedCellsRef.current = [];
-
-      if (reduceMotion) {
-        // Skip score popup animation, just show briefly
-        scorePopupAnim.setValue(1);
-        trackTimeout(() => { scorePopupAnim.setValue(0); setScorePopup(null); }, 800);
-        return;
-      }
-
-      // Celebration scaling based on word length (Task 2)
-      const popupScale = wordLen >= 7 ? 1.6 : wordLen >= 5 ? 1.3 : 1.0;
-
-      scorePopupAnim.setValue(0);
-      Animated.sequence([
-        Animated.spring(scorePopupAnim, {
-          toValue: 1,
-          friction: 5,
-          tension: 180,
-          useNativeDriver: true,
-        }),
-        Animated.delay(600),
-        Animated.timing(scorePopupAnim, {
-          toValue: 2,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => setScorePopup(null));
+    } else if (wordLen >= 5) {
+      void soundManager.playSound('combo');
+      void soundManager.playSound('wordFound');
+    } else {
+      void soundManager.playSound('wordFound');
     }
+
+    // Word-clear particle burst for normal words.
+    if (!reduceMotion && wordLen < 7) {
+      const cells = lastSubmittedCellsRef.current;
+      if (cells.length > 0) {
+        spawnTileBloom(cells);
+      } else {
+        const fallbackId = `chain-${Date.now()}`;
+        const entry: ClearParticleEntry = { id: fallbackId, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
+        particleLayerRef.current?.push([entry]);
+        trackTimeout(() => {
+          particleLayerRef.current?.removeIds([entry.id]);
+        }, 500);
+      }
+    }
+
+    // Reset captured cells so chain reactions fall back to the center burst.
+    lastSubmittedCellsRef.current = [];
   }, [score]);
 
   // Green flash + auto-submit when a valid word is selected.
@@ -1824,25 +1758,23 @@ function GameScreenImpl({
         actionLabel="Return home"
         onReset={onHome}
       >
-      {/* Chain celebrations, valid/invalid flash, score popup, big word
-          celebration — all extracted into a single memoized subtree so
-          this branch doesn't re-reconcile on every SELECT_CELL. All
-          Animated.Values are ref-stable and compared referentially by
-          React.memo; the primitive props only change on word submit /
-          combo increment. */}
+      {/* Valid / invalid word full-screen flashes. Chain + score + big-word
+          popups moved to SubmitFeedbackLayer below so their state changes
+          no longer force GameScreen to re-render. */}
       <GameFlashes
-        chainVisible={chainVisible}
-        combo={combo}
         showValidFlash={showValidFlash}
         showInvalidFlash={showInvalidFlash}
-        scorePopup={scorePopup}
-        lastSubmittedWordLen={lastSubmittedWordLenRef.current}
-        bigWordLabel={bigWordLabel}
-        chainAnim={chainAnim}
         validFlashAnim={validFlashAnim}
         invalidFlashAnim={invalidFlashAnim}
-        scorePopupAnim={scorePopupAnim}
-        bigWordAnim={bigWordAnim}
+      />
+
+      {/* Chain popup, score popup, big-word label — sibling layer that
+          subscribes to the store directly and runs its animations on the
+          UI thread. GameScreen hands it score deltas via a ref handle. */}
+      <SubmitFeedbackLayer
+        ref={submitFeedbackLayerRef}
+        store={store}
+        reduceMotion={reduceMotion}
       />
 
       {/* Combo tint pulse + confetti at combo >=5 (Phase 3.9). Reads
