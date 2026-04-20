@@ -605,6 +605,12 @@ export interface CosmeticTheme {
   equipped: boolean;
 }
 
+export interface CosmeticBonuses {
+  coinMultiplier?: number;
+  gemMultiplier?: number;
+  xpMultiplier?: number;
+}
+
 export interface ProfileFrame {
   id: string;
   name: string;
@@ -612,6 +618,7 @@ export interface ProfileFrame {
   source: string;
   owned: boolean;
   cost?: { currency: CurrencyType; amount: number } | { coins: number; gems: number };
+  bonuses?: CosmeticBonuses;
 }
 
 export interface ProfileTitle {
@@ -619,6 +626,8 @@ export interface ProfileTitle {
   title: string;
   source: string;
   owned: boolean;
+  rarity?: 'common' | 'rare' | 'epic' | 'legendary';
+  bonuses?: CosmeticBonuses;
 }
 
 // ============ ONBOARDING ============
@@ -711,7 +720,8 @@ export interface CeremonyItem {
     | 'early_bonus'
     | 'library_teaser'
     | 'starter_pack_unlocked'
-    | 'tomorrow_preview';
+    | 'tomorrow_preview'
+    | 'daily_quest_claim';
   data: Record<string, any>;
   /** If set, ceremony auto-dismisses after this many ms (Tier 2 behavior). */
   autoDismissMs?: number;

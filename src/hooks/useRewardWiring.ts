@@ -18,6 +18,7 @@ import { ATLAS_PAGES, getCurrentSeasonAlbum } from '../data/collections';
 import { generateShareText } from '../utils/shareGenerator';
 import { getMasteryTierForXP, MASTERY_REWARDS } from '../data/masteryRewards';
 import { eventManager } from '../services/eventManager';
+import { DailyQuestEvent } from '../data/dailyQuests';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
 import {
@@ -26,8 +27,8 @@ import {
 } from '../services/notificationTriggers';
 import { firestoreService } from '../services/firestore';
 import { crashReporter } from '../services/crashReporting';
-import { getTitleLabel } from '../data/cosmetics';
-import { getRemoteNumber } from '../services/remoteConfig';
+import { getTitleLabel, computeEquippedBonuses } from '../data/cosmetics';
+import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
 
 // Helper: get difficulty name for a level
 function getDifficultyForLevel(level: number): string {
@@ -118,6 +119,7 @@ interface PlayerContextLike {
   };
   collectStamp: (albumId: string, stampIndex: number) => void;
   unlockDecoration: (decorationId: string) => void;
+  recordDailyQuestEvent: (event: DailyQuestEvent) => void;
 }
 
 interface EconomyContextLike {
@@ -230,6 +232,22 @@ export function useRewardWiring({
     });
     player.recordPuzzleComplete(level, score, stars, isPerfect);
 
+    // Daily quest progress — emit O(1) events for active quests.
+    player.recordDailyQuestEvent({ type: 'puzzle_complete' });
+    if (isPerfect) {
+      player.recordDailyQuestEvent({ type: 'flawless_complete' });
+      player.recordDailyQuestEvent({ type: 'hint_skipped_puzzle' });
+    }
+    player.recordDailyQuestEvent({ type: 'mode_played', mode });
+    if (boardData) {
+      for (const w of boardData.words) {
+        const len = w.word?.length ?? 0;
+        if (len > 0) {
+          player.recordDailyQuestEvent({ type: 'word_found', value: len });
+        }
+      }
+    }
+
     // Capture pre-play mode stats for first-clear detection
     const prevModePlayed = player.modeStats?.[mode]?.played || 0;
 
@@ -247,21 +265,29 @@ export function useRewardWiring({
     // Update adaptive difficulty metrics
     player.recordPerformanceMetrics(level, stars, 0);
 
-    // Award coins based on difficulty -- apply event multipliers
+    // Award coins based on difficulty -- apply event multipliers + cosmetic perks
     const difficulty: Difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
     const eventMultipliers = eventManager.getEventMultipliers();
+    const cosmeticPerksOn = getRemoteBoolean('cosmeticPerksEnabled');
+    const cosmeticBonuses = cosmeticPerksOn
+      ? computeEquippedBonuses(player.equippedFrame, player.equippedTitle)
+      : { coinMultiplier: 0, gemMultiplier: 0, xpMultiplier: 0 };
+    const coinBonusFactor = 1 + (cosmeticBonuses.coinMultiplier ?? 0);
+    const gemBonusFactor = 1 + (cosmeticBonuses.gemMultiplier ?? 0);
+    const xpBonusFactor = 1 + (cosmeticBonuses.xpMultiplier ?? 0);
     const baseCoinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
-    const coinReward = Math.round(baseCoinReward * eventMultipliers.coins);
+    const coinReward = Math.round(baseCoinReward * eventMultipliers.coins * coinBonusFactor);
     economy.addCoins(coinReward);
 
     // Track total rewards for animated victory tally
     let totalCoinsAwarded = coinReward;
     let totalGemsAwarded = 0;
 
-    // Award gems for perfect clears
+    // Award gems for perfect clears (cosmetic gem multiplier applies)
     if (isPerfect) {
-      economy.addGems(ECONOMY.perfectClearGems);
-      totalGemsAwarded += ECONOMY.perfectClearGems;
+      const perfectGems = Math.round(ECONOMY.perfectClearGems * gemBonusFactor);
+      economy.addGems(perfectGems);
+      totalGemsAwarded += perfectGems;
     }
 
     // Slow-fill piggy bank — accumulates gems per puzzle complete (capped
@@ -277,11 +303,13 @@ export function useRewardWiring({
     // Season pass XP — scaled by star bonus + daily/perfect kickers.
     const baseXp = Math.max(0, Math.round(getRemoteNumber('seasonPassXpPerPuzzle')));
     if (baseXp > 0) {
-      const xpGain =
-        baseXp +
-        stars * 50 +
-        (isDaily ? 200 : 0) +
-        (isPerfect ? 150 : 0);
+      const xpGain = Math.round(
+        (baseXp +
+          stars * 50 +
+          (isDaily ? 200 : 0) +
+          (isPerfect ? 150 : 0)) *
+          xpBonusFactor,
+      );
       economy.addSeasonPassXp(xpGain);
       void analytics.logEvent('season_pass_xp_gained', {
         amount: xpGain,
@@ -302,10 +330,12 @@ export function useRewardWiring({
     if (isDaily) {
       const today = new Date().toISOString().split('T')[0];
       player.recordDailyComplete(today);
-      economy.addCoins(ECONOMY.dailyCompleteCoins);
-      economy.addGems(ECONOMY.dailyCompleteGems);
-      totalCoinsAwarded += ECONOMY.dailyCompleteCoins;
-      totalGemsAwarded += ECONOMY.dailyCompleteGems;
+      const dailyCoins = Math.round(ECONOMY.dailyCompleteCoins * coinBonusFactor);
+      const dailyGems = Math.round(ECONOMY.dailyCompleteGems * gemBonusFactor);
+      economy.addCoins(dailyCoins);
+      economy.addGems(dailyGems);
+      totalCoinsAwarded += dailyCoins;
+      totalGemsAwarded += dailyGems;
       player.updateStreak();
       void triggerStreakReminder(player.streaks.currentStreak + 1);
       void analytics.trackDailyChallengeComplete(player.streaks.currentStreak + 1);
@@ -313,6 +343,7 @@ export function useRewardWiring({
         date: today,
         streak: player.streaks.currentStreak + 1,
       });
+      player.recordDailyQuestEvent({ type: 'daily_challenge_done' });
     }
 
     // Collect Tier 2 unlocks to embed inline on the victory screen
@@ -721,6 +752,8 @@ export function useRewardWiring({
         mode,
         streakAfter: (player.flawlessStreak?.currentStreak || 0) + 1,
       });
+      const streakAfter = (player.flawlessStreak?.currentStreak || 0) + 1;
+      player.recordDailyQuestEvent({ type: 'flawless_streak_hit', value: streakAfter });
     }
 
     // Award seasonal stamp based on puzzles solved this season

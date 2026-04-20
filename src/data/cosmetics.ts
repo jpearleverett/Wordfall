@@ -1,4 +1,4 @@
-import { CosmeticTheme, ProfileFrame, ProfileTitle, LibraryDecoration, CurrencyType } from '../types';
+import { CosmeticTheme, ProfileFrame, ProfileTitle, LibraryDecoration, CurrencyType, CosmeticBonuses } from '../types';
 import { ECONOMY, STAR_MILESTONES } from '../constants';
 import { EVENT_TEMPLATES } from './events';
 import { GRAND_CHALLENGES } from './grandChallenges';
@@ -769,4 +769,50 @@ export function getDecorationsByType(type: LibraryDecoration['type']): LibraryDe
 
 export function getDecorationsByRarity(rarity: LibraryDecoration['rarity']): LibraryDecoration[] {
   return LIBRARY_DECORATIONS.filter((d) => d.rarity === rarity);
+}
+
+// ─── Cosmetic Perks ─────────────────────────────────────────────────────────
+// Rarity-driven bonuses applied when a frame or title is equipped. Stacking is
+// additive (frame + title); total capped downstream at +10% per currency to
+// prevent whale runaway. An explicit `bonuses` field on the definition always
+// wins over the rarity-based default.
+
+const RARITY_FRAME_BONUSES: Record<ProfileFrame['rarity'], CosmeticBonuses> = {
+  common: {},
+  rare: { coinMultiplier: 0.02 },
+  epic: { coinMultiplier: 0.03, gemMultiplier: 0.01 },
+  legendary: { coinMultiplier: 0.05, gemMultiplier: 0.02, xpMultiplier: 0.01 },
+};
+
+const RARITY_TITLE_BONUSES: Record<NonNullable<ProfileTitle['rarity']>, CosmeticBonuses> = {
+  common: {},
+  rare: { coinMultiplier: 0.01 },
+  epic: { coinMultiplier: 0.02, xpMultiplier: 0.01 },
+  legendary: { coinMultiplier: 0.03, gemMultiplier: 0.01, xpMultiplier: 0.02 },
+};
+
+export function getFrameBonuses(id: string): CosmeticBonuses {
+  const frame = getFrame(id);
+  if (!frame) return {};
+  if (frame.bonuses) return frame.bonuses;
+  return RARITY_FRAME_BONUSES[frame.rarity] ?? {};
+}
+
+export function getTitleBonuses(id: string): CosmeticBonuses {
+  const title = getTitle(id);
+  if (!title) return {};
+  if (title.bonuses) return title.bonuses;
+  return RARITY_TITLE_BONUSES[title.rarity ?? 'common'] ?? {};
+}
+
+/** Total equipped multiplier (capped 0.10 per currency to prevent runaway). */
+export function computeEquippedBonuses(frameId: string, titleId: string): CosmeticBonuses {
+  const f = getFrameBonuses(frameId);
+  const t = getTitleBonuses(titleId);
+  const cap = (n: number | undefined) => (n ? Math.min(0.10, n) : 0);
+  return {
+    coinMultiplier: cap((f.coinMultiplier ?? 0) + (t.coinMultiplier ?? 0)),
+    gemMultiplier: cap((f.gemMultiplier ?? 0) + (t.gemMultiplier ?? 0)),
+    xpMultiplier: cap((f.xpMultiplier ?? 0) + (t.xpMultiplier ?? 0)),
+  };
 }

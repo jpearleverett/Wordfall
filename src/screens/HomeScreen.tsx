@@ -26,6 +26,8 @@ import ReferralCard from '../components/ReferralCard';
 import ReferralPendingRewards from '../components/ReferralPendingRewards';
 import FriendLeaderboardCard from '../components/FriendLeaderboardCard';
 import PiggyBankCard from '../components/PiggyBankCard';
+import DailyQuestsCard from '../components/DailyQuestsCard';
+import { DailyQuest } from '../data/dailyQuests';
 import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
 import FlawlessStreakCard from '../components/FlawlessStreakCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
@@ -79,6 +81,8 @@ interface HomeScreenProps {
   playerStage?: 'new' | 'early' | 'established' | 'veteran';
   weeklyGoals?: WeeklyGoalsState | null;
   dailyMissions?: DailyMissionDisplay[];
+  dailyQuests?: DailyQuest[];
+  onClaimDailyQuest?: (templateId: string) => void;
   recommendation?: Recommendation | null;
   /** Streak grace days already used (0 or 1) */
   streakGraceDaysUsed?: number;
@@ -138,6 +142,8 @@ export function HomeScreen({
   playerStage = 'new',
   weeklyGoals = null,
   dailyMissions = [],
+  dailyQuests = [],
+  onClaimDailyQuest,
   recommendation = null,
   streakGraceDaysUsed = 0,
   streakShieldActive = false,
@@ -731,6 +737,11 @@ export function HomeScreen({
               );
             })}
           </LinearGradient>
+        )}
+
+        {/* Daily Quests — always visible once seeded */}
+        {dailyQuests.length > 0 && onClaimDailyQuest && (
+          <DailyQuestsCard quests={dailyQuests} onClaim={onClaimDailyQuest} />
         )}
 
         {/* Seasonal Quest - established+ */}

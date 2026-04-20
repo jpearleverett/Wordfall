@@ -428,7 +428,7 @@ function GameScreenImpl({
   const playerStreaks = usePlayerStore(selectStreaks);
   const tooltipsShown = usePlayerStore(selectTooltipsShown);
   const playerActions = usePlayerActions();
-  const { markTooltipShown, queueCeremony, sendChallenge } = playerActions;
+  const { markTooltipShown, queueCeremony, sendChallenge, recordDailyQuestEvent } = playerActions;
   // Cast handle for the dynamic streak_shield activation lookup below — no
   // such method exists on PlayerActions today, but the offer-accept switch
   // checks for it so a future addition wires through automatically.
@@ -1707,6 +1707,7 @@ function GameScreenImpl({
     grantBooster('wildcardTile');
     void soundManager.playSound('buttonPress');
     void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
+    recordDailyQuestEvent({ type: 'booster_used' });
     checkFirstBooster();
     activateWildcard();
     checkAndActivateCombo('wildcardTile');
@@ -1718,6 +1719,7 @@ function GameScreenImpl({
     grantBooster('spotlight');
     void soundManager.playSound('buttonPress');
     void analytics.logEvent('booster_used', { level, mode, booster: 'spotlight' });
+    recordDailyQuestEvent({ type: 'booster_used' });
     checkFirstBooster();
     activateSpotlight();
     checkAndActivateCombo('spotlight');
@@ -1729,6 +1731,7 @@ function GameScreenImpl({
     grantBooster('smartShuffle');
     void soundManager.playSound('buttonPress');
     void analytics.logEvent('booster_used', { level, mode, booster: 'smartShuffle' });
+    recordDailyQuestEvent({ type: 'booster_used' });
     checkFirstBooster();
     activateSmartShuffle();
     checkAndActivateCombo('smartShuffle');

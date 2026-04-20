@@ -6,6 +6,8 @@ import { AchievementCeremony } from '../components/AchievementCeremony';
 import { StreakMilestoneCeremony } from '../components/StreakMilestoneCeremony';
 import { CollectionCompleteCeremony } from '../components/CollectionCompleteCeremony';
 import { MilestoneCeremony } from '../components/MilestoneCeremony';
+import PrestigeResetCeremony from '../components/PrestigeResetCeremony';
+import { getRemoteBoolean } from '../services/remoteConfig';
 import { CeremonyItem } from '../types';
 import { COLORS } from '../constants';
 
@@ -180,14 +182,26 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
         />
       )}
       {activeCeremony?.type === 'prestige' && (
-        <MilestoneCeremony
-          ribbon="PRESTIGE!"
-          icon={activeCeremony.data?.icon || '\u{1F31F}'}
-          title={activeCeremony.data?.title || 'Prestige Level Up!'}
-          description={activeCeremony.data?.description || 'You have ascended to a new prestige tier!'}
-          accentColor={COLORS.gold}
-          onDismiss={onDismiss}
-        />
+        getRemoteBoolean('prestigeCeremonyEnabled') && activeCeremony.data?.level ? (
+          <PrestigeResetCeremony
+            level={activeCeremony.data.level}
+            label={activeCeremony.data.label || 'Prestige'}
+            icon={activeCeremony.data.icon || '\u{1F31F}'}
+            xpMultiplier={activeCeremony.data.xpMultiplier ?? 1.5}
+            permanentBonuses={activeCeremony.data.permanentBonuses ?? []}
+            cosmeticReward={activeCeremony.data.cosmeticReward}
+            onDismiss={onDismiss}
+          />
+        ) : (
+          <MilestoneCeremony
+            ribbon="PRESTIGE!"
+            icon={activeCeremony.data?.icon || '\u{1F31F}'}
+            title={activeCeremony.data?.title || 'Prestige Level Up!'}
+            description={activeCeremony.data?.description || 'You have ascended to a new prestige tier!'}
+            accentColor={COLORS.gold}
+            onDismiss={onDismiss}
+          />
+        )
       )}
       {activeCeremony?.type === 'first_win' && (
         <MilestoneCeremony
@@ -198,6 +212,17 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           accentColor={COLORS.gold}
           rewardLabel={`+${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems`}
           buttonText="AMAZING!"
+          onDismiss={onDismiss}
+        />
+      )}
+      {activeCeremony?.type === 'daily_quest_claim' && (
+        <MilestoneCeremony
+          ribbon="DAILY QUEST CLAIMED"
+          icon={'\u{1F4DC}'}
+          title="Quest Complete!"
+          description="Reward added to your stash. Check back tomorrow for new quests."
+          accentColor={COLORS.gold}
+          buttonText="NICE"
           onDismiss={onDismiss}
         />
       )}
