@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Pressable,
@@ -14,6 +14,13 @@ import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../../constants';
 const INDICATOR_WIDTH = 20;
 const INDICATOR_HEIGHT = 3;
 const TAB_BAR_HEIGHT = 64;
+
+// Hoisted at module scope so the accent shadow lookup runs once per app
+// launch instead of twice per NeonTabBar render. The tab bar re-renders on
+// every navigation state change, and SHADOWS.neonGlow() was previously
+// allocating two new objects every time.
+const NEON_GLOW_ACCENT = SHADOWS.neonGlow(COLORS.accent);
+const TAB_BAR_GRADIENT = GRADIENTS.tabBar as unknown as readonly [string, string, ...string[]];
 
 const NeonTabBar: React.FC<BottomTabBarProps> = ({
   state,
@@ -40,20 +47,20 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
 
   return (
     <LinearGradient
-      colors={GRADIENTS.tabBar as unknown as readonly [string, string, ...string[]]}
+      colors={TAB_BAR_GRADIENT}
       style={[
         styles.container,
         { paddingBottom: insets.bottom, height: TAB_BAR_HEIGHT + insets.bottom },
       ]}
     >
       {/* Neon top edge line */}
-      <View style={[styles.topEdge, SHADOWS.neonGlow(COLORS.accent)]} />
+      <View style={[styles.topEdge, NEON_GLOW_ACCENT]} />
 
       {/* Sliding neon indicator */}
       <Animated.View
         style={[
           styles.indicator,
-          SHADOWS.neonGlow(COLORS.accent),
+          NEON_GLOW_ACCENT,
           { transform: [{ translateX: indicatorX }] },
         ]}
       />

@@ -11,7 +11,12 @@
  * `NoLivesModal`.
  */
 import { useCallback } from 'react';
-import { useEconomy } from '../contexts/EconomyContext';
+import {
+  useEconomyActions,
+  useEconomyStore,
+  selectLivesCurrent,
+  selectNextLifeTime,
+} from '../stores/economyStore';
 import { LIVES } from '../constants';
 import { getRemoteBoolean } from '../services/remoteConfig';
 
@@ -41,34 +46,40 @@ export interface HardEnergyApi extends HardEnergySnapshot {
 }
 
 export function useHardEnergy(): HardEnergyApi {
-  const economy = useEconomy();
+  // Narrow zustand subscriptions replace the full `useEconomy()` read so
+  // life ticks / coin / VIP / season-pass mutations no longer re-render
+  // callers of this hook (GameScreenWrapper + NoLivesModal). Actions are
+  // stable references from EconomyActionsContext.
+  const livesCurrent = useEconomyStore(selectLivesCurrent);
+  const nextLifeTime = useEconomyStore(selectNextLifeTime);
+  const { spendLife, refillLives, addLives } = useEconomyActions();
   const enabled = getRemoteBoolean('hardEnergyEnabled');
 
-  const livesRemaining = enabled ? economy.lives : LIVES.max;
+  const livesRemaining = enabled ? livesCurrent : LIVES.max;
   const canPlay = !enabled || livesRemaining > 0;
-  const nextLifeAtMs = enabled ? economy.nextLifeTime : null;
+  const nextLifeAtMs = enabled ? nextLifeTime : null;
 
   const startLevel = useCallback((): { started: boolean } => {
     if (!enabled) return { started: true };
-    const ok = economy.spendLife();
+    const ok = spendLife();
     return { started: ok };
-  }, [enabled, economy]);
+  }, [enabled, spendLife]);
 
   const refillWithGems = useCallback((): boolean => {
     if (!enabled) return false;
-    return economy.refillLives();
-  }, [enabled, economy]);
+    return refillLives();
+  }, [enabled, refillLives]);
 
   const creditAdLife = useCallback((): void => {
     if (!enabled) return;
-    economy.addLives(1);
-  }, [enabled, economy]);
+    addLives(1);
+  }, [enabled, addLives]);
 
   return {
     enabled,
     canPlay,
     livesRemaining,
-    livesMax: economy.maxLives ?? LIVES.max,
+    livesMax: LIVES.max,
     nextLifeAtMs,
     gemRefillCost: LIVES.gemRefillCost,
     startLevel,

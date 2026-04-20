@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
 import { firestoreService } from '../services/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { useEconomy } from '../contexts/EconomyContext';
+import { useEconomyActions } from '../stores/economyStore';
 import { analytics } from '../services/analytics';
 import { getRemoteBoolean } from '../services/remoteConfig';
 
@@ -45,7 +45,7 @@ interface ClubSharedGoalsProps {
 
 const ClubSharedGoals: React.FC<ClubSharedGoalsProps> = ({ clubId, memberNames }) => {
   const { user } = useAuth();
-  const { addCoins, addGems } = useEconomy();
+  const { addCoins, addGems } = useEconomyActions();
   const [goals, setGoals] = useState<SharedGoalRow[]>([]);
   const [rewards, setRewards] = useState<PendingReward[]>([]);
   const [claiming, setClaiming] = useState<string | null>(null);

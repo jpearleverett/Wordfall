@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
 import { firestoreService } from '../services/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { useEconomy } from '../contexts/EconomyContext';
+import { useEconomyActions } from '../stores/economyStore';
 import { analytics } from '../services/analytics';
 import { getRemoteBoolean } from '../services/remoteConfig';
 
@@ -29,7 +29,7 @@ interface PendingRewardRow {
 
 const ReferralPendingRewards: React.FC = () => {
   const { user } = useAuth();
-  const { addCoins, addGems, addHintTokens } = useEconomy();
+  const { addCoins, addGems, addHintTokens } = useEconomyActions();
   const [rewards, setRewards] = useState<PendingRewardRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);

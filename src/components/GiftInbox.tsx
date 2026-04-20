@@ -21,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { firestoreService, FirestoreGift } from '../services/firestore';
 import { claimGiftSecure } from '../services/gifts';
-import { useEconomy } from '../contexts/EconomyContext';
+import { useEconomyActions } from '../stores/economyStore';
 import { useAuth } from '../contexts/AuthContext';
 import { crashReporter } from '../services/crashReporting';
 
@@ -40,7 +40,7 @@ const GIFT_I18N_KEY: Record<FirestoreGift['type'], string> = {
 export const GiftInbox: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { addHintTokens, addBoosterToken, addLives } = useEconomy();
+  const { addHintTokens, addBoosterToken, addLives } = useEconomyActions();
   const [gifts, setGifts] = useState<FirestoreGift[]>([]);
   const [loading, setLoading] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);

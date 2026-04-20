@@ -49,10 +49,15 @@ interface GridProps {
   movedCells?: CellPosition[];
   maxHeight?: number;
   isDragging?: boolean;
-  /** Per-tile gravity fall Animated.Values keyed by cell ID */
-  fallAnimMap?: Map<string, Animated.Value>;
-  /** Whether fall animation is currently active */
-  fallActive?: boolean;
+  /**
+   * Per-cell gravity fall detail, keyed by cellId. Each entry carries
+   * the number of rows a tile fell, the stagger delay, and the tick
+   * counter that identifies this particular gravity event. LetterCell
+   * uses all three to drive a Reanimated shared value on the UI thread.
+   */
+  fallDetailMap?: Map<string, { fallRows: number; delayMs: number }>;
+  /** Monotonic counter bumped once per gravity event. */
+  fallTick?: number;
   /** When true, all grid positions become tappable (for wildcard placement on empty cells) */
   wildcardMode?: boolean;
 }
@@ -73,8 +78,8 @@ function GameGridImpl({
   maxHeight,
   isDragging = false,
   noGravityLayout = false,
-  fallAnimMap,
-  fallActive = false,
+  fallDetailMap,
+  fallTick,
   wildcardMode = false,
 }: GridProps) {
   const rows = grid.length;
@@ -520,7 +525,7 @@ function GameGridImpl({
                     const selIndex = selectedSet.get(key) ?? -1;
                     const isSelected = selIndex >= 0;
                     const isHinted = hintedSet.has(key);
-                    const cellFallAnim = fallActive && fallAnimMap ? fallAnimMap.get(cell.id) : undefined;
+                    const fallDetail = fallDetailMap?.get(cell.id);
 
                     return (
                       <LetterCell
@@ -535,7 +540,9 @@ function GameGridImpl({
                         isMoved={movedSet.has(key)}
                         isWildcard={wildcardSet.has(`${row},${col}`)}
                         isSpotlightDimmed={spotlightDimmedCells?.has(`${row},${col}`) || false}
-                        fallAnim={cellFallAnim}
+                        fallFromRows={fallDetail?.fallRows}
+                        fallDelayMs={fallDetail?.delayMs}
+                        fallTick={fallTick}
                         row={row}
                         col={col}
                         currentWord={isSelected && validWord ? currentWord : undefined}
