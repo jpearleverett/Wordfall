@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Animated,
+  InteractionManager,
   View,
   Text,
   ScrollView,
@@ -115,18 +116,26 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const wingAnims = useRef(wings.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
-    const animations = wingAnims.map((anim, index) =>
-      Animated.sequence([
-        Animated.delay(index * 80),
-        Animated.spring(anim, {
-          toValue: 1,
-          friction: 7,
-          tension: 80,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    Animated.parallel(animations).start();
+    // Defer the staggered wing spring chain until after React's first
+    // interaction window closes. Kicking off N springs + setting the
+    // Animated.Value drivers during the mount commit was adding ~80–150ms
+    // of visible delay before the Library tab appeared; now the screen
+    // paints immediately and animations start one tick later.
+    const handle = InteractionManager.runAfterInteractions(() => {
+      const animations = wingAnims.map((anim, index) =>
+        Animated.sequence([
+          Animated.delay(index * 80),
+          Animated.spring(anim, {
+            toValue: 1,
+            friction: 7,
+            tension: 80,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      Animated.parallel(animations).start();
+    });
+    return () => handle.cancel();
   }, [wingAnims]);
 
   const totalLibraryStars = Object.values(starsByLevel).reduce((sum, value) => sum + value, 0);

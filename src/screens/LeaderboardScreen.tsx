@@ -180,28 +180,37 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
     ? Math.max(300, (totalScore % 900) + 200)
     : null;
 
-  // Mock fallback for when Firestore is not available
-  const mockDailyEntries = useMemo(() => {
+  // Mock fallback for when Firestore is not available. Each tab previously
+  // generated 50 entries on mount via 3 × useMemo (150 entries total), even
+  // when Firestore had real data ready to display. Now we skip generation
+  // entirely if Firestore is available, and only build the tab the user is
+  // currently looking at — the other two generate lazily on tab switch.
+  const mockDailyEntries = useMemo<LeaderboardEntry[]>(() => {
+    if (isFirestoreAvailable || activeTime !== 'Daily') return [];
+    const now = new Date();
     const dateSeed =
-      new Date().getFullYear() * 10000 +
-      (new Date().getMonth() + 1) * 100 +
-      new Date().getDate();
+      now.getFullYear() * 10000 +
+      (now.getMonth() + 1) * 100 +
+      now.getDate();
     return generateMockLeaderboard(dateSeed, playerDailyScore, currentUserId);
-  }, [playerDailyScore, currentUserId]);
+  }, [isFirestoreAvailable, activeTime, playerDailyScore, currentUserId]);
 
-  const mockWeeklyEntries = useMemo(() => {
+  const mockWeeklyEntries = useMemo<LeaderboardEntry[]>(() => {
+    if (isFirestoreAvailable || activeTime !== 'Weekly') return [];
+    const now = new Date();
     const weekSeed =
-      new Date().getFullYear() * 100 +
+      now.getFullYear() * 100 +
       Math.ceil(
-        (new Date().getTime() - new Date(new Date().getFullYear(), 0, 1).getTime()) /
+        (now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) /
           604800000
       );
     return generateMockLeaderboard(weekSeed, totalScore > 0 ? Math.floor(totalScore * 0.3) : null, currentUserId);
-  }, [totalScore, currentUserId]);
+  }, [isFirestoreAvailable, activeTime, totalScore, currentUserId]);
 
-  const mockAllTimeEntries = useMemo(() => {
+  const mockAllTimeEntries = useMemo<LeaderboardEntry[]>(() => {
+    if (isFirestoreAvailable || activeTime !== 'All-Time') return [];
     return generateMockLeaderboard(42, totalScore > 0 ? totalScore : null, currentUserId);
-  }, [totalScore, currentUserId]);
+  }, [isFirestoreAvailable, activeTime, totalScore, currentUserId]);
 
   // Fetch leaderboard data from Firestore
   const fetchLeaderboard = useCallback(

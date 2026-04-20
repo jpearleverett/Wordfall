@@ -169,8 +169,12 @@ export function HomeScreen({
   const wheelPulse = useRef(new Animated.Value(1)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
 
-  // Pre-compute daily completion for streak offer check
-  const today = new Date().toISOString().split('T')[0];
+  // Pre-compute daily completion for streak offer check. Memoized at mount
+  // so `today` is a stable string across the screen's lifetime; otherwise
+  // it changed identity every render and invalidated the three useMemos
+  // below (getDailyDeal / getFlashSale / streak progress) on every parent
+  // render — one of the biggest HomeScreen mount stalls.
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const dailyDone = progress.dailyCompleted.includes(today);
 
   // --- Streak shield contextual offer ---
