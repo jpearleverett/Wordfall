@@ -94,7 +94,10 @@ export type AnalyticsEventName =
   | 'settings_account_row_tapped'
   | 'first_purchase_modal_shown'
   | 'first_purchase_modal_accepted'
-  | 'first_purchase_modal_dismissed';
+  | 'first_purchase_modal_dismissed'
+  | 'gift_cta_tapped'
+  | 'gift_cta_sent'
+  | 'gift_cta_failed';
 
 export type EventParams = Record<string, unknown>;
 
