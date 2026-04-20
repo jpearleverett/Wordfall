@@ -90,7 +90,8 @@ export type AnalyticsEventName =
   | 'friend_search_performed'
   | 'friend_leaderboard_viewed'
   | 'booster_combo_activated'
-  | 'booster_combo_expired';
+  | 'booster_combo_expired'
+  | 'settings_account_row_tapped';
 
 export type EventParams = Record<string, unknown>;
 
