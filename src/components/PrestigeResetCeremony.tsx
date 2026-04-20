@@ -67,7 +67,7 @@ export default function PrestigeResetCeremony({
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
-      <SparkleField count={28} intensity="high" colors={[COLORS.gold, '#fff', COLORS.purple]} />
+      <SparkleField count={28} intensity="intense" colors={[COLORS.gold, '#fff', COLORS.purple]} />
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>PRESTIGE {level}</Text>
