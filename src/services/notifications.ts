@@ -556,6 +556,33 @@ class NotificationManager {
   }
 
   /**
+   * Delete the user's push token from Firestore so server-side senders
+   * (sendPushNotification, processStreakReminders) stop targeting them.
+   * Called when the user toggles notifications OFF in Settings.
+   *
+   * Best-effort: failures are logged but never thrown — we don't want to
+   * block a settings toggle on a network round-trip.
+   */
+  async deletePushToken(userId: string): Promise<void> {
+    try {
+      const { isFirebaseConfigured } = await import('../config/firebase');
+      if (!isFirebaseConfigured) {
+        logger.log('[Notifications] Firebase not configured — deletePushToken noop');
+        return;
+      }
+      const { getFirestore, doc, deleteDoc } = await import('firebase/firestore');
+      const { getApp } = await import('firebase/app');
+      const app = getApp();
+      const db = getFirestore(app);
+      await deleteDoc(doc(db, 'users', userId, 'pushToken', 'current'));
+      this.expoPushToken = null;
+      logger.log('[Notifications] Push token deleted from Firestore for user:', userId);
+    } catch (error) {
+      logger.warn('[Notifications] Failed to delete push token from Firestore:', error);
+    }
+  }
+
+  /**
    * Set up a listener for when the user taps a notification.
    * Routes the notification payload through handleRemoteNotification.
    */
