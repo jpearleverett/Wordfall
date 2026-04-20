@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import NeonTabBar from './src/components/navigation/NeonTabBar';
@@ -99,16 +99,18 @@ import { useCeremonyQueue } from './src/hooks/useCeremonyQueue';
 import { getLoginCalendarDay } from './src/data/loginCalendar';
 
 const Tab = createBottomTabNavigator();
-const HomeStack = createStackNavigator();
-const PlayStack = createStackNavigator();
-const CollectionsStack = createStackNavigator();
-const LibraryStack = createStackNavigator();
-const ProfileStack = createStackNavigator();
-const RootStack = createStackNavigator();
+const HomeStack = createNativeStackNavigator();
+const PlayStack = createNativeStackNavigator();
+const CollectionsStack = createNativeStackNavigator();
+const LibraryStack = createNativeStackNavigator();
+const ProfileStack = createNativeStackNavigator();
+const RootStack = createNativeStackNavigator();
 
 const screenOptions = {
   headerShown: false,
-  cardStyle: { backgroundColor: COLORS.bg },
+  // native-stack uses `contentStyle` for the screen background (JS stack
+  // used `cardStyle`). Same effect, different field name.
+  contentStyle: { backgroundColor: COLORS.bg },
   // Freeze screens that are pushed behind the current one. Without this, every
   // previous screen keeps running its backdrop animations, setIntervals, and
   // effects in the background — a 5-screen stack = 5x animation load.
