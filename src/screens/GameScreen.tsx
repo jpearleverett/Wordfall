@@ -609,6 +609,11 @@ function GameScreenImpl({
   const failureCountedRef = useRef(false);
   // close_finish: idle timer for "1 word away" scenario
   const closeFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // close_finish_premium escalation: fires after the coin-priced close_finish
+  // has been declined/dismissed AND player remains stuck at 1 word for 60s.
+  const closeFinishPremiumTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeFinishDismissedRef = useRef(false);
+  const closeFinishPremiumShownRef = useRef(false);
   // post_puzzle: track whether to show after completion dismissal
   const [pendingPostPuzzleOffer, setPendingPostPuzzleOffer] = useState(false);
   // Post-loss modal state
@@ -668,12 +673,20 @@ function GameScreenImpl({
         mode,
         difficulty,
       });
+      if (activeOffer === 'close_finish') {
+        closeFinishDismissedRef.current = true;
+      }
     }
     setActiveOffer(null);
   }, [activeOffer, level, mode, difficulty]);
 
   const showOfferIfAllowed = useCallback((type: OfferType) => {
-    if (offerShownThisLevel.current || offerSuppressed) return false;
+    // close_finish_premium is a deliberate escalation — it is allowed to fire
+    // even after the coin-priced close_finish has already been shown/dismissed
+    // on this level. All other offer types still honour the one-per-level gate.
+    const bypassGate = type === 'close_finish_premium';
+    if (offerSuppressed) return false;
+    if (!bypassGate && offerShownThisLevel.current) return false;
     offerShownThisLevel.current = true;
     trackTimeout(() => {
       setActiveOffer(type);
@@ -732,6 +745,35 @@ function GameScreenImpl({
       }
     };
   }, [remainingWords, isStuck, status, activeOffer, showOfferIfAllowed]);
+
+  // close_finish_premium: escalation after the coin-priced close_finish was
+  // dismissed. Fires 60s after dismissal if still at 1 word. 9-gem auto-solve.
+  useEffect(() => {
+    if (closeFinishPremiumTimerRef.current) {
+      clearTimeout(closeFinishPremiumTimerRef.current);
+      closeFinishPremiumTimerRef.current = null;
+    }
+    if (!getRemoteBoolean('closeFinishPremiumEnabled')) return;
+    if (
+      status === 'playing' &&
+      remainingWords.length === 1 &&
+      closeFinishDismissedRef.current &&
+      !closeFinishPremiumShownRef.current &&
+      !activeOffer
+    ) {
+      closeFinishPremiumTimerRef.current = setTimeout(() => {
+        if (closeFinishPremiumShownRef.current) return;
+        closeFinishPremiumShownRef.current = true;
+        showOfferIfAllowed('close_finish_premium');
+      }, 60000);
+    }
+    return () => {
+      if (closeFinishPremiumTimerRef.current) {
+        clearTimeout(closeFinishPremiumTimerRef.current);
+        closeFinishPremiumTimerRef.current = null;
+      }
+    };
+  }, [remainingWords.length, status, activeOffer, showOfferIfAllowed]);
 
   // hint_rescue: detect failures and show offer after 2+ fails (session or persistent)
   useEffect(() => {
@@ -830,6 +872,22 @@ function GameScreenImpl({
           accepted = true;
         }
         break;
+      case 'close_finish_premium': {
+        // Gem-priced escalation: spend N gems and auto-solve the last word.
+        // Price is Remote Config driven so LiveOps can tune without a build.
+        const gemCost = Math.max(1, Math.round(getRemoteNumber('closeFinishPremiumGemCost')));
+        if (spendGems(gemCost)) {
+          // Select the current positions of the last word (post-gravity) via
+          // USE_PREMIUM_HINT, then submit on the next tick so the player
+          // sees the trace briefly before it resolves.
+          store.dispatch({ type: 'USE_PREMIUM_HINT' });
+          trackTimeout(() => {
+            store.dispatch({ type: 'SUBMIT_WORD' });
+          }, 400);
+          accepted = true;
+        }
+        break;
+      }
       case 'post_puzzle':
         // Spend 80 coins, grant 10 hint tokens
         if (spendCoins(80)) {
@@ -854,9 +912,8 @@ function GameScreenImpl({
         }
         break;
       case 'streak_shield':
-        // Activate streak shield — only spend gems if method exists.
-        // (Placeholder — no such method on PlayerActions today; keeping the
-        // dynamic check so a future addition wires through automatically.)
+        // Activate streak shield — gem-priced in-game alternative to the
+        // streak_freeze IAP. Same underlying player action.
         if (typeof (playerActionsAny as Record<string, unknown>).activateStreakShield === 'function') {
           if (spendGems(30)) {
             (playerActionsAny as { activateStreakShield: () => void }).activateStreakShield();
@@ -884,6 +941,8 @@ function GameScreenImpl({
     level,
     mode,
     difficulty,
+    store,
+    trackTimeout,
   ]);
 
   // Memoize the composed grid scale to avoid creating a new style object each render
@@ -1351,7 +1410,9 @@ function GameScreenImpl({
       }
 
       // Celebration scaling based on word length (Task 2)
-      const popupScale = wordLen >= 7 ? 1.6 : wordLen >= 5 ? 1.3 : 1.0;
+      // 3-4 letter words get a visible 1.15x beat so every word clear confirms
+      // even when the board has no bloom cells captured (e.g. chain reactions).
+      const popupScale = wordLen >= 7 ? 1.6 : wordLen >= 5 ? 1.3 : 1.15;
 
       scorePopupAnim.setValue(0);
       Animated.sequence([
@@ -1392,18 +1453,16 @@ function GameScreenImpl({
           duration: 300,
           useNativeDriver: true,
         }).start();
+        // Grid scale pop runs in parallel with the flash so submit can fire faster
+        gridScaleAnim.setValue(1);
+        Animated.sequence([
+          Animated.timing(gridScaleAnim, { toValue: 0.97, duration: 60, useNativeDriver: true }),
+          Animated.timing(gridScaleAnim, { toValue: 1.0, duration: 100, useNativeDriver: true }),
+        ]).start();
       }
 
       validFlashTimerRef.current = setTimeout(() => {
         validFlashTimerRef.current = null;
-        // #3 Grid scale pop: 1.0 -> 0.97 -> 1.0 around submit
-        if (!reduceMotion) {
-          gridScaleAnim.setValue(1);
-          Animated.sequence([
-            Animated.timing(gridScaleAnim, { toValue: 0.97, duration: 80, useNativeDriver: true }),
-            Animated.timing(gridScaleAnim, { toValue: 1.0, duration: 120, useNativeDriver: true }),
-          ]).start();
-        }
 
         // Track word length for big word celebration (Task 2)
         lastSubmittedWordLenRef.current = wordLength;
@@ -1414,7 +1473,7 @@ function GameScreenImpl({
 
         submitWord();
         setShowValidFlash(false);
-      }, 250);
+      }, 100);
     } else {
       setShowValidFlash(false);
     }

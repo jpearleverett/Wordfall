@@ -89,6 +89,13 @@
       "button": "GET A HINT",
       "price": "3 gems"
     },
+    "closeFinishPremium": {
+      "ribbon": "DON'T LOSE IT",
+      "title": "Finish The Puzzle",
+      "description": "One word left — we'll reveal it for you. Claim your win.",
+      "button": "REVEAL LAST WORD",
+      "price": "9 gems"
+    },
     "postPuzzle": {
       "ribbon": "LOW ON HINTS",
       "title": "Stock Up",

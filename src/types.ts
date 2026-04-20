@@ -538,7 +538,8 @@ export type IAPProductId =
   | 'vip_weekly'
   | 'first_purchase_special'
   | 'piggy_bank_break'
-  | 'season_pass_premium';
+  | 'season_pass_premium'
+  | 'streak_freeze';
 
 export interface ShopOffer {
   id: string;

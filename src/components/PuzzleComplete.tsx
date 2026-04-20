@@ -11,8 +11,10 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { AccessibilityInfo } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
+import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { GameMode, VictorySummaryItem } from '../types';
 import {
@@ -440,6 +442,37 @@ export function PuzzleComplete({
     const timer = setTimeout(() => setStarsRevealed(true), 800);
     return () => clearTimeout(timer);
   }, [actionsAnim, cardAnim, fadeAnim, glitchAnim, ribbonAnim, statsAnim]);
+
+  // Auto-advance: 3.5s after victory, call onNextLevel. Cut to 2s in
+  // reduce-motion. Disabled for daily (player may want to share) and
+  // perfect-solve (savoring the FLAWLESS badge is the reward).
+  const [autoAdvanceCancelled, setAutoAdvanceCancelled] = useState(false);
+  const [autoAdvanceRemainingMs, setAutoAdvanceRemainingMs] = useState<number | null>(null);
+  useEffect(() => {
+    const enabled = getRemoteBoolean('autoAdvanceEnabled');
+    if (!enabled || autoAdvanceCancelled) {
+      setAutoAdvanceRemainingMs(null);
+      return;
+    }
+    if (isDaily || perfectRun || mode === 'daily' || mode === 'perfectSolve') {
+      setAutoAdvanceRemainingMs(null);
+      return;
+    }
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled().then((rm) => {
+      if (cancelled) return;
+      const base = getRemoteNumber('autoAdvanceDelayMs');
+      const delayMs = rm ? Math.min(2000, base) : base;
+      setAutoAdvanceRemainingMs(delayMs);
+    });
+    return () => { cancelled = true; };
+  }, [autoAdvanceCancelled, isDaily, perfectRun, mode]);
+
+  useEffect(() => {
+    if (autoAdvanceRemainingMs === null) return;
+    const id = setTimeout(() => onNextLevel(), autoAdvanceRemainingMs);
+    return () => clearTimeout(id);
+  }, [autoAdvanceRemainingMs, onNextLevel]);
 
   // Per-star reveal audio — one `starEarn` sting per earned star, staggered
   // to match the NeonStarBurst reveal delays (140 / 340 / 560 ms).
@@ -900,6 +933,16 @@ export function PuzzleComplete({
                     <Text style={styles.primaryButtonText}>{isDaily ? t('result.playAnotherMode') : t('result.next').toUpperCase()}</Text>
                   </LinearGradient>
                 </Pressable>
+                {autoAdvanceRemainingMs !== null && !autoAdvanceCancelled && (
+                  <Pressable
+                    style={({ pressed }) => [styles.stayButton, pressed && styles.buttonPressed]}
+                    onPress={() => setAutoAdvanceCancelled(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Stay on victory screen"
+                  >
+                    <Text style={styles.stayButtonText}>Tap to stay</Text>
+                  </Pressable>
+                )}
                 {showTomorrowPreview && (
                   <LinearGradient
                     colors={['rgba(100,180,255,0.12)', 'rgba(100,180,255,0.04)'] as [string, string]}
@@ -910,7 +953,7 @@ export function PuzzleComplete({
                   </LinearGradient>
                 )}
                 <View style={styles.secondaryRow}>
-                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={onHome} accessibilityRole="button" accessibilityLabel={t('result.goHomeA11y')}>
+                  <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]} onPress={() => { setAutoAdvanceCancelled(true); onHome(); }} accessibilityRole="button" accessibilityLabel={t('result.goHomeA11y')}>
                     <Text style={styles.secondaryButtonText}>{t('result.home')}</Text>
                   </Pressable>
                   {shareText ? (
@@ -1254,6 +1297,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowRadius: 2,
+  },
+  stayButton: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 6,
+  },
+  stayButtonText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    fontFamily: FONTS.body,
+    letterSpacing: 1,
+    textDecorationLine: 'underline',
   },
   secondaryRow: {
     flexDirection: 'row',

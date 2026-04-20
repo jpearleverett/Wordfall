@@ -64,6 +64,8 @@ export interface CommercialStateShape {
 export interface PlayerGrantSummary {
   cosmetics: string[];
   decorations: string[];
+  /** Consumable streak-shield charges (usually 1 per purchase) */
+  streakFreezeDays?: number;
 }
 
 export interface PurchaseFulfillmentOptions {
@@ -249,9 +251,14 @@ export function applyCatalogPurchase<TState extends CommercialStateShape>(
     transactionId: options.transactionId,
   });
 
+  const grants = splitPlayerGrantIds(rewards.decorations);
+  if (rewards.streakFreezeDays && rewards.streakFreezeDays > 0) {
+    grants.streakFreezeDays = rewards.streakFreezeDays;
+  }
+
   return {
     nextState,
-    grants: splitPlayerGrantIds(rewards.decorations),
+    grants,
     applied: true,
   };
 }

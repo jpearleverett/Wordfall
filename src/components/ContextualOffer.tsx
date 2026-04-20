@@ -27,7 +27,8 @@ export type OfferType =
   | 'hint_rescue'    // Offered after 2+ fails on same level
   | 'life_refill'    // Offered when lives hit 0
   | 'streak_shield'  // Offered when streak is about to expire
-  | 'close_finish'   // Offered when 1 word away with no hints
+  | 'close_finish'   // Offered when 1 word away with no hints (coin tier)
+  | 'close_finish_premium' // Escalation after 'close_finish' declined: gem-priced, auto-solves the last word
   | 'post_puzzle'    // Soft hint upsell after completing with 0 hints left
   | 'booster_pack';  // Offered when entering a hard/expert level
 
@@ -59,6 +60,7 @@ const OFFER_VISUAL: Record<OfferType, { icon: string; accentColor: string; i18nK
   life_refill: { icon: '\u{2764}\u{FE0F}', accentColor: COLORS.coral, i18nKey: 'lifeRefill' },
   streak_shield: { icon: '\u{1F6E1}\u{FE0F}', accentColor: COLORS.orange, i18nKey: 'streakShield' },
   close_finish: { icon: '\u{1F525}', accentColor: COLORS.green, i18nKey: 'closeFinish' },
+  close_finish_premium: { icon: '\u{1F48E}', accentColor: COLORS.accent, i18nKey: 'closeFinishPremium' },
   post_puzzle: { icon: '\u{1F4A1}', accentColor: COLORS.accent, i18nKey: 'postPuzzle' },
   booster_pack: { icon: '\u{26A1}', accentColor: COLORS.purple, i18nKey: 'boosterPack' },
 };

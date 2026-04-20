@@ -264,6 +264,7 @@ export interface PlayerContextType extends PlayerData {
   updateStreak: () => void;
   useGraceDay: () => boolean;
   useStreakShield: () => boolean;
+  activateStreakShield: () => void;
 
   // Cosmetics
   equipCosmetic: (type: 'theme' | 'frame' | 'title', id: string) => void;
@@ -569,6 +570,7 @@ const PlayerContext = createContext<PlayerContextType>({
   updateStreak: () => {},
   useGraceDay: () => false,
   useStreakShield: () => false,
+  activateStreakShield: () => {},
   equipCosmetic: () => {},
   unlockCosmetic: () => {},
   restoreWing: () => {},
@@ -924,6 +926,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     updateStreak,
     useGraceDay,
     useStreakShield,
+    activateStreakShield,
     updateMissionProgress,
     claimMissionReward,
     generateDailyMissions,
@@ -1776,6 +1779,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateStreak,
       useGraceDay,
       useStreakShield,
+      activateStreakShield,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
@@ -1837,6 +1841,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateStreak,
       useGraceDay,
       useStreakShield,
+      activateStreakShield,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
@@ -1903,6 +1908,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateStreak,
       useGraceDay,
       useStreakShield,
+      activateStreakShield,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
@@ -1963,6 +1969,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateStreak,
       useGraceDay,
       useStreakShield,
+      activateStreakShield,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
