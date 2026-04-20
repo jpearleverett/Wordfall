@@ -1216,7 +1216,7 @@ function GameScreenImpl({
     if (lastWordTensionFiredRef.current) return;
     lastWordTensionFiredRef.current = true;
     void soundManager.playMusic('tense', { crossfadeMs: 600 });
-    void soundManager.playSound('starEarn');
+    void soundManager.playSound('lastWord');
     void lastWordHaptic();
     const puzzleStartTime = store.getState().puzzleStartTime;
     const timeIntoPuzzleMs = puzzleStartTime > 0 ? Date.now() - puzzleStartTime : 0;

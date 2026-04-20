@@ -441,12 +441,28 @@ export function PuzzleComplete({
     return () => clearTimeout(timer);
   }, [actionsAnim, cardAnim, fadeAnim, glitchAnim, ribbonAnim, statsAnim]);
 
-  // Flawless badge audio sting: plays once when the badge reveals (rescues the
-  // previously-orphaned `starEarn` slot). Swap to a dedicated `flawless_badge`
-  // asset when the composer deliverable lands.
+  // Per-star reveal audio — one `starEarn` sting per earned star, staggered
+  // to match the NeonStarBurst reveal delays (140 / 340 / 560 ms).
+  useEffect(() => {
+    if (!starsRevealed) return;
+    const delays = [140, 340, 560];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 0; i < stars; i++) {
+      timers.push(
+        setTimeout(() => {
+          void soundManager.playSound('starEarn');
+        }, delays[i] ?? 560),
+      );
+    }
+    return () => { for (const t of timers) clearTimeout(t); };
+  }, [starsRevealed, stars]);
+
+  // Flawless badge audio sting: plays once when the badge reveals.
+  // Dedicated `flawlessBadge` slot — synth fallback until `flawless_badge.mp3`
+  // lands in `assets/audio/`.
   useEffect(() => {
     if (starsRevealed && perfectRun) {
-      void soundManager.playSound('starEarn');
+      void soundManager.playSound('flawlessBadge');
     }
   }, [starsRevealed, perfectRun]);
 

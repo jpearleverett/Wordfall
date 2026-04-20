@@ -2,31 +2,34 @@
 
 > Pass this document to your composer / sound designer. Specifies every asset needed to swap synth fallback for production audio.
 >
-> **Code wire-up:** drop delivered files into `assets/audio/` then update `src/services/sound.ts:47-67` — replace each `null` with `require('../../assets/audio/<filename>.mp3')`.
+> **Code wire-up:** drop delivered files into `assets/audio/` then open `src/services/sound.ts` and flip the matching `null` to `require('../../assets/audio/<filename>.mp3')` in the `REAL_SOUND_FILES` / `REAL_MUSIC_FILES` maps. Partial deliveries are fully supported — the runtime falls back to synthesis per-slot. The game is playable the whole time.
 >
-> **Format spec:** all assets MP3, mono, 44.1 kHz, normalized to -14 LUFS short-term (mobile-friendly, headroom-preserving). Loop points pre-baked in BGM where applicable.
+> **Format spec:** all assets MP3 (192 kbps CBR), mono, 44.1 kHz, normalized to -14 LUFS short-term (mobile-friendly, headroom-preserving), peak -1 dBTP. Loop points pre-baked in BGM where applicable.
+>
+> **Total scope:** 14 SFX + 5 BGM = **19 files**.
 
 ---
 
 ## Reference & Tone
 
-**Game genre:** gravity-based word puzzle. Think Candy Crush dopamine + Wordscapes warmth.
+**Game genre:** word-search-with-gravity (NOT match-3; see `agent_docs/game_mechanics.md`). Thoughtful strategic puzzle, not a reflex arcade.
 
 **Audio inspirations:**
-- **Candy Crush Saga** — bright, percussive, generous use of harmonic stacking on word-found events
-- **Wordscapes** — warm, slightly muted palette; tactile click sounds
-- **Toy Blast / Royal Match** — punchy ceremony moments, satisfying combo escalations
+- **Wordscapes / Word Cookies** — warm, slightly muted palette; tactile click sounds; calm gameplay bed
+- **Royal Match** — punchy ceremony moments without aggression
+- **NYT Games suite** — minimal but crisp UI feedback, no intrusive loops
 
 **Avoid:**
-- Aggressive synth leads (out of place for casual puzzle)
+- Match-3 style cascade/chain escalation escalations — Wordfall has no cascades
+- Aggressive synth leads (out of place for a thoughtful puzzle)
 - Long sustains on SFX (must not bleed into next interaction)
 - Vocal samples (locale issues)
 
 ---
 
-## SFX Library — 11 files
+## SFX Library — 14 files
 
-Drop into `assets/audio/`. Filenames must match exactly (case-sensitive).
+Drop into `assets/audio/`. Filenames must match exactly (case-sensitive, underscores not hyphens).
 
 ### Tier 1 — high-frequency interactions
 
@@ -60,23 +63,37 @@ Drop into `assets/audio/`. Filenames must match exactly (case-sensitive).
 - **Tone:** big, anthemic; layered chord with a percussive hit; the "impressive find" moment. **Not** a combo-counter sound — Wordfall has no successive-find combo multiplier (ripped Apr 2026). This slot was kept and repurposed for long-word celebration.
 
 #### `star_earn.mp3`
-- **Trigger:** (a) any star earned on the victory screen (per-puzzle 1/2/3 stars), and (b) currently doubles as the last-word tension sting + flawless-badge reveal sting until dedicated assets (`last_word_sting.mp3`, `flawless_badge.mp3`) land
+- **Trigger:** each star earned on the victory screen (per-puzzle 1/2/3 stars, staggered reveal)
 - **Length:** 500–800 ms
-- **Tone:** sparkle / magical chime; should pair well with looping (when 3 stars play in quick succession)
-
-**Deleted (Apr 2026 — Option A refactor):** `chain_bonus.mp3` is no longer needed. There is no chain reaction in Wordfall — gravity never auto-resolves a word. If your brief mentions "chain combos" or "chain reactions," that framing was based on an earlier prototype design that was ripped.
-
-### Tier 3 — feedback + system
-
-#### `word_invalid.mp3`
-- **Trigger:** invalid word submitted (not in dictionary, not adjacent, etc.)
-- **Length:** 200–350 ms
-- **Tone:** gentle "uh-uh" denial; descending two-note minor interval; NOT harsh or punishing — must not discourage retries
+- **Tone:** sparkle / magical chime; should pair well when 3 plays in quick succession
 
 #### `puzzle_complete.mp3`
-- **Trigger:** all words found, puzzle solved
+- **Trigger:** all list words found — victory screen entrance
 - **Length:** 1.2–1.8 s
 - **Tone:** big celebratory fanfare; brass + percussion + sustain; can have a subtle reverb tail
+
+### Tier 2 — dopamine layer (Option A: last-word tension + flawless)
+
+These three are the core of Wordfall's honest-to-genre dopamine architecture. Every puzzle ends on a tension moment; every clean solve rewards with a gold pill; every 3/5/7/10/15/20th flawless streak fires a full-screen ceremony.
+
+#### `last_word.mp3`
+- **Trigger:** fires **once** per puzzle, the moment `remainingWords` transitions 2 → 1. Paired with a BGM crossfade to the tense track.
+- **Length:** 500–800 ms
+- **Tone:** anticipatory tension riser — low-to-mid frequency slide upward. NOT triumphant; should feel like "one away" rather than "you won." Avoid percussive attack — smooth swell.
+- **Reference:** the stinger right before a boss appears in classic RPGs; Wordscapes "last letter" moment; *not* a fanfare.
+
+#### `flawless_badge.mp3`
+- **Trigger:** inline "FLAWLESS" pill reveals on victory screen. Plays on **every** puzzle solved with no hints, no undos, no shuffle. Common enough that it has to stay satisfying without tiring.
+- **Length:** 400–600 ms
+- **Tone:** warm gold arpeggio, bright but not overwhelming. Think "achievement unlocked" at a calm volume. Should sit naturally alongside `star_earn.mp3` when both fire close together.
+
+#### `flawless_milestone.mp3`
+- **Trigger:** full-screen flawless-streak milestone ceremony at 3 / 5 / 7 / 10 / 15 / 20 consecutive flawless solves. Rare — rarest in the game.
+- **Length:** 1.0–1.8 s
+- **Tone:** biggest ceremony fanfare in the game. Full orchestral swell, rising through harmonic stacks, satisfying resolution. Should feel like an honest-to-god achievement — players who hear this at streak 20 should remember it.
+- **Reference:** Candy Crush "Sweet!" at 5x intensity; the NYT Crossword solve fanfare scaled up.
+
+### Tier 3 — system & fallback
 
 #### `hint_used.mp3`
 - **Trigger:** hint booster activated
@@ -87,6 +104,15 @@ Drop into `assets/audio/`. Filenames must match exactly (case-sensitive).
 - **Trigger:** undo booster activated
 - **Length:** 200–400 ms
 - **Tone:** rewinding / time-reversal feel; subtle "swoop back"; quieter than `hint_used`
+
+#### `word_invalid.mp3` (OPTIONAL — synth fallback is fine)
+- **Trigger:** traced path doesn't match any list word. In practice Wordfall has no submit button and the player just keeps dragging until a match — this slot is mostly theoretical. **Safe to skip commissioning** and let the synth fallback cover edge cases.
+- **Length:** 200–350 ms
+- **Tone:** if commissioned, keep it gentle — a soft descending two-note denial, NOT harsh. Must not discourage retries.
+
+---
+
+**Deleted in Apr 2026 (Option A refactor):** `chain_bonus.mp3` was removed. There is no chain reaction in Wordfall — gravity never auto-resolves a word. If an older brief mentions "chain combos" or "chain reactions," that framing was based on a prototype design that was ripped. The `combo.mp3` slot was kept but repurposed as the "big word" (7+ letter) celebration, not a combo multiplier.
 
 ---
 
@@ -132,35 +158,18 @@ Drop into `assets/audio/`. All loopable (composer should mark loop points).
 
 ---
 
-## Future SFX Slots (Reserve, Optional)
+## Booster combo — wired as `booster_combo.mp3`
 
-These will land with the upcoming feature branches. If budget allows, commission them in this round:
+Already in the SFX map (`boosterCombo` slot). Triggered when the player pairs two boosters (Eagle Eye / Lucky Roll / Power Surge). Roughly 800 ms, bright and layered — the "synergy activated" moment. Spec inline with the main SFX list.
 
-- `booster_combo.mp3` — booster synergy activation (epic, layered, ~800ms)
-- `piggy_bank_break.mp3` — gem jar smashing open (satisfying ceramic break + coins falling, ~1.2s)
-- `season_pass_tier_unlock.mp3` — battle pass tier reached (ascending fanfare, ~1s)
-- `referral_reward.mp3` — friend joined and reward landed (warm, social-positive, ~600ms)
+## Future slots (NOT wired yet — ignore unless you want a bigger brief)
 
-### Last-word + Flawless dopamine layer (April 2026 — replaces chain/combo popups)
+These don't have code slots today. If you want dedicated SFX for them, the slot needs to be added to `SoundName` in `src/services/sound.ts` first. Tell me which you want wired and I'll plumb them in.
 
-Wordfall no longer tries to be match-3. Chain/combo popups were ripped; two new
-moments carry the same emotional weight within the game's actual rules
-(single-solution word-search with gravity).
-
-- `last_word_sting.mp3` — fires once when `remainingWords` transitions `2 → 1`.
-  500–800ms soft tension riser, subtle but distinct from `wordFound`. Pair with
-  a BGM crossfade to the tense bed. Currently using `starEarn` synth as the
-  stand-in; flip `src/services/sound.ts` once the real asset lands (either by
-  swapping `starEarn`'s `REAL_SOUND_FILES` entry or by adding a dedicated
-  `lastWord` slot to the `SoundName` union).
-- `flawless_badge.mp3` — plays when the "FLAWLESS" badge reveals on the victory
-  screen (~400–600ms bright chime, gold-hued, celebratory but brief — the
-  full-screen fanfare is reserved for flawless-streak milestones at 3/5/7/
-  10/15/20 solves in a row). Currently borrows the `starEarn` synth as
-  placeholder; rescued the orphaned slot.
-
-Both are Tier 1 additions — commission alongside the 11 SFX above rather than
-as a separate round.
+- `piggy_bank_break.mp3` — gem jar smashing open (satisfying ceramic break + coins falling, ~1.2 s)
+- `season_pass_tier_unlock.mp3` — battle pass tier reached (ascending fanfare, ~1 s)
+- `referral_reward.mp3` — friend joined and reward landed (warm, social-positive, ~600 ms)
+- Per-star staggered chimes (currently all three stars play the same `star_earn`)
 
 ---
 
@@ -171,7 +180,7 @@ as a separate round.
 - **Channels:** mono (we don't use stereo separation in mobile)
 - **Loudness:** -14 LUFS short-term, peak -1 dBTP
 - **Naming:** EXACTLY as specified above (case-sensitive, underscores not hyphens)
-- **Total payload:** target ~4–6 MB for all 16 files combined (BGM dominates; SFX are small)
+- **Total payload:** target ~6–8 MB for all 19 files combined (BGM dominates; SFX are small)
 
 ---
 
@@ -180,9 +189,9 @@ as a separate round.
 When you receive deliverables:
 
 1. Drop all files into `assets/audio/` (create the directory if missing)
-2. Update `src/services/sound.ts:47-67` — replace `null` with `require()` for each filename
-3. Run `npm test src/__tests__/audio.test.ts` (will be created in Branch 13) — must pass
-4. Test on dev client: every sound triggers cleanly, BGM transitions smoothly between menu → gameplay → victory, no clicks/pops at loop boundaries
+2. Open `src/services/sound.ts` and flip each matching `null` to `require('../../assets/audio/<filename>.mp3')` in `REAL_SOUND_FILES` / `REAL_MUSIC_FILES`
+3. Reload Metro (no APK rebuild needed — JS-only change)
+4. Test on dev client: every sound triggers cleanly, BGM transitions smoothly between menu → gameplay → tense (on last word) → victory, no clicks/pops at loop boundaries
 5. Verify on a real device with phone speaker (not just headphones) — bass-heavy mixes can disappear on phone speakers
 
 ---
@@ -190,9 +199,9 @@ When you receive deliverables:
 ## Budget Reference
 
 Industry rates (April 2026):
-- **SFX:** $50–$150 per asset (11 SFX = $550–$1650)
-- **BGM short loop:** $300–$800 per track (5 BGM = $1500–$4000)
-- **Total mid-tier:** $2000–$5500
-- **Total premium (named composer):** $5000–$15000
+- **SFX:** $50–$150 per asset (14 SFX = $700–$2,100)
+- **BGM short loop:** $300–$800 per track (5 BGM = $1,500–$4,000)
+- **Total mid-tier:** $2,200–$6,100
+- **Total premium (named composer):** $6,000–$18,000
 
-Budget $3000–$8000 for a quality result; allow 3–5 weeks lead time.
+Budget $3,000–$9,000 for a quality result; allow 3–5 weeks lead time. Partial delivery is fine — the game works on synth fallback per-slot, so you can ship what's ready and add the rest in a follow-up round.

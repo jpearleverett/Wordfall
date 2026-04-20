@@ -26,24 +26,40 @@ try {
   // crashReporter may be unavailable in test or minimal builds
 }
 
-type SoundName = 'tap' | 'gravity' | 'wordFound' | 'wordInvalid' | 'combo' | 'puzzleComplete' | 'starEarn' | 'buttonPress' | 'hintUsed' | 'undoUsed' | 'boosterCombo';
+type SoundName =
+  | 'tap'
+  | 'gravity'
+  | 'wordFound'
+  | 'wordInvalid'
+  | 'combo'         // repurposed: 7+ letter "big word" sting (NOT a successive-find combo)
+  | 'puzzleComplete'
+  | 'starEarn'
+  | 'buttonPress'
+  | 'hintUsed'
+  | 'undoUsed'
+  | 'boosterCombo'  // Eagle Eye / Lucky Roll / Power Surge activation
+  | 'lastWord'      // one-shot sting when remaining words transitions 2 -> 1
+  | 'flawlessBadge' // inline FLAWLESS pill reveal on victory screen
+  | 'flawlessMilestone'; // full-screen flawless-streak milestone ceremony fanfare
 // BGM tracks. `menu`/`gameplay`/`tense` are the historical set; `relax` and
 // `victory` were added in plan task 2.3 (BGM-by-screen context). `menu` is the
 // home-screen track in practice so no `home` alias is needed.
 type MusicTrack = 'menu' | 'gameplay' | 'tense' | 'relax' | 'victory';
 
-// ── Real-file asset registry (Phase 2A) ────────────────────────────
-// When the composer deliverable lands in assets/audio/, flip an entry
-// from `null` to `require('../../assets/audio/<file>.mp3')`. The runtime
-// prefers real files and falls back to synthesis per-name, so partial
-// deliveries still ship. Keep as a map rather than inline require so
-// Metro only evaluates the require for present files.
+// ── Real-file asset registry ──────────────────────────────────────
+// Drop an MP3 into `assets/audio/<filename>.mp3` (see `assets/audio/README.md`
+// for the canonical filename per slot), then flip `null` to
+// `require('../../assets/audio/<filename>.mp3')`. The runtime prefers the
+// bundled file and falls back to synthesis per-slot, so partial deliveries
+// still ship — the game is playable on synth fallback the whole time.
 //
-// Expected filenames (see assets/audio/README.md): tap.mp3, gravity.mp3,
-// word_found.mp3, word_invalid.mp3, combo.mp3, puzzle_complete.mp3,
-// star_earn.mp3, button_press.mp3, hint_used.mp3, undo_used.mp3,
-// chain_bonus.mp3 · bgm_menu.mp3, bgm_gameplay.mp3, bgm_relax.mp3,
-// bgm_victory.mp3.
+// Canonical filenames (14 SFX + 5 BGM = 19 total):
+//   SFX: tap.mp3, gravity.mp3, word_found.mp3, word_invalid.mp3, combo.mp3,
+//        puzzle_complete.mp3, star_earn.mp3, button_press.mp3, hint_used.mp3,
+//        undo_used.mp3, booster_combo.mp3, last_word.mp3, flawless_badge.mp3,
+//        flawless_milestone.mp3
+//   BGM: bgm_menu.mp3, bgm_gameplay.mp3, bgm_tense.mp3, bgm_relax.mp3,
+//        bgm_victory.mp3
 const REAL_SOUND_FILES: Record<SoundName, number | null> = {
   tap: null,
   gravity: null,
@@ -56,6 +72,9 @@ const REAL_SOUND_FILES: Record<SoundName, number | null> = {
   hintUsed: null,
   undoUsed: null,
   boosterCombo: null,
+  lastWord: null,
+  flawlessBadge: null,
+  flawlessMilestone: null,
 };
 
 const REAL_MUSIC_FILES: Record<MusicTrack, number | null> = {
@@ -111,6 +130,9 @@ const SOUND_CATEGORY: Record<SoundName, SoundCategory> = {
   hintUsed: 'sfx',
   undoUsed: 'sfx',
   boosterCombo: 'ceremony',
+  lastWord: 'ceremony',
+  flawlessBadge: 'ceremony',
+  flawlessMilestone: 'ceremony',
 };
 
 // ── Sound Definitions ──────────────────────────────────────────────
@@ -265,6 +287,55 @@ const SOUND_DEFS: Record<SoundName, ToneSpec> = {
     harmonics: [0.4, 0.2, 0.08],
     reverbMix: 0.22,
     reverbDecay: 0.22,
+  },
+
+  // Last-word tension — soft, low-to-mid tension riser with a subtle lift.
+  // Plays once when `remainingWords` transitions 2 -> 1, paired with a BGM
+  // crossfade to the tense track. Should feel anticipatory, not triumphant.
+  lastWord: {
+    freqs: [329.63, 415.30, 523.25],
+    duration: 0.55,
+    volume: 0.22,
+    attack: 0.03,
+    decay: 0.08,
+    sustain: 0.6,
+    release: 0.20,
+    harmonics: [0.3, 0.12, 0.05],
+    pitchSlide: 1.12,
+    reverbMix: 0.22,
+    reverbDecay: 0.28,
+  },
+
+  // Flawless badge reveal — warm, gold-hued arpeggio. Bright but not as big
+  // as the milestone fanfare; plays on every clean solve, so it has to stay
+  // satisfying without tiring the ear.
+  flawlessBadge: {
+    freqs: [880.0, 1108.73, 1318.51, 1760.0],
+    duration: 0.50,
+    volume: 0.22,
+    attack: 0.008,
+    decay: 0.06,
+    sustain: 0.65,
+    release: 0.18,
+    harmonics: [0.35, 0.15, 0.06],
+    reverbMix: 0.20,
+    reverbDecay: 0.20,
+  },
+
+  // Flawless streak milestone fanfare — large, triumphant, fires only at
+  // 3 / 5 / 7 / 10 / 15 / 20 flawless-in-a-row milestones. Biggest ceremony
+  // SFX in the game.
+  flawlessMilestone: {
+    freqs: [523.25, 659.25, 783.99, 1046.5, 1318.5, 1760.0],
+    duration: 1.10,
+    volume: 0.26,
+    attack: 0.01,
+    decay: 0.10,
+    sustain: 0.7,
+    release: 0.35,
+    harmonics: [0.45, 0.22, 0.10, 0.04],
+    reverbMix: 0.28,
+    reverbDecay: 0.40,
   },
 };
 

@@ -1,57 +1,92 @@
-# Wordfall Audio Assets
+# Wordfall Audio Assets — Drop-In Reference
 
-Place professional audio files in this directory. The sound service will automatically detect and use them, falling back to synthesized tones when a file is missing.
+Place professional audio files in this directory. The sound service auto-detects them and falls back to synthesized tones per-slot when a file is missing. **The game is fully playable today on synth fallback** — drop files in progressively as they arrive and each one starts playing on the next reload.
 
-**Filenames MUST match the entries in `REAL_SOUND_FILES` / `REAL_MUSIC_FILES` at `src/services/sound.ts:47-67`.** Files with other names will not be picked up by the runtime. See `agent_docs/audio_brief.md` for the full composer brief with triggers, durations, and tone direction.
+**Filenames MUST match the entries in `REAL_SOUND_FILES` / `REAL_MUSIC_FILES` at `src/services/sound.ts`.** The code looks for these exact names. Files with other names will be ignored by the runtime.
 
-## Currently wired filenames (what to actually ship)
+See `agent_docs/audio_brief.md` for the full composer brief (triggers, durations, tone direction, format spec).
 
-### SFX (11 files, underscores — not hyphens)
+---
 
-| File | Trigger |
-|------|---------|
-| `tap.mp3` | Every letter cell tap |
-| `button_press.mp3` | Any UI button (menu, back, close) |
-| `gravity.mp3` | Letters falling after a word clears |
-| `word_found.mp3` | Valid word from the list auto-resolves (trace match) |
-| `word_invalid.mp3` | **Synth-only fallback — this slot is effectively dead code.** Wordfall has no submit button and invalid words are impossible; the sound plays only if a stray call site is hit. Safe to skip. |
-| `combo.mp3` | 7+ letter "big word" celebration (NOT a successive-find combo — see `agent_docs/game_mechanics.md`) |
-| `star_earn.mp3` | Star reveal on victory screen + last-word tension sting + flawless-badge reveal (until dedicated assets land) |
-| `puzzle_complete.mp3` | All list words found |
-| `hint_used.mp3` | Hint booster activated |
-| `undo_used.mp3` | Undo booster activated |
-| `booster_combo.mp3` | Eagle Eye / Lucky Roll / Power Surge activates (two-booster synergy, separate from the removed successive-find combo) |
+## Complete manifest (19 files: 14 SFX + 5 BGM)
 
-### BGM (5 files)
+### Sound effects (14 files, all underscored)
 
-| File | Usage |
-|------|-------|
-| `bgm_menu.mp3` | Home screen, menus |
-| `bgm_gameplay.mp3` | Standard gameplay loop |
-| `bgm_tense.mp3` | Time Pressure mode + **last-word tension crossfade** (remaining:1) |
-| `bgm_relax.mp3` | Relax mode |
-| `bgm_victory.mp3` | Post-puzzle victory |
+| File | Slot name | Trigger | Priority |
+|------|-----------|---------|----------|
+| `tap.mp3` | `tap` | Every letter cell tap | T1 |
+| `button_press.mp3` | `buttonPress` | Any UI button (menu, back, close, booster activate) | T1 |
+| `gravity.mp3` | `gravity` | Letters falling into cleared spaces | T1 |
+| `word_found.mp3` | `wordFound` | Traced path matches a list word (auto-resolves) | T1 |
+| `combo.mp3` | `combo` | 7+ letter "big word" celebration sting (NOT a successive-find combo — see `agent_docs/game_mechanics.md`) | T1 |
+| `hint_used.mp3` | `hintUsed` | Hint booster activated | T1 |
+| `undo_used.mp3` | `undoUsed` | Undo booster activated | T2 |
+| `booster_combo.mp3` | `boosterCombo` | Eagle Eye / Lucky Roll / Power Surge activates (two-booster synergy) | T1 |
+| `star_earn.mp3` | `starEarn` | Star reveal on victory screen (per star, staggered) | T1 |
+| `puzzle_complete.mp3` | `puzzleComplete` | All list words found | T1 |
+| `last_word.mp3` | `lastWord` | One-shot sting when `remainingWords` transitions 2 → 1 (paired with BGM crossfade to tense) | T1 |
+| `flawless_badge.mp3` | `flawlessBadge` | Inline "FLAWLESS" pill reveals on victory screen (every clean solve — no hints/undos/shuffle) | T1 |
+| `flawless_milestone.mp3` | `flawlessMilestone` | Full-screen flawless-streak milestone ceremony at 3 / 5 / 7 / 10 / 15 / 20 consecutive flawless solves | T1 |
+| `word_invalid.mp3` | `wordInvalid` | **Optional — synth-only in practice.** Wordfall has no submit button so invalid words can't be submitted. Keep the synth fallback; skip the real asset unless you want belt-and-suspenders coverage for a theoretical edge case. | T3 |
 
-### Tier 1 future slots (drop in when ready, wire to existing key)
+### Background music (5 files, all looping except victory)
 
-- **`last_word_sting.mp3`** — dedicated sting for `remainingWords: 2 → 1`. Currently reusing `starEarn`. When delivered, either swap the `starEarn` entry in `REAL_SOUND_FILES` or add a new `lastWord` key to the `SoundName` union.
-- **`flawless_badge.mp3`** — dedicated reveal sting for the FLAWLESS badge. Same swap pattern.
+| File | Slot name | Usage |
+|------|-----------|-------|
+| `bgm_menu.mp3` | `menu` | Home screen, menus, inter-game lobby |
+| `bgm_gameplay.mp3` | `gameplay` | Standard gameplay loop |
+| `bgm_tense.mp3` | `tense` | Time Pressure mode **AND** last-word tension (crossfade in when `remainingWords === 1`) |
+| `bgm_relax.mp3` | `relax` | Relax mode |
+| `bgm_victory.mp3` | `victory` | Post-puzzle win screen (NOT looped) |
 
-See `agent_docs/audio_brief.md` §"Last-word + Flawless dopamine layer" for tone direction on both.
+---
 
-## Do NOT commission these (referenced in older drafts, but the runtime ignores them)
+## How to wire a file once it arrives
 
-These files were listed in prior versions of this README but have no corresponding `REAL_SOUND_FILES` entry — dropping them in does nothing:
+Drop the MP3 into this directory, then open `src/services/sound.ts` and flip the matching `null` to a `require()`. For example, after dropping `tap.mp3`:
 
-- `chain-bonus.mp3` / `chain_bonus.mp3` (mechanic ripped Apr 2026)
-- `wheel-spin.mp3`, `wheel-result.mp3`, `level-up.mp3`, `collection-complete.mp3`, `achievement-unlock.mp3`, `feature-unlock.mp3`, `streak-milestone.mp3`, `ceremony-fanfare.mp3`, `booster-used.mp3` (not wired)
-- Any hyphenated filenames (the code uses underscores exclusively)
+```ts
+const REAL_SOUND_FILES: Record<SoundName, number | null> = {
+  tap: require('../../assets/audio/tap.mp3'),   // was null
+  gravity: null,                                 // still synth
+  ...
+};
+```
+
+BGM works identically via `REAL_MUSIC_FILES`. **Partial delivery is fine** — every `null` entry keeps playing the synth fallback, so the game never breaks while you wait for the rest.
+
+No rebuild of the dev-client APK is needed — just reload Metro after editing `sound.ts`.
+
+---
+
+## Do NOT commission these
+
+Listed in older drafts of this README but **not wired** in code. Dropping them in does nothing:
+
+- `chain-bonus.mp3` / `chain_bonus.mp3` — mechanic ripped Apr 2026 (Option A refactor)
+- `wheel-spin.mp3`, `wheel-result.mp3`, `level-up.mp3`, `collection-complete.mp3`, `achievement-unlock.mp3`, `feature-unlock.mp3`, `streak-milestone.mp3`, `ceremony-fanfare.mp3`, `booster-used.mp3`
+- Any hyphenated filenames — the code uses underscores exclusively
+
+If you want any of these wired in future, add the slot to the `SoundName` union in `src/services/sound.ts` and update this README to match.
+
+---
 
 ## Format requirements
 
-- MP3 format, 44.1 kHz sample rate, mono (no stereo — mobile speakers don't benefit)
-- Normalize loudness to -14 LUFS short-term, peak -1 dBTP
-- SFX should have minimal silence at start/end
-- BGM must loop cleanly (seamless loop point pre-baked)
-- Keep file sizes small: SFX under 100 KB each, BGM under 2 MB each
-- **Filenames use underscores, case-sensitive, exactly as specified above**
+- **Format:** MP3, 192 kbps CBR
+- **Sample rate:** 44.1 kHz
+- **Channels:** mono (no stereo — mobile speakers don't benefit)
+- **Loudness:** -14 LUFS short-term, peak -1 dBTP
+- **Loop points:** pre-baked seamlessly for the 4 looping BGM tracks (menu, gameplay, tense, relax)
+- **Filenames:** exactly as specified above, case-sensitive, underscores not hyphens
+- **Size budgets:** SFX under 100 KB each; BGM under 2 MB each
+- **Total payload target:** ~6-8 MB for all 19 files combined
+
+---
+
+## Budget reference (April 2026 rates)
+
+- **SFX:** $50-$150/asset × 14 = $700-$2,100
+- **BGM:** $300-$800/track × 5 = $1,500-$4,000
+- **Realistic mid-tier total:** $2,500-$6,000, 3-5 weeks lead time
+- **Budget-tier alternative:** royalty-free libraries (Pixabay, Freesound, Kenney.nl) + light editing — free-to-$200, a weekend of curation. Good enough for soft launch; re-commission if KPIs justify it.
