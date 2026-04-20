@@ -99,10 +99,17 @@ function GameGridImpl({
     return set;
   }, [selectedCells]);
 
-  // Current word under construction from selected cells — threaded to each
-  // selected LetterCell so screen readers announce "selected, position 3,
-  // current word WOR" instead of just the letter.
+  // Current word under construction, only materialized when the valid-word
+  // flash is on (auto-submit window). This prop was previously threaded to
+  // every selected LetterCell on every tap so screen readers could announce
+  // the full in-progress word — but since the string grows per tap, every
+  // selected cell re-rendered every tap even though nothing else changed.
+  // Announcing the full word only at the valid-flash moment preserves the
+  // useful TalkBack cue ("part of valid word CATS") without breaking
+  // LetterCell memoization during active selection. Individual cells still
+  // announce their letter + selection index in all cases.
   const currentWord = useMemo(() => {
+    if (!validWord) return '';
     if (selectedCells.length === 0) return '';
     let word = '';
     for (const c of selectedCells) {
@@ -110,7 +117,7 @@ function GameGridImpl({
       if (cell) word += cell.letter;
     }
     return word;
-  }, [selectedCells, grid]);
+  }, [selectedCells, grid, validWord]);
 
   const hintedSet = useMemo(() => {
     const set = new Set<string>();
@@ -531,7 +538,7 @@ function GameGridImpl({
                         fallAnim={cellFallAnim}
                         row={row}
                         col={col}
-                        currentWord={isSelected ? currentWord : undefined}
+                        currentWord={isSelected && validWord ? currentWord : undefined}
                       />
                     );
                   })}
