@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useMemo, useCall
 import { auth, isFirebaseConfigured } from '../config/firebase';
 import { signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
 import { crashReporter } from '../services/crashReporting';
+import { logger } from '../utils/logger';
 import {
   getLinkedGoogleEmail,
   isGoogleSignInAvailable,
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           await signInAnonymously(auth);
         } catch (e) {
-          if (__DEV__) console.warn('Anonymous auth failed:', e);
+          logger.warn('Anonymous auth failed:', e);
           crashReporter.captureException(
             e instanceof Error ? e : new Error(String(e)),
             { tags: { operation: 'signInAnonymously' } },
@@ -79,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signOutGoogle();
     } catch (e) {
-      if (__DEV__) console.warn('Sign out failed:', e);
+      logger.warn('Sign out failed:', e);
       crashReporter.captureException(
         e instanceof Error ? e : new Error(String(e)),
         { tags: { operation: 'signOut' } },

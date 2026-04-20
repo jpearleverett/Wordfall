@@ -11,6 +11,7 @@ import { useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { FriendChallenge, GameMode, BoardConfig } from '../types';
 import { getTitleLabel } from '../data/cosmetics';
+import { logger } from '../utils/logger';
 
 const getToday = (): string => new Date().toISOString().split('T')[0];
 
@@ -31,12 +32,12 @@ async function deliverGift(
     const { sendGiftSecure } = await import('../services/gifts');
     await sendGiftSecure({ toUserId, type, amount, fromDisplayName });
   } catch (err) {
-    if (__DEV__) console.warn('[PlayerSocial] sendGiftSecure failed, falling back to direct write:', err);
+    logger.warn('[PlayerSocial] sendGiftSecure failed, falling back to direct write:', err);
     try {
       const { firestoreService } = await import('../services/firestore');
       await firestoreService.sendGift(fromUserId, fromDisplayName, toUserId, type === 'life' ? 'hint' : type, amount);
     } catch (fallbackErr) {
-      if (__DEV__) console.warn('[PlayerSocial] legacy sendGift fallback also failed:', fallbackErr);
+      logger.warn('[PlayerSocial] legacy sendGift fallback also failed:', fallbackErr);
     }
   }
 }
@@ -183,7 +184,7 @@ export function createSocialMethods<T extends PlayerSocialData>(
           });
         } catch (e) {
           // Gracefully fail — challenge is still saved locally
-          if (__DEV__) console.warn('[PlayerSocial] Failed to persist challenge to Firestore:', e);
+          logger.warn('[PlayerSocial] Failed to persist challenge to Firestore:', e);
         }
       });
     }

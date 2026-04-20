@@ -1,4 +1,5 @@
 import { BoardConfig, PlayerMetrics } from '../types';
+import { logger } from '../utils/logger';
 
 /**
  * Difficulty adjustment direction — purely internal, never shown to the player.
@@ -42,7 +43,7 @@ export function getAdjustedConfig(
   // Average stars below 1.5 OR multiple recent levels with >3 attempts
   if (averageStars < 1.5 || recentMultiAttemptLevels >= 2) {
     const adjusted = makeEasier(baseConfig);
-    if (__DEV__) console.log(
+    logger.log(
       `[DifficultyAdjuster] Easing difficulty: avgStars=${averageStars.toFixed(2)}, multiAttemptLevels=${recentMultiAttemptLevels}`,
     );
     return {
@@ -59,7 +60,7 @@ export function getAdjustedConfig(
   // High average stars AND a long streak of 3-star clears
   if (averageStars > 2.5 && consecutiveThreeStars > 5) {
     const adjusted = makeHarder(baseConfig);
-    if (__DEV__) console.log(
+    logger.log(
       `[DifficultyAdjuster] Increasing difficulty: avgStars=${averageStars.toFixed(2)}, consecutive3Stars=${consecutiveThreeStars}`,
     );
     return {
@@ -70,7 +71,7 @@ export function getAdjustedConfig(
   }
 
   // ── Sweet spot — no adjustment ──
-  if (__DEV__) console.log(
+  logger.log(
     `[DifficultyAdjuster] No adjustment needed: avgStars=${averageStars.toFixed(2)}, consecutive3Stars=${consecutiveThreeStars}`,
   );
   return { config: baseConfig, direction: 'none', reason: 'balanced' };

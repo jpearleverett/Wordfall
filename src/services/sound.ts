@@ -1289,7 +1289,7 @@ class SoundManager {
 
         this.preWarmed = true;
       } catch (e) {
-        if (__DEV__) console.warn('Sound preWarmAll failed:', e);
+        logger.warn('Sound preWarmAll failed:', e);
       } finally {
         this.preWarmPromise = null;
       }
@@ -1367,7 +1367,7 @@ class SoundManager {
             this.sounds.set(name, player);
           }
         } catch (e) {
-          if (__DEV__) console.warn(`Failed to create sound player "${name}":`, e);
+          logger.warn(`Failed to create sound player "${name}":`, e);
           return;
         }
       }

@@ -3,6 +3,7 @@ import { Alert, Linking } from 'react-native';
 import { NavigationContainerRef } from '@react-navigation/native';
 import { parseDeepLink } from '../utils/deepLinking';
 import { analytics } from '../services/analytics';
+import { logger } from '../utils/logger';
 
 interface DeepLinksPlayer {
   loaded: boolean;
@@ -45,7 +46,7 @@ export function useDeepLinks({ player, navigationRef, pendingChallengeRef }: Use
                 break;
               }
               pendingChallengeRef.current = cid;
-              if (__DEV__) console.log('[DeepLink] Challenge received:', cid);
+              logger.log('[DeepLink] Challenge received:', cid);
             }
             break;
           case 'daily':
@@ -87,7 +88,7 @@ export function useDeepLinks({ player, navigationRef, pendingChallengeRef }: Use
           void analytics.logEvent('deep_link_opened', { type: data.type, url });
         }
       } catch {
-        if (__DEV__) console.warn('[DeepLink] Failed to handle URL:', url);
+        logger.warn('[DeepLink] Failed to handle URL:', url);
       }
     };
 

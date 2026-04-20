@@ -275,7 +275,7 @@ export async function validateReceipt(
 
     // Server not configured (FIREBASE_FUNCTIONS_URL is empty)
     if (__DEV__) {
-      console.warn(
+      logger.warn(
         '[ReceiptValidation] EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL not configured — using client-side validation only (__DEV__ mode)',
       );
       await saveReceiptHash(hash);
@@ -294,7 +294,7 @@ export async function validateReceipt(
     );
     // All retries exhausted
     if (__DEV__) {
-      console.warn(
+      logger.warn(
         '[ReceiptValidation] Server validation failed after retries — falling back to client-side validation (__DEV__ mode):',
         error,
       );
