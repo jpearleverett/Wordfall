@@ -25,7 +25,7 @@ Changes take effect on the next app cold start (Remote Config fetch on
       "id": "rc_spring_splash",
       "type": "main",
       "name": "Spring Splash",
-      "description": "Double coins on every chain!",
+      "description": "Double coins on every flawless solve!",
       "icon": "🌸",
       "endTime": 1717200000000,
       "multipliers": {

@@ -223,7 +223,7 @@ User chose **tighten procedural generation** instead of hand-authoring 75 tutori
 
 | # | Task | Files | Effort |
 |---|------|-------|--------|
-| 3.5 | ✅ DONE. `analytics.trackDifficultyTelemetry({ mode, level, stars, attempts, hintsUsed, undosUsed, chainCount, timeMs, adjusterTier })` fires on win (from `useRewardWiring.ts:201`) and fail (from `GameScreen.tsx:1133`). | `src/services/analytics.ts`, `src/screens/GameScreen.tsx`, `src/hooks/useRewardWiring.ts` | 0.5d |
+| 3.5 | ✅ DONE. `analytics.trackDifficultyTelemetry({ mode, level, stars, attempts, hintsUsed, undosUsed, timeMs, adjusterTier })` fires on win (from `useRewardWiring.ts`) and fail (from `GameScreen.tsx`). `chainCount` was removed from the payload in the Apr 2026 Option A refactor. | `src/services/analytics.ts`, `src/screens/GameScreen.tsx`, `src/hooks/useRewardWiring.ts` | 0.5d |
 | 3.6 | Recruit 10 Play-Internal-Test players × 50 levels each. Target distributions: easy 75%+ first-try win · medium 50–60% · hard 30–40%. | testers + BigQuery | 2d |
 | 3.7 | Retune `difficultyAdjuster.ts` thresholds from observed data. | `src/services/difficultyAdjuster.ts` | 1d |
 
@@ -232,9 +232,9 @@ User chose **tighten procedural generation** instead of hand-authoring 75 tutori
 | # | Task | Files | Effort |
 |---|------|-------|--------|
 | 3.8 | ✅ DONE. `src/components/effects/ParticleSystem.tsx` runs spark+absorb particles on word-find; wired from `PlayField`. Audio tie-in will land with the real-asset commission in Phase 2.1. | `src/components/effects/ParticleSystem.tsx`, `src/screens/game/PlayField.tsx` | 1d |
-| 3.9 | ✅ DONE. `src/components/effects/ComboFlash.tsx` — accent-tint flash at combo ≥ 3, gold tint + confetti burst at combo ≥ 5, honours reduce-motion. Mounted in `GameScreen.tsx:1601`. | `src/components/effects/ComboFlash.tsx` | 1d |
-| 3.10 | ✅ DONE. Fall-in spring at `GameScreen.tsx:1091` uses `tension:180, friction:9` for a subtle landing bounce-overshoot. Reduce-motion users skip the spring block. | `src/screens/GameScreen.tsx` | 0.5d |
-| 3.11 | Layered BGM: high-intensity stem mixes in at combo ≥ 3, fades on miss. Requires 2.1 to have requested stems. | `src/services/sound.ts` | 1d |
+| 3.9 | ❌ REVERTED (Apr 2026 — Option A refactor). `ComboFlash` was deleted because combo/chain mechanics don't fit a single-solution word search. Replaced by last-word tension (BGM swap + chip pulse at 1 remaining word) + inline FLAWLESS badge + cross-puzzle flawless streak milestones. See `agent_docs/game_mechanics.md`. | `src/screens/game/GameFlashes.tsx`, `src/components/victory/FlawlessBadge.tsx`, `src/components/FlawlessStreakCard.tsx` | shipped |
+| 3.10 | ✅ DONE. Fall-in spring uses `tension:180, friction:9` for a subtle landing bounce-overshoot. Reduce-motion users skip the spring block. | `src/screens/GameScreen.tsx` | 0.5d |
+| 3.11 | ❌ SCRAPPED (Apr 2026). Layered BGM at "combo ≥ 3" is meaningless now that combo is gone. Last-word tension covers the high-intensity BGM need at the one moment it matters (remaining:1). | `src/services/sound.ts` | n/a |
 
 **Verification.** CI: golden-seed + fuzz green. Telemetry from 2nd-pass cohort lands within target distributions. Recorded juice demo: fresh eyes say "oh, that's satisfying".
 

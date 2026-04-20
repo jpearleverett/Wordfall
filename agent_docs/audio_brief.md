@@ -54,20 +54,17 @@ Drop into `assets/audio/`. Filenames must match exactly (case-sensitive).
 - **Tone:** ascending 3-note arpeggio (e.g., C–E–G), bell-like, bright; the "yes!" moment
 - **Variations:** ideally 2–3 micro-variants (we'll round-robin in code) to prevent fatigue
 
-#### `chain_bonus.mp3`
-- **Trigger:** word found immediately after gravity (chain reaction)
-- **Length:** 600–900 ms
-- **Tone:** more elaborate than `word_found` — add a flourish or upward slide; should feel "unlocked," not just rewarded
-
-#### `combo.mp3`
-- **Trigger:** combo counter reaches 3+
+#### `combo.mp3` (big-word sting, NOT a combo meter)
+- **Trigger:** valid word of 7+ letters is found (the "big word" emotional highlight)
 - **Length:** 700–1000 ms
-- **Tone:** big, anthemic; layered chord with a percussive hit; the "you're on fire" moment
+- **Tone:** big, anthemic; layered chord with a percussive hit; the "impressive find" moment. **Not** a combo-counter sound — Wordfall has no successive-find combo multiplier (ripped Apr 2026). This slot was kept and repurposed for long-word celebration.
 
 #### `star_earn.mp3`
-- **Trigger:** any star earned (per-puzzle, 1/2/3 stars)
+- **Trigger:** (a) any star earned on the victory screen (per-puzzle 1/2/3 stars), and (b) currently doubles as the last-word tension sting + flawless-badge reveal sting until dedicated assets (`last_word_sting.mp3`, `flawless_badge.mp3`) land
 - **Length:** 500–800 ms
 - **Tone:** sparkle / magical chime; should pair well with looping (when 3 stars play in quick succession)
+
+**Deleted (Apr 2026 — Option A refactor):** `chain_bonus.mp3` is no longer needed. There is no chain reaction in Wordfall — gravity never auto-resolves a word. If your brief mentions "chain combos" or "chain reactions," that framing was based on an earlier prototype design that was ripped.
 
 ### Tier 3 — feedback + system
 

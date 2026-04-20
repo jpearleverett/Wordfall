@@ -9,21 +9,23 @@ curve. Read this when touching the game engine, reward wiring, or difficulty.
 1. Player sees a grid of letters with target words listed in the WordBank
 2. Tap or drag across letters in any direction (horizontal, vertical, diagonal, or zigzag — all 8-directional adjacency) to spell words
 3. Non-adjacent taps start a new selection from the tapped cell (adjacency validated in the reducer)
-4. When a valid word is selected, cells turn green with checkmarks and auto-submit after 250ms
-5. Cleared letters disappear; letters above fall due to gravity (with LayoutAnimation)
+4. When the traced path matches a list word, cells turn green with checkmarks and auto-resolve after 250ms — there is no submit button
+5. Cleared letters disappear; letters above fall due to gravity. **One trace resolves exactly one word — gravity never auto-finds another**
 6. Post-gravity: cells that shifted position glow briefly with cyan trail (400ms fade)
-7. Score popup floats up showing points earned (with combo multiplier display)
-8. Chain celebrations ("2x CHAIN!") appear with screen shake on consecutive word finds
-9. Find all words to trigger victory screen with confetti, animated score counter, and star reveals
+7. Score popup floats up showing points earned
+8. When `remainingWords` drops to 1, BGM crossfades to the tense track, a sting plays, and the final word's chip glows gold + pulses 1.08× (last-word tension; `GameScreen.tsx` effect + `WordBank.tsx` `isLastRemaining`)
+9. Find all words to trigger victory screen with confetti, animated score counter, star reveals, and — if `perfectRun === true` — the gold "FLAWLESS" badge above the stars
 
 ### Visual Feedback System
 - **Green flash overlay**: 200ms on valid word match, before auto-submit (250ms delay)
-- **Chain popup**: Spring-scaled "Nx CHAIN!" with screen shake (3px oscillation)
-- **Score popup**: "+150 (2x!)" springs in, holds 600ms, floats up and fades out
+- **Score popup**: `+${points}` springs in, holds 600ms, floats up and fades out (7+ letter words get a bigger popup scale and trigger the "AMAZING!" / "INCREDIBLE!" big-word label)
+- **Last-word tension**: gold border + looping scale pulse on the final unfound chip; paired with BGM swap and one-shot sting
+- **FLAWLESS badge**: gold pill that scale-reveals on the victory screen when `perfectRun === true` (component: `src/components/victory/FlawlessBadge.tsx`)
 - **Post-gravity highlight**: Moved cells get a cyan border overlay that fades via opacity over 400ms
 - **Idle hint prompt**: Dynamic timer based on fail count (20s default → 15s after 1 failure → 10s after 2+), floats as absolute overlay on grid
 - **Mode intro banner**: 2.5-second absolute overlay on game start for non-classic modes (e.g. "No mistakes allowed!")
 - **Near-miss encouragement**: On failure, shows "SO CLOSE!" (1 word away) or "KEEP GOING!" with progress bar and word count, plus prominent retry button
+- **Deleted (Apr 2026, Option A refactor)**: chain popup, neon pulse overlay, VHS glitch overlay, `(Nx!)` score suffix — all removed because the underlying `combo`/`chainCount` mechanics didn't map to a single-solution word search
 
 ### Boosters
 Three booster types use **persistent inventory** stored in `economy.boosterTokens` (like hints/undos). New players start with 2 of each. Earned through puzzle rewards, events, coin shop (200 coins each), and the booster_pack contextual offer. First-ever use triggers `first_booster` ceremony:
@@ -60,21 +62,29 @@ Modes auto-unlock in `App.tsx` `handleComplete` based on player level.
 
 ### Scoring
 - Word found: 100 + (20 * letter count)
-- Combo multiplier: +50% per consecutive word
-- Cascade mode: multiplier grows by 0.25 per word
+- Mode multiplier (from `MODE_CONFIGS[mode].rules.scoreMultiplier`) applied
+- Expert mode: additional 1.5× bonus
+- Booster combo (Eagle Eye / Lucky Roll / Power Surge): 2× multiplier applied to each word found while the combo window is active (3 words by default)
+- Score doubler booster: multiplies the next word score by 2
 - Perfect clear: 500 bonus
 - No hints bonus: 200
 - Time bonus: 10 points/second remaining
 
+**Removed in Apr 2026 (Option A):** successive-find `combo` multiplier (+50% per consecutive word) and "cascade mode" 0.25× escalation. Both were ripped because single-solution puzzles always produce the same combo trajectory, making the multiplier a dishonest skill signal.
+
 ### Sound & Haptics
 Sound manager calls wired at every interaction point in `GameScreen.tsx` and `App.tsx`:
 - Cell tap → `tap` sound + light haptic
-- Valid word → `wordFound` sound + medium haptic
-- Invalid tap → `wordInvalid` sound + error haptic
-- Combo/chain → `combo` sound + heavy haptic
-- Puzzle complete → `puzzleComplete` sound + success haptic
+- Valid word (< 7 letters) → `wordFound` sound + medium haptic (`wordFoundHaptic`)
+- Valid word (7+ letters, "big word") → layered `wordFound` + `combo` sound + success haptic + "AMAZING!" / "INCREDIBLE!" overlay
+- Invalid tap (non-list prefix) → `wordInvalid` sound + error haptic
+- Last-word tension (2 → 1 remaining) → BGM crossfade to `tense` + `starEarn` sting + `lastWordHaptic`
+- Puzzle complete → `puzzleComplete` sound + victory BGM + (if flawless) `starEarn` sting on badge reveal
 - Hint/undo → `hintUsed`/`undoUsed` sound
-- Boosters → `buttonPress` sound
+- Boosters (individual) → `buttonPress` sound
+- Booster combo activated (Eagle Eye / Lucky Roll / Power Surge) → `boosterCombo` sound + `boosterComboHaptic`
+
+**Ripped in Apr 2026:** the old "Combo/chain → `combo` sound + heavy haptic" trigger. The `combo` sound was repurposed as the big-word (7+ letter) celebration; the orphaned `chainBonus` synth was deleted entirely. `starEarn` was rescued from orphan status and now plays on both last-word tension and the flawless badge reveal.
 
 **Audio is synthesized at runtime with caching** — `SoundManager` (`src/services/sound.ts`) generates tones and chords programmatically (sine waves via WAV data URIs). DSP and WAV encoding are separated: `synthesizeToneSamples()` returns raw `Int16Array` buffers cached in `synthesisCache: Map<string, Int16Array>`, and `createWavDataUri()` wraps them in WAV headers. `preWarmAll()` synthesizes all sounds + music tracks asynchronously on init (yields between each). `playSound()` never triggers synthesis — if a sound isn't cached, it skips silently. Uses `expo-audio` (`createAudioPlayer`), lazy-loaded via `require()`. Replace with real assets by swapping `createAudioPlayer(require('./path.mp3'))` calls.
 

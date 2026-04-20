@@ -6,7 +6,7 @@
 
 ## Project Overview
 
-Wordfall is a gravity-based strategic word puzzle mobile game built with **React Native + Expo**. Players find hidden words on a letter grid; when a word is cleared, letters above fall due to gravity, creating chain opportunities. 10 modes, 40 chapters (~600 authored puzzles + procedural beyond), collections, social features, a library meta-game, and a full player experience layer (interactive tutorial, progressive disclosure, ceremony system, achievements, weekly goals, mastery track, shareable results).
+Wordfall is a **word-search-with-gravity** mobile game built with **React Native + Expo**. Each puzzle ships with a pre-authored list of words to find on a letter grid. Players trace letters to find those words; when a traced path matches a list word it auto-resolves (no submit button) and cleared cells leave permanent empty spaces — remaining letters fall via gravity into those spaces. Win by finding every listed word; lose by falling into an unwinnable stuck state. 10 modes, 40 chapters (~600 authored puzzles + procedural beyond), collections, social features, a library meta-game, and a full player experience layer (interactive tutorial, progressive disclosure, ceremony system, achievements, weekly goals, mastery track, shareable results). **Read `agent_docs/game_mechanics.md` before making design, audio, or UX assumptions — Wordfall does NOT share mechanics with Candy Crush, Wordscapes, or match-3 games.**
 
 - **Framework:** React Native 0.83.4, Expo SDK 55 (New Architecture only — bridgeless mandatory), React 19.2, TypeScript ~5.8
 - **Animations:** `react-native-reanimated 4.2.1` + `react-native-worklets 0.7.2` — 30 components on UI-thread animations; 4 legacy files intentionally remain on the `react-native` Animated API
@@ -48,6 +48,7 @@ Ask-me-about questions route to the relevant slice instead of the full architect
 
 | I need to know about... | Read |
 |------|------|
+| **What the game actually is / isn't (rules, failure states, dopamine architecture)** | **`agent_docs/game_mechanics.md`** |
 | Zustand, selectors, reducer, render isolation, persistence debounce | `agent_docs/architecture/state.md` |
 | Board generation, solver, modes, scoring, rewards, ceremonies, difficulty curve | `agent_docs/architecture/engine.md` |
 | Navigation tree, screen prop pattern, design system, colors, animations | `agent_docs/architecture/screens.md` |

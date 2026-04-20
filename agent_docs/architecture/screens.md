@@ -80,8 +80,9 @@ No continuous animation loops run on idle tiles.
 - **Cell selection**: Scale down 0.86 → spring to 1.08 with animated glow border (60ms down, spring up)
 - **Valid word detection**: Cells turn green with checkmarks, green flash overlay (200ms)
 - **Post-gravity cells**: Cyan border overlay fading via opacity over 400ms
-- **Score popup**: Springs in, holds 600ms, floats up and fades out. Shows combo multiplier
-- **Chain celebration**: "Nx CHAIN!" popup with spring scale + screen shake (3px, 200ms)
+- **Score popup**: Springs in, holds 600ms, floats up and fades out (no combo multiplier suffix — ripped Apr 2026; 7+ letter words get a larger popup scale via `scorePopupBig`)
+- **Last-word tension**: when `remainingWords === 1`, final chip gets gold border + 1.08× loop pulse, BGM swaps to `tense`
+- **FLAWLESS badge**: gold pill on victory screen when `perfectRun === true` (between stars and score panel)
 - **WordBank chips**: Found words scale up 1.22x with spring then settle; `WordChip` wrapped in `React.memo`. No shimmer loop on found chips
 - **Puzzle complete**: 16 confetti particles (8 colors), 12 sparkles, 10 celebration burst particles. Stars pop in with staggered springs. Score counts up from 0 over 800ms. Card anchored to bottom with `maxHeight: 85%` + `ScrollView` for overflow
 - **AmbientBackdrop / SynthwaveHomeBackdrop**: 10-12 twinkling stars + nebula orbs or banded sun + flowing perspective grid, all migrated to Reanimated `withRepeat`/`withSequence` loops running on UI thread

@@ -49,7 +49,7 @@ These are every Candy-Crush/Wordscapes/match-3 assumption that does NOT apply. *
 | "Lives system gates play" | **Default OFF.** There's a hard-energy system (`src/hooks/useHardEnergy.ts`) but it's Remote-Config gated (`hardEnergyEnabled`) and defaults to `false`. The game currently plays with unlimited attempts. |
 | "Word construction from inventory" (à la Wordscapes / Word Cookies) | **No.** Letters are fixed on the grid. The player does not arrange letters from a pool. |
 | "Match-3 style matching" | **No.** There is no matching of identical tiles. The game is letter-adjacency path tracing. |
-| "Auto-cascade bonus (chain combos)" | **No auto-resolve.** See "chain" below for what the code's `chainCount` actually tracks — it's strategic positional reward, not cascade. |
+| "Auto-cascade bonus (chain combos)" | **No auto-resolve. Ever.** Earlier versions of the code had a `chainCount` counter and a `combo` score multiplier; both were ripped in April 2026 as part of the Option A dopamine refactor. Only the separate booster-combo system (Eagle Eye / Lucky Roll / Power Surge) remains, and that's a voluntary 2× window triggered by using two boosters together — not a cascade. |
 
 ---
 
@@ -63,31 +63,25 @@ These are every Candy-Crush/Wordscapes/match-3 assumption that does NOT apply. *
 
 ---
 
-## Three concepts easily confused: combo, chain, and booster-combo
+## Dopamine architecture (what the game rewards — and what it doesn't)
 
-These are all real and distinct. **Do not conflate them.**
+Wordfall is single-solution: every puzzle has essentially one correct find-order. Match-3 combo/chain mechanics don't map to this — they'd either fire on every win (no signal) or demand speed/reflex play the game doesn't want. The Option A refactor (April 2026) ripped the match-3 layer and replaced it with an architecture honest to Wordfall's genre (Sudoku / crossword family).
 
-### 1. `combo` (successive-find multiplier)
+### What exists (authoritative list)
 
-- **What it is:** a counter that increments each time a word is found, driving a score multiplier for subsequent finds.
-- **Where:** `useGame.ts:432` — `comboLevel = state.combo + 1`.
-- **Resets on:** specific actions (shuffle booster use, new puzzle). Does NOT reset on simple time gaps.
-- **Player-facing signal:** score popup shows `+X (2x!)` etc. when `combo > 1`.
+1. **Last-word tension.** When `remainingWords` transitions `2 → 1`, the BGM crossfades to the tense bed, a one-shot sting plays, and the final word's chip gets a gold border + gentle 1.08× scale pulse. Implementation: `GameScreen.tsx` effect keyed on `totalWords - foundWords` + `WordBank.tsx` `isLastRemaining` branch. Every puzzle now ends on a tension peak.
+2. **Flawless badge.** Every puzzle completed with `perfectRun === true` (no hints, no undos, no shuffle, no wrong-trace) shows a gold "FLAWLESS" pill on the victory screen, between the star row and the score panel. Component: `src/components/victory/FlawlessBadge.tsx`. Audio: `starEarn` sting (placeholder for `flawless_badge.mp3`).
+3. **Flawless streak.** Cross-session counter of consecutive flawless puzzles, incrementing only on distinct calendar days (same-day replays don't inflate). Resets on any non-flawless completion. Milestones at **3 / 5 / 7 / 10 / 15 / 20** queue a full-screen `flawless_streak_milestone` ceremony via the existing `MilestoneCeremony` template. Surfaced on the home screen via `FlawlessStreakCard` (gold when active, muted with teach-copy when `currentStreak === 0`). State: `PlayerData.flawlessStreak`.
+4. **Booster combo (unrelated, still real).** Separate 2× score multiplier window activated when the player voluntarily pairs two boosters in the same puzzle (Wildcard + Spotlight = Eagle Eye, Wildcard + SmartShuffle = Lucky Roll, Spotlight + SmartShuffle = Power Surge). Duration: N words (default 3). State fields: `activeComboType`, `comboMultiplier`, `comboWordsRemaining`. UI: `BoosterComboBanner`. Defined in `src/data/boosterCombos.ts`. **Do not confuse this with the deleted successive-find `combo` field — different system, different trigger.**
 
-### 2. `chainCount` (gravity-opened-paths counter)
+### What was deleted (do not re-invent)
 
-- **What it is:** a counter that increments when the player's word choice, *combined with gravity*, opened up MORE remaining list-words for findability than removing the same word without gravity would have.
-- **Where:** `useGame.ts:894-937` (deferred detection). Compares `findWordInGrid` on pre-gravity grid vs. post-gravity grid for all remaining list words; increments if `findableAfter > findableBefore`.
-- **What it represents:** strategic reward for picking the *right* word — one whose removal reshuffles letters into better positions for future finds.
-- **Not a cascade.** No word auto-resolves. The chain counter just says "your move made more stuff findable than it would have otherwise."
-- **Skipped in:** `noGravity` and `shrinkingBoard` modes.
+- **`combo` / `maxCombo` fields and the successive-find score multiplier.** A Candy-Crush-style "more points on consecutive finds" bonus. Deleted because in a single-solution puzzle every winner finds words in sequence, so the signal was meaningless.
+- **`chainCount` and the deferred chain-detection `useEffect`.** Tracked "gravity made more remaining words findable than the no-gravity case." Technically real but invisible to players and fired on a signal players couldn't reason about. Deleted.
+- **`ComboFlash` overlay, chain popup + screen shake, `(Nx)` score suffix, combo chip on GameHeader.** All the UI for the above.
+- **`'chain_count'` analytics event, `SCORE.comboMultiplier`, `SCORE.chainBonus`, `CHAIN_INTENSITY` constant, `chainPopupDuration`, orphaned `chainBonus` synth, `'chain_reaction'` achievement.** Swept.
 
-### 3. Booster combo (Eagle Eye / Lucky Roll / Power Surge)
-
-- **What it is:** a 2× score multiplier window activated when the player uses two specific boosters together (e.g., Wildcard + Spotlight = Eagle Eye). Defined in `src/data/boosterCombos.ts`.
-- **Where:** state fields `activeComboType`, `comboMultiplier`, `comboWordsRemaining`. Applied during word-score calculation in `useGame.ts:438-445`.
-- **Duration:** N words (typically 3) after activation, then expires.
-- **Player-facing signal:** `BoosterComboBanner` component + dedicated "boosterCombo" sound + 2× score multiplier on subsequent finds.
+If you see any of the above in code during future work, it's either vestigial (rip it) or in the booster-combo system (leave alone — that system is distinct).
 
 ---
 
@@ -126,14 +120,19 @@ Defined in `src/types.ts` around line 262 and `MODE_CONFIGS`. Each mode layers c
 
 | File | What lives here |
 |---|---|
-| `src/hooks/useGame.ts` | Reducer (all 24 actions) + zustand store wiring + deferred chain detection |
-| `src/stores/gameStore.ts` | Context, selectors, dispatcher |
+| `src/hooks/useGame.ts` | Reducer + zustand store wiring. No chain detection (removed April 2026). |
+| `src/stores/gameStore.ts` | Context, selectors (`selectPerfectRun`, `selectRemainingWordsCount`, etc.), dispatcher |
 | `src/engine/` (various) | Grid operations: `removeCells`, `applyGravity`, `findWordInGrid`, `areAllWordsIndependentlyFindable` |
 | `src/screens/game/PlayField.tsx` | Gesture handling + selection rendering (per-tap) |
-| `src/screens/GameScreen.tsx` | Gameplay UI (high-level, does NOT subscribe to per-tap state) |
-| `src/types.ts` | `GameState`, `Board`, `Word`, `Mode`, `MODE_CONFIGS`, etc. |
+| `src/screens/GameScreen.tsx` | Gameplay UI (high-level, does NOT subscribe to per-tap state). Owns the last-word tension effect. |
+| `src/components/WordBank.tsx` | Word chips; isLastRemaining pulse lives here |
+| `src/components/PuzzleComplete.tsx` | Victory screen; hosts FlawlessBadge render |
+| `src/components/victory/FlawlessBadge.tsx` | Gold "FLAWLESS" pill (every clean solve) |
+| `src/components/FlawlessStreakCard.tsx` | Home-screen streak display |
+| `src/contexts/PlayerContext.tsx` | `flawlessStreak` state + `updateFlawlessStreak` callback (milestones 3/5/7/10/15/20) |
+| `src/types.ts` | `GameState`, `Board`, `Word`, `Mode`, `MODE_CONFIGS`, `CeremonyItem.type` union (`flawless_streak_milestone` included), etc. |
 | `src/data/chapters/` | Authored chapter + puzzle data |
-| `src/data/boosterCombos.ts` | Booster combo definitions (Eagle Eye, Lucky Roll, Power Surge) |
+| `src/data/boosterCombos.ts` | Booster combo definitions (Eagle Eye, Lucky Roll, Power Surge) — separate from the removed successive-find combo |
 
 ---
 
@@ -145,17 +144,18 @@ The emotional beats that actually exist in this game:
 - **Word found** (auto-resolves on trace match — every time, same moment)
 - **Big word** (7+ letters — emotional highlight, not a difficulty signal)
 - **Word containing rare tile** (if rare tile mechanic active)
-- **Gravity cascade** (tiles falling, no new word auto-resolves)
-- **Chain** (strategic reward — your move opened more paths; a "nice move" sting)
-- **Successive combo** (building multiplier on consecutive finds)
-- **Booster combo activation** (Eagle Eye etc.)
+- **Gravity fall** (tiles settle into empty spaces; never spawns a new word auto-find)
+- **Last-word tension** (plays once when `remainingWords` transitions 2 → 1 — BGM swap + sting)
+- **Booster activation** (wildcard / spotlight / smart shuffle) and **booster combo activation** (Eagle Eye / Lucky Roll / Power Surge)
 - **Hint revealed / Undo used**
-- **Puzzle solved / Star reveals / Perfect solve**
-- **Stuck state warning / Stuck fail**
+- **Flawless badge reveal** (post-puzzle, every clean solve)
+- **Flawless streak milestone** (full-screen ceremony at 3/5/7/10/15/20)
+- **Puzzle solved / Star reveals**
+- **Stuck fail**
 - **Time Pressure timer warnings + timeout**
 - **Mode-specific mechanics** (shrink event, gravity flip, etc.)
 
-Do NOT spec audio for: invalid-word rejection, duplicate-word rejection, cascade auto-find, move-limit warning, lives-depleted. None of those moments exist.
+**Do NOT spec audio for:** invalid-word rejection, duplicate-word rejection, cascade auto-find, chain escalation, move-limit warning, lives-depleted, successive-combo multiplier sounds. None of those moments exist.
 
 See `agent_docs/audio_brief.md` for the composer deliverable manifest.
 
@@ -164,3 +164,4 @@ See `agent_docs/audio_brief.md` for the composer deliverable manifest.
 ## Changelog for this doc
 
 - **2026-04-20:** Initial authoritative mechanics doc created after audit revealed AI agents were repeatedly applying Candy-Crush / match-3 / Wordscapes conventions that don't apply to Wordfall. Written to prevent future sessions from making the same design-framing mistakes.
+- **2026-04-20 (Option A refactor):** Ripped the match-3-shaped combo/chain layer and replaced it with the Last-Word Tension + Flawless Badge + Flawless Streak dopamine architecture. Updated the "Three concepts easily confused" section to reflect that only booster-combo remains; added the "What was deleted" note so future agents don't accidentally re-introduce the removed systems.

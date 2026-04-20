@@ -11,7 +11,7 @@ Paste-ready copy for Google Play Console and App Store Connect. Character counts
 | Google Play app name | 30 chars | `Wordfall: Gravity Word Puzzle` (29) |
 | Apple app name | 30 chars | `Wordfall: Gravity Word Puzzle` (29) |
 | Apple subtitle | 30 chars | `Find words, drop letters` (24) |
-| Play short description | 80 chars | `Find words on a gravity grid. Clear letters, watch them fall, chain combos.` (76) |
+| Play short description | 80 chars | `Word search with gravity. Find every word, letters fall, order is everything.` (78) |
 
 ---
 
@@ -20,21 +20,24 @@ Paste-ready copy for Google Play Console and App Store Connect. Character counts
 Extended from `store-metadata/description.txt`. 1,976 characters (well under 4,000).
 
 ```
-Wordfall — The Word Puzzle Where Gravity Changes Everything
+Wordfall — The Word Search Where Gravity Changes Everything
 
-Think you know word games? Think again. In Wordfall, finding words is just the beginning. When you clear a word, letters above fall due to gravity — reshaping the entire board. The order you solve matters. Plan your moves, master the cascade, and outsmart the board.
+Think you know word searches? Think again. Wordfall shows you the list of words to find on a letter grid — and the moment you trace one, those letters disappear and everything above falls into the empty space. The order you find the words changes the board for every find that comes next. Choose wrong and you get stuck. Choose right and the puzzle unfolds like clockwork.
 
 GRAVITY-POWERED STRATEGY
-Unlike any other word game, Wordfall adds a physics layer to word puzzles. Clear a word at the top, and everything above drops. This means the order you find words completely changes what's possible next. It's chess meets Tetris meets Scrabble.
+Unlike any other word search, Wordfall adds a physics layer. Clear letters and gravity pulls the rest into place. One word at a time — you find it, it falls, you find the next. The skill is discovering the one correct sequence.
 
-10 UNIQUE GAME MODES
-• Classic — Solve all words with strategic thinking
-• Time Pressure — Race the clock for bonus points
-• Cascade — Build combo multipliers with consecutive finds
-• Perfect Solve — Zero mistakes, no hints — pure skill
+10 GAME MODES
+• Classic — Find every word on the list with strategic sequencing
+• Time Pressure — Countdown timer; solve before it runs out
+• Perfect Solve — Zero hints, zero undos — pure skill
+• Relax — Unlimited hints, ambient music, no pressure
+• Shrinking Board — Board shrinks as you play
+• Gravity Flip — Gravity direction rotates after each word
+• No Gravity — Cells clear in place; no falling
+• Expert — Expanded dictionary, denser boards
 • Daily Challenge — Same puzzle for everyone, every day
-• Endless — Infinite procedural puzzles at your difficulty
-• Shrinking Board, Gravity Flip, No Gravity, Wildcard Wave — 4 more modes unlock as you progress
+• Weekly — A harder curated puzzle each week
 
 RESTORE THE GRAND LIBRARY
 Your meta-journey: restore an ancient library wing by wing. Complete chapters to rebuild shelves, place decorations, and make it yours. 40 chapters with 600+ handcrafted puzzles await.
@@ -70,14 +73,15 @@ Extended from `store-metadata/whats-new.txt`. 456 characters — fits both store
 ```
 Version 1.0 — Launch Release
 
-Welcome to Wordfall! The gravity-powered word puzzle.
+Welcome to Wordfall! The gravity-powered word search.
 
 • 600+ handcrafted puzzles across 40 themed chapters
-• 10 unique game modes including Daily Challenge and Cascade
+• 10 unique game modes including Daily Challenge, Time Pressure, and Perfect Solve
 • Rich sound design and satisfying haptic feedback
 • Interactive tutorial that teaches through play
 • Collections: Word Atlas, Rare Tiles, Seasonal Stamps
 • 15 achievements, weekly goals, 30-tier mastery track
+• Flawless-solve tracking with milestone rewards
 • Club system for team competition
 
 We'd love your feedback — rate us and let us know!
@@ -90,7 +94,7 @@ We'd love your feedback — rate us and let us know!
 Extended from `store-metadata/keywords.txt`. 98 characters. Keywords are selected for search intent ("word puzzle", "brain game", "daily challenge") and to avoid duplicating words already in the app name or subtitle.
 
 ```
-anagram,brain,letters,scrabble,spelling,vocab,crossword,cascade,combo,daily,logic,quiz,wordle
+anagram,brain,letters,scrabble,spelling,vocab,crossword,gravity,daily,logic,quiz,wordle,search
 ```
 
 ## E. Google Play tags (choose up to 5 from their predefined list)
@@ -172,7 +176,7 @@ Portrait only (`app.json` `orientation: "portrait"`, `supportsTablet: false`). D
 | # | Screen captured | On-image caption (bold white on gradient pill) | What it demonstrates |
 |---|---|---|---|
 | 1 | Mid-puzzle — active tile-drag selection across a 7x7 board with a validated word lighting up | "Find Words. Watch Letters Fall." | Core gameplay |
-| 2 | Post-clear cascade — letters visibly dropping, chain counter at x3 | "Chain Combos for Bigger Scores" | Gravity + scoring |
+| 2 | Mid-gravity — letters visibly falling into cleared spaces, next word highlighted on the word list | "Gravity Reshapes the Board" | Gravity mechanic + strategy |
 | 3 | Mode selector screen | "10 Unique Modes. One Simple Rule." | Breadth of content |
 | 4 | Library meta-screen showing restored chapter with decorations | "Restore the Grand Library" | Meta-game |
 | 5 | Daily Challenge with leaderboard | "Every Day, a Fresh Puzzle" | Retention hook |
