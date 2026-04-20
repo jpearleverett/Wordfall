@@ -6,9 +6,14 @@
 >
 > **Format spec:** all assets MP3 (192 kbps CBR), mono, 44.1 kHz, normalized to -14 LUFS short-term (mobile-friendly, headroom-preserving), peak -1 dBTP. Loop points pre-baked in BGM where applicable.
 >
-> **Total scope:** 72 SFX + 10 BGM = **82 files**. See `assets/audio/README.md` for the at-a-glance drop-in manifest with live/dormant status per slot. This brief details the Tier 1 / Tier 2 / Tier 3 commissions with full tone direction; dormant slots beyond what's listed inline here have synth fallbacks in `src/services/sound.ts:SOUND_DEFS` that you can reference for pitch / length hints.
+> **Total scope:** 72 SFX + 10 BGM = **82 files**, organized into three priority tiers:
+> - **P0 (13 SFX + 5 BGM = 18 files)** — ship blockers. Core gameplay, Option A dopamine layer, core BGM. Without these the game feels broken.
+> - **P1 (32 SFX)** — strong polish. Ceremony fanfares, failure states, timer warnings, per-booster variants, signature monetization moments (piggy break, purchase success, high-value unlock), mystery wheel, chapter/tier milestones. Moves the game from "indie polish" to "top-tier F2P perceived quality."
+> - **P2 (27 SFX + 5 BGM = 32 files)** — optional polish. UI micro-sounds, minor economy pings, social pings, offers, tutorial, BGM variants. Each one adds a small increment; none individually moves KPIs.
 >
-> **Commission in 3 waves** if budget requires staging — see §"Priority shipping plan" in the README. Wave 1 (~22 files) is enough to ship to Google Play; Waves 2–3 land in post-launch.
+> See `assets/audio/README.md` for the full per-slot manifest with priorities + live/dormant status. This brief details the 14 highest-priority SFX + 5 core BGM with full tone direction; the remaining 58 SFX + 5 BGM are listed in the README with one-line triggers — use the synth fallbacks at `src/services/sound.ts:SOUND_DEFS` as pitch/length references when commissioning those.
+>
+> **Commission in waves** if budget requires staging. P0 alone ($1.5K–$4K) is enough to ship to Google Play; P0+P1 ($4K–$11K) hits top-tier polish; P2 is live-ops work over 6–12 months.
 
 ---
 
