@@ -1,10 +1,21 @@
 # Wordfall — Agent Context
 
-Gravity-based word puzzle (React Native + Expo). Find hidden words on a letter grid; cleared letters fall, creating chain opportunities. 10 modes, 40 authored chapters (~600 puzzles), clubs, VIP, prestige.
+**Word search with gravity** (React Native + Expo). Each puzzle has a pre-authored list of words to find on a letter grid. The player traces letters with their finger — when the trace matches a list word it auto-resolves (no submit button), those cells clear, and remaining letters fall via gravity into the empty spaces. 10 modes, 40 authored chapters (~600 puzzles), clubs, VIP, prestige.
 
 **Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**61 suites, 981 tests**).
 
 For detailed architecture see `agent_docs/architecture.md` — it's a short **index** that routes you to per-domain slices (state, engine, screens, cloud) so you only read what the current question needs.
+
+## Game Mechanics — read this before making design assumptions
+
+**Authoritative spec:** `agent_docs/game_mechanics.md`. Skim it before any gameplay, audio, UX, or balance work — Wordfall does NOT share mechanics with Candy Crush, Wordscapes, or match-3 games, and agents keep making those assumptions.
+
+**Quick "IS / IS NOT" for Claude sessions:**
+
+- **IS:** word search on a letter grid, words come from a pre-authored find-list, input is finger-trace across adjacent cells, traced path auto-resolves the moment it matches a list word, cleared cells leave permanent empty spaces, gravity pulls remaining letters into those spaces, puzzle ends when all list words are found or the board becomes unwinnable.
+- **IS NOT:** there is no submit button, so **invalid words are impossible**; words come from a fixed list, so **duplicate-word submission is impossible**; long words are already on the list, so **word length is not a difficulty signal**; gravity never spawns new tiles, so **the grid only shrinks**; one trace resolves exactly one word, so **auto-cascade chains (à la Candy Crush) do not exist**; there is no move counter, so **running out of moves is not a fail state**; the hard-energy / lives system is Remote-Config gated and defaults to OFF, so **the default game has no lives gate**.
+- **Real fail states:** (1) stuck — remaining list words become untraceable; (2) timeout — Time Pressure mode only; (3) perfect-solve violation — Perfect Solve mode only.
+- **Three easily-confused concepts that ARE distinct and real:** `combo` (successive-find score multiplier), `chainCount` (gravity-opened-more-paths counter; strategic reward, not auto-cascade), `activeComboType` (Eagle Eye / Lucky Roll / Power Surge — 2× multiplier from stacking two boosters).
 
 ## Commands
 
