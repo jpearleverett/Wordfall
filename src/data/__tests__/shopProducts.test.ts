@@ -60,7 +60,8 @@ describe('SHOP_PRODUCTS data', () => {
         (r.boosters && r.boosters.length > 0) ||
         r.flags ||
         r.dripDays ||
-        r.dailyDrip;
+        r.dailyDrip ||
+        r.streakFreezeDays;
       expect(hasReward).toBeTruthy();
     }
   });

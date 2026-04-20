@@ -1,12 +1,14 @@
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId, AchievementDef } from '../achievements';
 
 describe('ACHIEVEMENTS data', () => {
-  it('contains 20 achievements (14 standard + 6 hidden)', () => {
-    expect(ACHIEVEMENTS.length).toBe(20);
+  it('contains 19 achievements (13 standard + 6 hidden)', () => {
+    // chain_reaction removed as part of the Option A dopamine refactor
+    // (chains no longer exist as a mechanic — see agent_docs/game_mechanics.md).
+    expect(ACHIEVEMENTS.length).toBe(19);
     const hidden = ACHIEVEMENTS.filter(a => a.hidden);
     const standard = ACHIEVEMENTS.filter(a => !a.hidden);
     expect(hidden.length).toBe(6);
-    expect(standard.length).toBe(14);
+    expect(standard.length).toBe(13);
   });
 
   it('every achievement has a valid structure', () => {
