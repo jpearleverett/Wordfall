@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePlayerStore, selectFriendIds } from '../stores/playerStore';
 import { analytics } from '../services/analytics';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { SendGiftButton } from './social/SendGiftButton';
 
 interface FriendLeaderboardCardProps {
   onViewAll?: () => void;
@@ -119,6 +120,14 @@ const FriendLeaderboardCard: React.FC<FriendLeaderboardCardProps> = ({ onViewAll
                   <Text style={[styles.score, isMe && styles.scoreMe]}>
                     {row.score.toLocaleString()}
                   </Text>
+                  {!isMe && (
+                    <SendGiftButton
+                      recipientId={row.userId}
+                      recipientName={row.displayName}
+                      relationship="friend"
+                      compact
+                    />
+                  )}
                 </View>
               );
             })}
