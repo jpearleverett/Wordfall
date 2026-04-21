@@ -228,7 +228,8 @@ export function MysteryWheel({
                 />
               ))}
 
-              {/* Per-segment color chip + icon */}
+              {/* Icon disc — small neutral puck so icons read over any slice
+                  color without overlapping adjacent sectors. */}
               {WHEEL_SEGMENTS.map((seg, i) => {
                 const angle = i * SEGMENT_ANGLE + SEGMENT_ANGLE / 2;
                 return (
@@ -239,22 +240,13 @@ export function MysteryWheel({
                       {
                         transform: [
                           { rotate: `${angle}deg` },
-                          { translateY: -82 },
+                          { translateY: -92 },
                         ],
                       },
                     ]}
                     pointerEvents="none"
                   >
-                    <View
-                      style={[
-                        styles.segmentChip,
-                        {
-                          backgroundColor: seg.color + 'EE',
-                          borderColor: seg.color,
-                          shadowColor: seg.color,
-                        },
-                      ]}
-                    >
+                    <View style={styles.segmentChip}>
                       <Text style={styles.segmentIcon}>{seg.icon}</Text>
                     </View>
                   </View>
@@ -572,21 +564,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   segmentChip: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(10,2,21,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
-    elevation: 5,
   },
   segmentIcon: {
-    fontSize: 20,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowRadius: 2,
+    fontSize: 16,
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowRadius: 3,
   },
   hub: {
     position: 'absolute',
