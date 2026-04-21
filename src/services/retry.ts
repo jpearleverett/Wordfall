@@ -75,6 +75,22 @@ export async function withRetry<T>(
       await new Promise((r) => setTimeout(r, wait));
     }
   }
+  // Only surface RETRYABLE failures to the sync-status bus (and therefore
+  // the NotSyncedBanner). Permanent errors — permission-denied,
+  // unauthenticated, invalid-argument, etc. — are config or auth bugs
+  // that retrying can't fix. Flagging them as "we'll retry when you're
+  // back online" is actively misleading: the player is online, the
+  // problem is server-side. Log prominently so devs still see them,
+  // and drain the pending counter by calling markSyncSuccess (from
+  // the bus's POV the op is "done, just not via the happy path").
+  if (isPermanent(lastErr)) {
+    markSyncSuccess(label);
+    logger.error(
+      `[retry] ${label} permanent error (not retryable, not flagged as offline):`,
+      lastErr,
+    );
+    throw lastErr;
+  }
   markSyncFailure(label, lastErr);
   throw lastErr;
 }

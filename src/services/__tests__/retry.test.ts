@@ -45,7 +45,13 @@ describe('withRetry', () => {
     expect(getSyncStatus().failureCount).toBe(0);
   });
 
-  it('does NOT retry on permanent errors (permission-denied)', async () => {
+  it('does NOT retry permanent errors AND does not flag them as sync failures', async () => {
+    // Permanent errors (permission-denied, unauthenticated, etc.) are
+    // config/auth bugs, not connectivity issues. Retrying won't fix
+    // them, and marking them as sync failures would light up
+    // NotSyncedBanner with misleading "we'll retry when you're back
+    // online" copy. Contract: throw to the caller, keep sync status
+    // clean so the banner stays dark.
     const err: Error & { code?: string } = new Error('forbidden');
     err.code = 'permission-denied';
     const fn = jest.fn().mockRejectedValue(err);
@@ -53,8 +59,8 @@ describe('withRetry', () => {
       withRetry(fn, { label: 'test-perm', baseDelayMs: 1, maxDelayMs: 2 }),
     ).rejects.toBe(err);
     expect(fn).toHaveBeenCalledTimes(1);
-    expect(getSyncStatus().state).toBe('failed');
-    expect(getSyncStatus().failureCount).toBe(1);
+    expect(getSyncStatus().state).toBe('idle');
+    expect(getSyncStatus().failureCount).toBe(0);
   });
 
   it('throws after exhausting attempts, marks status failed', async () => {
