@@ -5,6 +5,7 @@ import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { logger } from '../utils/logger';
+import { withRetry } from '../services/retry';
 import { CHAPTERS, getChapterForLevel } from '../data/chapters';
 import { CeremonyItem, PlayerMetrics, PuzzleEnergyState, WeeklyGoalsState } from '../types';
 import { SeasonalQuestState, DEFAULT_SEASONAL_QUEST_STATE } from '../data/seasonalQuests';
@@ -733,7 +734,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     createPersistQueue<{ uid: string; data: PlayerData }>(async ({ uid, data: payload }) => {
       try {
         const docRef = doc(db, 'users', uid, 'data', 'player');
-        await setDoc(docRef, payload, { merge: true });
+        // Route through withRetry so transient errors are retried with
+        // exponential backoff AND the sync-status bus lights up
+        // NotSyncedBanner when writes keep failing. Permanent errors
+        // (permission-denied etc.) short-circuit immediately.
+        await withRetry(() => setDoc(docRef, payload, { merge: true }), {
+          label: 'player-firestore',
+        });
       } catch (e) {
         logger.warn('Failed to sync player data to Firestore:', e);
         throw e; // let queue log; next enqueue will retry with fresh data

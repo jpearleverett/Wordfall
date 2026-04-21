@@ -11,7 +11,13 @@ import {
 const { getReactNativePersistence } = require('firebase/auth') as {
   getReactNativePersistence: (storage: unknown) => Persistence;
 };
-import { getFirestore } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  memoryLocalCache,
+  type Firestore,
+} from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -41,5 +47,27 @@ try {
 }
 
 export const auth = authInstance;
-export const db = getFirestore(app);
+
+/**
+ * Firestore with an on-device cache so reads/writes can continue while
+ * offline (airplane mode, flaky network, subway dead zones). Writes are
+ * queued and replayed when the device reconnects; reads are served from
+ * the cache if available. Falls back to memory-only cache on hot reload
+ * / double-init so the app never fails to boot.
+ */
+let dbInstance: Firestore;
+try {
+  dbInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache(),
+  });
+} catch {
+  // Already initialised (hot reload) or the target platform doesn't
+  // support persistence (e.g. some test runners) — fall back gracefully.
+  try {
+    dbInstance = getFirestore(app);
+  } catch {
+    dbInstance = initializeFirestore(app, { localCache: memoryLocalCache() });
+  }
+}
+export const db = dbInstance;
 export default app;
