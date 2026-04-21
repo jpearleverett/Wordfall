@@ -8,7 +8,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SHADOWS } from '../constants';
+import { COLORS, FONTS } from '../constants';
+import { bentoPanel } from '../styles/bentoPanel';
 import {
   useEconomyStore,
   selectSeasonPassTier,
@@ -89,13 +90,8 @@ const SeasonPassHomeCard: React.FC<SeasonPassHomeCardProps> = ({ onPress }) => {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
+    ...bentoPanel('gold'),
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.purple + '55',
-    ...SHADOWS.medium,
   },
   cardPressed: {
     opacity: 0.85,

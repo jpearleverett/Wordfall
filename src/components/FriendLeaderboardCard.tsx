@@ -13,7 +13,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
+import { COLORS, FONTS, GRADIENTS } from '../constants';
+import { bentoPanel } from '../styles/bentoPanel';
 import { firestoreService } from '../services/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlayerStore, selectFriendIds } from '../stores/playerStore';
@@ -157,15 +158,9 @@ export default FriendLeaderboardCard;
 const styles = StyleSheet.create({
   wrapper: {
     marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 16,
-    ...SHADOWS.medium,
   },
   inner: {
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: COLORS.borderMedium,
+    ...bentoPanel('cyan'),
   },
   header: {
     flexDirection: 'row',

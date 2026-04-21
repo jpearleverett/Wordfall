@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
+import { bentoPanel } from '../styles/bentoPanel';
 import { SeasonalQuest, SeasonalQuestState, getQuestProgress } from '../data/seasonalQuests';
 
 interface SeasonalQuestCardProps {
@@ -170,15 +171,10 @@ export default SeasonalQuestCard;
 const styles = StyleSheet.create({
   container: {
     marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 20,
-    ...SHADOWS.medium,
   },
   card: {
-    borderRadius: 20,
+    ...bentoPanel('pink'),
     padding: 18,
-    borderWidth: 1,
-    borderColor: COLORS.borderMedium,
   },
 
   // Header
