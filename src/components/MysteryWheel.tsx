@@ -187,36 +187,25 @@ export function MysteryWheel({
             </View>
 
             <Animated.View style={[styles.wheel, wheelStyle]}>
-              {/* Conic-gradient approximation: 2 crossed gradients over a base ring */}
+              {/* Soft base gradient through the 4 accent colors */}
               <LinearGradient
-                colors={[COLORS.cyan, COLORS.pink, COLORS.gold, COLORS.purple]}
+                colors={[COLORS.cyan, COLORS.pink, COLORS.gold, COLORS.purple, COLORS.cyan]}
                 start={{ x: 0.5, y: 0 }}
                 end={{ x: 0.5, y: 1 }}
                 style={StyleSheet.absoluteFillObject}
               />
               <LinearGradient
                 colors={[
-                  `${COLORS.pink}CC`,
-                  `${COLORS.purple}00`,
-                  `${COLORS.cyan}CC`,
+                  `${COLORS.purple}99`,
                   `${COLORS.gold}00`,
+                  `${COLORS.pink}99`,
                 ]}
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
                 style={StyleSheet.absoluteFillObject}
               />
-              <LinearGradient
-                colors={[
-                  `${COLORS.gold}99`,
-                  `${COLORS.pink}00`,
-                  `${COLORS.purple}99`,
-                ]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFillObject}
-              />
 
-              {/* Slice dividers */}
+              {/* Dark spoke dividers — 8 thick lines from center to edge */}
               {WHEEL_SEGMENTS.map((seg, i) => (
                 <View
                   key={`div_${seg.id}`}
@@ -230,7 +219,7 @@ export function MysteryWheel({
                 />
               ))}
 
-              {/* Segment icons */}
+              {/* Per-segment color chip + icon */}
               {WHEEL_SEGMENTS.map((seg, i) => {
                 const angle = i * SEGMENT_ANGLE + SEGMENT_ANGLE / 2;
                 return (
@@ -241,13 +230,24 @@ export function MysteryWheel({
                       {
                         transform: [
                           { rotate: `${angle}deg` },
-                          { translateY: -92 },
+                          { translateY: -82 },
                         ],
                       },
                     ]}
                     pointerEvents="none"
                   >
-                    <Text style={styles.segmentIcon}>{seg.icon}</Text>
+                    <View
+                      style={[
+                        styles.segmentChip,
+                        {
+                          backgroundColor: seg.color + 'EE',
+                          borderColor: seg.color,
+                          shadowColor: seg.color,
+                        },
+                      ]}
+                    >
+                      <Text style={styles.segmentIcon}>{seg.icon}</Text>
+                    </View>
                   </View>
                 );
               })}
@@ -319,7 +319,7 @@ export function MysteryWheel({
             {wheelState.spinsAvailable === 0 && !hasDailyFreeSpin && !spinning && (
               <View style={styles.buyRow}>
                 <Pressable
-                  style={({ pressed }) => [!canBuy1 && styles.buttonDisabled, pressed && styles.buttonPressed]}
+                  style={({ pressed }) => [styles.buyPressable, !canBuy1 && styles.buttonDisabled, pressed && styles.buttonPressed]}
                   onPress={() => handleBuySpin(1)}
                   disabled={!canBuy1}
                   accessibilityRole="button"
@@ -328,10 +328,11 @@ export function MysteryWheel({
                   <View style={styles.buyButton}>
                     <Text style={styles.buyText}>1 Spin</Text>
                     <Text style={styles.buyPrice}>{'\u{1F48E}'} {SPIN_COST_GEMS}</Text>
+                    <Text style={styles.buyDiscountPlaceholder}> </Text>
                   </View>
                 </Pressable>
                 <Pressable
-                  style={({ pressed }) => [!canBuy5 && styles.buttonDisabled, pressed && styles.buttonPressed]}
+                  style={({ pressed }) => [styles.buyPressable, !canBuy5 && styles.buttonDisabled, pressed && styles.buttonPressed]}
                   onPress={() => handleBuySpin(SPIN_BUNDLE_COUNT)}
                   disabled={!canBuy5}
                   accessibilityRole="button"
@@ -536,19 +537,29 @@ const styles = StyleSheet.create({
   },
   sliceDivider: {
     position: 'absolute',
-    width: 1,
+    width: 3,
     height: '100%',
-    backgroundColor: 'rgba(10,2,21,0.45)',
+    backgroundColor: 'rgba(10,2,21,0.95)',
   },
   segment: {
     position: 'absolute',
     alignItems: 'center',
   },
+  segmentChip: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    elevation: 5,
+  },
   segmentIcon: {
-    fontSize: 22,
-    color: '#0a0215',
-    fontWeight: '900',
-    textShadowColor: 'rgba(255,255,255,0.5)',
+    fontSize: 20,
+    textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowRadius: 2,
   },
   hub: {
@@ -647,6 +658,10 @@ const styles = StyleSheet.create({
   buyRow: {
     flexDirection: 'row',
     gap: 12,
+    alignSelf: 'stretch',
+  },
+  buyPressable: {
+    flex: 1,
   },
   buyButton: {
     backgroundColor: COLORS.surface,
@@ -656,6 +671,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.accent + '30',
+    minHeight: 74,
+    justifyContent: 'center',
   },
   buyButtonBundle: {
     borderColor: COLORS.gold + '40',
@@ -676,6 +693,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     letterSpacing: 1,
     marginTop: 2,
+  },
+  buyDiscountPlaceholder: {
+    fontSize: 9,
+    lineHeight: 11,
+    marginTop: 2,
+    opacity: 0,
   },
   buttonDisabled: {
     opacity: 0.4,

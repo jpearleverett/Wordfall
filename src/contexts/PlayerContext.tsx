@@ -1420,9 +1420,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // ── Flawless Streak ───────────────────────────────────────────────────
   // Cross-session counter of consecutive flawless puzzles (no hints, no undos,
-  // no shuffle, no wrong-trace). Mirrors updateWinStreak but only counts
-  // distinct calendar days so same-day replays don't inflate the streak.
-  // Milestones (3/5/7/10/15/20) queue a `flawless_streak_milestone` ceremony.
+  // no shuffle, no wrong-trace). Per-puzzle: every flawless solve increments,
+  // any non-flawless completion resets to 0. Milestones (3/5/7/10/15/20)
+  // queue a `flawless_streak_milestone` ceremony.
 
   const updateFlawlessStreak = useCallback((wasFlawless: boolean) => {
     setData((prev) => {
@@ -1444,11 +1444,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
 
       const today = new Date().toISOString().split('T')[0];
-      if (prev.flawlessStreak.lastFlawlessDate === today) {
-        // Same-day replay — don't re-credit the streak.
-        return prev;
-      }
-
       const newStreak = prev.flawlessStreak.currentStreak + 1;
       const newBest = Math.max(newStreak, prev.flawlessStreak.bestStreak);
 
