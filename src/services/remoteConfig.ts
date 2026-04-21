@@ -120,6 +120,12 @@ export interface RemoteConfigValues {
   cosmeticPerksEnabled: boolean;
   streakShieldOfferEnabled: boolean;
   prestigeCeremonyEnabled: boolean;
+  /**
+   * ID of the currently featured product pinned above the shop grid.
+   * Empty string disables the pin. Set via Remote Config without a
+   * client rebuild to rotate emphasis weekly.
+   */
+  featuredProductId: string;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -229,6 +235,10 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // justifies and the gem cost has been A/B tuned against decline rate.
   closeFinishPremiumEnabled: false,
   closeFinishPremiumGemCost: 9,
+  // Featured-bundle pin shown at the top of the shop. Ops rotates this
+  // weekly via Remote Config — empty string means "no pin" so the shop
+  // falls back to the static ordering.
+  featuredProductId: 'explorer_bundle',
   dailyQuestsEnabled: true,
   cosmeticPerksEnabled: true,
   streakShieldOfferEnabled: true,

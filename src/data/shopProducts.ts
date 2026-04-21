@@ -48,6 +48,16 @@ export interface ShopProduct {
   originalPrice?: string;
   /** Numeric original price; lets UI compute % off without re-parsing */
   originalPriceAmount?: number;
+  /**
+   * Optional visual emphasis tag. Rendered as a ribbon badge above the
+   * card by ShopScreen. Curated by ops based on purchase-count analytics
+   * + store-section intent.
+   *
+   * - 'popular'    — high conversion volume; secondary highlight.
+   * - 'best_value' — highest coins-per-dollar in its tier; gold ribbon.
+   * - 'limited'    — time-boxed or stock-capped; red ribbon with pulse.
+   */
+  badge?: 'popular' | 'best_value' | 'limited';
   icon: string;
 }
 
@@ -127,6 +137,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     isNonConsumable: false,
     originalPrice: '$4.99',
     originalPriceAmount: 4.99,
+    badge: 'limited',
     icon: '\u{1F4D6}',
   },
   {
@@ -144,6 +155,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     isNonConsumable: false,
     originalPrice: '$1.99',
     originalPriceAmount: 1.99,
+    badge: 'popular',
     icon: '\u{1F4E6}',
   },
 
@@ -187,6 +199,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     isNonConsumable: false,
     originalPrice: '$12.99',
     originalPriceAmount: 12.99,
+    badge: 'popular',
     icon: '\u{1F9ED}',
   },
 
@@ -632,6 +645,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     isNonConsumable: false,
     originalPrice: '$24.99',
     originalPriceAmount: 24.99,
+    badge: 'popular',
     icon: '\u{1F3C6}',
   },
   {
@@ -712,6 +726,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     isNonConsumable: false,
     originalPrice: '$199.99',
     originalPriceAmount: 199.99,
+    badge: 'best_value',
     icon: '\u{1F525}',
   },
 
@@ -934,6 +949,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     isNonConsumable: false,
     originalPrice: '$119.99',
     originalPriceAmount: 119.99,
+    badge: 'best_value',
     icon: '\u{1F525}',
   },
 
