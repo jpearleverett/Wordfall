@@ -26,6 +26,17 @@ import {
   clearPuzzleSnapshot,
   snapshotMatchesTarget,
 } from '../services/puzzleSnapshot';
+import { generateIdempotencyKey } from '../utils/idempotency';
+
+/**
+ * Mints a completion id used by server-side retry paths to dedupe
+ * credit grants. Separate from the gifts idempotency key namespace
+ * just for readability in logs — under the hood they share the same
+ * short UUID-ish generator.
+ */
+function generateCompletionId(): string {
+  return `puz_${generateIdempotencyKey()}`;
+}
 
 const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
 
@@ -106,6 +117,7 @@ function createInitialState(
     comboWordsRemaining: 0,
     comboMultiplier: 1,
     captureReplay,
+    completionId: null,
   };
 }
 
@@ -493,6 +505,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         moves: newMoves,
         history: [...state.history, historyEntry],
         status: newStatus,
+        // Mint a stable completion key on the 'won' transition so any
+        // server-side retry path (weekly-leaderboard submission,
+        // referral credit, reward inbox) can dedupe against a repeat
+        // send. Once set it stays fixed for the remainder of this
+        // puzzle (NEW_GAME resets it back to null).
+        completionId:
+          newStatus === 'won' && !state.completionId
+            ? generateCompletionId()
+            : state.completionId,
         gravityDirection: newGravityDirection,
         shrinkCount: newShrinkCount,
         wordsUntilShrink: newWordsUntilShrink,

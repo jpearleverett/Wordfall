@@ -107,6 +107,15 @@ export interface GameState {
    * Enabled per-puzzle by GameScreen for dailies / event puzzles.
    */
   captureReplay: boolean;
+  /**
+   * Unique identifier generated on the `'won'` status transition. Used
+   * as a dedup key by any server-side flow that would otherwise
+   * double-grant rewards on a retry (weekly-leaderboard snapshot,
+   * referral-milestone credit, puzzle-complete inbox writes). `null`
+   * until the puzzle is solved, then stays fixed for the remainder of
+   * that puzzle's lifecycle (cleared on NEW_GAME).
+   */
+  completionId: string | null;
 }
 
 export type GameAction =

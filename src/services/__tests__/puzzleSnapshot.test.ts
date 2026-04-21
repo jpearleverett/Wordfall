@@ -76,6 +76,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     comboWordsRemaining: 0,
     comboMultiplier: 1,
     captureReplay: false,
+    completionId: null,
   };
   return { ...base, ...overrides };
 }
