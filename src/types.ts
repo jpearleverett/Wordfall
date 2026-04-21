@@ -147,7 +147,30 @@ export type GameAction =
    * shrinkCount so the reducer ignores stale dispatches — if another
    * shrink has occurred since the check started, the check is outdated.
    */
-  | { type: 'MARK_FAILED'; shrinkCount: number };
+  | { type: 'MARK_FAILED'; shrinkCount: number }
+  /**
+   * Restores an in-flight puzzle from a previously saved snapshot. Used when
+   * the app is killed mid-puzzle (backgrounding + OS reclamation, crash,
+   * etc.) so the player resumes exactly where they left off. Emitted by
+   * GameScreen on mount if a valid snapshot exists for the target level.
+   */
+  | { type: 'HYDRATE_FROM_SNAPSHOT'; state: GameState };
+
+/**
+ * Serializable snapshot of an in-progress puzzle. Written to AsyncStorage on
+ * AppState 'background' so a kill-mid-puzzle doesn't lose the player's work.
+ *
+ * `version` is bumped when the shape changes so stale snapshots from older
+ * app versions are discarded safely instead of crashing hydrate.
+ */
+export interface PuzzleSnapshot {
+  version: 1;
+  savedAtMs: number;
+  level: number;
+  mode: GameMode;
+  chapterId: number;
+  state: GameState;
+}
 
 export interface PlayerProgress {
   currentLevel: number;
