@@ -40,8 +40,12 @@ export function getAdjustedConfig(
   ).length;
 
   // ── Struggling detection ──
-  // Average stars below 1.5 OR multiple recent levels with >3 attempts
-  if (averageStars < 1.5 || recentMultiAttemptLevels >= 2) {
+  // Average stars below 2.0 OR any recent level that took >3 attempts.
+  // Earlier thresholds (< 1.5 / >= 2) gated easing so tightly that a player
+  // grinding 2-star clears on hard levels never got any relief, so the
+  // adaptive layer felt absent. 2.0 is still a clear struggle signal
+  // (consistent sub-star performance).
+  if (averageStars < 2.0 || recentMultiAttemptLevels >= 1) {
     const adjusted = makeEasier(baseConfig);
     logger.log(
       `[DifficultyAdjuster] Easing difficulty: avgStars=${averageStars.toFixed(2)}, multiAttemptLevels=${recentMultiAttemptLevels}`,
@@ -50,7 +54,7 @@ export function getAdjustedConfig(
       config: adjusted,
       direction: 'easier',
       reason:
-        averageStars < 1.5
+        averageStars < 2.0
           ? `low_avg_stars_${averageStars.toFixed(2)}`
           : `multi_attempt_levels_${recentMultiAttemptLevels}`,
     };
