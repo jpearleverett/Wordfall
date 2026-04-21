@@ -24,6 +24,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS } from '../constants';
 import { COMBO_DEFINITIONS, type ComboType } from '../data/boosterCombos';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface BoosterComboBannerProps {
   comboType: ComboType | null;
@@ -43,18 +44,31 @@ const BoosterComboBanner: React.FC<BoosterComboBannerProps> = ({
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(-40);
   const scale = useSharedValue(0.9);
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     if (!comboType) return;
-    opacity.value = withSequence(
-      withTiming(1, { duration: 180 }),
-      withDelay(AUTO_DISMISS_MS - 480, withTiming(0, { duration: 300 })),
-    );
-    translateY.value = withSpring(0, { damping: 14, stiffness: 220 });
-    scale.value = withSequence(
-      withSpring(1.04, { damping: 10, stiffness: 200 }),
-      withSpring(1.0, { damping: 14, stiffness: 220 }),
-    );
+    if (reduceMotion) {
+      // Skip spring/scale pop; just fade the banner in and out so
+      // vestibular-sensitive players still see the combo name +
+      // multiplier without a bouncing pulse.
+      opacity.value = withSequence(
+        withTiming(1, { duration: 120 }),
+        withDelay(AUTO_DISMISS_MS - 240, withTiming(0, { duration: 120 })),
+      );
+      translateY.value = 0;
+      scale.value = 1;
+    } else {
+      opacity.value = withSequence(
+        withTiming(1, { duration: 180 }),
+        withDelay(AUTO_DISMISS_MS - 480, withTiming(0, { duration: 300 })),
+      );
+      translateY.value = withSpring(0, { damping: 14, stiffness: 220 });
+      scale.value = withSequence(
+        withSpring(1.04, { damping: 10, stiffness: 200 }),
+        withSpring(1.0, { damping: 14, stiffness: 220 }),
+      );
+    }
     const id = setTimeout(() => {
       onDismiss?.();
     }, AUTO_DISMISS_MS);

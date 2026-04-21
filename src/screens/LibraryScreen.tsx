@@ -26,6 +26,7 @@ import {
 } from '../stores/playerStore';
 import { CHAPTERS } from '../data/chapters';
 import { Chapter } from '../types';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LibraryHeroIllustration } from '../components/common/HeroIllustrations';
 import { Tooltip } from '../components/common/Tooltip';
@@ -111,10 +112,17 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     }));
   }, []);
 
-  // Staggered entry animation for wings
+  // Staggered entry animation for wings. When reduce-motion is active we
+  // jump every wing straight to the final state so the player doesn't see
+  // a cascade of pop-ins across the screen.
   const wingAnims = useRef(wings.map(() => new Animated.Value(0))).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
+    if (reduceMotion) {
+      wingAnims.forEach((anim) => anim.setValue(1));
+      return;
+    }
     const animations = wingAnims.map((anim, index) =>
       Animated.sequence([
         Animated.delay(index * 80),
@@ -127,7 +135,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
       ])
     );
     Animated.parallel(animations).start();
-  }, [wingAnims]);
+  }, [wingAnims, reduceMotion]);
 
   const totalLibraryStars = Object.values(starsByLevel).reduce((sum, value) => sum + value, 0);
   const selectedWingData = wings.find((wing) => wing.id === selectedWing) ?? wings[0];

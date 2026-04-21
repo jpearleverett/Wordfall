@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { bentoDividerColor } from '../styles/bentoPanel';
 import { SparkleField } from './effects/ParticleSystem';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
   MysteryWheelState,
   WHEEL_SEGMENTS,
@@ -48,6 +49,7 @@ export function MysteryWheel({
   const [mysteryBoxResult, setMysteryBoxResult] = useState<{ label: string; icon: string } | null>(null);
   const [oddsVisible, setOddsVisible] = useState(false);
   const currentRotation = useRef(0);
+  const reduceMotion = useReduceMotion();
 
   // Pre-compute each segment's probability from its weight for public disclosure.
   const wheelOdds = useMemo(() => {
@@ -97,10 +99,13 @@ export function MysteryWheel({
     const fullRotations = 5 + Math.floor(Math.random() * 3); // 5-7 full spins
     const totalRotation = currentRotation.current + fullRotations * 360 + targetAngle - (currentRotation.current % 360);
 
-    const spinDuration = 3500 + Math.random() * 1000;
+    // Reduce-motion: jump to final angle with a 250ms fade rather than
+    // a 5-rotation spin. Players still see the result; we skip the
+    // visual payload that could trigger vestibular issues.
+    const spinDuration = reduceMotion ? 250 : 3500 + Math.random() * 1000;
     rotate.value = withTiming(totalRotation, {
       duration: spinDuration,
-      easing: Easing.out(Easing.cubic),
+      easing: reduceMotion ? Easing.linear : Easing.out(Easing.cubic),
     }, () => {
       runOnJS(onSpinComplete)(segment, updatedState, null);
     });
