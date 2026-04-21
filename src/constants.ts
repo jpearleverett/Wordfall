@@ -239,14 +239,64 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, BoardConfig> = {
   },
 };
 
-// Level progression — smooth per-level ramp with breather pacing
-// Inspired by Candy Crush / Royal Match: gradual increase with periodic easy levels
-// instead of a cliff at each difficulty threshold.
-export function getLevelConfig(level: number): BoardConfig {
-  // Breather levels: every 5th level is easier (sawtooth pattern, drops ~4 levels back)
-  const isBreather = level > 1 && level % 5 === 0;
-  const effectiveLevel = isBreather ? Math.max(1, level - 4) : level;
+// Level progression — smooth per-level ramp with breather + spike pacing.
+// Inspired by Candy Crush / Royal Match: gradual increase broken up by
+// periodic easy "breather" levels AND periodic hard "spike" levels so
+// strong players don't see a perfectly flat ramp.
+//
+//   - Breather: every 5th level (sawtooth, drops 4 levels of difficulty).
+//                Always wins if a breather and a spike would collide on
+//                the same level — the player-friendly reading.
+//   - Spike:    every 13th level from level 13 onwards. Adds one word
+//                and extends max word length by 1. Coprime with 5 so
+//                breather/spike collisions only happen at LCM = 65,
+//                and even there the breather takes precedence.
+//
+// Both intervals are compile-time constants. The `spikeLevelsEnabled`
+// Remote Config flag (consumed by isSpikeLevel) lets Ops dark-launch
+// the spike system if live telemetry shows unexpected fail-rate
+// spikes on spike levels.
+const BREATHER_INTERVAL = 5;
+const SPIKE_INTERVAL = 13;
+const SPIKE_MIN_LEVEL = 13; // no spikes during early-game learning phase
 
+export function isBreatherLevel(level: number): boolean {
+  return level > 1 && level % BREATHER_INTERVAL === 0;
+}
+
+/**
+ * Whether the player's current level is a designed "challenge spike" —
+ * intentionally harder than the surrounding ramp so strong players get
+ * a break from monotony. Breather levels always win when the two
+ * intervals would collide (e.g. level 65 = LCM). Honors the
+ * `spikeLevelsEnabled` Remote Config flag as a kill switch.
+ *
+ * Exposed so UI can render a "⚡ CHALLENGE" badge next to the level
+ * label (GameScreen consumes it).
+ */
+export function isSpikeLevel(level: number): boolean {
+  if (level < SPIKE_MIN_LEVEL) return false;
+  if (isBreatherLevel(level)) return false;
+  if (level % SPIKE_INTERVAL !== 0) return false;
+  // Lazy require to avoid a constants -> services cycle.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { getRemoteBoolean } = require('./services/remoteConfig') as {
+    getRemoteBoolean: (key: string) => boolean;
+  };
+  return getRemoteBoolean('spikeLevelsEnabled');
+}
+
+/** Apply spike-level transformation: one more word + one longer word. */
+function applySpike(base: BoardConfig): BoardConfig {
+  return {
+    ...base,
+    wordCount: base.wordCount + 1,
+    maxWordLength: Math.min(6, base.maxWordLength + 1),
+  };
+}
+
+/** Base phase-driven board config for the given level, ignoring spike/breather. */
+function getPhaseConfig(effectiveLevel: number): BoardConfig {
   // Phase 1: Tutorial / Easy (levels 1-5) — gentle ramp from 2 to 3 words
   if (effectiveLevel <= 3) {
     return { rows: 5, cols: 4, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' };
@@ -254,7 +304,6 @@ export function getLevelConfig(level: number): BoardConfig {
   if (effectiveLevel <= 5) {
     return { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
   }
-
   // Phase 2: Early game (levels 6-10) — introduce bigger grids gradually
   if (effectiveLevel <= 7) {
     return { rows: 6, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
@@ -262,7 +311,6 @@ export function getLevelConfig(level: number): BoardConfig {
   if (effectiveLevel <= 10) {
     return { rows: 6, cols: 5, wordCount: 4, minWordLength: 3, maxWordLength: 4, difficulty: 'medium' };
   }
-
   // Phase 3: Building confidence (levels 11-15) — 4-5 words, longer words creep in
   if (effectiveLevel <= 12) {
     return { rows: 6, cols: 6, wordCount: 4, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' };
@@ -270,7 +318,6 @@ export function getLevelConfig(level: number): BoardConfig {
   if (effectiveLevel <= 15) {
     return { rows: 7, cols: 6, wordCount: 5, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' };
   }
-
   // Phase 4: Mid-game (levels 16-22) — grid grows, word count climbs
   if (effectiveLevel <= 18) {
     return { rows: 7, cols: 6, wordCount: 5, minWordLength: 3, maxWordLength: 5, difficulty: 'hard' };
@@ -278,7 +325,6 @@ export function getLevelConfig(level: number): BoardConfig {
   if (effectiveLevel <= 22) {
     return { rows: 7, cols: 7, wordCount: 5, minWordLength: 3, maxWordLength: 6, difficulty: 'hard' };
   }
-
   // Phase 5: Late mid-game (levels 23-30) — 6 words, bigger grids
   if (effectiveLevel <= 26) {
     return { rows: 8, cols: 7, wordCount: 6, minWordLength: 3, maxWordLength: 6, difficulty: 'hard' };
@@ -286,7 +332,6 @@ export function getLevelConfig(level: number): BoardConfig {
   if (effectiveLevel <= 30) {
     return { rows: 8, cols: 7, wordCount: 6, minWordLength: 3, maxWordLength: 6, difficulty: 'hard' };
   }
-
   // Phase 6: Expert (levels 31-40) — harder word constraints, more words
   if (effectiveLevel <= 35) {
     return { rows: 8, cols: 7, wordCount: 7, minWordLength: 3, maxWordLength: 6, difficulty: 'expert' };
@@ -294,9 +339,16 @@ export function getLevelConfig(level: number): BoardConfig {
   if (effectiveLevel <= 40) {
     return { rows: 9, cols: 7, wordCount: 7, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
   }
-
   // Phase 7: Endgame (levels 41+) — full expert config
   return { rows: 9, cols: 7, wordCount: 8, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
+}
+
+export function getLevelConfig(level: number): BoardConfig {
+  const isBreather = isBreatherLevel(level);
+  const effectiveLevel = isBreather ? Math.max(1, level - 4) : level;
+  const base = getPhaseConfig(effectiveLevel);
+  const applySpikeThisLevel = !isBreather && isSpikeLevel(level);
+  return applySpikeThisLevel ? applySpike(base) : base;
 }
 
 // Legacy helper: get the broad difficulty tier for a level (used for rewards, UI labels)
@@ -797,10 +849,14 @@ export const FEATURE_UNLOCK_SCHEDULE: {
   { id: 'events', unlockLevel: 10, icon: '🏆', title: 'Events Unlocked!', description: 'Compete in weekly events for exclusive rewards and climb the leaderboards.', accentColor: COLORS.coral },
 ];
 
-// Breather difficulty config — drops the player back ~3-4 levels worth of difficulty
+// Breather difficulty config — drops the player back ~3-4 levels worth of
+// difficulty. Bypasses the spike layer so we don't accidentally hand the
+// player a harder-than-base puzzle when their would-be target lands on a
+// spike level (e.g. breather at level 30 otherwise recursed through the
+// spike at level 26, producing a breather that was harder than normal).
 export function getBreatherConfig(level: number): BoardConfig {
   const easierLevel = Math.max(1, level - 4);
-  return getLevelConfig(easierLevel);
+  return getPhaseConfig(easierLevel);
 }
 
 // Events

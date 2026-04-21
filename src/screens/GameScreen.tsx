@@ -25,7 +25,7 @@ import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic } from '../services/haptics';
@@ -72,7 +72,12 @@ interface GameScreenProps {
   mode?: GameMode;
   maxMoves?: number;
   timeLimit?: number;
-  onComplete: (stars: number, score: number, perfectRun: boolean) => void;
+  onComplete: (
+    stars: number,
+    score: number,
+    perfectRun: boolean,
+    completionTimeSeconds: number,
+  ) => void;
   onNextLevel: () => void;
   onHome: () => void;
   // Completion data (passed from App.tsx wrapper after handleComplete)
@@ -446,6 +451,11 @@ function GameScreenImpl({
     [failCount]
   );
 
+  // Challenge-spike marker — computed once per level so a Remote Config
+  // flip or level change rolls through. Suppressed for daily/weekly which
+  // don't use the ramp-based level config at all.
+  const isSpike = useMemo(() => isSpikeLevel(level), [level]);
+
   const modeConfig = MODE_CONFIGS[mode];
   const effectiveTimeLimit = modeConfig.rules.hasTimer
     ? (modeConfig.rules.timerSeconds || timeLimit || 120)
@@ -607,6 +617,14 @@ function GameScreenImpl({
   // hint_rescue: track session fail count for this level (local, resets on mount)
   const sessionFailCount = useRef(0);
   const failureCountedRef = useRef(false);
+  // Separate once-per-puzzle guard for the adaptive-difficulty fail
+  // signal. Classic/noGravity/gravityFlip/expert/relax modes never
+  // transition status to 'failed' when the board goes unwinnable —
+  // instead the isStuck flag fires while status stays 'playing'. This
+  // ref lets us count a single "struggled on this puzzle" event for
+  // the adjuster the first time isStuck goes true, independent of the
+  // hint_rescue failure-count plumbing.
+  const stuckFailRecordedRef = useRef(false);
   // close_finish: idle timer for "1 word away" scenario
   const closeFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // close_finish_premium escalation: fires after the coin-priced close_finish
@@ -781,6 +799,13 @@ function GameScreenImpl({
       if (!failureCountedRef.current) {
         failureCountedRef.current = true;
         sessionFailCount.current += 1;
+        // Persist the failure so the hint_rescue offer survives app
+        // restarts AND so the adaptive difficulty adjuster sees
+        // struggling levels (recordFailure co-updates
+        // performanceMetrics.levelAttempts now). The fail-path had
+        // never invoked this before — failCountByLevel was always
+        // empty, so the `persistentFails` read below only ever saw 0.
+        playerActions.recordFailure(level);
       }
       const persistentFails = failCountByLevel?.[level] ?? 0;
       const totalFails = Math.max(sessionFailCount.current, persistentFails);
@@ -790,7 +815,7 @@ function GameScreenImpl({
     } else {
       failureCountedRef.current = false;
     }
-  }, [status, activeOffer, showOfferIfAllowed, failCountByLevel, level]);
+  }, [status, activeOffer, showOfferIfAllowed, failCountByLevel, level, playerActions]);
 
   // hint_rescue: dead-end detected while player has 0 hint tokens
   useEffect(() => {
@@ -1505,9 +1530,22 @@ function GameScreenImpl({
       const finalScore = score;
       const finalStars = stars;
       const finalPerfectRun = perfectRun;
+      // Capture real completion time for the adaptive-difficulty feed.
+      // puzzleStartTime is wall-clock ms at NEW_GAME; this branch fires
+      // once per 'won' transition so subtracting gives the player's
+      // actual time-to-solve. Clamped to >=0 in case puzzleStartTime
+      // wasn't set (legacy snapshot hydrate path).
+      const startedAt = store.getState().puzzleStartTime;
+      const completionTimeSeconds =
+        startedAt > 0 ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0;
       const timer = setTimeout(() => {
         setShowComplete(true);
-        onCompleteRef.current(finalStars, finalScore, finalPerfectRun);
+        onCompleteRef.current(
+          finalStars,
+          finalScore,
+          finalPerfectRun,
+          completionTimeSeconds,
+        );
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -1517,7 +1555,27 @@ function GameScreenImpl({
   useEffect(() => {
     gridHeightLocked.current = false;
     setGridAreaHeight(0);
+    // Also reset the adjuster's per-puzzle stuck-fail guard so the
+    // next puzzle can record its own struggle signal independently.
+    stuckFailRecordedRef.current = false;
   }, [board]);
+
+  // Adaptive-difficulty struggle signal for modes that DON'T flip
+  // status to 'failed' on dead-end (Classic, noGravity, gravityFlip,
+  // expert, relax). When the solver reports isStuck on an active
+  // puzzle, count it as a fail for the adjuster exactly once per
+  // puzzle load — the player may then use a hint to escape, but the
+  // struggle telemetry is real and worth feeding in.
+  useEffect(() => {
+    if (
+      isStuck &&
+      status === 'playing' &&
+      !stuckFailRecordedRef.current
+    ) {
+      stuckFailRecordedRef.current = true;
+      playerActions.recordFailure(level);
+    }
+  }, [isStuck, status, level, playerActions]);
 
   // Show post-loss modal first (if applicable), then failed modal
   useEffect(() => {
@@ -1896,6 +1954,7 @@ function GameScreenImpl({
             canShowAdHint={!isAdFree && adManager.canShowAd('hint_reward')}
             isStuck={isStuck}
             undosLeft={undosLeft}
+            isSpike={isSpike && !isDaily && mode !== 'weekly'}
             onIdleHintTap={stableHandleIdleHintBannerTap}
             onAdHintTap={stableHandleAdHintBannerTap}
             onUndoTap={stableHandleUndo}

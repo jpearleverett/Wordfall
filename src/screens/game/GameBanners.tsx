@@ -24,6 +24,14 @@ interface GameBannersProps {
   canShowAdHint: boolean;
   isStuck: boolean;
   undosLeft: number;
+  /**
+   * True when the current puzzle is a "challenge spike" level — the
+   * designed-harder-than-surrounding-ramp kind. Shows a persistent
+   * gold banner so the player understands why this puzzle feels
+   * tougher than the last few. Computed from `isSpikeLevel(level)`
+   * at mount in GameScreen.
+   */
+  isSpike?: boolean;
   onIdleHintTap: () => void;
   onAdHintTap: () => void;
   onUndoTap: () => void;
@@ -41,6 +49,7 @@ function GameBannersImpl({
   canShowAdHint,
   isStuck,
   undosLeft,
+  isSpike = false,
   onIdleHintTap,
   onAdHintTap,
   onUndoTap,
@@ -70,6 +79,13 @@ function GameBannersImpl({
 
   return (
     <>
+      {isSpike && isPlaying && (
+        <View style={[styles.cascadeBar, styles.cascadeBarSpike]}>
+          <Text style={[styles.cascadeText, styles.cascadeTextSpike]}>
+            {'⚡'} CHALLENGE LEVEL
+          </Text>
+        </View>
+      )}
       {showGravityBanner && (
         <View style={styles.cascadeBar}>
           <Text style={styles.cascadeText}>
@@ -147,6 +163,20 @@ const styles = StyleSheet.create({
   },
   cascadeBarGold: {
     borderColor: COLORS.gold,
+  },
+  cascadeBarSpike: {
+    borderColor: COLORS.gold,
+    backgroundColor: 'rgba(50, 35, 10, 0.85)',
+    shadowColor: COLORS.gold,
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+  },
+  cascadeTextSpike: {
+    color: COLORS.gold,
+    textShadowColor: 'rgba(255, 184, 0, 0.6)',
+    textShadowRadius: 12,
+    fontSize: 13,
+    letterSpacing: 1.5,
   },
   cascadeText: {
     fontFamily: FONTS.display,

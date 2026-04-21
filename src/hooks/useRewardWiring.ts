@@ -189,7 +189,12 @@ export function useRewardWiring({
   params,
   navigation,
 }: UseRewardWiringParams) {
-  const handleComplete = useCallback((stars: number, score: number, perfectRun: boolean = false) => {
+  const handleComplete = useCallback((
+    stars: number,
+    score: number,
+    perfectRun: boolean = false,
+    completionTimeSeconds: number = 0,
+  ) => {
     try {
     const level = params.level || 0;
     const mode = (params.mode || 'classic') as GameMode;
@@ -266,8 +271,10 @@ export function useRewardWiring({
       player.updateProgress({ consecutiveFailures: 0, lastLevelStars: stars });
     }
 
-    // Update adaptive difficulty metrics
-    player.recordPerformanceMetrics(level, stars, 0);
+    // Update adaptive difficulty metrics with the real completion time
+    // (was hard-coded to 0 until April 2026 which zeroed out the
+    // averageCompletionTime channel entirely).
+    player.recordPerformanceMetrics(level, stars, completionTimeSeconds);
 
     // Award coins based on difficulty -- apply event multipliers + cosmetic perks
     const difficulty: Difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
