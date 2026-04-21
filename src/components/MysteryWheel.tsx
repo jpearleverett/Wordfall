@@ -29,6 +29,8 @@ interface MysteryWheelProps {
 
 const SEGMENT_COUNT = WHEEL_SEGMENTS.length;
 const SEGMENT_ANGLE = 360 / SEGMENT_COUNT;
+const WHEEL_RADIUS = 130; // Must match styles.wheel width/height/2.
+const SLICE_BASE_HALF = WHEEL_RADIUS * Math.tan((SEGMENT_ANGLE / 2) * (Math.PI / 180));
 
 export function MysteryWheel({
   wheelState,
@@ -187,25 +189,32 @@ export function MysteryWheel({
             </View>
 
             <Animated.View style={[styles.wheel, wheelStyle]}>
-              {/* Soft base gradient through the 4 accent colors */}
+              {/* 11 colored pie slices (border-triangle trick). Each slice owns
+                  its segment's color so the pointer landing is unambiguous. */}
+              {WHEEL_SEGMENTS.map((seg, i) => (
+                <View
+                  key={`slice_${seg.id}`}
+                  pointerEvents="none"
+                  style={[
+                    styles.slice,
+                    {
+                      borderTopColor: seg.color,
+                      transform: [{ rotate: `${(i + 0.5) * SEGMENT_ANGLE}deg` }],
+                    },
+                  ]}
+                />
+              ))}
+
+              {/* Subtle inner-to-outer vignette for depth without hiding colors */}
               <LinearGradient
-                colors={[COLORS.cyan, COLORS.pink, COLORS.gold, COLORS.purple, COLORS.cyan]}
-                start={{ x: 0.5, y: 0 }}
+                colors={[`${COLORS.bg}00`, `${COLORS.bg}55`]}
+                start={{ x: 0.5, y: 0.35 }}
                 end={{ x: 0.5, y: 1 }}
                 style={StyleSheet.absoluteFillObject}
-              />
-              <LinearGradient
-                colors={[
-                  `${COLORS.purple}99`,
-                  `${COLORS.gold}00`,
-                  `${COLORS.pink}99`,
-                ]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={StyleSheet.absoluteFillObject}
+                pointerEvents="none"
               />
 
-              {/* Dark spoke dividers — 8 thick lines from center to edge */}
+              {/* Dark spoke dividers — one per boundary, from rim to center */}
               {WHEEL_SEGMENTS.map((seg, i) => (
                 <View
                   key={`div_${seg.id}`}
@@ -535,11 +544,28 @@ const styles = StyleSheet.create({
     shadowRadius: 30,
     elevation: 12,
   },
+  slice: {
+    position: 'absolute',
+    top: 0,
+    left: WHEEL_RADIUS - SLICE_BASE_HALF,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderLeftWidth: SLICE_BASE_HALF,
+    borderRightWidth: SLICE_BASE_HALF,
+    borderTopWidth: WHEEL_RADIUS,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    transformOrigin: 'center bottom',
+  },
   sliceDivider: {
     position: 'absolute',
+    top: 0,
+    left: WHEEL_RADIUS - 1.5,
     width: 3,
-    height: '100%',
+    height: WHEEL_RADIUS,
     backgroundColor: 'rgba(10,2,21,0.95)',
+    transformOrigin: 'center bottom',
   },
   segment: {
     position: 'absolute',
@@ -631,6 +657,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   actions: {
+    alignSelf: 'stretch',
     alignItems: 'center',
     gap: 12,
     marginTop: 18,
@@ -667,7 +694,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 14,
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 8,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.accent + '30',
