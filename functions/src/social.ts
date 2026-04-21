@@ -1116,3 +1116,123 @@ export const onReferralSuccess = functions.https.onCall(
     };
   },
 );
+
+// ─── 11. distributeWeeklyRewards ─────────────────────────────────────────────
+//
+// Runs every Sunday at 23:00 UTC to snapshot the closing week's global
+// leaderboard and grant tiered rewards to the top finishers. Writes a
+// per-user reward doc at `users/{uid}/rewards/{weekId}_leaderboard` —
+// the client claims it from the reward inbox on next app open.
+//
+// Tier shape (intentionally steep; top-1 is a genuine dopamine hit):
+//   rank 1       → 1000 gems + weekly_champion_trophy decoration
+//   ranks 2-10   → 500 gems  + weekly_top10 frame
+//   ranks 11-100 → 100 gems
+//   ranks 101-1000 → 20 gems + weekly_participant badge
+//
+// Idempotency: reward docs use a stable id (`{weekId}_leaderboard`) so
+// a re-run of the same schedule (manual trigger / retry) does NOT
+// double-grant — the existing doc is simply overwritten.
+
+const WEEKLY_REWARD_COLLECTION = 'weeklyScores';
+const WEEKLY_REWARD_BATCH_SIZE = 500;
+
+interface WeeklyRewardTier {
+  maxRank: number;
+  gems: number;
+  decorations: string[];
+  label: string;
+}
+
+const WEEKLY_REWARD_TIERS: WeeklyRewardTier[] = [
+  { maxRank: 1, gems: 1000, decorations: ['weekly_champion_trophy'], label: 'Weekly Champion' },
+  { maxRank: 10, gems: 500, decorations: ['frame_weekly_top10'], label: 'Weekly Top 10' },
+  { maxRank: 100, gems: 100, decorations: [], label: 'Weekly Top 100' },
+  { maxRank: 1000, gems: 20, decorations: ['badge_weekly_participant'], label: 'Weekly Top 1000' },
+];
+
+/**
+ * Compute the weekId of the week that just closed when the function
+ * runs at Sunday 23:00 UTC. Mirrors `getCurrentWeekId` in
+ * `src/services/firestore.ts` so client and server agree on the ID.
+ */
+function getClosingWeekId(now: Date = new Date()): string {
+  const year = now.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  const days = Math.floor((now.getTime() - startOfYear.getTime()) / 86_400_000);
+  const weekNumber = Math.ceil((days + startOfYear.getUTCDay() + 1) / 7);
+  return `${year}_W${String(weekNumber).padStart(2, '0')}`;
+}
+
+function tierForRank(rank: number): WeeklyRewardTier | null {
+  for (const tier of WEEKLY_REWARD_TIERS) {
+    if (rank <= tier.maxRank) return tier;
+  }
+  return null;
+}
+
+export const distributeWeeklyRewards = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 23 * * 0') // Sunday 23:00 UTC
+  .timeZone('UTC')
+  .onRun(async () => {
+    const weekId = getClosingWeekId();
+    const startedAt = Date.now();
+
+    // Pull the entire leaderboard for the closing week, ordered by
+    // score. We pull up to the maximum rewarded rank (1000); ranks
+    // below that receive no grant.
+    const snap = await db
+      .collection(WEEKLY_REWARD_COLLECTION)
+      .where('weekId', '==', weekId)
+      .orderBy('score', 'desc')
+      .limit(WEEKLY_REWARD_TIERS[WEEKLY_REWARD_TIERS.length - 1].maxRank)
+      .get();
+
+    if (snap.empty) {
+      functions.logger.info('[distributeWeeklyRewards] empty leaderboard', { weekId });
+      return;
+    }
+
+    // Batch reward writes in groups of 500 to stay under Firestore's
+    // per-commit limit. Each reward doc id is stable per-user-per-week
+    // so re-running the schedule is idempotent (overwrite, not grow).
+    let processed = 0;
+    let batch = db.batch();
+    for (let i = 0; i < snap.docs.length; i++) {
+      const doc = snap.docs[i];
+      const rank = i + 1;
+      const tier = tierForRank(rank);
+      if (!tier) continue;
+      const userId = doc.data().userId as string | undefined;
+      if (!userId) continue;
+
+      const rewardRef = db.doc(`users/${userId}/rewards/${weekId}_leaderboard`);
+      batch.set(rewardRef, {
+        type: 'weekly_leaderboard',
+        weekId,
+        rank,
+        tierLabel: tier.label,
+        gems: tier.gems,
+        decorations: tier.decorations,
+        claimed: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      processed++;
+
+      if (processed % WEEKLY_REWARD_BATCH_SIZE === 0) {
+        await batch.commit();
+        batch = db.batch();
+      }
+    }
+
+    if (processed % WEEKLY_REWARD_BATCH_SIZE !== 0) {
+      await batch.commit();
+    }
+
+    functions.logger.info('[distributeWeeklyRewards] granted rewards', {
+      weekId,
+      processed,
+      durationMs: Date.now() - startedAt,
+    });
+  });

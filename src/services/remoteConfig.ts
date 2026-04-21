@@ -134,6 +134,12 @@ export interface RemoteConfigValues {
    * JSON is discarded safely and the static catalog is used as-is.
    */
   chapterOverrideJson: string;
+  /**
+   * Gates the weekly global leaderboard UI. When false, the home
+   * entry + WeeklyLeaderboardScreen stay hidden so Ops can light it
+   * up mid-soft-launch (or dark it down during an incident).
+   */
+  weeklyCompetitionEnabled: boolean;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -248,6 +254,10 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // falls back to the static ordering.
   featuredProductId: 'explorer_bundle',
   chapterOverrideJson: '',
+  // Weekly leaderboard — off until reward tiers + copy are final and
+  // the Cloud Function has been running long enough (1-2 weeks) to
+  // produce real leaderboard data for a meaningful screen.
+  weeklyCompetitionEnabled: false,
   dailyQuestsEnabled: true,
   cosmeticPerksEnabled: true,
   streakShieldOfferEnabled: true,
