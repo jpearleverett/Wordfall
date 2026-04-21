@@ -612,6 +612,14 @@ function GameScreenImpl({
   // hint_rescue: track session fail count for this level (local, resets on mount)
   const sessionFailCount = useRef(0);
   const failureCountedRef = useRef(false);
+  // Separate once-per-puzzle guard for the adaptive-difficulty fail
+  // signal. Classic/noGravity/gravityFlip/expert/relax modes never
+  // transition status to 'failed' when the board goes unwinnable —
+  // instead the isStuck flag fires while status stays 'playing'. This
+  // ref lets us count a single "struggled on this puzzle" event for
+  // the adjuster the first time isStuck goes true, independent of the
+  // hint_rescue failure-count plumbing.
+  const stuckFailRecordedRef = useRef(false);
   // close_finish: idle timer for "1 word away" scenario
   const closeFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // close_finish_premium escalation: fires after the coin-priced close_finish
@@ -1542,7 +1550,27 @@ function GameScreenImpl({
   useEffect(() => {
     gridHeightLocked.current = false;
     setGridAreaHeight(0);
+    // Also reset the adjuster's per-puzzle stuck-fail guard so the
+    // next puzzle can record its own struggle signal independently.
+    stuckFailRecordedRef.current = false;
   }, [board]);
+
+  // Adaptive-difficulty struggle signal for modes that DON'T flip
+  // status to 'failed' on dead-end (Classic, noGravity, gravityFlip,
+  // expert, relax). When the solver reports isStuck on an active
+  // puzzle, count it as a fail for the adjuster exactly once per
+  // puzzle load — the player may then use a hint to escape, but the
+  // struggle telemetry is real and worth feeding in.
+  useEffect(() => {
+    if (
+      isStuck &&
+      status === 'playing' &&
+      !stuckFailRecordedRef.current
+    ) {
+      stuckFailRecordedRef.current = true;
+      playerActions.recordFailure(level);
+    }
+  }, [isStuck, status, level, playerActions]);
 
   // Show post-loss modal first (if applicable), then failed modal
   useEffect(() => {
