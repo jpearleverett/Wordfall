@@ -2038,6 +2038,16 @@ function GameScreenImpl({
         <PostLossModal
           wordsFound={foundWords}
           totalWords={totalWords}
+          // Route to the mode-appropriate ceremony so each failure state
+          // has its own visual identity instead of flattening all losses
+          // into "So Close!".
+          variant={
+            status === 'timeout'
+              ? 'timeout'
+              : status === 'failed' && mode === 'perfectSolve'
+              ? 'perfect_broken'
+              : 'stuck'
+          }
           onWatchAd={() => {
             setShowPostLoss(false);
             handleWatchAdForHint();
