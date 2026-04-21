@@ -10,7 +10,7 @@
  */
 import { useCallback } from 'react';
 import { CeremonyItem, WeeklyGoalsState } from '../types';
-import { CHAPTERS, getChapterForLevel } from '../data/chapters';
+import { CHAPTERS, getChapterForLevel, getLastLevelOfChapter } from '../data/chapters';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
@@ -149,8 +149,23 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         0,
       );
       const highestCompletedLevel = Math.max(prev.highestLevel, level);
-      const nextCurrentLevel = Math.max(prev.currentLevel, level + 1);
-      const activeChapter = getChapterForLevel(nextCurrentLevel) ?? CHAPTERS[CHAPTERS.length - 1];
+      const uncappedNextLevel = Math.max(prev.currentLevel, level + 1);
+      // Enforce chapter star gate: if the player would cross into a chapter
+      // whose requiredStars exceeds their total, clamp them to the last level
+      // of the previously-unlocked chapter so they can replay for more stars.
+      const targetChapter =
+        getChapterForLevel(uncappedNextLevel) ?? CHAPTERS[CHAPTERS.length - 1];
+      const currentUnlockedChapter =
+        getChapterForLevel(prev.currentLevel) ?? CHAPTERS[0];
+      const crossesChapterBoundary =
+        targetChapter.id !== currentUnlockedChapter.id;
+      const gateMet = totalStars >= targetChapter.requiredStars;
+      const nextCurrentLevel =
+        !crossesChapterBoundary || gateMet
+          ? uncappedNextLevel
+          : Math.min(uncappedNextLevel, getLastLevelOfChapter(currentUnlockedChapter.id));
+      const activeChapter =
+        getChapterForLevel(nextCurrentLevel) ?? CHAPTERS[CHAPTERS.length - 1];
       const completedWingIds = Array.from(
         new Set(
           CHAPTERS.filter((chapter) => chapter.id < activeChapter.id).map((chapter) => chapter.wingId),

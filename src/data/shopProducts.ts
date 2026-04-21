@@ -945,6 +945,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     description: 'Ad-free + 50 daily gems + 3 daily hints + exclusive VIP frame + 2x XP boost',
     fallbackPrice: '$4.99/week',
     fallbackPriceAmount: 4.99,
+    originalPrice: '$9.99/week',
+    originalPriceAmount: 9.99,
     category: 'subscription',
     rewards: {
       flags: { adsRemoved: true, vipSubscriber: true },

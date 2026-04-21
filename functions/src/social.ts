@@ -377,6 +377,55 @@ async function canSendPushTo(senderUid: string, targetUid: string): Promise<bool
   return false;
 }
 
+/**
+ * Module-private helper: send an Expo push to a single user by UID.
+ *
+ * Used by (a) the authenticated `sendPushNotification` callable (wraps this
+ * with rate-limiting + relationship-gating) and (b) server-initiated pushes
+ * from scheduled/triggered functions (`onReferralSuccess`, streak reminders,
+ * etc.) where the sender is the system, not another user.
+ *
+ * Returns a structured result rather than throwing — callers decide how to
+ * handle "no token" / "invalid token" / "send failed". Unexpected errors are
+ * logged via `functions.logger` and swallowed (returned as `send_failed`) so
+ * that push failures never roll back the calling function's primary work.
+ */
+async function sendPushToUser(
+  userId: string,
+  title: string,
+  body: string,
+  data?: Record<string, unknown>,
+): Promise<{ success: boolean; reason?: string; ticketId?: string }> {
+  try {
+    const tokenDoc = await db.doc(`users/${userId}/pushToken/current`).get();
+    const tokenData = tokenDoc.data();
+    if (!tokenData?.token) return { success: false, reason: 'no_token' };
+
+    const { Expo } = await import('expo-server-sdk');
+    const expo = new Expo();
+
+    if (!Expo.isExpoPushToken(tokenData.token)) {
+      return { success: false, reason: 'invalid_token' };
+    }
+
+    const [ticket] = await expo.sendPushNotificationsAsync([
+      {
+        to: tokenData.token,
+        title,
+        body,
+        data: (data as Record<string, string> | undefined) ?? {},
+        sound: 'default',
+        priority: 'high',
+      },
+    ]);
+
+    return { success: true, ticketId: (ticket as { id?: string }).id };
+  } catch (error) {
+    functions.logger.error('[sendPushToUser] failed', { userId, error });
+    return { success: false, reason: 'send_failed' };
+  }
+}
+
 export const sendPushNotification = functions.https.onCall(
   async (
     data: { userId: string; title: string; body: string; data?: Record<string, string> },
@@ -434,36 +483,7 @@ export const sendPushNotification = functions.https.onCall(
       );
     }
 
-    // Get user's push token
-    const tokenDoc = await db.doc(`users/${userId}/pushToken/current`).get();
-    const tokenData = tokenDoc.data();
-    if (!tokenData?.token) return { success: false, reason: 'no_token' };
-
-    try {
-      // Use Expo push notification service
-      const { Expo } = await import('expo-server-sdk');
-      const expo = new Expo();
-
-      if (!Expo.isExpoPushToken(tokenData.token)) {
-        return { success: false, reason: 'invalid_token' };
-      }
-
-      const [ticket] = await expo.sendPushNotificationsAsync([
-        {
-          to: tokenData.token,
-          title,
-          body,
-          data: data.data ?? {},
-          sound: 'default',
-          priority: 'high',
-        },
-      ]);
-
-      return { success: true, ticketId: (ticket as any).id };
-    } catch (error) {
-      console.error('Push notification failed:', error);
-      return { success: false, reason: 'send_failed' };
-    }
+    return sendPushToUser(userId, title, body, data.data);
   },
 );
 
@@ -471,57 +491,66 @@ export const sendPushNotification = functions.https.onCall(
 
 /**
  * Runs daily at 8 PM UTC to send streak reminders to active players.
+ *
+ * Scans the `users` collection in paginated batches of 500 so DAU > 50k
+ * doesn't drop the tail. Inter-batch sleep keeps us well under Firestore's
+ * per-second read quota. Function-wide time budget guard ensures we never
+ * exceed the 540s Cloud Function timeout even in pathological scans.
  */
-export const processStreakReminders = functions.pubsub
-  .schedule('0 20 * * *')
+const STREAK_REMINDER_BATCH_SIZE = 500;
+const STREAK_REMINDER_BATCH_SLEEP_MS = 1000;
+const STREAK_REMINDER_TIME_BUDGET_MS = 9 * 60 * 1000; // leave ~60s headroom
+
+export const processStreakReminders = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 20 * * *')
   .timeZone('UTC')
   .onRun(async () => {
     const today = new Date().toISOString().split('T')[0];
-
-    // Find users with active streaks who haven't played today
-    const usersSnap = await db
-      .collection('users')
-      .where('streaks.currentStreak', '>', 0)
-      .limit(500) // Process in batches
-      .get();
+    const startedAt = Date.now();
 
     let notificationsSent = 0;
+    let scanned = 0;
+    let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
 
-    for (const userDoc of usersSnap.docs) {
-      const userData = userDoc.data();
-      const lastPlayDate = userData.streaks?.lastPlayDate;
+    while (Date.now() - startedAt < STREAK_REMINDER_TIME_BUDGET_MS) {
+      let query = db
+        .collection('users')
+        .where('streaks.currentStreak', '>', 0)
+        .orderBy('streaks.currentStreak')
+        .limit(STREAK_REMINDER_BATCH_SIZE);
+      if (lastDoc) query = query.startAfter(lastDoc);
 
-      if (lastPlayDate === today) continue; // Already played today
+      const usersSnap = await query.get();
+      if (usersSnap.empty) break;
 
-      // Get push token
-      const tokenDoc = await db.doc(`users/${userDoc.id}/pushToken/current`).get();
-      const tokenData = tokenDoc.data();
-      if (!tokenData?.token) continue;
+      for (const userDoc of usersSnap.docs) {
+        scanned++;
+        const userData = userDoc.data();
+        const lastPlayDate = userData.streaks?.lastPlayDate;
+        if (lastPlayDate === today) continue; // Already played today
 
-      const streakDays = userData.streaks?.currentStreak ?? 0;
+        const streakDays = userData.streaks?.currentStreak ?? 0;
 
-      try {
-        const { Expo } = await import('expo-server-sdk');
-        const expo = new Expo();
-
-        if (Expo.isExpoPushToken(tokenData.token)) {
-          await expo.sendPushNotificationsAsync([
-            {
-              to: tokenData.token,
-              title: `${streakDays}-day streak at risk!`,
-              body: `Don't lose your ${streakDays}-day streak! Complete a puzzle to keep it going.`,
-              data: { type: 'streak_reminder' },
-              sound: 'default',
-            },
-          ]);
-          notificationsSent++;
-        }
-      } catch (e) {
-        console.error(`Failed to send streak reminder to ${userDoc.id}:`, e);
+        const result = await sendPushToUser(
+          userDoc.id,
+          `${streakDays}-day streak at risk!`,
+          `Don't lose your ${streakDays}-day streak! Complete a puzzle to keep it going.`,
+          { type: 'streak_reminder' },
+        );
+        if (result.success) notificationsSent++;
       }
+
+      if (usersSnap.size < STREAK_REMINDER_BATCH_SIZE) break;
+      lastDoc = usersSnap.docs[usersSnap.docs.length - 1];
+      await new Promise((r) => setTimeout(r, STREAK_REMINDER_BATCH_SLEEP_MS));
     }
 
-    console.log(`Sent ${notificationsSent} streak reminders`);
+    functions.logger.info('[processStreakReminders] sent reminders', {
+      notificationsSent,
+      scanned,
+      durationMs: Date.now() - startedAt,
+    });
   });
 
 // ─── 5. rotateClubGoals ──────────────────────────────────────────────────────
@@ -694,8 +723,17 @@ type GiftType = 'hint' | 'tile' | 'life';
 const ALLOWED_GIFT_TYPES: readonly GiftType[] = ['hint', 'tile', 'life'] as const;
 const GIFT_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD, UTC
+/**
+ * Returns a stable day bucket derived from fixed 24h ms windows since epoch.
+ *
+ * Using ms-floor (vs. UTC date-string) keeps bucketing aligned with the
+ * `checkFirestoreRateLimit` helper (which also uses ms-floor) and is immune
+ * to locale/Date formatting quirks. The bucket rolls over at the same instant
+ * for every caller worldwide.
+ */
+function dailyBucketKey(): string {
+  const bucket = Math.floor(Date.now() / 86_400_000);
+  return `d${bucket}`;
 }
 
 /**
@@ -776,7 +814,7 @@ export const sendGift = functions.https.onCall(
       );
     }
 
-    const day = todayKey();
+    const day = dailyBucketKey();
     const giftRef = db.collection('gifts').doc(idempotencyKey);
     const quotaRef = db
       .collection('users')

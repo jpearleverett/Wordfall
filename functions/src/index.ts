@@ -715,6 +715,22 @@ export const clubGoalProgress = functions.https.onCall(
 
     const clubRef = db.collection("clubs").doc(clubId);
 
+    // Pre-flight membership check: close the race window where a user expelled
+    // between function invocation and transaction start could still contribute
+    // points. The in-transaction check below remains as defense in depth.
+    const preflightSnap = await clubRef.get();
+    if (!preflightSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Club not found");
+    }
+    const preflightMembers =
+      (preflightSnap.data()?.memberIds as string[]) ?? [];
+    if (!preflightMembers.includes(userId)) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "User is not a member of this club"
+      );
+    }
+
     const updatedProgress = await db.runTransaction(async (tx) => {
       const clubDoc = await tx.get(clubRef);
       if (!clubDoc.exists) {

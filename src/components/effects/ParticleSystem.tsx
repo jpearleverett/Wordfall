@@ -351,7 +351,11 @@ interface CelebrationBurstProps {
   colors?: string[];
 }
 
-const MAX_BURST_PARTICLES = 12;
+// Bumped from 12 → 24 to match the celebratory intent of default
+// `particleCount`. Still gated behind `tileBloomEnabled` Remote Config so
+// Ops can drop to 12 (or disable entirely) if low-end-Android perf telemetry
+// flags frame drops during celebration bursts.
+const MAX_BURST_PARTICLES = 24;
 
 export function CelebrationBurst({
   centerX = 180,

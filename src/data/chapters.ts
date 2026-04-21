@@ -549,6 +549,22 @@ export function getNextChapter(currentId: number): Chapter | undefined {
   return CHAPTERS.find((ch) => ch.id === currentId + 1);
 }
 
+/**
+ * Returns the highest level number that still belongs to the given chapter.
+ * Used by progression-gating to clamp a player's advancement at the end of
+ * the currently-unlocked chapter when the next chapter's star gate isn't met.
+ */
+export function getLastLevelOfChapter(chapterId: number): number {
+  let cumulative = 0;
+  for (const chapter of CHAPTERS) {
+    cumulative += chapter.puzzleCount;
+    if (chapter.id === chapterId) return cumulative;
+  }
+  // Past authored content — approximate via 15 puzzles/chapter convention.
+  const tail = CHAPTERS[CHAPTERS.length - 1];
+  return cumulative + (chapterId - tail.id) * 15;
+}
+
 export function getChapterForLevel(level: number): Chapter | undefined {
   if (level <= 0) return CHAPTERS[0];
 
