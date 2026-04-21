@@ -32,6 +32,7 @@ import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
 import FlawlessStreakCard from '../components/FlawlessStreakCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
+import { bentoPanel } from '../styles/bentoPanel';
 import {
   usePlayerStore,
   usePlayerActions,
@@ -176,6 +177,7 @@ export function HomeScreen({
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
   const wheelPulse = useRef(new Animated.Value(1)).current;
+  const wheelSpin = useRef(new Animated.Value(0)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
 
   // Pre-compute daily completion for streak offer check
@@ -259,6 +261,20 @@ export function HomeScreen({
       return () => pulse.stop();
     }
   }, [mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
+
+  // Slow spin for the wheel disc icon (matches bento design — 8s per rotation)
+  useEffect(() => {
+    const spin = Animated.loop(
+      Animated.timing(wheelSpin, {
+        toValue: 1,
+        duration: 8000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    spin.start();
+    return () => spin.stop();
+  }, [wheelSpin]);
 
   // Free spin toast animation
   useEffect(() => {
@@ -639,6 +655,31 @@ export function HomeScreen({
                 ]}
               >
                 <View style={styles.mysteryWheelIconContainer}>
+                  <Animated.View
+                    style={[
+                      StyleSheet.absoluteFill,
+                      {
+                        transform: [{
+                          rotate: wheelSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }),
+                        }],
+                      },
+                    ]}
+                    pointerEvents="none"
+                  >
+                    {/* pinwheel: two crossed linear gradients approximate a conic-gradient */}
+                    <LinearGradient
+                      colors={[COLORS.pink, COLORS.purple, COLORS.cyan, COLORS.gold]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <LinearGradient
+                      colors={['rgba(255,45,149,0.65)', 'rgba(200,77,255,0.0)', 'rgba(0,229,255,0.65)', 'rgba(255,184,0,0.0)']}
+                      start={{ x: 1, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                  </Animated.View>
                   <Text style={styles.mysteryWheelIcon}>{'\u{1F3B0}'}</Text>
                 </View>
                 <View style={styles.mysteryWheelContent}>
@@ -701,16 +742,18 @@ export function HomeScreen({
         </Animated.View>
       )}
 
-      {/* Neon Highway Level Progress */}
+      {/* Neon Highway Level Progress — Bento cyan shell */}
       <Animated.View
-        style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }], marginBottom: 14 }}
+        style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
       >
-        <NeonHighwayProgress
-          currentLevel={progress.currentLevel}
-          highestLevel={progress.highestLevel}
-          starsPerLevel={progress.starsByLevel}
-          onLevelPress={() => onPlay()}
-        />
+        <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.highwayShell}>
+          <NeonHighwayProgress
+            currentLevel={progress.currentLevel}
+            highestLevel={progress.highestLevel}
+            starsPerLevel={progress.starsByLevel}
+            onLevelPress={() => onPlay()}
+          />
+        </LinearGradient>
       </Animated.View>
 
       <Animated.View
@@ -1835,12 +1878,10 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   // Flash Sale Teaser
+  // Flash sale teaser — Bento pink (coral-leaning)
   flashSaleTeaser: {
-    borderRadius: 16,
+    ...bentoPanel('pink'),
     padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.coral + '40',
   },
   flashSaleTeaserRow: {
     flexDirection: 'row' as const,
@@ -1877,14 +1918,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // Mystery Wheel Button
+  // Neon Highway shell — Bento cyan
+  highwayShell: {
+    ...bentoPanel('cyan'),
+    padding: 0, // children manage their own padding
+  },
+
+  // Mystery Wheel Button — Bento purple shell
   mysteryWheelButton: {
-    borderRadius: 20,
+    ...bentoPanel('purple'),
     padding: 16,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    borderWidth: 1,
-    borderColor: 'rgba(168,85,247,0.45)',
     gap: 12,
   },
   mysteryWheelButtonGlow: {
@@ -1892,12 +1937,14 @@ const styles = StyleSheet.create({
     ...SHADOWS.glow(COLORS.purple),
   },
   mysteryWheelIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(168,85,247,0.35)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    borderWidth: 2,
+    borderColor: COLORS.gold,
+    overflow: 'hidden' as const,
   },
   mysteryWheelIcon: {
     fontSize: 24,
@@ -1978,14 +2025,13 @@ const styles = StyleSheet.create({
   },
 
   // Event Banners
+  // Event banner — Bento pink (event.color overrides borderColor at call site)
   eventBanner: {
+    ...bentoPanel('pink'),
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
     padding: 14,
     marginBottom: 8,
-    borderWidth: 1,
-    ...SHADOWS.soft,
   },
   eventBannerIcon: {
     fontSize: 28,
@@ -2008,16 +2054,13 @@ const styles = StyleSheet.create({
   eventBannerArrow: {
     fontSize: 24,
   },
-  // Come-back-tomorrow card
+  // Come-back-tomorrow card — Bento gold
   tomorrowCard: {
+    ...bentoPanel('gold'),
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
     padding: 16,
     marginHorizontal: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(100,180,255,0.20)',
   },
   tomorrowIcon: {
     fontSize: 28,
@@ -2037,16 +2080,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  // Onboarding milestone banner
+  // Onboarding milestone banner — Bento gold
   milestoneBanner: {
+    ...bentoPanel('gold'),
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
     padding: 16,
     marginHorizontal: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.25)',
   },
   milestoneBannerIcon: {
     fontSize: 32,

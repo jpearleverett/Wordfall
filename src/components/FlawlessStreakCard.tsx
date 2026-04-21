@@ -9,7 +9,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SHADOWS } from '../constants';
+import { COLORS, FONTS } from '../constants';
+import { bentoPanel } from '../styles/bentoPanel';
 
 interface FlawlessStreakCardProps {
   currentStreak: number;
@@ -86,13 +87,8 @@ FlawlessStreakCard.displayName = 'FlawlessStreakCard';
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
+    ...bentoPanel('pink'),
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.surface,
-    ...SHADOWS.medium,
   },
   cardActive: {
     borderColor: COLORS.gold + '80',

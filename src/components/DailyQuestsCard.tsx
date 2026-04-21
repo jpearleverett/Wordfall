@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, TYPOGRAPHY } from '../constants';
+import { COLORS, GRADIENTS, TYPOGRAPHY } from '../constants';
+import { bentoPanel, bentoDividerColor, bentoHeaderStyles } from '../styles/bentoPanel';
 import {
   DailyQuest,
   DailyQuestReward,
@@ -29,7 +30,7 @@ export default function DailyQuestsCard({ quests, onClaim }: Props) {
   const completed = quests.filter((q) => q.claimed).length;
 
   return (
-    <LinearGradient colors={GRADIENTS.surfaceCard} style={[styles.card, SHADOWS.medium]}>
+    <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.card}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Daily Quests</Text>
         <Text style={styles.meta}>
@@ -75,23 +76,18 @@ export default function DailyQuestsCard({ quests, onClaim }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    ...bentoPanel('cyan'),
+    padding: 14,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    ...bentoHeaderStyles.row,
+    borderBottomColor: bentoDividerColor('cyan'),
   },
   title: {
-    ...TYPOGRAPHY.sectionTitle,
-    color: COLORS.textPrimary,
+    ...bentoHeaderStyles.title,
   },
   meta: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
+    ...bentoHeaderStyles.meta,
   },
   row: {
     flexDirection: 'row',

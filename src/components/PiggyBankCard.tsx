@@ -7,7 +7,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SHADOWS } from '../constants';
+import { COLORS, FONTS } from '../constants';
+import { bentoPanel } from '../styles/bentoPanel';
 import {
   useEconomyStore,
   selectPiggyBankGems,
@@ -121,17 +122,12 @@ const PiggyBankCard: React.FC<PiggyBankCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    ...bentoPanel('gold'),
     padding: 16,
-    marginBottom: 16,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.pink + '40',
-    ...SHADOWS.medium,
   },
   cardCompact: {
     padding: 12,
-    marginBottom: 12,
   },
   header: {
     flexDirection: 'row',
