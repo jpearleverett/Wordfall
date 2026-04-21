@@ -568,6 +568,8 @@ export type IAPProductId =
   | 'royal_collection'
   | 'ultimate_whale'
   | 'vip_weekly'
+  | 'vip_monthly'
+  | 'vip_annual'
   | 'first_purchase_special'
   | 'piggy_bank_break'
   | 'season_pass_premium'

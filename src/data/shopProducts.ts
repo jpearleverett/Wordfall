@@ -954,6 +954,20 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
   },
 
   // ── Subscription ────────────────────────────────────────────────────────
+  //
+  // Three-tier VIP stack so the catalog supports all three typical
+  // commitment horizons. Reward shapes share the same flag bundle
+  // (adsRemoved + vipSubscriber + vipExclusive frame); only the
+  // dailyDrip scales and the anchor discount grows with duration so
+  // the annual tier presents as the clear long-term value.
+  //
+  // Anchor pricing: weekly $4.99 anchors at $9.99 (50% off),
+  // monthly $9.99 anchors at $19.99 (50% off), annual $49.99 anchors
+  // at $149.99 (66% off — equivalent to >$12/mo savings vs. monthly).
+  //
+  // Requires external Play Console registration:
+  //   wordfall_vip_monthly — SUBS, P1M
+  //   wordfall_vip_annual  — SUBS, P1Y
   {
     id: 'vip_weekly',
     storeProductId: 'wordfall_vip_weekly',
@@ -970,6 +984,50 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       decorations: ['frame_vip_exclusive'],
     },
     isNonConsumable: false,
+    icon: '\u{1F48E}',
+  },
+  {
+    id: 'vip_monthly',
+    storeProductId: 'wordfall_vip_monthly',
+    name: 'VIP Monthly',
+    description:
+      'Ad-free + 75 daily gems + 5 daily hints + monthly cosmetic drop + 2x XP boost',
+    fallbackPrice: '$9.99/month',
+    fallbackPriceAmount: 9.99,
+    originalPrice: '$19.99/month',
+    originalPriceAmount: 19.99,
+    category: 'subscription',
+    rewards: {
+      flags: { adsRemoved: true, vipSubscriber: true },
+      dailyDrip: { gems: 75, hintTokens: 5 },
+      decorations: ['frame_vip_exclusive', 'frame_vip_monthly'],
+    },
+    isNonConsumable: false,
+    badge: 'popular',
+    icon: '\u{1F48E}',
+  },
+  {
+    id: 'vip_annual',
+    storeProductId: 'wordfall_vip_annual',
+    name: 'VIP Annual',
+    description:
+      'Ad-free + 100 daily gems + 8 daily hints + 12 monthly cosmetic drops + 2x XP boost + annual-exclusive trophy',
+    fallbackPrice: '$49.99/year',
+    fallbackPriceAmount: 49.99,
+    originalPrice: '$149.99/year',
+    originalPriceAmount: 149.99,
+    category: 'subscription',
+    rewards: {
+      flags: { adsRemoved: true, vipSubscriber: true },
+      dailyDrip: { gems: 100, hintTokens: 8 },
+      decorations: [
+        'frame_vip_exclusive',
+        'frame_vip_annual',
+        'decoration_vip_annual_trophy',
+      ],
+    },
+    isNonConsumable: false,
+    badge: 'best_value',
     icon: '\u{1F48E}',
   },
 ];
