@@ -137,8 +137,7 @@ export default ReferralPendingRewards;
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 14,
     borderRadius: 20,
     ...SHADOWS.medium,
   },

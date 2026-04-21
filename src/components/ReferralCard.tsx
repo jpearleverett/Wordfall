@@ -241,8 +241,7 @@ export default ReferralCard;
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     borderRadius: 20,
     ...SHADOWS.medium,
   },

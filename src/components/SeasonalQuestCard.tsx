@@ -47,7 +47,7 @@ const SeasonalQuestCard: React.FC<SeasonalQuestCardProps> = ({
   }
 
   return (
-    <Animated.View style={[styles.container, cardStyle]}>
+    <Animated.View style={cardStyle}>
       <LinearGradient
         colors={GRADIENTS.surfaceCard as unknown as readonly [string, string, ...string[]]}
         style={styles.card}
@@ -169,9 +169,6 @@ export default SeasonalQuestCard;
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
-    marginHorizontal: 16,
-  },
   card: {
     ...bentoPanel('pink'),
     padding: 18,

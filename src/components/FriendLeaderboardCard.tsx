@@ -83,13 +83,12 @@ const FriendLeaderboardCard: React.FC<FriendLeaderboardCardProps> = ({ onViewAll
   if (friendIds.length === 0) return null;
 
   return (
-    <View style={styles.wrapper}>
-      <LinearGradient
-        colors={GRADIENTS.surfaceCard as unknown as readonly [string, string, ...string[]]}
-        style={styles.inner}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
+    <LinearGradient
+      colors={GRADIENTS.surfaceCard as unknown as readonly [string, string, ...string[]]}
+      style={styles.inner}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
         <View style={styles.header}>
           <Text style={styles.icon}>{'\uD83C\uDFC5'}</Text>
           <Text style={styles.title}>Friends Leaderboard</Text>
@@ -148,17 +147,13 @@ const FriendLeaderboardCard: React.FC<FriendLeaderboardCardProps> = ({ onViewAll
             ) : null}
           </>
         )}
-      </LinearGradient>
-    </View>
+    </LinearGradient>
   );
 };
 
 export default FriendLeaderboardCard;
 
 const styles = StyleSheet.create({
-  wrapper: {
-    marginHorizontal: 16,
-  },
   inner: {
     ...bentoPanel('cyan'),
   },
