@@ -599,7 +599,6 @@ export function HomeScreen({
           style={{
             opacity: contentAnim,
             transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [48, 0] }) }],
-            marginBottom: 14,
           }}
         >
           {activeEventBanners.map((eb) => (
@@ -851,45 +850,37 @@ export function HomeScreen({
 
         {/* Season Pass — tier ladder entry point */}
         {onOpenSeasonPass && (
-          <View style={{ marginHorizontal: 16 }}>
-            <SeasonPassHomeCard onPress={onOpenSeasonPass} />
-          </View>
+          <SeasonPassHomeCard onPress={onOpenSeasonPass} />
         )}
 
         {/* Flawless Streak — consecutive clean solves. Active card shines gold;
             empty state teaches what earns the streak. */}
-        <View style={{ marginHorizontal: 16 }}>
-          <FlawlessStreakCard
-            currentStreak={flawlessStreak?.currentStreak ?? 0}
-            bestStreak={flawlessStreak?.bestStreak ?? 0}
-          />
-        </View>
+        <FlawlessStreakCard
+          currentStreak={flawlessStreak?.currentStreak ?? 0}
+          bestStreak={flawlessStreak?.bestStreak ?? 0}
+        />
 
         {/* Pending referral rewards (auto-hides when empty) */}
         <ReferralPendingRewards />
 
         {/* Referral Card - established+ players */}
         {(playerStage === 'established' || playerStage === 'veteran') && referralCode ? (
-          <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
-            <ReferralCard
-              referralCode={referralCode}
-              referralCount={referralCount}
-              milestonesClaimed={referralMilestonesClaimed}
-              onClaimMilestone={(count) => claimReferralMilestone(count)}
-            />
-          </View>
+          <ReferralCard
+            referralCode={referralCode}
+            referralCount={referralCount}
+            milestonesClaimed={referralMilestonesClaimed}
+            onClaimMilestone={(count) => claimReferralMilestone(count)}
+          />
         ) : null}
 
         {/* Friends Leaderboard — auto-hides when the player has no friends */}
         <FriendLeaderboardCard onViewAll={onOpenFriendLeaderboard} />
 
         {/* Piggy Bank FOMO — compact mini-card (auto-hides unless jar ≥ 80%) */}
-        <View style={{ marginHorizontal: 16 }}>
-          <PiggyBankCard
-            compact
-            onBreak={() => onOpenShop?.()}
-          />
-        </View>
+        <PiggyBankCard
+          compact
+          onBreak={() => onOpenShop?.()}
+        />
 
         {/* Come-back-tomorrow hook — early game retention */}
         {(playerStage === 'new' || playerStage === 'early') && progress.puzzlesSolved >= 1 && !dailyDone && (
@@ -1273,7 +1264,7 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     padding: 24,
-    marginBottom: 18,
+    marginBottom: 14,
   },
   heroLogoGlow: {
     shadowColor: COLORS.accent,
@@ -2031,7 +2022,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    marginBottom: 8,
   },
   eventBannerIcon: {
     fontSize: 28,
@@ -2060,7 +2050,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    marginHorizontal: 16,
   },
   tomorrowIcon: {
     fontSize: 28,
@@ -2086,7 +2075,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    marginHorizontal: 16,
   },
   milestoneBannerIcon: {
     fontSize: 32,
@@ -2108,7 +2096,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   earlyGuidanceCard: {
-    marginHorizontal: 16,
     marginBottom: 14,
     borderRadius: 16,
     padding: 16,
