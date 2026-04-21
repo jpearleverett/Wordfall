@@ -399,6 +399,18 @@ function parseRemoteDailyDeal(): RemoteDailyDeal | null {
  * the default hashed deal for the day).
  */
 export function getFlashSale(date: Date): FlashSale | null {
+  // Remote-Config kill switch: short-circuits the full flash-sale
+  // surface (both the hashed default and any override). dailyDealOverride
+  // remains the granular "swap the deal" lever; this flag is the
+  // coarse on/off.
+  // Lazy require to sidestep the remoteConfig -> dynamicPricing cycle
+  // that existed before this file began consuming RC.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { getRemoteBoolean } = require('../services/remoteConfig') as {
+    getRemoteBoolean: (key: string) => boolean;
+  };
+  if (!getRemoteBoolean('flashSaleEnabled')) return null;
+
   const override = parseRemoteDailyDeal();
   if (override?.disabled) return null;
   if (override) {

@@ -1,5 +1,6 @@
 import { BoardConfig, PlayerMetrics } from '../types';
 import { logger } from '../utils/logger';
+import { getRemoteBoolean } from '../services/remoteConfig';
 
 /**
  * Difficulty adjustment direction — purely internal, never shown to the player.
@@ -23,6 +24,13 @@ export function getAdjustedConfig(
   baseConfig: BoardConfig,
   metrics: PlayerMetrics,
 ): AdjustmentResult {
+  // Remote-Config kill switch: when false, bypass adjustment entirely
+  // so ops can dark-launch the system if live telemetry shows
+  // unexpected retention effects.
+  if (!getRemoteBoolean('adaptiveDifficultyEnabled')) {
+    return { config: baseConfig, direction: 'none', reason: 'rc_disabled' };
+  }
+
   // Not enough data to adjust — need at least 5 recent results
   if (metrics.recentStars.length < 5) {
     return { config: baseConfig, direction: 'none', reason: 'insufficient_data' };

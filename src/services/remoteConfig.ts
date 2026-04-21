@@ -163,12 +163,14 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   maxAdsPerDay: 10,
   maxInterstitialsPerDay: 5,
   interstitialIntervalMs: 90_000,
-  // Events — both default OFF until the weekend-event and flash-sale
-  // surfaces are built. Flip via Remote Config once the UI lands
-  // (tracked as Phase B17 shop-urgency work + a future weekend-event
-  // banner task). Without the UI, these flags are no-ops today.
-  weekendBlitzEnabled: false,
-  flashSaleEnabled: false,
+  // Events — both ON by default. The features have been live (via the
+  // authored event rotation and getFlashSale hash) for a while; these
+  // flags are now real ops kill-switches wired in getCurrentEvent
+  // (events.ts) and getFlashSale (dynamicPricing.ts) respectively.
+  // Flipping either to false dark-launches the corresponding surface
+  // without a client rebuild.
+  weekendBlitzEnabled: true,
+  flashSaleEnabled: true,
   // Feature flags
   prestigeEnabled: true,
   clubsEnabled: true,
@@ -180,12 +182,13 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   boosterPackGemPrice: 15,
   lifeRefillGemPrice: 10,
   streakShieldGemPrice: 30,
-  // Difficulty — defaults off. Engine has a wiring point for adaptive
-  // adjustments (see puzzleGenerator getAdjustedConfig) but the
-  // production-ready tuning table is not yet authored. Flip ON via
-  // Remote Config once we have soft-launch performance telemetry to
-  // calibrate the curve.
-  adaptiveDifficultyEnabled: false,
+  // Difficulty — defaults ON. getAdjustedConfig is wired at 4 call
+  // sites in App.tsx and makes subtle (+/-1 step) adjustments based
+  // on the player's recent-star average. The flag is now an ops kill
+  // switch consulted inside getAdjustedConfig itself so flipping it
+  // false short-circuits to an identity pass without touching the
+  // call sites.
+  adaptiveDifficultyEnabled: true,
   // Phase 4B — hard-energy off until soft-launch cohort data justifies it
   hardEnergyEnabled: false,
   // Phase 0 / 4D LiveOps overrides — empty strings/0 mean "use built-ins"
@@ -244,10 +247,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Launch-readiness wave — new systems enabled by default, tunable via RC
   autoAdvanceEnabled: true,
   autoAdvanceDelayMs: 3500,
-  // closeFinishPremium defaults OFF — price tuning requires live
-  // conversion data. Flip ON once soft-launch ARPDAU telemetry
-  // justifies and the gem cost has been A/B tuned against decline rate.
-  closeFinishPremiumEnabled: false,
+  // closeFinishPremium ON by default. Fully wired in GameScreen.tsx —
+  // when a player is 1 word away and has dismissed the standard close-
+  // finish offer, a 60s-later 9-gem auto-solve rescue is offered.
+  // Price is separately tunable via closeFinishPremiumGemCost so Ops
+  // can calibrate without flipping the whole feature off.
+  closeFinishPremiumEnabled: true,
   closeFinishPremiumGemCost: 9,
   // Featured-bundle pin shown at the top of the shop. Ops rotates this
   // weekly via Remote Config — empty string means "no pin" so the shop
