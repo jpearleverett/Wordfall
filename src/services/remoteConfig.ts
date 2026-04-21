@@ -143,9 +143,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   maxAdsPerDay: 10,
   maxInterstitialsPerDay: 5,
   interstitialIntervalMs: 90_000,
-  // Events
-  weekendBlitzEnabled: true,
-  flashSaleEnabled: true,
+  // Events — both default OFF until the weekend-event and flash-sale
+  // surfaces are built. Flip via Remote Config once the UI lands
+  // (tracked as Phase B17 shop-urgency work + a future weekend-event
+  // banner task). Without the UI, these flags are no-ops today.
+  weekendBlitzEnabled: false,
+  flashSaleEnabled: false,
   // Feature flags
   prestigeEnabled: true,
   clubsEnabled: true,
@@ -157,8 +160,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   boosterPackGemPrice: 15,
   lifeRefillGemPrice: 10,
   streakShieldGemPrice: 30,
-  // Difficulty
-  adaptiveDifficultyEnabled: true,
+  // Difficulty — defaults off. Engine has a wiring point for adaptive
+  // adjustments (see puzzleGenerator getAdjustedConfig) but the
+  // production-ready tuning table is not yet authored. Flip ON via
+  // Remote Config once we have soft-launch performance telemetry to
+  // calibrate the curve.
+  adaptiveDifficultyEnabled: false,
   // Phase 4B — hard-energy off until soft-launch cohort data justifies it
   hardEnergyEnabled: false,
   // Phase 0 / 4D LiveOps overrides — empty strings/0 mean "use built-ins"
@@ -217,7 +224,10 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Launch-readiness wave — new systems enabled by default, tunable via RC
   autoAdvanceEnabled: true,
   autoAdvanceDelayMs: 3500,
-  closeFinishPremiumEnabled: true,
+  // closeFinishPremium defaults OFF — price tuning requires live
+  // conversion data. Flip ON once soft-launch ARPDAU telemetry
+  // justifies and the gem cost has been A/B tuned against decline rate.
+  closeFinishPremiumEnabled: false,
   closeFinishPremiumGemCost: 9,
   dailyQuestsEnabled: true,
   cosmeticPerksEnabled: true,

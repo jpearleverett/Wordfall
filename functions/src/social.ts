@@ -334,7 +334,7 @@ async function checkFirestoreRateLimit(
   } catch (err) {
     // Fail open so Firestore hiccups don't black out legit traffic — the
     // in-memory bucket + abuse monitoring above still provide coverage.
-    console.warn('[rateLimit] Firestore check failed, allowing:', err);
+    functions.logger.warn('[rateLimit] Firestore check failed, allowing:', err);
     return true;
   }
 }
@@ -637,7 +637,9 @@ export const rotateClubGoals = functions.pubsub
       await batch.commit();
     }
 
-    console.log(`Rotated goals for ${clubsSnap.size} clubs`);
+    functions.logger.info('[rotateClubGoals] rotated goals', {
+      clubsProcessed: clubsSnap.size,
+    });
   });
 
 // ─── Server-side profanity filter ────────────────────────────────────────────
@@ -697,7 +699,7 @@ export const moderateClubMessage = functions.firestore
           filteredAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       } catch (e) {
-        console.warn('[moderateClubMessage] update failed', e);
+        functions.logger.warn('[moderateClubMessage] update failed', e);
       }
     }
   });
