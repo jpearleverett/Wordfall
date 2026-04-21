@@ -445,11 +445,13 @@ export function HomeScreen({
         <View
           style={styles.heroCard}
         >
-          <Image
-            source={LOCAL_IMAGES.wordfallLogo}
-            style={styles.heroLogo}
-            resizeMode="contain"
-          />
+          <View style={styles.heroLogoGlow}>
+            <Image
+              source={LOCAL_IMAGES.wordfallLogo}
+              style={styles.heroLogo}
+              resizeMode="contain"
+            />
+          </View>
           <View style={styles.statsRow}>
             {[
               { value: `★ ${totalStars}`, label: 'Stars' },
@@ -457,11 +459,15 @@ export function HomeScreen({
               { value: `🔥 ${progress.currentStreak}`, label: 'Streak' },
             ].map((stat) => (
               <View key={stat.label} style={styles.statCardWrapper}>
-                <Image source={LOCAL_IMAGES.statsCard} style={styles.statCardImage} resizeMode="stretch" />
-                <View style={styles.statCardOverlay}>
+                <LinearGradient
+                  colors={['rgba(168,91,255,0.22)', 'rgba(10,1,32,0.60)']}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={styles.statCardSurface}
+                >
                   <Text style={styles.heroStatValue}>{stat.value}</Text>
                   <Text style={styles.heroStatLabel}>{stat.label}</Text>
-                </View>
+                </LinearGradient>
               </View>
             ))}
           </View>
@@ -1226,6 +1232,13 @@ const styles = StyleSheet.create({
     padding: 24,
     marginBottom: 18,
   },
+  heroLogoGlow: {
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
+    elevation: 10,
+  },
   heroLogo: {
     width: '100%',
     height: 180,
@@ -1250,14 +1263,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     aspectRatio: 1,
   },
-  statCardImage: {
+  statCardSurface: {
     width: '100%',
     height: '100%',
-  },
-  statCardOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(168,91,255,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: COLORS.purple,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 8,
   },
   heroStatValue: {
     color: '#ffffff',
@@ -1347,11 +1365,16 @@ const styles = StyleSheet.create({
   },
   // Mission panel
   missionPanel: {
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(0,229,255,0.20)',
     marginBottom: 14,
+    shadowColor: COLORS.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 6,
   },
   missionRow: {
     marginBottom: 10,
@@ -1383,11 +1406,16 @@ const styles = StyleSheet.create({
   },
   // Weekly Goals
   weeklyGoalsPanel: {
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(0,229,255,0.20)',
     marginBottom: 14,
+    shadowColor: COLORS.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 6,
   },
   weeklyGoalRow: {
     marginBottom: 12,
@@ -1444,28 +1472,40 @@ const styles = StyleSheet.create({
   },
   // Streak
   streakPanel: {
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,45,149,0.22)',
     marginBottom: 14,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 6,
   },
   panelHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,229,255,0.12)',
   },
   panelTitle: {
     color: COLORS.textPrimary,
-    fontSize: 17,
-    fontFamily: FONTS.bodyBold,
+    fontSize: 13,
+    fontFamily: FONTS.display,
+    letterSpacing: 1.5,
+    textShadowColor: 'rgba(255,255,255,0.45)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   panelMeta: {
     color: COLORS.textMuted,
-    fontSize: 11,
-    textTransform: 'uppercase',
+    fontSize: 10,
     letterSpacing: 1,
+    fontFamily: FONTS.bodyMedium,
   },
   streakBarRow: {
     flexDirection: 'row',
@@ -1501,11 +1541,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   rewardsPanel: {
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(0,229,255,0.20)',
     marginBottom: 14,
+    shadowColor: COLORS.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 6,
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -1674,11 +1719,16 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
   quickPlayPanel: {
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(168,91,255,0.22)',
     marginBottom: 14,
+    shadowColor: COLORS.purple,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 6,
   },
   quickPlayGrid: {
     flexDirection: 'row',
@@ -1722,11 +1772,16 @@ const styles = StyleSheet.create({
   },
   // Daily Deal
   dealPanel: {
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.15)',
+    borderColor: 'rgba(255,184,0,0.35)',
     marginBottom: 14,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 6,
   },
   dealContent: {
     flexDirection: 'row',
