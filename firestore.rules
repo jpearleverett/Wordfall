@@ -75,10 +75,27 @@ service cloud.firestore {
       allow update: if request.auth != null && resource.data.toUserId == request.auth.uid;
     }
 
-    // Clubs: members can read/write, anyone can create
+    // Clubs: members can read/write; create is tightly constrained so
+    // attackers can't seed a fresh club with pre-inflated scores.
+    //
+    // Initial doc MUST satisfy:
+    //   - name is a 1..64-char string
+    //   - memberIds contains only the creator's UID
+    //   - weeklyScore / totalScore initialize to zero (later incremented
+    //     atomically via the clubGoalProgress Cloud Function)
+    //   - createdAt is set to the request timestamp (server-time)
     match /clubs/{clubId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 64
+        && request.resource.data.memberIds is list
+        && request.resource.data.memberIds.size() == 1
+        && request.resource.data.memberIds[0] == request.auth.uid
+        && request.resource.data.weeklyScore == 0
+        && request.resource.data.totalScore == 0
+        && request.resource.data.createdAt == request.time;
       allow update: if request.auth != null && request.auth.uid in resource.data.memberIds;
 
       // Club messages

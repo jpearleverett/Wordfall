@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -19,6 +20,23 @@ import { findWordInGrid, isWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEn
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 import { instrumentReducer } from '../utils/perfInstrument';
 import { createGameStore, GameStore } from '../stores/gameStore';
+import {
+  loadPuzzleSnapshot,
+  savePuzzleSnapshot,
+  clearPuzzleSnapshot,
+  snapshotMatchesTarget,
+} from '../services/puzzleSnapshot';
+import { generateIdempotencyKey } from '../utils/idempotency';
+
+/**
+ * Mints a completion id used by server-side retry paths to dedupe
+ * credit grants. Separate from the gifts idempotency key namespace
+ * just for readability in logs — under the hood they share the same
+ * short UUID-ish generator.
+ */
+function generateCompletionId(): string {
+  return `puz_${generateIdempotencyKey()}`;
+}
 
 const GRAVITY_CYCLE: GravityDirection[] = ['down', 'right', 'up', 'left'];
 
@@ -99,6 +117,7 @@ function createInitialState(
     comboWordsRemaining: 0,
     comboMultiplier: 1,
     captureReplay,
+    completionId: null,
   };
 }
 
@@ -486,6 +505,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         moves: newMoves,
         history: [...state.history, historyEntry],
         status: newStatus,
+        // Mint a stable completion key on the 'won' transition so any
+        // server-side retry path (weekly-leaderboard submission,
+        // referral credit, reward inbox) can dedupe against a repeat
+        // send. Once set it stays fixed for the remainder of this
+        // puzzle (NEW_GAME resets it back to null).
+        completionId:
+          newStatus === 'won' && !state.completionId
+            ? generateCompletionId()
+            : state.completionId,
         gravityDirection: newGravityDirection,
         shrinkCount: newShrinkCount,
         wordsUntilShrink: newWordsUntilShrink,
@@ -580,6 +608,20 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // lightweight).
         state.captureReplay,
       );
+
+    case 'HYDRATE_FROM_SNAPSHOT':
+      // Restore a prior in-flight puzzle. The serialized snapshot already
+      // contains a complete GameState; we trust it verbatim here and rely
+      // on GameScreen to only dispatch this action when the stored snapshot
+      // matches the intended level/mode. Clears transient fields that
+      // shouldn't survive the background -> foreground transition.
+      return {
+        ...action.state,
+        selectedCells: [],
+        selectionDirection: null,
+        lastInvalidTap: null,
+        lastSelectionResetTap: null,
+      };
 
     case 'TICK_TIMER': {
       if (state.status !== 'playing' || state.timeRemaining <= 0) return state;
@@ -833,6 +875,42 @@ export function useGame(
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  // ── In-puzzle state persistence (crash / background recovery) ────────
+  // On first mount, try to hydrate from a snapshot that matches the
+  // target (level, mode). While the player is playing, save a snapshot
+  // on AppState 'background' so an OS kill during a background pause
+  // doesn't lose the puzzle. Clear the snapshot on terminal status
+  // ('won' | 'failed' | 'timeout') so next launch starts fresh.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const snap = await loadPuzzleSnapshot();
+      if (cancelled || !snap) return;
+      if (!snapshotMatchesTarget(snap, level, mode)) {
+        // Stale snapshot for a different level/mode — discard so the
+        // next mount of a matching level can start clean.
+        await clearPuzzleSnapshot();
+        return;
+      }
+      store.dispatch({ type: 'HYDRATE_FROM_SNAPSHOT', state: snap.state });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const handler = (next: AppStateStatus) => {
+      if (next !== 'background' && next !== 'inactive') return;
+      const current = store.getState();
+      // chapterId isn't threaded through useGame — we pass level as a
+      // stand-in. The snapshot's own level is what we actually match on.
+      void savePuzzleSnapshot(current, level);
+    };
+    const sub = AppState.addEventListener('change', handler);
+    return () => sub.remove();
+  }, [store, level]);
+
   // ── Narrow selectors for effects that need reactive reads ────────────
   const status = useStore(store, s => s.status);
   const timeRemaining = useStore(store, s => s.timeRemaining);
@@ -852,6 +930,15 @@ export function useGame(
     [words],
   );
   const solveSequence = useStore(store, useShallow((s: GameState) => s.solveSequence));
+
+  // Clear the persistence snapshot as soon as the puzzle reaches a
+  // terminal state so next launch starts fresh instead of prompting
+  // a resume for a puzzle that's already done.
+  useEffect(() => {
+    if (status === 'won' || status === 'failed' || status === 'timeout') {
+      void clearPuzzleSnapshot();
+    }
+  }, [status]);
 
   // ── Deferred shrink-solvability check (Fix B) ────────────────────────
   // The reducer performs the shrink synchronously (so the visual board

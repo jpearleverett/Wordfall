@@ -812,6 +812,7 @@ class FirestoreService {
         maxMembers: 30,
         autoKickDays: 14,
         weeklyScore: 0,
+        totalScore: 0,
         createdAt: serverTimestamp(),
       });
       return clubRef.id;

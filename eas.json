@@ -9,10 +9,10 @@
       "distribution": "internal",
       "env": {
         "EAS_SKIP_AUTO_FINGERPRINT": "1",
-        "EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID": "ca-app-pub-6575205005908086/7915277947",
-        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_ANDROID": "ca-app-pub-6575205005908086/2383749660",
-        "EXPO_PUBLIC_ADMOB_REWARDED_ID_IOS": "ca-app-pub-6575205005908086/4985862277",
-        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_IOS": "ca-app-pub-6575205005908086/1617462905"
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID": "ca-app-pub-3940256099942544/5224354917",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_ANDROID": "ca-app-pub-3940256099942544/1033173712",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_IOS": "ca-app-pub-3940256099942544/1712485313",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_IOS": "ca-app-pub-3940256099942544/4411468910"
       },
       "android": {
         "buildType": "apk"
@@ -25,10 +25,10 @@
       "distribution": "internal",
       "env": {
         "EAS_SKIP_AUTO_FINGERPRINT": "1",
-        "EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID": "ca-app-pub-6575205005908086/7915277947",
-        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_ANDROID": "ca-app-pub-6575205005908086/2383749660",
-        "EXPO_PUBLIC_ADMOB_REWARDED_ID_IOS": "ca-app-pub-6575205005908086/4985862277",
-        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_IOS": "ca-app-pub-6575205005908086/1617462905"
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_ANDROID": "ca-app-pub-3940256099942544/5224354917",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_ANDROID": "ca-app-pub-3940256099942544/1033173712",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID_IOS": "ca-app-pub-3940256099942544/1712485313",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID_IOS": "ca-app-pub-3940256099942544/4411468910"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -48,10 +48,12 @@
       },
       "ios": {
         "resourceClass": "m-medium",
-        "autoIncrement": "buildNumber"
+        "autoIncrement": "buildNumber",
+        "credentialsSource": "remote"
       },
       "android": {
-        "autoIncrement": "versionCode"
+        "autoIncrement": "versionCode",
+        "credentialsSource": "remote"
       },
       "autoIncrement": true
     }

@@ -594,6 +594,27 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     const productId = item.iapProductId ?? item.id;
     const displayPrice = getDisplayPrice(item);
     const anchor = getAnchor(item);
+    // Pull the ribbon badge from the catalog so ops can rotate emphasis
+    // via product data without touching the shop screen. Legacy
+    // `item.bestValue` still forces a BEST VALUE ribbon for older
+    // call sites; the catalog `badge` takes priority when set.
+    const catalogProduct = item.iapProductId ? getProductById(item.iapProductId) : undefined;
+    const ribbon: 'popular' | 'best_value' | 'limited' | null =
+      catalogProduct?.badge ?? (item.bestValue ? 'best_value' : null);
+    const ribbonLabel =
+      ribbon === 'popular'
+        ? 'MOST POPULAR'
+        : ribbon === 'best_value'
+        ? 'BEST VALUE'
+        : ribbon === 'limited'
+        ? 'LIMITED'
+        : null;
+    const ribbonGradient =
+      ribbon === 'popular'
+        ? ['#7E5BEF', '#B56CFB']
+        : ribbon === 'limited'
+        ? ['#E94B4B', '#FF7A7A']
+        : [...GRADIENTS.button.gold];
 
     return (
       <TouchableOpacity
@@ -603,7 +624,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         activeOpacity={0.7}
         disabled={!!purchasingId}
         accessibilityRole="button"
-        accessibilityLabel={`Buy ${item.name} for ${displayPrice}${item.bestValue ? ', best value' : ''}`}
+        accessibilityLabel={`Buy ${item.name} for ${displayPrice}${
+          ribbonLabel ? `, ${ribbonLabel.toLowerCase()}` : ''
+        }`}
       >
         <LinearGradient
           colors={[...GRADIENTS.surfaceCard]}
@@ -611,15 +634,15 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         />
-        {item.bestValue && (
+        {ribbonLabel && (
           <View style={styles.bestValueBadge}>
             <LinearGradient
-              colors={[...GRADIENTS.button.gold]}
+              colors={ribbonGradient as unknown as readonly [string, string, ...string[]]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             />
-            <Text style={styles.bestValueText}>BEST VALUE</Text>
+            <Text style={styles.bestValueText}>{ribbonLabel}</Text>
           </View>
         )}
         <Text style={styles.itemIcon}>{item.icon}</Text>

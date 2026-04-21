@@ -8,6 +8,11 @@ const mockGetRemoteString = jest.fn();
 
 jest.mock('../../services/remoteConfig', () => ({
   getRemoteString: (...args: unknown[]) => mockGetRemoteString(...args),
+  // New flashSaleEnabled kill switch — default true so these tests
+  // continue to exercise the override path without adding a per-test
+  // setup hook. A dedicated test for the flag-off path is covered by
+  // the unit elsewhere.
+  getRemoteBoolean: (_key: string) => true,
 }));
 
 import { getFlashSale } from '../dynamicPricing';

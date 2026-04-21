@@ -24,6 +24,7 @@
 import { getFunctions, httpsCallable, HttpsCallable } from 'firebase/functions';
 import app from '../config/firebase';
 import { crashReporter } from './crashReporting';
+import { generateIdempotencyKey } from '../utils/idempotency';
 
 export type GiftType = 'hint' | 'tile' | 'life';
 
@@ -72,19 +73,6 @@ function getClaimGift(): HttpsCallable<{ giftId: string }, ClaimGiftResult> {
     );
   }
   return claimGiftCallable;
-}
-
-/**
- * Minimal UUID-ish key. Not cryptographically strong — we only need uniqueness
- * per sender/app-install within a day so the server's idempotency dedup works.
- */
-function generateIdempotencyKey(): string {
-  return (
-    Date.now().toString(36) +
-    '-' +
-    Math.random().toString(36).slice(2, 10) +
-    Math.random().toString(36).slice(2, 10)
-  );
 }
 
 export async function sendGiftSecure(

@@ -120,6 +120,26 @@ export interface RemoteConfigValues {
   cosmeticPerksEnabled: boolean;
   streakShieldOfferEnabled: boolean;
   prestigeCeremonyEnabled: boolean;
+  /**
+   * ID of the currently featured product pinned above the shop grid.
+   * Empty string disables the pin. Set via Remote Config without a
+   * client rebuild to rotate emphasis weekly.
+   */
+  featuredProductId: string;
+  /**
+   * Seasonal chapter overlay JSON. When non-empty, parsed by
+   * `parseRemoteChapters` and merged onto the static 40-chapter catalog
+   * via `setRemoteChapterOverride`. Chapters must have ids >= 41 (the
+   * overlay extends, never replaces, the authored catalog). Malformed
+   * JSON is discarded safely and the static catalog is used as-is.
+   */
+  chapterOverrideJson: string;
+  /**
+   * Gates the weekly global leaderboard UI. When false, the home
+   * entry + WeeklyLeaderboardScreen stay hidden so Ops can light it
+   * up mid-soft-launch (or dark it down during an incident).
+   */
+  weeklyCompetitionEnabled: boolean;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -143,7 +163,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   maxAdsPerDay: 10,
   maxInterstitialsPerDay: 5,
   interstitialIntervalMs: 90_000,
-  // Events
+  // Events — both ON by default. The features have been live (via the
+  // authored event rotation and getFlashSale hash) for a while; these
+  // flags are now real ops kill-switches wired in getCurrentEvent
+  // (events.ts) and getFlashSale (dynamicPricing.ts) respectively.
+  // Flipping either to false dark-launches the corresponding surface
+  // without a client rebuild.
   weekendBlitzEnabled: true,
   flashSaleEnabled: true,
   // Feature flags
@@ -157,7 +182,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   boosterPackGemPrice: 15,
   lifeRefillGemPrice: 10,
   streakShieldGemPrice: 30,
-  // Difficulty
+  // Difficulty — defaults ON. getAdjustedConfig is wired at 4 call
+  // sites in App.tsx and makes subtle (+/-1 step) adjustments based
+  // on the player's recent-star average. The flag is now an ops kill
+  // switch consulted inside getAdjustedConfig itself so flipping it
+  // false short-circuits to an identity pass without touching the
+  // call sites.
   adaptiveDifficultyEnabled: true,
   // Phase 4B — hard-energy off until soft-launch cohort data justifies it
   hardEnergyEnabled: false,
@@ -217,8 +247,22 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Launch-readiness wave — new systems enabled by default, tunable via RC
   autoAdvanceEnabled: true,
   autoAdvanceDelayMs: 3500,
+  // closeFinishPremium ON by default. Fully wired in GameScreen.tsx —
+  // when a player is 1 word away and has dismissed the standard close-
+  // finish offer, a 60s-later 9-gem auto-solve rescue is offered.
+  // Price is separately tunable via closeFinishPremiumGemCost so Ops
+  // can calibrate without flipping the whole feature off.
   closeFinishPremiumEnabled: true,
   closeFinishPremiumGemCost: 9,
+  // Featured-bundle pin shown at the top of the shop. Ops rotates this
+  // weekly via Remote Config — empty string means "no pin" so the shop
+  // falls back to the static ordering.
+  featuredProductId: 'explorer_bundle',
+  chapterOverrideJson: '',
+  // Weekly leaderboard — off until reward tiers + copy are final and
+  // the Cloud Function has been running long enough (1-2 weeks) to
+  // produce real leaderboard data for a meaningful screen.
+  weeklyCompetitionEnabled: false,
   dailyQuestsEnabled: true,
   cosmeticPerksEnabled: true,
   streakShieldOfferEnabled: true,
@@ -246,6 +290,22 @@ function canUseRemoteConfig(): boolean {
 
 function notifyListeners(): void {
   const values = getAllRemoteValues();
+  // Keep the seasonal chapter overlay in sync with the latest RC payload.
+  // Doing this inline here (rather than requiring every app startup path
+  // to remember to call setRemoteChapterOverride) means fetching a fresh
+  // config mid-session also rolls out new seasonal chapters without a
+  // reload. Parse errors are swallowed by parseRemoteChapters itself.
+  try {
+    // Lazy require to avoid a cycle: chapters.ts imports from
+    // utils/chapterSchema which is independent, and this file already
+    // sits below chapters in the dependency tree.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { setRemoteChapterOverride } = require('../data/chapters');
+    setRemoteChapterOverride(values.chapterOverrideJson);
+  } catch {
+    // Chapters module not loaded yet (cold-start race) — the next
+    // notifyListeners tick will retry automatically.
+  }
   for (const cb of listeners) {
     try {
       cb(values);

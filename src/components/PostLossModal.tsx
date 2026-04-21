@@ -9,6 +9,24 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS } from '../constants';
 import { analytics } from '../services/analytics';
+import { errorHaptic, wordFoundHaptic } from '../services/haptics';
+
+/**
+ * Loss variants.
+ *
+ * - 'stuck'          — Generic dead-end / ran-out-of-moves. "So Close!" +
+ *                       gold accent. Default for backward compatibility.
+ * - 'timeout'        — timePressure mode timer hit zero. "Time's Up!" +
+ *                       red accent + stopwatch icon.
+ * - 'perfect_broken' — perfectSolve mode violation (player used hint /
+ *                       undo / picked a wrong word). "Perfect Broken" +
+ *                       gold→grey fade + cracked-gem icon.
+ *
+ * All three share the same CTA layout (watch-ad-for-hint, buy-hints,
+ * dismiss) so the conversion surface is consistent — only the header
+ * art, copy, and haptic differ.
+ */
+export type PostLossVariant = 'stuck' | 'timeout' | 'perfect_broken';
 
 interface PostLossModalProps {
   wordsFound: number;
@@ -16,9 +34,63 @@ interface PostLossModalProps {
   onWatchAd: () => void;
   onBuyHints: () => void;
   onDismiss: () => void;
+  variant?: PostLossVariant;
 }
 
 const AUTO_DISMISS_MS = 8000;
+
+interface VariantTheme {
+  icon: string;
+  title: string;
+  subtitleStuck: (wordsRemaining: number, totalWords: number, percent: number) => string;
+  accentColor: string;
+  titleColor: string;
+  titleGlow: string;
+  haptic: () => Promise<void>;
+  analyticsOfferType: string;
+}
+
+const VARIANTS: Record<PostLossVariant, VariantTheme> = {
+  stuck: {
+    icon: '🎯',
+    title: 'So Close!',
+    subtitleStuck: (wordsRemaining, _total, percent) =>
+      wordsRemaining === 1
+        ? 'Just 1 word away from victory!'
+        : `Only ${wordsRemaining} words left — ${percent}% complete!`,
+    accentColor: COLORS.gold,
+    titleColor: COLORS.gold,
+    titleGlow: COLORS.goldGlow,
+    haptic: wordFoundHaptic,
+    analyticsOfferType: 'post_loss',
+  },
+  timeout: {
+    icon: '⏱️',
+    title: "Time's Up!",
+    subtitleStuck: (wordsRemaining, _total, percent) =>
+      `${percent}% done when the clock ran out — ${wordsRemaining} word${
+        wordsRemaining === 1 ? '' : 's'
+      } away. Keep your streak alive?`,
+    accentColor: '#E94B4B',
+    titleColor: '#E94B4B',
+    titleGlow: 'rgba(233, 75, 75, 0.55)',
+    haptic: errorHaptic,
+    analyticsOfferType: 'post_loss_timeout',
+  },
+  perfect_broken: {
+    icon: '💎',
+    title: 'Perfect Broken',
+    subtitleStuck: (wordsRemaining, _total, percent) =>
+      `One slip. ${percent}% solved, ${wordsRemaining} word${
+        wordsRemaining === 1 ? '' : 's'
+      } to go. Run it back for a flawless?`,
+    accentColor: '#A48B3E',
+    titleColor: '#A48B3E',
+    titleGlow: 'rgba(164, 139, 62, 0.45)',
+    haptic: errorHaptic,
+    analyticsOfferType: 'post_loss_perfect_broken',
+  },
+};
 
 export function PostLossModal({
   wordsFound,
@@ -26,18 +98,26 @@ export function PostLossModal({
   onWatchAd,
   onBuyHints,
   onDismiss,
+  variant = 'stuck',
 }: PostLossModalProps) {
+  const theme = VARIANTS[variant];
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const [timeLeft, setTimeLeft] = useState(Math.ceil(AUTO_DISMISS_MS / 1000));
 
   useEffect(() => {
-    void analytics.logEvent('offer_shown', { offer_type: 'post_loss', words_found: wordsFound, total_words: totalWords });
+    void analytics.logEvent('offer_shown', {
+      offer_type: theme.analyticsOfferType,
+      words_found: wordsFound,
+      total_words: totalWords,
+    });
+    void theme.haptic();
 
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
       Animated.spring(scaleAnim, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
     ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -55,22 +135,28 @@ export function PostLossModal({
   }, [onDismiss]);
 
   const handleWatchAd = useCallback(() => {
-    void analytics.logEvent('offer_accepted', { offer_type: 'post_loss', action: 'watch_ad' });
+    void analytics.logEvent('offer_accepted', {
+      offer_type: theme.analyticsOfferType,
+      action: 'watch_ad',
+    });
     onWatchAd();
-  }, [onWatchAd]);
+  }, [onWatchAd, theme.analyticsOfferType]);
 
   const handleBuyHints = useCallback(() => {
-    void analytics.logEvent('offer_accepted', { offer_type: 'post_loss', action: 'buy_hints' });
+    void analytics.logEvent('offer_accepted', {
+      offer_type: theme.analyticsOfferType,
+      action: 'buy_hints',
+    });
     onBuyHints();
-  }, [onBuyHints]);
+  }, [onBuyHints, theme.analyticsOfferType]);
 
   const handleDismiss = useCallback(() => {
-    void analytics.logEvent('offer_dismissed', { offer_type: 'post_loss' });
+    void analytics.logEvent('offer_dismissed', { offer_type: theme.analyticsOfferType });
     onDismiss();
-  }, [onDismiss]);
+  }, [onDismiss, theme.analyticsOfferType]);
 
-  const wordsRemaining = totalWords - wordsFound;
-  const progressPercent = Math.round((wordsFound / totalWords) * 100);
+  const wordsRemaining = Math.max(0, totalWords - wordsFound);
+  const progressPercent = totalWords > 0 ? Math.round((wordsFound / totalWords) * 100) : 0;
 
   return (
     <Animated.View
@@ -84,16 +170,33 @@ export function PostLossModal({
           colors={[COLORS.surface, COLORS.bgLight]}
           style={styles.gradient}
         >
-          <Text style={styles.title}>So Close!</Text>
+          <Text style={styles.icon}>{theme.icon}</Text>
+          <Text
+            style={[
+              styles.title,
+              {
+                color: theme.titleColor,
+                textShadowColor: theme.titleGlow,
+              },
+            ]}
+          >
+            {theme.title}
+          </Text>
           <Text style={styles.subtitle}>
-            {wordsRemaining === 1
-              ? 'Just 1 word away from victory!'
-              : `Only ${wordsRemaining} words left — ${progressPercent}% complete!`}
+            {theme.subtitleStuck(wordsRemaining, totalWords, progressPercent)}
           </Text>
 
           {/* Progress bar */}
           <View style={styles.progressContainer}>
-            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${progressPercent}%`,
+                  backgroundColor: theme.accentColor,
+                },
+              ]}
+            />
           </View>
           <Text style={styles.progressText}>
             {wordsFound}/{totalWords} words found
@@ -154,12 +257,14 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
   },
+  icon: {
+    fontSize: 42,
+    marginBottom: 6,
+  },
   title: {
     fontFamily: FONTS.display,
     fontSize: 28,
-    color: COLORS.gold,
     marginBottom: 8,
-    textShadowColor: COLORS.goldGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
   },
@@ -181,7 +286,6 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: COLORS.green,
     borderRadius: 4,
   },
   progressText: {

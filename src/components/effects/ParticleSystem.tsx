@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Image, StyleSheet, View, DimensionValue } from 'react-native';
 import { COLORS } from '../../constants';
 import { LOCAL_IMAGES } from '../../utils/localAssets';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 
 // ─── Floating Diamond Sparkle ───────────────────────────────────────────
 interface SparkleProps {
@@ -351,7 +352,11 @@ interface CelebrationBurstProps {
   colors?: string[];
 }
 
-const MAX_BURST_PARTICLES = 12;
+// Bumped from 12 → 24 to match the celebratory intent of default
+// `particleCount`. Still gated behind `tileBloomEnabled` Remote Config so
+// Ops can drop to 12 (or disable entirely) if low-end-Android perf telemetry
+// flags frame drops during celebration bursts.
+const MAX_BURST_PARTICLES = 24;
 
 export function CelebrationBurst({
   centerX = 180,
@@ -359,6 +364,7 @@ export function CelebrationBurst({
   particleCount = 24,
   colors = SPARKLE_COLORS,
 }: CelebrationBurstProps) {
+  const reduceMotion = useReduceMotion();
   const cappedCount = Math.min(particleCount, MAX_BURST_PARTICLES);
   const particles = useMemo(
     () =>
@@ -373,6 +379,8 @@ export function CelebrationBurst({
       })),
     [centerX, centerY, cappedCount, colors],
   );
+
+  if (reduceMotion) return null;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -392,8 +400,10 @@ interface GlowRingProps {
 
 export function PulsingGlowRing({ size, color, pulseScale = 1.15 }: GlowRingProps) {
   const anim = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
+    if (reduceMotion) return;
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(anim, { toValue: 1, duration: 1400, useNativeDriver: true }),
@@ -405,7 +415,9 @@ export function PulsingGlowRing({ size, color, pulseScale = 1.15 }: GlowRingProp
     return () => {
       animation.stop();
     };
-  }, [anim]);
+  }, [anim, reduceMotion]);
+
+  if (reduceMotion) return null;
 
   return (
     <Animated.View

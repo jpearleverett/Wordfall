@@ -216,6 +216,12 @@ export function getEventForWeek(weekNumber: number): GameEvent {
 
 /**
  * Get the current active event based on today's date.
+ *
+ * Respects the `weekendBlitzEnabled` Remote Config flag as an ops
+ * kill-switch: when the week would land on a weekendBlitz event and
+ * the flag is false, return null so no event is shown (rather than
+ * silently substituting another event, which would surprise players
+ * expecting the regular rotation).
  */
 export function getCurrentEvent(): GameEvent | null {
   const now = new Date();
@@ -224,5 +230,16 @@ export function getCurrentEvent(): GameEvent | null {
   const diffWeeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
 
   if (diffWeeks < 0) return null;
-  return getEventForWeek(diffWeeks);
+  const event = getEventForWeek(diffWeeks);
+
+  if (event.type === 'weekendBlitz') {
+    // Lazy-require to avoid a data -> services cycle.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getRemoteBoolean } = require('../services/remoteConfig') as {
+      getRemoteBoolean: (key: string) => boolean;
+    };
+    if (!getRemoteBoolean('weekendBlitzEnabled')) return null;
+  }
+
+  return event;
 }

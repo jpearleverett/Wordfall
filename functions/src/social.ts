@@ -334,7 +334,7 @@ async function checkFirestoreRateLimit(
   } catch (err) {
     // Fail open so Firestore hiccups don't black out legit traffic — the
     // in-memory bucket + abuse monitoring above still provide coverage.
-    console.warn('[rateLimit] Firestore check failed, allowing:', err);
+    functions.logger.warn('[rateLimit] Firestore check failed, allowing:', err);
     return true;
   }
 }
@@ -375,6 +375,55 @@ async function canSendPushTo(senderUid: string, targetUid: string): Promise<bool
   }
 
   return false;
+}
+
+/**
+ * Module-private helper: send an Expo push to a single user by UID.
+ *
+ * Used by (a) the authenticated `sendPushNotification` callable (wraps this
+ * with rate-limiting + relationship-gating) and (b) server-initiated pushes
+ * from scheduled/triggered functions (`onReferralSuccess`, streak reminders,
+ * etc.) where the sender is the system, not another user.
+ *
+ * Returns a structured result rather than throwing — callers decide how to
+ * handle "no token" / "invalid token" / "send failed". Unexpected errors are
+ * logged via `functions.logger` and swallowed (returned as `send_failed`) so
+ * that push failures never roll back the calling function's primary work.
+ */
+async function sendPushToUser(
+  userId: string,
+  title: string,
+  body: string,
+  data?: Record<string, unknown>,
+): Promise<{ success: boolean; reason?: string; ticketId?: string }> {
+  try {
+    const tokenDoc = await db.doc(`users/${userId}/pushToken/current`).get();
+    const tokenData = tokenDoc.data();
+    if (!tokenData?.token) return { success: false, reason: 'no_token' };
+
+    const { Expo } = await import('expo-server-sdk');
+    const expo = new Expo();
+
+    if (!Expo.isExpoPushToken(tokenData.token)) {
+      return { success: false, reason: 'invalid_token' };
+    }
+
+    const [ticket] = await expo.sendPushNotificationsAsync([
+      {
+        to: tokenData.token,
+        title,
+        body,
+        data: (data as Record<string, string> | undefined) ?? {},
+        sound: 'default',
+        priority: 'high',
+      },
+    ]);
+
+    return { success: true, ticketId: (ticket as { id?: string }).id };
+  } catch (error) {
+    functions.logger.error('[sendPushToUser] failed', { userId, error });
+    return { success: false, reason: 'send_failed' };
+  }
 }
 
 export const sendPushNotification = functions.https.onCall(
@@ -434,36 +483,7 @@ export const sendPushNotification = functions.https.onCall(
       );
     }
 
-    // Get user's push token
-    const tokenDoc = await db.doc(`users/${userId}/pushToken/current`).get();
-    const tokenData = tokenDoc.data();
-    if (!tokenData?.token) return { success: false, reason: 'no_token' };
-
-    try {
-      // Use Expo push notification service
-      const { Expo } = await import('expo-server-sdk');
-      const expo = new Expo();
-
-      if (!Expo.isExpoPushToken(tokenData.token)) {
-        return { success: false, reason: 'invalid_token' };
-      }
-
-      const [ticket] = await expo.sendPushNotificationsAsync([
-        {
-          to: tokenData.token,
-          title,
-          body,
-          data: data.data ?? {},
-          sound: 'default',
-          priority: 'high',
-        },
-      ]);
-
-      return { success: true, ticketId: (ticket as any).id };
-    } catch (error) {
-      console.error('Push notification failed:', error);
-      return { success: false, reason: 'send_failed' };
-    }
+    return sendPushToUser(userId, title, body, data.data);
   },
 );
 
@@ -471,57 +491,66 @@ export const sendPushNotification = functions.https.onCall(
 
 /**
  * Runs daily at 8 PM UTC to send streak reminders to active players.
+ *
+ * Scans the `users` collection in paginated batches of 500 so DAU > 50k
+ * doesn't drop the tail. Inter-batch sleep keeps us well under Firestore's
+ * per-second read quota. Function-wide time budget guard ensures we never
+ * exceed the 540s Cloud Function timeout even in pathological scans.
  */
-export const processStreakReminders = functions.pubsub
-  .schedule('0 20 * * *')
+const STREAK_REMINDER_BATCH_SIZE = 500;
+const STREAK_REMINDER_BATCH_SLEEP_MS = 1000;
+const STREAK_REMINDER_TIME_BUDGET_MS = 9 * 60 * 1000; // leave ~60s headroom
+
+export const processStreakReminders = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 20 * * *')
   .timeZone('UTC')
   .onRun(async () => {
     const today = new Date().toISOString().split('T')[0];
-
-    // Find users with active streaks who haven't played today
-    const usersSnap = await db
-      .collection('users')
-      .where('streaks.currentStreak', '>', 0)
-      .limit(500) // Process in batches
-      .get();
+    const startedAt = Date.now();
 
     let notificationsSent = 0;
+    let scanned = 0;
+    let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
 
-    for (const userDoc of usersSnap.docs) {
-      const userData = userDoc.data();
-      const lastPlayDate = userData.streaks?.lastPlayDate;
+    while (Date.now() - startedAt < STREAK_REMINDER_TIME_BUDGET_MS) {
+      let query = db
+        .collection('users')
+        .where('streaks.currentStreak', '>', 0)
+        .orderBy('streaks.currentStreak')
+        .limit(STREAK_REMINDER_BATCH_SIZE);
+      if (lastDoc) query = query.startAfter(lastDoc);
 
-      if (lastPlayDate === today) continue; // Already played today
+      const usersSnap = await query.get();
+      if (usersSnap.empty) break;
 
-      // Get push token
-      const tokenDoc = await db.doc(`users/${userDoc.id}/pushToken/current`).get();
-      const tokenData = tokenDoc.data();
-      if (!tokenData?.token) continue;
+      for (const userDoc of usersSnap.docs) {
+        scanned++;
+        const userData = userDoc.data();
+        const lastPlayDate = userData.streaks?.lastPlayDate;
+        if (lastPlayDate === today) continue; // Already played today
 
-      const streakDays = userData.streaks?.currentStreak ?? 0;
+        const streakDays = userData.streaks?.currentStreak ?? 0;
 
-      try {
-        const { Expo } = await import('expo-server-sdk');
-        const expo = new Expo();
-
-        if (Expo.isExpoPushToken(tokenData.token)) {
-          await expo.sendPushNotificationsAsync([
-            {
-              to: tokenData.token,
-              title: `${streakDays}-day streak at risk!`,
-              body: `Don't lose your ${streakDays}-day streak! Complete a puzzle to keep it going.`,
-              data: { type: 'streak_reminder' },
-              sound: 'default',
-            },
-          ]);
-          notificationsSent++;
-        }
-      } catch (e) {
-        console.error(`Failed to send streak reminder to ${userDoc.id}:`, e);
+        const result = await sendPushToUser(
+          userDoc.id,
+          `${streakDays}-day streak at risk!`,
+          `Don't lose your ${streakDays}-day streak! Complete a puzzle to keep it going.`,
+          { type: 'streak_reminder' },
+        );
+        if (result.success) notificationsSent++;
       }
+
+      if (usersSnap.size < STREAK_REMINDER_BATCH_SIZE) break;
+      lastDoc = usersSnap.docs[usersSnap.docs.length - 1];
+      await new Promise((r) => setTimeout(r, STREAK_REMINDER_BATCH_SLEEP_MS));
     }
 
-    console.log(`Sent ${notificationsSent} streak reminders`);
+    functions.logger.info('[processStreakReminders] sent reminders', {
+      notificationsSent,
+      scanned,
+      durationMs: Date.now() - startedAt,
+    });
   });
 
 // ─── 5. rotateClubGoals ──────────────────────────────────────────────────────
@@ -608,7 +637,9 @@ export const rotateClubGoals = functions.pubsub
       await batch.commit();
     }
 
-    console.log(`Rotated goals for ${clubsSnap.size} clubs`);
+    functions.logger.info('[rotateClubGoals] rotated goals', {
+      clubsProcessed: clubsSnap.size,
+    });
   });
 
 // ─── Server-side profanity filter ────────────────────────────────────────────
@@ -668,7 +699,7 @@ export const moderateClubMessage = functions.firestore
           filteredAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       } catch (e) {
-        console.warn('[moderateClubMessage] update failed', e);
+        functions.logger.warn('[moderateClubMessage] update failed', e);
       }
     }
   });
@@ -694,8 +725,17 @@ type GiftType = 'hint' | 'tile' | 'life';
 const ALLOWED_GIFT_TYPES: readonly GiftType[] = ['hint', 'tile', 'life'] as const;
 const GIFT_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD, UTC
+/**
+ * Returns a stable day bucket derived from fixed 24h ms windows since epoch.
+ *
+ * Using ms-floor (vs. UTC date-string) keeps bucketing aligned with the
+ * `checkFirestoreRateLimit` helper (which also uses ms-floor) and is immune
+ * to locale/Date formatting quirks. The bucket rolls over at the same instant
+ * for every caller worldwide.
+ */
+function dailyBucketKey(): string {
+  const bucket = Math.floor(Date.now() / 86_400_000);
+  return `d${bucket}`;
 }
 
 /**
@@ -776,7 +816,7 @@ export const sendGift = functions.https.onCall(
       );
     }
 
-    const day = todayKey();
+    const day = dailyBucketKey();
     const giftRef = db.collection('gifts').doc(idempotencyKey);
     const quotaRef = db
       .collection('users')
@@ -1076,3 +1116,123 @@ export const onReferralSuccess = functions.https.onCall(
     };
   },
 );
+
+// ─── 11. distributeWeeklyRewards ─────────────────────────────────────────────
+//
+// Runs every Sunday at 23:00 UTC to snapshot the closing week's global
+// leaderboard and grant tiered rewards to the top finishers. Writes a
+// per-user reward doc at `users/{uid}/rewards/{weekId}_leaderboard` —
+// the client claims it from the reward inbox on next app open.
+//
+// Tier shape (intentionally steep; top-1 is a genuine dopamine hit):
+//   rank 1       → 1000 gems + weekly_champion_trophy decoration
+//   ranks 2-10   → 500 gems  + weekly_top10 frame
+//   ranks 11-100 → 100 gems
+//   ranks 101-1000 → 20 gems + weekly_participant badge
+//
+// Idempotency: reward docs use a stable id (`{weekId}_leaderboard`) so
+// a re-run of the same schedule (manual trigger / retry) does NOT
+// double-grant — the existing doc is simply overwritten.
+
+const WEEKLY_REWARD_COLLECTION = 'weeklyScores';
+const WEEKLY_REWARD_BATCH_SIZE = 500;
+
+interface WeeklyRewardTier {
+  maxRank: number;
+  gems: number;
+  decorations: string[];
+  label: string;
+}
+
+const WEEKLY_REWARD_TIERS: WeeklyRewardTier[] = [
+  { maxRank: 1, gems: 1000, decorations: ['weekly_champion_trophy'], label: 'Weekly Champion' },
+  { maxRank: 10, gems: 500, decorations: ['frame_weekly_top10'], label: 'Weekly Top 10' },
+  { maxRank: 100, gems: 100, decorations: [], label: 'Weekly Top 100' },
+  { maxRank: 1000, gems: 20, decorations: ['badge_weekly_participant'], label: 'Weekly Top 1000' },
+];
+
+/**
+ * Compute the weekId of the week that just closed when the function
+ * runs at Sunday 23:00 UTC. Mirrors `getCurrentWeekId` in
+ * `src/services/firestore.ts` so client and server agree on the ID.
+ */
+function getClosingWeekId(now: Date = new Date()): string {
+  const year = now.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  const days = Math.floor((now.getTime() - startOfYear.getTime()) / 86_400_000);
+  const weekNumber = Math.ceil((days + startOfYear.getUTCDay() + 1) / 7);
+  return `${year}_W${String(weekNumber).padStart(2, '0')}`;
+}
+
+function tierForRank(rank: number): WeeklyRewardTier | null {
+  for (const tier of WEEKLY_REWARD_TIERS) {
+    if (rank <= tier.maxRank) return tier;
+  }
+  return null;
+}
+
+export const distributeWeeklyRewards = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 23 * * 0') // Sunday 23:00 UTC
+  .timeZone('UTC')
+  .onRun(async () => {
+    const weekId = getClosingWeekId();
+    const startedAt = Date.now();
+
+    // Pull the entire leaderboard for the closing week, ordered by
+    // score. We pull up to the maximum rewarded rank (1000); ranks
+    // below that receive no grant.
+    const snap = await db
+      .collection(WEEKLY_REWARD_COLLECTION)
+      .where('weekId', '==', weekId)
+      .orderBy('score', 'desc')
+      .limit(WEEKLY_REWARD_TIERS[WEEKLY_REWARD_TIERS.length - 1].maxRank)
+      .get();
+
+    if (snap.empty) {
+      functions.logger.info('[distributeWeeklyRewards] empty leaderboard', { weekId });
+      return;
+    }
+
+    // Batch reward writes in groups of 500 to stay under Firestore's
+    // per-commit limit. Each reward doc id is stable per-user-per-week
+    // so re-running the schedule is idempotent (overwrite, not grow).
+    let processed = 0;
+    let batch = db.batch();
+    for (let i = 0; i < snap.docs.length; i++) {
+      const doc = snap.docs[i];
+      const rank = i + 1;
+      const tier = tierForRank(rank);
+      if (!tier) continue;
+      const userId = doc.data().userId as string | undefined;
+      if (!userId) continue;
+
+      const rewardRef = db.doc(`users/${userId}/rewards/${weekId}_leaderboard`);
+      batch.set(rewardRef, {
+        type: 'weekly_leaderboard',
+        weekId,
+        rank,
+        tierLabel: tier.label,
+        gems: tier.gems,
+        decorations: tier.decorations,
+        claimed: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      processed++;
+
+      if (processed % WEEKLY_REWARD_BATCH_SIZE === 0) {
+        await batch.commit();
+        batch = db.batch();
+      }
+    }
+
+    if (processed % WEEKLY_REWARD_BATCH_SIZE !== 0) {
+      await batch.commit();
+    }
+
+    functions.logger.info('[distributeWeeklyRewards] granted rewards', {
+      weekId,
+      processed,
+      durationMs: Date.now() - startedAt,
+    });
+  });

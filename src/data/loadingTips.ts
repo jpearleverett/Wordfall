@@ -7,15 +7,15 @@ export interface LoadingTip {
 
 export const LOADING_TIPS: LoadingTip[] = [
   // Gameplay tips (levels 1-10)
-  { id: 'tip_gravity', category: 'gameplay', text: 'When you clear a word, letters above fall down. Plan your moves to create chain reactions!', minLevel: 1 },
-  { id: 'tip_chains', category: 'gameplay', text: 'Chain reactions multiply your score. Clear words from bottom to top for maximum combos!', minLevel: 3 },
+  { id: 'tip_gravity', category: 'gameplay', text: 'When you clear a word, letters above fall down. Plan your moves to open new paths!', minLevel: 1 },
+  { id: 'tip_chains', category: 'gameplay', text: 'Clearing a word near the bottom lets the whole board cascade. Use gravity to reach trapped letters.', minLevel: 3 },
   { id: 'tip_diagonal', category: 'gameplay', text: 'Words can be traced in any direction - including diagonals! Look for hidden paths.', minLevel: 1 },
   { id: 'tip_hints', category: 'gameplay', text: 'Stuck on a puzzle? Use a hint to reveal one of the remaining words.', minLevel: 5 },
   { id: 'tip_undo', category: 'gameplay', text: 'Made a mistake? Undo your last move to try a different approach.', minLevel: 3 },
   { id: 'tip_stars', category: 'gameplay', text: 'Earn 3 stars by completing puzzles without hints and with a high score!', minLevel: 1 },
 
   // Strategy tips (levels 5-20)
-  { id: 'tip_long_words', category: 'strategy', text: 'Longer words are worth more points. Save them for when your combo multiplier is high!', minLevel: 5 },
+  { id: 'tip_long_words', category: 'strategy', text: 'Longer words score more. Clear them late — when gravity exposes more letters, long words become easier to spot.', minLevel: 5 },
   { id: 'tip_corners', category: 'strategy', text: 'Corner letters are harder to chain. Clear corner words first to open up the board.', minLevel: 8 },
   { id: 'tip_gravity_flip', category: 'strategy', text: 'In Gravity Flip mode, gravity rotates 90 degrees after each word. Plan ahead!', minLevel: 10 },
   { id: 'tip_shrinking', category: 'strategy', text: 'In Shrinking Board, the outer ring disappears every 2 words. Work inward!', minLevel: 5 },

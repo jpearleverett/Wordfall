@@ -1,8 +1,17 @@
 import { Chapter, Difficulty } from '../types';
+import { parseRemoteChapters } from '../utils/chapterSchema';
 
 /**
  * 40 chapters across 8 library wings (5 chapters per wing).
  * Each chapter has a curated set of theme words used for board generation.
+ *
+ * A Remote Config override (`chapterOverrideJson`) can publish
+ * additional chapters (ids 41+) without a client rebuild — that path
+ * is validated by `parseRemoteChapters` and surfaced via
+ * `getChapters()` / `getChapterForLevel()` below. The static export
+ * below remains for call sites that specifically need the authored
+ * 40-chapter catalog (e.g. analytics comparing launch-content vs.
+ * seasonal uplift).
  */
 export const CHAPTERS: Chapter[] = [
   // ── Wing 1: Nature (Chapters 1-5) ─────────────────────────────────────────
@@ -541,35 +550,87 @@ export function getChaptersByWing(wingId: string): Chapter[] {
   return CHAPTERS.filter((ch) => ch.wingId === wingId);
 }
 
+// ── Seasonal overlay (RC-driven) ─────────────────────────────────────────
+//
+// Chapters published via Remote Config's `chapterOverrideJson` are
+// validated by `parseRemoteChapters` and cached here. The module is
+// loaded once at boot via `setRemoteChapterOverride(json)` — called
+// from the remote-config fetch completion path. If no override is
+// present (default or malformed payload) the overlay stays empty and
+// all downstream lookups fall back to the 40 authored chapters.
+let remoteOverlay: Chapter[] = [];
+
+/**
+ * Ingest a new Remote Config chapter-overlay payload. Safe to call
+ * repeatedly (e.g. after RC refreshes mid-session). Malformed or empty
+ * payloads reset the overlay to empty rather than retaining stale
+ * state.
+ */
+export function setRemoteChapterOverride(json: string | null | undefined): void {
+  remoteOverlay = parseRemoteChapters(json);
+}
+
+/**
+ * Full, merged chapter catalog = static authored chapters + validated
+ * overlay entries (ids 41+). Callers that need live content should
+ * prefer this over direct `CHAPTERS` imports.
+ */
+export function getAllChapters(): Chapter[] {
+  if (remoteOverlay.length === 0) return CHAPTERS;
+  return [...CHAPTERS, ...remoteOverlay];
+}
+
 export function getChapter(id: number): Chapter | undefined {
-  return CHAPTERS.find((ch) => ch.id === id);
+  const all = getAllChapters();
+  return all.find((ch) => ch.id === id);
 }
 
 export function getNextChapter(currentId: number): Chapter | undefined {
-  return CHAPTERS.find((ch) => ch.id === currentId + 1);
+  const all = getAllChapters();
+  return all.find((ch) => ch.id === currentId + 1);
+}
+
+/**
+ * Returns the highest level number that still belongs to the given chapter.
+ * Used by progression-gating to clamp a player's advancement at the end of
+ * the currently-unlocked chapter when the next chapter's star gate isn't met.
+ */
+export function getLastLevelOfChapter(chapterId: number): number {
+  let cumulative = 0;
+  const all = getAllChapters();
+  for (const chapter of all) {
+    cumulative += chapter.puzzleCount;
+    if (chapter.id === chapterId) return cumulative;
+  }
+  // Past authored + overlay content — approximate via 15 puzzles/chapter.
+  const tail = all[all.length - 1];
+  return cumulative + (chapterId - tail.id) * 15;
 }
 
 export function getChapterForLevel(level: number): Chapter | undefined {
   if (level <= 0) return CHAPTERS[0];
 
   // Chapters define their own puzzle counts; map level to chapter by cumulative total.
+  // Consult the merged (static + RC overlay) catalog so seasonal
+  // chapters appear before the procedural fallback kicks in.
+  const all = getAllChapters();
   let cumulativeLevels = 0;
-  for (const chapter of CHAPTERS) {
+  for (const chapter of all) {
     cumulativeLevels += chapter.puzzleCount;
     if (level <= cumulativeLevels) {
       return chapter;
     }
   }
 
-  // Past authored content: use procedural chapter generation
-  // Import dynamically to avoid circular dependency
+  // Past authored + overlay content: use procedural chapter generation.
+  // Import dynamically to avoid circular dependency.
   const proceduralLevel = level - cumulativeLevels;
-  const chapterId = CHAPTERS.length + 1 + Math.floor(proceduralLevel / 15);
+  const chapterId = all.length + 1 + Math.floor(proceduralLevel / 15);
   try {
     const { generateProceduralChapter } = require('../engine/puzzleGenerator');
     return generateProceduralChapter(chapterId);
   } catch {
     // Fallback: clamp to final chapter
-    return CHAPTERS[CHAPTERS.length - 1];
+    return all[all.length - 1];
   }
 }

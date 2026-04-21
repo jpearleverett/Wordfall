@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
+import { withRetry } from '../services/retry';
 import { useSettings } from './SettingsContext';
 import { LIVES } from '../constants';
 import { AdRewardType, AD_REWARD_VALUES } from '../services/ads';
@@ -407,7 +408,12 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       if (u) {
         try {
           const docRef = doc(db, 'users', u.uid, 'economy', 'current');
-          await setDoc(docRef, payload, { merge: true });
+          // Route through withRetry so transient network errors are
+          // retried with exponential backoff AND the sync-status bus
+          // lights up NotSyncedBanner when writes keep failing.
+          await withRetry(() => setDoc(docRef, payload, { merge: true }), {
+            label: 'economy-firestore',
+          });
         } catch (e) {
           logger.warn('Failed to sync economy to Firestore:', e);
         }

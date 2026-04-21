@@ -509,14 +509,34 @@ export function generateBoard(
 }
 
 /**
- * Generate a daily challenge board based on the date.
+ * Hash a date string to a stable non-negative integer seed. Callers use
+ * this to derive the daily challenge's Mulberry32 seed so every player
+ * on the same UTC date generates the same board — which is what enables
+ * a global daily leaderboard (same puzzle, comparable scores).
  */
-export function generateDailyBoard(dateString: string): Board {
-  // Create a deterministic seed from the date string
+export function dailyBoardSeed(dateString: string): number {
   let seed = 0;
   for (let i = 0; i < dateString.length; i++) {
     seed = ((seed << 5) - seed + dateString.charCodeAt(i)) | 0;
   }
+  return Math.abs(seed);
+}
+
+// Module-level memo: daily board generation runs the full puzzle
+// generator with retries (~tens of ms on a fresh call). Callers that
+// hit the daily screen multiple times per app session (tab switches,
+// navigation back-and-forth) get cached results rather than burning
+// CPU regenerating the identical board.
+const dailyBoardCache = new Map<string, Board>();
+
+/**
+ * Generate (or return the cached copy of) the daily challenge board for
+ * the given UTC date string. Pure function of `dateString` — two
+ * devices on the same date produce identical boards.
+ */
+export function generateDailyBoard(dateString: string): Board {
+  const cached = dailyBoardCache.get(dateString);
+  if (cached) return cached;
 
   const config: BoardConfig = {
     rows: 7,
@@ -527,7 +547,17 @@ export function generateDailyBoard(dateString: string): Board {
     difficulty: 'medium',
   };
 
-  return generateBoard(config, Math.abs(seed));
+  const board = generateBoard(config, dailyBoardSeed(dateString));
+  dailyBoardCache.set(dateString, board);
+
+  // Bound the cache so rollover doesn't leak memory over a long-lived
+  // session (e.g. a player who doesn't kill the app for a week).
+  if (dailyBoardCache.size > 8) {
+    const firstKey = dailyBoardCache.keys().next().value;
+    if (firstKey !== undefined) dailyBoardCache.delete(firstKey);
+  }
+
+  return board;
 }
 
 /**
