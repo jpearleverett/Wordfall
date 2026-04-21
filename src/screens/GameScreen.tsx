@@ -25,7 +25,7 @@ import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
+import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic } from '../services/haptics';
@@ -450,6 +450,11 @@ function GameScreenImpl({
     () => failCount >= 2 ? 10000 : failCount === 1 ? 15000 : 20000,
     [failCount]
   );
+
+  // Challenge-spike marker — computed once per level so a Remote Config
+  // flip or level change rolls through. Suppressed for daily/weekly which
+  // don't use the ramp-based level config at all.
+  const isSpike = useMemo(() => isSpikeLevel(level), [level]);
 
   const modeConfig = MODE_CONFIGS[mode];
   const effectiveTimeLimit = modeConfig.rules.hasTimer
@@ -1949,6 +1954,7 @@ function GameScreenImpl({
             canShowAdHint={!isAdFree && adManager.canShowAd('hint_reward')}
             isStuck={isStuck}
             undosLeft={undosLeft}
+            isSpike={isSpike && !isDaily && mode !== 'weekly'}
             onIdleHintTap={stableHandleIdleHintBannerTap}
             onAdHintTap={stableHandleAdHintBannerTap}
             onUndoTap={stableHandleUndo}

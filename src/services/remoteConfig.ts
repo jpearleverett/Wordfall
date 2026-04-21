@@ -140,6 +140,14 @@ export interface RemoteConfigValues {
    * up mid-soft-launch (or dark it down during an incident).
    */
   weeklyCompetitionEnabled: boolean;
+  /**
+   * Spike levels — every 13th playable level is intentionally harder
+   * (one more word + one longer max word length) to break up the
+   * otherwise-linear ramp for strong players. Flip false to dark-
+   * launch if soft-launch telemetry shows fail-rate concentrated on
+   * spike levels (suggesting the magnitude is too aggressive).
+   */
+  spikeLevelsEnabled: boolean;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -263,6 +271,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // the Cloud Function has been running long enough (1-2 weeks) to
   // produce real leaderboard data for a meaningful screen.
   weeklyCompetitionEnabled: false,
+  // Spike-level system defaults ON — the magnitude (+1 word, +1 max
+  // word length, breathers always win collisions) is conservative
+  // enough to ship without pre-launch A/B data. Kill switch is here
+  // in case live telemetry reveals unexpected fail-rate spikes on
+  // spike levels specifically.
+  spikeLevelsEnabled: true,
   dailyQuestsEnabled: true,
   cosmeticPerksEnabled: true,
   streakShieldOfferEnabled: true,
