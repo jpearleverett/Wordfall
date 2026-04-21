@@ -356,6 +356,7 @@ export interface PlayerContextType extends PlayerData {
 
   // Adaptive Difficulty
   recordPerformanceMetrics: (level: number, stars: number, completionTimeSeconds: number) => void;
+  recordPerformanceFailure: (level: number) => void;
 
   // Player Segmentation
   recomputeSegments: (totalSpendCents?: number, sharesCount?: number) => void;
@@ -634,6 +635,7 @@ const PlayerContext = createContext<PlayerContextType>({
   getTimeUntilNextEnergy: () => 0,
   getEnergyDisplay: () => ({ current: ENERGY.MAX, max: ENERGY.MAX, bonusPlaysLeft: ENERGY.BONUS_PLAYS_AFTER_ZERO, isBonusMode: false }),
   recordPerformanceMetrics: () => {},
+  recordPerformanceFailure: () => {},
   sendChallenge: () => ({ id: '', challengerId: '', challengerName: '', challengerScore: 0, challengerStars: 0, challengerTime: 0, level: 0, seed: 0, mode: 'classic' as const, boardConfig: { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 5, difficulty: 'easy' as const }, createdAt: '', expiresAt: '', status: 'pending' as const }),
   respondToChallenge: () => {},
   recomputeSegments: () => {},
@@ -980,6 +982,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     completeAchievement,
     checkComebackRewards,
     recordPerformanceMetrics,
+    recordPerformanceFailure,
   } = progressMethods;
 
   // ── Social methods (extracted to PlayerSocialContext) ──────────────────
@@ -1920,6 +1923,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       getTimeUntilNextEnergy,
       getEnergyDisplay,
       recordPerformanceMetrics,
+      recordPerformanceFailure,
       sendChallenge,
       respondToChallenge,
       recomputeSegments,
@@ -1985,6 +1989,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       getTimeUntilNextEnergy,
       getEnergyDisplay,
       recordPerformanceMetrics,
+      recordPerformanceFailure,
       sendChallenge,
       respondToChallenge,
       recomputeSegments,
@@ -2055,6 +2060,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       getTimeUntilNextEnergy,
       getEnergyDisplay,
       recordPerformanceMetrics,
+      recordPerformanceFailure,
       sendChallenge,
       respondToChallenge,
       recomputeSegments,
@@ -2119,6 +2125,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       getTimeUntilNextEnergy,
       getEnergyDisplay,
       recordPerformanceMetrics,
+      recordPerformanceFailure,
       sendChallenge,
       respondToChallenge,
       recomputeSegments,

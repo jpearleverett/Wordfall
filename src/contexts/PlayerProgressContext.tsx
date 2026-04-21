@@ -124,6 +124,7 @@ export interface PlayerProgressMethods {
   completeAchievement: (achievementId: string) => void;
   checkComebackRewards: () => string[];
   recordPerformanceMetrics: (level: number, stars: number, completionTimeSeconds: number) => void;
+  recordPerformanceFailure: (level: number) => void;
 }
 
 type SetDataFn<T> = (updater: (prev: T) => T) => void;
@@ -518,6 +519,17 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         [level]: (prev.failCountByLevel[level] || 0) + 1,
       },
       consecutiveFailures: prev.consecutiveFailures + 1,
+      // Also feed the adaptive difficulty adjuster. levelAttempts is
+      // what getAdjustedConfig reads to detect "struggling on this
+      // level" (>3 attempts); before this co-update it only counted
+      // wins, so the branch was dead code.
+      performanceMetrics: {
+        ...prev.performanceMetrics,
+        levelAttempts: {
+          ...prev.performanceMetrics.levelAttempts,
+          [level]: (prev.performanceMetrics.levelAttempts[level] || 0) + 1,
+        },
+      },
     }));
   };
 
@@ -647,6 +659,30 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     }));
   };
 
+  /**
+   * Count a failure (stuck / timeout / perfect-broken) against the
+   * adaptive-difficulty feed. WITHOUT this call the adjuster's
+   * `levelAttempts[level]` never exceeded 1 — each win bumped the
+   * counter once and the player moved on, so the
+   * `recentMultiAttemptLevels > 3` struggling branch was dead code.
+   * Failures now bump the counter so a player who's stuck on a level
+   * for 4+ attempts triggers the "easier" path on the next puzzle
+   * load, even if they haven't won recently enough to tank their
+   * averageStars below 2.0.
+   */
+  const recordPerformanceFailure = (level: number): void => {
+    setData((prev) => ({
+      ...prev,
+      performanceMetrics: {
+        ...prev.performanceMetrics,
+        levelAttempts: {
+          ...prev.performanceMetrics.levelAttempts,
+          [level]: (prev.performanceMetrics.levelAttempts[level] || 0) + 1,
+        },
+      },
+    }));
+  };
+
   return {
     recordPuzzleComplete,
     recordDailyComplete,
@@ -671,5 +707,6 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     completeAchievement,
     checkComebackRewards,
     recordPerformanceMetrics,
+    recordPerformanceFailure,
   };
 }

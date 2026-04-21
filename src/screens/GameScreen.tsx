@@ -72,7 +72,12 @@ interface GameScreenProps {
   mode?: GameMode;
   maxMoves?: number;
   timeLimit?: number;
-  onComplete: (stars: number, score: number, perfectRun: boolean) => void;
+  onComplete: (
+    stars: number,
+    score: number,
+    perfectRun: boolean,
+    completionTimeSeconds: number,
+  ) => void;
   onNextLevel: () => void;
   onHome: () => void;
   // Completion data (passed from App.tsx wrapper after handleComplete)
@@ -781,6 +786,13 @@ function GameScreenImpl({
       if (!failureCountedRef.current) {
         failureCountedRef.current = true;
         sessionFailCount.current += 1;
+        // Persist the failure so the hint_rescue offer survives app
+        // restarts AND so the adaptive difficulty adjuster sees
+        // struggling levels (recordFailure co-updates
+        // performanceMetrics.levelAttempts now). The fail-path had
+        // never invoked this before — failCountByLevel was always
+        // empty, so the `persistentFails` read below only ever saw 0.
+        playerActions.recordFailure(level);
       }
       const persistentFails = failCountByLevel?.[level] ?? 0;
       const totalFails = Math.max(sessionFailCount.current, persistentFails);
@@ -790,7 +802,7 @@ function GameScreenImpl({
     } else {
       failureCountedRef.current = false;
     }
-  }, [status, activeOffer, showOfferIfAllowed, failCountByLevel, level]);
+  }, [status, activeOffer, showOfferIfAllowed, failCountByLevel, level, playerActions]);
 
   // hint_rescue: dead-end detected while player has 0 hint tokens
   useEffect(() => {
@@ -1505,9 +1517,22 @@ function GameScreenImpl({
       const finalScore = score;
       const finalStars = stars;
       const finalPerfectRun = perfectRun;
+      // Capture real completion time for the adaptive-difficulty feed.
+      // puzzleStartTime is wall-clock ms at NEW_GAME; this branch fires
+      // once per 'won' transition so subtracting gives the player's
+      // actual time-to-solve. Clamped to >=0 in case puzzleStartTime
+      // wasn't set (legacy snapshot hydrate path).
+      const startedAt = store.getState().puzzleStartTime;
+      const completionTimeSeconds =
+        startedAt > 0 ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0;
       const timer = setTimeout(() => {
         setShowComplete(true);
-        onCompleteRef.current(finalStars, finalScore, finalPerfectRun);
+        onCompleteRef.current(
+          finalStars,
+          finalScore,
+          finalPerfectRun,
+          completionTimeSeconds,
+        );
       }, 300);
       return () => clearTimeout(timer);
     }
