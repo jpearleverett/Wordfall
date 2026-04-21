@@ -126,6 +126,14 @@ export interface RemoteConfigValues {
    * client rebuild to rotate emphasis weekly.
    */
   featuredProductId: string;
+  /**
+   * Seasonal chapter overlay JSON. When non-empty, parsed by
+   * `parseRemoteChapters` and merged onto the static 40-chapter catalog
+   * via `setRemoteChapterOverride`. Chapters must have ids >= 41 (the
+   * overlay extends, never replaces, the authored catalog). Malformed
+   * JSON is discarded safely and the static catalog is used as-is.
+   */
+  chapterOverrideJson: string;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -239,6 +247,7 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // weekly via Remote Config — empty string means "no pin" so the shop
   // falls back to the static ordering.
   featuredProductId: 'explorer_bundle',
+  chapterOverrideJson: '',
   dailyQuestsEnabled: true,
   cosmeticPerksEnabled: true,
   streakShieldOfferEnabled: true,
@@ -266,6 +275,22 @@ function canUseRemoteConfig(): boolean {
 
 function notifyListeners(): void {
   const values = getAllRemoteValues();
+  // Keep the seasonal chapter overlay in sync with the latest RC payload.
+  // Doing this inline here (rather than requiring every app startup path
+  // to remember to call setRemoteChapterOverride) means fetching a fresh
+  // config mid-session also rolls out new seasonal chapters without a
+  // reload. Parse errors are swallowed by parseRemoteChapters itself.
+  try {
+    // Lazy require to avoid a cycle: chapters.ts imports from
+    // utils/chapterSchema which is independent, and this file already
+    // sits below chapters in the dependency tree.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { setRemoteChapterOverride } = require('../data/chapters');
+    setRemoteChapterOverride(values.chapterOverrideJson);
+  } catch {
+    // Chapters module not loaded yet (cold-start race) — the next
+    // notifyListeners tick will retry automatically.
+  }
   for (const cb of listeners) {
     try {
       cb(values);
