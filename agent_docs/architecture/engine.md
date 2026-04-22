@@ -102,7 +102,7 @@ Sound manager calls wired at every interaction point in `GameScreen.tsx` and `Ap
 - **Level-up detection**: Compares new level to `highestLevel`, passes `leveledUp` + `newLevel` to PuzzleComplete
 - **Difficulty transition detection**: Fires "New Challenge Tier!" when crossing easy→medium (level 6), medium→hard (level 16), hard→expert (level 31)
 - **Feature unlock checks**: Calls `player.checkFeatureUnlocks(newLevel)` which queues `FeatureUnlockCeremony` for newly unlocked tabs/features
-- **Achievement checks**: Calls `player.checkAchievements()` which compares player stats against all 15 achievement thresholds, queues `AchievementCeremony`
+- **Achievement checks**: Calls `player.checkAchievements()` which compares player stats against all 18 achievement definitions (`src/data/achievements.ts`) — 12 visible + 6 hidden, each with bronze/silver/gold tiers, queues `AchievementCeremony`
 - **Weekly goal progress**: Updates tracking keys (`puzzles_solved`, `total_score`, `stars_earned`, `perfect_solves`, `daily_completed`)
 - **Mode unlock ceremonies**: Detects newly unlockable modes, queues `ModeUnlockCeremony` for each
 - **Collection completion**: Checks if puzzle words completed an Atlas page using local state projection (avoids stale React batched state), queues `CollectionCompleteCeremony`
@@ -120,19 +120,24 @@ Sound manager calls wired at every interaction point in `GameScreen.tsx` and `Ap
 
 ### Ceremony Queue System
 
-Ceremonies (modals) are queued via `player.queueCeremony()` and processed sequentially in `HomeMainScreen`. **18 ceremony types** with two rendering patterns:
+Ceremonies (modals) are queued via `player.queueCeremony()` and processed sequentially by `src/App/CeremonyRouter.tsx` (20 explicit render cases). The `CeremonyItem.type` union in `src/types.ts:729` has 30 variants — the other 10 are either handled inline on the victory screen (`VictorySummaryItem`) or surface through HomeMainScreen. Two rendering patterns:
 
-**Bespoke components** (6 types with dedicated files):
+**Bespoke components** (8 types with dedicated files):
 - `feature_unlock` → `FeatureUnlockCeremony`
 - `mode_unlock` → `ModeUnlockCeremony`
 - `achievement` → `AchievementCeremony`
 - `streak_milestone` → `StreakMilestoneCeremony`
+- `flawless_streak_milestone` → `StreakMilestoneCeremony` (shared component)
 - `collection_complete` → `CollectionCompleteCeremony`
 - `difficulty_transition` → `DifficultyTransitionCeremony`
 - `level_up` → `LevelUpCeremony`
+- `prestige` → `PrestigeResetCeremony`
+- `first_purchase_offer` → `FirstPurchaseOfferModal`
 
-**MilestoneCeremony** (reusable component for 11 simpler types):
-- `star_milestone`, `perfect_milestone`, `decoration_unlock`, `first_rare_tile`, `first_booster`, `wing_complete`, `word_mastery_gold`, `first_mode_clear`, `wildcard_earned`, `win_streak_milestone`, `mystery_wheel_jackpot`
+**MilestoneCeremony** (reusable component for the remaining simpler types):
+- `mystery_wheel_jackpot`, `win_streak_milestone`, `first_rare_tile`, `first_booster`, `wing_complete`, `word_mastery_gold`, `first_mode_clear`, `wildcard_earned`, `quest_step_complete`, `first_win`, `daily_quest_claim`, `starter_pack_unlocked`
+
+**Known gap:** tier-50 Season Pass claim falls through to the generic `feature_unlock` ceremony. A dedicated `season_pass_complete` type is tracked as MG1 in `launch_blockers.md`.
 
 Each ceremony renders with animations, rewards display, and dismiss/action buttons. When one is dismissed, the next in the queue fires after 300ms.
 

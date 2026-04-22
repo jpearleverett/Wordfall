@@ -9,7 +9,7 @@ network-backed services, analytics events, monetization, or push.
 Auth/Firestore/Functions use the JS SDK (`firebase` npm package). Analytics uses the native module (`@react-native-firebase/analytics` v24+) because `firebase/analytics` is web-only and throws on RN. Both initialize independently: `firebase/app` reads `EXPO_PUBLIC_FIREBASE_*` env vars; `@react-native-firebase/app` reads `google-services.json` (Android) and `GoogleService-Info.plist` (iOS). Both must point to the same Firebase project.
 
 - **Firestore rules/indexes**: `firebase.json` in repo root references `firestore.rules` + `firestore.indexes.json`, both deployed to `wordfall-mobile-game` project.
-- **Cloud Functions**: single codebase at `functions/` (consolidated Apr 2026 — see `firebase.json`). Deployed on Node 22. 13 functions live: commerce in `functions/src/index.ts` (`validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion`) and social in `functions/src/social.ts` re-exported from `index.ts` (`onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift`). Per-UID rate-limit counter helper (`checkFirestoreRateLimit` at `rateLimits/{uid}_{endpoint}_{windowStart}`) guards `validateReceipt` / `clubGoalProgress` / `requestAccountDeletion` / `sendPushNotification`; fail-open on transaction error so Firestore hiccups don't black-hole legitimate traffic. `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` set in `.env`.
+- **Cloud Functions**: single codebase at `functions/` (consolidated Apr 2026 — see `firebase.json`). Deployed on Node 22. 15 functions live: commerce in `functions/src/index.ts` (`validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion`) and social in `functions/src/social.ts` re-exported from `index.ts` (`onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift`, `onReferralSuccess`, `distributeWeeklyRewards`). Per-UID rate-limit counter helper (`checkFirestoreRateLimit` at `rateLimits/{uid}_{endpoint}_{windowStart}`) guards `validateReceipt` / `clubGoalProgress` / `requestAccountDeletion` / `sendPushNotification`; fail-open on transaction error so Firestore hiccups don't black-hole legitimate traffic. `EXPO_PUBLIC_FIREBASE_FUNCTIONS_URL` set in `.env`.
 - **Auth**: Firebase anonymous auth with loading state (`AuthContext`).
 - **Firestore social layer** (`src/services/firestore.ts`): leaderboards (daily/weekly/all-time), friend system with codes, gift delivery (legacy client-direct path — still live for back-compat), player profile sync. Every method has try/catch returning defaults on failure — app works identically offline.
 - **Gifting — secure path** (`src/services/gifts.ts` + `functions/src/social.ts` `sendGift` / `claimGift`): atomic server-side transaction, 5-gift/day/sender cap (`users/{uid}/giftQuota/{YYYY-MM-DD}`), idempotency-key replay guard, clubmate/friend relationship check (reuses push-auth logic). Writes the same `gifts/` schema as the legacy direct path so `getPendingGifts` keeps working unchanged. Client entry points: `PlayerSocialContext.sendHintGift` / `sendTileGift` call `sendGiftSecure` with a fallback to legacy direct write, and `src/components/GiftInbox.tsx` (mounted in `ClubScreen`) consumes `firestoreService.getPendingGifts`, claims via `claimGiftSecure`, and applies the grant locally through EconomyContext (`addHintTokens` / `addBoosterToken('wildcardTile')` / `addLives`). Server never writes to the recipient economy.
@@ -21,7 +21,7 @@ Auth/Firestore/Functions use the JS SDK (`firebase` npm package). Analytics uses
 - **JS SDK** on web (`firebase/analytics` guarded by `isSupported()`)
 - **Firestore mirror**: every event also written to `analytics_events` collection (60s flush) + AsyncStorage as offline buffer
 
-32+ typed events across app lifecycle. Revenue (`trackRevenue`, `trackAdRevenue`), retention (`trackRetention` for D1/D7/D30), conversion funnels (`trackFunnel`), cohort analysis (`trackCohort`). User properties (level, stage, payer status). A/B testing via deterministic hash variant assignment (`getVariant()`).
+~100 typed event names across app lifecycle. Revenue (`trackRevenue`, `trackAdRevenue`), retention (`trackRetention` for D1/D7/D30), conversion funnels (`trackFunnel`), cohort analysis (`trackCohort`). User properties (level, stage, payer status). A/B testing via deterministic hash variant assignment (`getVariant()`). 133 `logEvent`/`trackEvent` call sites across the codebase.
 
 ## IAP (`src/services/iap.ts`)
 
@@ -37,7 +37,7 @@ Server-side validation via Firebase Cloud Function at `${FIREBASE_FUNCTIONS_URL}
 
 ## Push Notifications
 
-`src/services/notifications.ts` uses `expo-notifications`. 9 categories with template interpolation. Permission handling with graceful denial. Android notification channel. Convenience schedulers: `scheduleStreakReminder()` (8 PM), `scheduleDailyChallenge()` (9 AM), `scheduleComebackReminder()` (3 days). Segment-aware scheduling. Remote push: `registerForRemotePush()` gets Expo + device tokens, `sendTokenToServer()` syncs to Firestore `users/{uid}/tokens`, `handleRemoteNotification()` routes by category.
+`src/services/notifications.ts` uses `expo-notifications`. 9 categories with template interpolation. Permission handling with graceful denial. Android notification channel. Convenience schedulers: `scheduleStreakReminder()` (8 PM), `scheduleDailyChallenge()` (9 AM), `scheduleComebackReminder()` (3 days). **Daily frequency cap is hardcoded at `MAX_NOTIFICATIONS_PER_DAY = 3` (notifications.ts:147) and is NOT Remote-Config-overridable yet — tracked as R7 in `launch_blockers.md`.** `getPersonalizedNotifications()` exists in `playerSegmentation.ts:445` with per-segment cap / reminder hour / comeback delay but is **not yet consumed by the scheduler** (tracked as R1 in `launch_blockers.md`). Remote push: `registerForRemotePush()` gets Expo + device tokens, writes to Firestore `users/{uid}/pushToken/current`, `handleRemoteNotification()` routes by category.
 
 `src/services/notificationTriggers.ts` wires 8 gameplay-event triggers, all idempotent (cancels previous before scheduling new):
 - `triggerStreakReminder` (after streak update)
@@ -49,24 +49,28 @@ Server-side validation via Firebase Cloud Function at `${FIREBASE_FUNCTIONS_URL}
 - `triggerStreakAtRiskNotification` (background — streak ≥ 1 day and not played today)
 - `triggerFriendBeatScoreNotification` (immediate when friend beats score)
 
+**Server-side `processStreakReminders`** (`functions/src/social.ts:504–554`) runs daily at 8 PM UTC. **No per-timezone bucketing** — Tokyo users get the reminder at 3 AM local. Fix tracked as R2 in `launch_blockers.md`. Day-2 / Day-7 / lapsed-user re-engagement Cloud Functions do NOT exist yet (R3/R4/R5 in the same doc).
+
 ## Crash Reporting (`src/services/crashReporting.ts`)
 
 Dynamic `require('@sentry/react-native')`. When available + `EXPO_PUBLIC_SENTRY_DSN` set, forwards exceptions/messages/breadcrumbs/user context. Console-only fallback. Global `ErrorUtils` handler catches uncaught JS errors. Breadcrumb buffer (50 max) + Sentry forwarding. Root `ErrorBoundary` wraps app tree inside `GestureHandlerRootView`; shows synthwave crash screen with Restart button using `expo-updates.reloadAsync()`.
 
 ## Deep Linking
 
-`wordfall://` scheme configured in `app.json` with Android intent filters and iOS associated domains placeholder. `src/utils/deepLinking.ts` parses/builds referral/challenge/daily URLs, wrapped in try/catch:
+`wordfall://` scheme configured in `app.json` with Android intent filters. **Android App Links `autoVerify: true` is configured for `https://wordfallgame.app`** (`app.json:97–111`). `src/utils/deepLinking.ts` parses BOTH `wordfall://` and `https://wordfallgame.app/*` URLs, wrapped in try/catch:
 
 - `wordfall://referral/{code}` — auto-applies code
 - `wordfall://challenge/{id}` — stores challenge ID
 - `wordfall://daily` — navigates to daily mode
 - Query param fallbacks supported
 
+**Known gap:** `buildReferralLink()` at `deepLinking.ts:107–109` emits only the `wordfall://` custom scheme. The parser accepts `https://wordfallgame.app/r/{code}` but the builder doesn't emit it, so share text in chat apps can't install-attribute via the web. Tracked as S2 in `launch_blockers.md`.
+
 App.tsx handles cold-start (`Linking.getInitialURL()`) and warm-start (`Linking.addEventListener('url')`). All share text includes deep link CTAs via `generateShareText()`.
 
 ## A/B Testing (`src/services/experiments.ts`)
 
-6 pre-configured experiments: `onboarding_flow`, `energy_cap`, `hint_rescue_price`, `first_purchase_offer`, `daily_reward_generosity`, `mystery_wheel_free_frequency`. Weighted multi-variant assignment with deterministic hash (same `simpleHash` as `analytics.getVariant()`). `useExperiment()` hook memoizes variant assignment per userId. Exposure tracking is separate from assignment for proper intent-to-treat analysis. Supports `targetSegments` filter and `startDate`/`endDate` windows.
+6 pre-configured experiments: `onboarding_flow`, `energy_cap`, `hint_rescue_price`, `first_purchase_offer`, `daily_reward_generosity`, `mystery_wheel_free_frequency`. Weighted multi-variant assignment with deterministic hash (same `simpleHash` as `analytics.getVariant()`). `useExperiment()` hook memoizes variant assignment per userId. Exposure tracking is separate from assignment for proper intent-to-treat analysis. `startDate`/`endDate` windows are respected. **`targetSegments` field is declared on the `Experiment` type and set on `first_purchase_offer` but NOT consulted by `getAssignedVariant()` — segment targeting is a known gap tracked in `launch_blockers.md` (M3).**
 
 ## Player Segmentation (`src/services/playerSegmentation.ts`)
 
