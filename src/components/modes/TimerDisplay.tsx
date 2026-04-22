@@ -3,6 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS } from '../../constants';
+import { errorHaptic } from '../../services/haptics';
+import { soundManager } from '../../services/sound';
 
 interface TimerDisplayProps {
   totalSeconds: number;
@@ -37,17 +39,49 @@ export default function TimerDisplay({
 }: TimerDisplayProps) {
   const [remaining, setRemaining] = useState(totalSeconds);
   const pulseAnim = useSharedValue(1);
+  const flashAnim = useSharedValue(0);
   const onTimeUpRef = useRef(onTimeUp);
+  // C2 in launch_blockers.md: fire a visual + haptic + SFX warning once
+  // when `remaining` crosses 30s and 10s. `warned30sRef` / `warned10sRef`
+  // guard against re-fires across re-renders, and both reset whenever
+  // `totalSeconds` changes (new puzzle started).
+  const warned30sRef = useRef(false);
+  const warned10sRef = useRef(false);
 
   // Keep callback ref up to date
   useEffect(() => {
     onTimeUpRef.current = onTimeUp;
   }, [onTimeUp]);
 
-  // Reset when totalSeconds changes
+  // Reset when totalSeconds changes (new puzzle)
   useEffect(() => {
     setRemaining(totalSeconds);
+    warned30sRef.current = false;
+    warned10sRef.current = false;
   }, [totalSeconds]);
+
+  // C2 warnings: fire once when remaining crosses 30s or 10s threshold.
+  useEffect(() => {
+    if (paused) return;
+    const fireWarning = (slot: 'timerWarning30s' | 'timerWarning10s') => {
+      void errorHaptic();
+      // SFX slots are reserved in sound.ts:71–72. Stays silent on synth
+      // until the real audio ships; wiring is harmless today.
+      void soundManager.playSound(slot as any);
+      flashAnim.value = withSequence(
+        withTiming(1, { duration: 120 }),
+        withTiming(0, { duration: 500 }),
+      );
+    };
+    if (!warned30sRef.current && remaining <= 30 && remaining > 10 && totalSeconds > 30) {
+      warned30sRef.current = true;
+      fireWarning('timerWarning30s');
+    }
+    if (!warned10sRef.current && remaining <= 10 && remaining > 0 && totalSeconds > 10) {
+      warned10sRef.current = true;
+      fireWarning('timerWarning10s');
+    }
+  }, [remaining, totalSeconds, paused]);
 
   // Countdown interval
   useEffect(() => {
@@ -87,6 +121,10 @@ export default function TimerDisplay({
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseAnim.value }],
   }));
+  // Red warning flash driven by C2 threshold crossings.
+  const flashStyle = useAnimatedStyle(() => ({
+    opacity: flashAnim.value,
+  }));
 
   const fraction = totalSeconds > 0 ? remaining / totalSeconds : 0;
   const color = getTimerColor(fraction);
@@ -107,6 +145,13 @@ export default function TimerDisplay({
     >
       {/* Outer glow layer */}
       <View style={[styles.outerGlow, { shadowColor: color }]} />
+
+      {/* C2 warning flash — fades in+out when 30s/10s threshold is crossed. */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.warningFlash, flashStyle]}
+      />
+
 
       {/* Background ring */}
       <View style={[styles.ring, { width: ringSize, height: ringSize }]}>
@@ -196,6 +241,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 18,
     elevation: 10,
+  },
+  warningFlash: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: COLORS.coral,
+    opacity: 0,
   },
   ring: {
     alignItems: 'center',
