@@ -123,16 +123,20 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
 - **Firestore rules + indexes**: `firestore.rules` (124 lines, strict), `firestore.indexes.json` — written, just need `firebase deploy`
 - **Site/legal**: `wordfallgamesite/` has privacy/terms/support + an `assetlinks.json` template (placeholder SHA256 needs Play app signing fingerprint)
 
-### Real launch-blocking gaps (code-side, April 2026 ship-readiness audit)
+### Launch-blocking gaps — SHIPPED April 2026
 
-The authoritative, verified list lives in **`agent_docs/launch_blockers.md`** — grouped by Tier 1 (retention), Tier 2 (monetization), Tier 3 (discovery + ceremony), Tier 4 (feel polish). The shortlist for a WW Google Play launch:
+The authoritative, verified list lives in **`agent_docs/launch_blockers.md`**. As of 2026-04-22, **all 18 Tier 1–4 code gaps are shipped** on branch `claude/assess-wordfall-launch-readiness-VzyDY`. Summary of what landed:
 
-- **Retention pipeline** — wire `getPersonalizedNotifications()` from `playerSegmentation.ts:445` into `notifications.ts`; add `processDay2Reengagement` + `processDay7Reengagement` Cloud Functions next to `processStreakReminders`; bucket streak reminders by user timezone (hardcoded UTC today); render `segmentWelcomeMessage` on HomeScreen (computed in App.tsx:1207, prop accepted at HomeScreen.tsx:152, never rendered); add restorative streak-save modal; make `MAX_NOTIFICATIONS_PER_DAY` RC-overridable.
-- **Monetization lift** — raise `first_purchase_special` rewards from 200/25/5 → 500/50/10; add 3 per-booster SKUs (`wildcard_pack_5`, `spotlight_pack_5`, `shuffle_pack_5`) + booster-combo pack at $4.99; evaluate `experiments.ts` `targetSegments` field in `getAssignedVariant()` (declared but not consulted).
-- **Social discovery** — build Club Browser screen (`listClubs` API is missing from `firestore.ts`); make `buildReferralLink()` in `deepLinking.ts:107` output `https://wordfallgame.app/r/{code}` in addition to `wordfall://` (parser handles both; App Links `autoVerify` is already configured in `app.json`).
-- **Metagame ceremony** — dedicated `season_pass_complete` type in `CeremonyRouter.tsx` for tier-50 claims (currently generic); event leaderboard UI in `EventScreen.tsx` (shows personal progress only); animated legendary frame glow in `ProfileScreen.tsx:198–208` (currently static rarity color).
-- **Feel polish** — fire `gravityLandHaptic` from `haptics.ts:51` in the spring-complete callback at `GameScreen.tsx:1258–1265` (dead code today); Time Pressure 30s/10s visual + haptic warnings (SFX slots reserved in `sound.ts:71–72`); custom `cardStyleInterpolator` springs in `MainNavigator.tsx:28–32`.
-- **`assetlinks.json` SHA256** — replace the `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` placeholder in `wordfallgamesite/.well-known/assetlinks.json` with the Play App Signing fingerprint (Play Console → App signing).
+- **Tier 1 Retention (R1–R7)** — `getPersonalizedNotifications()` wired into `notifications.ts` scheduler; per-timezone `processStreakReminders`; new `processDay2Reengagement` + `processDay7Reengagement` Cloud Functions; restorative `PostStreakBreakOffer` modal (50 gems, 24h window, tracks `streaks.recentBreak`); `segmentWelcomeMessage` rendered as a welcome-back banner on HomeScreen; `maxNotificationsPerDay` RC-overridable with segment-derived cap winning.
+- **Tier 2 Monetization (M1–M3)** — `first_purchase_special` raised to 500/50/10; `wildcard_pack_5` / `spotlight_pack_5` / `shuffle_pack_5` SKUs at $1.99 each added alongside `booster_crate`; `getAssignedVariant()` now evaluates `targetSegments` (via new `segmentsForTargeting` param auto-flattened by `useExperiment()`).
+- **Tier 3 Social + Metagame (S1, S2, MG1–MG3)** — `firestoreService.listPublicClubs()` + Browse-clubs section inside `ClubScreen.renderNoClub()`; `buildReferralLink()` emits `https://wordfallgame.app/r/{code}` + parser handles `/r/` path; new `season_pass_complete` ceremony type with dedicated `SeasonPassCompleteCeremony` fired at tier 50; new `EventLeaderboardCard` + `submitEventScore` / `getEventLeaderboard` per-event ranking mounted in `EventScreen`; animated legendary frame glow on `ProfileScreen` via Reanimated pulse.
+- **Tier 4 Feel polish (C1, C2, P1, P2)** — `gravityLandHaptic()` now fires in the fall-spring `.start()` callback at `GameScreen.tsx:1272`; `TimerDisplay` threshold crossings at 30s / 10s fire haptic + SFX slot + coral flash overlay; new `economy_primer` onboarding phase teaches coins / gems / clubs; `MainNavigator` uses a custom `cardSpringFadeInterpolator` with spring open + cubic-out close transitions.
+
+**Remaining Tier 5 items (user-side, NOT code):**
+- `assetlinks.json` SHA256: replace the `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` placeholder in `wordfallgamesite/.well-known/assetlinks.json` with the Play App Signing fingerprint.
+- Register new SKUs in Play Console: `wordfall_wildcard_pack_5`, `wordfall_spotlight_pack_5`, `wordfall_shuffle_pack_5`.
+- Translate 5 non-EN locale files (`de / es-419 / fr / ja / pt-BR` — currently English structural stubs).
+- Hand-author puzzle overrides for levels 80–150 (`chapterOverrideJson` RC path exists).
 
 _(resolved April 2026)_ GDPR account deletion UI + `requestAccountDeletion` Cloud Function (purges users + subcollections + club membership + consent ledger + push tokens, hashes receipts for audit trail); secure `sendGift`/`claimGift` callable path; Google Sign-In linking (`src/services/googleAuth.ts` with credential-already-in-use recovery fallback — final activation needs user-side OAuth setup).
 
