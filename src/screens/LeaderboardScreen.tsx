@@ -25,6 +25,9 @@ import {
   selectDailyCompleted,
   selectTotalScore,
   selectFriendIds,
+  selectReferralCode,
+  selectReferralCount,
+  selectReferralMilestonesClaimed,
 } from '../stores/playerStore';
 import {
   firestoreService,
@@ -32,6 +35,9 @@ import {
 } from '../services/firestore';
 import { analytics } from '../services/analytics';
 import { SendGiftButton } from '../components/social/SendGiftButton';
+import ReferralCard from '../components/ReferralCard';
+import ReferralPendingRewards from '../components/ReferralPendingRewards';
+import FriendLeaderboardCard from '../components/FriendLeaderboardCard';
 
 const { width } = Dimensions.get('window');
 
@@ -150,7 +156,10 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
   const dailyCompleted = usePlayerStore(selectDailyCompleted);
   const totalScore = usePlayerStore(selectTotalScore);
   const friendIds = usePlayerStore(selectFriendIds);
-  const { sendChallenge } = usePlayerActions();
+  const referralCode = usePlayerStore(selectReferralCode);
+  const referralCount = usePlayerStore(selectReferralCount);
+  const referralMilestonesClaimed = usePlayerStore(selectReferralMilestonesClaimed);
+  const { sendChallenge, claimReferralMilestone } = usePlayerActions();
   const currentUserId = currentUserIdProp ?? user?.uid ?? '';
 
   useEffect(() => {
@@ -623,6 +632,17 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
           />
         }
       >
+        <ReferralPendingRewards />
+        <FriendLeaderboardCard />
+        {referralCode ? (
+          <ReferralCard
+            referralCode={referralCode}
+            referralCount={referralCount}
+            milestonesClaimed={referralMilestonesClaimed}
+            onClaimMilestone={(count) => claimReferralMilestone(count)}
+          />
+        ) : null}
+
         {loading && entries.length === 0 ? (
           <View style={styles.emptyState}>
             <ActivityIndicator size="large" color={COLORS.accent} />

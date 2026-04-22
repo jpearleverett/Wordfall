@@ -1523,9 +1523,6 @@ function HomeMainScreen({ route, navigation }: any) {
           color: e.type === 'weekend_blitz' ? COLORS.orange : e.type === 'mini' ? COLORS.teal : COLORS.accent,
         }))}
         onOpenEvents={() => navigation.navigate('Play', { screen: 'Event' })}
-        onOpenFriendLeaderboard={() =>
-          navigation.navigate('Play', { screen: 'Leaderboard', params: { scope: 'friends' } })
-        }
         claimedLoginToday={claimedLoginToday}
         onClaimLoginReward={handleClaimLoginReward}
       />

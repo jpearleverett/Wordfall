@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,14 +22,11 @@ import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 import { getFlashSale } from '../data/dynamicPricing';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
-import NeonStreakFlame from '../components/home/NeonStreakFlame';
-import ReferralCard from '../components/ReferralCard';
-import ReferralPendingRewards from '../components/ReferralPendingRewards';
-import FriendLeaderboardCard from '../components/FriendLeaderboardCard';
 import PiggyBankCard from '../components/PiggyBankCard';
 import DailyQuestsCard from '../components/DailyQuestsCard';
 import { DailyQuest } from '../data/dailyQuests';
 import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
+import LiveRail from '../components/home/LiveRail';
 import FlawlessStreakCard from '../components/FlawlessStreakCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
@@ -40,9 +38,6 @@ import {
   selectOnboardingMilestones,
   selectMysteryWheel,
   selectSeasonalQuest,
-  selectReferralCode,
-  selectReferralCount,
-  selectReferralMilestonesClaimed,
   selectFlawlessStreak,
 } from '../stores/playerStore';
 import { getNextMilestone } from '../data/onboardingMilestones';
@@ -102,8 +97,6 @@ interface HomeScreenProps {
   onOpenLibrary?: () => void;
   /** Navigate to season pass screen */
   onOpenSeasonPass?: () => void;
-  /** Navigate to the friend-scoped Leaderboard screen */
-  onOpenFriendLeaderboard?: () => void;
   claimedLoginToday?: boolean;
   onClaimLoginReward?: () => void;
 }
@@ -155,7 +148,6 @@ export function HomeScreen({
   onOpenEvents,
   onOpenLibrary,
   onOpenSeasonPass,
-  onOpenFriendLeaderboard,
   claimedLoginToday = false,
   onClaimLoginReward,
 }: HomeScreenProps) {
@@ -165,15 +157,11 @@ export function HomeScreen({
   const mysteryWheelData = usePlayerStore(selectMysteryWheel);
   const flawlessStreak = usePlayerStore(selectFlawlessStreak);
   const seasonalQuestState = usePlayerStore(selectSeasonalQuest);
-  const referralCode = usePlayerStore(selectReferralCode);
-  const referralCount = usePlayerStore(selectReferralCount);
-  const referralMilestonesClaimed = usePlayerStore(selectReferralMilestonesClaimed);
   const {
     updateProgress,
     updateSeasonalQuest,
     queueCeremony,
     completeOnboardingMilestone,
-    claimReferralMilestone,
   } = usePlayerActions();
   const titleAnim = useRef(new Animated.Value(0)).current;
   const contentAnim = useRef(new Animated.Value(0)).current;
@@ -187,6 +175,7 @@ export function HomeScreen({
 
   // --- Streak shield contextual offer ---
   const [showStreakOffer, setShowStreakOffer] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const streakOfferDismissed = useRef(false);
 
   useEffect(() => {
@@ -328,20 +317,9 @@ export function HomeScreen({
   // getFlashSale reads the current time — recompute on mount only. The flash
   // sale window is a coarse bucket, not per-second.
   const flashSale = useMemo(() => getFlashSale(new Date()), []);
-  const nextMilestone = useMemo(
-    () => [7, 14, 30, 60, 100].find((milestone) => milestone > progress.currentStreak) || 100,
-    [progress.currentStreak],
-  );
-  const streakProgress = useMemo(
-    () => Math.min(100, (progress.currentStreak / nextMilestone) * 100),
-    [progress.currentStreak, nextMilestone],
-  );
   // Progressive disclosure flags
   // Progressive disclosure: segment-aware when available, falls back to playerStage
   const hasSegmentContent = segmentHomeContent.length > 0;
-  const showStreak = hasSegmentContent
-    ? segmentHomeContent.includes('streak')
-    : progress.puzzlesSolved >= 1;
   const showDailyRewards = hasSegmentContent
     ? segmentHomeContent.includes('daily_rewards')
     : progress.puzzlesSolved >= 1;
@@ -439,6 +417,17 @@ export function HomeScreen({
                 <Text style={styles.currencyLabel}>💡 {currencies.hintTokens}</Text>
               </LinearGradient>
             </>
+          )}
+          {showDailyRewards && (
+            <Pressable
+              onPress={() => setCalendarOpen(true)}
+              style={({ pressed }) => [styles.calendarIconButton, pressed && styles.buttonPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={t('home.loginCalendar')}
+            >
+              <Ionicons name="calendar-outline" size={22} color={COLORS.textSecondary} />
+              {!claimedLoginToday && <View style={styles.calendarIconDot} />}
+            </Pressable>
           )}
           {onOpenShop && (
             <Pressable onPress={onOpenShop} style={({ pressed }) => [pressed && styles.buttonPressed]} accessibilityRole="button" accessibilityLabel={t('home.openShop')}>
@@ -611,6 +600,8 @@ export function HomeScreen({
         </View>
       )}
 
+      {/* Live rail — swipeable carousel: event / wheel / season pass / deal / flash sale */}
+      <LiveRail>
       {/* Active Event Banners */}
       {activeEventBanners.length > 0 && (
         <Animated.View
@@ -644,7 +635,6 @@ export function HomeScreen({
           ))}
         </Animated.View>
       )}
-
       {/* Mystery Wheel Button */}
       {showMysteryWheel && (
         <Animated.View
@@ -731,6 +721,82 @@ export function HomeScreen({
           </Pressable>
         </Animated.View>
       )}
+        {/* Season Pass — tier ladder entry point */}
+        {onOpenSeasonPass && (
+          <SeasonPassHomeCard onPress={onOpenSeasonPass} />
+        )}
+        {/* Today's Deal - visible after first puzzle */}
+        {progress.puzzlesSolved >= 1 && (
+          <LinearGradient
+            colors={GRADIENTS.surfaceCard}
+            style={[styles.dealPanel, SHADOWS.medium]}
+          >
+            <View style={styles.panelHeaderRow}>
+              <Text style={styles.panelTitle}>{dailyDeal.icon} Today's Deal</Text>
+              <Text style={styles.panelMeta}>{t('home.endsInHours', { hours: dealHoursLeft })}</Text>
+            </View>
+            <View style={styles.dealContent}>
+              <View style={styles.dealInfo}>
+                <Text style={styles.dealName}>{dailyDeal.name}</Text>
+                <Text style={styles.dealDesc}>{dailyDeal.description}</Text>
+                <View style={styles.dealPriceRow}>
+                  <Text style={styles.dealOriginalPrice}>
+                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.originalPrice}
+                  </Text>
+                  <Text style={styles.dealSalePrice}>
+                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.salePrice}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                style={({ pressed }) => [pressed && styles.buttonPressed]}
+                onPress={() => onBuyDeal?.(dailyDeal)}
+                accessibilityRole="button"
+                accessibilityLabel={`Buy ${dailyDeal.name} for ${dailyDeal.salePrice} ${dailyDeal.currency}`}
+              >
+                <LinearGradient
+                  colors={GRADIENTS.button.gold}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.dealBuyButton}
+                >
+                  <Text style={styles.dealBuyText}>BUY</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          </LinearGradient>
+        )}
+        {/* Flash Sale teaser */}
+        {flashSale && playerStage !== 'new' && playerStage !== 'early' && (
+          <Pressable
+            onPress={() => onOpenShop?.()}
+            style={({ pressed }) => [pressed && styles.buttonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Flash sale: ${flashSale.name}, ${flashSale.discountPercent} percent off. Tap to view in shop`}
+          >
+            <LinearGradient
+              colors={[COLORS.coral + '25', COLORS.orange + '15', ...GRADIENTS.surfaceCard.slice(1)]}
+              style={[styles.flashSaleTeaser, SHADOWS.medium]}
+            >
+              <View style={styles.flashSaleTeaserRow}>
+                <Text style={styles.flashSaleTeaserIcon}>{'\u26A1'}</Text>
+                <View style={styles.flashSaleTeaserInfo}>
+                  <Text style={styles.flashSaleTeaserTitle}>
+                    Today's Deal: {flashSale.name} - {flashSale.discountPercent}% OFF!
+                  </Text>
+                  <Text style={styles.flashSaleTeaserSubtitle}>
+                    {flashSale.salePrice} (was {flashSale.originalPrice}) — Tap to view in Shop
+                  </Text>
+                </View>
+                <View style={styles.flashSaleTeaserBadge}>
+                  <Text style={styles.flashSaleTeaserBadgeText}>SALE</Text>
+                </View>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        )}
+      </LiveRail>
+
 
       {/* Free Spin Toast */}
       {freeSpinToast && (
@@ -866,10 +932,6 @@ export function HomeScreen({
           </LinearGradient>
         )}
 
-        {/* Season Pass — tier ladder entry point */}
-        {onOpenSeasonPass && (
-          <SeasonPassHomeCard onPress={onOpenSeasonPass} />
-        )}
 
         {/* Flawless Streak — consecutive clean solves. Active card shines gold;
             empty state teaches what earns the streak. */}
@@ -878,143 +940,27 @@ export function HomeScreen({
           bestStreak={flawlessStreak?.bestStreak ?? 0}
         />
 
-        {/* Pending referral rewards (auto-hides when empty) */}
-        <ReferralPendingRewards />
-
-        {/* Referral Card - established+ players */}
-        {(playerStage === 'established' || playerStage === 'veteran') && referralCode ? (
-          <ReferralCard
-            referralCode={referralCode}
-            referralCount={referralCount}
-            milestonesClaimed={referralMilestonesClaimed}
-            onClaimMilestone={(count) => claimReferralMilestone(count)}
-          />
-        ) : null}
-
-        {/* Friends Leaderboard — auto-hides when the player has no friends */}
-        <FriendLeaderboardCard onViewAll={onOpenFriendLeaderboard} />
-
         {/* Piggy Bank FOMO — compact mini-card (auto-hides unless jar ≥ 80%) */}
         <PiggyBankCard
           compact
           onBreak={() => onOpenShop?.()}
         />
 
-        {/* Come-back-tomorrow hook — early game retention */}
-        {(playerStage === 'new' || playerStage === 'early') && progress.puzzlesSolved >= 1 && !dailyDone && (
-          <LinearGradient
-            colors={['rgba(100,180,255,0.15)', 'rgba(100,180,255,0.05)'] as [string, string]}
-            style={styles.tomorrowCard}
-          >
-            <Text style={styles.tomorrowIcon}>🌟</Text>
-            <View style={styles.tomorrowContent}>
-              <Text style={styles.tomorrowTitle}>{t('home.streakStartsNow')}</Text>
-              <Text style={styles.tomorrowSubtext}>
-                Complete today's Daily Challenge and come back tomorrow to keep it going.
-              </Text>
-            </View>
-          </LinearGradient>
-        )}
 
-        {/* Streak panel - hidden for brand new players */}
-        {showStreak && (
-          <LinearGradient
-            colors={GRADIENTS.surfaceCard}
-            style={[styles.streakPanel, SHADOWS.medium]}
-          >
-            <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelTitle}>🔥 Streak</Text>
-              <Text style={styles.panelMeta}>{t('home.nextMilestone', { days: nextMilestone })}</Text>
-            </View>
-            <View style={styles.streakBarRow}>
-              <NeonStreakFlame streakDays={progress.currentStreak} size="small" />
-              <View style={styles.streakTrack}>
-                <LinearGradient
-                  colors={[COLORS.orange, '#ff6b35']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.streakFill, { width: `${Math.max(streakProgress, 2)}%` }]}
-                />
-              </View>
-              <Text style={styles.streakTarget}>{nextMilestone}</Text>
-            </View>
-          </LinearGradient>
-        )}
 
-        {/* Today's Deal - visible after first puzzle */}
-        {progress.puzzlesSolved >= 1 && (
-          <LinearGradient
-            colors={GRADIENTS.surfaceCard}
-            style={[styles.dealPanel, SHADOWS.medium]}
-          >
-            <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelTitle}>{dailyDeal.icon} Today's Deal</Text>
-              <Text style={styles.panelMeta}>{t('home.endsInHours', { hours: dealHoursLeft })}</Text>
-            </View>
-            <View style={styles.dealContent}>
-              <View style={styles.dealInfo}>
-                <Text style={styles.dealName}>{dailyDeal.name}</Text>
-                <Text style={styles.dealDesc}>{dailyDeal.description}</Text>
-                <View style={styles.dealPriceRow}>
-                  <Text style={styles.dealOriginalPrice}>
-                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.originalPrice}
-                  </Text>
-                  <Text style={styles.dealSalePrice}>
-                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.salePrice}
-                  </Text>
-                </View>
-              </View>
-              <Pressable
-                style={({ pressed }) => [pressed && styles.buttonPressed]}
-                onPress={() => onBuyDeal?.(dailyDeal)}
-                accessibilityRole="button"
-                accessibilityLabel={`Buy ${dailyDeal.name} for ${dailyDeal.salePrice} ${dailyDeal.currency}`}
-              >
-                <LinearGradient
-                  colors={GRADIENTS.button.gold}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.dealBuyButton}
-                >
-                  <Text style={styles.dealBuyText}>BUY</Text>
-                </LinearGradient>
+        {/* 30-day login calendar — opens via top-bar icon sheet */}
+        <Modal
+          visible={calendarOpen && showDailyRewards}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setCalendarOpen(false)}
+        >
+          <Pressable style={styles.calendarSheetBackdrop} onPress={() => setCalendarOpen(false)}>
+            <Pressable style={styles.calendarSheetBody} onPress={() => {}}>
+              <Pressable style={styles.calendarSheetClose} onPress={() => setCalendarOpen(false)} accessibilityLabel="Close login calendar" accessibilityRole="button">
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
               </Pressable>
-            </View>
-          </LinearGradient>
-        )}
-
-        {/* Flash Sale teaser - visible for established+ players when a sale is active */}
-        {flashSale && playerStage !== 'new' && playerStage !== 'early' && (
-          <Pressable
-            onPress={() => onOpenShop?.()}
-            style={({ pressed }) => [pressed && styles.buttonPressed]}
-            accessibilityRole="button"
-            accessibilityLabel={`Flash sale: ${flashSale.name}, ${flashSale.discountPercent} percent off. Tap to view in shop`}
-          >
-            <LinearGradient
-              colors={[COLORS.coral + '25', COLORS.orange + '15', ...GRADIENTS.surfaceCard.slice(1)]}
-              style={[styles.flashSaleTeaser, SHADOWS.medium]}
-            >
-              <View style={styles.flashSaleTeaserRow}>
-                <Text style={styles.flashSaleTeaserIcon}>{'\u26A1'}</Text>
-                <View style={styles.flashSaleTeaserInfo}>
-                  <Text style={styles.flashSaleTeaserTitle}>
-                    Today's Deal: {flashSale.name} - {flashSale.discountPercent}% OFF!
-                  </Text>
-                  <Text style={styles.flashSaleTeaserSubtitle}>
-                    {flashSale.salePrice} (was {flashSale.originalPrice}) — Tap to view in Shop
-                  </Text>
-                </View>
-                <View style={styles.flashSaleTeaserBadge}>
-                  <Text style={styles.flashSaleTeaserBadgeText}>SALE</Text>
-                </View>
-              </View>
-            </LinearGradient>
-          </Pressable>
-        )}
-
-        {/* 30-day login calendar - hidden for day 1 new players */}
-        {showDailyRewards && (() => {
+              {(() => {
           const calendarDay = Math.min(Math.max(loginCycleDay, 1), 30);
           return (
             <LinearGradient
@@ -1134,6 +1080,9 @@ export function HomeScreen({
             </LinearGradient>
           );
         })()}
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* Recommended for You */}
         {recommendation && playerStage !== 'new' && (
@@ -1603,6 +1552,47 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 14,
     elevation: 6,
+  },
+  calendarIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+    marginRight: 6,
+  },
+  calendarIconDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#ff3b30',
+    borderWidth: 1.5,
+    borderColor: COLORS.bg,
+  },
+  calendarSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  calendarSheetBody: {
+    backgroundColor: COLORS.bg,
+    borderRadius: 20,
+    padding: 12,
+    maxHeight: '85%',
+  },
+  calendarSheetClose: {
+    alignSelf: 'flex-end',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   calendarGrid: {
     flexDirection: 'row',
