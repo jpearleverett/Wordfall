@@ -27,7 +27,7 @@ interface OnboardingScreenProps {
   onComplete?: () => void;
 }
 
-type Phase = 'welcome' | 'tutorial' | 'celebrate';
+type Phase = 'welcome' | 'tutorial' | 'celebrate' | 'economy_primer';
 
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => {} }) => {
   const { t } = useTranslation();
@@ -247,7 +247,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
 
           <Pressable
             style={({ pressed }) => [pressed && styles.pressed]}
-            onPress={onComplete}
+            onPress={() => transitionTo('economy_primer')}
             accessibilityRole="button"
             accessibilityLabel={t('onboarding.letsPlay')}
           >
@@ -258,6 +258,65 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
               style={[styles.startButton, SHADOWS.glow(COLORS.green)]}
             >
               <Text style={styles.startButtonText}>{t('onboarding.letsPlay')}</Text>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  // P1 in launch_blockers.md: a single slide introducing the economy
+  // (coins / gems / hints) + social discovery (clubs). Kept deliberately
+  // short — the goal is awareness, not monetization. Capped at ~10s
+  // with a single "Got it" CTA that proceeds to real gameplay.
+  if (phase === 'economy_primer') {
+    return (
+      <View style={styles.container}>
+        <Animated.View style={[styles.centerContent, { opacity: fadeAnim }]}>
+          <Text style={styles.primerHeader}>WHAT'S NEXT</Text>
+          <Text style={styles.primerTitle}>Your toolkit</Text>
+
+          <View style={styles.primerRow}>
+            <Text style={styles.primerIcon}>🪙</Text>
+            <View style={styles.primerCopyCol}>
+              <Text style={styles.primerRowTitle}>Coins</Text>
+              <Text style={styles.primerRowBody}>
+                Earn by solving puzzles. Spend on hints and boosters.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.primerRow}>
+            <Text style={styles.primerIcon}>💎</Text>
+            <View style={styles.primerCopyCol}>
+              <Text style={styles.primerRowTitle}>Gems</Text>
+              <Text style={styles.primerRowBody}>
+                Rare. Earned from perfect solves, login rewards, and offers.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.primerRow}>
+            <Text style={styles.primerIcon}>👥</Text>
+            <View style={styles.primerCopyCol}>
+              <Text style={styles.primerRowTitle}>Clubs</Text>
+              <Text style={styles.primerRowBody}>
+                Join one for daily gifts and weekly team goals.
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [pressed && styles.pressed]}
+            onPress={onComplete}
+            accessibilityRole="button"
+            accessibilityLabel="Got it, start playing"
+          >
+            <LinearGradient
+              colors={[COLORS.green, COLORS.teal] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.startButton, SHADOWS.glow(COLORS.green)]}
+            >
+              <Text style={styles.startButtonText}>GOT IT</Text>
             </LinearGradient>
           </Pressable>
         </Animated.View>
@@ -458,6 +517,54 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: 'center',
     marginBottom: 40,
+  },
+  // Economy primer (P1)
+  primerHeader: {
+    color: COLORS.accent,
+    fontSize: 12,
+    letterSpacing: 3,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 8,
+  },
+  primerTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 30,
+    fontFamily: FONTS.display,
+    letterSpacing: 2,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  primerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 320,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  primerIcon: {
+    fontSize: 32,
+    marginRight: 14,
+  },
+  primerCopyCol: {
+    flex: 1,
+  },
+  primerRowTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 2,
+  },
+  primerRowBody: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontFamily: FONTS.bodyRegular,
+    lineHeight: 18,
   },
   // Ready phase
   readyEmoji: {
