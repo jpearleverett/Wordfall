@@ -17,6 +17,11 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NotificationTriggerInput } from 'expo-notifications';
+import { getRemoteNumber } from './remoteConfig';
+import {
+  getPersonalizedNotifications,
+  type PlayerSegments,
+} from './playerSegmentation';
 
 // expo-notifications crashes in Expo Go since SDK 53.
 // Lazy-load the module and gracefully degrade when unavailable.
@@ -143,9 +148,51 @@ const NOTIFICATION_DEEP_LINKS: Partial<Record<NotificationCategory, string>> = {
 };
 
 // ─── Frequency cap ──────────────────────────────────────────────────────────
+//
+// Cap resolution order (highest priority first):
+//   1. Per-segment cap from getPersonalizedNotifications(segments).maxPerDay
+//      — hardcore: 1, at_risk: 3, lapsed: 2, default: 3
+//   2. Remote Config key `maxNotificationsPerDay` (default 3)
+//   3. Hardcoded fallback `DEFAULT_MAX_NOTIFICATIONS_PER_DAY` below
+//
+// The cap is re-evaluated on every schedule() call so a segment change
+// (e.g. player slides from casual → at_risk) takes effect immediately.
 
-const MAX_NOTIFICATIONS_PER_DAY = 3;
+const DEFAULT_MAX_NOTIFICATIONS_PER_DAY = 3;
 const FREQ_CAP_STORAGE_KEY = '@wordfall_notif_freq';
+
+/** Most-recent player segments, pushed in by App.tsx when segments recompute. */
+let currentSegments: PlayerSegments | null = null;
+
+/**
+ * Push the latest player segments into the notification scheduler so
+ * per-cohort caps and reminder hours can be applied to the next schedule()
+ * call. Safe to call on every segment recompute.
+ */
+export function setNotificationSegments(segments: PlayerSegments | null): void {
+  currentSegments = segments;
+}
+
+function resolveMaxPerDay(): number {
+  if (currentSegments) {
+    const personalized = getPersonalizedNotifications(currentSegments);
+    if (typeof personalized.maxPerDay === 'number' && personalized.maxPerDay > 0) {
+      return personalized.maxPerDay;
+    }
+  }
+  const rc = getRemoteNumber('maxNotificationsPerDay');
+  if (typeof rc === 'number' && rc > 0) return rc;
+  return DEFAULT_MAX_NOTIFICATIONS_PER_DAY;
+}
+
+function isCategoryAllowedForSegment(category: NotificationCategory): boolean {
+  if (!currentSegments) return true;
+  const personalized = getPersonalizedNotifications(currentSegments);
+  if (!personalized.enabledCategories || personalized.enabledCategories.length === 0) {
+    return true;
+  }
+  return personalized.enabledCategories.includes(category);
+}
 
 // ─── Storage Keys ────────────────────────────────────────────────────────────
 
@@ -273,7 +320,15 @@ class NotificationManager {
   ): Promise<string | null> {
     if (!this.initialized || !this.permissionGranted || !Notifications) return null;
 
-    // Frequency cap: max MAX_NOTIFICATIONS_PER_DAY per day (skip for daily recurring triggers)
+    // Segment-aware category filter: if the player's segment opted out of
+    // this category via getPersonalizedNotifications(), skip silently.
+    if (!isCategoryAllowedForSegment(category)) {
+      logger.log(`[Notifications] Category ${category} disabled for current segment, skipping`);
+      return null;
+    }
+
+    // Frequency cap: segment maxPerDay > RC maxNotificationsPerDay > default 3.
+    // (Skip for daily recurring triggers — those have their own day-of-week logic.)
     if (trigger.type === 'timeInterval') {
       try {
         const today = new Date().toISOString().split('T')[0];
@@ -287,8 +342,9 @@ class NotificationManager {
           freqData.count = 0;
         }
 
-        if (freqData.count >= MAX_NOTIFICATIONS_PER_DAY) {
-          logger.log(`[Notifications] Frequency cap reached (${MAX_NOTIFICATIONS_PER_DAY}/day), skipping ${category}`);
+        const cap = resolveMaxPerDay();
+        if (freqData.count >= cap) {
+          logger.log(`[Notifications] Frequency cap reached (${cap}/day), skipping ${category}`);
           return null;
         }
 

@@ -148,6 +148,16 @@ export interface RemoteConfigValues {
    * spike levels (suggesting the magnitude is too aggressive).
    */
   spikeLevelsEnabled: boolean;
+
+  /**
+   * Hard upper bound on local-scheduled push notifications per 24h.
+   * Segment-aware resolver in `notifications.ts` prefers
+   * `getPersonalizedNotifications(segments).maxPerDay` when the player
+   * has computed segments; this RC is the fallback ceiling and is also
+   * the cap that applies to brand-new users before their segments are
+   * computed. Raise during soft launch to 4–5 if tests show healthy CTR.
+   */
+  maxNotificationsPerDay: number;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -281,6 +291,7 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   cosmeticPerksEnabled: true,
   streakShieldOfferEnabled: true,
   prestigeCeremonyEnabled: true,
+  maxNotificationsPerDay: 3,
 };
 
 // ---------------------------------------------------------------------------

@@ -287,6 +287,10 @@ export interface PlayerContextType extends PlayerData {
   useGraceDay: () => boolean;
   useStreakShield: () => boolean;
   activateStreakShield: () => void;
+  /** R5: restorative streak-save. Returns restored count (0 if no break pending). */
+  restoreBrokenStreak: () => number;
+  /** Clear recent-break marker without restoring. */
+  dismissStreakBreak: () => void;
 
   // Cosmetics
   equipCosmetic: (type: 'theme' | 'frame' | 'title', id: string) => void;
@@ -428,6 +432,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
     graceDaysUsed: 0,
     streakShieldAvailable: false,
     lastShieldDate: '',
+    recentBreak: null,
   },
 
   // Collections
@@ -602,6 +607,8 @@ const PlayerContext = createContext<PlayerContextType>({
   useGraceDay: () => false,
   useStreakShield: () => false,
   activateStreakShield: () => {},
+  restoreBrokenStreak: () => 0,
+  dismissStreakBreak: () => {},
   equipCosmetic: () => {},
   unlockCosmetic: () => {},
   restoreWing: () => {},
@@ -965,6 +972,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     useGraceDay,
     useStreakShield,
     activateStreakShield,
+    restoreBrokenStreak,
+    dismissStreakBreak,
     updateMissionProgress,
     claimMissionReward,
     generateDailyMissions,
@@ -1890,6 +1899,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       useGraceDay,
       useStreakShield,
       activateStreakShield,
+      restoreBrokenStreak,
+      dismissStreakBreak,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
@@ -1956,6 +1967,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       useGraceDay,
       useStreakShield,
       activateStreakShield,
+      restoreBrokenStreak,
+      dismissStreakBreak,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
@@ -2027,6 +2040,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       useGraceDay,
       useStreakShield,
       activateStreakShield,
+      restoreBrokenStreak,
+      dismissStreakBreak,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
@@ -2092,6 +2107,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       useGraceDay,
       useStreakShield,
       activateStreakShield,
+      restoreBrokenStreak,
+      dismissStreakBreak,
       equipCosmetic,
       unlockCosmetic,
       restoreWing,
