@@ -43,7 +43,7 @@ interface SeasonPassScreenProps {
 const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
   const pass = useEconomyStore(selectSeasonPass);
   const { claimSeasonPassTier } = useEconomyActions();
-  const { unlockCosmetic } = usePlayerActions();
+  const { unlockCosmetic, queueCeremony } = usePlayerActions();
   const commerce = useCommerce();
 
   const [purchasing, setPurchasing] = useState(false);
@@ -88,8 +88,31 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
       if (grant?.cosmetic) {
         void unlockCosmetic(grant.cosmetic.id);
       }
+      // MG1 in launch_blockers.md: fire a dedicated cinematic when the
+      // ceiling tier (MAX_SEASON_TIER) is claimed. All other tiers fall
+      // through to the per-tier claim toast / no ceremony. The reward
+      // summary is built from the tier definition so we don't depend on
+      // claimSeasonPassTier's slim return type.
+      if (tier === MAX_SEASON_TIER) {
+        const tierDef = SEASON_PASS_TIERS[tier - 1];
+        const rewardLabels: string[] = [];
+        const pushReward = (r?: PassReward) => {
+          if (r?.label) rewardLabels.push(r.label);
+        };
+        pushReward(tierDef?.freeReward);
+        pushReward(tierDef?.premiumReward);
+        queueCeremony({
+          type: 'season_pass_complete',
+          data: {
+            seasonName: season.name,
+            tier,
+            rewardLabels,
+            cosmeticSetId: grant?.cosmetic?.id,
+          },
+        });
+      }
     },
-    [claimSeasonPassTier, unlockCosmetic],
+    [claimSeasonPassTier, unlockCosmetic, queueCeremony, season.name],
   );
 
   const renderReward = (reward: PassReward) => (

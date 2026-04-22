@@ -759,7 +759,8 @@ export interface CeremonyItem {
     | 'starter_pack_unlocked'
     | 'tomorrow_preview'
     | 'daily_quest_claim'
-    | 'first_purchase_offer';
+    | 'first_purchase_offer'
+    | 'season_pass_complete';
   data: Record<string, any>;
   /** If set, ceremony auto-dismisses after this many ms (Tier 2 behavior). */
   autoDismissMs?: number;
