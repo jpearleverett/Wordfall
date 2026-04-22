@@ -205,11 +205,18 @@ class FirestoreService {
     if (!this.enabled || !userId) return;
     try {
       const userRef = doc(db, 'users', userId);
+      // tzOffsetMinutes is positive east of UTC (inverted from Date#getTimezoneOffset)
+      // so the Cloud-Function local-hour math in functions/src/social.ts matches
+      // `new Date(utcMs + tzOffsetMinutes * 60_000).getUTCHours()`.
+      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const lastActiveDate = new Date().toISOString().slice(0, 10);
       await setDoc(
         userRef,
         {
           ...data,
           lastActive: serverTimestamp(),
+          tzOffsetMinutes,
+          lastActiveDate,
         },
         { merge: true }
       );
