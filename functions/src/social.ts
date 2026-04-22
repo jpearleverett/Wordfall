@@ -500,17 +500,37 @@ export const sendPushNotification = functions.https.onCall(
 const STREAK_REMINDER_BATCH_SIZE = 500;
 const STREAK_REMINDER_BATCH_SLEEP_MS = 1000;
 const STREAK_REMINDER_TIME_BUDGET_MS = 9 * 60 * 1000; // leave ~60s headroom
+/** The local hour we target for streak reminders (player's timezone). */
+const STREAK_REMINDER_TARGET_LOCAL_HOUR = 20; // 8 PM local
+
+/**
+ * Compute the local hour (0–23) for a user given their stored tzOffsetMinutes.
+ * `tzOffsetMinutes` follows the Date#getTimezoneOffset convention except
+ * inverted to match Expo's `Localization.getCalendars()[0].timeZoneOffsetMinutes`
+ * (positive east of UTC). Users who never sent a tzOffset fall back to UTC,
+ * which means they'll still get the reminder at 20:00 UTC (the old behavior).
+ */
+function localHourForUser(tzOffsetMinutes: number | undefined | null, nowMs: number): number {
+  const offsetMin = typeof tzOffsetMinutes === 'number' ? tzOffsetMinutes : 0;
+  const localMs = nowMs + offsetMin * 60 * 1000;
+  return new Date(localMs).getUTCHours();
+}
 
 export const processStreakReminders = functions
   .runWith({ timeoutSeconds: 540, memory: '512MB' })
-  .pubsub.schedule('0 20 * * *')
+  // R2 in launch_blockers.md: run every hour so we can bucket users by their
+  // local 8 PM. Each hour we only push to users whose local time is currently
+  // 20:00. Users without a recorded tzOffset still get the 20:00 UTC push.
+  .pubsub.schedule('0 * * * *')
   .timeZone('UTC')
   .onRun(async () => {
-    const today = new Date().toISOString().split('T')[0];
-    const startedAt = Date.now();
+    const nowMs = Date.now();
+    const today = new Date(nowMs).toISOString().split('T')[0];
+    const startedAt = nowMs;
 
     let notificationsSent = 0;
     let scanned = 0;
+    let skippedByTz = 0;
     let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
 
     while (Date.now() - startedAt < STREAK_REMINDER_TIME_BUDGET_MS) {
@@ -529,6 +549,13 @@ export const processStreakReminders = functions
         const userData = userDoc.data();
         const lastPlayDate = userData.streaks?.lastPlayDate;
         if (lastPlayDate === today) continue; // Already played today
+
+        // Per-timezone send window: only push when the user's local hour is 20:00.
+        const userHour = localHourForUser(userData.tzOffsetMinutes, nowMs);
+        if (userHour !== STREAK_REMINDER_TARGET_LOCAL_HOUR) {
+          skippedByTz++;
+          continue;
+        }
 
         const streakDays = userData.streaks?.currentStreak ?? 0;
 
@@ -549,7 +576,125 @@ export const processStreakReminders = functions
     functions.logger.info('[processStreakReminders] sent reminders', {
       notificationsSent,
       scanned,
+      skippedByTz,
+      hourUtc: new Date(nowMs).getUTCHours(),
       durationMs: Date.now() - startedAt,
+    });
+  });
+
+// ─── 4b. processDay2Reengagement / processDay7Reengagement ──────────────────
+//
+// R3 + R4 in launch_blockers.md: push lapsed users back into the game
+// before D7 churn compounds. Both functions share the same structure —
+// hourly cron, per-timezone bucketed at 19:00 local, targets users whose
+// `lastActiveDate` equals exactly today - Δ days.
+//
+// The offer side is already wired: when a Day-2/Day-7 returnee opens the
+// app, `dynamicPricing.ts:103-250` returns the segment-appropriate
+// discount ("WELCOME BACK" 70% off starter for lapsed, etc.). These
+// functions only trigger the push; the economy does the rest.
+
+const REENG_BATCH_SIZE = 500;
+const REENG_BATCH_SLEEP_MS = 1000;
+const REENG_TIME_BUDGET_MS = 9 * 60 * 1000;
+const REENG_TARGET_LOCAL_HOUR = 19; // 7 PM local — bucket for both D2 + D7
+
+function dateDaysAgo(nowMs: number, days: number): string {
+  return new Date(nowMs - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+async function runReengagementPass(opts: {
+  daysAgo: number;
+  title: string;
+  body: string;
+  notificationType: string;
+  /** Extra per-user skip predicate (e.g. skip if already converted). */
+  extraSkip?: (userData: FirebaseFirestore.DocumentData) => boolean;
+}): Promise<void> {
+  const { daysAgo, title, body, notificationType, extraSkip } = opts;
+  const nowMs = Date.now();
+  const startedAt = nowMs;
+  const targetDate = dateDaysAgo(nowMs, daysAgo);
+
+  let sent = 0;
+  let scanned = 0;
+  let skippedByTz = 0;
+  let skippedByExtra = 0;
+  let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+
+  while (Date.now() - startedAt < REENG_TIME_BUDGET_MS) {
+    let query = db
+      .collection('users')
+      .where('lastActiveDate', '==', targetDate)
+      .limit(REENG_BATCH_SIZE);
+    if (lastDoc) query = query.startAfter(lastDoc);
+
+    const usersSnap = await query.get();
+    if (usersSnap.empty) break;
+
+    for (const userDoc of usersSnap.docs) {
+      scanned++;
+      const userData = userDoc.data();
+
+      // Per-timezone send window — align with streak reminder semantics.
+      const userHour = localHourForUser(userData.tzOffsetMinutes, nowMs);
+      if (userHour !== REENG_TARGET_LOCAL_HOUR) {
+        skippedByTz++;
+        continue;
+      }
+
+      if (extraSkip && extraSkip(userData)) {
+        skippedByExtra++;
+        continue;
+      }
+
+      const result = await sendPushToUser(userDoc.id, title, body, {
+        type: notificationType,
+      });
+      if (result.success) sent++;
+    }
+
+    if (usersSnap.size < REENG_BATCH_SIZE) break;
+    lastDoc = usersSnap.docs[usersSnap.docs.length - 1];
+    await new Promise((r) => setTimeout(r, REENG_BATCH_SLEEP_MS));
+  }
+
+  functions.logger.info(`[reengagement:${notificationType}] complete`, {
+    daysAgo,
+    sent,
+    scanned,
+    skippedByTz,
+    skippedByExtra,
+    targetDate,
+    durationMs: Date.now() - startedAt,
+  });
+}
+
+export const processDay2Reengagement = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 * * * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    await runReengagementPass({
+      daysAgo: 2,
+      title: 'Come back, 2× coins waiting',
+      body: 'Your puzzle board is waiting. Tap to pick up where you left off.',
+      notificationType: 'day2_reengagement',
+      // Target non-payers: first-purchase offer on return is more effective.
+      extraSkip: (u) => Array.isArray(u.purchaseHistory) && u.purchaseHistory.length > 0,
+    });
+  });
+
+export const processDay7Reengagement = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub.schedule('0 * * * *')
+  .timeZone('UTC')
+  .onRun(async () => {
+    await runReengagementPass({
+      daysAgo: 7,
+      title: 'We miss you — your spot is saved',
+      body: 'Special welcome-back offer inside. Open to claim.',
+      notificationType: 'day7_reengagement',
     });
   });
 

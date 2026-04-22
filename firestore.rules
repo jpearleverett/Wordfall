@@ -49,6 +49,25 @@ service cloud.firestore {
         && request.resource.data.score <= 1000000;
     }
 
+    // MG2: per-event cumulative scores. Same shape/bounds as weeklyScores
+    // but scoped under events/{eventId}/scores/{uid}. Each user owns
+    // exactly one score doc per event; doc id == uid keeps that invariant.
+    match /events/{eventId}/scores/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.score is number
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 1000000;
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.score is number
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 1000000;
+    }
+
     // Friendships: either participant can create a pending request, but
     // accepting (status: 'pending' → 'accepted') is restricted to the
     // non-requester so senders can't self-accept their own pending ask.

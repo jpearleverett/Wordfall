@@ -293,6 +293,7 @@ export function getAllActiveExperiments(): Experiment[] {
 export function getAssignedVariant(
   experimentId: string,
   userId: string,
+  segmentsForTargeting?: readonly string[],
 ): ExperimentVariant {
   const experiment = experimentMap.get(experimentId);
 
@@ -316,6 +317,28 @@ export function getAssignedVariant(
   if (experiment.endDate && now > experiment.endDate) {
     return experiment.variants[0];
   }
+
+  // M3 in launch_blockers.md: respect `targetSegments` filter. Previously
+  // this field was declared and set on first_purchase_offer but never read,
+  // so every user was enrolled regardless of segment membership. If the
+  // experiment specifies segments and the caller supplies the player's
+  // current segments, users outside the target segments get the control
+  // variant (no enrollment).
+  if (
+    experiment.targetSegments &&
+    experiment.targetSegments.length > 0 &&
+    segmentsForTargeting !== undefined
+  ) {
+    const matched = experiment.targetSegments.some((seg) =>
+      segmentsForTargeting.includes(seg),
+    );
+    if (!matched) {
+      return experiment.variants[0];
+    }
+  }
+  // Note: when segmentsForTargeting is omitted (legacy call sites), the
+  // filter is bypassed — existing behavior. Add segments at call sites
+  // that want segment-gated experiments.
 
   // Deterministic hash-based weighted assignment
   const seed = `${userId}_${experimentId}`;

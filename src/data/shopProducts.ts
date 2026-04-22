@@ -65,18 +65,21 @@ export interface ShopProduct {
 
 export const SHOP_PRODUCTS: ShopProduct[] = [
   // ── First Purchase Special (impulse tier) ──────────────────────────────
+  // M1 in launch_blockers.md: rewards raised from 200/25/5 to 500/50/10 to
+  // match Wordscapes/Royal Match first-purchase value. Same $0.49 price.
+  // Industry-benchmark first-purchase velocity lift: +15–25%.
   {
     id: 'first_purchase_special',
     storeProductId: 'wordfall_first_purchase',
     name: 'Welcome Gift',
-    description: '200 Coins + 25 Gems + 5 Hints — One-time special!',
+    description: '500 Coins + 50 Gems + 10 Hints — One-time special!',
     fallbackPrice: '$0.49',
     fallbackPriceAmount: 0.49,
     category: 'bundles',
     rewards: {
-      coins: 200,
-      gems: 25,
-      hintTokens: 5,
+      coins: 500,
+      gems: 50,
+      hintTokens: 10,
     },
     isNonConsumable: true,
     originalPrice: '$1.99',
@@ -404,6 +407,58 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
   },
 
   // ── Consumables: Boosters ──────────────────────────────────────────────
+  // M2 in launch_blockers.md: 3 per-booster SKUs added alongside the trio
+  // crate. Royal Match/Candy Crush both ship 6–8 booster-specific SKUs —
+  // these 3 + the crate give Wordfall a comparable shelf at the $1.99–$4.99
+  // range. All three must be registered in Play Console catalog.
+  {
+    id: 'wildcard_pack_5',
+    storeProductId: 'wordfall_wildcard_pack_5',
+    name: 'Wildcard 5-Pack',
+    description: '5 Wildcard tiles — match any letter',
+    fallbackPrice: '$1.99',
+    fallbackPriceAmount: 1.99,
+    category: 'consumables',
+    rewards: {
+      boosters: [{ type: 'wildcardTile', count: 5 }],
+    },
+    isNonConsumable: false,
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
+    icon: '⭐',
+  },
+  {
+    id: 'spotlight_pack_5',
+    storeProductId: 'wordfall_spotlight_pack_5',
+    name: 'Spotlight 5-Pack',
+    description: '5 Spotlight charges — highlight target letters',
+    fallbackPrice: '$1.99',
+    fallbackPriceAmount: 1.99,
+    category: 'consumables',
+    rewards: {
+      boosters: [{ type: 'spotlight', count: 5 }],
+    },
+    isNonConsumable: false,
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
+    icon: '\u{1F4A1}',
+  },
+  {
+    id: 'shuffle_pack_5',
+    storeProductId: 'wordfall_shuffle_pack_5',
+    name: 'Shuffle 5-Pack',
+    description: '5 Smart Shuffles — re-layout the grid',
+    fallbackPrice: '$1.99',
+    fallbackPriceAmount: 1.99,
+    category: 'consumables',
+    rewards: {
+      boosters: [{ type: 'smartShuffle', count: 5 }],
+    },
+    isNonConsumable: false,
+    originalPrice: '$2.99',
+    originalPriceAmount: 2.99,
+    icon: '\u{1F500}',
+  },
   {
     id: 'booster_crate',
     storeProductId: 'wordfall_booster_crate',

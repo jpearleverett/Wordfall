@@ -50,10 +50,14 @@ import { useSettings } from './src/contexts/SettingsContext';
 import { usePlayer } from './src/contexts/PlayerContext';
 import { useHardEnergy } from './src/hooks/useHardEnergy';
 import { NoLivesModal } from './src/components/NoLivesModal';
+import PostStreakBreakOffer, {
+  RESTORE_GEM_COST,
+  RESTORE_WINDOW_MS,
+} from './src/components/PostStreakBreakOffer';
 import { soundManager } from './src/services/sound';
 import { setHapticsEnabled } from './src/services/haptics';
 // ATLAS_PAGES and generateShareText moved to useRewardWiring
-import { notificationManager } from './src/services/notifications';
+import { notificationManager, setNotificationSegments } from './src/services/notifications';
 import { installGlobalFontScaleClamp } from './src/components/common/Typography';
 import { initI18n } from './src/i18n';
 import { Providers } from './src/App/Providers';
@@ -997,6 +1001,10 @@ function HomeMainScreen({ route, navigation }: any) {
       );
       player.recomputeSegments(totalSpendCents, 0);
 
+      // Push segments into the notification scheduler so per-cohort caps +
+      // reminder hours + enabledCategories apply to the next schedule() call.
+      setNotificationSegments(player.segments);
+
       // Initialize notifications with segment-personalized scheduling
       void notificationManager.init().then(() => {
         const notifConfig = getPersonalizedNotifications(player.segments);
@@ -1584,6 +1592,36 @@ function HomeMainScreen({ route, navigation }: any) {
           onDismiss={() => setShowSessionReminder(false)}
         />
       )}
+
+      {/* R5: restorative streak save. Shown once per break, within 24h. */}
+      {(() => {
+        const rb = player.streaks.recentBreak;
+        const brokenRecently =
+          !!rb && Date.now() - rb.brokenAtMs < RESTORE_WINDOW_MS;
+        return (
+          <PostStreakBreakOffer
+            visible={brokenRecently}
+            brokenStreakCount={rb?.prevStreak ?? 0}
+            gemsAvailable={economy.gems}
+            onRestore={() => {
+              if (!economy.spendGems(RESTORE_GEM_COST)) return;
+              const restored = player.restoreBrokenStreak();
+              if (restored > 0) {
+                void analytics.logEvent('streak_restored', {
+                  restored_count: restored,
+                  gem_cost: RESTORE_GEM_COST,
+                });
+              }
+            }}
+            onDismiss={() => {
+              player.dismissStreakBreak();
+              void analytics.logEvent('streak_restore_dismissed', {
+                broken_count: rb?.prevStreak ?? 0,
+              });
+            }}
+          />
+        );
+      })()}
     </View>
   );
 }

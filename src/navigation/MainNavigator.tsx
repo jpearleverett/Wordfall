@@ -1,7 +1,11 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Animated, Easing, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
+import {
+  createStackNavigator,
+  StackCardInterpolationProps,
+  TransitionSpec,
+} from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import NeonTabBar from '../components/navigation/NeonTabBar';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -25,10 +29,75 @@ const CollectionsStack = createStackNavigator();
 const LibraryStack = createStackNavigator();
 const ProfileStack = createStackNavigator();
 
+// P2 in launch_blockers.md: custom spring-based stack transitions replace
+// the React Navigation default slide. Push = gentle fade + 8% scale-up so
+// the outgoing screen feels depth-pushed; pop mirrors it. All tuned to
+// match the 280–400ms spring-settle feel of in-game ceremonies.
+const springTransitionSpec: TransitionSpec = {
+  animation: 'spring',
+  config: {
+    stiffness: 180,
+    damping: 22,
+    mass: 1,
+    overshootClamping: true,
+    restDisplacementThreshold: 0.01,
+    restSpeedThreshold: 0.01,
+  },
+};
+
+const timingTransitionSpec: TransitionSpec = {
+  animation: 'timing',
+  config: {
+    duration: 220,
+    easing: Easing.out(Easing.cubic),
+  },
+};
+
+function cardSpringFadeInterpolator({
+  current,
+  next,
+  layouts,
+}: StackCardInterpolationProps) {
+  const translateX = current.progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [layouts.screen.width * 0.06, 0],
+  });
+  const scale = current.progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.96, 1],
+  });
+  const opacity = current.progress.interpolate({
+    inputRange: [0, 0.3, 1],
+    outputRange: [0, 0.6, 1],
+  });
+  const nextOpacity = next
+    ? next.progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 0.92],
+      })
+    : 1;
+  return {
+    cardStyle: {
+      transform: [{ translateX }, { scale }],
+      opacity,
+    },
+    overlayStyle: {
+      opacity: Animated.subtract(1, nextOpacity),
+    },
+  };
+}
+
 export const screenOptions = {
   headerShown: false,
   cardStyle: { backgroundColor: COLORS.bg },
   freezeOnBlur: true,
+  // Spring-backed custom transition. Reduce-motion is honored by React
+  // Navigation itself when the OS accessibility flag is set.
+  cardStyleInterpolator: cardSpringFadeInterpolator,
+  transitionSpec: {
+    open: springTransitionSpec,
+    close: timingTransitionSpec,
+  },
 };
 
 // ── Tab icon styles (extracted to avoid object creation on every render) ──

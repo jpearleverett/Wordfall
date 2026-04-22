@@ -48,6 +48,16 @@ export interface PlayerProgressData {
     graceDaysUsed: number;
     streakShieldAvailable: boolean;
     lastShieldDate: string;
+    /**
+     * Set when a streak of >=3 days just broke (R5 in launch_blockers.md).
+     * Surfaces the restorative "50 gems to save your streak" modal on the
+     * next app open. Cleared when either the offer is claimed (streak
+     * restored) or 24h pass (offer expired).
+     */
+    recentBreak: {
+      prevStreak: number;
+      brokenAtMs: number;
+    } | null;
   };
 
   // Missions
@@ -107,6 +117,16 @@ export interface PlayerProgressMethods {
   useGraceDay: () => boolean;
   useStreakShield: () => boolean;
   activateStreakShield: () => void;
+  /**
+   * Restore a recently-broken streak (R5 in launch_blockers.md).
+   * Reverts `currentStreak` to the pre-break value stored in `recentBreak`
+   * and clears the break marker so the offer modal stops showing.
+   * Returns the restored streak count, or 0 if nothing to restore.
+   * Callers are responsible for spending the gem cost via EconomyContext.
+   */
+  restoreBrokenStreak: () => number;
+  /** Clear the recent-break marker without restoring (user dismissed offer). */
+  dismissStreakBreak: () => void;
   updateMissionProgress: (missionId: string, progress: number) => void;
   claimMissionReward: (missionId: string) => void;
   generateDailyMissions: () => void;
@@ -234,6 +254,11 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       let newStreak: number;
       let graceUsed = false;
       let shieldConsumed = false;
+      // A streak break big enough to regret (≥3 days) is remembered in
+      // `recentBreak` so the HomeScreen can surface the restorative
+      // "50 gems to save your streak" offer on next open. Small breaks
+      // (1–2 day streaks) are not worth an offer.
+      let didBreakStreak = false;
       if (diffDays === 1) {
         newStreak = streaks.currentStreak + 1;
       } else if (diffDays === 0) {
@@ -248,6 +273,9 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         shieldConsumed = true;
       } else {
         newStreak = 1;
+        if (streaks.currentStreak >= 3) {
+          didBreakStreak = true;
+        }
       }
 
       const newGraceDaysUsed = graceUsed
@@ -298,6 +326,9 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
           lastPlayDate: today,
           graceDaysUsed: shieldConsumed ? streaks.graceDaysUsed : newGraceDaysUsed,
           streakShieldAvailable: shieldConsumed ? false : streaks.streakShieldAvailable,
+          recentBreak: didBreakStreak
+            ? { prevStreak: streaks.currentStreak, brokenAtMs: Date.now() }
+            : streaks.recentBreak,
         },
         lastActiveDate: today,
       };
@@ -352,6 +383,39 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         lastShieldDate: new Date().toISOString().slice(0, 10),
       },
     }));
+  };
+
+  const restoreBrokenStreak = (): number => {
+    // R5 in launch_blockers.md: restorative path for a just-broken streak.
+    // Reverts `currentStreak` to the pre-break value and clears the marker.
+    // The gem cost is deducted separately by the caller (EconomyContext).
+    let restoredCount = 0;
+    setData((prev) => {
+      const br = prev.streaks.recentBreak;
+      if (!br) return prev;
+      restoredCount = br.prevStreak;
+      return {
+        ...prev,
+        streaks: {
+          ...prev.streaks,
+          currentStreak: br.prevStreak,
+          // Backdate lastPlayDate to yesterday so the next play continues the streak.
+          lastPlayDate: new Date(Date.now() - 24 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10),
+          recentBreak: null,
+        },
+      };
+    });
+    return restoredCount;
+  };
+
+  const dismissStreakBreak = (): void => {
+    setData((prev) =>
+      prev.streaks.recentBreak
+        ? { ...prev, streaks: { ...prev.streaks, recentBreak: null } }
+        : prev,
+    );
   };
 
   const updateMissionProgress = (missionId: string, progress: number): void => {
@@ -690,6 +754,8 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     useGraceDay,
     useStreakShield,
     activateStreakShield,
+    restoreBrokenStreak,
+    dismissStreakBreak,
     updateMissionProgress,
     claimMissionReward,
     generateDailyMissions,

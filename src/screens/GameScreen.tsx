@@ -28,7 +28,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic } from '../services/haptics';
+import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic } from '../services/haptics';
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
 import {
@@ -1268,6 +1268,10 @@ function GameScreenImpl({
         setFallActive(true);
         Animated.parallel(animations).start(() => {
           setFallActive(false);
+          // C1 in launch_blockers.md: fire the gravity-land haptic now that
+          // the spring animation has settled. Previously this function was
+          // defined in haptics.ts:51 but never called in production.
+          void gravityLandHaptic();
           // Clean up animated values for cells no longer on the grid
           const activeCellIds = new Set<string>();
           grid.forEach(row =>

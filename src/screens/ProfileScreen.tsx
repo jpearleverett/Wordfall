@@ -9,9 +9,17 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { Skeleton, SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import {
   usePlayerStore,
@@ -207,6 +215,36 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     }
   }, [equippedFrame.rarity]);
 
+  // MG3 in launch_blockers.md: animated glow for legendary frames.
+  // Pulses scale 1.00 ↔ 1.04 and shadow opacity 0.6 ↔ 1.0 on a 1400ms
+  // cycle. Respects reduce-motion — when enabled the ring is static.
+  const reduceMotion = useReduceMotion();
+  const isLegendary = equippedFrame.rarity === 'legendary';
+  const glowPulse = useSharedValue(0);
+  useEffect(() => {
+    if (!isLegendary || reduceMotion) {
+      glowPulse.value = 0;
+      return;
+    }
+    glowPulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 700 }),
+        withTiming(0, { duration: 700 }),
+      ),
+      -1,
+      false,
+    );
+  }, [isLegendary, reduceMotion]);
+
+  const animatedRingStyle = useAnimatedStyle(() => {
+    if (!isLegendary || reduceMotion) {
+      return { transform: [{ scale: 1 }], shadowOpacity: 0.6 };
+    }
+    const scale = 1 + glowPulse.value * 0.04;
+    const shadowOpacity = 0.6 + glowPulse.value * 0.4;
+    return { transform: [{ scale }], shadowOpacity };
+  });
+
   const renderProgressBar = (progress: number, color: string) => (
     <View style={styles.progressBarBg}>
       <View
@@ -271,7 +309,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* Avatar Area */}
         <View style={styles.avatarSection}>
-          <View
+          <Animated.View
             style={[
               styles.avatarRing,
               {
@@ -279,6 +317,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 shadowColor: frameBorderColor,
                 backgroundColor: equippedTheme.colors.surface,
               },
+              animatedRingStyle,
             ]}
           >
             <View
@@ -297,7 +336,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               />
               <Text style={[styles.avatarLetter, { color: equippedTheme.colors.accent }]}>{initial}</Text>
             </View>
-          </View>
+          </Animated.View>
           <View style={styles.levelBadge}>
             <LinearGradient
               colors={[equippedTheme.colors.accent, frameBorderColor] as [string, string]}

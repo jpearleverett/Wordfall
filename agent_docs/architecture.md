@@ -14,7 +14,7 @@ Wordfall is a **word-search-with-gravity** mobile game built with **React Native
 - **Backend:** Firebase (Auth + Firestore + Functions) with offline fallback
 - **State:** 4 context providers + 2 extracted sub-contexts + **zustand** for game state (wraps reducer via `redux` middleware for per-component selector subscriptions) + AsyncStorage persistence (debounced) + Firestore sync
 - **Build plugins:** **React Compiler** via `babel-preset-expo` `'react-compiler'` option (scoped to `src/`), plus `react-native-worklets/plugin` (must remain last)
-- **Testing:** Jest + ts-jest, 61 test suites with 981 tests
+- **Testing:** Jest + ts-jest, 66 test suites
 - **Monetization:** `react-native-iap@^15.0.0` wired with full purchase flow + fraud detection; `react-native-google-mobile-ads@^16` autolinked with test IDs; segment-based dynamic offers with flash sales; $0.49 first-purchase impulse offer for non-payers
 - **Audio:** `expo-audio` only (`createAudioPlayer`). `expo-av` removed in SDK 55.
 - **Video:** `expo-video` (`useVideoPlayer` + `VideoView`) with error boundary fallback
@@ -32,7 +32,7 @@ src/
 ├── navigation/       # MainNavigator.tsx (tab/stack definitions)
 ├── contexts/         # AuthContext, EconomyContext, PlayerContext, SettingsContext + PlayerProgressContext, PlayerSocialContext
 ├── components/       # UI organized by domain (common, home, victory, effects, game, modes, events, navigation, economy)
-├── screens/          # 15 screens (Home, Game, Modes, Collections, Library, Profile, EditProfile, Settings, Shop, CosmeticStore, Club, Leaderboard, Event, Onboarding, Mastery)
+├── screens/          # 17 screens (Home, Game, Modes, Collections, Library, Profile, EditProfile, Settings, Shop, CosmeticStore, Club, Leaderboard, WeeklyLeaderboard, Event, Onboarding, Mastery, SeasonPass)
 │   └── game/         # PlayField.tsx (Grid+ConnectedWordBank), GameFlashes.tsx, GameBanners.tsx — extracted for render isolation
 ├── config/           # firebase.ts
 ├── data/             # Static game data (chapters, collections, cosmetics, events, missions, tutorial boards, achievements, weekly goals, mastery rewards, mystery wheel, event layers, shop products, seasonal quests, VIP, prestige, referrals, club events, coin shop, login calendar, daily rewards, grand challenges, season pass, seasonal wheels, regional pricing, dynamic pricing, word categories)
@@ -55,7 +55,10 @@ Ask-me-about questions route to the relevant slice instead of the full architect
 | Firebase, analytics, IAP, Ads, push notifications, Sentry, deep linking | `agent_docs/architecture/cloud.md` |
 | Build/runtime quirks (native modules, Babel plugin order, SDK 55 pitfalls) | `agent_docs/gotchas.md` |
 | Code conventions (adding a screen/ceremony/action/mode, exports, selectors) | `agent_docs/patterns.md` |
-| Environment setup, Firebase config, IAP products, open launch items | `agent_docs/setup.md` |
+| Launch-blocking gaps + path to 9/10 (Tier 1–5 punch list) | `agent_docs/launch_blockers.md` |
 | Extended hot-path file list beyond the 6 in CLAUDE.md | `agent_docs/critical_files.md` |
-
-See also: `FIRESTORE_SOCIAL_GUIDE.md` (Firestore schemas, security rules, migration plan), `GAME_DESIGN_DOCUMENT.md` (full GDD, 17 sections).
+| Remote Config event calendar + flash sale authoring | `agent_docs/live_ops.md` |
+| Composer deliverable manifest (72 SFX + 10 BGM) | `agent_docs/audio_brief.md` |
+| Art & visual polish brief | `agent_docs/art_brief.md` |
+| Play Console Data Safety form draft | `agent_docs/data_safety.md` |
+| Play Console store listing copy | `agent_docs/store_listing.md` |

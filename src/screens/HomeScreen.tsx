@@ -532,6 +532,21 @@ export function HomeScreen({
       </Animated.View>
 
       {/* Guided onboarding milestone banner — shown for first 5 levels */}
+      {/* Segment-driven welcome-back banner for at-risk / lapsed / returned
+          players. Message comes from getWelcomeBackMessage() in App.tsx. */}
+      {segmentWelcomeMessage && (
+        <LinearGradient
+          colors={['rgba(0,212,255,0.20)', 'rgba(168,85,247,0.10)'] as [string, string]}
+          style={styles.welcomeBackBanner}
+        >
+          <Text style={styles.welcomeBackIcon}>{'\u{1F44B}'}</Text>
+          <View style={styles.welcomeBackContent}>
+            <Text style={styles.welcomeBackTitle}>{segmentWelcomeMessage.title}</Text>
+            <Text style={styles.welcomeBackSubtitle}>{segmentWelcomeMessage.subtitle}</Text>
+          </View>
+        </LinearGradient>
+      )}
+
       {nextGuidedMilestone && (
         <Pressable
           style={({ pressed }) => [pressed && styles.buttonPressed]}
@@ -2094,6 +2109,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.display,
     letterSpacing: 1,
+  },
+  // Segment-driven welcome-back banner (R6 in launch_blockers.md).
+  welcomeBackBanner: {
+    ...bentoPanel('cyan'),
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    marginBottom: 14,
+  },
+  welcomeBackIcon: {
+    fontSize: 28,
+    marginRight: 12,
+  },
+  welcomeBackContent: {
+    flex: 1,
+  },
+  welcomeBackTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 3,
+  },
+  welcomeBackSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontFamily: FONTS.bodyRegular,
+    lineHeight: 17,
   },
   earlyGuidanceCard: {
     marginBottom: 14,

@@ -205,11 +205,18 @@ class FirestoreService {
     if (!this.enabled || !userId) return;
     try {
       const userRef = doc(db, 'users', userId);
+      // tzOffsetMinutes is positive east of UTC (inverted from Date#getTimezoneOffset)
+      // so the Cloud-Function local-hour math in functions/src/social.ts matches
+      // `new Date(utcMs + tzOffsetMinutes * 60_000).getUTCHours()`.
+      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const lastActiveDate = new Date().toISOString().slice(0, 10);
       await setDoc(
         userRef,
         {
           ...data,
           lastActive: serverTimestamp(),
+          tzOffsetMinutes,
+          lastActiveDate,
         },
         { merge: true }
       );
@@ -414,6 +421,75 @@ class FirestoreService {
       );
     } catch (e) {
       logFirestoreError('submitWeeklyScore', 'weeklyScores', e);
+    }
+  }
+
+  /**
+   * MG2 in launch_blockers.md: per-event cumulative leaderboard.
+   * Mirrors `submitWeeklyScore` but scopes to `events/{eventId}/scores/{uid}`
+   * so each event has its own ranking independent of weekly/daily scores.
+   */
+  async submitEventScore(
+    eventId: string,
+    userId: string,
+    score: number,
+    displayName: string,
+  ): Promise<void> {
+    if (!this.enabled || !userId || !eventId) return;
+    try {
+      const docRef = doc(db, 'events', eventId, 'scores', userId);
+      const existing = await getDoc(docRef);
+      const prevScore = existing.exists() ? existing.data().score || 0 : 0;
+      await withRetry(
+        () =>
+          setDoc(docRef, {
+            userId,
+            displayName,
+            score: prevScore + score,
+            eventId,
+            timestamp: serverTimestamp(),
+          }),
+        { label: 'submitEventScore' },
+      );
+    } catch (e) {
+      logFirestoreError('submitEventScore', 'events.scores', e);
+    }
+  }
+
+  /**
+   * Read the top-N scores for a given event, ordered by score desc.
+   * Returns an empty array when Firestore is unavailable so the UI
+   * can degrade gracefully (same pattern as daily/weekly leaderboards).
+   */
+  async getEventLeaderboard(
+    eventId: string,
+    limitCount: number = 50,
+  ): Promise<Array<{
+    userId: string;
+    displayName: string;
+    score: number;
+  }>> {
+    if (!this.enabled || !eventId) return [];
+    try {
+      const q = query(
+        collection(db, 'events', eventId, 'scores'),
+        orderBy('score', 'desc'),
+        firestoreLimit(Math.max(1, Math.min(100, limitCount))),
+      );
+      const snap = await getDocs(q);
+      const out: Array<{ userId: string; displayName: string; score: number }> = [];
+      snap.forEach((s) => {
+        const d = s.data();
+        out.push({
+          userId: String(d.userId ?? ''),
+          displayName: String(d.displayName ?? 'Player'),
+          score: Number(d.score ?? 0),
+        });
+      });
+      return out;
+    } catch (e) {
+      logFirestoreError('getEventLeaderboard', 'events.scores', e);
+      return [];
     }
   }
 
@@ -834,6 +910,77 @@ class FirestoreService {
     } catch (e) {
       logger.warn('[Firestore] getClub failed:', e);
       return null;
+    }
+  }
+
+  /**
+   * List public clubs that the player can browse + join (S1 in
+   * launch_blockers.md). Sorted by weeklyScore descending so active
+   * clubs appear first. Empty filter arguments match all clubs.
+   *
+   * @param opts.maxMembers     Cap on member count (excludes full clubs).
+   * @param opts.minWeeklyScore Minimum weekly score threshold.
+   * @param opts.limit          Max results to return (default 20).
+   * @returns Array of { id, name, description, memberCount, maxMembers,
+   *                    weeklyScore, ownerId } — safe subset for browsing.
+   */
+  async listPublicClubs(opts?: {
+    maxMembers?: number;
+    minWeeklyScore?: number;
+    limit?: number;
+  }): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    memberCount: number;
+    maxMembers: number;
+    weeklyScore: number;
+    ownerId: string;
+  }>> {
+    if (!this.enabled) return [];
+    try {
+      const pageSize = Math.max(1, Math.min(50, opts?.limit ?? 20));
+      // Order by weeklyScore descending — active clubs first. Firestore
+      // can only apply one inequality per query, so membership-cap
+      // filtering happens client-side after the read.
+      const clubsQuery = query(
+        collection(db, 'clubs'),
+        orderBy('weeklyScore', 'desc'),
+        firestoreLimit(pageSize * 2),
+      );
+      const snap = await getDocs(clubsQuery);
+      const out: Array<{
+        id: string;
+        name: string;
+        description: string;
+        memberCount: number;
+        maxMembers: number;
+        weeklyScore: number;
+        ownerId: string;
+      }> = [];
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data();
+        const memberCount = Number(data.memberCount ?? 0);
+        const maxMembers = Number(data.maxMembers ?? 30);
+        const weeklyScore = Number(data.weeklyScore ?? 0);
+        if (opts?.maxMembers && memberCount >= opts.maxMembers) continue;
+        if (memberCount >= maxMembers) continue; // full
+        if (opts?.minWeeklyScore !== undefined && weeklyScore < opts.minWeeklyScore) continue;
+        out.push({
+          id: docSnap.id,
+          name: String(data.name ?? 'Club'),
+          description: String(data.description ?? ''),
+          memberCount,
+          maxMembers,
+          weeklyScore,
+          ownerId: String(data.ownerId ?? ''),
+        });
+        if (out.length >= pageSize) break;
+      }
+      return out;
+    } catch (e) {
+      logFirestoreError('listPublicClubs', 'clubs', e);
+      return [];
     }
   }
 

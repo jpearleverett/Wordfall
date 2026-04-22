@@ -829,6 +829,20 @@ export function useRewardWiring({
       void firestoreService.submitWeeklyScore(userId, score, displayName);
     }
 
+    // MG2: per-event cumulative score. eventManager keeps a list of
+    // currently-active events; we submit the puzzle score against each
+    // so a single puzzle can rank on multiple overlapping events.
+    if (userId) {
+      for (const activeEvent of eventManager.getActiveEvents()) {
+        void firestoreService.submitEventScore(
+          activeEvent.id,
+          userId,
+          score,
+          displayName,
+        );
+      }
+    }
+
     if (userId) {
       void firestoreService.syncPlayerProfile(userId, {
         displayName,

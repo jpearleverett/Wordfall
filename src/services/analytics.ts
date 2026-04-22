@@ -27,6 +27,8 @@ export type AnalyticsEventName =
   // Progression & social
   | 'daily_challenge_complete'
   | 'streak_broken'
+  | 'streak_restored'
+  | 'streak_restore_dismissed'
   | 'achievement_earned'
   | 'ceremony_shown'
   | 'ceremony_dismissed'

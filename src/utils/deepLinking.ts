@@ -52,6 +52,16 @@ export function parseDeepLink(url: string): DeepLinkData {
       }
     }
 
+    // Short https path used by the web share link: /r/{code}
+    // Emitted by buildReferralLink(). Wordfall's web host lands here so
+    // the Android App Link verification opens the app with the code.
+    if (path.startsWith('r/')) {
+      const code = path.substring('r/'.length).trim();
+      if (code.length > 0) {
+        return { type: 'referral', referralCode: code.toUpperCase() };
+      }
+    }
+
     if (path.startsWith('challenge/')) {
       const id = path.substring('challenge/'.length).trim();
       if (id.length > 0) {
@@ -102,9 +112,31 @@ export function parseDeepLink(url: string): DeepLinkData {
 }
 
 /**
- * Build a deep link URL for a referral code.
+ * Public web domain for universal (https) deep links. Must match
+ * app.json `android.intentFilters` with autoVerify: true so Android
+ * App Links opens these URLs directly in the installed app.
+ */
+export const WORDFALL_WEB_HOST = 'wordfallgame.app';
+
+/**
+ * Build the canonical https:// referral URL used in share text. S2 in
+ * launch_blockers.md: earlier this function only emitted the custom
+ * `wordfall://` scheme, so friends tapping a referral link in a chat app
+ * or email could not land on the Play Store / app with the code preserved.
+ * The parser handles both schemes, and app.json declares the https host
+ * with autoVerify, so this URL opens the app directly on install and
+ * falls back to the Cloudflare Pages bounce page for uninstalled users.
  */
 export function buildReferralLink(referralCode: string): string {
+  return `https://${WORDFALL_WEB_HOST}/r/${referralCode}`;
+}
+
+/**
+ * Legacy custom-scheme builder. Still used by older share integrations
+ * that need the `wordfall://` form explicitly (tests + intent filters).
+ * New call sites should prefer `buildReferralLink` (https).
+ */
+export function buildReferralSchemeLink(referralCode: string): string {
   return `wordfall://referral/${referralCode}`;
 }
 
