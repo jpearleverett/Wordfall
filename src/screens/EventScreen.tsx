@@ -11,6 +11,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import EventLeaderboardCard from '../components/events/EventLeaderboardCard';
+import { useAuth } from '../contexts/AuthContext';
 import { getCurrentEvent } from '../data/events';
 import { EventExclusiveReward } from '../types';
 import { eventManager, ActiveEvent, EventRewardTierDisplay } from '../services/eventManager';
@@ -38,6 +40,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
   onOpenEventShop: onOpenEventShopProp,
 }) => {
   const { addCoins, addGems, addHintTokens } = useEconomyActions();
+  const { user } = useAuth();
   const ownedDecorations = usePlayerStore(selectOwnedDecorations);
   const unlockedCosmetics = usePlayerStore(selectUnlockedCosmetics);
   const { unlockCosmetic, unlockDecoration, updateProgress } = usePlayerActions();
@@ -355,6 +358,12 @@ const EventScreen: React.FC<EventScreenProps> = ({
                   );
                 })}
               </View>
+              {/* MG2: per-event leaderboard — degrades to null offline. */}
+              <EventLeaderboardCard
+                eventId={activeEvent.id}
+                currentUserId={user?.uid}
+                previewSize={5}
+              />
             </LinearGradient>
           );
         })}

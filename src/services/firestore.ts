@@ -424,6 +424,75 @@ class FirestoreService {
     }
   }
 
+  /**
+   * MG2 in launch_blockers.md: per-event cumulative leaderboard.
+   * Mirrors `submitWeeklyScore` but scopes to `events/{eventId}/scores/{uid}`
+   * so each event has its own ranking independent of weekly/daily scores.
+   */
+  async submitEventScore(
+    eventId: string,
+    userId: string,
+    score: number,
+    displayName: string,
+  ): Promise<void> {
+    if (!this.enabled || !userId || !eventId) return;
+    try {
+      const docRef = doc(db, 'events', eventId, 'scores', userId);
+      const existing = await getDoc(docRef);
+      const prevScore = existing.exists() ? existing.data().score || 0 : 0;
+      await withRetry(
+        () =>
+          setDoc(docRef, {
+            userId,
+            displayName,
+            score: prevScore + score,
+            eventId,
+            timestamp: serverTimestamp(),
+          }),
+        { label: 'submitEventScore' },
+      );
+    } catch (e) {
+      logFirestoreError('submitEventScore', 'events.scores', e);
+    }
+  }
+
+  /**
+   * Read the top-N scores for a given event, ordered by score desc.
+   * Returns an empty array when Firestore is unavailable so the UI
+   * can degrade gracefully (same pattern as daily/weekly leaderboards).
+   */
+  async getEventLeaderboard(
+    eventId: string,
+    limitCount: number = 50,
+  ): Promise<Array<{
+    userId: string;
+    displayName: string;
+    score: number;
+  }>> {
+    if (!this.enabled || !eventId) return [];
+    try {
+      const q = query(
+        collection(db, 'events', eventId, 'scores'),
+        orderBy('score', 'desc'),
+        firestoreLimit(Math.max(1, Math.min(100, limitCount))),
+      );
+      const snap = await getDocs(q);
+      const out: Array<{ userId: string; displayName: string; score: number }> = [];
+      snap.forEach((s) => {
+        const d = s.data();
+        out.push({
+          userId: String(d.userId ?? ''),
+          displayName: String(d.displayName ?? 'Player'),
+          score: Number(d.score ?? 0),
+        });
+      });
+      return out;
+    } catch (e) {
+      logFirestoreError('getEventLeaderboard', 'events.scores', e);
+      return [];
+    }
+  }
+
   // ── Friend System ─────────────────────────────────────────────────────────
 
   /**
