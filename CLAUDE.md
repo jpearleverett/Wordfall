@@ -23,9 +23,19 @@ For detailed architecture see `agent_docs/architecture.md` — it's a short **in
 npx expo start --dev-client            # Metro bundler (Expo Go NOT supported)
 npm run typecheck                      # tsc --noEmit
 npm test                               # jest (66 suites)
+npm run screenshots                    # build web-harness + capture PNGs → .artifacts/screenshots/
 npm install --legacy-peer-deps         # .npmrc sets this by default
 EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  # Rebuild dev client APK (Termux requires the env var)
 ```
+
+## Visual harness (screenshot previews)
+
+Headless-Chromium-driven preview of individual components. Useful for
+Claude sessions and CI: run `npm run screenshots` to bundle the
+registry at `web-harness/entries.tsx`, serve it locally, and capture
+one PNG per entry into `.artifacts/screenshots/`. See
+**`web-harness/README.md`** for how to add an entry, the shim layout,
+and the Reanimated/snapshot limitations.
 
 ## Critical Files
 

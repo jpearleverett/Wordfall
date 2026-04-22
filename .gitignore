@@ -18,3 +18,8 @@ coverage/
 *.tsbuildinfo
 .claude/settings.local.json
 .claude/*.local.*
+
+# Visual harness — generated bundle + screenshot outputs
+web-harness/harness.bundle.js
+web-harness/harness.bundle.js.map
+.artifacts/

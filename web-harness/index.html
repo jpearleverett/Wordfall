@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wordfall Visual Harness</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body, #root {
+        height: 100%;
+        width: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0a0015;
+        color: #fff;
+      }
+      #root { display: flex; }
+      .harness-sidebar {
+        width: 240px;
+        background: #12002a;
+        border-right: 1px solid rgba(255,255,255,0.08);
+        padding: 20px 12px;
+        overflow-y: auto;
+        flex-shrink: 0;
+      }
+      .harness-sidebar h1 {
+        font-size: 12px;
+        letter-spacing: 2px;
+        opacity: 0.6;
+        margin-bottom: 16px;
+      }
+      .harness-sidebar button {
+        display: block;
+        width: 100%;
+        padding: 10px 12px;
+        margin-bottom: 6px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 8px;
+        color: #fff;
+        text-align: left;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .harness-sidebar button[data-active="true"] {
+        background: rgba(0,212,255,0.12);
+        border-color: rgba(0,212,255,0.4);
+      }
+      .harness-sidebar button:hover { background: rgba(255,255,255,0.07); }
+      .harness-viewport {
+        flex: 1;
+        position: relative;
+        background: #0a0015;
+        overflow: hidden;
+      }
+      .harness-frame {
+        width: 390px;
+        height: 844px;
+        margin: 24px auto;
+        background: #0a0015;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 20px;
+        overflow: hidden;
+        position: relative;
+      }
+      .harness-label {
+        position: absolute;
+        top: 8px;
+        left: 12px;
+        font-size: 11px;
+        letter-spacing: 1.5px;
+        opacity: 0.5;
+        font-family: monospace;
+        z-index: 100;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="./harness.bundle.js"></script>
+  </body>
+</html>
