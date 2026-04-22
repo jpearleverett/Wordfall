@@ -32,6 +32,7 @@ import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
 import FlawlessStreakCard from '../components/FlawlessStreakCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
+import { getRemoteBoolean } from '../services/remoteConfig';
 import { bentoPanel } from '../styles/bentoPanel';
 import {
   usePlayerStore,
@@ -347,12 +348,13 @@ export function HomeScreen({
   const showQuickPlay = hasSegmentContent
     ? segmentHomeContent.includes('daily_challenge')
     : playerStage !== 'new' && playerStage !== 'early';
-  const showWeeklyGoals = hasSegmentContent
+  const legacyTaskCardsEnabled = getRemoteBoolean('legacyTaskCardsEnabled');
+  const showWeeklyGoals = legacyTaskCardsEnabled && (hasSegmentContent
     ? segmentHomeContent.includes('weekly_goals') && weeklyGoals
-    : (playerStage === 'established' || playerStage === 'veteran') && weeklyGoals;
-  const showMissions = hasSegmentContent
+    : (playerStage === 'established' || playerStage === 'veteran') && weeklyGoals);
+  const showMissions = legacyTaskCardsEnabled && (hasSegmentContent
     ? segmentHomeContent.includes('missions') && dailyMissions.length > 0
-    : (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0;
+    : (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0);
   const showMysteryWheel = hasSegmentContent
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
     : (playerStage !== 'new' || (mysteryWheelSpins > 0)) && onOpenWheel;
@@ -360,7 +362,8 @@ export function HomeScreen({
   // ── Seasonal Quest ──────────────────────────────────────────────────
   const seasonalQuest = getCurrentSeasonalQuest();
   const questState = seasonalQuestState;
-  const showSeasonalQuest = (playerStage === 'established' || playerStage === 'veteran')
+  const showSeasonalQuest = legacyTaskCardsEnabled
+    && (playerStage === 'established' || playerStage === 'veteran')
     && !questState.completedQuestIds.includes(seasonalQuest.id);
 
   // Auto-initialize quest for the current season if not started

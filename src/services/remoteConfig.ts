@@ -78,6 +78,10 @@ export interface RemoteConfigValues {
   seasonPassXpPerPuzzle: number;
   seasonPassXpMultiplier: number;
 
+  // Home UI — render deprecated Daily Missions / Weekly Goals / Seasonal Quest cards.
+  // Default off; Daily Quests + Season Pass are the live surfaces. Flip to restore legacy cards.
+  legacyTaskCardsEnabled: boolean;
+
   // Referral rewards — Cloud Function grant loop (Branch 7)
   referralEnabled: boolean;
   referralRewardGemsReferrer: number;
@@ -230,6 +234,8 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   seasonPassDurationDays: 30,
   seasonPassXpPerPuzzle: 100,
   seasonPassXpMultiplier: 1.0,
+
+  legacyTaskCardsEnabled: false,
 
   referralEnabled: true,
   referralRewardGemsReferrer: 25,
