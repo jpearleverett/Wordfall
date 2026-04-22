@@ -90,6 +90,11 @@ interface StreakData {
   graceDaysUsed: number;
   streakShieldAvailable: boolean;
   lastShieldDate: string;
+  /** R5: set when a streak of >=3 days just broke. See src/types.ts StreakData. */
+  recentBreak?: {
+    prevStreak: number;
+    brokenAtMs: number;
+  } | null;
 }
 
 interface ModeStats {

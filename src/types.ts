@@ -495,6 +495,16 @@ export interface StreakData {
   graceDaysUsed: number;
   streakShieldAvailable: boolean;
   lastShieldDate?: string;
+  /**
+   * Set when a streak of >=3 days just broke (R5 in launch_blockers.md).
+   * Surfaces the restorative "50 gems to save your streak" modal on the
+   * next app open. Cleared when either the offer is claimed (streak
+   * restored) or 24h pass (offer expired).
+   */
+  recentBreak?: {
+    prevStreak: number;
+    brokenAtMs: number;
+  } | null;
 }
 
 export interface WeeklyChallenge {

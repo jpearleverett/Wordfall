@@ -4,7 +4,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import {
   createStackNavigator,
   StackCardInterpolationProps,
-  TransitionSpec,
 } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import NeonTabBar from '../components/navigation/NeonTabBar';
@@ -33,7 +32,10 @@ const ProfileStack = createStackNavigator();
 // the React Navigation default slide. Push = gentle fade + 8% scale-up so
 // the outgoing screen feels depth-pushed; pop mirrors it. All tuned to
 // match the 280–400ms spring-settle feel of in-game ceremonies.
-const springTransitionSpec: TransitionSpec = {
+// Typed via `as const` — `@react-navigation/stack` v7 doesn't export a
+// `TransitionSpec` alias; the nested `transitionSpec` field on
+// `TransitionPreset` accepts this shape directly.
+const springTransitionSpec = {
   animation: 'spring',
   config: {
     stiffness: 180,
@@ -43,15 +45,15 @@ const springTransitionSpec: TransitionSpec = {
     restDisplacementThreshold: 0.01,
     restSpeedThreshold: 0.01,
   },
-};
+} as const;
 
-const timingTransitionSpec: TransitionSpec = {
+const timingTransitionSpec = {
   animation: 'timing',
   config: {
     duration: 220,
     easing: Easing.out(Easing.cubic),
   },
-};
+} as const;
 
 function cardSpringFadeInterpolator({
   current,
