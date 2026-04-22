@@ -61,6 +61,7 @@ interface PlayerData {
   puzzlesSolved: number;
   totalStars: number;
   bestStreak: number;
+  currentStreak: number;
   perfectSolves: number;
   totalScore: number;
   badges: Array<{ id: string; name: string; icon: string }>;
@@ -88,6 +89,7 @@ const DEFAULT_PLAYER: PlayerData = {
   puzzlesSolved: 0,
   totalStars: 0,
   bestStreak: 0,
+  currentStreak: 0,
   perfectSolves: 0,
   totalScore: 0,
   badges: [],
@@ -169,6 +171,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       puzzlesSolved,
       totalStars,
       bestStreak: playerStreaks.bestStreak,
+      currentStreak: playerStreaks.currentStreak,
       perfectSolves,
       totalScore,
       badges: achievementIds.map((id: string) => ({ id, name: id, icon: '\u{1F3C5}' })),
@@ -183,6 +186,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       puzzlesSolved,
       totalStars,
       playerStreaks.bestStreak,
+      playerStreaks.currentStreak,
       perfectSolves,
       totalScore,
       achievementIds,

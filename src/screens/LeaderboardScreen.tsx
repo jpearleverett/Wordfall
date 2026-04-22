@@ -150,7 +150,8 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
   scope: scopeProp,
   route,
 }) => {
-  const scope: LeaderboardScope = scopeProp ?? route?.params?.scope ?? 'global';
+  const initialScope: LeaderboardScope = scopeProp ?? route?.params?.scope ?? 'global';
+  const [scope, setScope] = useState<LeaderboardScope>(initialScope);
   const { user } = useAuth();
   const currentLevel = usePlayerStore(selectCurrentLevel);
   const dailyCompleted = usePlayerStore(selectDailyCompleted);
@@ -480,6 +481,28 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
         </Text>
       </View>
 
+      {/* Scope Tabs — Global / Friends */}
+      <View style={styles.tabBar}>
+        {(['global', 'friends'] as const).map((s) => {
+          const isActive = scope === s;
+          const label = s === 'global' ? 'Global' : 'Friends';
+          return (
+            <TouchableOpacity
+              key={s}
+              style={[styles.tab, isActive && styles.tabActive]}
+              onPress={() => setScope(s)}
+              accessibilityRole="tab"
+              accessibilityLabel={`${label} leaderboard`}
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       {/* Time Tabs */}
       <View style={styles.tabBar}>
         {TIME_TABS.map((tab) => {
@@ -633,7 +656,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
         }
       >
         <ReferralPendingRewards />
-        <FriendLeaderboardCard />
+        <FriendLeaderboardCard onViewAll={() => setScope('friends')} />
         {referralCode ? (
           <ReferralCard
             referralCode={referralCode}

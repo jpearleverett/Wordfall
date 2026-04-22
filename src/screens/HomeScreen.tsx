@@ -946,8 +946,6 @@ export function HomeScreen({
           onBreak={() => onOpenShop?.()}
         />
 
-
-
         {/* 30-day login calendar — opens via top-bar icon sheet */}
         <Modal
           visible={calendarOpen && showDailyRewards}
@@ -1471,19 +1469,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.display,
   },
-  // Streak
-  streakPanel: {
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,45,149,0.22)',
-    marginBottom: 14,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 6,
-  },
   panelHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1507,39 +1492,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1,
     fontFamily: FONTS.bodyMedium,
-  },
-  streakBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  streakCount: {
-    color: COLORS.orange,
-    fontSize: 22,
-    fontFamily: FONTS.display,
-    minWidth: 28,
-    textAlign: 'center',
-    textShadowColor: COLORS.orangeGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-  },
-  streakTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    overflow: 'hidden',
-  },
-  streakFill: {
-    height: '100%',
-    borderRadius: 999,
-  },
-  streakTarget: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    fontFamily: FONTS.bodyBold,
-    minWidth: 28,
-    textAlign: 'center',
   },
   rewardsPanel: {
     borderRadius: 18,
@@ -2051,31 +2003,6 @@ const styles = StyleSheet.create({
   },
   eventBannerArrow: {
     fontSize: 24,
-  },
-  // Come-back-tomorrow card — Bento gold
-  tomorrowCard: {
-    ...bentoPanel('gold'),
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  tomorrowIcon: {
-    fontSize: 28,
-    marginRight: 14,
-  },
-  tomorrowContent: {
-    flex: 1,
-  },
-  tomorrowTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontFamily: FONTS.bodySemiBold,
-    marginBottom: 2,
-  },
-  tomorrowSubtext: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 18,
   },
   // Onboarding milestone banner — Bento gold
   milestoneBanner: {
