@@ -10,6 +10,12 @@
 > Every item below was **grep-verified against the working tree** during the
 > April 2026 deep audit. Do not re-list items that are already wired — search
 > first.
+>
+> **Status (2026-04-22):** All Tier 1–4 code gaps are **SHIPPED** on
+> branch `claude/assess-wordfall-launch-readiness-VzyDY`. Remaining work
+> is Tier 5 only (user-side / content). See the per-item status lines
+> below for the commit and verify the change on device before marking
+> the punch list closed.
 
 ---
 
@@ -47,8 +53,10 @@ never connected the wires.
 - **Work:** Replace the hardcoded `MAX_NOTIFICATIONS_PER_DAY = 3` check
   at `notifications.ts:147` with the segment-derived value. Use the
   segment's reminder hours instead of the constants.
-- **Status:** CONFIRMED_GAP. Function is exported and tested but never
-  imported in production code.
+- **Status:** ✅ SHIPPED. `setNotificationSegments()` is called from
+  `App.tsx` whenever segments recompute; `schedule()` reads
+  `isCategoryAllowedForSegment()` and `resolveMaxPerDay()` which drive
+  off the segment config. Commit: `Tier 1 retention wave: R1 + R5 + R6 + R7`.
 
 ### R2. Per-timezone streak reminders
 
@@ -59,8 +67,10 @@ never connected the wires.
 - **Work:** write `user.tzOffsetMinutes` at session start (Expo
   `Localization.getCalendars()` returns it). Change the scheduler to run
   hourly and bucket users by their 8 PM local hour.
-- **Status:** CONFIRMED_GAP. No `tzOffset` / `timezone` / `utcOffset`
-  fields anywhere in `functions/src/`.
+- **Status:** ✅ SHIPPED. `processStreakReminders` now runs hourly and
+  per-user filters by `localHourForUser(tzOffsetMinutes, nowMs) === 20`.
+  `syncPlayerProfile` writes `tzOffsetMinutes` to the user doc on every
+  profile sync. Commit: `Tier 1 retention wave: R2 + R3 + R4`.
 
 ### R3. Day-2 re-engagement Cloud Function
 
@@ -72,8 +82,10 @@ never connected the wires.
   set a server flag that surfaces an in-app 50% off starter on their next
   open (the `dynamicPricing.ts:103–250` engine already returns
   cohort-appropriate offers — this just needs a trigger).
-- **Status:** CONFIRMED_GAP. Only lapsed signal today is the client-local
-  `comebackReminder` in `App.tsx` that fires on app-open after 3+ days.
+- **Status:** ✅ SHIPPED. `processDay2Reengagement` Cloud Function in
+  `functions/src/social.ts` runs hourly, targets users whose
+  `lastActiveDate === today-2` AND no purchase history, pushes at local
+  19:00 via the shared `runReengagementPass()` helper.
 
 ### R4. Day-7 re-engagement Cloud Function
 
@@ -82,7 +94,8 @@ never connected the wires.
   is saved" and surface the **already-wired** "WELCOME BACK" 70% off
   starter from `dynamicPricing.ts:110–128` (engagement === 'lapsed'
   branch). The offer exists; just needs the push trigger.
-- **Status:** CONFIRMED_GAP.
+- **Status:** ✅ SHIPPED. `processDay7Reengagement` Cloud Function
+  mirrors the Day-2 function, targeting `lastActiveDate === today-7`.
 
 ### R5. Restorative streak save modal
 
@@ -96,8 +109,14 @@ never connected the wires.
   `restoreStreak()` that reverts `streakBrokenAt` and restores the prior
   streak count. Hook into the ceremony queue so it shows on next app
   open if the break is fresh.
-- **Status:** CONFIRMED_GAP. `restoreStreak` / `unbreakStreak` /
-  `revertStreak` — no matches anywhere.
+- **Status:** ✅ SHIPPED. `PlayerProgressContext` tracks
+  `streaks.recentBreak = { prevStreak, brokenAtMs }` on any full break
+  (prevStreak >= 3). New methods `restoreBrokenStreak()` and
+  `dismissStreakBreak()` are re-exported through `PlayerContext`. The
+  `PostStreakBreakOffer` modal in `src/components/PostStreakBreakOffer.tsx`
+  costs 50 gems (`RESTORE_GEM_COST`), is mounted inside `HomeMainScreen`,
+  and logs `streak_restored` / `streak_restore_dismissed` analytics
+  events.
 
 ### R6. Render `segmentWelcomeMessage` on HomeScreen
 
@@ -107,7 +126,9 @@ never connected the wires.
 - **Work:** add a header banner in HomeScreen's top section that renders
   `{segmentWelcomeMessage.title}` + `{segmentWelcomeMessage.subtitle}`
   when non-null. ~20 lines.
-- **Status:** CONFIRMED_GAP.
+- **Status:** ✅ SHIPPED. `segmentWelcomeMessage` is now rendered as a
+  `welcomeBackBanner` bento-panel above the milestone banner in
+  `HomeScreen.tsx:536-547`.
 
 ### R7. Make `MAX_NOTIFICATIONS_PER_DAY` Remote-Config overridable
 
@@ -117,7 +138,10 @@ never connected the wires.
   3 as the default. Add the key to `RemoteConfigValues` in
   `src/services/remoteConfig.ts`. Combine with R1 so the segment-derived
   cap wins when present.
-- **Status:** CONFIRMED_GAP. No RC key drives this today.
+- **Status:** ✅ SHIPPED. `resolveMaxPerDay()` picks segment cap >
+  `getRemoteNumber('maxNotificationsPerDay')` > `DEFAULT_MAX_NOTIFICATIONS_PER_DAY`
+  (3). New RC key `maxNotificationsPerDay` added to `RemoteConfigValues`
+  and `REMOTE_CONFIG_DEFAULTS`. Ops can flip to 4–5 without a rebuild.
 
 ---
 
@@ -131,8 +155,8 @@ never connected the wires.
   level 5–15 via `dynamicPricing.ts:153–163`).
 - **Target:** `{ coins: 500, gems: 50, hintTokens: 10 }`. Same $0.49
   price. Industry-standard first-purchase velocity lift: +15–25%.
-- **Status:** CONFIRMED_GAP. Wordscapes/Royal Match hit ~5× this value at
-  the same price tier.
+- **Status:** ✅ SHIPPED. `shopProducts.ts:68-85` now grants 500 coins +
+  50 gems + 10 hints at the same $0.49 price.
 
 ### M2. Add 3 per-booster SKUs + combo pack
 
@@ -147,7 +171,10 @@ never connected the wires.
   - `shuffle_pack_5` @ $1.99
   - (`booster_crate` stays as the $4.99 trio)
 - **User-side:** register the 3 new SKUs in Play Console.
-- **Status:** CONFIRMED_GAP. Royal Match ships 6–8 booster-specific SKUs.
+- **Status:** ✅ SHIPPED (code). All 3 SKUs added to `shopProducts.ts`
+  and `IAPProductId` union. **User-side blocker:** `wordfall_wildcard_pack_5`,
+  `wordfall_spotlight_pack_5`, `wordfall_shuffle_pack_5` still need to
+  be registered in Play Console before the SKUs can be purchased.
 
 ### M3. Evaluate `targetSegments` in A/B assignment
 
@@ -162,7 +189,11 @@ never connected the wires.
   is set, check whether any of the player's segments (spending,
   engagement, skill, motivation) match. If none match, return
   `null` (not assigned). ~10 lines.
-- **Status:** CONFIRMED_GAP.
+- **Status:** ✅ SHIPPED. `getAssignedVariant()` now accepts
+  `segmentsForTargeting: readonly string[]` and returns the control
+  variant when `targetSegments` is set and doesn't intersect.
+  `useExperiment()` flattens `player.segments` and passes them
+  automatically. Commit: `Tier 2 monetization wave: M1 + M2 + M3`.
 
 ---
 
@@ -180,7 +211,12 @@ never connected the wires.
   has the fields — just missing the reader. Build a `ClubBrowserScreen`
   with filter chips + list + "Join" CTA that calls the existing
   `joinClub(clubId)` path.
-- **Status:** CONFIRMED_GAP. The biggest single social retention lift.
+- **Status:** ✅ SHIPPED. `firestoreService.listPublicClubs({ maxMembers?,
+  minWeeklyScore?, limit })` added (ordered by `weeklyScore` desc). The
+  existing `ClubScreen.renderNoClub()` now includes a "Browse clubs"
+  section with Refresh button, displaying each club's name / description /
+  member count / weekly score + a JOIN CTA that reuses the existing
+  `onJoinClub(id)` handler.
 
 ### S2. HTTPS universal referral links
 
@@ -198,8 +234,11 @@ never connected the wires.
   (`wordfallgamesite/`) to bounce `/r/:code` either to the app (via App
   Link) or to the Play Store with the code stored in a deferred
   deep-link cookie.
-- **Status:** CONFIRMED_GAP (infrastructure exists, the builder doesn't
-  emit the URL).
+- **Status:** ✅ SHIPPED. `buildReferralLink()` now returns
+  `https://wordfallgame.app/r/{code}`. The parser in `parseDeepLink()`
+  handles the short `/r/{code}` path as well as the legacy
+  `wordfall://referral/{code}`. The custom-scheme builder is still
+  available as `buildReferralSchemeLink()` for callers that need it.
 
 ### MG1. Tier-50 Season Pass cinematic ceremony
 
@@ -214,8 +253,11 @@ never connected the wires.
   `SeasonPassCompleteCeremony` component modeled on
   `PrestigeResetCeremony` (full-screen, sparkle field, legendary set
   reveal).
-- **Status:** CONFIRMED_GAP. `CeremonyRouter` has no `pass_complete` /
-  `season_complete` / `tier_50` case.
+- **Status:** ✅ SHIPPED. New `CeremonyItem.type` variant
+  `'season_pass_complete'`; new `SeasonPassCompleteCeremony` component
+  modeled on `PrestigeResetCeremony`; routed through `CeremonyRouter`
+  alongside the existing 20 cases. `SeasonPassScreen.handleClaim()`
+  queues the ceremony when `tier === MAX_SEASON_TIER`.
 
 ### MG2. Event leaderboard UI
 
@@ -229,7 +271,12 @@ never connected the wires.
   `events/{eventId}/scores` (new collection, same shape as
   `dailyScores`). Mount it inside EventScreen between the progress bar
   and the tier rewards. Add 1 Firestore index.
-- **Status:** CONFIRMED_GAP.
+- **Status:** ✅ SHIPPED. New `submitEventScore` + `getEventLeaderboard`
+  in `firestore.ts`; new `EventLeaderboardCard` in
+  `src/components/events/`; mounted per active event inside EventScreen;
+  `useRewardWiring.handleComplete()` submits each puzzle score to every
+  active event's scope via `eventManager.getActiveEvents()`. Firestore
+  rules extended with `events/{eventId}/scores/{userId}` match block.
 
 ### MG3. Animated legendary frame glow
 
@@ -241,7 +288,11 @@ never connected the wires.
   avatar with an Animated.View driven by `useSharedValue` +
   `withRepeat(withSequence(...))` that pulses opacity 0.6 → 1.0 and
   scale 1.0 → 1.04 over ~1400ms. Respect `useReduceMotion()`.
-- **Status:** CONFIRMED_GAP.
+- **Status:** ✅ SHIPPED. `ProfileScreen.tsx` wraps the avatar in an
+  `Animated.View` driven by `glowPulse` shared value running a
+  `withRepeat(withSequence(withTiming 700ms, withTiming 700ms), -1)`
+  cycle. Scale 1.00 ↔ 1.04 and shadow opacity 0.6 ↔ 1.0. Static when
+  `useReduceMotion()` is true or rarity !== legendary.
 
 ---
 
@@ -258,7 +309,10 @@ never connected the wires.
   callback (already exists for `setFallActive(false)`), call
   `gravityLandHaptic()`. Respect the existing `hapticsEnabled` setting
   and `reduceMotion` flag. One line.
-- **Status:** CONFIRMED_GAP. Dead code today.
+- **Status:** ✅ SHIPPED. Now called in the
+  `Animated.parallel(animations).start()` callback at
+  `GameScreen.tsx:1272`. Respects global `hapticsEnabled` setting
+  enforced inside the haptics service.
 
 ### C2. Time Pressure 30s / 10s warnings
 
@@ -271,7 +325,12 @@ never connected the wires.
 - **Work:** add a `useEffect` that fires a visual pulse + haptic (and
   SFX slot, which stays silent on synth until real audio ships) when
   `remainingSeconds` crosses 30 and 10.
-- **Status:** CONFIRMED_GAP.
+- **Status:** ✅ SHIPPED. `TimerDisplay` uses `warned30sRef` /
+  `warned10sRef` one-shot guards; both reset when `totalSeconds`
+  changes (new puzzle). Each crossing fires `errorHaptic()` +
+  `soundManager.playSound('timerWarningNNs')` (silent on synth, live
+  on real audio delivery) + a coral flash overlay driven by
+  `flashAnim` withSequence 0→1 (120ms) → 0 (500ms).
 
 ### P1. Onboarding economy / social education
 
@@ -285,8 +344,9 @@ never connected the wires.
   currencies + their acquisition paths, and a CTA to "Join a Club
   for free rewards" that routes to the Club Browser (see S1). Keep it
   under 10 seconds of screen time.
-- **Status:** REAL GAP (noted by final verification agent). Moves
-  first-purchase conversion + D2 retention.
+- **Status:** ✅ SHIPPED. New `economy_primer` phase between `celebrate`
+  and onComplete. Renders 3 icon+copy rows (coins / gems / clubs) with
+  a single "GOT IT" CTA. Deliberately <10s of screen time.
 
 ### P2. Custom nav transitions
 
@@ -297,7 +357,10 @@ never connected the wires.
 - **Work:** add a `cardStyleInterpolator` that uses a spring for Home
   ↔ Game and slide-from-right for Profile. Respect `useReduceMotion`.
   ~30 lines.
-- **Status:** CONFIRMED_GAP.
+- **Status:** ✅ SHIPPED. New `cardSpringFadeInterpolator` in
+  `MainNavigator.tsx` plus open/close `TransitionSpec` (spring stiffness
+  180 damping 22 for push, 220ms cubic-out for pop). React Navigation
+  honors OS reduce-motion automatically.
 
 ---
 
@@ -360,17 +423,24 @@ completeness.)
 
 ---
 
-## Estimated effort to 9/10
+## Shipped status (2026-04-22)
 
-| Tier | Work | Engineering time |
-|------|------|------------------|
-| Tier 1 (retention) | R1–R7 | 5–7 days |
-| Tier 2 (monetization) | M1–M3 | 2 days |
-| Tier 3 (social + ceremony) | S1, S2, MG1, MG2, MG3 | 4–5 days |
-| Tier 4 (feel polish) | C1, C2, P1, P2 | 1–2 days |
-| **Total** | 18 items | **~12–16 engineering days** |
+All 18 Tier 1–4 code gaps landed on branch
+`claude/assess-wordfall-launch-readiness-VzyDY`:
 
-Tier 5 is user-side + content — outside the engineering total.
+| Tier | Items | Status |
+|------|-------|--------|
+| Tier 1 (retention) | R1 R2 R3 R4 R5 R6 R7 | ✅ all shipped |
+| Tier 2 (monetization) | M1 M2 M3 | ✅ all shipped |
+| Tier 3 (social + ceremony) | S1 S2 MG1 MG2 MG3 | ✅ all shipped |
+| Tier 4 (feel polish) | C1 C2 P1 P2 | ✅ all shipped |
+| Tier 5 (user-side / content) | U1 U2 U3 U4 | ⏳ outside engineering |
+
+**Verify before merge:** install the dev-client APK, smoke-test the
+retention pipeline (streak break + restore), the club browser, the
+tier-50 season pass ceremony, and the event leaderboard. Typechecking
+is unaffected (no new TS errors introduced). Run `npm test` to confirm
+the full suite still passes.
 
 ## What this list deliberately leaves out
 
