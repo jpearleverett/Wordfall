@@ -82,6 +82,18 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   const [searchText, setSearchText] = useState('');
   const [createName, setCreateName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  // S1 in launch_blockers.md: browse public clubs alongside join-by-code.
+  const [browseList, setBrowseList] = useState<
+    Array<{
+      id: string;
+      name: string;
+      description: string;
+      memberCount: number;
+      maxMembers: number;
+      weeklyScore: number;
+    }>
+  >([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
 
   const { user } = useAuth();
   const [chatMessages, setChatMessages] = useState<ClubMessage[]>([]);
@@ -116,6 +128,37 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     });
     return () => { cancelled = true; };
   }, [user?.uid]);
+
+  // S1: populate the club browser when the player has no club joined.
+  // Only runs once on no-club entry; the Refresh button re-fetches on demand.
+  useEffect(() => {
+    if (clubId) return;
+    if (!firestoreService.isAvailable()) return;
+    let cancelled = false;
+    setBrowseLoading(true);
+    firestoreService
+      .listPublicClubs({ limit: 20 })
+      .then((clubs) => {
+        if (!cancelled) setBrowseList(clubs);
+      })
+      .finally(() => {
+        if (!cancelled) setBrowseLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clubId]);
+
+  const refreshBrowseList = useCallback(async () => {
+    if (!firestoreService.isAvailable()) return;
+    setBrowseLoading(true);
+    try {
+      const clubs = await firestoreService.listPublicClubs({ limit: 20 });
+      setBrowseList(clubs);
+    } finally {
+      setBrowseLoading(false);
+    }
+  }, []);
 
   const handleMessageLongPress = useCallback(
     (message: ClubMessage) => {
@@ -383,6 +426,56 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           </TouchableOpacity>
         )}
       </View>
+
+      {/* S1: Browse public clubs — appears when Firestore is available. */}
+      {firestoreService.isAvailable() && (
+        <View style={styles.searchSection}>
+          <View style={styles.browseHeaderRow}>
+            <Text style={styles.sectionTitle}>Browse clubs</Text>
+            <TouchableOpacity
+              onPress={refreshBrowseList}
+              disabled={browseLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh club list"
+            >
+              <Text style={styles.browseRefresh}>
+                {browseLoading ? '...' : 'Refresh'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {browseList.length === 0 && !browseLoading && (
+            <Text style={styles.browseEmpty}>
+              No public clubs available right now. Try again in a bit, or
+              create your own below.
+            </Text>
+          )}
+          {browseList.map((c) => (
+            <TouchableOpacity
+              key={c.id}
+              style={styles.browseCard}
+              onPress={() => onJoinClub(c.id)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Join ${c.name} — ${c.memberCount} of ${c.maxMembers} members`}
+            >
+              <View style={styles.browseCardMain}>
+                <Text style={styles.browseCardName} numberOfLines={1}>
+                  {c.name}
+                </Text>
+                {c.description ? (
+                  <Text style={styles.browseCardDesc} numberOfLines={2}>
+                    {c.description}
+                  </Text>
+                ) : null}
+                <Text style={styles.browseCardMeta}>
+                  {c.memberCount}/{c.maxMembers} members · {c.weeklyScore.toLocaleString()} pts/wk
+                </Text>
+              </View>
+              <Text style={styles.browseCardCta}>JOIN</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Create */}
       <View style={styles.createSection}>
@@ -829,6 +922,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
     ...SHADOWS.glow(COLORS.accent),
+  },
+  // S1 club browser
+  browseHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  browseRefresh: {
+    color: COLORS.accent,
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    letterSpacing: 1,
+  },
+  browseEmpty: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    paddingVertical: 12,
+  },
+  browseCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(26,31,69,0.7)',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  browseCardMain: {
+    flex: 1,
+    marginRight: 12,
+  },
+  browseCardName: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontFamily: FONTS.bodySemiBold,
+    marginBottom: 2,
+  },
+  browseCardDesc: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontFamily: FONTS.bodyRegular,
+    lineHeight: 17,
+    marginBottom: 4,
+  },
+  browseCardMeta: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontFamily: FONTS.bodyRegular,
+  },
+  browseCardCta: {
+    color: COLORS.accent,
+    fontSize: 12,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1.5,
   },
   joinButtonText: {
     fontSize: 15,

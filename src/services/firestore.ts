@@ -844,6 +844,77 @@ class FirestoreService {
     }
   }
 
+  /**
+   * List public clubs that the player can browse + join (S1 in
+   * launch_blockers.md). Sorted by weeklyScore descending so active
+   * clubs appear first. Empty filter arguments match all clubs.
+   *
+   * @param opts.maxMembers     Cap on member count (excludes full clubs).
+   * @param opts.minWeeklyScore Minimum weekly score threshold.
+   * @param opts.limit          Max results to return (default 20).
+   * @returns Array of { id, name, description, memberCount, maxMembers,
+   *                    weeklyScore, ownerId } — safe subset for browsing.
+   */
+  async listPublicClubs(opts?: {
+    maxMembers?: number;
+    minWeeklyScore?: number;
+    limit?: number;
+  }): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    memberCount: number;
+    maxMembers: number;
+    weeklyScore: number;
+    ownerId: string;
+  }>> {
+    if (!this.enabled) return [];
+    try {
+      const pageSize = Math.max(1, Math.min(50, opts?.limit ?? 20));
+      // Order by weeklyScore descending — active clubs first. Firestore
+      // can only apply one inequality per query, so membership-cap
+      // filtering happens client-side after the read.
+      const clubsQuery = query(
+        collection(db, 'clubs'),
+        orderBy('weeklyScore', 'desc'),
+        firestoreLimit(pageSize * 2),
+      );
+      const snap = await getDocs(clubsQuery);
+      const out: Array<{
+        id: string;
+        name: string;
+        description: string;
+        memberCount: number;
+        maxMembers: number;
+        weeklyScore: number;
+        ownerId: string;
+      }> = [];
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data();
+        const memberCount = Number(data.memberCount ?? 0);
+        const maxMembers = Number(data.maxMembers ?? 30);
+        const weeklyScore = Number(data.weeklyScore ?? 0);
+        if (opts?.maxMembers && memberCount >= opts.maxMembers) continue;
+        if (memberCount >= maxMembers) continue; // full
+        if (opts?.minWeeklyScore !== undefined && weeklyScore < opts.minWeeklyScore) continue;
+        out.push({
+          id: docSnap.id,
+          name: String(data.name ?? 'Club'),
+          description: String(data.description ?? ''),
+          memberCount,
+          maxMembers,
+          weeklyScore,
+          ownerId: String(data.ownerId ?? ''),
+        });
+        if (out.length >= pageSize) break;
+      }
+      return out;
+    } catch (e) {
+      logFirestoreError('listPublicClubs', 'clubs', e);
+      return [];
+    }
+  }
+
   // ── Club Chat ──────────────────────────────────────────────────────────────
 
   /**
