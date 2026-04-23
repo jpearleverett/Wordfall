@@ -25,6 +25,19 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
   const tabCount = state.routes.length;
   const tabWidth = screenWidth / tabCount;
 
+  // Honor `tabBarStyle: { display: 'none' }` set by the focused screen via
+  // `navigation.getParent()?.setOptions(...)`. The default React Navigation
+  // tab bar respects this automatically; this is a custom tab bar, so we
+  // have to opt in. Used by `useHideTabBarOnFocus` to hide the bar during
+  // gameplay.
+  const focusedDescriptor = descriptors[state.routes[state.index]?.key];
+  const focusedTabBarStyle = focusedDescriptor?.options?.tabBarStyle as
+    | { display?: 'flex' | 'none' }
+    | undefined;
+  if (focusedTabBarStyle?.display === 'none') {
+    return null;
+  }
+
   const indicatorX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
