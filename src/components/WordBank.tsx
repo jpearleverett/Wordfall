@@ -483,16 +483,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     // Leave clear vertical space so the wrap-panel's bottom row isn't
     // visually covered by the HUD drop shadow above or the grid's neon
-    // frame glow below — both extend beyond their own layout bounds and
-    // would otherwise bleed into the chips' band. Grid.tsx's shadowWrap
-    // casts radius 16–20 above its top edge, so the bottom margin needs
-    // at least that much clearance for the chips to sit on top cleanly.
-    marginTop: 6,
-    marginBottom: 22,
-    // zIndex + elevation lift the chip band above the grid's shadow
-    // (flex siblings — RN treats later siblings as visually on top by
-    // default, but the neon shadow is painted outward so an explicit
-    // stacking hint keeps chips crisp).
+    // frame glow below. Grid.tsx mounts three decorative layers
+    // (outerGlow +12px, neonFrameWrap +16px, shadowRadius 16) absolutely
+    // outside the frame's layout box, so gridArea's measurable top edge
+    // sits ~22px below its visual top. The chip band needs clearance
+    // past that bleed — 40px is comfortable.
+    marginTop: 8,
+    marginBottom: 40,
+    // zIndex + elevation keep the chip band painted on top of the
+    // grid's shadow if it ever extends this far up.
     zIndex: 2,
     elevation: 2,
   },

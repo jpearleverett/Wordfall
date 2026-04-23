@@ -358,7 +358,10 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Info-architecture changes default ON (ship state) — flip OFF remotely to
   // revert in place. Tile/typography changes default OFF — flip ON after a
   // 48h production soak.
-  hideTabBarDuringPlayEnabled: true,
+  // `hideTabBarDuringPlayEnabled` defaulted OFF after device test — the
+  // user wanted the bottom tab bar (Home / Play / Collections / Library /
+  // Profile) to stay visible during play. Feature still wired for A/B.
+  hideTabBarDuringPlayEnabled: false,
   gameScreenChapterInlineEnabled: true,
   wordBankExpandedPanelEnabled: true,
   gameBackgroundDimmedEnabled: true,
