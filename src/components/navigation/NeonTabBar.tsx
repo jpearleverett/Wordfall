@@ -38,13 +38,16 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
     }).start();
   }, [state.index, tabWidth, indicatorX]);
 
-  // Honor `tabBarStyle: { display: 'none' }` set by the focused screen via
-  // `navigation.getParent()?.setOptions(...)`. The default React Navigation
-  // tab bar respects this automatically; this is a custom tab bar, so we
-  // have to opt in. Used by `useHideTabBarOnFocus` to hide the bar during
-  // gameplay. This check MUST come after every hook (Rules of Hooks) —
-  // doing the early-return first drops the useRef/useEffect from the
-  // render tree and React throws "Rendered fewer hooks than expected".
+  // Honor `tabBarStyle: { display: 'none' }` resolved onto the focused tab
+  // descriptor. The default React Navigation tab bar respects this
+  // automatically; this is a custom tab bar, so we have to opt in. Set
+  // via the `hideTabBarOnGame` helper in App.tsx which keys off
+  // `getFocusedRouteNameFromRoute` — when the focused nested route is
+  // `Game`, the tab screen's options gain `tabBarStyle.display: 'none'`
+  // and we return null here. This check MUST come after every hook
+  // (Rules of Hooks) — doing the early-return first drops the
+  // useRef/useEffect from the render tree and React throws
+  // "Rendered fewer hooks than expected".
   const focusedDescriptor = descriptors[state.routes[state.index]?.key];
   const focusedTabBarStyle = focusedDescriptor?.options?.tabBarStyle as
     | { display?: 'flex' | 'none' }

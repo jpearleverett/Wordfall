@@ -71,7 +71,6 @@ import { FailBreatherOffer, BREATHER_COOLDOWN_MS } from '../components/FailBreat
 import { GameFlashes } from './game/GameFlashes';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
-import { useHideTabBarOnFocus } from '../hooks/useHideTabBarOnFocus';
 
 interface GameScreenProps {
   board: Board;
@@ -432,7 +431,6 @@ function GameScreenImpl({
   nextUnlockPreview = null,
 }: GameScreenProps) {
   const { t } = useTranslation();
-  useHideTabBarOnFocus();
   // Narrow zustand subscriptions — re-render only when the slice actually
   // read changes. usePlayer() / useEconomy() would re-render this 1700-line
   // component on every economy/player mutation across the app.

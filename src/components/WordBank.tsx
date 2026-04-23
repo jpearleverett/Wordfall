@@ -568,7 +568,12 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: 'rgba(200,77,255,0.22)',
+    // Bumped from 0.22 to 0.55 — the earlier dim-backdrop shipped made
+    // the previous ~22% border almost invisible against the darker
+    // gradient, so the wrap panel rendered but the chips looked like
+    // empty whitespace.
+    borderColor: 'rgba(200,77,255,0.55)',
+    backgroundColor: 'rgba(26, 10, 46, 0.55)',
     overflow: 'visible',
     gap: 4,
     shadowColor: '#000',

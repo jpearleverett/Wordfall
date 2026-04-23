@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useFonts, loadAsync as loadFontAsync } from 'expo-font';
@@ -352,6 +352,20 @@ function detectDifficultyTransition(oldLevel: number, newLevel: number): { from:
   return null;
 }
 
+// Hide the global tab bar whenever the focused nested route inside a tab
+// stack is 'Game'. This is the documented React-Navigation pattern for
+// custom tab bars — see `NeonTabBar` which reads the resolved tabBarStyle
+// off the descriptor options. Gated by the `hideTabBarDuringPlayEnabled`
+// Remote Config flag so production can disable the behavior remotely.
+function hideTabBarOnGame({ route }: { route: { name: string; state?: any } }) {
+  if (!getRemoteBoolean('hideTabBarDuringPlayEnabled')) return {};
+  const focused = getFocusedRouteNameFromRoute(route as any);
+  if (focused === 'Game') {
+    return { tabBarStyle: { display: 'none' as const } };
+  }
+  return {};
+}
+
 // Main Tab Navigator with progressive tab unlocking
 function MainTabs() {
   const insets = useSafeAreaInsets();
@@ -381,16 +395,18 @@ function MainTabs() {
       <Tab.Screen
         name="Home"
         component={HomeStackScreen}
-        options={{
+        options={({ route }) => ({
           tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon iconName={focused ? 'home' : 'home-outline'} focused={focused} />,
-        }}
+          ...hideTabBarOnGame({ route }),
+        })}
       />
       <Tab.Screen
         name="Play"
         component={PlayStackScreen}
-        options={{
+        options={({ route }) => ({
           tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon iconName={focused ? 'game-controller' : 'game-controller-outline'} focused={focused} />,
-        }}
+          ...hideTabBarOnGame({ route }),
+        })}
       />
       {hasFeature('tab_collections') && (
         <Tab.Screen
