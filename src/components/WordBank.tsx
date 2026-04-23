@@ -3,6 +3,7 @@ import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WordPlacement } from '../types';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
+import { getRemoteBoolean } from '../services/remoteConfig';
 
 interface WordChipProps {
   wordPlacement: WordPlacement;
@@ -20,16 +21,27 @@ interface WordChipProps {
    * "one away from winning" moment.
    */
   isLastRemaining: boolean;
+  /**
+   * Tier 6 B7 — rising edge of this prop fires a one-shot overshoot + glow so
+   * the visual coordinates with the BGM swap + haptic tension moment. This is
+   * distinct from `isLastRemaining`: that stays true for the whole final-word
+   * phase (driving the gentle loop), while `tensionActive` transitions false →
+   * true exactly once when the player enters the tension state.
+   */
+  tensionActive: boolean;
   index: number;
 }
 
-const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValidWord, isLastRemaining, index }: WordChipProps) {
+const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValidWord, isLastRemaining, tensionActive, index }: WordChipProps) {
   const foundAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const lastRemainingAnim = useRef(new Animated.Value(1)).current;
+  // Tier 6 B7 — coordinated one-shot pulse on tension rising edge.
+  const tensionPulseAnim = useRef(new Animated.Value(0)).current;
   const wasFound = useRef(false);
   const lastRemainingLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const tensionFiredRef = useRef(false);
 
   useEffect(() => {
     if (wordPlacement.found && !wasFound.current) {
@@ -66,6 +78,36 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
       ]).start();
     }
   }, [wordPlacement.found]);
+
+  // Tier 6 B7 — fire a one-shot overshoot + glow when `tensionActive` rises,
+  // coordinating the visual with the BGM swap + haptic moment in GameScreen.
+  // Only fires on the chip that is currently `isLastRemaining` (so found
+  // chips and earlier-resolved words stay calm) and only once per puzzle
+  // (tensionFiredRef).
+  useEffect(() => {
+    if (!tensionActive) {
+      tensionFiredRef.current = false;
+      tensionPulseAnim.setValue(0);
+      return;
+    }
+    if (!isLastRemaining || wordPlacement.found) return;
+    if (tensionFiredRef.current) return;
+    if (!getRemoteBoolean('lastWordTensionPulseEnabled')) return;
+    tensionFiredRef.current = true;
+    Animated.sequence([
+      Animated.timing(tensionPulseAnim, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: false, // drives shadowOpacity which isn't native-driver-safe
+      }),
+      Animated.spring(tensionPulseAnim, {
+        toValue: 0.35,
+        friction: 5,
+        tension: 160,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [tensionActive, isLastRemaining, wordPlacement.found]);
 
   useEffect(() => {
     // Last-remaining-word pulse: loop scale 1.0 → 1.08 → 1.0 while this is the
@@ -132,6 +174,18 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
     return null;
   };
 
+  // Tier 6 B7 — tensionPulseAnim drives the one-shot overshoot (0→1.0 maps to
+  // scale +0.17 and shadowOpacity 0→0.8, settling to a +0.06 resting scale
+  // and 0.3 shadowOpacity for the tension duration).
+  const tensionScale = tensionPulseAnim.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [1, 1.06, 1.17],
+  });
+  const tensionShadowOpacity = tensionPulseAnim.interpolate({
+    inputRange: [0, 0.35, 1],
+    outputRange: [0, 0.3, 0.8],
+  });
+
   return (
     <Animated.View
       style={[
@@ -140,8 +194,12 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         isLastRemaining && !wordPlacement.found && styles.wordChipLastRemaining,
         {
           transform: [
-            { scale: Animated.multiply(scaleAnim, lastRemainingAnim) },
+            { scale: Animated.multiply(Animated.multiply(scaleAnim, lastRemainingAnim), tensionScale) },
           ],
+          shadowColor: COLORS.gold,
+          shadowOpacity: tensionShadowOpacity as unknown as number,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 0 },
         },
       ]}
       accessibilityLabel={`${wordPlacement.word}, ${wordPlacement.found ? 'found' : 'not found'}${isLastRemaining && !wordPlacement.found ? ', last remaining' : ''}`}
@@ -203,9 +261,17 @@ interface WordBankProps {
   words: WordPlacement[];
   currentWord: string;
   isValidWord: boolean;
+  /**
+   * Tier 6 B7 — mirrors GameScreen's last-word tension trigger. Set to true
+   * when exactly one word remains so the final chip can fire a one-shot
+   * overshoot + gold-glow coordinated with the BGM swap + haptic. Defaults
+   * to false when the prop isn't passed (no behavior change for older
+   * callers).
+   */
+  tensionActive?: boolean;
 }
 
-export const WordBank = React.memo(function WordBank({ words, currentWord, isValidWord }: WordBankProps) {
+export const WordBank = React.memo(function WordBank({ words, currentWord, isValidWord, tensionActive }: WordBankProps) {
   const wordAnim = useRef(new Animated.Value(0)).current;
   const prevWord = useRef('');
 
@@ -306,6 +372,7 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
                 isActive={isActive}
                 isValidWord={chipIsValid}
                 isLastRemaining={isLastRemaining}
+                tensionActive={!!tensionActive}
                 index={index}
               />
             );

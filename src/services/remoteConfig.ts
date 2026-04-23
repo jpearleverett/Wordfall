@@ -59,6 +59,8 @@ export interface RemoteConfigValues {
   dynamicOffersEnabled: boolean;
   /** Tier 6 B2 — queue the first-purchase-offer modal post-onboarding. */
   firstSessionStarterBundleEnabled: boolean;
+  /** Tier 6 B7 — one-shot chip-pulse + gold glow on last-word tension edge. */
+  lastWordTensionPulseEnabled: boolean;
   // Phase 4B — hard-energy A/B (default OFF; flip on if soft-launch D7 sags)
   hardEnergyEnabled: boolean;
   // Phase 0 — pricing + LiveOps override hooks (Phase 4D)
@@ -225,6 +227,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   dynamicOffersEnabled: true,
   // Tier 6 B2 — queue first-purchase offer on first HomeScreen arrival.
   firstSessionStarterBundleEnabled: true,
+  // Tier 6 B7 — last-word tension chip pulse; kill-switch if reduce-motion
+  // compliance flags any issue post-launch.
+  lastWordTensionPulseEnabled: true,
   // Phase 4B — hard-energy off until soft-launch cohort data justifies it
   hardEnergyEnabled: false,
   // Phase 0 / 4D LiveOps overrides — empty strings/0 mean "use built-ins"
