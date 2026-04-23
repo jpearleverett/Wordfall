@@ -3,11 +3,12 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, interpolate } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
+import { COLORS, FONTS, GRADIENTS, MODE_CONFIGS } from '../constants';
 import { GameMode } from '../types';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { getChapterForLevel } from '../data/chapters';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { useRoundedFontReady } from '../services/fontReady';
 
 interface GameHeaderProps {
   level: number;
@@ -88,6 +89,9 @@ export const GameHeader = React.memo(function GameHeader({
         : 1;
   const showStarsPips = getRemoteBoolean('liveStarsPipsEnabled');
   const showFlawlessChip = getRemoteBoolean('flawlessStreakHudChipEnabled') && flawlessStreak > 0;
+  const roundedReady = useRoundedFontReady();
+  const useRoundedFont = getRemoteBoolean('roundedDisplayFontEnabled') && roundedReady;
+  const labelFontOverride = useRoundedFont ? { fontFamily: FONTS.displayRounded } : null;
   const flawlessScale = useSharedValue(1);
   useEffect(() => {
     if (flawlessStreak > 0) {
@@ -170,7 +174,7 @@ export const GameHeader = React.memo(function GameHeader({
               {/* Label overlay */}
               <View style={styles.batteryLabelOverlay}>
                 <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
-                <Text style={styles.batteryText} numberOfLines={1}>{modeLabel}</Text>
+                <Text style={[styles.batteryText, labelFontOverride]} numberOfLines={1}>{modeLabel}</Text>
                 <View style={styles.progressDivider} />
                 <Text style={[styles.progressCount, { color: modeConfig.color }]}>
                   {foundWords}/{totalWords}

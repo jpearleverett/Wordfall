@@ -871,6 +871,7 @@ export const EVENT_SCHEDULE = {
 // Fonts: SpaceGrotesk (display) + Inter (body)
 export const FONTS = {
   display: 'SpaceGrotesk_700Bold',
+  displayRounded: 'Baloo2_800ExtraBold',
   bodyRegular: 'Inter_400Regular',
   bodyMedium: 'Inter_500Medium',
   bodySemiBold: 'Inter_600SemiBold',
