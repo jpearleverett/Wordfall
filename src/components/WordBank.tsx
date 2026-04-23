@@ -481,6 +481,20 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingVertical: 6,
+    // Leave clear vertical space so the wrap-panel's bottom row isn't
+    // visually covered by the HUD drop shadow above or the grid's neon
+    // frame glow below — both extend beyond their own layout bounds and
+    // would otherwise bleed into the chips' band. Grid.tsx's shadowWrap
+    // casts radius 16–20 above its top edge, so the bottom margin needs
+    // at least that much clearance for the chips to sit on top cleanly.
+    marginTop: 6,
+    marginBottom: 22,
+    // zIndex + elevation lift the chip band above the grid's shadow
+    // (flex siblings — RN treats later siblings as visually on top by
+    // default, but the neon shadow is painted outward so an explicit
+    // stacking hint keeps chips crisp).
+    zIndex: 2,
+    elevation: 2,
   },
   currentWordContainer: {
     alignItems: 'center',
@@ -568,7 +582,12 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: 'rgba(200,77,255,0.22)',
+    // Bumped from 0.22 to 0.55 — the earlier dim-backdrop shipped made
+    // the previous ~22% border almost invisible against the darker
+    // gradient, so the wrap panel rendered but the chips looked like
+    // empty whitespace.
+    borderColor: 'rgba(200,77,255,0.55)',
+    backgroundColor: 'rgba(26, 10, 46, 0.55)',
     overflow: 'visible',
     gap: 4,
     shadowColor: '#000',
