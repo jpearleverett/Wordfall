@@ -271,6 +271,55 @@ interface WordBankProps {
   tensionActive?: boolean;
 }
 
+/**
+ * Wordscapes-style fill-in dash row. Renders one slot per letter of the
+ * target word; slots fill from the player's current trace as they match
+ * the word's prefix, then strike through on match. Found words stay
+ * visible with the letters + strikethrough + ✓.
+ *
+ * Used when `crosswordDashRevealEnabled` RC flag is on. Defaults OFF so
+ * the visual change is opt-in and A/B-able.
+ */
+interface DashRowProps {
+  word: string;
+  found: boolean;
+  prefixLen: number;
+  isValidWord: boolean;
+}
+const DashRow = React.memo(function DashRow({ word, found, prefixLen, isValidWord }: DashRowProps) {
+  const letters = word.toUpperCase().split('');
+  const active = !found && prefixLen > 0;
+  return (
+    <View style={[dashStyles.row, active && dashStyles.rowActive, found && dashStyles.rowFound]}>
+      {letters.map((ch, i) => {
+        const revealed = found || i < prefixLen;
+        return (
+          <View
+            key={i}
+            style={[
+              dashStyles.slot,
+              revealed && dashStyles.slotRevealed,
+              found && dashStyles.slotFound,
+              active && isValidWord && i === prefixLen - 1 && dashStyles.slotValid,
+            ]}
+          >
+            <Text
+              style={[
+                dashStyles.slotText,
+                revealed && dashStyles.slotTextRevealed,
+                found && dashStyles.slotTextFound,
+              ]}
+            >
+              {revealed ? ch : ''}
+            </Text>
+          </View>
+        );
+      })}
+      {found && <Text style={dashStyles.checkmark}>✓</Text>}
+    </View>
+  );
+});
+
 export const WordBank = React.memo(function WordBank({ words, currentWord, isValidWord, tensionActive }: WordBankProps) {
   const wordAnim = useRef(new Animated.Value(0)).current;
   const prevWord = useRef('');
@@ -283,6 +332,12 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
     getRemoteBoolean('wordBankExpandedPanelEnabled') &&
     windowHeight >= 700 &&
     words.length <= 10;
+  // Wordscapes-style fill-in dashes instead of chip pills. Only renders when
+  // we have the vertical budget (expanded-panel conditions) so small devices
+  // still get the compact horizontal scroll.
+  const useDashReveal =
+    getRemoteBoolean('crosswordDashRevealEnabled') &&
+    useExpandedPanel;
 
   // Animate current word text on change
   useEffect(() => {
@@ -354,8 +409,30 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
         </View>
       </View>
 
-      {/* Target words - wrapped panel (default) or horizontal scroll fallback */}
-      {(() => {
+      {/* Target words - dash-reveal (opt-in), wrapped chips, or horizontal scroll fallback */}
+      {useDashReveal ? (
+        <View style={dashStyles.panel}>
+          {words.map((wordPlacement, index) => {
+            const wordUpper = wordPlacement.word.toUpperCase();
+            const currentUpper = currentWord.toUpperCase();
+            const prefixLen =
+              !wordPlacement.found && currentUpper.length > 0 && wordUpper.startsWith(currentUpper)
+                ? currentUpper.length
+                : 0;
+            const chipIsValid =
+              !wordPlacement.found && currentUpper === wordUpper && isValidWord;
+            return (
+              <DashRow
+                key={`${wordPlacement.word}-${index}`}
+                word={wordPlacement.word}
+                found={wordPlacement.found}
+                prefixLen={prefixLen}
+                isValidWord={chipIsValid}
+              />
+            );
+          })}
+        </View>
+      ) : (() => {
         const unfoundCount = words.filter(w => !w.found).length;
         const chips = words.map((wordPlacement, index) => {
           // Compute isActive here so we pass a stable boolean to WordChip.
@@ -599,5 +676,71 @@ const styles = StyleSheet.create({
     color: COLORS.purpleLight,
     fontSize: 9,
     fontFamily: 'SpaceGrotesk_700Bold',
+  },
+});
+
+const dashStyles = StyleSheet.create({
+  panel: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    gap: 6,
+    alignItems: 'center',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 77, 255, 0.15)',
+    backgroundColor: 'rgba(10, 0, 21, 0.35)',
+  },
+  rowActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: 'rgba(255, 45, 149, 0.10)',
+  },
+  rowFound: {
+    borderColor: COLORS.green,
+    backgroundColor: 'rgba(0, 255, 135, 0.08)',
+    opacity: 0.85,
+  },
+  slot: {
+    width: 18,
+    height: 22,
+    borderRadius: 3,
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slotRevealed: {
+    borderBottomColor: 'rgba(255,255,255,0.6)',
+  },
+  slotValid: {
+    borderBottomColor: COLORS.green,
+  },
+  slotFound: {
+    borderBottomColor: COLORS.green,
+  },
+  slotText: {
+    fontSize: 13,
+    fontFamily: 'SpaceGrotesk_700Bold',
+    color: COLORS.textPrimary,
+    letterSpacing: 0.4,
+  },
+  slotTextRevealed: {
+    color: COLORS.textPrimary,
+  },
+  slotTextFound: {
+    color: COLORS.green,
+    textDecorationLine: 'line-through',
+  },
+  checkmark: {
+    marginLeft: 4,
+    color: COLORS.green,
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
   },
 });

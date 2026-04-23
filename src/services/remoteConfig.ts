@@ -196,6 +196,12 @@ export interface RemoteConfigValues {
   letterVowelTintEnabled: boolean;
   /** iOS-only selected-tile shadow bump (Android elevation bump skipped due to flicker). */
   selectedTileShadowBumpEnabled: boolean;
+  /** Swap the gameplay AmbientBackdrop palette to the chapter's wing palette. */
+  chapterThemedBackdropEnabled: boolean;
+  /** Render the find-list as Wordscapes-style fill-in dashes instead of chip pills. */
+  crosswordDashRevealEnabled: boolean;
+  /** Show a small Reanimated mascot at the top of the gameplay HUD that reacts to finds. */
+  gameplayMascotEnabled: boolean;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -361,6 +367,11 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   roundedDisplayFontEnabled: false,
   letterVowelTintEnabled: false,
   selectedTileShadowBumpEnabled: false,
+  // Puzzle-screen v2 follow-ups (April 2026 — default OFF for first release,
+  // each gated so we can A/B or kill-switch in prod).
+  chapterThemedBackdropEnabled: false,
+  crosswordDashRevealEnabled: false,
+  gameplayMascotEnabled: false,
 };
 
 // ---------------------------------------------------------------------------

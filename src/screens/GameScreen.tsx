@@ -56,8 +56,10 @@ import {
 import { analytics } from '../services/analytics';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
 import BoosterComboBanner from '../components/BoosterComboBanner';
+import GameplayMascot from '../components/GameplayMascot';
 import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCombos';
 import { getTheme } from '../data/cosmetics';
+import { getChapterForLevel, getChapterPalette } from '../data/chapters';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { adManager, AdRewardType } from '../services/ads';
@@ -1877,12 +1879,20 @@ function GameScreenImpl({
     return dimmed;
   }, [spotlightActive, spotlightLetters, grid]);
 
+  // Per-chapter backdrop palette. RC-gated so we can kill the feature
+  // remotely if a particular palette clashes with chapter art. When the
+  // flag is off, `undefined` passes through and AmbientBackdrop renders
+  // its default synthwave stops.
+  const chapterPaletteOverride = getRemoteBoolean('chapterThemedBackdropEnabled')
+    ? getChapterPalette(getChapterForLevel(level))
+    : undefined;
+
   return (
     <GameStoreContext.Provider value={store}>
     <React.Profiler id="GameScreen" onRender={profilerOnRender}>
     <Animated.View style={shakeContainerStyle}>
     <SafeAreaView style={styles.container}>
-      <AmbientBackdrop variant="game" />
+      <AmbientBackdrop variant="game" colorOverride={chapterPaletteOverride} />
       {/* Mode intro banner - absolute overlay so it doesn't shift layout */}
       {showModeIntro && mode !== 'classic' && (
         <View style={styles.modeIntroOverlay} pointerEvents="none">
@@ -1911,6 +1921,12 @@ function GameScreenImpl({
           multiplier={comboMultiplierValue}
         />
       )}
+
+      <GameplayMascot
+        foundCount={foundWords}
+        tensionActive={totalWords - foundWords === 1}
+        flawlessStreak={flawlessStreakCurrent}
+      />
 
       <GameHeader
         level={level}
