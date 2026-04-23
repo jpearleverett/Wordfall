@@ -37,8 +37,16 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const lastRemainingAnim = useRef(new Animated.Value(1)).current;
-  // Tier 6 B7 — coordinated one-shot pulse on tension rising edge.
-  const tensionPulseAnim = useRef(new Animated.Value(0)).current;
+  // Tier 6 B7 — tension pulse split across two values so the bridge collision
+  // disappears: `tensionScaleAnim` runs on the native driver (so it can
+  // multiply cleanly into the native-driven scale chain), `tensionGlowAnim`
+  // stays JS-driven for shadowOpacity (which the native driver can't touch).
+  // Previously a single useNativeDriver:false value was multiplied into a
+  // useNativeDriver:true transform — that's the "Attempting to run JS driven
+  // animation on animated node that has been moved to native earlier" crash
+  // fired on the last-word transition.
+  const tensionScaleAnim = useRef(new Animated.Value(0)).current;
+  const tensionGlowAnim = useRef(new Animated.Value(0)).current;
   const wasFound = useRef(false);
   const lastRemainingLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const tensionFiredRef = useRef(false);
@@ -87,25 +95,24 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   useEffect(() => {
     if (!tensionActive) {
       tensionFiredRef.current = false;
-      tensionPulseAnim.setValue(0);
+      tensionScaleAnim.setValue(0);
+      tensionGlowAnim.setValue(0);
       return;
     }
     if (!isLastRemaining || wordPlacement.found) return;
     if (tensionFiredRef.current) return;
     if (!getRemoteBoolean('lastWordTensionPulseEnabled')) return;
     tensionFiredRef.current = true;
-    Animated.sequence([
-      Animated.timing(tensionPulseAnim, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: false, // drives shadowOpacity which isn't native-driver-safe
-      }),
-      Animated.spring(tensionPulseAnim, {
-        toValue: 0.35,
-        friction: 5,
-        tension: 160,
-        useNativeDriver: false,
-      }),
+    // Drive the two values in lockstep — same shape, different drivers.
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(tensionScaleAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.spring(tensionScaleAnim, { toValue: 0.35, friction: 5, tension: 160, useNativeDriver: true }),
+      ]),
+      Animated.sequence([
+        Animated.timing(tensionGlowAnim, { toValue: 1, duration: 180, useNativeDriver: false }),
+        Animated.spring(tensionGlowAnim, { toValue: 0.35, friction: 5, tension: 160, useNativeDriver: false }),
+      ]),
     ]).start();
   }, [tensionActive, isLastRemaining, wordPlacement.found]);
 
@@ -174,14 +181,14 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
     return null;
   };
 
-  // Tier 6 B7 — tensionPulseAnim drives the one-shot overshoot (0→1.0 maps to
-  // scale +0.17 and shadowOpacity 0→0.8, settling to a +0.06 resting scale
-  // and 0.3 shadowOpacity for the tension duration).
-  const tensionScale = tensionPulseAnim.interpolate({
+  // Tier 6 B7 — split tension drives. tensionScaleAnim feeds the native-driven
+  // scale chain; tensionGlowAnim feeds the JS-only shadowOpacity. Same shape,
+  // different runtimes — no bridge crossing.
+  const tensionScale = tensionScaleAnim.interpolate({
     inputRange: [0, 0.35, 1],
     outputRange: [1, 1.06, 1.17],
   });
-  const tensionShadowOpacity = tensionPulseAnim.interpolate({
+  const tensionShadowOpacity = tensionGlowAnim.interpolate({
     inputRange: [0, 0.35, 1],
     outputRange: [0, 0.3, 0.8],
   });
@@ -247,12 +254,6 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         </Animated.View>
       )}
 
-      {/* Letter count indicator with glass treatment */}
-      {!wordPlacement.found && (
-        <View style={styles.letterCount}>
-          <Text style={styles.letterCountText}>{wordPlacement.word.length}</Text>
-        </View>
-      )}
     </Animated.View>
   );
 });
@@ -325,19 +326,21 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
   const prevWord = useRef('');
   const { height: windowHeight } = useWindowDimensions();
   const foundCount = useMemo(() => words.filter(w => w.found).length, [words]);
-  // 2-row wrap panel only when vertical budget allows AND list size stays readable
-  // at two rows — otherwise keep the horizontal scroll fallback so small devices
-  // (iPhone SE) don't push the booster bar off-screen.
+  // Wrap chips into a multi-row panel by default. The earlier guard
+  // (`windowHeight >= 700 && words.length <= 10`) was too strict — even on
+  // a notched iPhone the wrap never triggered, so users still saw a
+  // horizontally-truncated list. We now drop the height guard (the grid
+  // auto-shrinks to absorb the extra wrapped row) and only fall back to
+  // horizontal scroll when the list is genuinely large (>14 words).
   const useExpandedPanel =
-    getRemoteBoolean('wordBankExpandedPanelEnabled') &&
-    windowHeight >= 700 &&
-    words.length <= 10;
-  // Wordscapes-style fill-in dashes instead of chip pills. Only renders when
-  // we have the vertical budget (expanded-panel conditions) so small devices
-  // still get the compact horizontal scroll.
+    getRemoteBoolean('wordBankExpandedPanelEnabled') && words.length <= 14;
+  // Wordscapes-style fill-in dashes are heavier vertically — only render when
+  // we both have the wrap layout AND a tall enough device, so iPhone SE
+  // doesn't get pushed.
   const useDashReveal =
     getRemoteBoolean('crosswordDashRevealEnabled') &&
-    useExpandedPanel;
+    useExpandedPanel &&
+    windowHeight >= 700;
 
   // Animate current word text on change
   useEffect(() => {

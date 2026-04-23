@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, interpolate } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, interpolate, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, MODE_CONFIGS } from '../constants';
@@ -9,6 +9,37 @@ import { LOCAL_IMAGES } from '../utils/localAssets';
 import { getChapterForLevel } from '../data/chapters';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { useRoundedFontReady } from '../services/fontReady';
+
+/**
+ * Floating "+N" callout that rises from the score on every word-found.
+ * Mounted with a fresh `key` per delta so each pop is its own animation
+ * instance. The parent schedules the unmount after the animation duration;
+ * no Reanimated-to-JS worklet callback needed.
+ */
+const SCORE_POP_DURATION_MS = 660;
+const ScorePop: React.FC<{ amount: number; color: string }> = ({ amount, color }) => {
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+  useEffect(() => {
+    opacity.value = withSequence(
+      withTiming(1, { duration: 80 }),
+      withTiming(1, { duration: 360 }),
+      withTiming(0, { duration: 220, easing: Easing.in(Easing.quad) }),
+    );
+    translateY.value = withTiming(-36, { duration: SCORE_POP_DURATION_MS, easing: Easing.out(Easing.quad) });
+    // fire-once on mount — new amounts arrive with a fresh key
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+  return (
+    <Animated.Text style={[scorePopStyles.text, style, { color, textShadowColor: color }]}>
+      +{amount}
+    </Animated.Text>
+  );
+};
 
 interface GameHeaderProps {
   level: number;
@@ -105,12 +136,27 @@ export const GameHeader = React.memo(function GameHeader({
     transform: [{ scale: flawlessScale.value }],
   }));
 
-  // Animate score pop on change
+  // Hero score: track previous to compute the +delta callout, and pop the
+  // score itself on every change. One callout slot — rapid finds replace.
+  const prevScoreRef = useRef(score);
+  const popKeyRef = useRef(0);
+  const [pop, setPop] = useState<{ amount: number; key: number } | null>(null);
   useEffect(() => {
+    const delta = score - prevScoreRef.current;
+    prevScoreRef.current = score;
+    if (delta <= 0) return;
     scoreScale.value = withSequence(
-      withTiming(1.15, { duration: 80 }),
-      withSpring(1, { damping: 8 }),
+      withTiming(1.18, { duration: 90 }),
+      withSpring(1, { damping: 7, stiffness: 220 }),
     );
+    popKeyRef.current += 1;
+    const key = popKeyRef.current;
+    setPop({ amount: delta, key });
+    const timeout = setTimeout(() => {
+      // only clear if this pop is still the latest
+      setPop((p) => (p && p.key === key ? null : p));
+    }, SCORE_POP_DURATION_MS + 80);
+    return () => clearTimeout(timeout);
   }, [score]);
 
   // Animate progress bar smoothly — Reanimated handles layout props on UI thread
@@ -160,41 +206,23 @@ export const GameHeader = React.memo(function GameHeader({
             <Image source={LOCAL_IMAGES.iconBack} style={{ width: 20, height: 20 }} resizeMode="contain" />
           </Pressable>
 
-          {/* Center: battery progress indicator */}
-          <View style={styles.centerBlock}>
-            <View style={styles.batteryContainer}>
-              {/* Battery shell */}
-              <Image source={LOCAL_IMAGES.iconBattery} style={styles.batteryShell} resizeMode="contain" />
-              {/* Battery fill (width proportional to progress) */}
-              <View style={styles.batteryFillContainer}>
-                {progress > 0 && (
-                  <View style={[styles.batteryFill, { width: `${progress}%` }]} />
-                )}
-              </View>
-              {/* Label overlay */}
-              <View style={styles.batteryLabelOverlay}>
-                <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
-                <Text style={[styles.batteryText, labelFontOverride]} numberOfLines={1}>{modeLabel}</Text>
-                <View style={styles.progressDivider} />
-                <Text style={[styles.progressCount, { color: modeConfig.color }]}>
-                  {foundWords}/{totalWords}
-                </Text>
-              </View>
+          {/* Center: chapter title + stars + flawless chip (no battery icon) */}
+          <View style={styles.titleBlock}>
+            <View style={styles.titleRow}>
+              <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
+              <Text style={[styles.titleText, labelFontOverride]} numberOfLines={1}>
+                {modeLabel}
+              </Text>
             </View>
             {(showStarsPips || showFlawlessChip) && (
-              <View style={styles.subRow}>
-                {showStarsPips ? (
+              <View style={styles.titleSubRow}>
+                {showStarsPips && (
                   <View style={styles.pipsRow} accessibilityLabel={`Projected ${projectedStars} of 3 stars`}>
                     {[0, 1, 2].map(i => (
-                      <Text
-                        key={i}
-                        style={[styles.pip, i < projectedStars ? styles.pipOn : styles.pipOff]}
-                      >
-                        ★
-                      </Text>
+                      <Text key={i} style={[styles.pip, i < projectedStars ? styles.pipOn : styles.pipOff]}>★</Text>
                     ))}
                   </View>
-                ) : <View />}
+                )}
                 {showFlawlessChip && (
                   <Animated.View style={[styles.flawlessChip, flawlessStyle]}>
                     <Text style={styles.flawlessChipText}>🔥 {flawlessStreak}</Text>
@@ -202,19 +230,6 @@ export const GameHeader = React.memo(function GameHeader({
                 )}
               </View>
             )}
-          </View>
-
-          {/* Score with animated pop */}
-          <View style={styles.scoreBlock} accessibilityLabel={`Current score: ${score}`}>
-            <Animated.Text
-              style={[
-                styles.scoreValue,
-                scoreStyle,
-                  { color: accentColor, textShadowColor: `${accentColor}AA` },
-              ]}
-            >
-              {score.toLocaleString()}
-            </Animated.Text>
           </View>
 
           {/* Action buttons */}
@@ -275,6 +290,27 @@ export const GameHeader = React.memo(function GameHeader({
               </Pressable>
             )}
           </View>
+        </View>
+
+        {/* Hero score row — big, centered, with +N float-up callout */}
+        <View style={styles.scoreHero} accessibilityLabel={`Current score: ${score}`}>
+          <Animated.Text
+            style={[
+              styles.scoreHeroValue,
+              scoreStyle,
+              { color: accentColor, textShadowColor: `${accentColor}AA` },
+            ]}
+          >
+            {score.toLocaleString()}
+          </Animated.Text>
+          <View pointerEvents="none" style={styles.scorePopSlot}>
+            {pop && (
+              <ScorePop key={pop.key} amount={pop.amount} color={accentColor} />
+            )}
+          </View>
+          <Text style={styles.scoreHeroLabel}>
+            {foundWords}/{totalWords} WORDS
+          </Text>
         </View>
 
         {/* Animated progress bar */}
@@ -359,16 +395,27 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: 'Inter_700Bold',
   },
-  centerBlock: {
+  titleBlock: {
     flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
   },
-  subRow: {
-    marginTop: 3,
-    paddingHorizontal: 4,
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 16,
+    gap: 6,
+  },
+  titleText: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.6,
+  },
+  titleSubRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   pipsRow: {
     flexDirection: 'row',
@@ -403,86 +450,39 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.3,
   },
-  batteryContainer: {
-    position: 'relative',
-    width: 180,
-    height: 50,
-    marginLeft: -2,
+  modeIcon: {
+    fontSize: 14,
   },
-  batteryShell: {
-    position: 'absolute',
-    width: 180,
-    height: 50,
-  },
-  batteryFillContainer: {
-    position: 'absolute',
-    top: 8,
-    left: 10,
-    width: 140,
-    height: 34,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  batteryFill: {
-    height: '100%',
-    backgroundColor: COLORS.accent,
-    borderRadius: 5,
-    opacity: 0.80,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-  },
-  batteryLabelOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
+  scoreHero: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingRight: 12,
+    marginTop: 8,
+    marginBottom: 6,
+    position: 'relative',
   },
-  batteryText: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.5,
-  },
-  modeIcon: {
-    fontSize: 12,
-  },
-  modeText: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 0.4,
-  },
-  progressDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    marginHorizontal: 2,
-  },
-  progressCount: {
-    fontSize: 12,
-    fontFamily: 'SpaceGrotesk_700Bold',
-  },
-  scoreBlock: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    gap: 4,
-    alignSelf: 'center',
-    flexShrink: 0,
-  },
-  scoreValue: {
+  scoreHeroValue: {
     color: COLORS.accent,
-    fontSize: 19,
+    fontSize: 38,
+    lineHeight: 42,
     fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 18,
+    textShadowRadius: 20,
+    textShadowOffset: { width: 0, height: 0 },
+    letterSpacing: 1,
+  },
+  scoreHeroLabel: {
+    marginTop: 2,
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1.4,
+  },
+  scorePopSlot: {
+    position: 'absolute',
+    top: -4,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   actionsRow: {
     flexDirection: 'row',
@@ -592,5 +592,15 @@ const styles = StyleSheet.create({
   btnPressed: {
     transform: [{ scale: 0.92 }],
     opacity: 0.8,
+  },
+});
+
+const scorePopStyles = StyleSheet.create({
+  text: {
+    fontSize: 20,
+    fontFamily: 'SpaceGrotesk_700Bold',
+    textShadowRadius: 12,
+    textShadowOffset: { width: 0, height: 0 },
+    letterSpacing: 0.5,
   },
 });
