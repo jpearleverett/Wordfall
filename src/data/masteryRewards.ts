@@ -67,22 +67,28 @@ const SEASONS: { name: string; startMonth: number; endMonth: number }[] = [
   { name: 'Autumn Harvest', startMonth: 9, endMonth: 11 },     // Oct-Dec
 ];
 
-/** Returns the current season name based on the given date (defaults to now). */
+/** Returns the current season name based on the given date (defaults to now).
+ *
+ * Reads the calendar components in UTC so seasons line up globally. ISO date
+ * strings (e.g. `'2026-07-01'`) parse as UTC midnight, so a device east of
+ * Greenwich previously flipped them back into the prior month. Locking to
+ * UTC keeps client and server agreeing on the active season boundary.
+ */
 export function currentSeason(date: Date = new Date()): string {
-  const month = date.getMonth();
-  const year = date.getFullYear();
+  const month = date.getUTCMonth();
+  const year = date.getUTCFullYear();
   const season = SEASONS.find((s) => month >= s.startMonth && month <= s.endMonth);
   return season ? `${season.name} ${year}` : `Season ${year}`;
 }
 
-/** Returns the end date of the current season. */
+/** Returns the end date of the current season. UTC-anchored (see `currentSeason`). */
 export function seasonEndDate(date: Date = new Date()): Date {
-  const month = date.getMonth();
-  const year = date.getFullYear();
+  const month = date.getUTCMonth();
+  const year = date.getUTCFullYear();
   const season = SEASONS.find((s) => month >= s.startMonth && month <= s.endMonth);
-  if (!season) return new Date(year, 11, 31, 23, 59, 59);
+  if (!season) return new Date(Date.UTC(year, 11, 31, 23, 59, 59));
   // End of the last month of the season
-  return new Date(year, season.endMonth + 1, 0, 23, 59, 59);
+  return new Date(Date.UTC(year, season.endMonth + 1, 0, 23, 59, 59));
 }
 
 /** Returns the number of full days remaining in the current season. */

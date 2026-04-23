@@ -178,12 +178,17 @@ function mulberry32(seed: number): () => number {
  * Items rotate every 48 hours, aligned to even calendar days.
  */
 function getRotationWindow(dateStr: string): string {
+  // Lock to UTC: ISO date strings parse as UTC midnight, but mixing local-time
+  // `getFullYear()` / `new Date(year, 0, 0)` with UTC `getTime()` drifted the
+  // day-of-year by ±1 in non-UTC environments, splitting a single 48h window
+  // into two for clients east or west of Greenwich.
   const d = new Date(dateStr);
+  const year = d.getUTCFullYear();
   const dayOfYear = Math.floor(
-    (d.getTime() - new Date(d.getFullYear(), 0, 0).getTime()) / 86_400_000,
+    (d.getTime() - Date.UTC(year, 0, 0)) / 86_400_000,
   );
   const window = Math.floor(dayOfYear / 2);
-  return `${d.getFullYear()}-${window}`;
+  return `${year}-${window}`;
 }
 
 /**
@@ -213,13 +218,12 @@ export function getCurrentRotatingItems(date: string): RotatingItem[] {
  */
 export function getTimeRemainingHours(date: string): number {
   const d = new Date(date);
-  const dayOfYear = Math.floor(
-    (d.getTime() - new Date(d.getFullYear(), 0, 0).getTime()) / 86_400_000,
-  );
+  const year = d.getUTCFullYear();
+  const startOfYear = Date.UTC(year, 0, 0);
+  const dayOfYear = Math.floor((d.getTime() - startOfYear) / 86_400_000);
   const windowStart = Math.floor(dayOfYear / 2) * 2;
   const windowEndDay = windowStart + 2;
 
-  const startOfYear = new Date(d.getFullYear(), 0, 0).getTime();
   const windowEndMs = startOfYear + windowEndDay * 86_400_000;
 
   const remainingMs = Math.max(0, windowEndMs - d.getTime());

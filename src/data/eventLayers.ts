@@ -226,7 +226,11 @@ export function getMiniEventForDate(dateStr: string): MiniEvent | null {
  */
 export function isWeekendBlitz(dateStr?: string): boolean {
   const date = dateStr ? new Date(dateStr) : new Date();
-  const day = date.getDay();
+  // ISO date strings ("YYYY-MM-DD") parse as UTC midnight per the spec, so we
+  // must read the weekday in UTC as well. Using local-time `getDay()` here
+  // shifted the result by a day for any non-UTC client (Termux / Android
+  // devices east or west of Greenwich), sometimes flipping weekend ↔ weekday.
+  const day = date.getUTCDay();
   return day === 0 || day === 6; // Sunday = 0, Saturday = 6
 }
 
