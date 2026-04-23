@@ -1793,6 +1793,29 @@ function AppContent() {
                       }
                     }
 
+                    // Tier 6 B2 — Day-1 starter bundle in FTUE.
+                    // Queue the first-purchase offer ceremony on post-
+                    // onboarding HomeScreen arrival so it lands as a
+                    // dismissible modal rather than gating the flow.
+                    // Gated by:
+                    //   - RC flag `firstSessionStarterBundleEnabled`
+                    //   - zero lifetime purchases (economy side)
+                    //   - modal never-shown marker
+                    const rcStarterOn = getRemoteBoolean('firstSessionStarterBundleEnabled');
+                    const isNonPayer = (economy.purchaseHistory?.length ?? 0) === 0;
+                    const notYetShown = !player.firstPurchaseModalShownAt;
+                    if (rcStarterOn && isNonPayer && notYetShown) {
+                      setTimeout(() => {
+                        player.queueCeremony({
+                          type: 'first_purchase_offer',
+                          data: { source: 'ftue_day1' },
+                        });
+                        void analytics.logEvent('starter_bundle_offered_day1', {
+                          level,
+                        });
+                      }, 500);
+                    }
+
                     setShowOnboarding(false);
                   }}
                 />

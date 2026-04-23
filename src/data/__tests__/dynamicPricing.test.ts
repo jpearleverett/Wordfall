@@ -192,3 +192,76 @@ describe('getDiscountedPrice', () => {
     expect(result.savings).toBe('70% OFF');
   });
 });
+
+/**
+ * Tier 6 B6 — four-tier comeback ladder keyed off `daysSinceActive`.
+ * Each case pins exactly one tier so the intent of each discount band
+ * stays unambiguous as copy/assets evolve.
+ */
+describe('getDynamicOffers — Tier 6 B6 comeback ladder', () => {
+  it('Day 0–1: falls through (no ladder offer)', () => {
+    const offers = getDynamicOffers('non_payer', 'casual', 10, 0);
+    // Should get non-payer default, not a comeback tier badge
+    expect(offers.every((o) => o.badge !== 'COME BACK')).toBe(true);
+    expect(offers.every((o) => o.badge !== 'WELCOME BACK')).toBe(true);
+  });
+
+  it('Day 2–3 lightly lapsed: 50% starter with COME BACK badge, 24h', () => {
+    const offers = getDynamicOffers('non_payer', 'at_risk', 10, 2);
+    expect(offers[0]).toMatchObject({
+      productId: 'starter_pack',
+      discountPercent: 50,
+      badge: 'COME BACK',
+      expiresInHours: 24,
+    });
+  });
+
+  it('Day 4–7 lapsed: 70% starter with WELCOME BACK badge, 48h', () => {
+    const offers = getDynamicOffers('non_payer', 'lapsed', 15, 5);
+    expect(offers[0]).toMatchObject({
+      productId: 'starter_pack',
+      discountPercent: 70,
+      badge: 'WELCOME BACK',
+      expiresInHours: 48,
+    });
+  });
+
+  it('Day 8–14 deeply lapsed: 75% first-purchase-special + gems_500, WE MISS YOU', () => {
+    const offers = getDynamicOffers('non_payer', 'lapsed', 15, 10);
+    expect(offers[0]).toMatchObject({
+      productId: 'first_purchase_special',
+      discountPercent: 75,
+      badge: 'WE MISS YOU',
+    });
+    expect(offers[1]).toMatchObject({
+      productId: 'gems_500',
+      discountPercent: 40,
+    });
+  });
+
+  it('Day 15+ churned: 30% mega bundle with LAST CALL badge, 72h', () => {
+    const offers = getDynamicOffers('non_payer', 'lapsed', 20, 20);
+    expect(offers[0]).toMatchObject({
+      productId: 'mega_bundle_gold',
+      discountPercent: 30,
+      badge: 'LAST CALL',
+      expiresInHours: 72,
+    });
+  });
+
+  it('ladder takes precedence over engagement segment', () => {
+    // An `at_risk` player with daysSinceActive=10 should get the ladder's
+    // deeply-lapsed offer, not the legacy at_risk branch.
+    const offers = getDynamicOffers('non_payer', 'at_risk', 15, 10);
+    expect(offers[0].productId).toBe('first_purchase_special');
+  });
+
+  it('falls through to legacy branches when daysSinceActive is undefined', () => {
+    const offers = getDynamicOffers('non_payer', 'lapsed', 15);
+    expect(offers[0]).toMatchObject({
+      productId: 'starter_pack',
+      discountPercent: 70,
+      badge: 'WELCOME BACK',
+    });
+  });
+});

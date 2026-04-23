@@ -36,6 +36,9 @@ import {
   usePlayerActions,
   selectEquippedTheme,
   selectFailCountByLevel,
+  selectConsecutiveFailures,
+  selectLastLevelStars,
+  selectLastBreatherOfferedAt,
   selectPuzzlesSolved,
   selectStreaks,
   selectTooltipsShown,
@@ -61,6 +64,7 @@ import { MockAdModal } from '../components/MockAdModal';
 import { ModeTutorialOverlay } from '../components/ModeTutorialOverlay';
 import { getModeTutorial } from '../data/modeTutorials';
 import { PostLossModal } from '../components/PostLossModal';
+import { FailBreatherOffer, BREATHER_COOLDOWN_MS } from '../components/FailBreatherOffer';
 import { GameFlashes } from './game/GameFlashes';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
@@ -429,6 +433,9 @@ function GameScreenImpl({
   // component on every economy/player mutation across the app.
   const equippedThemeId = usePlayerStore(selectEquippedTheme);
   const failCountByLevel = usePlayerStore(selectFailCountByLevel);
+  const consecutiveFailures = usePlayerStore(selectConsecutiveFailures);
+  const lastLevelStars = usePlayerStore(selectLastLevelStars);
+  const lastBreatherOfferedAt = usePlayerStore(selectLastBreatherOfferedAt);
   const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
   const playerStreaks = usePlayerStore(selectStreaks);
   const tooltipsShown = usePlayerStore(selectTooltipsShown);
@@ -637,9 +644,12 @@ function GameScreenImpl({
   // Post-loss modal state
   const [showPostLoss, setShowPostLoss] = useState(false);
   const postLossShownRef = useRef(false);
+  // Tier 6 B1 — fail-breather offer gates PostLoss when player is stuck
+  const [showFailBreather, setShowFailBreather] = useState(false);
+  const failBreatherShownRef = useRef(false);
   // booster_pack: only show once per level on first entry to hard/expert
   const boosterPackShown = useRef(false);
-  const offerSuppressed = showModeTutorial || showComplete || showPostLoss || showFailed || activeOffer !== null;
+  const offerSuppressed = showModeTutorial || showComplete || showPostLoss || showFailed || showFailBreather || activeOffer !== null;
 
   // --- Rewarded Ad state ---
   const [mockAdState, setMockAdState] = useState<{
@@ -1581,9 +1591,37 @@ function GameScreenImpl({
     }
   }, [isStuck, status, level, playerActions]);
 
-  // Show post-loss modal first (if applicable), then failed modal
+  // Show post-loss modal first (if applicable), then failed modal.
+  // Tier 6 B1 — if the player qualifies for the fail-breather offer,
+  // surface it ahead of PostLossModal on this loss. Rules:
+  //   • Remote Config flag `failBreatherEnabled` must be true
+  //   • consecutiveFailures >= 2 OR lastLevelStars === 1 (existing
+  //     `needsBreather()` predicate, mirrored here via selectors so
+  //     GameScreen doesn't have to call the context method)
+  //   • 1-hour cooldown since the last offer on this player
+  //   • mode !== 'relax' (relax mode has no fail state)
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && !showFailed) {
+      const breatherEligible =
+        getRemoteBoolean('failBreatherEnabled') &&
+        mode !== 'relax' &&
+        (consecutiveFailures >= 2 || lastLevelStars === 1) &&
+        (!lastBreatherOfferedAt ||
+          Date.now() - lastBreatherOfferedAt > BREATHER_COOLDOWN_MS) &&
+        !failBreatherShownRef.current;
+      if (breatherEligible) {
+        failBreatherShownRef.current = true;
+        const timer = setTimeout(() => {
+          setShowFailBreather(true);
+          void analytics.logEvent('fail_breather_shown', {
+            consecutive_failures: consecutiveFailures,
+            last_level_stars: lastLevelStars,
+            level,
+            mode,
+          });
+        }, 400);
+        return () => clearTimeout(timer);
+      }
       // Show post-loss conversion modal if not already shown this level attempt
       if (!postLossShownRef.current && foundWords > 0 && mode !== 'relax') {
         postLossShownRef.current = true;
@@ -1594,7 +1632,15 @@ function GameScreenImpl({
       const timer = setTimeout(() => setShowFailed(true), 400);
       return () => clearTimeout(timer);
     }
-  }, [status, showFailed, foundWords, mode]);
+  }, [
+    status,
+    showFailed,
+    foundWords,
+    mode,
+    consecutiveFailures,
+    lastLevelStars,
+    lastBreatherOfferedAt,
+  ]);
 
   // Cell press/drag handlers now live inside PlayField — GameScreen no longer
   // subscribes to per-tap selection state. PlayField notifies GameScreen of
@@ -2092,6 +2138,48 @@ function GameScreenImpl({
           onComplete={() => {
             setShowModeTutorial(false);
             markTooltipShown(`mode_tutorial_${mode}`);
+          }}
+        />
+      )}
+
+      {/* Tier 6 B1 — fail-breather offer: precedes PostLoss on stuck loops */}
+      {showFailBreather && (
+        <FailBreatherOffer
+          visible={showFailBreather}
+          consecutiveFailures={consecutiveFailures}
+          onAccept={() => {
+            addHintTokens(1);
+            if (typeof (playerActionsAny as Record<string, unknown>).updateProgress === 'function') {
+              (playerActionsAny as { updateProgress: (patch: Record<string, unknown>) => void })
+                .updateProgress({ lastBreatherOfferedAt: Date.now() });
+            }
+            void analytics.logEvent('fail_breather_accepted', {
+              consecutive_failures: consecutiveFailures,
+              level,
+              mode,
+            });
+            setShowFailBreather(false);
+            // Skip PostLossModal this time — the breather is the relief.
+            setShowFailed(true);
+          }}
+          onDismiss={() => {
+            if (typeof (playerActionsAny as Record<string, unknown>).updateProgress === 'function') {
+              (playerActionsAny as { updateProgress: (patch: Record<string, unknown>) => void })
+                .updateProgress({ lastBreatherOfferedAt: Date.now() });
+            }
+            void analytics.logEvent('fail_breather_dismissed', {
+              consecutive_failures: consecutiveFailures,
+              level,
+              mode,
+            });
+            setShowFailBreather(false);
+            // Fall through to the standard post-loss flow on next frame.
+            if (!postLossShownRef.current && foundWords > 0) {
+              postLossShownRef.current = true;
+              setShowPostLoss(true);
+            } else {
+              setShowFailed(true);
+            }
           }}
         />
       )}

@@ -28,7 +28,18 @@ import {
 import { firestoreService } from '../services/firestore';
 import { crashReporter } from '../services/crashReporting';
 import { getTitleLabel, computeEquippedBonuses } from '../data/cosmetics';
+import {
+  getPrestigeCoinMultiplier,
+  getPrestigeGemMultiplier,
+  getPrestigeXpMultiplier,
+} from '../data/prestigeSystem';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
+
+/** Tier 6 B3 — defensive ceiling on the composed (cosmetic × prestige) bonus
+ *  factor so a level-5 whale with a legendary frame doesn't accidentally
+ *  produce 8× XP gains. Observed from analytics after launch and tightened if
+ *  the real distribution warrants. */
+const MAX_BONUS_FACTOR = 5.0;
 
 // Helper: get difficulty name for a level
 function getDifficultyForLevel(level: number): string {
@@ -93,6 +104,12 @@ interface PlayerContextLike {
   recordReferralSuccess: () => Promise<boolean>;
   featuresUnlocked: string[];
   seasonalQuest: SeasonalQuestState;
+  /** Tier 6 B3 — prestige state feeds the permanent-bonus multiplier. */
+  prestige?: {
+    prestigeLevel: number;
+    totalPrestiges: number;
+    permanentBonuses: string[];
+  };
 
   recordPuzzleComplete: (level: number, score: number, stars: number, isPerfect: boolean) => void;
   recordModePlay: (modeId: string, score: number, isWin: boolean) => void;
@@ -238,6 +255,9 @@ export function useRewardWiring({
       player_level: Math.max(level + 1, player.currentLevel),
       total_puzzles_solved: player.puzzlesSolved + 1,
       player_stage: playerStageFromPuzzles(player.puzzlesSolved + 1),
+      // Tier 6 B3 — attribute every subsequent event to the player's
+      // prestige tier for whale-cohort funnel analysis.
+      prestige_tier: player.prestige?.prestigeLevel ?? 0,
     });
     player.recordPuzzleComplete(level, score, stars, isPerfect);
 
@@ -283,9 +303,26 @@ export function useRewardWiring({
     const cosmeticBonuses = cosmeticPerksOn
       ? computeEquippedBonuses(player.equippedFrame, player.equippedTitle)
       : { coinMultiplier: 0, gemMultiplier: 0, xpMultiplier: 0 };
-    const coinBonusFactor = 1 + (cosmeticBonuses.coinMultiplier ?? 0);
-    const gemBonusFactor = 1 + (cosmeticBonuses.gemMultiplier ?? 0);
-    const xpBonusFactor = 1 + (cosmeticBonuses.xpMultiplier ?? 0);
+    // Tier 6 B3 — prestige permanent-bonus multipliers (were dead code
+    // before; now stack multiplicatively on top of cosmetics). The
+    // composed factor is capped at MAX_BONUS_FACTOR so the most
+    // stacked-out whale can't inflate rewards past 5×.
+    const prestige = player.prestige;
+    const prestigeXp = getPrestigeXpMultiplier(prestige?.prestigeLevel ?? 0);
+    const prestigeCoin = getPrestigeCoinMultiplier(prestige?.permanentBonuses ?? []);
+    const prestigeGem = getPrestigeGemMultiplier(prestige?.permanentBonuses ?? []);
+    const coinBonusFactor = Math.min(
+      (1 + (cosmeticBonuses.coinMultiplier ?? 0)) * prestigeCoin,
+      MAX_BONUS_FACTOR,
+    );
+    const gemBonusFactor = Math.min(
+      (1 + (cosmeticBonuses.gemMultiplier ?? 0)) * prestigeGem,
+      MAX_BONUS_FACTOR,
+    );
+    const xpBonusFactor = Math.min(
+      (1 + (cosmeticBonuses.xpMultiplier ?? 0)) * prestigeXp,
+      MAX_BONUS_FACTOR,
+    );
     const baseCoinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
     const coinReward = Math.round(baseCoinReward * eventMultipliers.coins * coinBonusFactor);
     economy.addCoins(coinReward);

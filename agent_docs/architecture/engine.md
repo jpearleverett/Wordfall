@@ -176,4 +176,10 @@ Difficulty uses a **smooth per-level ramp** (not a staircase). Every 5th level i
 
 After 2+ consecutive failures or a 1-star clear, `player.needsBreather()` returns true. `App.tsx` `startGame()` and `handleNextLevel()` check this and use `getBreatherConfig(level)` to serve a board ~4 levels easier than the current level. Additionally, every 5th level is inherently a breather in the normal difficulty curve.
 
+**Tier 6 B1 (April 2026)** added a `FailBreatherOffer` modal that surfaces on the post-loss flow in `GameScreen.tsx` when the same `needsBreather()` predicate is true and a 1-hour cooldown (`PlayerProgressData.lastBreatherOfferedAt`) has elapsed. Accepting grants 1 free hint and lets the next level inherit the `getBreatherConfig` easier board. RC-gated via `failBreatherEnabled` (default ON). Same release loosened the adaptive adjuster thresholds: easing now triggers at `averageStars < 2.4` (was 2.0) and any recent level with >2 attempts (was >3), because new players on 5-cell grids naturally average ~2.8 stars so the old 2.0 floor never triggered for real L15–L25 strugglers. See `difficultyAdjuster.ts:46-70`.
+
 Welcome-back modal in `HomeMainScreen` awards tiered comeback rewards (3-day/7-day/30-day absence) with animated card UI instead of basic alert.
+
+### Gravity animation (Tier 6 B5 note)
+
+Gravity at `GameScreen.tsx:1258–1280` uses legacy RN `Animated.spring` with `tension: 180, friction: 9, useNativeDriver: true`. The Tier 6 audit flagged this as a worklet/bridge split vs LetterCell's Reanimated 4 scale-pop, but `useNativeDriver: true` means the `translateY` animation runs on the native UI thread — the JS bridge is only touched on start/stop, not per frame. Full Reanimated migration is a v1.1 polish item: tuning `withSpring({ stiffness, damping })` to match the current landing-bounce feel requires on-device pilot testing on iPhone 13+ and mid-tier Android (the `damping ≈ friction × 2` heuristic is rough). See `agent_docs/gotchas.md` for the tradeoff rule.

@@ -49,6 +49,9 @@ import {
   canPrestige,
   getPrestigeRewards,
   getPrestigeSummary,
+  getPrestigeXpMultiplier,
+  getPrestigeCoinMultiplier,
+  getPrestigeGemMultiplier,
   PRESTIGE_LEVELS,
 } from '../data/prestigeSystem';
 
@@ -370,6 +373,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           const prestigeLevel = prestige.prestigeLevel;
           const prestigeDef = PRESTIGE_LEVELS.find((pl) => pl.level === prestigeLevel);
           if (!prestigeDef) return null;
+          // Tier 6 B3 — show the live multiplier so the meta-loop has teeth.
+          const xpMult = getPrestigeXpMultiplier(prestigeLevel);
+          const coinMult = getPrestigeCoinMultiplier(prestige.permanentBonuses ?? []);
+          const gemMult = getPrestigeGemMultiplier(prestige.permanentBonuses ?? []);
+          const multiplierSummary = [
+            xpMult > 1 ? `${xpMult.toFixed(2)}× XP` : null,
+            coinMult > 1 ? `${coinMult.toFixed(2)}× Coin` : null,
+            gemMult > 1 ? `${gemMult.toFixed(2)}× Gem` : null,
+          ].filter(Boolean).join(' · ');
           return (
             <View style={styles.prestigeBadgeRow}>
               <LinearGradient
@@ -381,8 +393,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <Text style={styles.prestigeBadgeIcon}>{prestigeDef.icon}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.prestigeBadgeLabel}>{prestigeDef.label}</Text>
-              <Text style={styles.prestigeBadgeMultiplier}>
-                  Permanent prestige bonuses unlocked
+                <Text style={styles.prestigeBadgeMultiplier}>
+                  {multiplierSummary || 'Permanent prestige bonuses unlocked'}
                 </Text>
               </View>
               <Text style={styles.prestigeBadgeCount}>

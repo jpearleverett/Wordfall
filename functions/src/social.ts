@@ -1381,3 +1381,209 @@ export const distributeWeeklyRewards = functions
       durationMs: Date.now() - startedAt,
     });
   });
+
+// ─── Tier 6 B4 — Server-side leaderboard validation ──────────────────────────
+//
+// The client previously wrote directly to `dailyScores/`, `weeklyScores/`, and
+// `events/{eventId}/scores/` via the Firestore SDK, so a modded client could
+// submit arbitrary scores up to the rules' 1M cap. This callable centralizes
+// writes through a server-side gate that enforces:
+//
+//   • Auth: context.auth.uid must match the submitted userId
+//   • Rate limit: 60 submissions/hour/UID (Firestore-backed, cold-start-safe)
+//   • Score ceiling: per-mode, per-level plausible upper bound
+//   • Duration floor: durationMs >= floor(wordCount * 400)
+//   • `server: true` marker + `validatedAt` timestamp on every write
+//
+// Board-hash verification (regenerating the expected board from the same seed
+// and hashing letters) is a follow-up — today's seeds are non-deterministic
+// (`modeLevel * 1337 + Date.now()`) so the full plan-B4 proof-of-play check
+// requires switching to a deterministic seed first. Without it we still block
+// the obvious cheats (large scores, submit spam, impossibly fast completions).
+
+type LeaderboardScope = 'daily' | 'weekly' | 'event';
+
+interface SubmitValidatedScorePayload {
+  scope: LeaderboardScope;
+  score: number;
+  stars?: number;
+  level?: number;
+  displayName?: string;
+  eventId?: string; // required when scope='event'
+  wordCount?: number;
+  durationMs?: number;
+  mode?: string;
+}
+
+/** Conservative per-level max score ceiling. Any submission above this is
+ *  almost certainly manipulated. Tunable via Remote Config in a follow-up. */
+function maxPlausibleScore(mode: string, level: number): number {
+  // Base ceiling: 1000 * (level+1), inflated for score-multiplier modes.
+  const base = 1000 * (level + 1);
+  const multiplier =
+    mode === 'expert' ? 3 : mode === 'timePressure' ? 2 : mode === 'perfectSolve' ? 2 : 1;
+  return Math.min(base * multiplier, 250_000);
+}
+
+export const submitValidatedScore = functions.https.onCall(
+  async (data: SubmitValidatedScorePayload, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Authentication required',
+      );
+    }
+    const uid = context.auth.uid;
+    const {
+      scope,
+      score,
+      stars = 0,
+      level = 0,
+      displayName = '',
+      eventId = '',
+      wordCount = 0,
+      durationMs = 0,
+      mode = 'classic',
+    } = data ?? ({} as SubmitValidatedScorePayload);
+
+    if (scope !== 'daily' && scope !== 'weekly' && scope !== 'event') {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid scope');
+    }
+    if (typeof score !== 'number' || score < 0 || !Number.isFinite(score)) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid score');
+    }
+    if (typeof level !== 'number' || level < 0 || level > 10_000) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid level');
+    }
+    if (scope === 'event' && (typeof eventId !== 'string' || eventId.length === 0 || eventId.length > 128)) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid eventId');
+    }
+
+    // Score ceiling (mode × level)
+    const ceiling = maxPlausibleScore(mode, level);
+    if (score > ceiling) {
+      functions.logger.warn('[submitValidatedScore] score above ceiling', {
+        uid: uid.slice(0, 6),
+        scope,
+        mode,
+        level,
+        score,
+        ceiling,
+      });
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Score exceeds plausible ceiling for this level',
+      );
+    }
+
+    // Duration floor — only enforced when the client reports wordCount
+    if (wordCount > 0 && durationMs > 0) {
+      const minDurationMs = Math.floor(wordCount * 400);
+      if (durationMs < minDurationMs) {
+        functions.logger.warn('[submitValidatedScore] duration below floor', {
+          uid: uid.slice(0, 6),
+          wordCount,
+          durationMs,
+          minDurationMs,
+        });
+        throw new functions.https.HttpsError(
+          'permission-denied',
+          'Completion time below plausible floor',
+        );
+      }
+    }
+
+    // Per-UID rate limit: 60/hour
+    const within = await checkFirestoreRateLimit(uid, 'submit_score', 60, 3600);
+    if (!within) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Score submission rate limit exceeded',
+      );
+    }
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    if (scope === 'daily') {
+      const today = new Date().toISOString().slice(0, 10);
+      const docId = `${uid}_${today}`;
+      const ref = db.collection('dailyScores').doc(docId);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.exists && (snap.data()?.score ?? 0) >= score) return;
+        tx.set(
+          ref,
+          {
+            userId: uid,
+            displayName,
+            score,
+            stars,
+            level,
+            date: today,
+            timestamp: now,
+            server: true,
+            validatedAt: now,
+          },
+          { merge: true },
+        );
+      });
+      return { ok: true, scope, written: true };
+    }
+
+    if (scope === 'weekly') {
+      const weekId = weekIdFor(new Date());
+      const docId = `${uid}_${weekId}`;
+      const ref = db.collection('weeklyScores').doc(docId);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const prev = snap.exists ? (snap.data()?.score ?? 0) : 0;
+        tx.set(
+          ref,
+          {
+            userId: uid,
+            displayName,
+            score: prev + score,
+            weekId,
+            timestamp: now,
+            server: true,
+            validatedAt: now,
+          },
+          { merge: true },
+        );
+      });
+      return { ok: true, scope, written: true };
+    }
+
+    // event
+    const ref = db.collection('events').doc(eventId).collection('scores').doc(uid);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const prev = snap.exists ? (snap.data()?.score ?? 0) : 0;
+      tx.set(
+        ref,
+        {
+          userId: uid,
+          displayName,
+          score: prev + score,
+          eventId,
+          timestamp: now,
+          server: true,
+          validatedAt: now,
+        },
+        { merge: true },
+      );
+    });
+    return { ok: true, scope, written: true };
+  },
+);
+
+/** ISO week-number helper — mirrors src/utils/weekIdentifier.ts so the
+ *  server doesn't need to import from client code. */
+function weekIdFor(d: Date): string {
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dayNum = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${target.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}

@@ -364,6 +364,75 @@ never connected the wires.
 
 ---
 
+## Tier 6 — Top-grosser parity (April 2026, post-assessment)
+
+**Context.** After Tiers 1–4 shipped, a multi-agent F2P readiness audit placed Wordfall at **7.7/10** on a GameRefinery × Seufert pyramid — launchable today, but short of Wordscapes/Royal Match parity at 9/10. The audit identified 7 specific blockers concentrated in (a) FTUE monetization psychology, (b) over-tolerant difficulty curve, and (c) a small set of polish/wiring items. These are the items to close the top-grosser gap.
+
+All items shipped on branch `claude/assess-game-readiness-7yM5p` except B5 (analyzed and deferred — see below).
+
+### B1. Difficulty trigger tuning + fail-breather offer ✅ SHIPPED
+
+`difficultyAdjuster.ts:56`'s `averageStars < 2.0` gate never triggered for real L15–L25 strugglers (small-grid players average ~2.8 stars naturally). Raised to `< 2.4`; dropped the multi-attempt gate from `> 3` → `> 2`. New `FailBreatherOffer` modal (modelled on `PostStreakBreakOffer`, no gem cost) surfaces via `GameScreen.tsx` post-loss effect when `needsBreather()` is true and a 1-hour cooldown has elapsed, granting 1 free hint. New RC flag `failBreatherEnabled` (default ON). Analytics: `fail_breather_{shown,accepted,dismissed}`. 4 new unit tests pin the 2.4 / 2-attempt boundaries.
+
+### B2. Day-1 starter bundle in FTUE ✅ SHIPPED
+
+Royal Match / Wordscapes present a \$0.99 starter bundle in the Day-1 funnel; Wordfall already had the `FirstPurchaseOfferModal` wired through `CeremonyRouter.first_purchase_offer` but nothing queued the ceremony post-onboarding. `App.tsx` onboarding-complete handler now enqueues it after a 500ms delay, gated by `firstSessionStarterBundleEnabled` RC + zero-lifetime-purchases + `firstPurchaseModalShownAt==null`. Analytics: `starter_bundle_offered_day1`. The "dismissed → persistent tile" fallback is already covered by Tier 6 B6's For-You row (non-payer segment surfaces `starter_pack @ 30%` for 72h).
+
+### B3. Wire prestige XP/coin/gem multipliers ✅ SHIPPED
+
+`src/data/prestigeSystem.ts` defined 5 prestige tiers with `xpMultiplier` 1.5×–3.0× + `permanentBonuses: PermanentBonus[]`, but `useRewardWiring.ts:280–290` only read `cosmeticBonuses` — prestige's permanent bonuses were cosmetic theater. Fix:
+- New helpers `getPrestigeXpMultiplier / getPrestigeCoinMultiplier / getPrestigeGemMultiplier` decode the accumulated `permanentBonuses` string IDs.
+- `useRewardWiring` composes cosmetic × prestige multipliers multiplicatively, capped at `MAX_BONUS_FACTOR = 5.0` to guard against whale stacking.
+- `ProfileScreen.tsx` prestige badge surfaces the live "1.50× XP · 1.25× Coin · 2.00× Gem" summary — gives the meta-loop teeth.
+- Analytics user-property `prestige_tier` attached for whale-cohort funnel analysis.
+- 13 new unit tests pin the multiplier decoding + stacking behavior.
+
+### B4. Server-side leaderboard validation ✅ SHIPPED
+
+`submitDailyScore / submitWeeklyScore / submitEventScore` wrote directly from client to Firestore with only the rules' 0–1M cap — any modded client could inject arbitrary scores. All top-grossers validate server-side.
+
+New Cloud Function `submitValidatedScore` (`functions/src/social.ts`; inventory bumps from 18 → 19) enforces:
+- Auth (`context.auth.uid`)
+- Rate limit 60/hr/UID (Firestore-backed, cold-start-safe via `checkFirestoreRateLimit`)
+- Score ceiling: `1000 × (level+1)`, inflated for expert/timePressure/perfectSolve modes; hard cap 250k
+- Duration floor: `durationMs >= wordCount × 400` when both reported
+- `server: true` + `validatedAt` on every write
+
+Client: new `src/services/leaderboardSubmit.ts` wraps the callable. `firestore.ts` routes all three submit paths through it when `leaderboardValidationEnabled` RC is on; direct-write fallback retained as kill-switch. Firestore rules NOT tightened yet — that's a separate step once the callable is verified in production for 1–2 weeks.
+
+**Deferred to follow-up:** board-hash proof-of-play. Today's seeds are non-deterministic (`modeLevel × 1337 + Date.now()`), so server-side board regeneration needs a deterministic-seed migration first.
+
+### B5. Gravity + invalid-flash migration to Reanimated 4 — ⏸️ ANALYZED + DEFERRED
+
+The audit raised a concern that `GameScreen.tsx` still uses legacy RN `Animated` alongside LetterCell's Reanimated 4 animations, creating a "JS bridge / worklet split" that might cost 1–2 frames on chain clears. Investigation showed:
+
+- Gravity at `GameScreen.tsx:1258–1280` uses `useNativeDriver: true` — the `translateY` animation runs **on the native UI thread**, not the JS bridge. The bridge is only touched on start/stop, not per frame.
+- `LetterCell.tsx:120–125` has an explicit code comment acknowledging the split: the consuming `fallAnim` ref is kept on legacy `Animated.Value` because "migrating it would cascade into a much larger diff."
+- Reanimated's `damping` parameter does not map cleanly from RN Animated's `friction` — the conversion is heuristic (`damping ≈ friction × 2`) and requires on-device pilot testing to preserve the existing landing-bounce feel.
+
+**Decision:** deferred. The leverage is much smaller than the audit assumed (the animation is already native-driven) and the risk of a tuning regression on the game's most visible animation is high without device access. Updated the `LetterCell.tsx:120–130` comment to document the tradeoff; no code change to the animation itself. Full migration is a v1.1 polish item.
+
+### B6. Comeback ladder + wire `getDynamicOffers()` into live UI ✅ SHIPPED
+
+Two tightly coupled issues:
+1. Single `'lapsed'` tier (7+ days) — no Day-2 / Day-7 / Day-14 escalation.
+2. `getDynamicOffers()` had **zero live callers** — test-only code; the entire segmentation matrix was dark.
+
+Fix:
+- `src/services/playerSegmentation.ts` `PlayerSegments` gains a `daysSinceActive: number` field. `DEFAULT_SEGMENTS` updated.
+- `src/data/dynamicPricing.ts` adds a 4-tier `lapsedLadder()`: Day 2–3 → 50% starter / "COME BACK"; Day 4–7 → 70% starter / "WELCOME BACK"; Day 8–14 → 75% `first_purchase_special` + 40% `gems_500` / "WE MISS YOU"; Day 15+ → 30% `mega_bundle_gold` + 60% starter / "LAST CALL".
+- `ShopScreen.tsx` renders a "For You" horizontal carousel above the existing Featured Offers row; `dynamicOffersEnabled` RC-gated.
+- Analytics: `offer_surfaced` (deduped per distinct offer set) + `offer_tapped`.
+- 7 new unit tests pin each ladder tier boundary + fallthrough behavior.
+
+### B7. Coordinate chip pulse with last-word tension moment ✅ SHIPPED
+
+The chip pulse at `WordBank.tsx:78–94` existed as a looping 1.0 → 1.08 → 1.0 effect while `isLastRemaining===true`, but was decoupled from the audio/haptic tension moment at `GameScreen.tsx:1298–1316`. The audio hit a crescendo; the visual didn't move.
+
+Fix: `WordChip` gains a `tensionActive` prop; on rising edge it fires a one-shot `Animated.sequence` (scale overshoot to 1.17, spring back to 1.06, coincident gold-glow `shadowOpacity` 0→0.8 settling at 0.3). `ConnectedWordBank` (PlayField) computes `tensionActive = unfoundCount === 1` and threads it in. Original looping pulse is preserved as the rest state. `lastWordTensionPulseEnabled` RC flag, reduce-motion-respectful, ref-guarded against re-fire within a puzzle.
+
+---
+
 ## Tier 5 — User-side + content (not code)
 
 ### U1. `assetlinks.json` SHA256 fingerprint
@@ -423,10 +492,9 @@ completeness.)
 
 ---
 
-## Shipped status (2026-04-22)
+## Shipped status (2026-04-23)
 
-All 18 Tier 1–4 code gaps landed on branch
-`claude/assess-wordfall-launch-readiness-VzyDY`:
+All 18 Tier 1–4 code gaps landed on branch `claude/assess-wordfall-launch-readiness-VzyDY`. Tier 6 (top-grosser parity) landed on `claude/assess-game-readiness-7yM5p`:
 
 | Tier | Items | Status |
 |------|-------|--------|
@@ -435,6 +503,8 @@ All 18 Tier 1–4 code gaps landed on branch
 | Tier 3 (social + ceremony) | S1 S2 MG1 MG2 MG3 | ✅ all shipped |
 | Tier 4 (feel polish) | C1 C2 P1 P2 | ✅ all shipped |
 | Tier 5 (user-side / content) | U1 U2 U3 U4 | ⏳ outside engineering |
+| Tier 6 (top-grosser parity) | B1 B2 B3 B4 B6 B7 | ✅ all shipped |
+| Tier 6 (top-grosser parity) | B5 | ⏸️ analyzed + deferred |
 
 **Verify before merge:** install the dev-client APK, smoke-test the
 retention pipeline (streak break + restore), the club browser, the

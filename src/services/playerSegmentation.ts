@@ -44,6 +44,12 @@ export interface PlayerSegments {
   spending: SpendingSegment;
   motivations: MotivationSegment[];
   computedAt: string;
+  /**
+   * Tier 6 B6 — raw days-since-active, carried alongside the coarse
+   * engagement segment so `getDynamicOffers()` can tier the comeback ladder
+   * (Day 2–3 / 4–7 / 8–14 / 15+) without having to re-derive it.
+   */
+  daysSinceActive: number;
 }
 
 // ─── Input Data Shape ───────────────────────────────────────────────────────
@@ -103,6 +109,7 @@ export const DEFAULT_SEGMENTS: PlayerSegments = {
   spending: 'non_payer',
   motivations: [],
   computedAt: '',
+  daysSinceActive: 0,
 };
 
 // ─── Segment Computation ────────────────────────────────────────────────────
@@ -293,12 +300,14 @@ function computeMotivations(input: SegmentationInput): MotivationSegment[] {
 // ─── Main Computation ───────────────────────────────────────────────────────
 
 export function computeSegments(input: SegmentationInput): PlayerSegments {
+  const today = getToday();
   return {
     engagement: computeEngagement(input),
     skill: computeSkill(input),
     spending: computeSpending(input),
     motivations: computeMotivations(input),
     computedAt: new Date().toISOString(),
+    daysSinceActive: daysBetween(input.lastActiveDate, today),
   };
 }
 

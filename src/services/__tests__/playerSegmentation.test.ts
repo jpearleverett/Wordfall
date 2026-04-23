@@ -59,6 +59,7 @@ function makeSegments(overrides: Partial<PlayerSegments> = {}): PlayerSegments {
     spending: 'non_payer',
     motivations: [],
     computedAt: new Date().toISOString(),
+    daysSinceActive: 0,
     ...overrides,
   };
 }

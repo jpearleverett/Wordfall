@@ -84,6 +84,13 @@ export interface PlayerProgressData {
   failCountByLevel: Record<number, number>;
   consecutiveFailures: number;
   lastLevelStars: number;
+  /**
+   * Timestamp (ms) of the last fail-breather offer shown to this player.
+   * Used by `App.tsx:GameScreenWrapper` to enforce a 1-hour cooldown so the
+   * offer doesn't re-fire back-to-back on the same stuck level.
+   * Tier 6 B1 — see `agent_docs/launch_blockers.md`.
+   */
+  lastBreatherOfferedAt: number | null;
 
   // Tracking
   wordsFoundTotal: number;

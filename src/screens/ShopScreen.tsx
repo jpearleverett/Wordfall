@@ -28,7 +28,12 @@ import {
   selectVipStreakWeeks,
   selectVipStreakBonusClaimed,
 } from '../stores/economyStore';
-import { usePlayerActions } from '../stores/playerStore';
+import {
+  usePlayerActions,
+  usePlayerStore,
+  selectSegments,
+  selectCurrentLevel,
+} from '../stores/playerStore';
 import { iapManager } from '../services/iap';
 import { adManager, AdRewardType } from '../services/ads';
 import { MockAdModal } from '../components/MockAdModal';
@@ -40,7 +45,8 @@ import {
 } from '../data/rotatingShop';
 import { funnelTracker } from '../services/funnelTracker';
 import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
-import { getFlashSale, FlashSale } from '../data/dynamicPricing';
+import { getFlashSale, FlashSale, getDynamicOffers, DynamicOffer } from '../data/dynamicPricing';
+import { getRemoteBoolean } from '../services/remoteConfig';
 import { getProductById } from '../data/shopProducts';
 import { soundManager } from '../services/sound';
 import {
@@ -254,6 +260,41 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     claimVipStreakBonus,
   } = useEconomyActions();
   const { unlockCosmetic } = usePlayerActions();
+  // Tier 6 B6 — read player segments + current level to compute the dynamic
+  // "For You" row. When segments haven't been computed yet (first session),
+  // the hook returns an empty offer list so the section simply doesn't render.
+  const segments = usePlayerStore(selectSegments);
+  const currentLevel = usePlayerStore(selectCurrentLevel);
+  const dynamicOffers = useMemo<DynamicOffer[]>(() => {
+    if (!segments) return [];
+    if (!getRemoteBoolean('dynamicOffersEnabled')) return [];
+    return getDynamicOffers(
+      segments.spending,
+      segments.engagement,
+      currentLevel,
+      (segments as { daysSinceActive?: number }).daysSinceActive,
+    );
+  }, [segments, currentLevel]);
+  // Fire offer_surfaced once per distinct offer set so the funnel analytics
+  // dimension (segment × tier) shows up without re-firing on re-renders.
+  const lastSurfacedKeyRef = useRef<string>('');
+  useEffect(() => {
+    if (dynamicOffers.length === 0) return;
+    const key = dynamicOffers.map((o) => `${o.productId}@${o.discountPercent}`).join('|');
+    if (key === lastSurfacedKeyRef.current) return;
+    lastSurfacedKeyRef.current = key;
+    for (const offer of dynamicOffers) {
+      void analytics.logEvent('offer_surfaced', {
+        product_id: offer.productId,
+        discount_percent: offer.discountPercent,
+        badge: offer.badge ?? '',
+        engagement: segments?.engagement ?? 'unknown',
+        spending: segments?.spending ?? 'unknown',
+        days_since_active:
+          (segments as { daysSinceActive?: number } | null | undefined)?.daysSinceActive ?? 0,
+      });
+    }
+  }, [dynamicOffers, segments]);
   const adsRemoved = adsRemovedProp ?? isAdFreeComputed;
   const premiumPass = premiumPassProp ?? isPremiumPassFlag;
   const { commerceStatus, checkPurchaseAllowed, purchaseProduct, restorePurchases } = useCommerce();
@@ -1075,6 +1116,72 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 </View>
               );
             })}
+          </View>
+        )}
+
+        {/* ── Tier 6 B6 — For You (dynamic offers) ─────────────────────── */}
+        {dynamicOffers.length > 0 && (
+          <View style={styles.dynamicOffersSection}>
+            <Text style={styles.dynamicOffersHeading}>For you</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.featuredContent}
+            >
+              {dynamicOffers.map((offer) => {
+                const product = getProductById(offer.productId as any);
+                const name = product?.name ?? offer.productId;
+                const price = product?.fallbackPrice ?? '$1.99';
+                const originalPrice = product?.originalPrice;
+                const icon = product?.icon ?? '\u{1F381}';
+                return (
+                  <TouchableOpacity
+                    key={`${offer.productId}-${offer.discountPercent}`}
+                    style={styles.featuredCard}
+                    onPress={() => {
+                      void analytics.logEvent('offer_tapped', {
+                        product_id: offer.productId,
+                        discount_percent: offer.discountPercent,
+                        engagement: segments?.engagement ?? 'unknown',
+                      });
+                      handlePurchase(offer.productId);
+                    }}
+                    activeOpacity={0.7}
+                    disabled={!!purchasingId}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Personalized offer: ${name} at ${offer.discountPercent} percent off`}
+                  >
+                    <LinearGradient
+                      colors={['#2a1e52', '#1a1240']}
+                      style={StyleSheet.absoluteFill}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                    />
+                    <View style={styles.featuredGlow} />
+                    {offer.badge && (
+                      <View style={styles.featuredBadge}>
+                        <Text style={styles.featuredBadgeText}>{offer.badge}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.featuredIcon}>{icon}</Text>
+                    <Text style={styles.featuredName}>{name}</Text>
+                    <Text style={styles.featuredDesc}>
+                      {`${offer.discountPercent}% off for you`}
+                    </Text>
+                    <View style={styles.featuredPriceRow}>
+                      {originalPrice && (
+                        <Text style={styles.featuredOldPrice}>{originalPrice}</Text>
+                      )}
+                      {isLoading(offer.productId) ? (
+                        <ActivityIndicator size="small" color={COLORS.green} />
+                      ) : (
+                        <Text style={styles.featuredPrice}>{price}</Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         )}
 
@@ -1951,6 +2058,19 @@ const styles = StyleSheet.create({
   featuredContent: {
     gap: 12,
     paddingRight: 16,
+  },
+  dynamicOffersSection: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  dynamicOffersHeading: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    paddingLeft: 2,
   },
   featuredCard: {
     width: width * 0.7,

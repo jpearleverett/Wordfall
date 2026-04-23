@@ -97,6 +97,100 @@ export const MEGA_BUNDLES: ShopProduct[] = [
 // ─── Offer Strategy Logic ────────────────────────────────────────────────────
 
 /**
+ * Tier 6 B6 — 4-tier comeback ladder keyed off `daysSinceActive`.
+ *
+ *  - Day 2–3 ("lightly lapsed"): 50% off starter, 24h "COME BACK"
+ *  - Day 4–7 ("lapsed"): 70% off starter, 48h "WELCOME BACK"
+ *  - Day 8–14 ("deeply lapsed"): 75% off first-purchase-special + 100 gems, 48h "WE MISS YOU"
+ *  - Day 15+ ("churned"): 30% off gold mega bundle + cosmetic frame, 72h "LAST CALL"
+ *
+ * Returns an empty array when the player is still Day-0 or Day-1 active;
+ * callers should fall through to the standard segment-based branches.
+ */
+function lapsedLadder(daysSinceActive: number, playerLevel: number): DynamicOffer[] {
+  if (daysSinceActive < 2) return [];
+
+  if (daysSinceActive <= 3) {
+    // Lightly lapsed: soft 50% nudge
+    const offers: DynamicOffer[] = [{
+      productId: 'starter_pack',
+      discountPercent: 50,
+      badge: 'COME BACK',
+      expiresInHours: 24,
+      priority: 1,
+    }];
+    if (playerLevel >= 10) {
+      offers.push({
+        productId: 'gems_250',
+        discountPercent: 30,
+        expiresInHours: 24,
+        priority: 2,
+      });
+    }
+    return offers;
+  }
+
+  if (daysSinceActive <= 7) {
+    // Classic 4-7 day lapsed window
+    const offers: DynamicOffer[] = [{
+      productId: 'starter_pack',
+      discountPercent: 70,
+      badge: 'WELCOME BACK',
+      expiresInHours: 48,
+      priority: 1,
+    }];
+    if (playerLevel >= 10) {
+      offers.push({
+        productId: 'gems_250',
+        discountPercent: 50,
+        badge: 'COMEBACK DEAL',
+        expiresInHours: 48,
+        priority: 2,
+      });
+    }
+    return offers;
+  }
+
+  if (daysSinceActive <= 14) {
+    // Deeply lapsed: pull out the first-purchase special + extra gems
+    return [
+      {
+        productId: 'first_purchase_special',
+        discountPercent: 75,
+        badge: 'WE MISS YOU',
+        expiresInHours: 48,
+        priority: 0,
+      },
+      {
+        productId: 'gems_500',
+        discountPercent: 40,
+        badge: 'COMEBACK BONUS',
+        expiresInHours: 48,
+        priority: 1,
+      },
+    ];
+  }
+
+  // Day 15+: churned tier — mega bundle at 30% + cosmetic frame hook
+  return [
+    {
+      productId: 'mega_bundle_gold',
+      discountPercent: 30,
+      badge: 'LAST CALL',
+      expiresInHours: 72,
+      priority: 0,
+    },
+    {
+      productId: 'starter_pack',
+      discountPercent: 60,
+      badge: 'RETURNING PLAYER',
+      expiresInHours: 72,
+      priority: 1,
+    },
+  ];
+}
+
+/**
  * Returns 1-3 dynamic offers personalized to the player's spending
  * and engagement segments.
  */
@@ -104,10 +198,23 @@ export function getDynamicOffers(
   spending: SpendingSegment,
   engagement: EngagementSegment,
   playerLevel: number,
+  daysSinceActive?: number,
 ): DynamicOffer[] {
   const offers: DynamicOffer[] = [];
 
-  // ── Lapsed players: aggressive win-back ──
+  // ── Tier 6 B6 — 4-tier comeback ladder ──
+  // Wordscapes / Royal Match tier comeback offers by time-away so the
+  // discount deepens as the player drifts. We key off the optional
+  // `daysSinceActive` so we can distinguish Day-2 ("lightly lapsed" — still
+  // in `at_risk`), Day-4–7 (entering `lapsed`), Day-8–14 ("deeply lapsed"),
+  // and Day-15+ ("churned"). Callers that don't have the raw days-since
+  // value fall through to the legacy engagement-based branches below.
+  if (typeof daysSinceActive === 'number') {
+    const ladder = lapsedLadder(daysSinceActive, playerLevel);
+    if (ladder.length > 0) return ladder;
+  }
+
+  // ── Legacy win-back (Day 7+ only — retained for callers pre-Tier-6) ──
   if (engagement === 'lapsed') {
     offers.push({
       productId: 'starter_pack',

@@ -100,6 +100,9 @@ export const selectPendingCeremonies  = (s: PlayerData) => s.pendingCeremonies;
 export const selectTooltipsShown      = (s: PlayerData) => s.tooltipsShown;
 
 export const selectFailCountByLevel   = (s: PlayerData) => s.failCountByLevel;
+export const selectConsecutiveFailures = (s: PlayerData) => s.consecutiveFailures;
+export const selectLastLevelStars      = (s: PlayerData) => s.lastLevelStars;
+export const selectLastBreatherOfferedAt = (s: PlayerData) => s.lastBreatherOfferedAt;
 export const selectMysteryWheel       = (s: PlayerData) => s.mysteryWheel;
 export const selectWinStreak          = (s: PlayerData) => s.winStreak;
 export const selectFlawlessStreak     = (s: PlayerData) => s.flawlessStreak;

@@ -38,22 +38,24 @@ export function getAdjustedConfig(
 
   const { averageStars, consecutiveThreeStars, levelAttempts } = metrics;
 
-  // Count recent levels with >3 attempts (struggling indicator)
+  // Count recent levels with >2 attempts (struggling indicator)
   const recentLevelKeys = Object.keys(levelAttempts)
     .map(Number)
     .sort((a, b) => b - a)
     .slice(0, 5);
   const recentMultiAttemptLevels = recentLevelKeys.filter(
-    (lvl) => levelAttempts[lvl] > 3,
+    (lvl) => levelAttempts[lvl] > 2,
   ).length;
 
   // ── Struggling detection ──
-  // Average stars below 2.0 OR any recent level that took >3 attempts.
-  // Earlier thresholds (< 1.5 / >= 2) gated easing so tightly that a player
-  // grinding 2-star clears on hard levels never got any relief, so the
-  // adaptive layer felt absent. 2.0 is still a clear struggle signal
-  // (consistent sub-star performance).
-  if (averageStars < 2.0 || recentMultiAttemptLevels >= 1) {
+  // Average stars below 2.4 OR any recent level that took >2 attempts.
+  // Tier 6 (April 2026) loosened the thresholds after the first pass
+  // (< 2.0 / >3 attempts) was shown to miss real strugglers — new
+  // players on 5-cell grids naturally average ~2.8 stars, so a 2.0
+  // floor never triggered until the player was deep in failed
+  // chapter-gate territory. 2.4 catches the L15–L25 softlock zone
+  // without reacting to a single off puzzle.
+  if (averageStars < 2.4 || recentMultiAttemptLevels >= 1) {
     const adjusted = makeEasier(baseConfig);
     logger.log(
       `[DifficultyAdjuster] Easing difficulty: avgStars=${averageStars.toFixed(2)}, multiAttemptLevels=${recentMultiAttemptLevels}`,
@@ -62,7 +64,7 @@ export function getAdjustedConfig(
       config: adjusted,
       direction: 'easier',
       reason:
-        averageStars < 2.0
+        averageStars < 2.4
           ? `low_avg_stars_${averageStars.toFixed(2)}`
           : `multi_attempt_levels_${recentMultiAttemptLevels}`,
     };

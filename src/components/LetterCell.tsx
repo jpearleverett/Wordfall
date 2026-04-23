@@ -122,7 +122,12 @@ export const LetterCell = React.memo(function LetterCell({
   // drag, chain clear) don't serialize through the JS bridge. The outer
   // wrapper below keeps the legacy Animated.Value for `fallAnim` because
   // that shared animated value is owned by GameScreen's gravity block
-  // (fallAnimMap) — migrating it would cascade into a much larger diff.
+  // (fallAnimMap) and already runs with `useNativeDriver: true` — the
+  // translateY animation is native-driven on the UI thread, not the JS
+  // bridge, so the worklet/bridge split concern raised in the Tier 6
+  // audit is much smaller than the header "legacy Animated" label
+  // suggests. Full Reanimated migration was evaluated in Tier 6 B5 and
+  // deferred — see `agent_docs/gotchas.md` for the tradeoff analysis.
   const scaleAnim = useSharedValue(1);
   const movedAnim = useSharedValue(0);
 

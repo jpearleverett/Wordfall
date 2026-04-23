@@ -237,6 +237,12 @@ function ConnectedWordBankImpl() {
     [selectedCells, currentWord, wildcardCells, words, remainingWordSet, rawWord],
   );
 
+  // Tier 6 B7 — mirror GameScreen's tension trigger so the final chip
+  // coordinates its overshoot + glow with the BGM swap + haptic moment.
+  const tensionActive = useMemo(() => {
+    return words.filter((w) => !w.found).length === 1;
+  }, [words]);
+
   return (
     <View style={styles.wordArea}>
       <React.Profiler id="WordBank" onRender={profilerOnRender}>
@@ -244,6 +250,7 @@ function ConnectedWordBankImpl() {
           words={words}
           currentWord={currentWord}
           isValidWord={isValidWord}
+          tensionActive={tensionActive}
         />
       </React.Profiler>
     </View>

@@ -99,7 +99,20 @@ export type AnalyticsEventName =
   | 'first_purchase_modal_dismissed'
   | 'gift_cta_tapped'
   | 'gift_cta_sent'
-  | 'gift_cta_failed';
+  | 'gift_cta_failed'
+  // Tier 6 B1 — fail-breather offer
+  | 'fail_breather_shown'
+  | 'fail_breather_accepted'
+  | 'fail_breather_dismissed'
+  // Tier 6 B2 — Day-1 starter bundle in FTUE
+  | 'starter_bundle_offered_day1'
+  | 'starter_bundle_dismissed_day1'
+  | 'starter_bundle_purchased_day1'
+  // Tier 6 B6 — dynamic comeback ladder lifecycle
+  | 'offer_surfaced'
+  | 'offer_tapped'
+  | 'offer_purchased'
+  | 'offer_expired';
 
 export type EventParams = Record<string, unknown>;
 
@@ -841,6 +854,8 @@ class Analytics {
     total_spend?: number;
     /** Phase 4.11 — Firebase A/B segmentation for hard-energy cohort */
     hard_energy_enabled?: boolean;
+    /** Tier 6 B3 — attribute whale-cohort events to the player's prestige tier. */
+    prestige_tier?: number;
   }): Promise<void> {
     await this.ensureLoaded();
 
