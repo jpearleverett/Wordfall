@@ -15,7 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useFonts } from 'expo-font';
+import { useFonts, loadAsync as loadFontAsync } from 'expo-font';
+import { markRoundedFontReady } from './src/services/fontReady';
 import { Ionicons } from '@expo/vector-icons';
 import NeonTabBar from './src/components/navigation/NeonTabBar';
 import { BoardGenBanner } from './src/components/BoardGenBanner';
@@ -1855,6 +1856,18 @@ export default function App() {
     crashReporter.init();
     analytics.initFirebase();
     funnelTracker.trackStep('app_open');
+
+    // Post-mount rounded display font — not part of the hard-gated useFonts()
+    // above, so a stalled fetch can't block the first render. Components
+    // subscribe via useRoundedFontReady() and fall back to SpaceGrotesk until
+    // this resolves (or forever, if the network is offline on cold start).
+    loadFontAsync({
+      Baloo2_800ExtraBold: require('@expo-google-fonts/baloo-2/800ExtraBold/Baloo2_800ExtraBold.ttf'),
+    })
+      .then(() => markRoundedFontReady())
+      .catch(() => {
+        // swallow — the fallback font already renders fine
+      });
 
     return () => {
       void analytics.destroy();

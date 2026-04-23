@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import {
   Animated,
   Image,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -14,10 +15,13 @@ import Reanimated, {
   withSequence,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS } from '../constants';
+import { COLORS, FONTS, GRADIENTS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { perfCountCellRender } from '../utils/perfInstrument';
 import { useColors } from '../hooks/useColors';
+import { useRoundedFontReady } from '../services/fontReady';
+import { getRemoteBoolean } from '../services/remoteConfig';
+import { useSettings } from '../contexts/SettingsContext';
 
 // ── Pre-computed style constants (module scope so tuples share a single reference) ─
 const BODY_COLORS_VALID: [string, string, string, string, string] = ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
@@ -117,6 +121,23 @@ export const LetterCell = React.memo(function LetterCell({
   // If memoization is working we expect ~1 render per tap.
   perfCountCellRender();
   const palette = useColors();
+  // Typography + accessibility-aware visual overrides (Batch C, RC-gated).
+  // All default OFF so the first release ships the current look; flip ON
+  // remotely after soak. Subscribed here (not in GameScreen) so per-cell
+  // updates don't tear through the whole grid on RC fetch.
+  const roundedReady = useRoundedFontReady();
+  const useRoundedFont =
+    getRemoteBoolean('roundedDisplayFontEnabled') && roundedReady;
+  const { colorblindMode } = useSettings();
+  // Vowel tint disabled under any colorblind mode — the CVD palette swap
+  // owns tile-state color and a second layer would fight it.
+  const useVowelTint =
+    getRemoteBoolean('letterVowelTintEnabled') && colorblindMode === 'off';
+  const useShadowBump =
+    Platform.OS === 'ios' &&
+    isSelected &&
+    getRemoteBoolean('selectedTileShadowBumpEnabled');
+  const isVowel = 'AEIOU'.includes(letter);
   // Scale-pop + moved-overlay animations are driven on the Reanimated
   // worklet runtime so state changes on multiple cells at once (valid-word
   // drag, chain clear) don't serialize through the JS bridge. The outer
@@ -293,11 +314,14 @@ export const LetterCell = React.memo(function LetterCell({
             borderColor,
             borderWidth: isSelected || isValidWord ? 2 : isWildcard ? 1.5 : 1,
             shadowColor,
-            shadowOpacity: (isSelected || isValidWord) ? 0.7 : 0.4,
+            shadowOpacity: useShadowBump ? 0.85 : (isSelected || isValidWord) ? 0.7 : 0.4,
             // shadowRadius was 16/8 — halved because the grid renders up to
             // 50 cells simultaneously and each shadow is a per-frame GPU blur.
-            // 8/4 is still clearly visible but ~4x cheaper.
-            shadowRadius: (isSelected || isValidWord) ? 8 : 4,
+            // 8/4 is still clearly visible but ~4x cheaper. iOS shadow bump
+            // (Batch C, RC-gated) lifts selected tiles to 12 for extra
+            // pick-up feel; Android elevation intentionally not bumped
+            // (flickers under LinearGradient underlays).
+            shadowRadius: useShadowBump ? 12 : (isSelected || isValidWord) ? 8 : 4,
             shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 4 : 2 },
             elevation: (isSelected || isValidWord) ? 8 : 4,
           },
@@ -394,6 +418,10 @@ export const LetterCell = React.memo(function LetterCell({
             isSelected && styles.letterSelected,
             isValidWord && styles.letterValid,
             !isSelected && !isValidWord && styles.letterDefault,
+            useRoundedFont && { fontFamily: FONTS.displayRounded },
+            useVowelTint &&
+              !isSelected &&
+              !isValidWord && { color: isVowel ? '#fff4d6' : '#e8e0ff' },
           ]}
         >
           {isWildcard ? '★' : letter}

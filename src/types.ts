@@ -273,6 +273,18 @@ export interface Chapter {
   icon: string;
   /** Optional generation constraints. When absent, defaults apply. */
   profile?: GenerationProfile;
+  /**
+   * Optional per-chapter visual palette. When present, AmbientBackdrop's
+   * `'game'` variant swaps its default synthwave gradient for this palette
+   * so each world feels distinct. Gated behind `chapterThemedBackdropEnabled`
+   * RC flag. All three stops are hex strings. Colorblind overrides run
+   * downstream in `useColors()` so per-chapter palettes don't fight CVD.
+   */
+  palette?: {
+    bg: string;
+    surface: string;
+    accent: string;
+  };
 }
 
 // ============ GAME MODES ============

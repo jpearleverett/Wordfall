@@ -6,6 +6,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { COLORS } from '../../constants';
 import { LOCAL_IMAGES } from '../../utils/localAssets';
 import SynthwaveHomeBackdrop from '../home/SynthwaveHomeBackdrop';
+import { getRemoteBoolean } from '../../services/remoteConfig';
 
 interface AmbientBackdropProps {
   variant?: 'home' | 'library' | 'game' | 'collections' | 'profile' | 'shop' | 'leaderboard' | 'event' | 'mastery' | 'modes' | 'settings' | 'club';
@@ -144,14 +145,18 @@ export function AmbientBackdrop({ variant = 'home', colorOverride }: AmbientBack
   const isFocused = useIsFocused();
 
   if (variant === 'game') {
+    // Dim the backdrop so the grid visually pops. RC-gated so we can revert
+    // remotely if the darker middle stops look muddy on OLED vs. LCD.
+    const dim = getRemoteBoolean('gameBackgroundDimmedEnabled');
     const gameGradient = [
       colorOverride?.bg ?? '#050008',
       colorOverride?.surface ?? '#0d0020',
-      colorOverride?.accent ?? '#1a0533',
-      colorOverride?.surface ?? '#2a0845',
-      colorOverride?.accent ?? '#1a0533',
+      colorOverride?.accent ?? (dim ? '#140428' : '#1a0533'),
+      colorOverride?.surface ?? (dim ? '#220738' : '#2a0845'),
+      colorOverride?.accent ?? (dim ? '#140428' : '#1a0533'),
       colorOverride?.bg ?? '#0d0020',
     ] as [string, string, ...string[]];
+    const bgImageOpacity = dim ? 0.25 : 0.5;
     // Game screen gets a STATIC backdrop — just the sky gradient + bg image.
     // Previously this rendered SynthwaveBackdrop with a looping H.264 video,
     // an animated NeonSun, a scrolling perspective grid, and 10-25 twinkling
@@ -174,7 +179,7 @@ export function AmbientBackdrop({ variant = 'home', colorOverride }: AmbientBack
             ...StyleSheet.absoluteFillObject,
             width: '100%',
             height: '100%',
-            opacity: 0.5,
+            opacity: bgImageOpacity,
           }}
           resizeMode="cover"
         />

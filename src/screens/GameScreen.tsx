@@ -41,6 +41,7 @@ import {
   selectLastBreatherOfferedAt,
   selectPuzzlesSolved,
   selectStreaks,
+  selectFlawlessStreak,
   selectTooltipsShown,
 } from '../stores/playerStore';
 import {
@@ -55,8 +56,10 @@ import {
 import { analytics } from '../services/analytics';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
 import BoosterComboBanner from '../components/BoosterComboBanner';
+import GameplayMascot from '../components/GameplayMascot';
 import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCombos';
 import { getTheme } from '../data/cosmetics';
+import { getChapterForLevel, getChapterPalette } from '../data/chapters';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { adManager, AdRewardType } from '../services/ads';
@@ -68,6 +71,7 @@ import { FailBreatherOffer, BREATHER_COOLDOWN_MS } from '../components/FailBreat
 import { GameFlashes } from './game/GameFlashes';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
+import { useHideTabBarOnFocus } from '../hooks/useHideTabBarOnFocus';
 
 interface GameScreenProps {
   board: Board;
@@ -428,6 +432,7 @@ function GameScreenImpl({
   nextUnlockPreview = null,
 }: GameScreenProps) {
   const { t } = useTranslation();
+  useHideTabBarOnFocus();
   // Narrow zustand subscriptions — re-render only when the slice actually
   // read changes. usePlayer() / useEconomy() would re-render this 1700-line
   // component on every economy/player mutation across the app.
@@ -438,6 +443,8 @@ function GameScreenImpl({
   const lastBreatherOfferedAt = usePlayerStore(selectLastBreatherOfferedAt);
   const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
   const playerStreaks = usePlayerStore(selectStreaks);
+  const flawlessStreakData = usePlayerStore(selectFlawlessStreak);
+  const flawlessStreakCurrent = flawlessStreakData?.currentStreak ?? 0;
   const tooltipsShown = usePlayerStore(selectTooltipsShown);
   const playerActions = usePlayerActions();
   const { markTooltipShown, queueCeremony, sendChallenge, recordDailyQuestEvent } = playerActions;
@@ -1872,12 +1879,20 @@ function GameScreenImpl({
     return dimmed;
   }, [spotlightActive, spotlightLetters, grid]);
 
+  // Per-chapter backdrop palette. RC-gated so we can kill the feature
+  // remotely if a particular palette clashes with chapter art. When the
+  // flag is off, `undefined` passes through and AmbientBackdrop renders
+  // its default synthwave stops.
+  const chapterPaletteOverride = getRemoteBoolean('chapterThemedBackdropEnabled')
+    ? getChapterPalette(getChapterForLevel(level))
+    : undefined;
+
   return (
     <GameStoreContext.Provider value={store}>
     <React.Profiler id="GameScreen" onRender={profilerOnRender}>
     <Animated.View style={shakeContainerStyle}>
     <SafeAreaView style={styles.container}>
-      <AmbientBackdrop variant="game" />
+      <AmbientBackdrop variant="game" colorOverride={chapterPaletteOverride} />
       {/* Mode intro banner - absolute overlay so it doesn't shift layout */}
       {showModeIntro && mode !== 'classic' && (
         <View style={styles.modeIntroOverlay} pointerEvents="none">
@@ -1907,11 +1922,19 @@ function GameScreenImpl({
         />
       )}
 
+      <GameplayMascot
+        foundCount={foundWords}
+        tensionActive={totalWords - foundWords === 1}
+        flawlessStreak={flawlessStreakCurrent}
+      />
+
       <GameHeader
         level={level}
         score={score}
         moves={moves}
         hintsLeft={hintsAvailable}
+        hintsUsed={hintsUsed}
+        flawlessStreak={flawlessStreakCurrent}
         undosLeft={undosAvailable}
         foundWords={foundWords}
         totalWords={totalWords}

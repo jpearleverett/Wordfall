@@ -2,6 +2,39 @@ import { Chapter, Difficulty } from '../types';
 import { parseRemoteChapters } from '../utils/chapterSchema';
 
 /**
+ * Per-wing backdrop palettes. Each chapter inherits its wing's palette
+ * unless the chapter declares its own `palette` override. Used by
+ * `AmbientBackdrop` variant `'game'` when `chapterThemedBackdropEnabled`
+ * Remote Config flag is on.
+ *
+ * Palette picks keep the synthwave ceiling — saturated, deep-space-friendly
+ * — while giving each wing a recognizable dominant hue.
+ */
+export const WING_PALETTES: Record<string, { bg: string; surface: string; accent: string }> = {
+  nature:    { bg: '#04110b', surface: '#0a2a1a', accent: '#124a2e' },
+  science:   { bg: '#050814', surface: '#0d1930', accent: '#1e3a6f' },
+  mythology: { bg: '#120818', surface: '#2a1030', accent: '#4d1e52' },
+  ocean:     { bg: '#020a14', surface: '#051f3a', accent: '#0a3d66' },
+  arts:      { bg: '#120612', surface: '#2a0c2e', accent: '#5a1e5e' },
+  space:     { bg: '#050008', surface: '#0d0020', accent: '#2a0845' },
+  history:   { bg: '#0e0905', surface: '#231808', accent: '#52381a' },
+  elements:  { bg: '#180802', surface: '#361004', accent: '#6b1f08' },
+};
+
+/**
+ * Resolve the effective backdrop palette for a chapter — prefers the
+ * chapter's own `palette` override, falls back to the wing palette, and
+ * finally falls back to the baseline space palette so every level has a
+ * usable result.
+ */
+export function getChapterPalette(chapter: Chapter | undefined): { bg: string; surface: string; accent: string } {
+  if (chapter?.palette) return chapter.palette;
+  const wing = chapter?.wingId;
+  if (wing && WING_PALETTES[wing]) return WING_PALETTES[wing];
+  return WING_PALETTES.space;
+}
+
+/**
  * 40 chapters across 8 library wings (5 chapters per wing).
  * Each chapter has a curated set of theme words used for board generation.
  *
