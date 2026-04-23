@@ -80,6 +80,10 @@ import { db, isFirebaseConfigured } from '../config/firebase';
 import { logger } from '../utils/logger';
 import { crashReporter } from './crashReporting';
 import { withRetry } from './retry';
+import {
+  submitValidatedScore as submitValidatedScoreCallable,
+  leaderboardValidationEnabled,
+} from './leaderboardSubmit';
 
 /**
  * Log a Firestore mutation failure to both the local logger (dev visibility)
@@ -368,6 +372,24 @@ class FirestoreService {
     displayName: string
   ): Promise<void> {
     if (!this.enabled || !userId) return;
+    // Tier 6 B4 — route through the validated-score Cloud Function when the
+    // RC flag is on. Keeps the direct-write fallback for the kill-switch
+    // case, so flipping the flag off doesn't break leaderboards.
+    if (leaderboardValidationEnabled()) {
+      try {
+        await submitValidatedScoreCallable({
+          scope: 'daily',
+          score,
+          stars,
+          level,
+          displayName,
+        });
+        return;
+      } catch (e) {
+        logFirestoreError('submitDailyScore(callable)', 'dailyScores', e);
+        return;
+      }
+    }
     try {
       const today = getTodayDateString();
       const docId = `${userId}_${today}`;
@@ -402,6 +424,19 @@ class FirestoreService {
     displayName: string
   ): Promise<void> {
     if (!this.enabled || !userId) return;
+    if (leaderboardValidationEnabled()) {
+      try {
+        await submitValidatedScoreCallable({
+          scope: 'weekly',
+          score,
+          displayName,
+        });
+        return;
+      } catch (e) {
+        logFirestoreError('submitWeeklyScore(callable)', 'weeklyScores', e);
+        return;
+      }
+    }
     try {
       const weekId = getCurrentWeekId();
       const docId = `${userId}_${weekId}`;
@@ -436,6 +471,20 @@ class FirestoreService {
     displayName: string,
   ): Promise<void> {
     if (!this.enabled || !userId || !eventId) return;
+    if (leaderboardValidationEnabled()) {
+      try {
+        await submitValidatedScoreCallable({
+          scope: 'event',
+          score,
+          eventId,
+          displayName,
+        });
+        return;
+      } catch (e) {
+        logFirestoreError('submitEventScore(callable)', 'events.scores', e);
+        return;
+      }
+    }
     try {
       const docRef = doc(db, 'events', eventId, 'scores', userId);
       const existing = await getDoc(docRef);
