@@ -175,6 +175,27 @@ export interface RemoteConfigValues {
    * computed. Raise during soft launch to 4–5 if tests show healthy CTR.
    */
   maxNotificationsPerDay: number;
+
+  // Puzzle-screen visual overhaul (April 2026) — every visual change on the
+  // gameplay screen is gated so it can be A/B tested or killed remotely.
+  /** Hide the global bottom tab bar while GameScreen is focused. */
+  hideTabBarDuringPlayEnabled: boolean;
+  /** Fold the chapter name into the level pill: "NEON NIGHTS · L33". */
+  gameScreenChapterInlineEnabled: boolean;
+  /** Render the find-list as a 2-row wrapped panel (falls back to horizontal scroll on small screens or long lists). */
+  wordBankExpandedPanelEnabled: boolean;
+  /** Dim the gameplay AmbientBackdrop so tiles pop. */
+  gameBackgroundDimmedEnabled: boolean;
+  /** Render a 3-pip star-projection row next to the level pill. */
+  liveStarsPipsEnabled: boolean;
+  /** Show a "🔥 {streak}" chip when flawlessStreak > 0. */
+  flawlessStreakHudChipEnabled: boolean;
+  /** Swap letter font to Baloo 2 ExtraBold once it loads post-mount. */
+  roundedDisplayFontEnabled: boolean;
+  /** Warm-vowel / cool-consonant tint on tile letters (skipped under colorblind modes). */
+  letterVowelTintEnabled: boolean;
+  /** iOS-only selected-tile shadow bump (Android elevation bump skipped due to flicker). */
+  selectedTileShadowBumpEnabled: boolean;
 }
 
 export type RemoteConfigKey = keyof RemoteConfigValues;
@@ -326,6 +347,20 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   streakShieldOfferEnabled: true,
   prestigeCeremonyEnabled: true,
   maxNotificationsPerDay: 3,
+
+  // Puzzle-screen visual overhaul (April 2026).
+  // Info-architecture changes default ON (ship state) — flip OFF remotely to
+  // revert in place. Tile/typography changes default OFF — flip ON after a
+  // 48h production soak.
+  hideTabBarDuringPlayEnabled: true,
+  gameScreenChapterInlineEnabled: true,
+  wordBankExpandedPanelEnabled: true,
+  gameBackgroundDimmedEnabled: true,
+  liveStarsPipsEnabled: true,
+  flawlessStreakHudChipEnabled: true,
+  roundedDisplayFontEnabled: false,
+  letterVowelTintEnabled: false,
+  selectedTileShadowBumpEnabled: false,
 };
 
 // ---------------------------------------------------------------------------

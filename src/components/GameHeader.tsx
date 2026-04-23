@@ -6,12 +6,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS } from '../constants';
 import { GameMode } from '../types';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import { getChapterForLevel } from '../data/chapters';
+import { getRemoteBoolean } from '../services/remoteConfig';
 
 interface GameHeaderProps {
   level: number;
   score: number;
   moves: number;
   hintsLeft: number;
+  /** Live count of hints used this run; feeds the 3-pip star projection. */
+  hintsUsed?: number;
+  /** Current flawless streak count (cross-session). Renders a `🔥 N` chip when > 0. */
+  flawlessStreak?: number;
   undosLeft: number;
   foundWords: number;
   totalWords: number;
@@ -35,6 +41,8 @@ export const GameHeader = React.memo(function GameHeader({
   score,
   moves,
   hintsLeft,
+  hintsUsed = 0,
+  flawlessStreak = 0,
   undosLeft,
   foundWords,
   totalWords,
@@ -53,10 +61,45 @@ export const GameHeader = React.memo(function GameHeader({
   const surfaceColor = themeColors?.surface ?? '#1a0a2e';
   const bgColor = themeColors?.bg ?? '#0a0015';
   const selectedColor = themeColors?.cellSelected ?? accentColor;
-  const modeLabel = isDaily ? 'Daily' : mode !== 'classic' ? modeConfig.name : `Lv ${level}`;
+  // Classic mode: fold the chapter name into the level pill when RC permits,
+  // so players see "NEON NIGHTS · L33" instead of a bare level number. Daily
+  // and specialty modes keep their own labels — they don't map to chapters.
+  const classicLabel = (() => {
+    if (!getRemoteBoolean('gameScreenChapterInlineEnabled')) return `Lv ${level}`;
+    const chapter = getChapterForLevel(level);
+    if (!chapter) return `Lv ${level}`;
+    const short = chapter.name.length > 12 ? chapter.name.slice(0, 11) + '…' : chapter.name;
+    return `${short.toUpperCase()} · L${level}`;
+  })();
+  const modeLabel = isDaily ? 'Daily' : mode !== 'classic' ? modeConfig.name : classicLabel;
   const progress = totalWords > 0 ? (foundWords / totalWords) * 100 : 0;
   const scoreScale = useSharedValue(1);
   const progressValue = useSharedValue(0);
+
+  // Live star projection — mirrors the post-win rules in useGame.ts so the
+  // pips the player sees during play match the stars they'll actually earn
+  // if they win right now. 3 ⇒ flawless (no hints, no wasted moves); 2 ⇒
+  // near-flawless (≤1 hint, ≤1 wasted move); 1 ⇒ a win counts for something.
+  const projectedStars =
+    hintsUsed === 0 && moves <= totalWords
+      ? 3
+      : hintsUsed <= 1 && moves <= totalWords + 1
+        ? 2
+        : 1;
+  const showStarsPips = getRemoteBoolean('liveStarsPipsEnabled');
+  const showFlawlessChip = getRemoteBoolean('flawlessStreakHudChipEnabled') && flawlessStreak > 0;
+  const flawlessScale = useSharedValue(1);
+  useEffect(() => {
+    if (flawlessStreak > 0) {
+      flawlessScale.value = withSequence(
+        withTiming(1.15, { duration: 120 }),
+        withSpring(1, { damping: 8 }),
+      );
+    }
+  }, [flawlessStreak]);
+  const flawlessStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: flawlessScale.value }],
+  }));
 
   // Animate score pop on change
   useEffect(() => {
@@ -127,13 +170,34 @@ export const GameHeader = React.memo(function GameHeader({
               {/* Label overlay */}
               <View style={styles.batteryLabelOverlay}>
                 <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
-                <Text style={styles.batteryText}>{modeLabel}</Text>
+                <Text style={styles.batteryText} numberOfLines={1}>{modeLabel}</Text>
                 <View style={styles.progressDivider} />
                 <Text style={[styles.progressCount, { color: modeConfig.color }]}>
                   {foundWords}/{totalWords}
                 </Text>
               </View>
             </View>
+            {(showStarsPips || showFlawlessChip) && (
+              <View style={styles.subRow}>
+                {showStarsPips ? (
+                  <View style={styles.pipsRow} accessibilityLabel={`Projected ${projectedStars} of 3 stars`}>
+                    {[0, 1, 2].map(i => (
+                      <Text
+                        key={i}
+                        style={[styles.pip, i < projectedStars ? styles.pipOn : styles.pipOff]}
+                      >
+                        ★
+                      </Text>
+                    ))}
+                  </View>
+                ) : <View />}
+                {showFlawlessChip && (
+                  <Animated.View style={[styles.flawlessChip, flawlessStyle]}>
+                    <Text style={styles.flawlessChipText}>🔥 {flawlessStreak}</Text>
+                  </Animated.View>
+                )}
+              </View>
+            )}
           </View>
 
           {/* Score with animated pop */}
@@ -293,6 +357,47 @@ const styles = StyleSheet.create({
   },
   centerBlock: {
     flex: 1,
+  },
+  subRow: {
+    marginTop: 3,
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 16,
+  },
+  pipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  pip: {
+    fontSize: 12,
+    lineHeight: 14,
+  },
+  pipOn: {
+    color: COLORS.gold,
+    textShadowColor: COLORS.gold,
+    textShadowRadius: 6,
+  },
+  pipOff: {
+    color: 'rgba(255,255,255,0.2)',
+  },
+  flawlessChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,120,30,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,160,60,0.4)',
+  },
+  flawlessChipText: {
+    fontSize: 10,
+    color: '#ffd59a',
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.3,
   },
   batteryContainer: {
     position: 'relative',

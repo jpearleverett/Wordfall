@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WordPlacement } from '../types';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
@@ -274,6 +274,15 @@ interface WordBankProps {
 export const WordBank = React.memo(function WordBank({ words, currentWord, isValidWord, tensionActive }: WordBankProps) {
   const wordAnim = useRef(new Animated.Value(0)).current;
   const prevWord = useRef('');
+  const { height: windowHeight } = useWindowDimensions();
+  const foundCount = useMemo(() => words.filter(w => w.found).length, [words]);
+  // 2-row wrap panel only when vertical budget allows AND list size stays readable
+  // at two rows — otherwise keep the horizontal scroll fallback so small devices
+  // (iPhone SE) don't push the booster bar off-screen.
+  const useExpandedPanel =
+    getRemoteBoolean('wordBankExpandedPanelEnabled') &&
+    windowHeight >= 700 &&
+    words.length <= 10;
 
   // Animate current word text on change
   useEffect(() => {
@@ -323,11 +332,11 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
               </View>
             )}
           </View>
-        ) : (
+        ) : foundCount === 0 ? (
           <Text style={styles.currentWordPlaceholder}>
-            Tap letters to spell a word
+            Trace a word from the list
           </Text>
-        )}
+        ) : null}
         {/* Elegant underline with gradient */}
         <View style={styles.underline}>
           {currentWord.length > 0 && (
@@ -345,40 +354,45 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
         </View>
       </View>
 
-      {/* Target words - horizontally scrollable */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.wordList}
-        style={styles.wordListScroll}
-      >
-        {(() => {
-          const unfoundCount = words.filter(w => !w.found).length;
-          return words.map((wordPlacement, index) => {
-            // Compute isActive here so we pass a stable boolean to WordChip.
-            // When currentWord changes from "AB" → "ABC", only chips whose
-            // boolean flipped re-render; the rest are skipped by React.memo.
-            const isActive = !wordPlacement.found && currentWord === wordPlacement.word;
-            // isValidWord only affects a chip's rendering when it's also the
-            // active one. Passing `false` to all other chips keeps their props
-            // stable when the *global* isValidWord flips, avoiding a cascade
-            // of re-renders across all 4-6 chips on every valid-word moment.
-            const chipIsValid = isActive && isValidWord;
-            const isLastRemaining = unfoundCount === 1 && !wordPlacement.found;
-            return (
-              <WordChip
-                key={`${wordPlacement.word}-${index}`}
-                wordPlacement={wordPlacement}
-                isActive={isActive}
-                isValidWord={chipIsValid}
-                isLastRemaining={isLastRemaining}
-                tensionActive={!!tensionActive}
-                index={index}
-              />
-            );
-          });
-        })()}
-      </ScrollView>
+      {/* Target words - wrapped panel (default) or horizontal scroll fallback */}
+      {(() => {
+        const unfoundCount = words.filter(w => !w.found).length;
+        const chips = words.map((wordPlacement, index) => {
+          // Compute isActive here so we pass a stable boolean to WordChip.
+          // When currentWord changes from "AB" → "ABC", only chips whose
+          // boolean flipped re-render; the rest are skipped by React.memo.
+          const isActive = !wordPlacement.found && currentWord === wordPlacement.word;
+          // isValidWord only affects a chip's rendering when it's also the
+          // active one. Passing `false` to all other chips keeps their props
+          // stable when the *global* isValidWord flips, avoiding a cascade
+          // of re-renders across all 4-6 chips on every valid-word moment.
+          const chipIsValid = isActive && isValidWord;
+          const isLastRemaining = unfoundCount === 1 && !wordPlacement.found;
+          return (
+            <WordChip
+              key={`${wordPlacement.word}-${index}`}
+              wordPlacement={wordPlacement}
+              isActive={isActive}
+              isValidWord={chipIsValid}
+              isLastRemaining={isLastRemaining}
+              tensionActive={!!tensionActive}
+              index={index}
+            />
+          );
+        });
+        return useExpandedPanel ? (
+          <View style={styles.wordListWrap}>{chips}</View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.wordList}
+            style={styles.wordListScroll}
+          >
+            {chips}
+          </ScrollView>
+        );
+      })()}
     </View>
   );
 });
@@ -456,6 +470,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  wordListWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
     paddingVertical: 4,
   },
   wordChip: {
