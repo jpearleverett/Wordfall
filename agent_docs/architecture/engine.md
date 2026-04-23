@@ -44,6 +44,18 @@ GameScreen spends from `economy.spendBoosterToken()` and grants into game state 
 - 3-tier fallback: standard → simplified → minimal generation on failure
 - Board generation timeout protection prevents UI hangs on difficult configurations
 
+### Content Pipeline (authored vs. procedural)
+
+There are **zero hand-placed grids in the repo**. Every board — level 1 included — is built at runtime by `generateBoard(config, seed, mode)` in `src/engine/boardGenerator.ts`. What's "authored" is chapter metadata, not puzzles.
+
+**Layer 1 — Hand-curated chapter catalog (`src/data/chapters.ts`, IDs 1–40).** Each chapter entry hand-specifies: `name`, `theme`, `description`, `icon`, `wingId`, `puzzleCount: 15`, `requiredStars` gate, a `themeWords` list of 12 words (e.g. chapter 1 `['tree','leaf','sun','rain','seed','root','stem','bark','soil','vine','fern','moss']`), and a `profile: GenerationProfile` (grid size, min/max word length, `introducedMechanics`, `emptyCellDensity`, `dictionaryTier`). `selectThemedWords()` in `puzzleGenerator.ts:61` biases board generation toward the theme words with a general-pool fallback. The 15 puzzles inside each chapter are generated on demand from `profile` + `generateBoard()` + a per-level seed — deterministic across devices but not hand-laid.
+
+**Layer 2 — Remote Config overlay (`chapterOverrideJson` → `setRemoteChapterOverride` at `chapters.ts:584`).** Ops can publish hand-curated chapter metadata for IDs 41+ via RC without a client rebuild. Payload is validated by `parseRemoteChapters` and merged into `getAllChapters()`. This is the intended live-ops path for seasonal chapter drops — ship an authored-feeling chapter monthly without rebuilding the app.
+
+**Layer 3 — Procedural fallback (`generateProceduralChapter(chapterId)` at `puzzleGenerator.ts:300`).** When a level exceeds curated + overlay content, `getChapterForLevel()` calls the procedural generator. It cycles `PROCEDURAL_THEMES` (derived from `WORD_CATEGORIES`), rolls a name from a 20×20 `{adjective} {noun}` table ("Emerald Spire", "Obsidian Vault"), sets `requiredStars = 234 + proceduralIndex * 6`, scales via `getProceduralBoardConfig` (difficulty caps at expert with grid≤10×8, words≤10, breather every 5th chapter). `getLevelConfigExtended(level)` at `puzzleGenerator.ts:358` returns the post-600 `BoardConfig` using a simpler scaling formula than the hand-tuned per-level curve in `constants.ts:getLevelConfig`.
+
+**What "600" is.** Literally `CURATED_CHAPTER_COUNT * PUZZLES_PER_CHAPTER` at `puzzleGenerator.ts:210-212`. It's the threshold where the hand-curated metadata catalog ends, not a hard cap on playable content. The game will procedurally generate chapters indefinitely. The real content-depth ceiling past 600 is curated-feel (generated chapter names, cycling themes) and the late-game difficulty curve, not a puzzle-count cap.
+
 ### 10 Game Modes
 | Mode | Key Rule | Unlock Level |
 |------|----------|-------------|

@@ -1,6 +1,6 @@
 # Wordfall — Agent Context
 
-**Word search with gravity** (React Native + Expo). Each puzzle has a pre-authored list of words to find on a letter grid. The player traces letters with their finger — when the trace matches a list word it auto-resolves (no submit button), those cells clear, and remaining letters fall via gravity into the empty spaces. 10 modes, 40 authored chapters (~600 puzzles), clubs, VIP, prestige.
+**Word search with gravity** (React Native + Expo). Each puzzle has a pre-authored list of words to find on a letter grid. The player traces letters with their finger — when the trace matches a list word it auto-resolves (no submit button), those cells clear, and remaining letters fall via gravity into the empty spaces. 10 modes, 40 hand-curated chapters covering levels 1–600 (names, themes, 12-word theme lists, star gates, per-chapter difficulty profile), then unbounded procedural chapters past level 600 via `generateProceduralChapter()`. Every board is procedurally generated from a seed — there are no hand-placed grids in the repo. Clubs, VIP, prestige.
 
 **Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**66 suites**).
 
