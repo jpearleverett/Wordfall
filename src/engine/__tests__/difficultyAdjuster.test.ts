@@ -144,9 +144,12 @@ describe('getAdjustedConfig - cruising detection', () => {
   });
 
   it('does not make harder if consecutiveThreeStars > 5 but avgStars <= 2.5', () => {
+    // Tier 6 B1 raised the easing threshold to 2.4 — bump the test
+    // average to 2.45 so we land in the balanced band (between 2.4
+    // easing and 2.5 hardening) without tripping either branch.
     const metrics = makeMetrics({
-      recentStars: [1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3],
-      averageStars: 2.3,
+      recentStars: [2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3],
+      averageStars: 2.45,
       consecutiveThreeStars: 7,
       levelAttempts: {},
     });
@@ -179,11 +182,61 @@ describe('getAdjustedConfig - cruising detection', () => {
   });
 });
 
+describe('getAdjustedConfig - Tier 6 B1 threshold changes', () => {
+  it('eases at averageStars 2.35 (just under the new 2.4 gate)', () => {
+    const metrics = makeMetrics({
+      recentStars: [2, 2, 3, 2, 2, 3, 2, 2, 3, 2],
+      averageStars: 2.35,
+      consecutiveThreeStars: 0,
+      levelAttempts: {},
+    });
+    const result = getAdjustedConfig(baseConfig, metrics);
+    expect(result.direction).toBe('easier');
+    expect(result.reason).toMatch(/low_avg_stars_/);
+  });
+
+  it('does NOT ease at averageStars 2.45 (just over the new 2.4 gate)', () => {
+    const metrics = makeMetrics({
+      recentStars: [2, 3, 2, 3, 3, 2, 3, 3, 2, 2],
+      averageStars: 2.45,
+      consecutiveThreeStars: 0,
+      levelAttempts: {},
+    });
+    const result = getAdjustedConfig(baseConfig, metrics);
+    expect(result.direction).toBe('none');
+  });
+
+  it('eases when any recent level has 3 attempts (new > 2 trigger)', () => {
+    const metrics = makeMetrics({
+      recentStars: [3, 3, 3, 3, 3],
+      averageStars: 3.0,
+      consecutiveThreeStars: 5,
+      levelAttempts: { 18: 3 },
+    });
+    const result = getAdjustedConfig(baseConfig, metrics);
+    expect(result.direction).toBe('easier');
+    expect(result.reason).toMatch(/multi_attempt_levels_/);
+  });
+
+  it('does NOT ease when a level has only 2 attempts', () => {
+    const metrics = makeMetrics({
+      recentStars: [3, 3, 2, 3, 2, 3],
+      averageStars: 2.67,
+      consecutiveThreeStars: 1,
+      levelAttempts: { 18: 2 },
+    });
+    const result = getAdjustedConfig(baseConfig, metrics);
+    expect(result.direction).toBe('none');
+  });
+});
+
 describe('getAdjustedConfig - balanced', () => {
   it('returns none when in the sweet spot', () => {
+    // Tier 6 B1: sweet spot is now averageStars in (2.4, 2.5]
+    // with no multi-attempt levels and a short 3-star streak.
     const metrics = makeMetrics({
-      recentStars: [2, 3, 2, 2, 3, 2, 3, 2, 2, 3],
-      averageStars: 2.3,
+      recentStars: [2, 3, 2, 3, 3, 2, 3, 2, 3, 3],
+      averageStars: 2.45,
       consecutiveThreeStars: 1,
       levelAttempts: {},
     });

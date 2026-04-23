@@ -181,6 +181,12 @@ export interface PlayerData {
   failCountByLevel: Record<number, number>;
   consecutiveFailures: number;
   lastLevelStars: number;
+  /**
+   * Timestamp (ms) of the last fail-breather offer shown. Enforces a
+   * 1-hour cooldown so the breather can't re-fire back-to-back on the
+   * same stuck level. Tier 6 B1 — see `agent_docs/launch_blockers.md`.
+   */
+  lastBreatherOfferedAt: number | null;
 
   // Tracking
   wordsFoundTotal: number;
@@ -510,6 +516,7 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   failCountByLevel: {},
   consecutiveFailures: 0,
   lastLevelStars: 0,
+  lastBreatherOfferedAt: null,
 
   // Tracking
   wordsFoundTotal: 0,

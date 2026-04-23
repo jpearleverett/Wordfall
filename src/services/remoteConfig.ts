@@ -53,6 +53,8 @@ export interface RemoteConfigValues {
   streakShieldGemPrice: number;
   // Difficulty
   adaptiveDifficultyEnabled: boolean;
+  /** Tier 6 B1 — surface a free-hint breather modal after 2 consecutive fails. */
+  failBreatherEnabled: boolean;
   // Phase 4B — hard-energy A/B (default OFF; flip on if soft-launch D7 sags)
   hardEnergyEnabled: boolean;
   // Phase 0 — pricing + LiveOps override hooks (Phase 4D)
@@ -211,6 +213,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // false short-circuits to an identity pass without touching the
   // call sites.
   adaptiveDifficultyEnabled: true,
+  // Tier 6 B1 — breather modal after two fails; kill-switch to false if
+  // cohort data shows it hurts whale grind retention.
+  failBreatherEnabled: true,
   // Phase 4B — hard-energy off until soft-launch cohort data justifies it
   hardEnergyEnabled: false,
   // Phase 0 / 4D LiveOps overrides — empty strings/0 mean "use built-ins"

@@ -117,6 +117,55 @@ export function getPrestigeMultiplier(prestigeLevel: number): number {
   return def?.xpMultiplier ?? 1.0;
 }
 
+/** Tier 6 B3 — XP multiplier getter aligned with the cosmetic-bonus API. */
+export function getPrestigeXpMultiplier(prestigeLevel: number): number {
+  return getPrestigeMultiplier(prestigeLevel);
+}
+
+/**
+ * Tier 6 B3 — parse the accumulated `permanentBonuses` string IDs stored on
+ * `PrestigeState` and sum the fractional coin boost. Each `coin_bonus_X`
+ * contributes +X; each `all_bonus_X` contributes +X for every currency.
+ * Returns the multiplier (1.0 = no change).
+ */
+export function getPrestigeCoinMultiplier(permanentBonuses: string[]): number {
+  let bonus = 0;
+  for (const id of permanentBonuses) {
+    const [prefix, valueStr] = splitBonusId(id);
+    const value = Number.parseFloat(valueStr);
+    if (!Number.isFinite(value)) continue;
+    if (prefix === 'coin_bonus' || prefix === 'all_bonus') {
+      bonus += value;
+    }
+  }
+  return 1 + bonus;
+}
+
+/**
+ * Tier 6 B3 — companion to {@link getPrestigeCoinMultiplier} for gems.
+ * `gem_bonus_X` and `all_bonus_X` values are treated as fractional boosts
+ * exactly as the ceremony copy advertises (`+X% Gem Reward`).
+ */
+export function getPrestigeGemMultiplier(permanentBonuses: string[]): number {
+  let bonus = 0;
+  for (const id of permanentBonuses) {
+    const [prefix, valueStr] = splitBonusId(id);
+    const value = Number.parseFloat(valueStr);
+    if (!Number.isFinite(value)) continue;
+    if (prefix === 'gem_bonus' || prefix === 'all_bonus') {
+      bonus += value;
+    }
+  }
+  return 1 + bonus;
+}
+
+/** Split a bonus ID like "coin_bonus_0.25" into ["coin_bonus", "0.25"]. */
+function splitBonusId(id: string): [string, string] {
+  const lastUnderscore = id.lastIndexOf('_');
+  if (lastUnderscore === -1) return [id, ''];
+  return [id.slice(0, lastUnderscore), id.slice(lastUnderscore + 1)];
+}
+
 /**
  * Get the player level required for the next prestige.
  * Always 100 levels from the effective starting point.
