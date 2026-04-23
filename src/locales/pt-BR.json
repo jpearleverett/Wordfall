@@ -130,8 +130,6 @@
     "loginCalendar": "Login Calendar",
     "loginCalendarDay": "Day {{day}} of 30",
     "calendarGrandPrize": "Day 30: GRAND PRIZE",
-    "streakStartsNow": "Your streak starts now!",
-    "nextMilestone": "Next: {{days}} days",
     "endsInHours": "Ends in {{hours}}h",
     "quickPlay": "Quick play",
     "openSettings": "Open settings",

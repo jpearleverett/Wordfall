@@ -25,6 +25,9 @@ import {
   selectDailyCompleted,
   selectTotalScore,
   selectFriendIds,
+  selectReferralCode,
+  selectReferralCount,
+  selectReferralMilestonesClaimed,
 } from '../stores/playerStore';
 import {
   firestoreService,
@@ -32,6 +35,9 @@ import {
 } from '../services/firestore';
 import { analytics } from '../services/analytics';
 import { SendGiftButton } from '../components/social/SendGiftButton';
+import ReferralCard from '../components/ReferralCard';
+import ReferralPendingRewards from '../components/ReferralPendingRewards';
+import FriendLeaderboardCard from '../components/FriendLeaderboardCard';
 
 const { width } = Dimensions.get('window');
 
@@ -144,13 +150,17 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
   scope: scopeProp,
   route,
 }) => {
-  const scope: LeaderboardScope = scopeProp ?? route?.params?.scope ?? 'global';
+  const initialScope: LeaderboardScope = scopeProp ?? route?.params?.scope ?? 'global';
+  const [scope, setScope] = useState<LeaderboardScope>(initialScope);
   const { user } = useAuth();
   const currentLevel = usePlayerStore(selectCurrentLevel);
   const dailyCompleted = usePlayerStore(selectDailyCompleted);
   const totalScore = usePlayerStore(selectTotalScore);
   const friendIds = usePlayerStore(selectFriendIds);
-  const { sendChallenge } = usePlayerActions();
+  const referralCode = usePlayerStore(selectReferralCode);
+  const referralCount = usePlayerStore(selectReferralCount);
+  const referralMilestonesClaimed = usePlayerStore(selectReferralMilestonesClaimed);
+  const { sendChallenge, claimReferralMilestone } = usePlayerActions();
   const currentUserId = currentUserIdProp ?? user?.uid ?? '';
 
   useEffect(() => {
@@ -471,6 +481,28 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
         </Text>
       </View>
 
+      {/* Scope Tabs — Global / Friends */}
+      <View style={styles.tabBar}>
+        {(['global', 'friends'] as const).map((s) => {
+          const isActive = scope === s;
+          const label = s === 'global' ? 'Global' : 'Friends';
+          return (
+            <TouchableOpacity
+              key={s}
+              style={[styles.tab, isActive && styles.tabActive]}
+              onPress={() => setScope(s)}
+              accessibilityRole="tab"
+              accessibilityLabel={`${label} leaderboard`}
+              accessibilityState={{ selected: isActive }}
+            >
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       {/* Time Tabs */}
       <View style={styles.tabBar}>
         {TIME_TABS.map((tab) => {
@@ -623,6 +655,17 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
           />
         }
       >
+        <ReferralPendingRewards />
+        <FriendLeaderboardCard onViewAll={() => setScope('friends')} />
+        {referralCode ? (
+          <ReferralCard
+            referralCode={referralCode}
+            referralCount={referralCount}
+            milestonesClaimed={referralMilestonesClaimed}
+            onClaimMilestone={(count) => claimReferralMilestone(count)}
+          />
+        ) : null}
+
         {loading && entries.length === 0 ? (
           <View style={styles.emptyState}>
             <ActivityIndicator size="large" color={COLORS.accent} />

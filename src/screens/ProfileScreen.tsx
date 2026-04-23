@@ -61,6 +61,7 @@ interface PlayerData {
   puzzlesSolved: number;
   totalStars: number;
   bestStreak: number;
+  currentStreak: number;
   perfectSolves: number;
   totalScore: number;
   badges: Array<{ id: string; name: string; icon: string }>;
@@ -88,6 +89,7 @@ const DEFAULT_PLAYER: PlayerData = {
   puzzlesSolved: 0,
   totalStars: 0,
   bestStreak: 0,
+  currentStreak: 0,
   perfectSolves: 0,
   totalScore: 0,
   badges: [],
@@ -100,7 +102,8 @@ const DEFAULT_PLAYER: PlayerData = {
 const STAT_CARDS = [
   { key: 'puzzlesSolved', label: 'Puzzles Solved', icon: '\u{1F9E9}' },
   { key: 'totalStars', label: 'Total Stars', icon: '\u2B50' },
-  { key: 'bestStreak', label: 'Best Streak', icon: '\u{1F525}' },
+  { key: 'currentStreak', label: 'Current Streak', icon: '\u{1F525}' },
+  { key: 'bestStreak', label: 'Best Streak', icon: '\u{1F3C5}' },
   { key: 'perfectSolves', label: 'Perfect Solves', icon: '\u{1F48E}' },
   { key: 'totalScore', label: 'Total Score', icon: '\u{1F3C6}' },
   { key: 'level', label: 'Current Level', icon: '\u{1F4C8}' },
@@ -168,6 +171,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       puzzlesSolved,
       totalStars,
       bestStreak: playerStreaks.bestStreak,
+      currentStreak: playerStreaks.currentStreak,
       perfectSolves,
       totalScore,
       badges: achievementIds.map((id: string) => ({ id, name: id, icon: '\u{1F3C5}' })),
@@ -182,6 +186,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       puzzlesSolved,
       totalStars,
       playerStreaks.bestStreak,
+      playerStreaks.currentStreak,
       perfectSolves,
       totalScore,
       achievementIds,
