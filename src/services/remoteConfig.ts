@@ -57,6 +57,8 @@ export interface RemoteConfigValues {
   failBreatherEnabled: boolean;
   /** Tier 6 B6 — render the dynamic "For You" offers row on Shop / Home. */
   dynamicOffersEnabled: boolean;
+  /** Tier 6 B2 — queue the first-purchase-offer modal post-onboarding. */
+  firstSessionStarterBundleEnabled: boolean;
   // Phase 4B — hard-energy A/B (default OFF; flip on if soft-launch D7 sags)
   hardEnergyEnabled: boolean;
   // Phase 0 — pricing + LiveOps override hooks (Phase 4D)
@@ -221,6 +223,8 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Tier 6 B6 — dynamic "For You" comeback-ladder row; kill-switch if the
   // segmentation logic misfires on any tier post-launch.
   dynamicOffersEnabled: true,
+  // Tier 6 B2 — queue first-purchase offer on first HomeScreen arrival.
+  firstSessionStarterBundleEnabled: true,
   // Phase 4B — hard-energy off until soft-launch cohort data justifies it
   hardEnergyEnabled: false,
   // Phase 0 / 4D LiveOps overrides — empty strings/0 mean "use built-ins"
