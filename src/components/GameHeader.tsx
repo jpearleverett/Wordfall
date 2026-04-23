@@ -356,10 +356,12 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     overflow: 'visible',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
+    // Shadow shrunk (8→4 offset, 16→8 radius) so the HUD drop shadow no
+    // longer bleeds down into the WordBank chip band directly below.
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
   },
   glassEdge: {
     position: 'absolute',
