@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
     // sits ~22px below its visual top. The chip band needs clearance
     // past that bleed — 40px is comfortable.
     marginTop: 8,
-    marginBottom: 40,
+    marginBottom: 30,
     // zIndex + elevation keep the chip band painted on top of the
     // grid's shadow if it ever extends this far up.
     zIndex: 2,
