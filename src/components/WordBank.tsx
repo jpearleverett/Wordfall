@@ -254,12 +254,6 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         </Animated.View>
       )}
 
-      {/* Letter count indicator with glass treatment */}
-      {!wordPlacement.found && (
-        <View style={styles.letterCount}>
-          <Text style={styles.letterCountText}>{wordPlacement.word.length}</Text>
-        </View>
-      )}
     </Animated.View>
   );
 });
