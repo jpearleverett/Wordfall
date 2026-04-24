@@ -1878,7 +1878,7 @@ export default function App() {
     // subscribe via useRoundedFontReady() and fall back to SpaceGrotesk until
     // this resolves (or forever, if the network is offline on cold start).
     loadFontAsync({
-      Baloo2_800ExtraBold: require('@expo-google-fonts/baloo-2/800ExtraBold/Baloo2_800ExtraBold.ttf'),
+      Baloo2_700Bold: require('@expo-google-fonts/baloo-2/700Bold/Baloo2_700Bold.ttf'),
     })
       .then(() => markRoundedFontReady())
       .catch(() => {

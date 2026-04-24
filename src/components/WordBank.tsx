@@ -467,17 +467,17 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    paddingVertical: 2,
+    paddingVertical: 0,
     // Leave clear vertical space so the wrap-panel's bottom row isn't
     // visually covered by the HUD drop shadow above or the grid's neon
     // frame glow below. Grid.tsx mounts three decorative layers
     // (outerGlow +12px, neonFrameWrap +16px, shadowRadius 16) absolutely
     // outside the frame's layout box, so gridArea's measurable top edge
-    // sits ~22px below its visual top. Keep >=28px clearance on the
+    // sits ~22px below its visual top. Keep >=26px clearance on the
     // bottom; the top hugs the HUD since WordBank's paddingVertical
     // + chromeCard paddingBottom already leave air above.
     marginTop: 0,
-    marginBottom: 28,
+    marginBottom: 26,
     // zIndex + elevation keep the chip band painted on top of the
     // grid's shadow if it ever extends this far up.
     zIndex: 2,
@@ -485,8 +485,8 @@ const styles = StyleSheet.create({
   },
   currentWordContainer: {
     alignItems: 'center',
-    marginBottom: 2,
-    height: 22,
+    marginBottom: 1,
+    height: 19,
     justifyContent: 'center',
   },
   currentWordRow: {
@@ -495,14 +495,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   currentWord: {
-    fontSize: 18,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 19,
     fontFamily: 'SpaceGrotesk_700Bold',
     color: COLORS.textPrimary,
-    letterSpacing: 3.5,
+    letterSpacing: 3,
     textTransform: 'uppercase',
     textShadowColor: 'rgba(200,77,255,0.4)',
-    textShadowRadius: 8,
+    textShadowRadius: 6,
   },
   currentWordValid: {
     color: COLORS.green,
@@ -533,9 +533,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
   },
   underline: {
-    width: '50%',
-    height: 2,
-    marginTop: 2,
+    width: '45%',
+    height: 1.5,
+    marginTop: 1,
     borderRadius: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',

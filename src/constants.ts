@@ -871,7 +871,10 @@ export const EVENT_SCHEDULE = {
 // Fonts: SpaceGrotesk (display) + Inter (body)
 export const FONTS = {
   display: 'SpaceGrotesk_700Bold',
-  displayRounded: 'Baloo2_800ExtraBold',
+  // Baloo 2 Bold (700) instead of ExtraBold (800) — ExtraBold rendered
+  // too thick on tile letters and read as "fat" rather than friendly.
+  // Bold keeps the rounded friendliness without the bulk.
+  displayRounded: 'Baloo2_700Bold',
   bodyRegular: 'Inter_400Regular',
   bodyMedium: 'Inter_500Medium',
   bodySemiBold: 'Inter_600SemiBold',
