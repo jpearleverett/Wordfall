@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontFamily: 'SpaceGrotesk_700Bold',
     textAlign: 'center',
-    letterSpacing: 0.8,
+    letterSpacing: 0.4,
   },
   letterDefault: {
     textShadowColor: 'rgba(0,0,0,0.85)',

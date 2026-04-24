@@ -18,8 +18,12 @@ interface SelectionTrailOverlayProps {
   cellBounds: CellBound[];
 }
 
-const LINE_HEIGHT = 4;
-const DOT_SIZE = 9;
+// Trail now renders UNDER the tile grid (see Grid.tsx), so the line only
+// shows in the gaps between cells. The big dots at cell centers are
+// fully hidden by tiles, so they're trimmed back to a subtle glow
+// accent that just barely peeks past tile edges.
+const LINE_HEIGHT = 3;
+const DOT_SIZE = 5;
 
 const SelectionTrailOverlay: React.FC<SelectionTrailOverlayProps> = ({
   selectedCells,

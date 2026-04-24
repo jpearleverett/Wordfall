@@ -496,6 +496,19 @@ function GameGridImpl({
               on every selection change. At opacity 0.03 the effect is barely
               visible anyway, and the cost on every grid render is significant. */}
 
+          {/* Neon selection trail — mounted BEFORE the tile grid so the
+              trail's dots + line segments paint BEHIND the tiles. The line
+              only shows in the cell-gap regions (letters stay fully
+              readable); tile selection color still marks which cells are
+              chosen. Prior order had the overlay on top which meant the
+              9px dots sat right over the letters on every selected tile. */}
+          {selectedCells.length > 1 && (
+            <SelectionTrailOverlay
+              selectedCells={selectedCells}
+              cellBounds={cellBounds}
+            />
+          )}
+
           <GestureDetector gesture={composedGesture}>
             <View
               ref={gridRef}
@@ -562,14 +575,6 @@ function GameGridImpl({
                 </Text>
               </View>
             </View>
-          )}
-
-          {/* Neon selection trail lines between selected cells */}
-          {selectedCells.length > 1 && (
-            <SelectionTrailOverlay
-              selectedCells={selectedCells}
-              cellBounds={cellBounds}
-            />
           )}
         </View>
       </LinearGradient>
