@@ -346,22 +346,20 @@ const styles = StyleSheet.create({
   },
   chromeCard: {
     borderRadius: 20,
-    // Softened from 1.5px @ 0.25 opacity — the loud purple outline fought
-    // with the grid for visual attention. Now it reads as a subtle frame,
-    // not a dominant panel.
-    borderWidth: 1,
-    borderColor: 'rgba(200,77,255,0.15)',
+    // Border removed entirely — the gradient fill + glass top edge carry
+    // the frame without a third "window outline" fighting the grid's
+    // neon frame and the chip band's implicit boundary. Screen now reads
+    // as one vertical flow instead of three stacked panels.
+    borderWidth: 0,
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 4,
     overflow: 'visible',
     shadowColor: '#000',
-    // Shadow shrunk (8→4 offset, 16→8 radius) so the HUD drop shadow no
-    // longer bleeds down into the WordBank chip band directly below.
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 6,
   },
   glassEdge: {
     position: 'absolute',
@@ -428,16 +426,19 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   pip: {
-    fontSize: 12,
-    lineHeight: 14,
+    fontSize: 15,
+    lineHeight: 16,
   },
   pipOn: {
     color: COLORS.gold,
     textShadowColor: COLORS.gold,
-    textShadowRadius: 6,
+    textShadowRadius: 8,
   },
+  // Solid dim-gold instead of barely-visible white @ 20% — gives players a
+  // clear "here's the ceiling, you've lost 2 of it" read rather than a
+  // blank gap next to the one filled star.
   pipOff: {
-    color: 'rgba(255,255,255,0.2)',
+    color: 'rgba(255, 184, 0, 0.30)',
   },
   flawlessChip: {
     flexDirection: 'row',

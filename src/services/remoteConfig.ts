@@ -367,13 +367,31 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   gameBackgroundDimmedEnabled: true,
   liveStarsPipsEnabled: true,
   flawlessStreakHudChipEnabled: true,
-  roundedDisplayFontEnabled: false,
-  letterVowelTintEnabled: false,
-  selectedTileShadowBumpEnabled: false,
-  // Puzzle-screen v2 follow-ups (April 2026 — default OFF for first release,
-  // each gated so we can A/B or kill-switch in prod).
-  chapterThemedBackdropEnabled: false,
+  // Typography + tile polish shipped in Batch C. Defaults flipped true
+  // after the hero-score redesign + chip-overlap fixes validated the
+  // rest of the puzzle screen — these were the final polish layers
+  // still gated off. All remain RC-overridable for remote kill-switch.
+  // `roundedDisplayFontEnabled`: Baloo 2 ExtraBold on tile letters +
+  // pill label (post-mount loaded, falls back to SpaceGrotesk if the
+  // font fetch stalls).
+  roundedDisplayFontEnabled: true,
+  // `letterVowelTintEnabled`: warm vowels / cool consonants.
+  // Auto-disabled under any colorblind mode.
+  letterVowelTintEnabled: true,
+  // `selectedTileShadowBumpEnabled`: iOS-only bump so selected tiles
+  // feel pressed-in. Android intentionally unchanged (elevation
+  // flickers under LinearGradient).
+  selectedTileShadowBumpEnabled: true,
+  // Puzzle-screen v2 follow-ups (April 2026).
+  // Palette enabled — each wing now gets its own mood (nature green,
+  // ocean blue, etc.) driven off the new getChapterPalette resolver.
+  chapterThemedBackdropEnabled: true,
+  // Dash-reveal remains OFF — it swaps the chip metaphor wholesale
+  // for Wordscapes-style fill-in slots. Big UX change; ship as an
+  // opt-in A/B once the chip layout is stable in internal.
   crosswordDashRevealEnabled: false,
+  // Mascot OFF — only an emoji placeholder today (🦉). Flip on once
+  // a real sprite lands.
   gameplayMascotEnabled: false,
 };
 

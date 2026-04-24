@@ -18,8 +18,8 @@ interface SelectionTrailOverlayProps {
   cellBounds: CellBound[];
 }
 
-const LINE_HEIGHT = 2;
-const DOT_SIZE = 6;
+const LINE_HEIGHT = 4;
+const DOT_SIZE = 9;
 
 const SelectionTrailOverlay: React.FC<SelectionTrailOverlayProps> = ({
   selectedCells,
@@ -114,27 +114,31 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
   },
+  // Trail was rendering but at 2px line / 6px dot with 45% shadow it was
+  // nearly invisible over the tile highlights. Bumped up so players
+  // actually see the connection between traced tiles.
   line: {
     position: 'absolute',
     height: LINE_HEIGHT,
+    borderRadius: LINE_HEIGHT / 2,
     backgroundColor: COLORS.accent,
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 4,
-    shadowOpacity: 0.45,
-    elevation: 3,
+    shadowRadius: 8,
+    shadowOpacity: 0.9,
+    elevation: 5,
   },
   dot: {
     position: 'absolute',
     width: DOT_SIZE,
     height: DOT_SIZE,
     borderRadius: DOT_SIZE / 2,
-    backgroundColor: COLORS.accent,
+    backgroundColor: '#ffffff',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 4,
-    shadowOpacity: 0.45,
-    elevation: 3,
+    shadowRadius: 8,
+    shadowOpacity: 0.9,
+    elevation: 5,
   },
 });
 

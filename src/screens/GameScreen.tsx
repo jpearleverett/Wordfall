@@ -147,6 +147,13 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
 // Shared empty Set so memoized consumers (PlayField's GameGrid) don't re-render when spotlight is inactive.
 const EMPTY_CELL_KEY_SET: Set<string> = new Set();
 
+// Unified booster-button body gradient — matches the tile material language
+// so the three boosters read as one shelf with different icons rather than
+// three mismatched widgets. Earlier revision had per-booster gradient
+// tints (purple / blue / blue) and a yellow shelf image bleeding through
+// behind them, which made the bar look like stickers on a wood plank.
+const BOOSTER_BODY_GRADIENT = ['#2a1548', '#160a2e'] as [string, string];
+
 // Pure helper — module scope so memoized sub-components can reach it.
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -188,11 +195,6 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
       styles.boosterBar,
       !(hasAnyBoosters && isPlaying) && styles.boosterBarHidden,
     ]}>
-      <Image
-        source={LOCAL_IMAGES.shelfBooster}
-        style={styles.boosterShelfImage}
-        resizeMode="stretch"
-      />
       <View style={styles.boosterShelf}>
         {wildcardCount > 0 && (
           <Pressable
@@ -204,10 +206,10 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
             onPress={onWildcard}
           >
             <LinearGradient
-              colors={['rgba(25, 15, 50, 0.85)', 'rgba(15, 8, 35, 0.90)'] as [string, string]}
+              colors={BOOSTER_BODY_GRADIENT}
               style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
             />
-            <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 215, 0, 0.20)' }]} />
+            <View style={styles.boosterGlassEdge} />
             <View style={styles.boosterIconWrap}>
               <Text style={styles.boosterEmoji}>★</Text>
             </View>
@@ -227,10 +229,10 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
             onPress={onSpotlight}
           >
             <LinearGradient
-              colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
+              colors={BOOSTER_BODY_GRADIENT}
               style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
             />
-            <View style={[styles.boosterGlow, { backgroundColor: 'rgba(255, 215, 0, 0.18)' }]} />
+            <View style={styles.boosterGlassEdge} />
             <View style={styles.boosterIconWrap}>
               <Text style={styles.boosterEmoji}>💡</Text>
             </View>
@@ -246,10 +248,10 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
             onPress={onSmartShuffle}
           >
             <LinearGradient
-              colors={['rgba(10, 20, 50, 0.85)', 'rgba(5, 12, 35, 0.90)'] as [string, string]}
+              colors={BOOSTER_BODY_GRADIENT}
               style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
             />
-            <View style={[styles.boosterGlow, { backgroundColor: 'rgba(168, 85, 247, 0.20)' }]} />
+            <View style={styles.boosterGlassEdge} />
             <View style={styles.boosterIconWrap}>
               <Text style={styles.boosterEmoji}>🔀</Text>
             </View>
@@ -2685,52 +2687,48 @@ const styles = StyleSheet.create({
   boosterBarHidden: {
     opacity: 0,
   },
-  boosterShelfImage: {
-    position: 'absolute',
-    bottom: 0,
-    alignSelf: 'center',
-    width: '85%',
-    height: 55,
-    opacity: 0.9,
-  },
   boosterShelf: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
+    gap: 14,
     paddingBottom: 8,
   },
   boosterButton: {
     alignItems: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 45, 149, 0.25)',
-    minWidth: 90,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 77, 255, 0.35)',
+    minWidth: 88,
     overflow: 'visible',
-    shadowColor: 'rgba(255, 45, 149, 0.4)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 6,
   },
   boosterActive: {
-    borderColor: 'rgba(255, 45, 149, 0.6)',
+    borderColor: COLORS.accent,
     shadowColor: COLORS.accent,
     shadowOpacity: 0.7,
-    shadowRadius: 14,
+    shadowRadius: 12,
   },
   boosterPressed: {
-    transform: [{ scale: 0.92 }],
-    opacity: 0.8,
+    transform: [{ scale: 0.94 }],
+    opacity: 0.85,
   },
-  boosterGlow: {
+  // Top glass highlight that matches LetterCell's specular — ties the
+  // booster material to the grid's.
+  boosterGlassEdge: {
     position: 'absolute',
-    top: 4,
-    left: '15%' as unknown as number,
-    right: '15%' as unknown as number,
-    height: 40,
-    borderRadius: 20,
+    top: 1,
+    left: 8,
+    right: 8,
+    height: 12,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   boosterIconWrap: {
     marginBottom: 6,
