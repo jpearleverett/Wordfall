@@ -147,12 +147,20 @@ function fillEmptyCells(grid: Grid, rng: () => number): void {
 /**
  * Select words for a puzzle, ensuring variety in length and starting letters.
  * Prefers shorter words for faster placement and solvability.
+ *
+ * When `themeWords` is supplied (authored per-chapter in `chapters.ts`), those
+ * words are placed at the head of the pool — the generator still applies its
+ * variety + substring + overlap guards, but chapter-themed words get first
+ * crack at the slots so Garden Bloom shows ROSE/TULIP/PETAL instead of
+ * BABBLE/MOTTO. Theme words are validated against the dictionary pool first
+ * so we never ship a word players can't actually find.
  */
 function selectWords(
   config: BoardConfig,
   rng: () => number,
   mode?: GameMode,
   profile?: GenerationProfile,
+  themeWords?: string[],
 ): string[] {
   let pool = getWordsByLength(config.minWordLength, config.maxWordLength);
 
@@ -187,12 +195,29 @@ function selectWords(
     }
   }
 
-  const shuffled = shuffleArray(pool, rng);
+  // Theme words that actually exist in the pool (same length bounds + passed
+  // the dictionary-tier / mode filters). Missing entries are silently dropped
+  // — the chapter author can't assume every garden word survives every
+  // generation profile (e.g. profile.dictionaryTier='expert' strips common
+  // 3-4 letter words). The shuffled general pool still fills the remaining
+  // slots so the list has some variety even when a chapter ships few theme
+  // words that fit the current profile.
+  const poolSet = new Set(pool);
+  const preferred = themeWords
+    ? Array.from(new Set(themeWords.map(w => w.toLowerCase()))).filter(w => poolSet.has(w))
+    : [];
+  const shuffledPreferred = shuffleArray(preferred, rng);
+  const shuffledRest = shuffleArray(pool, rng);
+  const shuffled = [...shuffledPreferred, ...shuffledRest];
   const selected: string[] = [];
+  const selectedSet = new Set<string>();
   const usedLetters = new Set<string>();
 
   for (const word of shuffled) {
     if (selected.length >= config.wordCount) break;
+    // Deduplicate across preferred + general pool — a theme word also
+    // present in the dictionary would otherwise be considered twice.
+    if (selectedSet.has(word)) continue;
 
     // Avoid duplicate starting letters for variety
     if (selected.length < config.wordCount - 1 && usedLetters.has(word[0])) {
@@ -214,6 +239,7 @@ function selectWords(
     if (tooMuchOverlap && selected.length < config.wordCount - 2) continue;
 
     selected.push(word);
+    selectedSet.add(word);
     usedLetters.add(word[0]);
   }
 
@@ -221,12 +247,13 @@ function selectWords(
   if (selected.length < config.wordCount) {
     for (const word of shuffled) {
       if (selected.length >= config.wordCount) break;
-      if (selected.includes(word)) continue;
+      if (selectedSet.has(word)) continue;
       const isSubstring = selected.some(
         w => w.includes(word) || word.includes(w)
       );
       if (isSubstring) continue;
       selected.push(word);
+      selectedSet.add(word);
     }
   }
 
@@ -331,8 +358,9 @@ function attemptGenerate(
   rng: () => number,
   mode?: GameMode,
   profile?: GenerationProfile,
+  themeWords?: string[],
 ): Board | null {
-  const words = selectWords(config, rng, mode, profile);
+  const words = selectWords(config, rng, mode, profile, themeWords);
   if (words.length < config.wordCount) return null;
 
   const grid = createEmptyGrid(config.rows, config.cols);
@@ -412,6 +440,7 @@ export function generateBoard(
   seed?: number,
   mode?: GameMode,
   profile?: GenerationProfile,
+  themeWords?: string[],
 ): Board {
   const baseSeed = seed ?? Date.now();
   const startTime = Date.now();
@@ -454,7 +483,7 @@ export function generateBoard(
   for (let attempt = 0; attempt < 80; attempt++) {
     checkTimeout();
     const rng = createRng(baseSeed + attempt * 7919);
-    const board = attemptGenerate(effectiveConfig, rng, mode, profile);
+    const board = attemptGenerate(effectiveConfig, rng, mode, profile, themeWords);
     if (board) return board;
   }
 
@@ -468,7 +497,7 @@ export function generateBoard(
   for (let attempt = 0; attempt < 60; attempt++) {
     checkTimeout();
     const rng = createRng(baseSeed + 1000 + attempt * 7919);
-    const board = attemptGenerate(fallbackConfig, rng, mode, profile);
+    const board = attemptGenerate(fallbackConfig, rng, mode, profile, themeWords);
     if (board) return board;
   }
 

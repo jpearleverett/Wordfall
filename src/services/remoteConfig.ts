@@ -358,10 +358,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Info-architecture changes default ON (ship state) — flip OFF remotely to
   // revert in place. Tile/typography changes default OFF — flip ON after a
   // 48h production soak.
-  // `hideTabBarDuringPlayEnabled` defaulted OFF after device test — the
-  // user wanted the bottom tab bar (Home / Play / Collections / Library /
-  // Profile) to stay visible during play. Feature still wired for A/B.
-  hideTabBarDuringPlayEnabled: false,
+  // `hideTabBarDuringPlayEnabled` flipped back ON (April 2026 design
+  // pass) — the tab bar competes with the grid for vertical space and
+  // the in-header back button already returns the player to Home. Top
+  // word-puzzle grossers (Wordscapes, Word Cookies, Words of Wonders)
+  // all hide the global nav during an active puzzle.
+  hideTabBarDuringPlayEnabled: true,
   gameScreenChapterInlineEnabled: true,
   wordBankExpandedPanelEnabled: true,
   gameBackgroundDimmedEnabled: true,

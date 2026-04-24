@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import {
   Animated,
   Image,
@@ -26,9 +26,25 @@ import { useSettings } from '../contexts/SettingsContext';
 // ── Pre-computed style constants (module scope so tuples share a single reference) ─
 const BODY_COLORS_VALID: [string, string, string, string, string] = ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
 const BODY_COLORS_SELECTED_HINT: [string, string, string, string, string] = ['#fff0b3', '#ffe580', '#ffd24d', '#ffb800', '#cc9200'];
-const BODY_COLORS_SELECTED: [string, string, string, string, string] = ['#ff8fd0', '#ff6eb8', '#ff2d95', '#e91e8c', '#b8147a'];
+// Selected-tile gradient was originally ['#ff8fd0', …] — the top stop was too
+// light against a white letter, so the text washed out on the upper half of
+// traced tiles. Darkened the entry stops so the whole tile sits in a deeper
+// magenta range that pushes white letters forward, while keeping the pink
+// identity.
+const BODY_COLORS_SELECTED: [string, string, string, string, string] = ['#d9267a', '#c0206c', '#a8185f', '#8a1250', '#6b0d3e'];
 const BODY_COLORS_WILDCARD = [...GRADIENTS.tile.wildcard] as [string, string, ...string[]];
 const BODY_COLORS_DEFAULT: [string, string, string, string, string] = ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'];
+
+/**
+ * Per-chapter tile tint. GameScreen computes a 5-stop gradient derived from
+ * the chapter's backdrop palette (nature → green, ocean → blue, etc.) and
+ * publishes it via this context. LetterCell falls back to the default
+ * purple ramp when no provider is mounted (e.g. Daily mode, tests). The
+ * provider value is memoized per-level in GameScreen so mid-puzzle state
+ * changes don't reach the cell via this context — only level transitions
+ * do, which re-render the grid anyway.
+ */
+export const TilePaletteContext = createContext<[string, string, string, string, string] | null>(null);
 
 const HIGHLIGHT_VALID: [string, string] = ['rgba(200,255,230,0.65)', 'rgba(0,255,135,0.0)'];
 const HIGHLIGHT_SELECTED_HINT: [string, string] = ['rgba(255,245,200,0.65)', 'rgba(255,184,0,0.0)'];
@@ -121,6 +137,10 @@ export const LetterCell = React.memo(function LetterCell({
   // If memoization is working we expect ~1 render per tap.
   perfCountCellRender();
   const palette = useColors();
+  // Chapter-derived default tile gradient. Stable across a single level; a
+  // level transition re-renders the whole grid anyway, so the extra context
+  // subscription doesn't break the per-tap memoization of LetterCell.
+  const chapterTileRamp = useContext(TilePaletteContext);
   // Typography + accessibility-aware visual overrides (Batch C, RC-gated).
   // All default OFF so the first release ships the current look; flip ON
   // remotely after soak. Subscribed here (not in GameScreen) so per-cell
@@ -198,7 +218,7 @@ export const LetterCell = React.memo(function LetterCell({
     else if (isSelected && isHinted) body = BODY_COLORS_SELECTED_HINT;
     else if (isSelected) body = BODY_COLORS_SELECTED;
     else if (isWildcard) body = BODY_COLORS_WILDCARD;
-    else body = BODY_COLORS_DEFAULT;
+    else body = chapterTileRamp ?? BODY_COLORS_DEFAULT;
 
     let highlight: [string, string];
     if (isValidWord) highlight = HIGHLIGHT_VALID;
@@ -225,7 +245,7 @@ export const LetterCell = React.memo(function LetterCell({
       borderColor: border,
       shadowColor: shadow,
     };
-  }, [isValidWord, isSelected, isHinted, isWildcard, palette]);
+  }, [isValidWord, isSelected, isHinted, isWildcard, palette, chapterTileRamp]);
 
   // CRITICAL: always use Animated.View, never swap between View and Animated.View
   // based on props. A component-type swap forces React to unmount the entire
@@ -486,21 +506,21 @@ const styles = StyleSheet.create({
     textShadowRadius: 6,
     textShadowOffset: { width: 0, height: 2 },
   },
-  // Selected letters used to be white-on-white-glow, which disappeared
-  // against the bright pink selected-tile gradient — the white glow
-  // flattened the contrast. Swapped to a tight dark drop shadow so the
-  // white letter gets a crisp readable outline against the pink fill.
+  // Selected letters need a heavy dark halo — the gradient under them is
+  // still pink and white-on-pink is a low-contrast read without the halo.
+  // Radius bumped from 3 → 8, offset centered, so the text reads as a
+  // crisp white glyph rimmed in near-black instead of a thin drop shadow.
   letterSelected: {
     color: '#ffffff',
-    textShadowColor: 'rgba(0,0,0,0.95)',
-    textShadowRadius: 3,
-    textShadowOffset: { width: 0, height: 2 },
+    textShadowColor: 'rgba(0,0,0,1)',
+    textShadowRadius: 8,
+    textShadowOffset: { width: 0, height: 0 },
   },
   letterValid: {
     color: '#ffffff',
-    textShadowColor: 'rgba(0,60,20,0.95)',
-    textShadowRadius: 3,
-    textShadowOffset: { width: 0, height: 2 },
+    textShadowColor: 'rgba(0,40,15,1)',
+    textShadowRadius: 8,
+    textShadowOffset: { width: 0, height: 0 },
   },
   indexBadge: {
     position: 'absolute',

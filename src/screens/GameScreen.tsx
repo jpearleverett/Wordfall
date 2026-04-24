@@ -59,7 +59,7 @@ import BoosterComboBanner from '../components/BoosterComboBanner';
 import GameplayMascot from '../components/GameplayMascot';
 import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCombos';
 import { getTheme } from '../data/cosmetics';
-import { getChapterForLevel, getChapterPalette } from '../data/chapters';
+import { getChapterForLevel, getChapterPalette, getChapterTileRamp } from '../data/chapters';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { adManager, AdRewardType } from '../services/ads';
@@ -71,6 +71,7 @@ import { FailBreatherOffer, BREATHER_COOLDOWN_MS } from '../components/FailBreat
 import { GameFlashes } from './game/GameFlashes';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
+import { TilePaletteContext } from '../components/LetterCell';
 
 interface GameScreenProps {
   board: Board;
@@ -1887,9 +1888,17 @@ function GameScreenImpl({
   // remotely if a particular palette clashes with chapter art. When the
   // flag is off, `undefined` passes through and AmbientBackdrop renders
   // its default synthwave stops.
+  const chapterForBackdrop = useMemo(() => getChapterForLevel(level), [level]);
   const chapterPaletteOverride = getRemoteBoolean('chapterThemedBackdropEnabled')
-    ? getChapterPalette(getChapterForLevel(level))
+    ? getChapterPalette(chapterForBackdrop)
     : undefined;
+  // Per-chapter default tile ramp. Memoized on level so the provider value
+  // is referentially stable across per-tap re-renders — the 50-tile grid
+  // would otherwise invalidate on every commit.
+  const chapterTileRamp = useMemo(
+    () => (getRemoteBoolean('chapterThemedBackdropEnabled') ? getChapterTileRamp(chapterForBackdrop) : null),
+    [chapterForBackdrop],
+  );
 
   return (
     <GameStoreContext.Provider value={store}>
@@ -1995,6 +2004,11 @@ function GameScreenImpl({
 
       {/* Grid area — onLayout measures the available space for Grid sizing */}
       <View style={styles.gridArea} onLayout={handleGridLayout}>
+        {/* TilePaletteContext publishes the chapter-derived tile ramp to every
+            LetterCell without threading a prop through Grid. Value is
+            memoized per-level above, so per-tap re-renders don't invalidate
+            consumers. */}
+        <TilePaletteContext.Provider value={chapterTileRamp}>
         {/* PlayField — subscribes to per-tap selection state (selectedCells,
             grid, wildcardCells). GameScreen does NOT subscribe to
             selectedCells, so cell taps only re-render PlayField +
@@ -2014,6 +2028,7 @@ function GameScreenImpl({
           isDragging={isDragging}
           setIsDragging={setIsDragging}
         />
+        </TilePaletteContext.Provider>
         {/* Floating banners - absolute overlay, don't affect grid sizing.
             Memoized subtree: all its conditions are derived from non-per-tap
             state (mode, gravityDirection, wildcardMode, hintsAvailable,
