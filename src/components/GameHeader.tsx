@@ -41,6 +41,17 @@ const ScorePop: React.FC<{ amount: number; color: string }> = ({ amount, color }
   );
 };
 
+/**
+ * One-line rule label that describes the current projected-star tier. Pairs
+ * with the 3-pip row so players can answer "why am I at 2★?" without opening
+ * a menu. Mirrors the `stars` formula in `useGame.ts:968`.
+ */
+function starRuleLabel(projected: number): string {
+  if (projected >= 3) return 'FLAWLESS · NO HINTS';
+  if (projected >= 2) return '≤1 HINT · ≤1 WASTED';
+  return 'MANY MISTAKES';
+}
+
 interface GameHeaderProps {
   level: number;
   score: number;
@@ -192,12 +203,13 @@ export const GameHeader = React.memo(function GameHeader({
         <View style={[styles.chromeGlow, { backgroundColor: `${modeConfig.color}20` }]} />
 
         <View style={styles.topRow}>
-          {/* Back button with glass effect */}
+          {/* Back button with glass effect. With the tab bar hidden during
+              play, this is the primary exit — the a11y copy matches. */}
           <Pressable
             style={({ pressed }) => [styles.backButton, pressed && styles.btnPressed]}
             onPress={onBack}
-            accessibilityLabel="Go back"
-            accessibilityHint="Return to the home screen"
+            accessibilityLabel="Exit puzzle"
+            accessibilityHint="Leave this puzzle and return to the previous screen"
           >
             <LinearGradient
               colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)'] as [string, string]}
@@ -289,10 +301,18 @@ export const GameHeader = React.memo(function GameHeader({
             center, not the title block's. */}
         <View style={styles.scoreHero} accessibilityLabel={`Current score: ${score}`}>
           {showStarsPips && (
-            <View style={styles.pipsRow} accessibilityLabel={`Projected ${projectedStars} of 3 stars`}>
+            <View style={styles.pipsRow} accessibilityLabel={`Projected ${projectedStars} of 3 stars. ${starRuleLabel(projectedStars)}`}>
               {[0, 1, 2].map(i => (
                 <Text key={i} style={[styles.pip, i < projectedStars ? styles.pipOn : styles.pipOff]}>★</Text>
               ))}
+              {/* Rule hint: tells players what the pip count MEANS — Wordfall
+                  stars are gated on hints + wasted moves, not score, so a
+                  classic "1,200 for 3★" number would be wrong. The label
+                  surfaces the current tier's rule so players always know
+                  what state they're in. */}
+              <Text style={styles.pipRuleText} numberOfLines={1}>
+                {starRuleLabel(projectedStars)}
+              </Text>
             </View>
           )}
           <Animated.Text
@@ -383,6 +403,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  // Back button is the primary exit while the tab bar is hidden during
+  // play, so the border is lifted from 10% → 22% opacity to read as an
+  // interactive chip rather than a quiet icon. Tap target stays 32px but
+  // the visible hit area feels more affordant.
   backButton: {
     width: 32,
     height: 32,
@@ -390,7 +414,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(255,255,255,0.22)',
     overflow: 'hidden',
   },
   backText: {
@@ -436,6 +460,13 @@ const styles = StyleSheet.create({
   // blank gap next to the one filled star.
   pipOff: {
     color: 'rgba(255, 184, 0, 0.30)',
+  },
+  pipRuleText: {
+    marginLeft: 6,
+    fontSize: 9,
+    fontFamily: 'SpaceGrotesk_700Bold',
+    letterSpacing: 0.8,
+    color: 'rgba(255, 255, 255, 0.55)',
   },
   flawlessChip: {
     flexDirection: 'row',

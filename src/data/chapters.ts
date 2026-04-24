@@ -22,6 +22,35 @@ export const WING_PALETTES: Record<string, { bg: string; surface: string; accent
 };
 
 /**
+ * Per-wing tile-body gradients (5-stop ramps, top→bottom). Pre-authored
+ * instead of interpolated so each wing can be tuned for contrast against
+ * the white cell letter + the wing backdrop. Keeps default tiles visibly
+ * distinct between chapters — Nature reads as deep forest green, Ocean as
+ * cold navy, Elements as molten red, etc. — while preserving the glossy
+ * tile silhouette the players already learned. The ramps sit darker than
+ * the backdrop so tiles pop off the page; the brightest stop is still
+ * lighter than the backdrop's accent stop for the glossy highlight read.
+ */
+export const WING_TILE_RAMPS: Record<string, [string, string, string, string, string]> = {
+  nature:    ['#2a6b3e', '#215433', '#174029', '#102e1e', '#0a1e14'],
+  science:   ['#3a6fc9', '#2b57a2', '#1f4280', '#152e5c', '#0d1e3d'],
+  mythology: ['#7a3390', '#602578', '#4a1b62', '#36134a', '#220a30'],
+  ocean:     ['#2a7fb8', '#1f648f', '#164d6f', '#0f3752', '#082234'],
+  arts:      ['#8a2a8c', '#6d2070', '#551857', '#3e103e', '#260a26'],
+  space:     ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'],
+  history:   ['#8a6728', '#6c4f1e', '#513b16', '#3a2a0f', '#241906'],
+  elements:  ['#b23814', '#8a2a0e', '#6b1f08', '#4a1404', '#2a0a02'],
+};
+
+const FALLBACK_TILE_RAMP: [string, string, string, string, string] = WING_TILE_RAMPS.space;
+
+export function getChapterTileRamp(chapter: Chapter | undefined): [string, string, string, string, string] {
+  const wing = chapter?.wingId;
+  if (wing && WING_TILE_RAMPS[wing]) return WING_TILE_RAMPS[wing];
+  return FALLBACK_TILE_RAMP;
+}
+
+/**
  * Resolve the effective backdrop palette for a chapter — prefers the
  * chapter's own `palette` override, falls back to the wing palette, and
  * finally falls back to the baseline space palette so every level has a

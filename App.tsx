@@ -41,6 +41,7 @@ import SeasonPassScreen from './src/screens/SeasonPassScreen';
 import { ConsentGate } from './src/components/ConsentGate';
 import { hasAcceptedTos } from './src/services/consent';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
+import { getChapterForLevel } from './src/data/chapters';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
 import { getBreatherConfig } from './src/constants';
@@ -184,7 +185,8 @@ function EventScreenWrapperNav({ navigation }: any) {
       config = adjusted.config;
 
       const seed = Date.now() + modeLevel * 1337;
-      let board = generateBoard(config, seed, mode);
+      const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
+      let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.navigate('Game', {
@@ -512,7 +514,8 @@ function ModesScreenWrapper({ navigation }: any) {
       config = adjusted.config;
 
       const seed = Date.now() + modeLevel * 1337;
-      board = generateBoard(config, seed, mode);
+      const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
+      board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
 
       const modeConfig = MODE_CONFIGS[mode];
       navigation.navigate('Game', {
@@ -655,7 +658,8 @@ function GameScreenWrapper({ route, navigation }: any) {
       }
 
       const seed = modeLevel * 1337 + Date.now();
-      let board = generateBoard(config, seed, mode);
+      const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
+      let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -725,7 +729,8 @@ function GameScreenWrapper({ route, navigation }: any) {
 
       const config = getLevelConfig(nextModeLevel);
       const seed = nextModeLevel * 1337 + Date.now();
-      let board = generateBoard(config, seed, mode);
+      const chapter = mode === 'classic' ? getChapterForLevel(nextModeLevel) : undefined;
+      let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -1350,7 +1355,14 @@ function HomeMainScreen({ route, navigation }: any) {
             config = adjusted.config;
           }
           const level = difficulty ? 0 : player.currentLevel;
-          const board = generateBoard(config, level * 1337 + Date.now());
+          const chapter = !difficulty ? getChapterForLevel(player.currentLevel) : undefined;
+          const board = generateBoard(
+            config,
+            level * 1337 + Date.now(),
+            'classic',
+            chapter?.profile,
+            chapter?.themeWords,
+          );
           setLoading(false);
           navigation.navigate('Game', { board, level, mode: 'classic', isDaily: false });
         } catch (e: any) {
