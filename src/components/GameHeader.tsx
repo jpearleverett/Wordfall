@@ -341,8 +341,8 @@ export const GameHeader = React.memo(function GameHeader({
 const styles = StyleSheet.create({
   wrapper: {
     paddingHorizontal: 14,
-    paddingTop: 6,
-    paddingBottom: 4,
+    paddingTop: 4,
+    paddingBottom: 2,
   },
   chromeCard: {
     borderRadius: 20,
@@ -352,8 +352,10 @@ const styles = StyleSheet.create({
     // as one vertical flow instead of three stacked panels.
     borderWidth: 0,
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 4,
+    // Tighter vertical padding so the HUD is slimmer and the grid
+    // reclaims the saved height via its flex:1 gridArea.
+    paddingTop: 6,
+    paddingBottom: 2,
     overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -384,9 +386,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -462,22 +464,22 @@ const styles = StyleSheet.create({
   scoreHero: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
-    marginBottom: 4,
+    marginTop: 2,
+    marginBottom: 2,
     position: 'relative',
   },
   scoreHeroValue: {
     color: COLORS.accent,
-    fontSize: 34,
-    lineHeight: 38,
+    fontSize: 30,
+    lineHeight: 34,
     fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 18,
+    textShadowRadius: 16,
     textShadowOffset: { width: 0, height: 0 },
     letterSpacing: 1,
   },
   scoreHeroLabel: {
-    marginTop: 1,
+    marginTop: 0,
     color: COLORS.textMuted,
     fontSize: 9,
     fontFamily: 'Inter_700Bold',
@@ -496,9 +498,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   actionButton: {
-    width: 40,
-    height: 44,
-    borderRadius: 13,
+    width: 36,
+    height: 38,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -508,7 +510,7 @@ const styles = StyleSheet.create({
     shadowColor: COLORS.purple,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowRadius: 6,
     elevation: 4,
   },
   hintButton: {
@@ -560,11 +562,11 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceGrotesk_700Bold',
   },
   progressTrack: {
-    height: 5,
+    height: 4,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'visible',
-    marginTop: 10,
+    marginTop: 6,
     position: 'relative',
   },
   progressFill: {
