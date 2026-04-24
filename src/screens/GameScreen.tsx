@@ -551,7 +551,6 @@ function GameScreenImpl({
       );
     }
   }, [solveSequence, foundWords, totalWords]);
-  const gridHeightLocked = useRef(false);
   const validFlashAnim = useRef(new Animated.Value(0)).current;
   const [showValidFlash, setShowValidFlash] = useState(false);
   const invalidFlashAnim = useRef(new Animated.Value(0)).current;
@@ -1001,13 +1000,18 @@ function GameScreenImpl({
     [shakeAnim],
   );
 
-  // Stable onLayout callback — uses ref to lock on first measurement and prevent re-renders
+  // Track the grid container's actual height. Previously this was locked
+  // to the first measurement via `gridHeightLocked.current` to avoid
+  // re-renders on every minor layout shift — but that froze the grid at
+  // whatever size it measured BEFORE the WordBank finished expanding to
+  // its 2-row wrap panel, so the grid then visibly shrank as WordBank
+  // claimed its real height. Now we track every measurement but only
+  // re-render when the height actually changed by ≥1px, which absorbs
+  // the post-mount layout settle while staying stable during gameplay.
   const handleGridLayout = useCallback((e: { nativeEvent: { layout: { height: number } } }) => {
     const h = e.nativeEvent.layout.height;
-    if (!gridHeightLocked.current && h > 0) {
-      gridHeightLocked.current = true;
-      setGridAreaHeight(h);
-    }
+    if (h <= 0) return;
+    setGridAreaHeight((prev) => (Math.abs(prev - h) >= 1 ? h : prev));
   }, []);
 
   // Hard cap on simultaneously-rendered bloom particles. Keeps the queue
@@ -1572,9 +1576,9 @@ function GameScreenImpl({
     }
   }, [status, stars, score, perfectRun]);
 
-  // Reset grid height lock when board changes (new puzzle/level)
+  // Reset grid height when board changes (new puzzle/level) — prompts a
+  // fresh onLayout measurement for the new grid's dimensions.
   useEffect(() => {
-    gridHeightLocked.current = false;
     setGridAreaHeight(0);
     // Also reset the adjuster's per-puzzle stuck-fail guard so the
     // next puzzle can record its own struggle signal independently.
