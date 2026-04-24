@@ -480,16 +480,16 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 4,
     // Leave clear vertical space so the wrap-panel's bottom row isn't
     // visually covered by the HUD drop shadow above or the grid's neon
     // frame glow below. Grid.tsx mounts three decorative layers
     // (outerGlow +12px, neonFrameWrap +16px, shadowRadius 16) absolutely
     // outside the frame's layout box, so gridArea's measurable top edge
-    // sits ~22px below its visual top. The chip band needs clearance
-    // past that bleed — 40px is comfortable.
-    marginTop: 8,
-    marginBottom: 30,
+    // sits ~22px below its visual top. 24px is the minimum clearance
+    // we can ship without the chips getting overlapped by the grid glow.
+    marginTop: 4,
+    marginBottom: 24,
     // zIndex + elevation keep the chip band painted on top of the
     // grid's shadow if it ever extends this far up.
     zIndex: 2,
@@ -497,8 +497,8 @@ const styles = StyleSheet.create({
   },
   currentWordContainer: {
     alignItems: 'center',
-    marginBottom: 6,
-    height: 40,
+    marginBottom: 3,
+    height: 28,
     justifyContent: 'center',
   },
   currentWordRow: {
@@ -507,13 +507,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   currentWord: {
-    fontSize: 26,
+    fontSize: 20,
     fontFamily: 'SpaceGrotesk_700Bold',
     color: COLORS.textPrimary,
-    letterSpacing: 6,
+    letterSpacing: 4,
     textTransform: 'uppercase',
     textShadowColor: 'rgba(200,77,255,0.4)',
-    textShadowRadius: 12,
+    textShadowRadius: 10,
   },
   currentWordValid: {
     color: COLORS.green,
@@ -544,10 +544,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
   },
   underline: {
-    width: '65%',
-    height: 2.5,
-    marginTop: 8,
-    borderRadius: 2,
+    width: '55%',
+    height: 2,
+    marginTop: 4,
+    borderRadius: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
   },
@@ -570,17 +570,17 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   wordChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 16,
-    borderWidth: 1.5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
     // Bumped from 0.22 to 0.55 — the earlier dim-backdrop shipped made
     // the previous ~22% border almost invisible against the darker
     // gradient, so the wrap panel rendered but the chips looked like
@@ -590,10 +590,10 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     gap: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   chipBackground: {
     ...StyleSheet.absoluteFillObject,
@@ -644,10 +644,10 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   wordText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'Inter_600SemiBold',
     color: COLORS.wordPending,
-    letterSpacing: 2.5,
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   wordTextFound: {
