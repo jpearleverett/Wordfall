@@ -342,21 +342,18 @@ export const GameHeader = React.memo(function GameHeader({
 const styles = StyleSheet.create({
   wrapper: {
     paddingHorizontal: 14,
-    paddingTop: 4,
-    paddingBottom: 2,
+    paddingTop: 2,
+    paddingBottom: 0,
   },
   chromeCard: {
     borderRadius: 20,
     // Border removed entirely — the gradient fill + glass top edge carry
     // the frame without a third "window outline" fighting the grid's
-    // neon frame and the chip band's implicit boundary. Screen now reads
-    // as one vertical flow instead of three stacked panels.
+    // neon frame and the chip band's implicit boundary.
     borderWidth: 0,
     paddingHorizontal: 12,
-    // Tighter vertical padding so the HUD is slimmer and the grid
-    // reclaims the saved height via its flex:1 gridArea.
-    paddingTop: 6,
-    paddingBottom: 2,
+    paddingTop: 4,
+    paddingBottom: 1,
     overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -423,7 +420,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    marginBottom: 1,
+    marginBottom: 0,
   },
   pip: {
     fontSize: 15,
@@ -462,17 +459,17 @@ const styles = StyleSheet.create({
   scoreHero: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
-    marginBottom: 2,
+    marginTop: 0,
+    marginBottom: 0,
     position: 'relative',
   },
   scoreHeroValue: {
     color: COLORS.accent,
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 30,
     fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 16,
+    textShadowRadius: 14,
     textShadowOffset: { width: 0, height: 0 },
     letterSpacing: 1,
   },
@@ -560,11 +557,11 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceGrotesk_700Bold',
   },
   progressTrack: {
-    height: 4,
+    height: 3,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'visible',
-    marginTop: 6,
+    marginTop: 4,
     position: 'relative',
   },
   progressFill: {
