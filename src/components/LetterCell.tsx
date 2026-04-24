@@ -486,17 +486,21 @@ const styles = StyleSheet.create({
     textShadowRadius: 6,
     textShadowOffset: { width: 0, height: 2 },
   },
+  // Selected letters used to be white-on-white-glow, which disappeared
+  // against the bright pink selected-tile gradient — the white glow
+  // flattened the contrast. Swapped to a tight dark drop shadow so the
+  // white letter gets a crisp readable outline against the pink fill.
   letterSelected: {
-    color: '#fff',
-    textShadowColor: 'rgba(255,255,255,0.7)',
-    textShadowRadius: 16,
-    textShadowOffset: { width: 0, height: 0 },
+    color: '#ffffff',
+    textShadowColor: 'rgba(0,0,0,0.95)',
+    textShadowRadius: 3,
+    textShadowOffset: { width: 0, height: 2 },
   },
   letterValid: {
-    color: '#fff',
-    textShadowColor: 'rgba(200,255,220,0.8)',
-    textShadowRadius: 18,
-    textShadowOffset: { width: 0, height: 0 },
+    color: '#ffffff',
+    textShadowColor: 'rgba(0,60,20,0.95)',
+    textShadowRadius: 3,
+    textShadowOffset: { width: 0, height: 2 },
   },
   indexBadge: {
     position: 'absolute',

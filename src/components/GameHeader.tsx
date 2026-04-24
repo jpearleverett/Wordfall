@@ -206,30 +206,22 @@ export const GameHeader = React.memo(function GameHeader({
             <Image source={LOCAL_IMAGES.iconBack} style={{ width: 20, height: 20 }} resizeMode="contain" />
           </Pressable>
 
-          {/* Center: chapter title + stars + flawless chip (no battery icon) */}
+          {/* Center: chapter title only. Stars + flawless chip moved into
+              the score hero so they're centered on the same axis as the
+              big score number (not biased to the left between back and
+              action buttons). */}
           <View style={styles.titleBlock}>
             <View style={styles.titleRow}>
               <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
               <Text style={[styles.titleText, labelFontOverride]} numberOfLines={1}>
                 {modeLabel}
               </Text>
+              {showFlawlessChip && (
+                <Animated.View style={[styles.flawlessChip, flawlessStyle]}>
+                  <Text style={styles.flawlessChipText}>🔥 {flawlessStreak}</Text>
+                </Animated.View>
+              )}
             </View>
-            {(showStarsPips || showFlawlessChip) && (
-              <View style={styles.titleSubRow}>
-                {showStarsPips && (
-                  <View style={styles.pipsRow} accessibilityLabel={`Projected ${projectedStars} of 3 stars`}>
-                    {[0, 1, 2].map(i => (
-                      <Text key={i} style={[styles.pip, i < projectedStars ? styles.pipOn : styles.pipOff]}>★</Text>
-                    ))}
-                  </View>
-                )}
-                {showFlawlessChip && (
-                  <Animated.View style={[styles.flawlessChip, flawlessStyle]}>
-                    <Text style={styles.flawlessChipText}>🔥 {flawlessStreak}</Text>
-                  </Animated.View>
-                )}
-              </View>
-            )}
           </View>
 
           {/* Action buttons */}
@@ -292,8 +284,17 @@ export const GameHeader = React.memo(function GameHeader({
           </View>
         </View>
 
-        {/* Hero score row — big, centered, with +N float-up callout */}
+        {/* Hero score row — big, centered, with +N float-up callout. Stars
+            pips now live up here so they share the score's horizontal
+            center, not the title block's. */}
         <View style={styles.scoreHero} accessibilityLabel={`Current score: ${score}`}>
+          {showStarsPips && (
+            <View style={styles.pipsRow} accessibilityLabel={`Projected ${projectedStars} of 3 stars`}>
+              {[0, 1, 2].map(i => (
+                <Text key={i} style={[styles.pip, i < projectedStars ? styles.pipOn : styles.pipOff]}>★</Text>
+              ))}
+            </View>
+          )}
           <Animated.Text
             style={[
               styles.scoreHeroValue,
@@ -408,6 +409,7 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
   },
   titleText: {
@@ -416,16 +418,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.6,
   },
-  titleSubRow: {
-    marginTop: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   pipsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    justifyContent: 'center',
+    gap: 3,
+    marginBottom: 1,
   },
   pip: {
     fontSize: 15,

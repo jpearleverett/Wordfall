@@ -37,16 +37,15 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const lastRemainingAnim = useRef(new Animated.Value(1)).current;
-  // Tier 6 B7 — tension pulse split across two values so the bridge collision
-  // disappears: `tensionScaleAnim` runs on the native driver (so it can
-  // multiply cleanly into the native-driven scale chain), `tensionGlowAnim`
-  // stays JS-driven for shadowOpacity (which the native driver can't touch).
-  // Previously a single useNativeDriver:false value was multiplied into a
-  // useNativeDriver:true transform — that's the "Attempting to run JS driven
-  // animation on animated node that has been moved to native earlier" crash
-  // fired on the last-word transition.
+  // Tier 6 B7 — tension pulse is scale-only (native-driver safe). The
+  // earlier glow-on-shadowOpacity channel was dropped because mixing a
+  // JS-driven shadowOpacity and a native-driven transform on the same
+  // Animated.View triggers "Attempting to run JS driven animation on
+  // animated node that has been moved to native earlier" once an
+  // animation completes. The scale overshoot + the gold
+  // wordChipLastRemaining border already communicate the tension
+  // moment; the glow layer was low ROI and the crash risk.
   const tensionScaleAnim = useRef(new Animated.Value(0)).current;
-  const tensionGlowAnim = useRef(new Animated.Value(0)).current;
   const wasFound = useRef(false);
   const lastRemainingLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const tensionFiredRef = useRef(false);
@@ -95,24 +94,20 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   useEffect(() => {
     if (!tensionActive) {
       tensionFiredRef.current = false;
-      tensionScaleAnim.setValue(0);
-      tensionGlowAnim.setValue(0);
+      // Reset back to 0 via a zero-duration native animation rather than
+      // setValue() — setValue on a node that's already been moved to
+      // native can trigger the same "JS driven animation on native
+      // node" crash we hit before.
+      Animated.timing(tensionScaleAnim, { toValue: 0, duration: 0, useNativeDriver: true }).start();
       return;
     }
     if (!isLastRemaining || wordPlacement.found) return;
     if (tensionFiredRef.current) return;
     if (!getRemoteBoolean('lastWordTensionPulseEnabled')) return;
     tensionFiredRef.current = true;
-    // Drive the two values in lockstep — same shape, different drivers.
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(tensionScaleAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.spring(tensionScaleAnim, { toValue: 0.35, friction: 5, tension: 160, useNativeDriver: true }),
-      ]),
-      Animated.sequence([
-        Animated.timing(tensionGlowAnim, { toValue: 1, duration: 180, useNativeDriver: false }),
-        Animated.spring(tensionGlowAnim, { toValue: 0.35, friction: 5, tension: 160, useNativeDriver: false }),
-      ]),
+    Animated.sequence([
+      Animated.timing(tensionScaleAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.spring(tensionScaleAnim, { toValue: 0.35, friction: 5, tension: 160, useNativeDriver: true }),
     ]).start();
   }, [tensionActive, isLastRemaining, wordPlacement.found]);
 
@@ -181,16 +176,12 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
     return null;
   };
 
-  // Tier 6 B7 — split tension drives. tensionScaleAnim feeds the native-driven
-  // scale chain; tensionGlowAnim feeds the JS-only shadowOpacity. Same shape,
-  // different runtimes — no bridge crossing.
+  // Tier 6 B7 — tension pulse maps tensionScaleAnim to a scale overshoot.
+  // Glow layer removed; scale + gold border in wordChipLastRemaining
+  // carry the tension visual.
   const tensionScale = tensionScaleAnim.interpolate({
     inputRange: [0, 0.35, 1],
     outputRange: [1, 1.06, 1.17],
-  });
-  const tensionShadowOpacity = tensionGlowAnim.interpolate({
-    inputRange: [0, 0.35, 1],
-    outputRange: [0, 0.3, 0.8],
   });
 
   return (
@@ -203,10 +194,6 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
           transform: [
             { scale: Animated.multiply(Animated.multiply(scaleAnim, lastRemainingAnim), tensionScale) },
           ],
-          shadowColor: COLORS.gold,
-          shadowOpacity: tensionShadowOpacity as unknown as number,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 0 },
         },
       ]}
       accessibilityLabel={`${wordPlacement.word}, ${wordPlacement.found ? 'found' : 'not found'}${isLastRemaining && !wordPlacement.found ? ', last remaining' : ''}`}
@@ -489,7 +476,7 @@ const styles = StyleSheet.create({
     // sits ~22px below its visual top. 24px is the minimum clearance
     // we can ship without the chips getting overlapped by the grid glow.
     marginTop: 4,
-    marginBottom: 24,
+    marginBottom: 32,
     // zIndex + elevation keep the chip band painted on top of the
     // grid's shadow if it ever extends this far up.
     zIndex: 2,
