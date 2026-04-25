@@ -2373,10 +2373,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.bg,
+    // Lift the whole bottom edge off the OS navigation bar / home
+    // indicator. Pushing both the grid and the booster bar up by ~14px
+    // keeps the boosters from sitting flush against the bottom edge of
+    // the device, which felt cramped against the home indicator on
+    // gesture-nav Android.
+    paddingBottom: 14,
   },
   gridArea: {
     flex: 1,
-    justifyContent: 'center',
+    // flex-start (was 'center') — anchors the grid to the top of its
+    // available space so it sits just below the WordBank instead of
+    // floating in the middle. Combined with the trimmed WordBank
+    // marginBottom this lifts the grid noticeably up the screen.
+    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 8,
   },
