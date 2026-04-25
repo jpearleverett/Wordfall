@@ -472,11 +472,12 @@ const styles = StyleSheet.create({
     // bottom edge — the header already has its own glass chrome that
     // visually competes with the chips when they hug it.
     marginTop: 10,
-    // Pulled in from 26 → 14: the wider clearance was originally to
-    // dodge the grid's outer-glow halo, but the visual reality is the
-    // glow is soft enough that 14px reads as "separate" without the
-    // big empty gap that pushed the grid down. This shifts the grid up.
-    marginBottom: 14,
+    // 20px clears Grid.tsx's +22px decorative overflow (outerGlow +
+    // neonFrameWrap + shadowRadius extend past the grid's measured top
+    // edge). Earlier 14px let the neon frame poke up into the last chip
+    // row. This is the minimum that prevents that overlap while still
+    // leaving the grid noticeably higher than the original 26px.
+    marginBottom: 20,
     // zIndex + elevation keep the chip band painted on top of the
     // grid's shadow if it ever extends this far up.
     zIndex: 2,
