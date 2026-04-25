@@ -468,16 +468,15 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingVertical: 0,
-    // Leave clear vertical space so the wrap-panel's bottom row isn't
-    // visually covered by the HUD drop shadow above or the grid's neon
-    // frame glow below. Grid.tsx mounts three decorative layers
-    // (outerGlow +12px, neonFrameWrap +16px, shadowRadius 16) absolutely
-    // outside the frame's layout box, so gridArea's measurable top edge
-    // sits ~22px below its visual top. Keep >=26px clearance on the
-    // bottom; the top hugs the HUD since WordBank's paddingVertical
-    // + chromeCard paddingBottom already leave air above.
-    marginTop: 0,
-    marginBottom: 26,
+    // Air added above so the chip band doesn't crowd the GameHeader's
+    // bottom edge — the header already has its own glass chrome that
+    // visually competes with the chips when they hug it.
+    marginTop: 10,
+    // Pulled in from 26 → 14: the wider clearance was originally to
+    // dodge the grid's outer-glow halo, but the visual reality is the
+    // glow is soft enough that 14px reads as "separate" without the
+    // big empty gap that pushed the grid down. This shifts the grid up.
+    marginBottom: 14,
     // zIndex + elevation keep the chip band painted on top of the
     // grid's shadow if it ever extends this far up.
     zIndex: 2,
@@ -485,7 +484,11 @@ const styles = StyleSheet.create({
   },
   currentWordContainer: {
     alignItems: 'center',
-    marginBottom: 1,
+    // Bumped from 1 → 10 — the underline + traced-letter readout
+    // previously crowded the chip row directly beneath. With proper
+    // breathing room, the readout reads as a separate "what you've
+    // traced" element rather than a header on top of the chips.
+    marginBottom: 10,
     height: 19,
     justifyContent: 'center',
   },
