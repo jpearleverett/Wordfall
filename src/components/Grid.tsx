@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   Animated,
   Image,
@@ -10,6 +10,7 @@ import {
   GestureDetector,
   Gesture,
 } from 'react-native-gesture-handler';
+import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Grid as GridType, CellPosition, GravityDirection } from '../types';
 import { LetterCell } from './LetterCell';
@@ -23,6 +24,87 @@ const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rg
 const GRADIENT_START = { x: 0, y: 0 };
 const GRADIENT_END = { x: 1, y: 1 };
 const EMPTY_FLEX = { flex: 1 } as const;
+
+/**
+ * Immutable layout snapshot read by the UI-thread hit-test worklet. Pushed
+ * from JS into a shared value whenever the board layout changes (never per
+ * frame), so the worklet can resolve a touch to a cell without hopping to JS.
+ */
+type GridHitLayout = {
+  byCol: Array<Array<{ row: number; col: number; y: number; h: number }>>;
+  stride: number;
+  gridWidth: number;
+  gridHeight: number;
+  padding: number;
+  rows: number;
+  wildcardMode: boolean;
+  noGravityLayout: boolean;
+};
+
+const EMPTY_HIT_LAYOUT: GridHitLayout = {
+  byCol: [],
+  stride: 0,
+  gridWidth: 0,
+  gridHeight: 0,
+  padding: CELL_GAP / 2,
+  rows: 0,
+  wildcardMode: false,
+  noGravityLayout: false,
+};
+
+/**
+ * UI-thread hit test. Mirrors the former JS `hitTestCell` exactly but runs
+ * inside the Reanimated worklet runtime, so finger tracking is never starved
+ * by JS-thread React commits. Column is computed by x/stride (constant time);
+ * gravity-down grids use stride-based slot indexing, noGravityLayout grids
+ * scan the (small) column array because cleared cells leave gaps.
+ */
+function hitTestWorklet(
+  absX: number,
+  absY: number,
+  layout: GridHitLayout,
+): CellPosition | null {
+  'worklet';
+  const { byCol, stride, gridWidth, gridHeight, padding, rows, wildcardMode, noGravityLayout } = layout;
+  if (stride <= 0) return null;
+  if (absX < 0 || absY < 0 || absX >= gridWidth || absY >= gridHeight) return null;
+
+  if (wildcardMode) {
+    const colIdx = Math.floor((absX - padding) / stride);
+    const rowIdx = Math.floor(absY / stride);
+    if (colIdx >= 0 && colIdx < byCol.length && rowIdx >= 0 && rowIdx < rows) {
+      return { row: rowIdx, col: colIdx };
+    }
+    return null;
+  }
+
+  const colIdx = Math.floor((absX - padding) / stride);
+  if (colIdx < 0 || colIdx >= byCol.length) return null;
+  const column = byCol[colIdx];
+  if (!column || column.length === 0) return null;
+
+  if (noGravityLayout) {
+    const targetRow = Math.floor(absY / stride);
+    for (let i = 0; i < column.length; i++) {
+      const c = column[i];
+      if (c.row === targetRow) {
+        if (absY >= c.y && absY < c.y + c.h) return { row: c.row, col: c.col };
+        return null;
+      }
+      if (c.row > targetRow) return null; // Past it (sorted), no match
+    }
+    return null;
+  }
+
+  const firstY = column[0].y;
+  const slotIdx = Math.floor((absY - firstY) / stride);
+  if (slotIdx < 0 || slotIdx >= column.length) return null;
+  const candidate = column[slotIdx];
+  if (absY >= candidate.y && absY < candidate.y + candidate.h) {
+    return { row: candidate.row, col: candidate.col };
+  }
+  return null;
+}
 
 interface GridProps {
   grid: GridType;
@@ -204,26 +286,16 @@ function GameGridImpl({
   }, [grid, rows, cols, cellSize, gridHeight, noGravityLayout]);
 
   const gridRef = useRef<View>(null);
-  const gridLayoutRef = useRef({ x: 0, y: 0 });
-  const lastDragCellRef = useRef<string | null>(null);
-  const lastDragPosRef = useRef<{ x: number; y: number } | null>(null);
-  const isDraggingRef = useRef(false);
 
   // ── Column-indexed hit-test lookup (stride-based O(1)) ───────────────────
   // The old implementation iterated every cellBounds entry (up to 49) on
   // every pointer move, then again per interpolated step during fast drags.
   // Now we precompute per-column ordered arrays and compute (col, rowSlot)
   // with arithmetic, reducing each hit test to at most one bounds check.
-  const cellBoundsRef = useRef(cellBounds);
-  cellBoundsRef.current = cellBounds;
-  const cellSizeRef = useRef(cellSize);
-  cellSizeRef.current = cellSize;
-
   // Per-column sorted bounds list. Each column entry holds the cells in
   // layout order (top to bottom) so a y-coordinate maps to an index via
   // `Math.floor((y - firstY) / stride)`.
-  const cellsByColumnRef = useRef<Array<Array<{ row: number; col: number; y: number; h: number }>>>([]);
-  cellsByColumnRef.current = useMemo(() => {
+  const cellsByColumn = useMemo(() => {
     const byCol: Array<Array<{ row: number; col: number; y: number; h: number }>> = [];
     for (let c = 0; c < cols; c++) byCol.push([]);
     for (const b of cellBounds) {
@@ -236,80 +308,28 @@ function GameGridImpl({
     return byCol;
   }, [cellBounds, cols]);
 
-  const strideRef = useRef(cellSize + CELL_GAP);
-  strideRef.current = cellSize + CELL_GAP;
-  const gridWidthRef = useRef(gridWidth);
-  gridWidthRef.current = gridWidth;
-  const gridHeightRef = useRef(gridHeight);
-  gridHeightRef.current = gridHeight;
-  const noGravityLayoutRef = useRef(noGravityLayout);
-  noGravityLayoutRef.current = noGravityLayout;
-  const wildcardModeRef = useRef(wildcardMode);
-  wildcardModeRef.current = wildcardMode;
-  const rowsRef = useRef(rows);
-  rowsRef.current = rows;
+  // ── UI-thread gesture state (shared values) ───────────────────────────────
+  // The pan gesture runs as a worklet on the UI thread, so finger tracking is
+  // never blocked by JS-thread React commits. `layoutSV` carries an immutable
+  // layout snapshot the hit-test worklet reads; it's refreshed only when the
+  // board layout changes (not per frame). Per-drag scratch state lives in
+  // shared values the worklet owns.
+  const layoutSV = useSharedValue<GridHitLayout>(EMPTY_HIT_LAYOUT);
+  const lastDragCellSV = useSharedValue<string | null>(null);
+  const lastDragPosSV = useSharedValue<{ x: number; y: number } | null>(null);
 
-  // Stable hit test. Column is computed by x/stride (constant time).
-  // For gravity-down grids, cells are contiguous so we use stride-based O(1)
-  // slot indexing. For noGravityLayout grids (noGravity / shrinkingBoard),
-  // cleared cells leave gaps, so we derive the target row directly from
-  // the y-coordinate and scan the (small) column array.
-  const hitTestCell = useCallback((absX: number, absY: number): CellPosition | null => {
-    // Fast out-of-bounds rejection.
-    if (absX < 0 || absY < 0 || absX >= gridWidthRef.current || absY >= gridHeightRef.current) {
-      return null;
-    }
-    const stride = strideRef.current;
-    if (stride <= 0) return null;
-    // CELL_GAP / 2 is the inner padding added in cellBounds computation.
-    const padding = CELL_GAP / 2;
-
-    // In wildcard placement mode, any grid position is tappable — even empty
-    // cells — so the reducer can create a placeholder wildcard cell there.
-    if (wildcardModeRef.current) {
-      const colIdx = Math.floor((absX - padding) / stride);
-      const rowIdx = Math.floor(absY / stride);
-      if (colIdx >= 0 && colIdx < cellsByColumnRef.current.length && rowIdx >= 0 && rowIdx < rowsRef.current) {
-        return { row: rowIdx, col: colIdx };
-      }
-      return null;
-    }
-
-    const colIdx = Math.floor((absX - padding) / stride);
-    const byCol = cellsByColumnRef.current;
-    if (colIdx < 0 || colIdx >= byCol.length) return null;
-    const column = byCol[colIdx];
-    if (column.length === 0) return null;
-
-    if (noGravityLayoutRef.current) {
-      // In noGravityLayout, cells sit at y = row * stride. Cleared cells
-      // leave gaps so the column array is NOT contiguous. Derive the target
-      // row directly from the y-coordinate and scan for a match.
-      const targetRow = Math.floor(absY / stride);
-      for (let i = 0; i < column.length; i++) {
-        const c = column[i];
-        if (c.row === targetRow) {
-          if (absY >= c.y && absY < c.y + c.h) {
-            return { row: c.row, col: c.col };
-          }
-          return null;
-        }
-        if (c.row > targetRow) return null; // Past it (sorted), no match
-      }
-      return null;
-    }
-
-    // Gravity-down: cells are contiguous, stride-based O(1) slot indexing.
-    const firstY = column[0].y;
-    const slotIdx = Math.floor((absY - firstY) / stride);
-    if (slotIdx < 0 || slotIdx >= column.length) return null;
-    const candidate = column[slotIdx];
-    // Cheap sanity check: ensure absY is actually within [candidate.y, candidate.y + candidate.h).
-    if (absY >= candidate.y && absY < candidate.y + candidate.h) {
-      return { row: candidate.row, col: candidate.col };
-    }
-    return null;
-  }, []);
+  useEffect(() => {
+    layoutSV.value = {
+      byCol: cellsByColumn,
+      stride: cellSize + CELL_GAP,
+      gridWidth,
+      gridHeight,
+      padding: CELL_GAP / 2,
+      rows,
+      wildcardMode,
+      noGravityLayout,
+    };
+  }, [cellsByColumn, cellSize, gridWidth, gridHeight, rows, wildcardMode, noGravityLayout, layoutSV]);
 
   const onCellPressRef = useRef(onCellPress);
   onCellPressRef.current = onCellPress;
@@ -320,107 +340,100 @@ function GameGridImpl({
   const onDragEndRef = useRef(onDragEnd);
   onDragEndRef.current = onDragEnd;
 
-  // Built once on mount. The empty dep array is intentional — the callbacks
-  // read from refs, so the gesture handler never needs to be rebuilt.
-  //
-  // NOTE on rAF batching: an earlier version deferred pan onUpdate dispatches
-  // to requestAnimationFrame, intending to cap commits at the display refresh
-  // rate. In practice this ADDED ~16ms of latency per cell because React
-  // renders still take 50-100ms (way above one frame), so the rAF wait was
-  // pure overhead with no batching benefit. Reverted to synchronous dispatch
-  // which matches the pre-optimization behavior. The SELECT_CELLS action and
-  // onCellsPress plumbing still exist in useGame.ts and Grid's props so they
-  // can be re-enabled once per-commit render time drops below 16ms (via a
-  // full PlayArea extraction — Phase 2D in the optimization plan).
+  // JS-thread commit callbacks. The gesture worklet hops here via runOnJS
+  // ONLY to push selection into the store — finger sampling keeps running on
+  // the UI thread meanwhile, so a busy JS thread can no longer stall the drag.
+  // Stable (useCallback []) so the worklet gesture captures them once.
+  const commitCellsJS = useCallback((cells: CellPosition[]) => {
+    if (cells.length === 0) return;
+    perfDragDispatch();
+    if (onCellsPressRef.current) onCellsPressRef.current(cells);
+    else cells.forEach((c) => onCellPressRef.current(c));
+  }, []);
+  const pressCellJS = useCallback((cell: CellPosition) => {
+    perfDragDispatch();
+    onCellPressRef.current(cell);
+  }, []);
+  const dragStartJS = useCallback(() => {
+    perfDragStart();
+    onDragStartRef.current?.();
+  }, []);
+  const dragEndJS = useCallback(() => {
+    perfDragEnd();
+    onDragEndRef.current?.();
+  }, []);
+
+  // Built once on mount. Pan + tap callbacks are worklets (note the absence of
+  // runOnJS(true)), so they execute on the UI thread; hit-testing reads the
+  // immutable layout snapshot from layoutSV. Only the store commit hops to JS
+  // via runOnJS, and crossed cells are coalesced per frame into one commit.
   const composedGesture = useMemo(() => {
     const panGesture = Gesture.Pan()
-      .runOnJS(true)
       .minDistance(0)
       // Cancel pointer updates when the finger leaves the grid. This stops
-      // the native handler from pumping events we'd just reject anyway,
-      // saving a few hundred microseconds per off-grid frame during drags
-      // that stray over the word bank or booster bar.
+      // the native handler from pumping events we'd just reject anyway.
       .shouldCancelWhenOutside(true)
       .onBegin((e) => {
-        isDraggingRef.current = true;
-        lastDragCellRef.current = null;
-        lastDragPosRef.current = { x: e.x, y: e.y };
-        perfDragStart();
-        onDragStartRef.current?.();
-        const cell = hitTestCell(e.x, e.y);
+        'worklet';
+        lastDragCellSV.value = null;
+        lastDragPosSV.value = { x: e.x, y: e.y };
+        runOnJS(dragStartJS)();
+        const cell = hitTestWorklet(e.x, e.y, layoutSV.value);
         if (cell) {
-          const key = `${cell.row},${cell.col}`;
-          lastDragCellRef.current = key;
-          perfDragDispatch();
-          onCellPressRef.current(cell);
+          lastDragCellSV.value = `${cell.row},${cell.col}`;
+          runOnJS(pressCellJS)(cell);
         }
       })
       .onUpdate((e) => {
-        // Interpolate between last position and current to catch cells
-        // skipped by fast diagonal drags. Hit-test is O(1) thanks to the
-        // column-indexed lookup, so this stays cheap.
-        const crossedCells: CellPosition[] = [];
-        const prev = lastDragPosRef.current;
-        const enqueueCell = (cell: CellPosition) => {
+        'worklet';
+        // Interpolate between last position and current to catch cells skipped
+        // by fast diagonal drags. Hit-test is O(1) via the column index.
+        const layout = layoutSV.value;
+        const crossed: CellPosition[] = [];
+        const enqueue = (cell: CellPosition) => {
           const key = `${cell.row},${cell.col}`;
-          if (key === lastDragCellRef.current) return;
-          lastDragCellRef.current = key;
-          crossedCells.push(cell);
+          if (key === lastDragCellSV.value) return;
+          lastDragCellSV.value = key;
+          crossed.push(cell);
         };
+        const prev = lastDragPosSV.value;
         if (prev) {
           const dx = e.x - prev.x;
           const dy = e.y - prev.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          const halfCell = (cellSizeRef.current + CELL_GAP) / 2;
-          if (dist > halfCell) {
+          const halfCell = layout.stride / 2;
+          if (halfCell > 0 && dist > halfCell) {
             const steps = Math.ceil(dist / halfCell);
             for (let s = 1; s < steps; s++) {
               const t = s / steps;
-              const mx = prev.x + dx * t;
-              const my = prev.y + dy * t;
-              const midCell = hitTestCell(mx, my);
-              if (midCell) {
-                enqueueCell(midCell);
-              }
+              const mid = hitTestWorklet(prev.x + dx * t, prev.y + dy * t, layout);
+              if (mid) enqueue(mid);
             }
           }
         }
-        lastDragPosRef.current = { x: e.x, y: e.y };
-
-        const cell = hitTestCell(e.x, e.y);
-        if (cell) {
-          enqueueCell(cell);
-        }
-
-        if (crossedCells.length > 0) {
-          perfDragDispatch();
-          if (onCellsPressRef.current) {
-            onCellsPressRef.current(crossedCells);
-          } else {
-            crossedCells.forEach((crossedCell) => onCellPressRef.current(crossedCell));
-          }
-        }
+        lastDragPosSV.value = { x: e.x, y: e.y };
+        const cell = hitTestWorklet(e.x, e.y, layout);
+        if (cell) enqueue(cell);
+        if (crossed.length > 0) runOnJS(commitCellsJS)(crossed);
       })
       .onEnd(() => {
-        isDraggingRef.current = false;
-        lastDragCellRef.current = null;
-        lastDragPosRef.current = null;
-        perfDragEnd();
-        onDragEndRef.current?.();
+        'worklet';
+        lastDragCellSV.value = null;
+        lastDragPosSV.value = null;
       })
       .onFinalize(() => {
-        isDraggingRef.current = false;
-        lastDragCellRef.current = null;
-        lastDragPosRef.current = null;
+        // Always fires (including on cancel), so drag-end cleanup is guaranteed.
+        'worklet';
+        lastDragCellSV.value = null;
+        lastDragPosSV.value = null;
+        runOnJS(dragEndJS)();
       });
 
     const tapGesture = Gesture.Tap()
-      .runOnJS(true)
       .onEnd((e) => {
-        const cell = hitTestCell(e.x, e.y);
-        if (cell) {
-          onCellPressRef.current(cell);
-        }
+        'worklet';
+        const cell = hitTestWorklet(e.x, e.y, layoutSV.value);
+        if (cell) runOnJS(pressCellJS)(cell);
       });
 
     return Gesture.Race(panGesture, tapGesture);

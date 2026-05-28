@@ -56,6 +56,21 @@ function buildRemainingWordSet(words: Array<{ word: string; found: boolean }>): 
 }
 
 /**
+ * React.Profiler instruments every commit (React measures actual/base
+ * duration to invoke onRender) — a small but real cost on the gameplay hot
+ * path in ALL builds, not just dev. Gate it behind __DEV__ so production
+ * commits skip the measurement entirely; in dev it still feeds perfInstrument.
+ */
+function MaybeProfiler({ id, children }: { id: string; children: React.ReactNode }) {
+  if (!__DEV__) return <>{children}</>;
+  return (
+    <React.Profiler id={id} onRender={profilerOnRender}>
+      {children}
+    </React.Profiler>
+  );
+}
+
+/**
  * Shared wildcard-aware validity check used by both PlayField (to drive
  * the valid-word flash) and ConnectedWordBank (to style the current word).
  * Extracted so the two components' memoization logic stays in one place.
@@ -167,7 +182,7 @@ function PlayFieldImpl({
     <>
       {/* Grid wrapper with scale animations */}
       <Animated.View style={gridScaleStyle}>
-        <React.Profiler id="Grid" onRender={profilerOnRender}>
+        <MaybeProfiler id="Grid">
           <GameGrid
             grid={grid}
             selectedCells={selectedCells}
@@ -188,7 +203,7 @@ function PlayFieldImpl({
             fallActive={fallActive}
             wildcardMode={wildcardMode}
           />
-        </React.Profiler>
+        </MaybeProfiler>
       </Animated.View>
     </>
   );
@@ -245,14 +260,14 @@ function ConnectedWordBankImpl() {
 
   return (
     <View style={styles.wordArea}>
-      <React.Profiler id="WordBank" onRender={profilerOnRender}>
+      <MaybeProfiler id="WordBank">
         <WordBank
           words={words}
           currentWord={currentWord}
           isValidWord={isValidWord}
           tensionActive={tensionActive}
         />
-      </React.Profiler>
+      </MaybeProfiler>
     </View>
   );
 }
