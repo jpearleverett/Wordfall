@@ -530,7 +530,6 @@ function GameScreenImpl({
 
   const [showComplete, setShowComplete] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [gridAreaHeight, setGridAreaHeight] = useState(0);
 
   // Announce every newly-found word to screen readers (TalkBack / VoiceOver).
@@ -595,7 +594,6 @@ function GameScreenImpl({
 
   // --- Per-tile gravity fall animation state ---
   const fallAnimMap = useRef(new Map<string, Animated.Value>()).current;
-  const [fallActive, setFallActive] = useState(false);
 
   // --- Big word celebration state (Task 2) ---
   const [bigWordLabel, setBigWordLabel] = useState<string | null>(null);
@@ -1234,9 +1232,10 @@ function GameScreenImpl({
       requestAnimationFrame(() => {
         void analytics.logEvent('gravity_interaction', analyticsPayload);
       });
-      setMovedCells(moved);
-
-      // Per-tile gravity fall animation
+      // Per-tile gravity fall animation. Prepare Animated.Values before
+      // publishing movedCells so the single render triggered by setMovedCells
+      // already contains the initial transform; avoid a separate fallActive
+      // render on start/end.
       if (!reduceMotion && moved.length > 0) {
         const rows = grid.length;
         const cols = grid[0]?.length ?? 0;
@@ -1287,9 +1286,8 @@ function GameScreenImpl({
             ])
           );
         }
-        setFallActive(true);
+        setMovedCells(moved);
         Animated.parallel(animations).start(() => {
-          setFallActive(false);
           // C1 in launch_blockers.md: fire the gravity-land haptic now that
           // the spring animation has settled. Previously this function was
           // defined in haptics.ts:51 but never called in production.
@@ -1303,6 +1301,8 @@ function GameScreenImpl({
             if (!activeCellIds.has(id)) fallAnimMap.delete(id);
           }
         });
+      } else {
+        setMovedCells(moved);
       }
 
       const timer = setTimeout(() => setMovedCells([]), 400);
@@ -1524,7 +1524,7 @@ function GameScreenImpl({
 
         submitWord();
         setShowValidFlash(false);
-      }, 100);
+      }, 50);
     } else {
       setShowValidFlash(false);
     }
@@ -2023,10 +2023,7 @@ function GameScreenImpl({
           showValidFlash={showValidFlash}
           spotlightDimmedSet={spotlightDimmedSet}
           fallAnimMap={fallAnimMap}
-          fallActive={fallActive}
           movedCells={movedCells}
-          isDragging={isDragging}
-          setIsDragging={setIsDragging}
         />
         </TilePaletteContext.Provider>
         {/* Floating banners - absolute overlay, don't affect grid sizing.

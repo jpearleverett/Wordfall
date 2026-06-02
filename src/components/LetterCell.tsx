@@ -34,6 +34,7 @@ const BODY_COLORS_SELECTED_HINT: [string, string, string, string, string] = ['#f
 const BODY_COLORS_SELECTED: [string, string, string, string, string] = ['#d9267a', '#c0206c', '#a8185f', '#8a1250', '#6b0d3e'];
 const BODY_COLORS_WILDCARD = [...GRADIENTS.tile.wildcard] as [string, string, ...string[]];
 const BODY_COLORS_DEFAULT: [string, string, string, string, string] = ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'];
+const IS_ANDROID = Platform.OS === 'android';
 
 /**
  * Per-chapter tile tint. GameScreen computes a 5-stop gradient derived from
@@ -157,6 +158,8 @@ export const LetterCell = React.memo(function LetterCell({
     Platform.OS === 'ios' &&
     isSelected &&
     getRemoteBoolean('selectedTileShadowBumpEnabled');
+  const raisedTile = isSelected || isValidWord;
+  const androidElevation = IS_ANDROID ? (raisedTile ? 3 : 0) : (raisedTile ? 8 : 4);
   const isVowel = 'AEIOU'.includes(letter);
   // Scale-pop + moved-overlay animations are driven on the Reanimated
   // worklet runtime so state changes on multiple cells at once (valid-word
@@ -334,16 +337,16 @@ export const LetterCell = React.memo(function LetterCell({
             borderColor,
             borderWidth: isSelected || isValidWord ? 2 : isWildcard ? 1.5 : 1,
             shadowColor,
-            shadowOpacity: useShadowBump ? 0.85 : (isSelected || isValidWord) ? 0.7 : 0.4,
+            shadowOpacity: IS_ANDROID ? 0 : useShadowBump ? 0.85 : raisedTile ? 0.7 : 0.4,
             // shadowRadius was 16/8 — halved because the grid renders up to
             // 50 cells simultaneously and each shadow is a per-frame GPU blur.
             // 8/4 is still clearly visible but ~4x cheaper. iOS shadow bump
             // (Batch C, RC-gated) lifts selected tiles to 12 for extra
-            // pick-up feel; Android elevation intentionally not bumped
-            // (flickers under LinearGradient underlays).
-            shadowRadius: useShadowBump ? 12 : (isSelected || isValidWord) ? 8 : 4,
-            shadowOffset: { width: 0, height: (isSelected || isValidWord) ? 4 : 2 },
-            elevation: (isSelected || isValidWord) ? 8 : 4,
+            // pick-up feel. Android gets a tiny selected-only elevation and
+            // skips per-tile shadow blur to avoid gradient-layer jank.
+            shadowRadius: IS_ANDROID ? 0 : useShadowBump ? 12 : raisedTile ? 8 : 4,
+            shadowOffset: { width: 0, height: raisedTile ? 4 : 2 },
+            elevation: androidElevation,
           },
           scaleStyle,
         ]}
@@ -381,7 +384,7 @@ export const LetterCell = React.memo(function LetterCell({
             right: size * 0.12,
             height: size * 0.05,
             borderRadius: size * 0.025,
-            backgroundColor: isSelected || isValidWord
+            backgroundColor: raisedTile
               ? 'rgba(255,255,255,0.45)'
               : 'rgba(255,255,255,0.16)',
           }}
@@ -408,7 +411,7 @@ export const LetterCell = React.memo(function LetterCell({
             invisible against the body gradient, but rendering it cost one extra
             gradient per cell. */}
 
-        {!isSelected && !isValidWord && (
+        {!IS_ANDROID && !raisedTile && (
           <Image
             source={LOCAL_IMAGES.tileGemTexture}
             style={{
@@ -420,7 +423,7 @@ export const LetterCell = React.memo(function LetterCell({
           />
         )}
 
-        {(isSelected || isValidWord) && (
+        {raisedTile && (
           <View
             style={{
               ...StyleSheet.absoluteFillObject,
