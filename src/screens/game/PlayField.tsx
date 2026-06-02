@@ -18,7 +18,7 @@ import { useGameStore, useGameDispatch } from '../../stores/gameStore';
 import { CellPosition, GameMode, GameState, GravityDirection } from '../../types';
 import { CELL_GAP, MAX_GRID_WIDTH, COLORS } from '../../constants';
 import { matchesWord } from '../../hooks/useGame';
-import { profilerOnRender, perfMark, perfDragStart, perfDragEnd } from '../../utils/perfInstrument';
+import { profilerOnRender, perfMark } from '../../utils/perfInstrument';
 import { tapHaptic } from '../../services/haptics';
 import { soundManager } from '../../services/sound';
 
@@ -41,14 +41,8 @@ interface PlayFieldProps {
   spotlightDimmedSet: Set<string>;
   /** Fall animation map from gravity animation effect */
   fallAnimMap: Map<string, Animated.Value>;
-  /** Whether fall animation is active */
-  fallActive: boolean;
   /** Moved cells for post-gravity highlight */
   movedCells: CellPosition[];
-  /** Whether user is dragging (for grid glow effect) */
-  isDragging: boolean;
-  /** Setters forwarded from GameScreen */
-  setIsDragging: (v: boolean) => void;
 }
 
 function buildRemainingWordSet(words: Array<{ word: string; found: boolean }>): Set<string> {
@@ -84,10 +78,7 @@ function PlayFieldImpl({
   showValidFlash,
   spotlightDimmedSet,
   fallAnimMap,
-  fallActive,
   movedCells,
-  isDragging,
-  setIsDragging,
 }: PlayFieldProps) {
   const dispatch = useGameDispatch();
 
@@ -160,9 +151,6 @@ function PlayFieldImpl({
     [dispatch, onCellInteraction],
   );
 
-  const handleDragStart = useCallback(() => setIsDragging(true), [setIsDragging]);
-  const handleDragEnd = useCallback(() => setIsDragging(false), [setIsDragging]);
-
   return (
     <>
       {/* Grid wrapper with scale animations */}
@@ -174,18 +162,14 @@ function PlayFieldImpl({
             hintedCells={isValidWord ? selectedCells : EMPTY_CELL_ARRAY}
             onCellPress={handleCellPress}
             onCellsPress={handleCellsPress}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
             validWord={showValidFlash}
             movedCells={mode === 'noGravity' ? EMPTY_CELL_ARRAY : movedCells}
             maxHeight={gridAreaHeight}
-            isDragging={isDragging}
             wildcardCells={wildcardCells}
             spotlightDimmedCells={spotlightDimmedSet}
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
             noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
             fallAnimMap={fallAnimMap}
-            fallActive={fallActive}
             wildcardMode={wildcardMode}
           />
         </React.Profiler>

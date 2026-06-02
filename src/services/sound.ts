@@ -238,6 +238,19 @@ const REAL_SOUND_FILES: Record<SoundName, number | null> = {
   ftueFirstWin: null,
 };
 
+
+const CORE_PREWARM_SOUNDS: SoundName[] = [
+  'tap',
+  'wordFound',
+  'wordInvalid',
+  'gravity',
+  'combo',
+  'lastWord',
+  'puzzleComplete',
+];
+const CORE_PREWARM_MUSIC: MusicTrack[] = ['gameplay', 'tense', 'relax', 'victory', 'menu'];
+const BACKGROUND_PREWARM_DELAY_MS = 12;
+
 const REAL_MUSIC_FILES: Record<MusicTrack, number | null> = {
   menu: null,
   gameplay: null,
@@ -1254,21 +1267,41 @@ class SoundManager {
 
     this.preWarmPromise = (async () => {
       try {
-        // Synthesize all sound effect samples + URIs, yielding between each
-        for (const name of Object.keys(SOUND_DEFS) as SoundName[]) {
-          if (!this.synthesisCache.has(name)) {
+        const warmSound = async (name: SoundName) => {
+          if (!this.soundUris.has(name)) {
             this.getSoundUri(name); // Populates both synthesisCache and soundUris
-            // Yield to event loop so UI stays responsive
-            await new Promise<void>(resolve => setTimeout(resolve, 0));
+            await new Promise<void>(resolve => setTimeout(resolve, BACKGROUND_PREWARM_DELAY_MS));
+          }
+        };
+        const warmMusic = async (track: MusicTrack) => {
+          const cacheKey = `music:${track}`;
+          if (!this.soundUris.has(cacheKey)) {
+            this.getMusicUri(track); // Populates both synthesisCache and soundUris
+            await new Promise<void>(resolve => setTimeout(resolve, BACKGROUND_PREWARM_DELAY_MS));
+          }
+        };
+
+        // Prioritize the cues that make the board feel tactile. The old pass
+        // synthesized every dormant shop/social/ceremony slot immediately after
+        // app init; on Android that long JS queue could overlap the first puzzle
+        // and make dragging feel sticky. Core gameplay cues warm first, then the
+        // rest are trickled in with small gaps.
+        for (const name of CORE_PREWARM_SOUNDS) {
+          await warmSound(name);
+        }
+        for (const track of CORE_PREWARM_MUSIC) {
+          await warmMusic(track);
+        }
+
+        for (const name of Object.keys(SOUND_DEFS) as SoundName[]) {
+          if (!CORE_PREWARM_SOUNDS.includes(name)) {
+            await warmSound(name);
           }
         }
 
-        // Synthesize all music track samples + URIs, yielding between each
         for (const track of Object.keys(MUSIC_DEFS) as MusicTrack[]) {
-          const cacheKey = `music:${track}`;
-          if (!this.synthesisCache.has(cacheKey)) {
-            this.getMusicUri(track); // Populates both synthesisCache and soundUris
-            await new Promise<void>(resolve => setTimeout(resolve, 0));
+          if (!CORE_PREWARM_MUSIC.includes(track)) {
+            await warmMusic(track);
           }
         }
 
@@ -1282,6 +1315,7 @@ class SoundManager {
                 const player = createAudioPlayerFn(uri);
                 player.volume = this.sfxVolume;
                 this.sounds.set(name, player);
+                await new Promise<void>(resolve => setTimeout(resolve, BACKGROUND_PREWARM_DELAY_MS));
               }
             }
           }

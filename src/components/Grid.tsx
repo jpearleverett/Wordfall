@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useCallback } from 'react';
 import {
   Animated,
   Image,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -23,6 +24,7 @@ const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rg
 const GRADIENT_START = { x: 0, y: 0 };
 const GRADIENT_END = { x: 1, y: 1 };
 const EMPTY_FLEX = { flex: 1 } as const;
+const IS_ANDROID = Platform.OS === 'android';
 
 interface GridProps {
   grid: GridType;
@@ -48,11 +50,8 @@ interface GridProps {
   validWord?: boolean;
   movedCells?: CellPosition[];
   maxHeight?: number;
-  isDragging?: boolean;
   /** Per-tile gravity fall Animated.Values keyed by cell ID */
   fallAnimMap?: Map<string, Animated.Value>;
-  /** Whether fall animation is currently active */
-  fallActive?: boolean;
   /** When true, all grid positions become tappable (for wildcard placement on empty cells) */
   wildcardMode?: boolean;
 }
@@ -71,10 +70,8 @@ function GameGridImpl({
   validWord = false,
   movedCells = [],
   maxHeight,
-  isDragging = false,
   noGravityLayout = false,
   fallAnimMap,
-  fallActive = false,
   wildcardMode = false,
 }: GridProps) {
   const rows = grid.length;
@@ -208,6 +205,7 @@ function GameGridImpl({
   const lastDragCellRef = useRef<string | null>(null);
   const lastDragPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
+  const dragGlowAnim = useRef(new Animated.Value(0)).current;
 
   // ── Column-indexed hit-test lookup (stride-based O(1)) ───────────────────
   // The old implementation iterated every cellBounds entry (up to 49) on
@@ -343,6 +341,7 @@ function GameGridImpl({
       .shouldCancelWhenOutside(true)
       .onBegin((e) => {
         isDraggingRef.current = true;
+        Animated.timing(dragGlowAnim, { toValue: 1, duration: 90, useNativeDriver: true }).start();
         lastDragCellRef.current = null;
         lastDragPosRef.current = { x: e.x, y: e.y };
         perfDragStart();
@@ -403,6 +402,7 @@ function GameGridImpl({
       })
       .onEnd(() => {
         isDraggingRef.current = false;
+        Animated.timing(dragGlowAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start();
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
         perfDragEnd();
@@ -410,6 +410,7 @@ function GameGridImpl({
       })
       .onFinalize(() => {
         isDraggingRef.current = false;
+        Animated.timing(dragGlowAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start();
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
       });
@@ -432,11 +433,15 @@ function GameGridImpl({
   const outerHeight = gridHeight + framePad * 2;
 
   // Memoize computed style objects to avoid creating new objects on every render
+  const outerGlowOpacity = useMemo(() => dragGlowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.65, 1],
+  }), [dragGlowAnim]);
+
   const outerGlowStyle = useMemo(() => [
     styles.outerGlow,
-    { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28 },
-    isDragging && styles.outerGlowDragging,
-  ], [outerWidth, outerHeight, isDragging]);
+    { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28, opacity: outerGlowOpacity },
+  ], [outerWidth, outerHeight, outerGlowOpacity]);
 
   const neonFrameWrapStyle = useMemo(() => [
     styles.neonFrameWrap, { width: outerWidth + 16, height: outerHeight + 16, borderRadius: 28 }
@@ -473,7 +478,7 @@ function GameGridImpl({
 
   return (
     <View style={styles.shadowWrap}>
-      <View style={outerGlowStyle} />
+      <Animated.View style={outerGlowStyle} />
 
       <View style={neonFrameWrapStyle}>
         <Image
@@ -533,7 +538,7 @@ function GameGridImpl({
                     const selIndex = selectedSet.get(key) ?? -1;
                     const isSelected = selIndex >= 0;
                     const isHinted = hintedSet.has(key);
-                    const cellFallAnim = fallActive && fallAnimMap ? fallAnimMap.get(cell.id) : undefined;
+                    const cellFallAnim = fallAnimMap ? fallAnimMap.get(cell.id) : undefined;
 
                     return (
                       <LetterCell
@@ -604,11 +609,6 @@ const styles = StyleSheet.create({
     elevation: 0,
     alignSelf: 'center',
   },
-  outerGlowDragging: {
-    backgroundColor: 'rgba(255,45,149,0.16)',
-    shadowOpacity: 0.7,
-    shadowRadius: 20,
-  },
   neonFrameWrap: {
     position: 'absolute',
     alignSelf: 'center',
@@ -625,9 +625,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: IS_ANDROID ? 0 : 0.5,
+    shadowRadius: IS_ANDROID ? 0 : 12,
+    elevation: IS_ANDROID ? 0 : 8,
   },
   frameInner: {
     backgroundColor: 'rgba(8, 0, 18, 0.88)',
