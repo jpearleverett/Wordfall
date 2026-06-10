@@ -1364,7 +1364,13 @@ class SoundManager {
     return category === 'ceremony' ? this.ceremonyVolume : this.sfxVolume;
   }
 
-  async playSound(name: SoundName): Promise<void> {
+  /**
+   * Play a one-shot SFX. `opts.rate` (default 1) sets the playback rate for
+   * this play — with pitch correction off this shifts pitch, which the trace
+   * path uses for the Wordscapes-style rising tap scale (each cell added to
+   * a trace plays slightly higher than the last). Clamped to 0.5–2.
+   */
+  async playSound(name: SoundName, opts?: { rate?: number }): Promise<void> {
     if (this.muted || !this.initialized) return;
 
     const category = SOUND_CATEGORY[name] ?? 'sfx';
@@ -1411,6 +1417,16 @@ class SoundManager {
 
     try {
       player.volume = targetVol;
+      const rate = Math.min(2, Math.max(0.5, opts?.rate ?? 1));
+      try {
+        if (typeof player.setPlaybackRate === 'function') {
+          player.setPlaybackRate(rate);
+        } else {
+          player.playbackRate = rate;
+        }
+      } catch {
+        // Playback-rate support is best-effort — fall through at normal pitch.
+      }
       player.seekTo(0);
       player.play();
     } catch (e) {

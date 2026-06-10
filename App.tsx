@@ -58,7 +58,7 @@ import PostStreakBreakOffer, {
   RESTORE_WINDOW_MS,
 } from './src/components/PostStreakBreakOffer';
 import { soundManager } from './src/services/sound';
-import { setHapticsEnabled } from './src/services/haptics';
+import { setHapticsEnabled, successHaptic } from './src/services/haptics';
 // ATLAS_PAGES and generateShareText moved to useRewardWiring
 import { notificationManager, setNotificationSegments } from './src/services/notifications';
 import { installGlobalFontScaleClamp } from './src/components/common/Typography';
@@ -1496,7 +1496,10 @@ function HomeMainScreen({ route, navigation }: any) {
       loginCycleDay: player.loginCycleDay + 1,
       lastLoginRewardClaimDate: claimDate,
     });
-    Alert.alert('Reward Claimed!', dayReward.label);
+    // In-world feedback instead of an OS alert: the calendar tile flips to
+    // its claimed state, the claim chime plays, and the device taps back.
+    void soundManager.playSound('loginClaim');
+    void successHaptic();
     void analytics.logEvent('login_reward_claimed', { day: player.loginCycleDay });
   }, [player, economy]);
 

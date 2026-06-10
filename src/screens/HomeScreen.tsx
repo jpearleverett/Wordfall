@@ -21,6 +21,10 @@ import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 import { getDailyVariant } from '../engine/boardGenerator';
 import { useDeferredMount } from '../utils/perfInstrument';
+
+// Session-scoped guard so the login-calendar auto-present fires once per app
+// launch, not on every Home focus/remount.
+let autoOpenedCalendarThisSession = false;
 import { getFlashSale } from '../data/dynamicPricing';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
@@ -341,6 +345,20 @@ export function HomeScreen({
   const showMysteryWheel = hasSegmentContent
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
     : (playerStage !== 'new' || (mysteryWheelSpins > 0)) && onOpenWheel;
+
+  // Auto-present the login calendar once per app session when today's
+  // reward is unclaimed — the Wordscapes/Royal Match daily-sheet ritual.
+  // The reward was previously discoverable only via the top-bar icon dot,
+  // so most players never built the daily-claim habit. Delayed past the
+  // hero entry animation + the below-fold deferred mount.
+  useEffect(() => {
+    if (!showDailyRewards || claimedLoginToday || autoOpenedCalendarThisSession) return;
+    const timer = setTimeout(() => {
+      autoOpenedCalendarThisSession = true;
+      setCalendarOpen(true);
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [showDailyRewards, claimedLoginToday]);
 
   // ── Seasonal Quest ──────────────────────────────────────────────────
   const seasonalQuest = getCurrentSeasonalQuest();

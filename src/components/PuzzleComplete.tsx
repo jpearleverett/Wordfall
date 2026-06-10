@@ -156,9 +156,16 @@ function AnimatedScore({ targetScore }: { targetScore: number }) {
       const progress = step / steps;
       const easedProgress = 1 - Math.pow(1 - progress, 3);
       setDisplayScore(Math.round(targetScore * easedProgress));
+      // Coin-tally tick on every other step, pitch rising with progress —
+      // the classic mobile-game "score pour" sound. Finishes on a bright
+      // resolve chord when the total lands.
+      if (step % 2 === 0 && step < steps) {
+        void soundManager.playSound('bonusCountdownTick', { rate: 1 + progress * 0.5 });
+      }
       if (step >= steps) {
         setDisplayScore(targetScore);
         clearInterval(interval);
+        void soundManager.playSound('bonusCountdownEnd');
       }
     }, duration / steps);
 
