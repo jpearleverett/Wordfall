@@ -34,6 +34,7 @@ import { DailyQuest } from '../data/dailyQuests';
 import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
 import LiveRail from '../components/home/LiveRail';
 import SectionHeader from '../components/home/SectionHeader';
+import PrimaryButton from '../components/common/PrimaryButton';
 import FlawlessStreakCard from '../components/FlawlessStreakCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
@@ -789,21 +790,12 @@ export function HomeScreen({
                   </Text>
                 </View>
               </View>
-              <Pressable
-                style={({ pressed }) => [pressed && styles.buttonPressed]}
+              <PrimaryButton
+                label="BUY"
+                variant="gold"
                 onPress={() => onBuyDeal?.(dailyDeal)}
-                accessibilityRole="button"
                 accessibilityLabel={`Buy ${dailyDeal.name} for ${dailyDeal.salePrice} ${dailyDeal.currency}`}
-              >
-                <LinearGradient
-                  colors={GRADIENTS.button.gold}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.dealBuyButton}
-                >
-                  <Text style={styles.dealBuyText}>BUY</Text>
-                </LinearGradient>
-              </Pressable>
+              />
             </View>
           </LinearGradient>
         )}
@@ -1836,18 +1828,6 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.goldGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
-  },
-  dealBuyButton: {
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  dealBuyText: {
-    color: COLORS.bg,
-    fontSize: 14,
-    fontFamily: FONTS.display,
-    letterSpacing: 2,
   },
   // Flash Sale Teaser
   // Flash sale teaser — Bento pink (coral-leaning)
