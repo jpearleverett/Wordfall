@@ -1416,16 +1416,7 @@ const styles = StyleSheet.create({
   },
   // Mission panel
   missionPanel: {
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,229,255,0.20)',
-    marginBottom: 14,
-    shadowColor: COLORS.cyan,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 6,
+    ...bentoPanel('cyan'),
   },
   missionRow: {
     marginBottom: 10,
@@ -1457,16 +1448,7 @@ const styles = StyleSheet.create({
   },
   // Weekly Goals
   weeklyGoalsPanel: {
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,229,255,0.20)',
-    marginBottom: 14,
-    shadowColor: COLORS.cyan,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 6,
+    ...bentoPanel('cyan'),
   },
   weeklyGoalRow: {
     marginBottom: 12,
@@ -1727,14 +1709,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   recommendCard: {
-    borderRadius: 18,
-    padding: 16,
+    ...bentoPanel('pink', { padding: 16 }),
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: COLORS.accent + '25',
   },
   recommendIcon: {
     fontSize: 32,
@@ -1765,16 +1743,7 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
   quickPlayPanel: {
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(168,91,255,0.22)',
-    marginBottom: 14,
-    shadowColor: COLORS.purple,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 6,
+    ...bentoPanel('purple'),
   },
   quickPlayGrid: {
     flexDirection: 'row',

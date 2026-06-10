@@ -153,9 +153,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           .filter((tier) => achievementIdsSet.has(`${achievement.id}_${tier.level}`))
           .map((tier) => tier.level);
         const highestTier = earnedLevels[earnedLevels.length - 1] ?? null;
-        const tierColor = highestTier === 'gold' ? COLORS.gold
-          : highestTier === 'silver' ? '#c0c0c0'
-          : highestTier === 'bronze' ? '#cd7f32'
+        const tierColor = highestTier === 'gold' ? COLORS.tierGold
+          : highestTier === 'silver' ? COLORS.tierSilver
+          : highestTier === 'bronze' ? COLORS.tierBronze
           : 'rgba(255,255,255,0.15)';
 
         return {
@@ -510,7 +510,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   {achievement.tiers.map(t => {
                     const earned = earnedLevels.includes(t.level);
                     const dotColor = t.level === 'gold' ? COLORS.gold
-                      : t.level === 'silver' ? '#c0c0c0' : '#cd7f32';
+                      : t.level === 'silver' ? COLORS.tierSilver : COLORS.tierBronze;
                     return (
                       <View
                         key={t.level}
