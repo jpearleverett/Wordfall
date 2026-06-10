@@ -339,8 +339,30 @@ function getPhaseConfig(effectiveLevel: number): BoardConfig {
   if (effectiveLevel <= 40) {
     return { rows: 9, cols: 7, wordCount: 7, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
   }
-  // Phase 7: Endgame (levels 41+) — full expert config
-  return { rows: 9, cols: 7, wordCount: 8, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
+  // Phase 7: Endgame (levels 41+). Previously a single constant config
+  // (9×7, 8 words) for every level 41–600 — a 560-level flatline. Now a
+  // texture cycle: board shape + word-length window rotate per 15-level
+  // chapter so the long haul keeps changing feel, while the word-count
+  // base still ramps slowly for overall progression. Invariants honored:
+  // rows ≤ 10, cols ≤ 8, wordCount ≤ 10, maxWordLength ≤ 6, and adjacent
+  // non-breather levels never drop word count by more than 1.
+  const chapterIdx = Math.floor((effectiveLevel - 1) / 15);
+  const wordBase = effectiveLevel >= 116 ? 8 : 7;
+  switch (chapterIdx % 4) {
+    case 0: // wide — standard mix (56 cells)
+      return { rows: 8, cols: 7, wordCount: wordBase, minWordLength: 3, maxWordLength: 6, difficulty: 'expert' };
+    case 1: // tall + narrow — many short words, long gravity columns (54 cells;
+      // capped a word lower than wide so chapter profiles that clamp the
+      // length window upward don't push fill ratio past what placement
+      // can comfortably satisfy)
+      return { rows: 9, cols: 6, wordCount: wordBase - 1, minWordLength: 3, maxWordLength: 5, difficulty: 'expert' };
+    case 2: // compact — fewer but longer words, tight board (49 cells)
+      return { rows: 7, cols: 7, wordCount: wordBase - 1, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
+    default: // large — the classic endgame board (63 cells). minWordLength 3
+      // keeps placement fast at the 8-word base; chapter profiles + the
+      // longWords bias still skew the list long where that's the theme.
+      return { rows: 9, cols: 7, wordCount: wordBase, minWordLength: 3, maxWordLength: 6, difficulty: 'expert' };
+  }
 }
 
 export function getLevelConfig(level: number): BoardConfig {

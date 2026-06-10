@@ -173,12 +173,12 @@ function selectWords(
     if (commonPool.length >= config.wordCount * 3) {
       pool = commonPool;
     }
-  } else if (profile?.dictionaryTier === 'expert') {
-    const expertPool = pool.filter(w => w.length >= 5);
-    if (expertPool.length >= config.wordCount * 3) {
-      pool = expertPool;
-    }
   }
+  // 'expert' tier is applied as a long-word BIAS below (same interleave as
+  // the longWords mechanic) rather than a hard pool filter — an all-5/6
+  // letter find-list at 8 words is the slowest placement config the
+  // generator faces (~10× generation cost) and reads monotonous anyway.
+  const expertBias = profile?.dictionaryTier === 'expert';
 
   // Mode-specific word pool filtering
   if (mode === 'timePressure') {
@@ -217,8 +217,21 @@ function selectWords(
   // the already-shuffled pool keeps determinism while putting the showcased
   // length class first in line for the open slots.
   const mechanics = profile?.introducedMechanics;
-  if (mechanics?.includes('longWords')) {
-    shuffledRest = [...shuffledRest.filter(w => w.length >= 5), ...shuffledRest.filter(w => w.length < 5)];
+  if (mechanics?.includes('longWords') || expertBias) {
+    // Bias, don't saturate: lead with enough long words to color the list,
+    // then alternate long/short so placement isn't strained by an all-long
+    // find-list (all 5-6 letter words on one grid is the slowest config the
+    // generator faces).
+    const long = shuffledRest.filter(w => w.length >= 5);
+    const short = shuffledRest.filter(w => w.length < 5);
+    const lead = long.slice(0, Math.ceil(config.wordCount / 2));
+    const tailLong = long.slice(lead.length);
+    const mixed: string[] = [];
+    for (let i = 0; i < Math.max(tailLong.length, short.length); i++) {
+      if (i < short.length) mixed.push(short[i]);
+      if (i < tailLong.length) mixed.push(tailLong[i]);
+    }
+    shuffledRest = [...lead, ...mixed];
   } else if (mechanics?.includes('fourLetter')) {
     shuffledRest = [...shuffledRest.filter(w => w.length === 4), ...shuffledRest.filter(w => w.length !== 4)];
   }

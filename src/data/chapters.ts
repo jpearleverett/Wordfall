@@ -165,7 +165,7 @@ export const CHAPTERS: Chapter[] = [
     wingId: 'nature',
     icon: '🏔️',
     profile: {
-      minWordLength: 4,
+      minWordLength: 3,
       maxWordLength: 6,
       introducedMechanics: ['longWords', 'denseBoard'],
       emptyCellDensity: 0.03,
@@ -185,6 +185,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['atom', 'cell', 'gene', 'mass', 'wave', 'lens', 'core', 'volt', 'tube', 'beam', 'data', 'test'],
     wingId: 'science',
     icon: '🧪',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 4,
+      introducedMechanics: ['fourLetter'],
+      emptyCellDensity: 0.1,
+      dictionaryTier: 'common',
+    },
   },
   {
     id: 7,
@@ -197,6 +204,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['acid', 'base', 'bond', 'salt', 'iron', 'zinc', 'gold', 'lead', 'neon', 'oxide', 'ionic', 'mole'],
     wingId: 'science',
     icon: '⚗️',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 5,
+      introducedMechanics: ['fourLetter'],
+      emptyCellDensity: 0.06,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 8,
@@ -209,6 +223,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['organ', 'nerve', 'spine', 'brain', 'heart', 'lung', 'bone', 'skin', 'vein', 'blood', 'limb', 'joint'],
     wingId: 'science',
     icon: '🔬',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 5,
+      emptyCellDensity: 0.04,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 9,
@@ -221,6 +241,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['force', 'speed', 'light', 'sound', 'heat', 'power', 'orbit', 'field', 'pulse', 'spark', 'quark', 'flux'],
     wingId: 'science',
     icon: '⚡',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords'],
+      emptyCellDensity: 0.02,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 10,
@@ -233,6 +260,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['prism', 'laser', 'radar', 'sonar', 'phase', 'probe', 'clone', 'surge', 'fuse', 'alloy', 'dense', 'vapor'],
     wingId: 'science',
     icon: '🔭',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords', 'denseBoard'],
+      dictionaryTier: 'expert',
+    },
   },
 
   // ── Wing 3: Mythology (Chapters 11-15) ─────────────────────────────────────
@@ -247,6 +280,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['myth', 'hero', 'sage', 'fate', 'lore', 'epic', 'bard', 'rune', 'omen', 'tome', 'ward', 'oath'],
     wingId: 'mythology',
     icon: '📜',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 4,
+      introducedMechanics: ['fourLetter'],
+      emptyCellDensity: 0.08,
+      dictionaryTier: 'common',
+    },
   },
   {
     id: 12,
@@ -259,6 +299,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['titan', 'hydra', 'muse', 'oracle', 'helm', 'bolt', 'aegis', 'forge', 'lyre', 'styx', 'chaos', 'atlas'],
     wingId: 'mythology',
     icon: '🏛️',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 5,
+      emptyCellDensity: 0.06,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 13,
@@ -271,6 +317,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['rune', 'thor', 'odin', 'frost', 'wolf', 'raven', 'axe', 'mead', 'hall', 'shield', 'forge', 'fjord'],
     wingId: 'mythology',
     icon: '⚔️',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords'],
+      emptyCellDensity: 0.04,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 14,
@@ -283,6 +336,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['jade', 'silk', 'lotus', 'crane', 'pearl', 'tiger', 'scroll', 'honor', 'fate', 'spirit', 'dawn', 'moon'],
     wingId: 'mythology',
     icon: '🐉',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords'],
+      emptyCellDensity: 0.02,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 15,
@@ -295,6 +355,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['drake', 'gryphon', 'pixie', 'troll', 'imp', 'ogre', 'elf', 'sprite', 'golem', 'wraith', 'fiend', 'beast'],
     wingId: 'mythology',
     icon: '🦄',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords', 'denseBoard'],
+      dictionaryTier: 'expert',
+    },
   },
 
   // ── Wing 4: Ocean (Chapters 16-20) ─────────────────────────────────────────
@@ -309,6 +375,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['tide', 'sand', 'shell', 'wave', 'reef', 'surf', 'cove', 'bay', 'kelp', 'clam', 'crab', 'foam'],
     wingId: 'ocean',
     icon: '🐚',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 4,
+      introducedMechanics: ['fourLetter'],
+      emptyCellDensity: 0.14,
+      dictionaryTier: 'common',
+    },
   },
   {
     id: 17,
@@ -321,6 +394,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['sail', 'hull', 'mast', 'helm', 'port', 'keel', 'deck', 'bow', 'stern', 'rig', 'crew', 'knot'],
     wingId: 'ocean',
     icon: '⛵',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 5,
+      emptyCellDensity: 0.12,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 18,
@@ -333,6 +412,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['depth', 'abyss', 'coral', 'squid', 'shark', 'whale', 'eel', 'drift', 'trench', 'murky', 'plunge', 'dive'],
     wingId: 'ocean',
     icon: '🐋',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 5,
+      emptyCellDensity: 0.1,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 19,
@@ -345,6 +430,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['coral', 'fish', 'ray', 'seal', 'otter', 'pearl', 'bloom', 'reef', 'prawn', 'gull', 'heron', 'shore'],
     wingId: 'ocean',
     icon: '🐠',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords'],
+      emptyCellDensity: 0.08,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 20,
@@ -357,6 +449,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['kraken', 'siren', 'trident', 'anchor', 'tempest', 'voyage', 'pirate', 'plank', 'fleet', 'harbor', 'storm', 'wreck'],
     wingId: 'ocean',
     icon: '🦑',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords'],
+      emptyCellDensity: 0.06,
+      dictionaryTier: 'expert',
+    },
   },
 
   // ── Wing 5: Arts (Chapters 21-25) ──────────────────────────────────────────
@@ -371,6 +470,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['line', 'shade', 'tone', 'form', 'hue', 'ink', 'pen', 'brush', 'clay', 'mold', 'frame', 'draft'],
     wingId: 'arts',
     icon: '✏️',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 4,
+      introducedMechanics: ['fourLetter'],
+      emptyCellDensity: 0.08,
+      dictionaryTier: 'common',
+    },
   },
   {
     id: 22,
@@ -383,6 +489,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['paint', 'color', 'blend', 'style', 'mural', 'easel', 'pastel', 'vivid', 'bold', 'canvas', 'oil', 'wash'],
     wingId: 'arts',
     icon: '🎨',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 5,
+      emptyCellDensity: 0.06,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 23,
@@ -395,6 +507,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['note', 'chord', 'beat', 'tempo', 'bass', 'drum', 'flute', 'harp', 'tune', 'song', 'hymn', 'jazz'],
     wingId: 'arts',
     icon: '🎵',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 5,
+      emptyCellDensity: 0.04,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 24,
@@ -407,6 +525,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['stage', 'scene', 'act', 'role', 'plot', 'drama', 'mask', 'mime', 'cast', 'prop', 'cue', 'bow'],
     wingId: 'arts',
     icon: '🎭',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 6,
+      introducedMechanics: ['denseBoard'],
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 25,
@@ -419,6 +543,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['craft', 'vision', 'motif', 'genre', 'medium', 'opus', 'avant', 'etch', 'carve', 'sculpt', 'fresco', 'muse'],
     wingId: 'arts',
     icon: '🖼️',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords', 'denseBoard'],
+      dictionaryTier: 'expert',
+    },
   },
 
   // ── Wing 6: Space (Chapters 26-30) ─────────────────────────────────────────
@@ -433,6 +563,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['star', 'moon', 'sky', 'night', 'glow', 'dawn', 'dusk', 'beam', 'ray', 'haze', 'mist', 'void'],
     wingId: 'space',
     icon: '⭐',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 4,
+      introducedMechanics: ['fourLetter'],
+      emptyCellDensity: 0.15,
+      dictionaryTier: 'common',
+    },
   },
   {
     id: 27,
@@ -445,6 +582,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['lunar', 'crater', 'orbit', 'phase', 'eclipse', 'tide', 'rock', 'dust', 'land', 'base', 'module', 'suit'],
     wingId: 'space',
     icon: '🌙',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 5,
+      emptyCellDensity: 0.13,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 28,
@@ -457,6 +600,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['mars', 'venus', 'earth', 'ring', 'core', 'giant', 'dwarf', 'comet', 'belt', 'solar', 'flare', 'probe'],
     wingId: 'space',
     icon: '🪐',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 5,
+      emptyCellDensity: 0.11,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 29,
@@ -469,6 +618,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['nova', 'nebula', 'quasar', 'pulsar', 'cosmic', 'gamma', 'warp', 'rift', 'void', 'black', 'hole', 'dark'],
     wingId: 'space',
     icon: '🌌',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords'],
+      emptyCellDensity: 0.09,
+      dictionaryTier: 'expert',
+    },
   },
   {
     id: 30,
@@ -481,6 +637,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['rocket', 'launch', 'thrust', 'fuel', 'dock', 'relay', 'signal', 'array', 'mission', 'crew', 'cargo', 'titan'],
     wingId: 'space',
     icon: '🚀',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords'],
+      emptyCellDensity: 0.07,
+      dictionaryTier: 'expert',
+    },
   },
 
   // ── Wing 7: History (Chapters 31-35) ───────────────────────────────────────
@@ -495,6 +658,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['king', 'queen', 'crown', 'reign', 'throne', 'court', 'noble', 'lord', 'dame', 'knight', 'serf', 'realm'],
     wingId: 'history',
     icon: '🏺',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 5,
+      introducedMechanics: ['fourLetter'],
+      emptyCellDensity: 0.04,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 32,
@@ -507,6 +677,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['castle', 'moat', 'tower', 'gate', 'wall', 'siege', 'sword', 'armor', 'lance', 'steed', 'banner', 'herald'],
     wingId: 'history',
     icon: '🏰',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 5,
+      introducedMechanics: ['denseBoard'],
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 33,
@@ -519,6 +695,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['trade', 'route', 'spice', 'silk', 'port', 'chart', 'compass', 'voyage', 'colony', 'fleet', 'cargo', 'fort'],
     wingId: 'history',
     icon: '🗺️',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 6,
+      introducedMechanics: ['denseBoard'],
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 34,
@@ -531,6 +713,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['revolt', 'reform', 'liberty', 'rights', 'vote', 'press', 'union', 'treaty', 'peace', 'law', 'code', 'pact'],
     wingId: 'history',
     icon: '⚖️',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords', 'denseBoard'],
+      dictionaryTier: 'expert',
+    },
   },
   {
     id: 35,
@@ -543,6 +731,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['radio', 'film', 'media', 'press', 'globe', 'urban', 'steel', 'rail', 'bridge', 'motor', 'flight', 'wire'],
     wingId: 'history',
     icon: '🏙️',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords', 'denseBoard'],
+      dictionaryTier: 'expert',
+    },
   },
 
   // ── Wing 8: Elements (Chapters 36-40) ──────────────────────────────────────
@@ -557,6 +751,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['fire', 'flame', 'blaze', 'ember', 'spark', 'ash', 'smoke', 'coal', 'burn', 'heat', 'torch', 'glow'],
     wingId: 'elements',
     icon: '🔥',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 5,
+      introducedMechanics: ['fourLetter'],
+      emptyCellDensity: 0.06,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 37,
@@ -569,6 +770,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['water', 'river', 'lake', 'rain', 'flood', 'steam', 'ice', 'snow', 'mist', 'pool', 'dam', 'falls'],
     wingId: 'elements',
     icon: '💧',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      emptyCellDensity: 0.1,
+      dictionaryTier: 'standard',
+    },
   },
   {
     id: 38,
@@ -581,6 +788,13 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['wind', 'gust', 'gale', 'breeze', 'draft', 'storm', 'cloud', 'sky', 'air', 'blow', 'whirl', 'swirl'],
     wingId: 'elements',
     icon: '💨',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords'],
+      emptyCellDensity: 0.08,
+      dictionaryTier: 'expert',
+    },
   },
   {
     id: 39,
@@ -593,6 +807,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['stone', 'rock', 'sand', 'clay', 'iron', 'ore', 'gem', 'quartz', 'slate', 'flint', 'dust', 'soil'],
     wingId: 'elements',
     icon: '⛰️',
+    profile: {
+      minWordLength: 4,
+      maxWordLength: 6,
+      introducedMechanics: ['denseBoard'],
+      dictionaryTier: 'expert',
+    },
   },
   {
     id: 40,
@@ -605,6 +825,12 @@ export const CHAPTERS: Chapter[] = [
     themeWords: ['primal', 'force', 'energy', 'spirit', 'chaos', 'order', 'cycle', 'balance', 'surge', 'calm', 'apex', 'prime'],
     wingId: 'elements',
     icon: '✨',
+    profile: {
+      minWordLength: 3,
+      maxWordLength: 6,
+      introducedMechanics: ['longWords', 'denseBoard'],
+      dictionaryTier: 'expert',
+    },
   },
 ];
 
