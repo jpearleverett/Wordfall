@@ -98,6 +98,12 @@ export const COLORS = {
   vhsStatic: 'rgba(255,255,255,0.02)',
   mountainSilhouette: '#1a0533',
   horizonGlow: 'rgba(255,45,149,0.35)',
+
+  // Interaction states — use these instead of ad-hoc opacity on disabled
+  // controls so the dimmed look is consistent app-wide.
+  buttonDisabled: 'rgba(255,255,255,0.20)',
+  textDisabled: 'rgba(240,230,255,0.40)',
+  borderDisabled: 'rgba(255,255,255,0.08)',
 };
 
 // Gradient presets — synthwave / Miami
@@ -908,11 +914,14 @@ export const TYPOGRAPHY = {
   displayLarge: { fontFamily: FONTS.display, fontSize: 36, letterSpacing: 1.5 },
   screenTitle: { fontFamily: FONTS.display, fontSize: 28, letterSpacing: 1 },
   sectionTitle: { fontFamily: FONTS.bodySemiBold, fontSize: 20, letterSpacing: 0.5 },
+  bodyLarge: { fontFamily: FONTS.bodyRegular, fontSize: 16, letterSpacing: 0.2 },
   body: { fontFamily: FONTS.bodyRegular, fontSize: 15, letterSpacing: 0.2 },
+  bodySmall: { fontFamily: FONTS.bodyRegular, fontSize: 13, letterSpacing: 0.2 },
   bodyMedium: { fontFamily: FONTS.bodyMedium, fontSize: 15, letterSpacing: 0.2 },
   bodySemiBold: { fontFamily: FONTS.bodySemiBold, fontSize: 15, letterSpacing: 0.2 },
   bodyBold: { fontFamily: FONTS.bodyBold, fontSize: 15, letterSpacing: 0.2 },
   label: { fontFamily: FONTS.bodySemiBold, fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase' as const },
+  labelSmall: { fontFamily: FONTS.bodySemiBold, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' as const },
   caption: { fontFamily: FONTS.bodyMedium, fontSize: 11, letterSpacing: 0.3 },
   score: { fontFamily: FONTS.display, fontSize: 22, letterSpacing: 0.5 },
   comboText: { fontFamily: FONTS.display, fontSize: 28, letterSpacing: 1 },
@@ -925,8 +934,9 @@ export const TYPOGRAPHY = {
   neonCounter: { fontFamily: FONTS.display, fontSize: 32, letterSpacing: 1 },
 };
 
-// Spacing scale
+// Spacing scale — every margin/padding should resolve to one of these.
 export const SPACING = {
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,
@@ -936,12 +946,15 @@ export const SPACING = {
   xxxl: 40,
 };
 
-// Border radius scale
+// Border radius scale — 6 tiers, each with a named role. The April audit
+// found 34 distinct ad-hoc radius values across screens; new code should
+// resolve to one of these (sm: badges/chips, md: inputs/small buttons,
+// lg: buttons/list rows, xl: cards/panels, xxl: hero cards/modals).
 export const RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  sm: 4,
+  md: 8,
+  lg: 12,
+  xl: 16,
   xxl: 24,
   full: 999,
 };
