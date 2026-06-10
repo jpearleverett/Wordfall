@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Board, CellPosition, GameMode, GameState, VictorySummaryItem } from '../types';
 import { useGame } from '../hooks/useGame';
 import { GameStoreContext } from '../stores/gameStore';
@@ -434,6 +435,11 @@ function GameScreenImpl({
   nextUnlockPreview = null,
 }: GameScreenProps) {
   const { t } = useTranslation();
+  // Bottom inset: RN's legacy SafeAreaView is a no-op on Android, so the
+  // booster bar previously relied on a fixed 28px guess that sat flush
+  // against (or under) tall gesture-nav bars. Take the larger of the two.
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(28, insets.bottom + 12);
   // Narrow zustand subscriptions — re-render only when the slice actually
   // read changes. usePlayer() / useEconomy() would re-render this 1700-line
   // component on every economy/player mutation across the app.
@@ -1904,7 +1910,7 @@ function GameScreenImpl({
     <GameStoreContext.Provider value={store}>
     <React.Profiler id="GameScreen" onRender={profilerOnRender}>
     <Animated.View style={shakeContainerStyle}>
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { paddingBottom: bottomInset }]}>
       <AmbientBackdrop variant="game" colorOverride={chapterPaletteOverride} />
       {/* Mode intro banner - absolute overlay so it doesn't shift layout */}
       {showModeIntro && mode !== 'classic' && (
