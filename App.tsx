@@ -4,6 +4,7 @@ import {
   Alert,
   AppState,
   Animated,
+  InteractionManager,
   Pressable,
   SafeAreaView,
   StatusBar,
@@ -623,6 +624,32 @@ function GameScreenWrapper({ route, navigation }: any) {
     navigation,
   });
 
+  // ── Next-board prefetch ─────────────────────────────────────────────
+  // generateBoard is synchronous JS-thread work (typically tens of ms,
+  // worst-seed a few hundred). Running it on the "Next level" tap makes the
+  // most common navigation in the game feel sticky. Instead we pre-generate
+  // the next board while the victory screen is on display and reuse it at
+  // tap time when the target (mode/level/config) still matches.
+  const prefetchedNext = useRef<{ key: string; board: Board } | null>(null);
+
+  const computeNextTarget = useCallback(() => {
+    const mode = (params.mode || 'classic') as GameMode;
+    // advanceModeLevel was already called in handleComplete on win, so
+    // getModeLevel returns the new (incremented) level. Classic uses the
+    // global level carried in params.
+    const modeLevel = mode === 'classic'
+      ? (params.level || 0) + 1
+      : player.getModeLevel(mode);
+    const useBreather = player.needsBreather();
+    let config = useBreather ? getBreatherConfig(modeLevel) : getLevelConfig(modeLevel);
+    if (!useBreather) {
+      const adjusted = getAdjustedConfig(config, player.performanceMetrics);
+      config = adjusted.config;
+    }
+    const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
+    return { mode, modeLevel, config, chapter, key: `${mode}:${modeLevel}:${JSON.stringify(config)}` };
+  }, [params, player]);
+
   const handleComplete = useCallback((
     stars: number,
     score: number,
@@ -632,7 +659,32 @@ function GameScreenWrapper({ route, navigation }: any) {
     // Track spins before completion to detect if a new one is awarded
     spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
     handleCompleteInner(stars, score, perfectRun, completionTimeSeconds);
-  }, [handleCompleteInner, player.mysteryWheel.spinsAvailable]);
+
+    // Pre-generate the next board while the player is looking at the
+    // victory screen. Best-effort: failures fall through to the sync
+    // generation in handleNextLevel. The 600ms delay lets the victory
+    // animation start without competing for the JS thread; the key check
+    // at tap time guards against the target shifting (e.g. adaptive
+    // difficulty settling after completion processing).
+    setTimeout(() => {
+      InteractionManager.runAfterInteractions(() => {
+        try {
+          const target = computeNextTarget();
+          if (prefetchedNext.current?.key === target.key) return;
+          const board = generateBoard(
+            target.config,
+            target.modeLevel * 1337 + Date.now(),
+            target.mode,
+            target.chapter?.profile,
+            target.chapter?.themeWords,
+          );
+          prefetchedNext.current = { key: target.key, board };
+        } catch {
+          // Prefetch is opportunistic — tap-time generation remains the source of truth.
+        }
+      });
+    }, 600);
+  }, [handleCompleteInner, player.mysteryWheel.spinsAvailable, computeNextTarget]);
 
   const handleNextLevel = useCallback(() => {
     try {
@@ -640,26 +692,16 @@ function GameScreenWrapper({ route, navigation }: any) {
       const mode = (params.mode || 'classic') as GameMode;
       player.useEnergy(mode);
 
-      // Each mode has its own level progression (classic uses global level)
-      // advanceModeLevel was already called in handleComplete on win,
-      // so getModeLevel returns the new (incremented) level
-      const modeLevel = mode === 'classic'
-        ? (params.level || 0) + 1  // classic uses params.level which is global
-        : player.getModeLevel(mode);
+      const target = computeNextTarget();
+      const { modeLevel, config, chapter } = target;
 
-      // Check if player needs a breather level
-      const useBreather = player.needsBreather();
-      let config = useBreather ? getBreatherConfig(modeLevel) : getLevelConfig(modeLevel);
-
-      // Apply adaptive difficulty (only when not in breather mode)
-      if (!useBreather) {
-        const adjusted = getAdjustedConfig(config, player.performanceMetrics);
-        config = adjusted.config;
-      }
-
-      const seed = modeLevel * 1337 + Date.now();
-      const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
-      let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
+      // Reuse the board pre-generated during the victory screen when the
+      // target still matches; otherwise generate now (original behavior).
+      const cached = prefetchedNext.current;
+      prefetchedNext.current = null;
+      const board = cached && cached.key === target.key
+        ? cached.board
+        : generateBoard(config, modeLevel * 1337 + Date.now(), mode, chapter?.profile, chapter?.themeWords);
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.replace('Game', {
@@ -705,7 +747,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         navigation.goBack();
       }
     }
-  }, [params, navigation, player]);
+  }, [params, navigation, player, computeNextTarget]);
 
   const handleSkipLevel = useCallback(() => {
     const SKIP_COST = 200;

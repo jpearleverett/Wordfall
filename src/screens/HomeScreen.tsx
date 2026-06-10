@@ -20,6 +20,7 @@ import { soundManager } from '../services/sound';
 import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 import { getDailyVariant } from '../engine/boardGenerator';
+import { useDeferredMount } from '../utils/perfInstrument';
 import { getFlashSale } from '../data/dynamicPricing';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
@@ -173,6 +174,9 @@ export function HomeScreen({
   // Pre-compute daily completion for streak offer check
   const today = new Date().toISOString().split('T')[0];
   const dailyDone = progress.dailyCompleted.includes(today);
+
+  // Below-the-fold cards mount a beat after first paint (see render).
+  const belowFoldMounted = useDeferredMount(150);
 
   // --- Streak shield contextual offer ---
   const [showStreakOffer, setShowStreakOffer] = useState(false);
@@ -828,6 +832,11 @@ export function HomeScreen({
         </Animated.View>
       )}
 
+      {/* Below-the-fold content (progress highway, quests, goals, calendar,
+          quick play) mounts one beat after first paint — the hero card +
+          daily CTA appear immediately and the rest streams in while the
+          entry animation plays. Cuts Home mount/commit cost roughly in half. */}
+      {belowFoldMounted && (<>
       {/* Neon Highway Level Progress — Bento cyan shell */}
       <Animated.View
         style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
@@ -1138,6 +1147,7 @@ export function HomeScreen({
           </LinearGradient>
         )}
       </Animated.View>
+      </>)}
     </ScrollView>
       {/* Streak shield contextual offer */}
       {showStreakOffer && (
