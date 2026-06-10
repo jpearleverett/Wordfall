@@ -202,16 +202,55 @@ function selectWords(
   // 3-4 letter words). The shuffled general pool still fills the remaining
   // slots so the list has some variety even when a chapter ships few theme
   // words that fit the current profile.
+  // NOTE: the dictionary pool is UPPERCASE — theme words from chapters.ts are
+  // authored lowercase, so they must be uppercased before the membership
+  // check. (A historic lowercase normalization here meant theme words never
+  // matched the pool at all and every chapter drew from the generic pool.)
   const poolSet = new Set(pool);
   const preferred = themeWords
-    ? Array.from(new Set(themeWords.map(w => w.toLowerCase()))).filter(w => poolSet.has(w))
+    ? Array.from(new Set(themeWords.map(w => w.toUpperCase()))).filter(w => poolSet.has(w))
     : [];
   const shuffledPreferred = shuffleArray(preferred, rng);
-  const shuffledRest = shuffleArray(pool, rng);
+  let shuffledRest = shuffleArray(pool, rng);
+
+  // Mechanic-driven length bias for the general (non-theme) pool. Partitioning
+  // the already-shuffled pool keeps determinism while putting the showcased
+  // length class first in line for the open slots.
+  const mechanics = profile?.introducedMechanics;
+  if (mechanics?.includes('longWords')) {
+    shuffledRest = [...shuffledRest.filter(w => w.length >= 5), ...shuffledRest.filter(w => w.length < 5)];
+  } else if (mechanics?.includes('fourLetter')) {
+    shuffledRest = [...shuffledRest.filter(w => w.length === 4), ...shuffledRest.filter(w => w.length !== 4)];
+  }
+
   const shuffled = [...shuffledPreferred, ...shuffledRest];
   const selected: string[] = [];
   const selectedSet = new Set<string>();
   const usedLetters = new Set<string>();
+
+  // Reserved theme slots: up to half the find-list comes straight from the
+  // chapter's themeWords so the chapter's flavor is actually visible on the
+  // board. The general-pool loop below enforces a "no duplicate starting
+  // letter" variety guard that silently rejected most theme words (e.g.
+  // RAIN/ROOT/ROSE all share R), which is why chapters never felt themed.
+  // Theme picks skip that guard but keep the substring + letter-overlap
+  // guards that protect placement solvability.
+  const themeSlots = Math.min(shuffledPreferred.length, Math.ceil(config.wordCount / 2));
+  for (const word of shuffledPreferred) {
+    if (selected.length >= themeSlots) break;
+    if (selectedSet.has(word)) continue;
+    const isSubstring = selected.some(w => w.includes(word) || word.includes(w));
+    if (isSubstring) continue;
+    const letterSet = new Set(word.split(''));
+    const tooMuchOverlap = selected.some(w => {
+      const shared = w.split('').filter(l => letterSet.has(l)).length;
+      return shared > Math.min(w.length, word.length) * 0.5;
+    });
+    if (tooMuchOverlap) continue;
+    selected.push(word);
+    selectedSet.add(word);
+    usedLetters.add(word[0]);
+  }
 
   for (const word of shuffled) {
     if (selected.length >= config.wordCount) break;
@@ -258,6 +297,50 @@ function selectWords(
   }
 
   return selected;
+}
+
+/**
+ * Carve intentional empty cells out of the filled board, honoring the
+ * chapter profile's `emptyCellDensity`. Holes are only taken from the
+ * topmost contiguous run of NON-word filler cells in each column, which
+ * keeps the board gravity-stable (nothing sits above a hole, so no letter
+ * falls at puzzle start) and never touches a placed word path. Fewer filler
+ * letters = less noise + visibly varied board silhouettes per chapter.
+ *
+ * Skipped for shrinkingBoard (outer filler ring is structural) and
+ * gravityFlip (rotating gravity would collapse top holes immediately).
+ */
+function carveEmptyCells(
+  grid: Grid,
+  wordPositions: Map<string, CellPosition[]>,
+  density: number,
+  rng: () => number
+): void {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const target = Math.floor(rows * cols * density);
+  if (target <= 0) return;
+
+  const wordCells = new Set<string>();
+  wordPositions.forEach(positions => {
+    positions.forEach(p => wordCells.add(`${p.row},${p.col}`));
+  });
+
+  const colOrder = shuffleArray(Array.from({ length: cols }, (_, i) => i), rng);
+  let carved = 0;
+  for (const c of colOrder) {
+    if (carved >= target) break;
+    // Topmost contiguous run of filler (non-word) cells in this column.
+    let run = 0;
+    while (run < rows && !wordCells.has(`${run},${c}`)) run++;
+    // Cap holes per column so the carving spreads across the board instead
+    // of hollowing out one side.
+    const maxHere = Math.min(run, target - carved, 2);
+    for (let r = 0; r < maxHere; r++) {
+      grid[r][c] = null;
+      carved++;
+    }
+  }
 }
 
 /**
@@ -418,6 +501,15 @@ function attemptGenerate(
 
   // Fill empty cells
   fillEmptyCells(grid, rng);
+
+  // Carve intentional holes per the chapter profile. `denseBoard` chapters
+  // force a fully-filled board regardless of the declared density. Carving
+  // happens BEFORE the solvability check so validation covers the holes.
+  const wantsDense = profile?.introducedMechanics?.includes('denseBoard');
+  const density = wantsDense ? 0 : profile?.emptyCellDensity ?? 0;
+  if (density > 0 && mode !== 'shrinkingBoard' && mode !== 'gravityFlip') {
+    carveEmptyCells(grid, wordPositions, density, rng);
+  }
 
   // Verify solvability using fast heuristics + budgeted fallback
   const wordStrings = placements.map(p => p.word);

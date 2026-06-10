@@ -239,9 +239,12 @@ export interface GenerationProfile {
   /** Upper bound on placed word length. Default 9. */
   maxWordLength?: number;
   /**
-   * Mechanics this chapter should showcase so the generator biases toward
-   * boards where the mechanic is likely to trigger. Purely advisory; does
-   * not change engine rules (which are driven by mode).
+   * Mechanics this chapter should showcase. Wired into the generator:
+   * `fourLetter` biases open word slots toward 4-letter words, `longWords`
+   * biases toward 5+ letter words, `denseBoard` forces a fully-filled grid
+   * (overrides emptyCellDensity). `gravityCascade` and `wildcards` are
+   * advisory labels only (gravity is always on; wildcards are a booster).
+   * Never changes engine rules — those are driven by mode.
    */
   introducedMechanics?: Array<
     | 'gravityCascade'
@@ -250,7 +253,13 @@ export interface GenerationProfile {
     | 'longWords'
     | 'denseBoard'
   >;
-  /** 0..1 — fraction of cells intentionally left empty at gen time. */
+  /**
+   * 0..1 — fraction of cells intentionally left empty at gen time. Holes are
+   * carved from the topmost non-word filler cells per column (gravity-stable,
+   * never touches word paths). Higher density = less letter noise = easier,
+   * with visibly varied board silhouettes. Ignored for shrinkingBoard and
+   * gravityFlip modes and when `denseBoard` is declared.
+   */
   emptyCellDensity?: number;
   /**
    * 'common' restricts to high-frequency dictionary subset (safer for
