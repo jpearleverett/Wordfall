@@ -406,7 +406,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Board shrinks every 2 words',
     icon: '🔻',
     color: COLORS.coral,
-    unlockLevel: 5,
+    unlockLevel: 4,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -415,7 +415,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.25,
       comboMode: false,
-      skillGate: { perfectSolves: 3 },
+      skillGate: { perfectSolves: 2 },
     },
   },
   timePressure: {
@@ -424,7 +424,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Beat the clock',
     icon: '⏱️',
     color: COLORS.orange,
-    unlockLevel: 12,
+    unlockLevel: 8,
     rules: {
       hasTimer: true,
       timerSeconds: 120,
@@ -434,7 +434,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.5,
       comboMode: false,
-      skillGate: { perfectSolves: 5 },
+      skillGate: { perfectSolves: 3 },
     },
   },
   perfectSolve: {
@@ -443,7 +443,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Zero mistakes, no assists',
     icon: '💎',
     color: COLORS.gold,
-    unlockLevel: 18,
+    unlockLevel: 14,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -452,7 +452,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 2,
       comboMode: false,
-      skillGate: { perfectSolves: 10, minStars: 30 },
+      skillGate: { perfectSolves: 6, minStars: 20 },
     },
   },
   gravityFlip: {
@@ -461,7 +461,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Gravity rotates 90° after each word',
     icon: '🔄',
     color: COLORS.coral,
-    unlockLevel: 14,
+    unlockLevel: 10,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -470,7 +470,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.5,
       comboMode: false,
-      skillGate: { minStars: 50 },
+      skillGate: { minStars: 25 },
     },
   },
   daily: {
@@ -496,7 +496,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Curated hard puzzle',
     icon: '🏆',
     color: COLORS.purple,
-    unlockLevel: 16,
+    unlockLevel: 12,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -505,7 +505,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.5,
       comboMode: false,
-      skillGate: { puzzlesSolved: 20 },
+      skillGate: { puzzlesSolved: 12 },
     },
   },
   noGravity: {
@@ -514,7 +514,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Letters stay put — pure word finding',
     icon: '🚀',
     color: COLORS.teal,
-    unlockLevel: 8,
+    unlockLevel: 6,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -531,7 +531,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Minimal hints, harder boards',
     icon: '🧠',
     color: COLORS.purple,
-    unlockLevel: 30,
+    unlockLevel: 22,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -540,7 +540,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 2,
       comboMode: false,
-      skillGate: { perfectSolves: 25, minStars: 100 },
+      skillGate: { perfectSolves: 15, minStars: 60 },
     },
   },
   relax: {
@@ -549,7 +549,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'No pressure, unlimited undos',
     icon: '🌿',
     color: COLORS.green,
-    unlockLevel: 3,
+    unlockLevel: 2,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,

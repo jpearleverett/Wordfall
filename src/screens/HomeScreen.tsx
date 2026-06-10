@@ -19,6 +19,7 @@ import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
 import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
+import { getDailyVariant } from '../engine/boardGenerator';
 import { getFlashSale } from '../data/dynamicPricing';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
@@ -513,7 +514,9 @@ export function HomeScreen({
                 <View style={styles.dailyContent}>
                   <Text style={styles.dailyTitle}>{dailyDone ? 'Daily completed' : "Today's challenge"}</Text>
                   <Text style={styles.dailySubtitle}>
-                    {dailyDone ? 'Come back tomorrow!' : `+${ECONOMY.dailyCompleteCoins} coins`}
+                    {dailyDone
+                      ? 'Come back tomorrow!'
+                      : `${getDailyVariant(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
                   </Text>
                 </View>
                 <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>

@@ -8,7 +8,7 @@
  * on: every player on a given UTC date plays the same puzzle, so
  * scores are comparable.
  */
-import { generateDailyBoard, dailyBoardSeed } from '../boardGenerator';
+import { generateDailyBoard, dailyBoardSeed, getDailyVariant } from '../boardGenerator';
 
 describe('dailyBoardSeed', () => {
   it('is deterministic over a fixed date string', () => {
@@ -53,10 +53,30 @@ describe('generateDailyBoard', () => {
     expect(gridA).not.toEqual(gridB);
   });
 
-  it('produces a board with 5 words (daily config)', () => {
+  it('matches the weekday variant config (2026-04-21 is a Tuesday)', () => {
     const board = generateDailyBoard('2026-04-21');
     expect(board.words.length).toBe(5);
     expect(board.config.rows).toBe(7);
     expect(board.config.cols).toBe(6);
+  });
+
+  it('weekday variants rotate the daily texture', () => {
+    // 2026-04-19 Sunday .. 2026-04-25 Saturday
+    const dates = ['2026-04-19', '2026-04-20', '2026-04-21', '2026-04-22', '2026-04-23', '2026-04-24', '2026-04-25'];
+    const variants = dates.map((d) => getDailyVariant(d));
+    expect(variants.map((v) => v.name)).toEqual([
+      'Zen Garden', 'Word Flood', 'Classic Daily', 'Long Haul', 'Tall Tower', 'Big Board', 'Weekend Special',
+    ]);
+    // Each variant generates a valid board with its declared word count
+    // (allow the generator's -1 fallback under placement strain).
+    for (const d of dates) {
+      const board = generateDailyBoard(d);
+      const expected = getDailyVariant(d).config.wordCount;
+      expect(board.words.length).toBeGreaterThanOrEqual(expected - 1);
+    }
+  });
+
+  it('falls back to the classic variant for unparseable dates', () => {
+    expect(getDailyVariant('garbage').name).toBe('Classic Daily');
   });
 });

@@ -668,18 +668,45 @@ const dailyBoardCache = new Map<string, Board>();
  * the given UTC date string. Pure function of `dateString` — two
  * devices on the same date produce identical boards.
  */
+/**
+ * Day-of-week daily variants. The daily challenge previously used one
+ * static 7×6 / 5-word config forever; now each weekday has a distinct
+ * texture so the daily ritual stays fresh across weeks. Derived from the
+ * UTC date string, so determinism (same date → same board for every
+ * player) is preserved.
+ */
+export const DAILY_VARIANTS: ReadonlyArray<{ name: string; config: BoardConfig }> = [
+  // Sunday — small + gentle wind-down
+  { name: 'Zen Garden', config: { rows: 6, cols: 5, wordCount: 4, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' } },
+  // Monday — many short words to start the week fast
+  { name: 'Word Flood', config: { rows: 7, cols: 6, wordCount: 7, minWordLength: 3, maxWordLength: 4, difficulty: 'medium' } },
+  // Tuesday — the classic daily
+  { name: 'Classic Daily', config: { rows: 7, cols: 6, wordCount: 5, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' } },
+  // Wednesday — fewer but longer words
+  { name: 'Long Haul', config: { rows: 7, cols: 6, wordCount: 4, minWordLength: 5, maxWordLength: 6, difficulty: 'medium' } },
+  // Thursday — tall narrow tower, long gravity columns
+  { name: 'Tall Tower', config: { rows: 9, cols: 5, wordCount: 5, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' } },
+  // Friday — the big weekly workout
+  { name: 'Big Board', config: { rows: 8, cols: 7, wordCount: 6, minWordLength: 3, maxWordLength: 6, difficulty: 'hard' } },
+  // Saturday — wide + busy weekend special
+  { name: 'Weekend Special', config: { rows: 7, cols: 7, wordCount: 6, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' } },
+];
+
+/**
+ * Resolve the daily variant for a UTC date string (YYYY-MM-DD). Falls back
+ * to the classic config when the string can't be parsed.
+ */
+export function getDailyVariant(dateString: string): { name: string; config: BoardConfig } {
+  const ms = Date.parse(`${dateString}T00:00:00Z`);
+  if (Number.isNaN(ms)) return DAILY_VARIANTS[2];
+  return DAILY_VARIANTS[new Date(ms).getUTCDay()];
+}
+
 export function generateDailyBoard(dateString: string): Board {
   const cached = dailyBoardCache.get(dateString);
   if (cached) return cached;
 
-  const config: BoardConfig = {
-    rows: 7,
-    cols: 6,
-    wordCount: 5,
-    minWordLength: 3,
-    maxWordLength: 5,
-    difficulty: 'medium',
-  };
+  const { config } = getDailyVariant(dateString);
 
   const board = generateBoard(config, dailyBoardSeed(dateString));
   dailyBoardCache.set(dateString, board);
