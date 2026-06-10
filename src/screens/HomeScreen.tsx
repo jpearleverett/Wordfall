@@ -33,6 +33,7 @@ import DailyQuestsCard from '../components/DailyQuestsCard';
 import { DailyQuest } from '../data/dailyQuests';
 import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
 import LiveRail from '../components/home/LiveRail';
+import SectionHeader from '../components/home/SectionHeader';
 import FlawlessStreakCard from '../components/FlawlessStreakCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
@@ -367,6 +368,14 @@ export function HomeScreen({
     && (playerStage === 'established' || playerStage === 'veteran')
     && !questState.completedQuestIds.includes(seasonalQuest.id);
 
+  // Whether the "Today's goals" band has anything to show — gates its header.
+  const hasGoalsContent = Boolean(
+    showMissions ||
+    (dailyQuests.length > 0 && onClaimDailyQuest) ||
+    (showSeasonalQuest && questState.activeQuestId) ||
+    (showWeeklyGoals && weeklyGoals),
+  );
+
   // Auto-initialize quest for the current season if not started
   useEffect(() => {
     if (!showSeasonalQuest) return;
@@ -551,7 +560,11 @@ export function HomeScreen({
       {/* Guided onboarding milestone banner — shown for first 5 levels */}
       {/* Segment-driven welcome-back banner for at-risk / lapsed / returned
           players. Message comes from getWelcomeBackMessage() in App.tsx. */}
-      {segmentWelcomeMessage && (
+      {/* Ambient banner slot — exactly ONE of (guided milestone | welcome
+          back | early guidance) renders. They previously stacked for early
+          returning players, opening the screen with three banners of
+          banner soup before any content. */}
+      {!nextGuidedMilestone && segmentWelcomeMessage && (
         <LinearGradient
           colors={['rgba(0,212,255,0.20)', 'rgba(168,85,247,0.10)'] as [string, string]}
           style={styles.welcomeBackBanner}
@@ -610,7 +623,7 @@ export function HomeScreen({
         </Pressable>
       )}
 
-      {!nextGuidedMilestone && playerStage === 'early' && (
+      {!nextGuidedMilestone && !segmentWelcomeMessage && playerStage === 'early' && (
         <View style={styles.earlyGuidanceCard}>
           <LinearGradient
             colors={['rgba(0,212,255,0.16)', 'rgba(0,212,255,0.06)'] as [string, string]}
@@ -626,6 +639,9 @@ export function HomeScreen({
       )}
 
       {/* Live rail — swipeable carousel: event / wheel / season pass / deal / flash sale */}
+      {(progress.puzzlesSolved >= 1 || activeEventBanners.length > 0) && (
+        <SectionHeader label="LIVE NOW" accent={COLORS.coral} />
+      )}
       <LiveRail>
       {/* Active Event Banners */}
       {activeEventBanners.length > 0 && (
@@ -855,10 +871,11 @@ export function HomeScreen({
           daily CTA appear immediately and the rest streams in while the
           entry animation plays. Cuts Home mount/commit cost roughly in half. */}
       {belowFoldMounted && (<>
-      {/* Neon Highway Level Progress — Bento cyan shell */}
+      {/* ── YOUR JOURNEY — level progress + personal streak/piggy meters ── */}
       <Animated.View
         style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
       >
+        <SectionHeader label="YOUR JOURNEY" accent={COLORS.teal} />
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.highwayShell}>
           <NeonHighwayProgress
             currentLevel={progress.currentLevel}
@@ -867,11 +884,24 @@ export function HomeScreen({
             onLevelPress={() => onPlay()}
           />
         </LinearGradient>
+        {/* Flawless Streak — consecutive clean solves. Active card shines gold;
+            empty state teaches what earns the streak. */}
+        <FlawlessStreakCard
+          currentStreak={flawlessStreak?.currentStreak ?? 0}
+          bestStreak={flawlessStreak?.bestStreak ?? 0}
+        />
+        {/* Piggy Bank FOMO — compact mini-card (auto-hides unless jar ≥ 80%) */}
+        <PiggyBankCard
+          compact
+          onBreak={() => onOpenShop?.()}
+        />
       </Animated.View>
 
       <Animated.View
         style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
       >
+        {/* ── TODAY'S GOALS — missions / quests / weekly goals ── */}
+        {hasGoalsContent && <SectionHeader label="TODAY'S GOALS" accent={COLORS.gold} />}
         {/* Mission Progress - established+ */}
         {showMissions && (
           <LinearGradient
@@ -962,19 +992,6 @@ export function HomeScreen({
           </LinearGradient>
         )}
 
-
-        {/* Flawless Streak — consecutive clean solves. Active card shines gold;
-            empty state teaches what earns the streak. */}
-        <FlawlessStreakCard
-          currentStreak={flawlessStreak?.currentStreak ?? 0}
-          bestStreak={flawlessStreak?.bestStreak ?? 0}
-        />
-
-        {/* Piggy Bank FOMO — compact mini-card (auto-hides unless jar ≥ 80%) */}
-        <PiggyBankCard
-          compact
-          onBreak={() => onOpenShop?.()}
-        />
 
         {/* 30-day login calendar — opens via top-bar icon sheet */}
         <Modal
@@ -1112,6 +1129,10 @@ export function HomeScreen({
           </Pressable>
         </Modal>
 
+        {/* ── MORE WAYS TO PLAY — recommendation + quick play ── */}
+        {((recommendation && playerStage !== 'new') || showQuickPlay) && (
+          <SectionHeader label="MORE WAYS TO PLAY" accent={COLORS.purple} />
+        )}
         {/* Recommended for You */}
         {recommendation && playerStage !== 'new' && (
           <Pressable
