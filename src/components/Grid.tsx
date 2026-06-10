@@ -54,6 +54,11 @@ interface GridProps {
   fallAnimMap?: Map<string, Animated.Value>;
   /** When true, all grid positions become tappable (for wildcard placement on empty cells) */
   wildcardMode?: boolean;
+  /**
+   * Cell carrying the bonus coin marker (variable-reward tile). Keyed by
+   * cell ID so the marker travels with the tile through gravity falls.
+   */
+  bonusCellId?: string | null;
 }
 
 function GameGridImpl({
@@ -73,6 +78,7 @@ function GameGridImpl({
   noGravityLayout = false,
   fallAnimMap,
   wildcardMode = false,
+  bonusCellId = null,
 }: GridProps) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -553,6 +559,7 @@ function GameGridImpl({
                         isMoved={movedSet.has(key)}
                         isWildcard={wildcardSet.has(`${row},${col}`)}
                         isSpotlightDimmed={spotlightDimmedCells?.has(`${row},${col}`) || false}
+                        isBonusTile={bonusCellId != null && cell.id === bonusCellId}
                         fallAnim={cellFallAnim}
                         row={row}
                         col={col}

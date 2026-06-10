@@ -108,6 +108,11 @@ interface LetterCellProps {
   isMoved?: boolean;
   isWildcard?: boolean;
   isSpotlightDimmed?: boolean;
+  /**
+   * Variable-reward marker: this tile carries a coin bonus that pays out
+   * when the word containing it is found. Renders a small gold coin badge.
+   */
+  isBonusTile?: boolean;
   /** Animated.Value driving gravity fall translateY (pixels, animates to 0) */
   fallAnim?: Animated.Value;
   /** Grid row index (0-based). Used to build screen-reader position hints. */
@@ -129,6 +134,7 @@ export const LetterCell = React.memo(function LetterCell({
   isMoved = false,
   isWildcard = false,
   isSpotlightDimmed = false,
+  isBonusTile = false,
   fallAnim,
   row,
   col,
@@ -450,6 +456,27 @@ export const LetterCell = React.memo(function LetterCell({
           {isWildcard ? '★' : letter}
         </Text>
 
+        {/* Bonus coin badge — variable-reward marker. Static (no animation)
+            so it doesn't break the per-tap memoization; the payoff moment
+            (bloom + SFX + coin grant) is owned by GameScreen. */}
+        {isBonusTile && (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.bonusBadge,
+              {
+                width: size * 0.34,
+                height: size * 0.34,
+                borderRadius: size * 0.17,
+                top: -size * 0.08,
+                right: -size * 0.08,
+              },
+            ]}
+          >
+            <Text style={{ fontSize: size * 0.2 }}>🪙</Text>
+          </View>
+        )}
+
         {isSelected && selectionIndex >= 0 && !isValidWord && (
           <View
             style={[
@@ -545,6 +572,20 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceGrotesk_700Bold',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowRadius: 2,
+  },
+  bonusBadge: {
+    position: 'absolute',
+    backgroundColor: 'rgba(20, 6, 42, 0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.gold,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 5,
   },
   checkBadge: {
     position: 'absolute',

@@ -121,6 +121,13 @@ export interface RemoteConfigValues {
   tileBloomEnabled: boolean;
   tileBloomParticlesPerTile: number;
 
+  /**
+   * Variable-reward coin tile: ~35% of boards mark one letter of a hidden
+   * word with a coin badge; finding that word pays bonus coins with a
+   * rare-find sting. Kill switch for the in-puzzle variable-ratio reward.
+   */
+  bonusTileEnabled: boolean;
+
   // First-purchase hard-modal offer — interrupts post-puzzle at level
   // [min, max] for non-payers exactly once per user. Set enabled=false to
   // kill the interrupt (offer still available via shelf).
@@ -315,6 +322,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   invalidShakeEnabled: true,
   tileBloomEnabled: true,
   tileBloomParticlesPerTile: 2,
+
+  // In-puzzle variable-reward coin tile
+  bonusTileEnabled: true,
 
   // First-purchase hard-modal offer — interrupt fires post-puzzle at
   // levels 5–6 for non-payers exactly once per user (guarded by

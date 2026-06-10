@@ -61,6 +61,7 @@ import GameplayMascot from '../components/GameplayMascot';
 import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCombos';
 import { getTheme } from '../data/cosmetics';
 import { getChapterForLevel, getChapterPalette, getChapterTileRamp } from '../data/chapters';
+import { rollBonusTile } from '../utils/bonusTile';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
 import { adManager, AdRewardType } from '../services/ads';
@@ -619,6 +620,7 @@ function GameScreenImpl({
   const lives = useEconomyStore(selectLivesCurrent);
   const isAdFree = useEconomyStore(selectIsAdFreeComputed);
   const {
+    addCoins,
     addHintTokens,
     addLives,
     addBoosterToken,
@@ -631,6 +633,18 @@ function GameScreenImpl({
   } = useEconomyActions();
   const [activeOffer, setActiveOffer] = useState<OfferType | null>(null);
   const offerShownThisLevel = useRef(false);
+
+  // ── Bonus coin tile (in-puzzle variable reward) ──────────────────────
+  // ~35% of boards mark one letter of a hidden word with a coin badge;
+  // finding that word pays bonus coins with a rare-find sting. Selection is
+  // a pure hash of the board's word list, so a given board always rolls the
+  // same tile (retry can't farm it — the award ref below is keyed on the
+  // cell ID). RC kill switch: bonusTileEnabled.
+  const bonusTile = useMemo(
+    () => (getRemoteBoolean('bonusTileEnabled') ? rollBonusTile(board) : null),
+    [board],
+  );
+  const bonusAwardedCellRef = useRef<string | null>(null);
   const completionHandled = useRef(false);
   // hint_rescue: track session fail count for this level (local, resets on mount)
   const sessionFailCount = useRef(0);
@@ -1373,7 +1387,26 @@ function GameScreenImpl({
     prevScoreRef.current = score;
     if (diff > 0 && status === 'playing') {
       const wordLen = lastSubmittedWordLenRef.current;
-      setScorePopup({ points: diff, label: `+${diff}` });
+
+      // Bonus coin tile payoff — the just-found word carried the coin badge.
+      let bonusCoins = 0;
+      if (bonusTile && bonusAwardedCellRef.current !== bonusTile.cellId) {
+        const seq = store.getState().solveSequence;
+        const lastFound = seq[seq.length - 1]?.wordFound;
+        if (lastFound && lastFound.toUpperCase() === bonusTile.word.toUpperCase()) {
+          bonusAwardedCellRef.current = bonusTile.cellId;
+          bonusCoins = bonusTile.coins;
+          addCoins(bonusCoins);
+          void soundManager.playSound('wordFoundRare');
+          void successHaptic();
+          void analytics.logEvent('bonus_tile_collected', { level, mode, coins: bonusCoins });
+        }
+      }
+
+      setScorePopup({
+        points: diff,
+        label: bonusCoins > 0 ? `+${diff}  \u{1FA99}+${bonusCoins}` : `+${diff}`,
+      });
       void wordFoundHaptic();
 
       // Big word celebration variance (Task 2)
@@ -2030,6 +2063,7 @@ function GameScreenImpl({
           spotlightDimmedSet={spotlightDimmedSet}
           fallAnimMap={fallAnimMap}
           movedCells={movedCells}
+          bonusCellId={bonusTile?.cellId ?? null}
         />
         </TilePaletteContext.Provider>
         {/* Floating banners - absolute overlay, don't affect grid sizing.

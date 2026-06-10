@@ -43,6 +43,8 @@ interface PlayFieldProps {
   fallAnimMap: Map<string, Animated.Value>;
   /** Moved cells for post-gravity highlight */
   movedCells: CellPosition[];
+  /** Bonus coin tile (variable reward) — cell ID, travels with gravity */
+  bonusCellId?: string | null;
 }
 
 function buildRemainingWordSet(words: Array<{ word: string; found: boolean }>): Set<string> {
@@ -79,6 +81,7 @@ function PlayFieldImpl({
   spotlightDimmedSet,
   fallAnimMap,
   movedCells,
+  bonusCellId = null,
 }: PlayFieldProps) {
   const dispatch = useGameDispatch();
 
@@ -180,6 +183,7 @@ function PlayFieldImpl({
             maxHeight={gridAreaHeight}
             wildcardCells={wildcardCells}
             spotlightDimmedCells={spotlightDimmedSet}
+            bonusCellId={bonusCellId}
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
             noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
             fallAnimMap={fallAnimMap}
