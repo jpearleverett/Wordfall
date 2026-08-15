@@ -13,7 +13,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS, getLevelConfig } from '../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
+import { getLevelConfigExtended } from '../engine/puzzleGenerator';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { logger } from '../utils/logger';
@@ -141,6 +142,71 @@ interface LeaderboardScreenProps {
    *  future club-scoped cross-club comparisons. */
   scope?: LeaderboardScope;
 }
+
+/**
+ * One list row, extracted so React (with the Compiler's auto-memoization)
+ * can bail out unchanged rows when the screen re-renders — previously every
+ * tab/scope switch and Firestore refresh rebuilt all ~47 inline row subtrees.
+ */
+const LeaderboardRow = React.memo(function LeaderboardRow({
+  entry,
+  isCurrentUser,
+  showDivider,
+  showGift,
+  onChallenge,
+}: {
+  entry: LeaderboardEntry;
+  isCurrentUser: boolean;
+  showDivider: boolean;
+  showGift: boolean;
+  onChallenge: (entry: LeaderboardEntry) => void;
+}) {
+  return (
+    <View>
+      {showDivider && <View style={styles.listDivider} />}
+      <View style={[styles.listRow, isCurrentUser && styles.listRowHighlight]}>
+        <View style={styles.rankContainer}>
+          <Text style={[styles.rankText, isCurrentUser && styles.rankTextHighlight]}>
+            {entry.rank}
+          </Text>
+        </View>
+        <View style={[styles.listAvatar, isCurrentUser && styles.listAvatarHighlight]}>
+          <Text style={styles.listAvatarText}>
+            {entry.name.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.listInfo}>
+          <Text
+            style={[styles.listName, isCurrentUser && styles.listNameHighlight]}
+            numberOfLines={1}
+          >
+            {entry.name}
+            {isCurrentUser ? ' (You)' : ''}
+          </Text>
+        </View>
+        <Text style={[styles.listScore, isCurrentUser && styles.listScoreHighlight]}>
+          {entry.score.toLocaleString()}
+        </Text>
+        {!isCurrentUser && (
+          <TouchableOpacity
+            style={styles.challengeButton}
+            onPress={() => onChallenge(entry)}
+          >
+            <Text style={styles.challengeButtonText}>{'⚔️'}</Text>
+          </TouchableOpacity>
+        )}
+        {!isCurrentUser && showGift && (
+          <SendGiftButton
+            recipientId={entry.id}
+            recipientName={entry.name}
+            relationship="friend"
+            compact
+          />
+        )}
+      </View>
+    </View>
+  );
+});
 
 const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: { scope?: LeaderboardScope } } }> = ({
   leaderboardData,
@@ -384,6 +450,23 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
     currentUserId,
     friendIds,
   ]);
+
+  const handleChallenge = useCallback((entry: LeaderboardEntry) => {
+    const level = currentLevel;
+    // Extended: past level 600 the challenge board must use the live
+    // procedural config, not the curated endgame-cycle fallthrough.
+    const config = getLevelConfigExtended(level);
+    sendChallenge(entry.id, {
+      score: totalScore > 0 ? Math.floor(totalScore * 0.01) : 0,
+      stars: 0,
+      time: 0,
+      level,
+      seed: Date.now(),
+      mode: 'classic',
+      boardConfig: config,
+    });
+    Alert.alert('Challenge Sent!', `You challenged ${entry.name}!`);
+  }, [currentLevel, totalScore, sendChallenge]);
 
   const getRankColor = (rank: number): string => {
     if (rank === 1) return '#FFD700';
@@ -699,90 +782,16 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
               end={{ x: 0, y: 1 }}
               style={styles.listCard}
             >
-              {entries.slice(3).map((entry, index) => {
-                const isCurrentUser = entry.id === currentUserId;
-                return (
-                  <View key={entry.id}>
-                    {index > 0 && <View style={styles.listDivider} />}
-                    <View
-                      style={[
-                        styles.listRow,
-                        isCurrentUser && styles.listRowHighlight,
-                      ]}
-                    >
-                      <View style={styles.rankContainer}>
-                        <Text
-                          style={[
-                            styles.rankText,
-                            isCurrentUser && styles.rankTextHighlight,
-                          ]}
-                        >
-                          {entry.rank}
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.listAvatar,
-                          isCurrentUser && styles.listAvatarHighlight,
-                        ]}
-                      >
-                        <Text style={styles.listAvatarText}>
-                          {entry.name.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.listInfo}>
-                        <Text
-                          style={[
-                            styles.listName,
-                            isCurrentUser && styles.listNameHighlight,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {entry.name}
-                          {isCurrentUser ? ' (You)' : ''}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.listScore,
-                          isCurrentUser && styles.listScoreHighlight,
-                        ]}
-                      >
-                        {entry.score.toLocaleString()}
-                      </Text>
-                      {!isCurrentUser && (
-                        <TouchableOpacity
-                          style={styles.challengeButton}
-                          onPress={() => {
-                            const level = currentLevel;
-                            const config = getLevelConfig(level);
-                            sendChallenge(entry.id, {
-                              score: totalScore > 0 ? Math.floor(totalScore * 0.01) : 0,
-                              stars: 0,
-                              time: 0,
-                              level,
-                              seed: Date.now(),
-                              mode: 'classic',
-                              boardConfig: config,
-                            });
-                            Alert.alert('Challenge Sent!', `You challenged ${entry.name}!`);
-                          }}
-                        >
-                          <Text style={styles.challengeButtonText}>{'\u2694\uFE0F'}</Text>
-                        </TouchableOpacity>
-                      )}
-                      {!isCurrentUser && (scope === 'friends' || friendIds.includes(entry.id)) && (
-                        <SendGiftButton
-                          recipientId={entry.id}
-                          recipientName={entry.name}
-                          relationship="friend"
-                          compact
-                        />
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
+              {entries.slice(3).map((entry, index) => (
+                <LeaderboardRow
+                  key={entry.id}
+                  entry={entry}
+                  isCurrentUser={entry.id === currentUserId}
+                  showDivider={index > 0}
+                  showGift={scope === 'friends' || friendIds.includes(entry.id)}
+                  onChallenge={handleChallenge}
+                />
+              ))}
             </LinearGradient>
           </>
         )}

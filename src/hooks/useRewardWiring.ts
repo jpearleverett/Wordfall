@@ -3,7 +3,6 @@ import { Board, CeremonyItem, Difficulty, GameMode, VictorySummaryItem } from '.
 import { SeasonalQuestState, getCurrentSeasonalQuest } from '../data/seasonalQuests';
 import {
   COLORS,
-  getLevelConfig,
   ECONOMY,
   COLLECTION,
   MODE_CONFIGS,
