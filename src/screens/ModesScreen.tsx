@@ -109,7 +109,7 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
           />
         ) : (
           <LinearGradient
-            colors={['#121636', '#0e1230']}
+            colors={[...GRADIENTS.surfaceCard]}
             style={StyleSheet.absoluteFill}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}

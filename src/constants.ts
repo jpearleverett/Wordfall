@@ -98,6 +98,12 @@ export const COLORS = {
   vhsStatic: 'rgba(255,255,255,0.02)',
   mountainSilhouette: '#1a0533',
   horizonGlow: 'rgba(255,45,149,0.35)',
+
+  // Interaction states — use these instead of ad-hoc opacity on disabled
+  // controls so the dimmed look is consistent app-wide.
+  buttonDisabled: 'rgba(255,255,255,0.20)',
+  textDisabled: 'rgba(240,230,255,0.40)',
+  borderDisabled: 'rgba(255,255,255,0.08)',
 };
 
 // Gradient presets — synthwave / Miami
@@ -339,8 +345,30 @@ function getPhaseConfig(effectiveLevel: number): BoardConfig {
   if (effectiveLevel <= 40) {
     return { rows: 9, cols: 7, wordCount: 7, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
   }
-  // Phase 7: Endgame (levels 41+) — full expert config
-  return { rows: 9, cols: 7, wordCount: 8, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
+  // Phase 7: Endgame (levels 41+). Previously a single constant config
+  // (9×7, 8 words) for every level 41–600 — a 560-level flatline. Now a
+  // texture cycle: board shape + word-length window rotate per 15-level
+  // chapter so the long haul keeps changing feel, while the word-count
+  // base still ramps slowly for overall progression. Invariants honored:
+  // rows ≤ 10, cols ≤ 8, wordCount ≤ 10, maxWordLength ≤ 6, and adjacent
+  // non-breather levels never drop word count by more than 1.
+  const chapterIdx = Math.floor((effectiveLevel - 1) / 15);
+  const wordBase = effectiveLevel >= 116 ? 8 : 7;
+  switch (chapterIdx % 4) {
+    case 0: // wide — standard mix (56 cells)
+      return { rows: 8, cols: 7, wordCount: wordBase, minWordLength: 3, maxWordLength: 6, difficulty: 'expert' };
+    case 1: // tall + narrow — many short words, long gravity columns (54 cells;
+      // capped a word lower than wide so chapter profiles that clamp the
+      // length window upward don't push fill ratio past what placement
+      // can comfortably satisfy)
+      return { rows: 9, cols: 6, wordCount: wordBase - 1, minWordLength: 3, maxWordLength: 5, difficulty: 'expert' };
+    case 2: // compact — fewer but longer words, tight board (49 cells)
+      return { rows: 7, cols: 7, wordCount: wordBase - 1, minWordLength: 4, maxWordLength: 6, difficulty: 'expert' };
+    default: // large — the classic endgame board (63 cells). minWordLength 3
+      // keeps placement fast at the 8-word base; chapter profiles + the
+      // longWords bias still skew the list long where that's the theme.
+      return { rows: 9, cols: 7, wordCount: wordBase, minWordLength: 3, maxWordLength: 6, difficulty: 'expert' };
+  }
 }
 
 export function getLevelConfig(level: number): BoardConfig {
@@ -384,7 +412,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Board shrinks every 2 words',
     icon: '🔻',
     color: COLORS.coral,
-    unlockLevel: 5,
+    unlockLevel: 4,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -393,7 +421,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.25,
       comboMode: false,
-      skillGate: { perfectSolves: 3 },
+      skillGate: { perfectSolves: 2 },
     },
   },
   timePressure: {
@@ -402,7 +430,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Beat the clock',
     icon: '⏱️',
     color: COLORS.orange,
-    unlockLevel: 12,
+    unlockLevel: 8,
     rules: {
       hasTimer: true,
       timerSeconds: 120,
@@ -412,7 +440,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.5,
       comboMode: false,
-      skillGate: { perfectSolves: 5 },
+      skillGate: { perfectSolves: 3 },
     },
   },
   perfectSolve: {
@@ -421,7 +449,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Zero mistakes, no assists',
     icon: '💎',
     color: COLORS.gold,
-    unlockLevel: 18,
+    unlockLevel: 14,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -430,7 +458,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 2,
       comboMode: false,
-      skillGate: { perfectSolves: 10, minStars: 30 },
+      skillGate: { perfectSolves: 6, minStars: 20 },
     },
   },
   gravityFlip: {
@@ -439,7 +467,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Gravity rotates 90° after each word',
     icon: '🔄',
     color: COLORS.coral,
-    unlockLevel: 14,
+    unlockLevel: 10,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -448,7 +476,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.5,
       comboMode: false,
-      skillGate: { minStars: 50 },
+      skillGate: { minStars: 25 },
     },
   },
   daily: {
@@ -474,7 +502,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Curated hard puzzle',
     icon: '🏆',
     color: COLORS.purple,
-    unlockLevel: 16,
+    unlockLevel: 12,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -483,7 +511,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 1.5,
       comboMode: false,
-      skillGate: { puzzlesSolved: 20 },
+      skillGate: { puzzlesSolved: 12 },
     },
   },
   noGravity: {
@@ -492,7 +520,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Letters stay put — pure word finding',
     icon: '🚀',
     color: COLORS.teal,
-    unlockLevel: 8,
+    unlockLevel: 6,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -509,7 +537,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'Minimal hints, harder boards',
     icon: '🧠',
     color: COLORS.purple,
-    unlockLevel: 30,
+    unlockLevel: 22,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -518,7 +546,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
       unlimitedUndo: false,
       scoreMultiplier: 2,
       comboMode: false,
-      skillGate: { perfectSolves: 25, minStars: 100 },
+      skillGate: { perfectSolves: 15, minStars: 60 },
     },
   },
   relax: {
@@ -527,7 +555,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     description: 'No pressure, unlimited undos',
     icon: '🌿',
     color: COLORS.green,
-    unlockLevel: 3,
+    unlockLevel: 2,
     rules: {
       hasTimer: false,
       hasMoveLimit: false,
@@ -886,11 +914,14 @@ export const TYPOGRAPHY = {
   displayLarge: { fontFamily: FONTS.display, fontSize: 36, letterSpacing: 1.5 },
   screenTitle: { fontFamily: FONTS.display, fontSize: 28, letterSpacing: 1 },
   sectionTitle: { fontFamily: FONTS.bodySemiBold, fontSize: 20, letterSpacing: 0.5 },
+  bodyLarge: { fontFamily: FONTS.bodyRegular, fontSize: 16, letterSpacing: 0.2 },
   body: { fontFamily: FONTS.bodyRegular, fontSize: 15, letterSpacing: 0.2 },
+  bodySmall: { fontFamily: FONTS.bodyRegular, fontSize: 13, letterSpacing: 0.2 },
   bodyMedium: { fontFamily: FONTS.bodyMedium, fontSize: 15, letterSpacing: 0.2 },
   bodySemiBold: { fontFamily: FONTS.bodySemiBold, fontSize: 15, letterSpacing: 0.2 },
   bodyBold: { fontFamily: FONTS.bodyBold, fontSize: 15, letterSpacing: 0.2 },
   label: { fontFamily: FONTS.bodySemiBold, fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase' as const },
+  labelSmall: { fontFamily: FONTS.bodySemiBold, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' as const },
   caption: { fontFamily: FONTS.bodyMedium, fontSize: 11, letterSpacing: 0.3 },
   score: { fontFamily: FONTS.display, fontSize: 22, letterSpacing: 0.5 },
   comboText: { fontFamily: FONTS.display, fontSize: 28, letterSpacing: 1 },
@@ -903,8 +934,9 @@ export const TYPOGRAPHY = {
   neonCounter: { fontFamily: FONTS.display, fontSize: 32, letterSpacing: 1 },
 };
 
-// Spacing scale
+// Spacing scale — every margin/padding should resolve to one of these.
 export const SPACING = {
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,
@@ -914,12 +946,15 @@ export const SPACING = {
   xxxl: 40,
 };
 
-// Border radius scale
+// Border radius scale — 6 tiers, each with a named role. The April audit
+// found 34 distinct ad-hoc radius values across screens; new code should
+// resolve to one of these (sm: badges/chips, md: inputs/small buttons,
+// lg: buttons/list rows, xl: cards/panels, xxl: hero cards/modals).
 export const RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  sm: 4,
+  md: 8,
+  lg: 12,
+  xl: 16,
   xxl: 24,
   full: 999,
 };

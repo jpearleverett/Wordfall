@@ -24,13 +24,24 @@ const ACCENT_DIVIDER: Record<BentoAccent, string> = {
   purple: 'rgba(200,77,255,0.14)',
 };
 
-export function bentoPanel(accent: BentoAccent): ViewStyle {
+export interface BentoPanelOverrides {
+  padding?: number;
+  marginBottom?: number;
+  borderRadius?: number;
+}
+
+/**
+ * The shared card shell. Screens should compose this instead of re-declaring
+ * radius/padding/border/shadow per panel — the April 2026 design audit found
+ * 10+ hand-rolled near-duplicates of this exact style.
+ */
+export function bentoPanel(accent: BentoAccent, overrides?: BentoPanelOverrides): ViewStyle {
   return {
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: overrides?.borderRadius ?? 18,
+    padding: overrides?.padding ?? 14,
     borderWidth: 1,
     borderColor: ACCENT_BORDER[accent],
-    marginBottom: 14,
+    marginBottom: overrides?.marginBottom ?? 14,
     shadowColor: ACCENT_COLOR[accent],
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.22,

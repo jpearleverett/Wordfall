@@ -43,6 +43,8 @@ interface PlayFieldProps {
   fallAnimMap: Map<string, Animated.Value>;
   /** Moved cells for post-gravity highlight */
   movedCells: CellPosition[];
+  /** Bonus coin tile (variable reward) — cell ID, travels with gravity */
+  bonusCellId?: string | null;
 }
 
 function buildRemainingWordSet(words: Array<{ word: string; found: boolean }>): Set<string> {
@@ -79,6 +81,7 @@ function PlayFieldImpl({
   spotlightDimmedSet,
   fallAnimMap,
   movedCells,
+  bonusCellId = null,
 }: PlayFieldProps) {
   const dispatch = useGameDispatch();
 
@@ -112,6 +115,10 @@ function PlayFieldImpl({
 
   useEffect(() => {
     onSelectionLengthChange?.(selectedCells.length);
+    // Mirror for the tap-feedback handlers below — lets them read the live
+    // trace length without taking selectedCells as a dependency (which would
+    // recreate the callbacks on every tap).
+    selectionLenRef.current = selectedCells.length;
   }, [selectedCells.length, onSelectionLengthChange]);
 
   // ── Shared empty array for stable prop identity ───────────────────────
@@ -119,6 +126,15 @@ function PlayFieldImpl({
 
   // ── Tap feedback throttle ─────────────────────────────────────────────
   const lastTapFeedbackAt = useRef(0);
+  const selectionLenRef = useRef(0);
+
+  // Rising tap scale: each cell added to the trace plays a slightly
+  // higher-pitched tap (Wordscapes-style momentum feedback). +6% per cell,
+  // capped at +48% so long traces don't squeak.
+  const tapRateForTrace = useCallback(
+    () => 1 + Math.min(8, selectionLenRef.current) * 0.06,
+    [],
+  );
 
   const handleCellPress = useCallback(
     (position: CellPosition) => {
@@ -128,11 +144,11 @@ function PlayFieldImpl({
       if (now - lastTapFeedbackAt.current > 40) {
         lastTapFeedbackAt.current = now;
         void tapHaptic();
-        void soundManager.playSound('tap');
+        void soundManager.playSound('tap', { rate: tapRateForTrace() });
       }
       dispatch({ type: 'SELECT_CELL', position });
     },
-    [dispatch, onCellInteraction],
+    [dispatch, onCellInteraction, tapRateForTrace],
   );
 
   const handleCellsPress = useCallback(
@@ -144,11 +160,11 @@ function PlayFieldImpl({
       if (now - lastTapFeedbackAt.current > 40) {
         lastTapFeedbackAt.current = now;
         void tapHaptic();
-        void soundManager.playSound('tap');
+        void soundManager.playSound('tap', { rate: tapRateForTrace() });
       }
       dispatch({ type: 'SELECT_CELLS', positions });
     },
-    [dispatch, onCellInteraction],
+    [dispatch, onCellInteraction, tapRateForTrace],
   );
 
   return (
@@ -167,6 +183,7 @@ function PlayFieldImpl({
             maxHeight={gridAreaHeight}
             wildcardCells={wildcardCells}
             spotlightDimmedCells={spotlightDimmedSet}
+            bonusCellId={bonusCellId}
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
             noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
             fallAnimMap={fallAnimMap}

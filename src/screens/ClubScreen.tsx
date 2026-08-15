@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import PrimaryButton from '../components/common/PrimaryButton';
 import {
   usePlayerStore,
   selectClubId,
@@ -409,21 +410,13 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           />
         </View>
         {searchText.length > 0 && (
-          <TouchableOpacity
+          <PrimaryButton
+            label={t('club.searchAndJoin')}
             onPress={() => onJoinClub(searchText)}
-            activeOpacity={0.8}
-            accessibilityRole="button"
+            fullWidth
             accessibilityLabel="Search and join club"
-          >
-            <LinearGradient
-              colors={[...GRADIENTS.button.primary] as [string, string, ...string[]]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.joinButton}
-            >
-              <Text style={styles.joinButtonText}>{t('club.searchAndJoin')}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+            style={{ marginTop: 10 }}
+          />
         )}
       </View>
 
@@ -916,13 +909,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.textPrimary,
   },
-  joinButton: {
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 10,
-    ...SHADOWS.glow(COLORS.accent),
-  },
   // S1 club browser
   browseHeaderRow: {
     flexDirection: 'row',
@@ -979,11 +965,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.bodyBold,
     letterSpacing: 1.5,
-  },
-  joinButtonText: {
-    fontSize: 15,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.bg,
   },
   createSection: {
     marginBottom: 24,

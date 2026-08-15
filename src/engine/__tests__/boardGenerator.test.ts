@@ -1,4 +1,4 @@
-import { generateBoard, generateDailyBoard } from '../boardGenerator';
+import { generateBoard, generateDailyBoard, getDailyVariant } from '../boardGenerator';
 import { findWordInGrid } from '../solver';
 import { BoardConfig } from '../../types';
 
@@ -131,10 +131,12 @@ describe('generateDailyBoard', () => {
     expect(words1 !== words2 || true).toBe(true);
   });
 
-  it('daily board has correct grid size', () => {
+  it('daily board grid size matches the weekday variant', () => {
+    // 2026-01-01 is a Thursday — Tall Tower variant (9×5).
     const board = generateDailyBoard('2026-01-01');
-    expect(board.grid.length).toBe(7);
-    expect(board.grid[0].length).toBe(6);
+    const variant = getDailyVariant('2026-01-01');
+    expect(board.grid.length).toBe(variant.config.rows);
+    expect(board.grid[0].length).toBe(variant.config.cols);
   });
 
   it('daily board words are all findable', () => {

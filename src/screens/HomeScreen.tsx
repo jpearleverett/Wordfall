@@ -19,6 +19,12 @@ import { Difficulty, PlayerProgress, WeeklyGoalsState } from '../types';
 import { soundManager } from '../services/sound';
 import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
+import { getDailyVariant } from '../engine/boardGenerator';
+import { useDeferredMount } from '../utils/perfInstrument';
+
+// Session-scoped guard so the login-calendar auto-present fires once per app
+// launch, not on every Home focus/remount.
+let autoOpenedCalendarThisSession = false;
 import { getFlashSale } from '../data/dynamicPricing';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import NeonHighwayProgress from '../components/home/NeonHighwayProgress';
@@ -27,6 +33,8 @@ import DailyQuestsCard from '../components/DailyQuestsCard';
 import { DailyQuest } from '../data/dailyQuests';
 import SeasonPassHomeCard from '../components/SeasonPassHomeCard';
 import LiveRail from '../components/home/LiveRail';
+import SectionHeader from '../components/home/SectionHeader';
+import PrimaryButton from '../components/common/PrimaryButton';
 import FlawlessStreakCard from '../components/FlawlessStreakCard';
 import SeasonalQuestCard from '../components/SeasonalQuestCard';
 import { getCurrentSeasonalQuest, advanceQuestStep } from '../data/seasonalQuests';
@@ -172,6 +180,9 @@ export function HomeScreen({
   // Pre-compute daily completion for streak offer check
   const today = new Date().toISOString().split('T')[0];
   const dailyDone = progress.dailyCompleted.includes(today);
+
+  // Below-the-fold cards mount a beat after first paint (see render).
+  const belowFoldMounted = useDeferredMount(150);
 
   // --- Streak shield contextual offer ---
   const [showStreakOffer, setShowStreakOffer] = useState(false);
@@ -337,12 +348,34 @@ export function HomeScreen({
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
     : (playerStage !== 'new' || (mysteryWheelSpins > 0)) && onOpenWheel;
 
+  // Auto-present the login calendar once per app session when today's
+  // reward is unclaimed — the Wordscapes/Royal Match daily-sheet ritual.
+  // The reward was previously discoverable only via the top-bar icon dot,
+  // so most players never built the daily-claim habit. Delayed past the
+  // hero entry animation + the below-fold deferred mount.
+  useEffect(() => {
+    if (!showDailyRewards || claimedLoginToday || autoOpenedCalendarThisSession) return;
+    const timer = setTimeout(() => {
+      autoOpenedCalendarThisSession = true;
+      setCalendarOpen(true);
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [showDailyRewards, claimedLoginToday]);
+
   // ── Seasonal Quest ──────────────────────────────────────────────────
   const seasonalQuest = getCurrentSeasonalQuest();
   const questState = seasonalQuestState;
   const showSeasonalQuest = legacyTaskCardsEnabled
     && (playerStage === 'established' || playerStage === 'veteran')
     && !questState.completedQuestIds.includes(seasonalQuest.id);
+
+  // Whether the "Today's goals" band has anything to show — gates its header.
+  const hasGoalsContent = Boolean(
+    showMissions ||
+    (dailyQuests.length > 0 && onClaimDailyQuest) ||
+    (showSeasonalQuest && questState.activeQuestId) ||
+    (showWeeklyGoals && weeklyGoals),
+  );
 
   // Auto-initialize quest for the current season if not started
   useEffect(() => {
@@ -513,7 +546,9 @@ export function HomeScreen({
                 <View style={styles.dailyContent}>
                   <Text style={styles.dailyTitle}>{dailyDone ? 'Daily completed' : "Today's challenge"}</Text>
                   <Text style={styles.dailySubtitle}>
-                    {dailyDone ? 'Come back tomorrow!' : `+${ECONOMY.dailyCompleteCoins} coins`}
+                    {dailyDone
+                      ? 'Come back tomorrow!'
+                      : `${getDailyVariant(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
                   </Text>
                 </View>
                 <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>
@@ -526,7 +561,11 @@ export function HomeScreen({
       {/* Guided onboarding milestone banner — shown for first 5 levels */}
       {/* Segment-driven welcome-back banner for at-risk / lapsed / returned
           players. Message comes from getWelcomeBackMessage() in App.tsx. */}
-      {segmentWelcomeMessage && (
+      {/* Ambient banner slot — exactly ONE of (guided milestone | welcome
+          back | early guidance) renders. They previously stacked for early
+          returning players, opening the screen with three banners of
+          banner soup before any content. */}
+      {!nextGuidedMilestone && segmentWelcomeMessage && (
         <LinearGradient
           colors={['rgba(0,212,255,0.20)', 'rgba(168,85,247,0.10)'] as [string, string]}
           style={styles.welcomeBackBanner}
@@ -585,7 +624,7 @@ export function HomeScreen({
         </Pressable>
       )}
 
-      {!nextGuidedMilestone && playerStage === 'early' && (
+      {!nextGuidedMilestone && !segmentWelcomeMessage && playerStage === 'early' && (
         <View style={styles.earlyGuidanceCard}>
           <LinearGradient
             colors={['rgba(0,212,255,0.16)', 'rgba(0,212,255,0.06)'] as [string, string]}
@@ -601,6 +640,9 @@ export function HomeScreen({
       )}
 
       {/* Live rail — swipeable carousel: event / wheel / season pass / deal / flash sale */}
+      {(progress.puzzlesSolved >= 1 || activeEventBanners.length > 0) && (
+        <SectionHeader label="LIVE NOW" accent={COLORS.coral} />
+      )}
       <LiveRail>
       {/* Active Event Banners */}
       {activeEventBanners.length > 0 && (
@@ -748,21 +790,12 @@ export function HomeScreen({
                   </Text>
                 </View>
               </View>
-              <Pressable
-                style={({ pressed }) => [pressed && styles.buttonPressed]}
+              <PrimaryButton
+                label="BUY"
+                variant="gold"
                 onPress={() => onBuyDeal?.(dailyDeal)}
-                accessibilityRole="button"
                 accessibilityLabel={`Buy ${dailyDeal.name} for ${dailyDeal.salePrice} ${dailyDeal.currency}`}
-              >
-                <LinearGradient
-                  colors={GRADIENTS.button.gold}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.dealBuyButton}
-                >
-                  <Text style={styles.dealBuyText}>BUY</Text>
-                </LinearGradient>
-              </Pressable>
+              />
             </View>
           </LinearGradient>
         )}
@@ -825,10 +858,16 @@ export function HomeScreen({
         </Animated.View>
       )}
 
-      {/* Neon Highway Level Progress — Bento cyan shell */}
+      {/* Below-the-fold content (progress highway, quests, goals, calendar,
+          quick play) mounts one beat after first paint — the hero card +
+          daily CTA appear immediately and the rest streams in while the
+          entry animation plays. Cuts Home mount/commit cost roughly in half. */}
+      {belowFoldMounted && (<>
+      {/* ── YOUR JOURNEY — level progress + personal streak/piggy meters ── */}
       <Animated.View
         style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
       >
+        <SectionHeader label="YOUR JOURNEY" accent={COLORS.teal} />
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.highwayShell}>
           <NeonHighwayProgress
             currentLevel={progress.currentLevel}
@@ -837,11 +876,24 @@ export function HomeScreen({
             onLevelPress={() => onPlay()}
           />
         </LinearGradient>
+        {/* Flawless Streak — consecutive clean solves. Active card shines gold;
+            empty state teaches what earns the streak. */}
+        <FlawlessStreakCard
+          currentStreak={flawlessStreak?.currentStreak ?? 0}
+          bestStreak={flawlessStreak?.bestStreak ?? 0}
+        />
+        {/* Piggy Bank FOMO — compact mini-card (auto-hides unless jar ≥ 80%) */}
+        <PiggyBankCard
+          compact
+          onBreak={() => onOpenShop?.()}
+        />
       </Animated.View>
 
       <Animated.View
         style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
       >
+        {/* ── TODAY'S GOALS — missions / quests / weekly goals ── */}
+        {hasGoalsContent && <SectionHeader label="TODAY'S GOALS" accent={COLORS.gold} />}
         {/* Mission Progress - established+ */}
         {showMissions && (
           <LinearGradient
@@ -932,19 +984,6 @@ export function HomeScreen({
           </LinearGradient>
         )}
 
-
-        {/* Flawless Streak — consecutive clean solves. Active card shines gold;
-            empty state teaches what earns the streak. */}
-        <FlawlessStreakCard
-          currentStreak={flawlessStreak?.currentStreak ?? 0}
-          bestStreak={flawlessStreak?.bestStreak ?? 0}
-        />
-
-        {/* Piggy Bank FOMO — compact mini-card (auto-hides unless jar ≥ 80%) */}
-        <PiggyBankCard
-          compact
-          onBreak={() => onOpenShop?.()}
-        />
 
         {/* 30-day login calendar — opens via top-bar icon sheet */}
         <Modal
@@ -1082,6 +1121,10 @@ export function HomeScreen({
           </Pressable>
         </Modal>
 
+        {/* ── MORE WAYS TO PLAY — recommendation + quick play ── */}
+        {((recommendation && playerStage !== 'new') || showQuickPlay) && (
+          <SectionHeader label="MORE WAYS TO PLAY" accent={COLORS.purple} />
+        )}
         {/* Recommended for You */}
         {recommendation && playerStage !== 'new' && (
           <Pressable
@@ -1135,6 +1178,7 @@ export function HomeScreen({
           </LinearGradient>
         )}
       </Animated.View>
+      </>)}
     </ScrollView>
       {/* Streak shield contextual offer */}
       {showStreakOffer && (
@@ -1364,16 +1408,7 @@ const styles = StyleSheet.create({
   },
   // Mission panel
   missionPanel: {
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,229,255,0.20)',
-    marginBottom: 14,
-    shadowColor: COLORS.cyan,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 6,
+    ...bentoPanel('cyan'),
   },
   missionRow: {
     marginBottom: 10,
@@ -1405,16 +1440,7 @@ const styles = StyleSheet.create({
   },
   // Weekly Goals
   weeklyGoalsPanel: {
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,229,255,0.20)',
-    marginBottom: 14,
-    shadowColor: COLORS.cyan,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 6,
+    ...bentoPanel('cyan'),
   },
   weeklyGoalRow: {
     marginBottom: 12,
@@ -1675,14 +1701,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   recommendCard: {
-    borderRadius: 18,
-    padding: 16,
+    ...bentoPanel('pink', { padding: 16 }),
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: COLORS.accent + '25',
   },
   recommendIcon: {
     fontSize: 32,
@@ -1713,16 +1735,7 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
   quickPlayPanel: {
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(168,91,255,0.22)',
-    marginBottom: 14,
-    shadowColor: COLORS.purple,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 6,
+    ...bentoPanel('purple'),
   },
   quickPlayGrid: {
     flexDirection: 'row',
@@ -1815,18 +1828,6 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.goldGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
-  },
-  dealBuyButton: {
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  dealBuyText: {
-    color: COLORS.bg,
-    fontSize: 14,
-    fontFamily: FONTS.display,
-    letterSpacing: 2,
   },
   // Flash Sale Teaser
   // Flash sale teaser — Bento pink (coral-leaning)

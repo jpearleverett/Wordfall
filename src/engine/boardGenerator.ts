@@ -173,12 +173,12 @@ function selectWords(
     if (commonPool.length >= config.wordCount * 3) {
       pool = commonPool;
     }
-  } else if (profile?.dictionaryTier === 'expert') {
-    const expertPool = pool.filter(w => w.length >= 5);
-    if (expertPool.length >= config.wordCount * 3) {
-      pool = expertPool;
-    }
   }
+  // 'expert' tier is applied as a long-word BIAS below (same interleave as
+  // the longWords mechanic) rather than a hard pool filter — an all-5/6
+  // letter find-list at 8 words is the slowest placement config the
+  // generator faces (~10× generation cost) and reads monotonous anyway.
+  const expertBias = profile?.dictionaryTier === 'expert';
 
   // Mode-specific word pool filtering
   if (mode === 'timePressure') {
@@ -202,16 +202,68 @@ function selectWords(
   // 3-4 letter words). The shuffled general pool still fills the remaining
   // slots so the list has some variety even when a chapter ships few theme
   // words that fit the current profile.
+  // NOTE: the dictionary pool is UPPERCASE — theme words from chapters.ts are
+  // authored lowercase, so they must be uppercased before the membership
+  // check. (A historic lowercase normalization here meant theme words never
+  // matched the pool at all and every chapter drew from the generic pool.)
   const poolSet = new Set(pool);
   const preferred = themeWords
-    ? Array.from(new Set(themeWords.map(w => w.toLowerCase()))).filter(w => poolSet.has(w))
+    ? Array.from(new Set(themeWords.map(w => w.toUpperCase()))).filter(w => poolSet.has(w))
     : [];
   const shuffledPreferred = shuffleArray(preferred, rng);
-  const shuffledRest = shuffleArray(pool, rng);
+  let shuffledRest = shuffleArray(pool, rng);
+
+  // Mechanic-driven length bias for the general (non-theme) pool. Partitioning
+  // the already-shuffled pool keeps determinism while putting the showcased
+  // length class first in line for the open slots.
+  const mechanics = profile?.introducedMechanics;
+  if (mechanics?.includes('longWords') || expertBias) {
+    // Bias, don't saturate: lead with enough long words to color the list,
+    // then alternate long/short so placement isn't strained by an all-long
+    // find-list (all 5-6 letter words on one grid is the slowest config the
+    // generator faces).
+    const long = shuffledRest.filter(w => w.length >= 5);
+    const short = shuffledRest.filter(w => w.length < 5);
+    const lead = long.slice(0, Math.ceil(config.wordCount / 2));
+    const tailLong = long.slice(lead.length);
+    const mixed: string[] = [];
+    for (let i = 0; i < Math.max(tailLong.length, short.length); i++) {
+      if (i < short.length) mixed.push(short[i]);
+      if (i < tailLong.length) mixed.push(tailLong[i]);
+    }
+    shuffledRest = [...lead, ...mixed];
+  } else if (mechanics?.includes('fourLetter')) {
+    shuffledRest = [...shuffledRest.filter(w => w.length === 4), ...shuffledRest.filter(w => w.length !== 4)];
+  }
+
   const shuffled = [...shuffledPreferred, ...shuffledRest];
   const selected: string[] = [];
   const selectedSet = new Set<string>();
   const usedLetters = new Set<string>();
+
+  // Reserved theme slots: up to half the find-list comes straight from the
+  // chapter's themeWords so the chapter's flavor is actually visible on the
+  // board. The general-pool loop below enforces a "no duplicate starting
+  // letter" variety guard that silently rejected most theme words (e.g.
+  // RAIN/ROOT/ROSE all share R), which is why chapters never felt themed.
+  // Theme picks skip that guard but keep the substring + letter-overlap
+  // guards that protect placement solvability.
+  const themeSlots = Math.min(shuffledPreferred.length, Math.ceil(config.wordCount / 2));
+  for (const word of shuffledPreferred) {
+    if (selected.length >= themeSlots) break;
+    if (selectedSet.has(word)) continue;
+    const isSubstring = selected.some(w => w.includes(word) || word.includes(w));
+    if (isSubstring) continue;
+    const letterSet = new Set(word.split(''));
+    const tooMuchOverlap = selected.some(w => {
+      const shared = w.split('').filter(l => letterSet.has(l)).length;
+      return shared > Math.min(w.length, word.length) * 0.5;
+    });
+    if (tooMuchOverlap) continue;
+    selected.push(word);
+    selectedSet.add(word);
+    usedLetters.add(word[0]);
+  }
 
   for (const word of shuffled) {
     if (selected.length >= config.wordCount) break;
@@ -258,6 +310,50 @@ function selectWords(
   }
 
   return selected;
+}
+
+/**
+ * Carve intentional empty cells out of the filled board, honoring the
+ * chapter profile's `emptyCellDensity`. Holes are only taken from the
+ * topmost contiguous run of NON-word filler cells in each column, which
+ * keeps the board gravity-stable (nothing sits above a hole, so no letter
+ * falls at puzzle start) and never touches a placed word path. Fewer filler
+ * letters = less noise + visibly varied board silhouettes per chapter.
+ *
+ * Skipped for shrinkingBoard (outer filler ring is structural) and
+ * gravityFlip (rotating gravity would collapse top holes immediately).
+ */
+function carveEmptyCells(
+  grid: Grid,
+  wordPositions: Map<string, CellPosition[]>,
+  density: number,
+  rng: () => number
+): void {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const target = Math.floor(rows * cols * density);
+  if (target <= 0) return;
+
+  const wordCells = new Set<string>();
+  wordPositions.forEach(positions => {
+    positions.forEach(p => wordCells.add(`${p.row},${p.col}`));
+  });
+
+  const colOrder = shuffleArray(Array.from({ length: cols }, (_, i) => i), rng);
+  let carved = 0;
+  for (const c of colOrder) {
+    if (carved >= target) break;
+    // Topmost contiguous run of filler (non-word) cells in this column.
+    let run = 0;
+    while (run < rows && !wordCells.has(`${run},${c}`)) run++;
+    // Cap holes per column so the carving spreads across the board instead
+    // of hollowing out one side.
+    const maxHere = Math.min(run, target - carved, 2);
+    for (let r = 0; r < maxHere; r++) {
+      grid[r][c] = null;
+      carved++;
+    }
+  }
 }
 
 /**
@@ -419,6 +515,15 @@ function attemptGenerate(
   // Fill empty cells
   fillEmptyCells(grid, rng);
 
+  // Carve intentional holes per the chapter profile. `denseBoard` chapters
+  // force a fully-filled board regardless of the declared density. Carving
+  // happens BEFORE the solvability check so validation covers the holes.
+  const wantsDense = profile?.introducedMechanics?.includes('denseBoard');
+  const density = wantsDense ? 0 : profile?.emptyCellDensity ?? 0;
+  if (density > 0 && mode !== 'shrinkingBoard' && mode !== 'gravityFlip') {
+    carveEmptyCells(grid, wordPositions, density, rng);
+  }
+
   // Verify solvability using fast heuristics + budgeted fallback
   const wordStrings = placements.map(p => p.word);
   if (!checkSolvability(grid, wordStrings, wordPositions, rng, mode)) return null;
@@ -563,18 +668,45 @@ const dailyBoardCache = new Map<string, Board>();
  * the given UTC date string. Pure function of `dateString` — two
  * devices on the same date produce identical boards.
  */
+/**
+ * Day-of-week daily variants. The daily challenge previously used one
+ * static 7×6 / 5-word config forever; now each weekday has a distinct
+ * texture so the daily ritual stays fresh across weeks. Derived from the
+ * UTC date string, so determinism (same date → same board for every
+ * player) is preserved.
+ */
+export const DAILY_VARIANTS: ReadonlyArray<{ name: string; config: BoardConfig }> = [
+  // Sunday — small + gentle wind-down
+  { name: 'Zen Garden', config: { rows: 6, cols: 5, wordCount: 4, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' } },
+  // Monday — many short words to start the week fast
+  { name: 'Word Flood', config: { rows: 7, cols: 6, wordCount: 7, minWordLength: 3, maxWordLength: 4, difficulty: 'medium' } },
+  // Tuesday — the classic daily
+  { name: 'Classic Daily', config: { rows: 7, cols: 6, wordCount: 5, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' } },
+  // Wednesday — fewer but longer words
+  { name: 'Long Haul', config: { rows: 7, cols: 6, wordCount: 4, minWordLength: 5, maxWordLength: 6, difficulty: 'medium' } },
+  // Thursday — tall narrow tower, long gravity columns
+  { name: 'Tall Tower', config: { rows: 9, cols: 5, wordCount: 5, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' } },
+  // Friday — the big weekly workout
+  { name: 'Big Board', config: { rows: 8, cols: 7, wordCount: 6, minWordLength: 3, maxWordLength: 6, difficulty: 'hard' } },
+  // Saturday — wide + busy weekend special
+  { name: 'Weekend Special', config: { rows: 7, cols: 7, wordCount: 6, minWordLength: 3, maxWordLength: 5, difficulty: 'medium' } },
+];
+
+/**
+ * Resolve the daily variant for a UTC date string (YYYY-MM-DD). Falls back
+ * to the classic config when the string can't be parsed.
+ */
+export function getDailyVariant(dateString: string): { name: string; config: BoardConfig } {
+  const ms = Date.parse(`${dateString}T00:00:00Z`);
+  if (Number.isNaN(ms)) return DAILY_VARIANTS[2];
+  return DAILY_VARIANTS[new Date(ms).getUTCDay()];
+}
+
 export function generateDailyBoard(dateString: string): Board {
   const cached = dailyBoardCache.get(dateString);
   if (cached) return cached;
 
-  const config: BoardConfig = {
-    rows: 7,
-    cols: 6,
-    wordCount: 5,
-    minWordLength: 3,
-    maxWordLength: 5,
-    difficulty: 'medium',
-  };
+  const { config } = getDailyVariant(dateString);
 
   const board = generateBoard(config, dailyBoardSeed(dateString));
   dailyBoardCache.set(dateString, board);

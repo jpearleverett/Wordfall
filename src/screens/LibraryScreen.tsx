@@ -33,15 +33,19 @@ import { Tooltip } from '../components/common/Tooltip';
 
 const { width } = Dimensions.get('window');
 
+// Wing theming on the synthwave palette (COLORS tokens). The original
+// hand-picked Material Design hexes (#4caf50, #2196f3, \u2026) read as a
+// different app sitting inside the neon shell \u2014 and the science aura was
+// accidentally pink. Auras are the wing color at 16% alpha.
 const WING_META: Record<string, { name: string; icon: string; color: string; aura: string }> = {
-  nature: { name: 'Nature', icon: '\u{1F33F}', color: '#4caf50', aura: 'rgba(76, 175, 80, 0.16)' },
-  science: { name: 'Science', icon: '\u{1F52C}', color: '#00d4ff', aura: 'rgba(255, 45, 149, 0.16)' },
-  mythology: { name: 'Mythology', icon: '\u26A1', color: '#ffd700', aura: 'rgba(255, 215, 0, 0.16)' },
-  ocean: { name: 'Ocean', icon: '\u{1F30A}', color: '#2196f3', aura: 'rgba(33, 150, 243, 0.16)' },
-  arts: { name: 'Arts', icon: '\u{1F3A8}', color: '#e91e63', aura: 'rgba(233, 30, 99, 0.16)' },
-  space: { name: 'Space', icon: '\u{1F680}', color: '#a855f7', aura: 'rgba(168, 85, 247, 0.16)' },
-  history: { name: 'History', icon: '\u{1F4DC}', color: '#ff9800', aura: 'rgba(255, 152, 0, 0.16)' },
-  elements: { name: 'Elements', icon: '\u2728', color: '#ff6b6b', aura: 'rgba(255, 107, 107, 0.16)' },
+  nature: { name: 'Nature', icon: '\u{1F33F}', color: COLORS.green, aura: 'rgba(0, 255, 135, 0.16)' },
+  science: { name: 'Science', icon: '\u{1F52C}', color: COLORS.cyan, aura: 'rgba(0, 229, 255, 0.16)' },
+  mythology: { name: 'Mythology', icon: '\u26A1', color: COLORS.gold, aura: 'rgba(255, 184, 0, 0.16)' },
+  ocean: { name: 'Ocean', icon: '\u{1F30A}', color: COLORS.teal, aura: 'rgba(0, 245, 212, 0.16)' },
+  arts: { name: 'Arts', icon: '\u{1F3A8}', color: COLORS.accent, aura: 'rgba(255, 45, 149, 0.16)' },
+  space: { name: 'Space', icon: '\u{1F680}', color: COLORS.purple, aura: 'rgba(200, 77, 255, 0.16)' },
+  history: { name: 'History', icon: '\u{1F4DC}', color: COLORS.orange, aura: 'rgba(255, 106, 0, 0.16)' },
+  elements: { name: 'Elements', icon: '\u2728', color: COLORS.coral, aura: 'rgba(255, 68, 102, 0.16)' },
 };
 
 interface LibraryScreenProps {

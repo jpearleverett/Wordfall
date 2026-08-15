@@ -60,17 +60,20 @@ describe('Game Modes Integration', () => {
 
   describe('unlock level ordering', () => {
     it('unlock levels are in ascending or grouped order', () => {
-      // Verify specific unlock levels — redistributed for progressive disclosure
+      // Verify specific unlock levels — accelerated June 2026 so players
+      // taste mode variety inside the first two chapters instead of
+      // grinding classic-only for weeks. Every cap is the latest level at
+      // which the mode may unlock.
       expect(MODE_CONFIGS.classic.unlockLevel).toBe(1);
       expect(MODE_CONFIGS.daily.unlockLevel).toBe(1);
-      expect(MODE_CONFIGS.relax.unlockLevel).toBeLessThanOrEqual(5);
-      expect(MODE_CONFIGS.shrinkingBoard.unlockLevel).toBeLessThanOrEqual(8);
-      expect(MODE_CONFIGS.noGravity.unlockLevel).toBeLessThanOrEqual(10);
-      expect(MODE_CONFIGS.timePressure.unlockLevel).toBeLessThanOrEqual(15);
-      expect(MODE_CONFIGS.gravityFlip.unlockLevel).toBeLessThanOrEqual(16);
-      expect(MODE_CONFIGS.weekly.unlockLevel).toBeLessThanOrEqual(18);
-      expect(MODE_CONFIGS.perfectSolve.unlockLevel).toBeLessThanOrEqual(20);
-      expect(MODE_CONFIGS.expert.unlockLevel).toBe(30);
+      expect(MODE_CONFIGS.relax.unlockLevel).toBeLessThanOrEqual(3);
+      expect(MODE_CONFIGS.shrinkingBoard.unlockLevel).toBeLessThanOrEqual(5);
+      expect(MODE_CONFIGS.noGravity.unlockLevel).toBeLessThanOrEqual(8);
+      expect(MODE_CONFIGS.timePressure.unlockLevel).toBeLessThanOrEqual(10);
+      expect(MODE_CONFIGS.gravityFlip.unlockLevel).toBeLessThanOrEqual(12);
+      expect(MODE_CONFIGS.weekly.unlockLevel).toBeLessThanOrEqual(14);
+      expect(MODE_CONFIGS.perfectSolve.unlockLevel).toBeLessThanOrEqual(16);
+      expect(MODE_CONFIGS.expert.unlockLevel).toBe(22);
     });
 
     it('classic and daily are always available (level 1)', () => {
