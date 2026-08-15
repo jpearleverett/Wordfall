@@ -72,6 +72,14 @@ export interface ReceiptValidationResult {
   isTrial?: boolean;
   /** Original transaction ID */
   transactionId?: string;
+  /**
+   * True when this exact receipt was already validated successfully on this
+   * device. Callers must NOT re-grant currency for it, but must still run
+   * the acknowledge/consume path — Google auto-refunds any purchase left
+   * unacknowledged for 3 days, so a transient ack failure has to stay
+   * retryable across launches.
+   */
+  alreadyValidated?: boolean;
 }
 
 export interface SubscriptionValidationResult {
@@ -247,11 +255,17 @@ export async function validateReceipt(
   const knownHashes = await loadReceiptHashes();
 
   if (knownHashes.has(hash)) {
-    logger.warn(
-      '[ReceiptValidation] Duplicate receipt detected (possible replay attack):',
+    // A LOCAL hash hit is not an attack: hashes are only written after this
+    // device validated this receipt successfully. It means we are seeing a
+    // redelivery — most often because acknowledge/consume failed last time.
+    // Report it as already-validated so the caller can retry the ack (and
+    // skip re-granting) rather than being permanently blocked, which used to
+    // guarantee a Google auto-refund 3 days later.
+    logger.log(
+      '[ReceiptValidation] Receipt already validated on this device — allowing acknowledge retry:',
       productId,
     );
-    return { valid: false, error: 'Duplicate receipt — possible replay attack' };
+    return { valid: true, alreadyValidated: true };
   }
 
   // Attempt server-side validation

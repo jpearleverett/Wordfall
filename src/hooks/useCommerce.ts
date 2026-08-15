@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useEconomyActions } from '../stores/economyStore';
 import { usePlayerActions } from '../stores/playerStore';
@@ -38,19 +38,6 @@ export function useCommerce() {
     setCommerceStatus(iapManager.getStatus());
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    iapManager.init().catch(() => undefined).finally(() => {
-      if (active) {
-        refreshStatus();
-      }
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [refreshStatus]);
-
   const applyPlayerGrants = useCallback((grants: { cosmetics: string[]; decorations: string[]; streakFreezeDays?: number }) => {
     for (const decorationId of grants.decorations) {
       unlockDecoration(decorationId);
@@ -75,6 +62,62 @@ export function useCommerce() {
     settings.updateSetting('monthlySpent', currentSpent + priceAmount);
     settings.updateSetting('monthlySpentResetDate', currentMonth);
   }, [settings]);
+
+  /**
+   * Fulfil a purchase that arrived WITHOUT an awaiting `purchase()` caller:
+   * the app was killed between the store charge and fulfilment (recovered by
+   * processPendingPurchases on next launch), Play Billing redelivered, or the
+   * in-app 120s timeout already resolved the promise. Before this existed the
+   * result was broadcast to an empty listener list while the purchase had
+   * already been acknowledged AND consumed — the player was charged real
+   * money, got nothing, and Restore could not recover it (consumed purchases
+   * disappear from getAvailablePurchases and re-validation is a replay).
+   *
+   * Held in a ref so the subscription effect below keeps stable deps and
+   * never unsubscribes mid-recovery.
+   */
+  const fulfilOrphanedPurchaseRef = useRef<(result: PurchaseResult) => void>(() => {});
+  fulfilOrphanedPurchaseRef.current = (result: PurchaseResult) => {
+    if (!result.success || !result.transactionId) return;
+    const priceAmount = iapManager.getPriceAmount(result.productId);
+    // applyCatalogPurchase dedupes on transactionId, so this is idempotent
+    // even if the same recovery runs twice or several useCommerce consumers
+    // are mounted at once.
+    const applied = applyValidatedPurchase(result.productId, {
+      source: 'purchase',
+      transactionId: result.transactionId,
+      currency: 'USD',
+      amount: priceAmount,
+      expiresAt: result.expiresAt,
+    });
+    if (!applied.applied) return;
+    applyPlayerGrants(applied.grants);
+    recordSpend(priceAmount);
+    void analytics.trackIAPCompleted(result.productId, priceAmount, priceAmount);
+    void analytics.trackRevenue(result.productId, priceAmount, 'USD');
+    void funnelTracker.trackPurchase('iap_completed', result.productId);
+  };
+
+  useEffect(() => {
+    let active = true;
+    // Subscribe BEFORE init(): processPendingPurchases runs inside init(),
+    // so registering afterwards would miss the very recovery pass this
+    // listener exists to catch.
+    const unsubscribe = iapManager.onPurchase((result) => {
+      fulfilOrphanedPurchaseRef.current(result);
+    });
+
+    iapManager.init().catch(() => undefined).finally(() => {
+      if (active) {
+        refreshStatus();
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [refreshStatus]);
 
   const checkPurchaseAllowed = useCallback((productId: string): PurchasePreflightResult => {
     const priceAmount = iapManager.getPriceAmount(productId);

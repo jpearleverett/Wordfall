@@ -764,9 +764,14 @@ export function useRewardWiring({
       void analytics.logEvent('first_mode_clear', { mode });
     }
 
-    // Mastery tier-up detection (XP proxy: puzzlesSolved * 100)
-    const prevMasteryXP = (player.puzzlesSolved - 1) * 100;
-    const newMasteryXP = player.puzzlesSolved * 100;
+    // Mastery tier-up detection (XP proxy: puzzlesSolved * 100).
+    // player.puzzlesSolved is the PRE-completion count here (the progress
+    // update is queued, not yet applied), so "after" is count + 1 — the same
+    // post-completion convention the rest of this callback and
+    // MasteryScreen use. The old (count-1)/count pair fired every tier-up
+    // one puzzle late (or never, if the player churned first).
+    const prevMasteryXP = player.puzzlesSolved * 100;
+    const newMasteryXP = (player.puzzlesSolved + 1) * 100;
     const prevMasteryTier = getMasteryTierForXP(prevMasteryXP);
     const newMasteryTier = getMasteryTierForXP(newMasteryXP);
     if (newMasteryTier > prevMasteryTier) {

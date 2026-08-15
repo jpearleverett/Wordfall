@@ -558,8 +558,9 @@ class IAPManager {
           productId: internalId,
           error: validation.error ?? 'Receipt validation failed',
         };
-        this.resolvePendingPurchase(storeId, errorResult);
-        this.notifyListeners(errorResult);
+        if (!this.resolvePendingPurchase(storeId, errorResult)) {
+          this.notifyListeners(errorResult);
+        }
         return;
       }
 
@@ -574,6 +575,7 @@ class IAPManager {
       });
 
       // Acknowledge / finish the transaction
+      let acknowledged = true;
       if (this.rniap) {
         const shopProduct = getProductById(internalId);
         const isConsumable = !(shopProduct?.isNonConsumable ?? false);
@@ -592,13 +594,24 @@ class IAPManager {
             }
           }
         } catch (ackError) {
+          acknowledged = false;
           logger.warn('[IAP] Failed to acknowledge/finish transaction:', ackError);
-          // Purchase still succeeded from user perspective
+          // Purchase still succeeded from the user's perspective — grant it
+          // below. But Google auto-refunds anything left unacknowledged for
+          // 3 days, so the SKU stays in the pending list to force a retry on
+          // the next launch (validateReceipt now reports the redelivered
+          // receipt as alreadyValidated instead of rejecting it as a replay).
+          crashReporter.captureException(
+            ackError instanceof Error ? ackError : new Error(String(ackError)),
+            { tags: { step: 'acknowledgePurchase' }, sku: storeId, transactionId },
+          );
         }
       }
 
-      // Clear pending purchase
-      await this.clearPendingPurchase(internalId);
+      // Clear pending purchase only once the store side is settled.
+      if (acknowledged) {
+        await this.clearPendingPurchase(internalId);
+      }
 
       const successResult: PurchaseResult = {
         success: true,
@@ -608,8 +621,13 @@ class IAPManager {
         expiresAt: validation.expiresAt,
       };
 
-      this.resolvePendingPurchase(storeId, successResult);
-      this.notifyListeners(successResult);
+      // Only broadcast when nobody was awaiting purchase() — otherwise the
+      // listener would fulfil first and make the awaited path's own
+      // applyValidatedPurchase a no-op, silently skipping recordSpend and
+      // revenue analytics.
+      if (!this.resolvePendingPurchase(storeId, successResult)) {
+        this.notifyListeners(successResult);
+      }
     } catch (e: any) {
       logger.warn('[IAP] Error handling purchase update:', e);
       crashReporter.captureException(
@@ -621,8 +639,9 @@ class IAPManager {
         productId: internalId,
         error: e?.message ?? 'Purchase processing failed',
       };
-      this.resolvePendingPurchase(storeId, errorResult);
-      this.notifyListeners(errorResult);
+      if (!this.resolvePendingPurchase(storeId, errorResult)) {
+        this.notifyListeners(errorResult);
+      }
     }
   }
 
@@ -656,19 +675,29 @@ class IAPManager {
       productId: internalId,
       error: error?.message ?? 'Purchase failed',
     };
-    if (storeId) {
-      this.resolvePendingPurchase(storeId, errorResult);
+    const delivered = storeId
+      ? this.resolvePendingPurchase(storeId, errorResult)
+      : false;
+    if (!delivered) {
+      this.notifyListeners(errorResult);
     }
-    this.notifyListeners(errorResult);
   }
 
-  private resolvePendingPurchase(storeId: string, result: PurchaseResult): void {
+  /**
+   * Hand the result to the in-session caller awaiting `purchase()`, if any.
+   * Returns whether such a caller existed — false means the result is
+   * ORPHANED (app was killed mid-purchase and this is the next-launch
+   * recovery pass, Play Billing redelivered, or the 120s timeout already
+   * resolved the promise). Orphaned results must go out over the listener
+   * channel instead, or the player is charged with nothing granted.
+   */
+  private resolvePendingPurchase(storeId: string, result: PurchaseResult): boolean {
     const pending = this.pendingPurchaseResolvers.get(storeId);
-    if (pending) {
-      clearTimeout(pending.timeout);
-      this.pendingPurchaseResolvers.delete(storeId);
-      pending.resolve(result);
-    }
+    if (!pending) return false;
+    clearTimeout(pending.timeout);
+    this.pendingPurchaseResolvers.delete(storeId);
+    pending.resolve(result);
+    return true;
   }
 
   // ── Pending purchase recovery ───────────────────────────────────────────

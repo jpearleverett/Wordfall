@@ -142,6 +142,25 @@ class EventManager {
       this.eventProgress = { ...savedProgress };
     }
     this.refreshLayers();
+    this.pruneStale();
+  }
+
+  /**
+   * Drop progress entries for long-dead events. Date-keyed ids (daily
+   * streaks, weekend blitzes, weekly events) otherwise accumulate forever
+   * and get JSON.stringify'd into every debounced player-data persist —
+   * a steadily growing cost on the post-win hot path. Active events are
+   * always exempt (a Remote-Config override event may run longer than any
+   * built-in), and 14 days comfortably outlives every built-in lifetime.
+   */
+  private pruneStale(): void {
+    const activeIds = new Set(this.getActiveEvents().map(e => e.id));
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    for (const id of Object.keys(this.eventProgress)) {
+      if (!activeIds.has(id) && this.eventProgress[id].startedAt < cutoff) {
+        delete this.eventProgress[id];
+      }
+    }
   }
 
   /**
@@ -231,7 +250,15 @@ class EventManager {
       endOfBlitz.setDate(endOfBlitz.getDate() + daysUntilSunday);
       endOfBlitz.setHours(23, 59, 59, 999);
 
-      const blitzId = `weekend_blitz_${today}`;
+      // Key the blitz to the weekend's SATURDAY (UTC, matching
+      // isWeekendBlitz's getUTCDay) — a plain `today` key minted a fresh id
+      // on Sunday, resetting progress mid-weekend and letting every tier be
+      // claimed twice per weekend.
+      const blitzAnchor = new Date();
+      if (blitzAnchor.getUTCDay() === 0) {
+        blitzAnchor.setUTCDate(blitzAnchor.getUTCDate() - 1);
+      }
+      const blitzId = `weekend_blitz_${blitzAnchor.toISOString().split('T')[0]}`;
       events.push({
         id: blitzId,
         type: 'weekend_blitz',

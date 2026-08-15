@@ -30,6 +30,12 @@ interface ValidateReceiptResponse {
   productId?: string;
   isTrial?: boolean;
   transactionId?: string;
+  /**
+   * Set when this receipt was already validated for this same user+product.
+   * The response is valid so the client can finish acknowledging the
+   * purchase with the store, but no new purchases row was written.
+   */
+  alreadyProcessed?: boolean;
 }
 
 interface AppleVerifyReceiptResponse {
@@ -147,11 +153,14 @@ async function checkFirestoreRateLimit(
 }
 
 /**
- * Check Firestore for receipt replay. Returns true if receipt was already used.
+ * Look up a previously validated receipt. Returns null when unseen.
  */
-async function isReceiptReplay(hash: string): Promise<boolean> {
+async function findStoredReceipt(
+  hash: string
+): Promise<{ productId?: string; userId?: string | null } | null> {
   const doc = await db.collection("receipts").doc(hash).get();
-  return doc.exists;
+  if (!doc.exists) return null;
+  return (doc.data() ?? {}) as { productId?: string; userId?: string | null };
 }
 
 /**
@@ -367,7 +376,26 @@ async function validateReceiptCore(
   }
 
   const hash = hashReceipt(receipt);
-  if (await isReceiptReplay(hash)) {
+  const priorReceipt = await findStoredReceipt(hash);
+  if (priorReceipt) {
+    // Same user, same product — this is a redelivery, not an attack. Play
+    // Billing resends purchases the client never managed to acknowledge, and
+    // a hard rejection here left them unacknowledgeable forever, which makes
+    // Google auto-refund them after 3 days. Answer idempotently instead: no
+    // new purchases row is written, and the client's own transactionId dedup
+    // stops any double-grant.
+    const sameOwner =
+      (priorReceipt.userId ?? null) === authenticatedUserId &&
+      priorReceipt.productId === productId;
+    if (sameOwner) {
+      functions.logger.info("Receipt redelivery for same user — idempotent OK", {
+        productId,
+        uid: authenticatedUserId.slice(0, 6),
+      });
+      return { valid: true, alreadyProcessed: true, productId };
+    }
+
+    // Different UID or different product for the same receipt: a real replay.
     functions.logger.warn("Duplicate receipt detected", {
       productId,
       uid: authenticatedUserId.slice(0, 6),
