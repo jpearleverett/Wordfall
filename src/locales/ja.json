@@ -269,7 +269,6 @@
     "next": "次へ",
     "home": "ホーム",
     "score": "スコア：{{score}}",
-    "stars": "{{count}} / 3 スター",
     "soClose": "あと少し！",
     "keepGoing": "その調子！",
     "timeUpShort": "時間切れ！",

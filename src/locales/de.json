@@ -269,7 +269,6 @@
     "next": "Weiter",
     "home": "Startseite",
     "score": "Punkte: {{score}}",
-    "stars": "{{count}} / 3 Sterne",
     "soClose": "FAST GESCHAFFT!",
     "keepGoing": "WEITER SO!",
     "timeUpShort": "ZEIT UM!",

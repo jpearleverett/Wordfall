@@ -1,0 +1,9 @@
+# Cloudflare Pages redirects — https://developers.cloudflare.com/pages/configuration/redirects/
+#
+# Referral bounce: buildReferralLink() (src/utils/deepLinking.ts) emits
+# https://wordfallgame.app/r/{code}. Devices with the app installed never
+# reach this file — Android App Links (assetlinks.json) route straight into
+# the app. Everyone else lands here and bounces to the Play listing with the
+# referral code preserved in the install-referrer param, so attribution
+# survives the store hop.
+/r/* https://play.google.com/store/apps/details?id=com.wordfall.game&referrer=wordfall_ref_:splat 302

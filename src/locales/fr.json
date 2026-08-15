@@ -269,7 +269,6 @@
     "next": "Suivant",
     "home": "Accueil",
     "score": "Score : {{score}}",
-    "stars": "{{count}} / 3 étoiles",
     "soClose": "SI PRÈS DU BUT !",
     "keepGoing": "CONTINUE !",
     "timeUpShort": "TEMPS ÉCOULÉ !",
