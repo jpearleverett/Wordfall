@@ -22,7 +22,9 @@ For detailed architecture see `agent_docs/architecture.md` — it's a short **in
 ```bash
 npx expo start --dev-client            # Metro bundler (Expo Go NOT supported)
 npm run typecheck                      # tsc --noEmit
-npm test                               # jest (66 suites)
+npm test                               # jest (70 suites)
+npx expo export --platform android     # REQUIRED before release — only local check that runs hermesc
+                                       # (typecheck + tests pass even when the prod bundle is broken)
 npm install --legacy-peer-deps         # .npmrc sets this by default
 EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  # Rebuild dev client APK (Termux requires the env var)
 ```

@@ -551,6 +551,33 @@ the full suite still passes.
 
 ---
 
+## ⚠️ Production bundle was broken (fixed 2026-08-15)
+
+`npx expo export --platform android` — the bundling step every production
+AAB runs — **failed outright** on `main`, so no release build was
+possible:
+
+```
+error: Invalid expression encountered
+  var iap = yield import(/* webpackIgnore: true */rniapModuleName)...
+Android Bundling failed 49369ms index.js (2274 modules)
+```
+
+Metro only rewrites `import()` into a lazy require when the specifier is
+a **string literal**; the computed specifier in `src/services/iap.ts`
+survived into the bundle and Hermes could not compile it. Dev builds skip
+bytecode compilation, which is exactly why the dev-client smoke test
+always looked clean.
+
+**Standing rule: never use a computed specifier in `import()`.** Every
+other dynamic import in `src/` already uses a literal.
+
+**Add `npx expo export --platform android` to the pre-release checklist.**
+Typecheck and `npm test` both passed the entire time this was broken —
+neither exercises Hermes bytecode compilation.
+
+---
+
 ## Commerce hardening (2026-08-15, `claude/game-completion-optimization-orl091`)
 
 Two **real-money loss paths** were found by an adversarial review and are
