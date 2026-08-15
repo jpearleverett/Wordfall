@@ -35,7 +35,6 @@ interface WordChipProps {
 const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValidWord, isLastRemaining, tensionActive, index }: WordChipProps) {
   const foundAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
   const lastRemainingAnim = useRef(new Animated.Value(1)).current;
   // Tier 6 B7 — tension pulse is scale-only (native-driver safe). The
   // earlier glow-on-shadowOpacity channel was dropped because mixing a
@@ -147,27 +146,10 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
     };
   }, [isLastRemaining, wordPlacement.found]);
 
-  useEffect(() => {
-    // Stop any running animation before starting a new one
-    glowAnim.stopAnimation();
-
-    if (isActive && isValidWord) {
-      // Finite pulse (3 cycles) instead of infinite Animated.loop
-      // to avoid continuous animation overhead on the native thread
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.5, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.5, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.8, duration: 250, useNativeDriver: true }),
-      ]).start();
-    } else if (isActive) {
-      Animated.timing(glowAnim, { toValue: 0.7, duration: 150, useNativeDriver: true }).start();
-    } else {
-      Animated.timing(glowAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start();
-    }
-  }, [isActive, isValidWord]);
+  // NOTE: the old glow layer's Animated.Value was removed along with its
+  // driver effect — it fired a ~1.85s native sequence at every word-match
+  // moment while nothing in the render output referenced it. The active/valid
+  // visual comes entirely from wordChipActive / wordChipValid styles.
 
   const getChipStyle = () => {
     if (wordPlacement.found) return styles.wordChipFound;

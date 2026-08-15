@@ -518,7 +518,6 @@ function GameScreenImpl({
   const undosLeft = useStore(store, s => s.undosLeft);
   const timeRemaining = useStore(store, s => s.timeRemaining);
   const grid = useStore(store, s => s.board.grid);
-  const words = useStore(store, useShallow((s: GameState) => s.board.words));
   const history = useStore(store, useShallow((s: GameState) => s.history));
   const wildcardMode = useStore(store, s => s.wildcardMode);
   const spotlightActive = useStore(store, s => s.spotlightActive);
@@ -526,11 +525,9 @@ function GameScreenImpl({
   const gravityDirection = useStore(store, s => s.gravityDirection);
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const perfectRun = useStore(store, s => s.perfectRun);
-  const lastInvalidTap = useStore(store, s => s.lastInvalidTap);
-  const lastSelectionResetTap = useStore(store, s => s.lastSelectionResetTap);
-  const boardFreezeActive = useStore(store, s => s.boardFreezeActive);
-  const scoreDoubler = useStore(store, s => s.scoreDoubler);
-  const boostersUsedThisPuzzle = useStore(store, useShallow((s: GameState) => s.boostersUsedThisPuzzle));
+  // NOTE: deliberately NOT subscribed to per-tap markers (lastInvalidTap /
+  // lastSelectionResetTap) — the invalid-tap feedback below watches the store
+  // transiently so trace restarts never re-render this 3000-line component.
   const activeComboType = useStore(store, s => s.activeComboType);
   const comboWordsRemaining = useStore(store, s => s.comboWordsRemaining);
   const comboMultiplierValue = useStore(store, s => s.comboMultiplier);
@@ -564,6 +561,9 @@ function GameScreenImpl({
   const [showInvalidFlash, setShowInvalidFlash] = useState(false);
   const scorePopupAnim = useRef(new Animated.Value(0)).current;
   const [scorePopup, setScorePopup] = useState<{ points: number; label: string } | null>(null);
+  // Pending reduce-motion popup teardown — cleared before scheduling the next
+  // so fast word chains don't have the old word's timer null the new popup.
+  const scorePopupTeardownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevScoreRef = useRef(score);
   const [showIdleHint, setShowIdleHint] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1135,7 +1135,11 @@ function GameScreenImpl({
         duration: 200,
         useNativeDriver: true,
       }),
-    ]).start(() => setShowInvalidFlash(false));
+    ]).start(({ finished }) => {
+      // A rapid second invalid tap restarts the sequence; the interrupted
+      // run's callback must not hide the flash the new run just showed.
+      if (finished) setShowInvalidFlash(false);
+    });
 
     if (!reduceMotion && getRemoteBoolean('invalidShakeEnabled')) {
       // ~120ms total, ±8px peak — reduced amplitude vs the 7+-letter shake
@@ -1151,12 +1155,26 @@ function GameScreenImpl({
     }
   }, [invalidFlashAnim, reduceMotion, shakeAnim]);
 
-  // Trigger invalid flash only for true invalid-tap errors.
-  useEffect(() => {
-    if (lastInvalidTap) {
-      showInvalidFlashAnim();
-    }
-  }, [lastInvalidTap, showInvalidFlashAnim]);
+  // Invalid-tap feedback: a non-adjacent tap that breaks an active 2+ cell
+  // trace is the game's one "you can't do that" gesture (empty cells aren't
+  // even hit-testable). The reducer records it as lastSelectionResetTap;
+  // watching it through a transient subscription keeps the per-tap marker out
+  // of this component's render path entirely. Starting a fresh trace from a
+  // single selected cell stays silent — that's normal play, not an error.
+  const fireInvalidTapFeedback = useStableCallback(showInvalidFlashAnim);
+  useEffect(
+    () =>
+      store.subscribe((s, prev) => {
+        if (
+          s.lastSelectionResetTap &&
+          s.lastSelectionResetTap !== prev.lastSelectionResetTap &&
+          prev.selectedCells.length >= 2
+        ) {
+          fireInvalidTapFeedback();
+        }
+      }),
+    [store, fireInvalidTapFeedback],
+  );
 
   // Hints/undos use persistent economy tokens (not per-level allocation)
   // Relax mode still uses unlimited per-level allocation
@@ -1240,7 +1258,13 @@ function GameScreenImpl({
 
   // Track post-gravity moved cells + per-tile fall animation
   useEffect(() => {
-    if (foundWords > prevFoundWordsRef.current && status === 'playing') {
+    // Capture-then-update BEFORE branching: the word-found branch returns a
+    // cleanup function, so a trailing assignment would be unreachable and the
+    // stale ref would replay the gravity whoosh/haptic on every undo (which
+    // drops foundWords from N to N-1 — still above a never-updated 0).
+    const prevFound = prevFoundWordsRef.current;
+    prevFoundWordsRef.current = foundWords;
+    if (foundWords > prevFound && status === 'playing') {
       const previousGrid = history[history.length - 1]?.grid;
       const moved = previousGrid
         ? getMovedCellPositions(previousGrid, grid)
@@ -1307,7 +1331,12 @@ function GameScreenImpl({
           );
         }
         setMovedCells(moved);
-        Animated.parallel(animations).start(() => {
+        Animated.parallel(animations).start(({ finished }) => {
+          // Interrupted runs (the next word's setValue force-stops in-flight
+          // springs on shared columns) must not fire the landing haptic while
+          // tiles are mid-air — the completed successor run handles both the
+          // haptic and the pruning with fresh state.
+          if (!finished) return;
           // C1 in launch_blockers.md: fire the gravity-land haptic now that
           // the spring animation has settled. Previously this function was
           // defined in haptics.ts:51 but never called in production.
@@ -1322,13 +1351,18 @@ function GameScreenImpl({
           }
         });
       } else {
-        setMovedCells(moved);
+        // Words cleared along the bottom rows move nothing — keep the state's
+        // existing (often empty) array reference so PlayField/GameGrid skip
+        // two pointless grid-wide reconciliations during the clear window.
+        setMovedCells(prev => (prev.length === 0 && moved.length === 0 ? prev : moved));
       }
 
-      const timer = setTimeout(() => setMovedCells([]), 400);
+      const timer = setTimeout(
+        () => setMovedCells(prev => (prev.length === 0 ? prev : [])),
+        400,
+      );
       return () => clearTimeout(timer);
     }
-    prevFoundWordsRef.current = foundWords;
   }, [foundWords, status]);
 
   // Last-word tension hook (plan task 2). When `remainingWords` transitions to
@@ -1432,7 +1466,11 @@ function GameScreenImpl({
             Animated.spring(bigWordAnim, { toValue: 1, friction: 4, tension: 200, useNativeDriver: true }),
             Animated.delay(800),
             Animated.timing(bigWordAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-          ]).start(() => setBigWordLabel(null));
+          ]).start(({ finished }) => {
+            // Consecutive 7+ letter words restart the sequence; an interrupted
+            // run must not null out the label the new run just set.
+            if (finished) setBigWordLabel(null);
+          });
 
           // Per-tile bloom burst for 7+ letter words (multi-tile waterfall).
           // Falls back to a center burst if no cleared cells were captured
@@ -1493,9 +1531,19 @@ function GameScreenImpl({
       lastSubmittedCellsRef.current = [];
 
       if (reduceMotion) {
-        // Skip score popup animation, just show briefly
+        // Skip score popup animation, just show briefly. Cancel the previous
+        // word's pending teardown so a fast follow-up popup isn't nulled 800ms
+        // after the OLD word instead of this one.
+        if (scorePopupTeardownRef.current !== null) {
+          clearTimeout(scorePopupTeardownRef.current);
+          pendingTimeoutsRef.current.delete(scorePopupTeardownRef.current);
+        }
         scorePopupAnim.setValue(1);
-        trackTimeout(() => { scorePopupAnim.setValue(0); setScorePopup(null); }, 800);
+        scorePopupTeardownRef.current = trackTimeout(() => {
+          scorePopupTeardownRef.current = null;
+          scorePopupAnim.setValue(0);
+          setScorePopup(null);
+        }, 800);
         return;
       }
 
@@ -1518,7 +1566,13 @@ function GameScreenImpl({
           duration: 300,
           useNativeDriver: true,
         }),
-      ]).start(() => setScorePopup(null));
+      ]).start(({ finished }) => {
+        // A back-to-back word find restarts this sequence via setValue(0),
+        // which fires the interrupted run's callback — without this guard it
+        // deletes the popup the new word just set, so fast chains lose their
+        // '+N' feedback entirely.
+        if (finished) setScorePopup(null);
+      });
     }
   }, [score]);
 
@@ -1728,7 +1782,10 @@ function GameScreenImpl({
         toValue: 1,
         duration: 150,
         useNativeDriver: true,
-      }).start(() => {
+      }).start(({ finished }) => {
+        // Double-tapping undo restarts the flash; the interrupted run's
+        // callback must not hide the flash the second tap just started.
+        if (!finished) return;
         setShowUndoFlash(false);
         undoFlashAnim.setValue(0);
       });

@@ -363,8 +363,13 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
 
     // Friends scope: keep only rows whose id is in friendIds or is the current
     // user, then re-rank from 1. Mock entries (prefixed `mock_`) are dropped.
+    // Copy each row before re-ranking — filter() shares the underlying entry
+    // objects with the Global scope, and writing friend-scope ranks onto them
+    // corrupts the Global list's rank numbers/medals after a tab round-trip.
     const allowed = new Set<string>([currentUserId, ...friendIds]);
-    const filtered = base.filter((e) => allowed.has(e.id));
+    const filtered = base
+      .filter((e) => allowed.has(e.id))
+      .map((e) => ({ ...e }));
     filtered.sort((a, b) => b.score - a.score);
     filtered.forEach((e, i) => { e.rank = i + 1; });
     return filtered;

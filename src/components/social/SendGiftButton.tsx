@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text } from 'react-nat
 import { COLORS } from '../../constants';
 import { sendGiftSecure, type GiftType } from '../../services/gifts';
 import { analytics } from '../../services/analytics';
-import { usePlayer } from '../../contexts/PlayerContext';
+import { usePlayerStore, selectEquippedTitle } from '../../stores/playerStore';
 import { getTitleLabel } from '../../data/cosmetics';
 import { logger } from '../../utils/logger';
 
@@ -40,7 +40,10 @@ export function SendGiftButton({
   relationship,
   compact = false,
 }: SendGiftButtonProps) {
-  const { equippedTitle } = usePlayer();
+  // Narrow store selector, not the full PlayerContext: this button renders
+  // per leaderboard/club row (up to ~50 at once), and a context subscription
+  // re-rendered every row on any player-state change.
+  const equippedTitle = usePlayerStore(selectEquippedTitle);
   const [sending, setSending] = useState(false);
 
   const send = async (type: GiftType) => {

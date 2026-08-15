@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import {
   Animated,
@@ -239,9 +240,16 @@ export function HomeScreen({
     ]).start();
   }, [contentAnim, titleAnim]);
 
+  // Focus gate for the decorative loops below. freezeOnBlur suspends React
+  // rendering but does NOT stop already-running native-driver animations, so
+  // without this the wheel loops keep burning UI-thread frames behind
+  // GameScreen for the whole session (AmbientBackdrop gates for the same
+  // reason).
+  const isFocused = useIsFocused();
+
   // Pulse animation for wheel button when spins available
   useEffect(() => {
-    if (mysteryWheelSpins > 0 || dailyFreeSpinAvailable) {
+    if (isFocused && (mysteryWheelSpins > 0 || dailyFreeSpinAvailable)) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(wheelPulse, {
@@ -261,21 +269,7 @@ export function HomeScreen({
       pulse.start();
       return () => pulse.stop();
     }
-  }, [mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
-
-  // Slow spin for the wheel disc icon (matches bento design — 8s per rotation)
-  useEffect(() => {
-    const spin = Animated.loop(
-      Animated.timing(wheelSpin, {
-        toValue: 1,
-        duration: 8000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
-    spin.start();
-    return () => spin.stop();
-  }, [wheelSpin]);
+  }, [isFocused, mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
 
   // Free spin toast animation
   useEffect(() => {
@@ -347,6 +341,25 @@ export function HomeScreen({
   const showMysteryWheel = hasSegmentContent
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
     : (playerStage !== 'new' || (mysteryWheelSpins > 0)) && onOpenWheel;
+  const mysteryWheelVisible = Boolean(showMysteryWheel);
+
+  // Slow spin for the wheel disc icon (matches bento design — 8s per rotation).
+  // Runs only while Home is focused AND the wheel card is actually rendered —
+  // previously this looped unconditionally for the entire session, including
+  // behind GameScreen.
+  useEffect(() => {
+    if (!isFocused || !mysteryWheelVisible) return;
+    const spin = Animated.loop(
+      Animated.timing(wheelSpin, {
+        toValue: 1,
+        duration: 8000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    spin.start();
+    return () => spin.stop();
+  }, [isFocused, mysteryWheelVisible, wheelSpin]);
 
   // Auto-present the login calendar once per app session when today's
   // reward is unclaimed — the Wordscapes/Royal Match daily-sheet ritual.

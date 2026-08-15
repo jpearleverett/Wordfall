@@ -10,12 +10,14 @@ import {
   Alert,
 } from 'react-native';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -226,11 +228,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // MG3 in launch_blockers.md: animated glow for legendary frames.
   // Pulses scale 1.00 ↔ 1.04 and shadow opacity 0.6 ↔ 1.0 on a 1400ms
   // cycle. Respects reduce-motion — when enabled the ring is static.
+  // Focus-gated like the backdrops: ProfileScreen stays mounted beneath
+  // pushed screens, and an unfocused withRepeat would keep mutating the
+  // shared value (and re-blurring the shadow) every frame while invisible.
   const reduceMotion = useReduceMotion();
+  const isFocused = useIsFocused();
   const isLegendary = equippedFrame.rarity === 'legendary';
   const glowPulse = useSharedValue(0);
   useEffect(() => {
-    if (!isLegendary || reduceMotion) {
+    if (!isLegendary || reduceMotion || !isFocused) {
+      cancelAnimation(glowPulse);
       glowPulse.value = 0;
       return;
     }
@@ -242,7 +249,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       -1,
       false,
     );
-  }, [isLegendary, reduceMotion]);
+    return () => cancelAnimation(glowPulse);
+  }, [isLegendary, reduceMotion, isFocused, glowPulse]);
 
   const animatedRingStyle = useAnimatedStyle(() => {
     if (!isLegendary || reduceMotion) {

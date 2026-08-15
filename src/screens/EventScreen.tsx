@@ -26,6 +26,42 @@ import {
 
 const { width } = Dimensions.get('window');
 
+/**
+ * Self-contained 1Hz countdown leaf (same pattern as ShopScreen's
+ * LiveCountdownText). Owning the interval here means the tick re-renders one
+ * Text node instead of re-running the entire ~950-line EventScreen body every
+ * second for the lifetime of the screen.
+ */
+const EventCountdownText = React.memo(function EventCountdownText({
+  endTime,
+  style,
+}: {
+  endTime: number;
+  style: object;
+}) {
+  const format = useCallback(() => {
+    const remaining = Math.max(0, endTime - Date.now());
+    const days = Math.floor(remaining / 86400000);
+    const hours = Math.floor((remaining % 86400000) / 3600000);
+    const minutes = Math.floor((remaining % 3600000) / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+    return `${hours.toString().padStart(2, '0')}:${minutes
+      .toString()
+      .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }, [endTime]);
+
+  const [text, setText] = useState(() => format());
+
+  useEffect(() => {
+    setText(format());
+    const interval = setInterval(() => setText(format()), 1000);
+    return () => clearInterval(interval);
+  }, [format]);
+
+  return <Text style={style}>Ends in {text}</Text>;
+});
+
 interface EventScreenProps {
   event?: any;
   progress?: number;
@@ -46,8 +82,6 @@ const EventScreen: React.FC<EventScreenProps> = ({
   const { unlockCosmetic, unlockDecoration, updateProgress } = usePlayerActions();
   const onPlayEventPuzzle = onPlayEventPuzzleProp ?? (() => {});
   const onOpenEventShop = onOpenEventShopProp ?? (() => {});
-  const [timeRemaining, setTimeRemaining] = useState('');
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [activeEvents, setActiveEvents] = useState<ActiveEvent[]>([]);
   const [claimAnim] = useState(new Animated.Value(1));
 
@@ -60,33 +94,6 @@ const EventScreen: React.FC<EventScreenProps> = ({
   // Get the primary event (main or first active)
   const primaryEvent = activeEvents.find(e => e.type === 'main') || activeEvents[0];
   const endTime = primaryEvent?.endTime ?? (event?.endTime ?? Date.now() + 5 * 24 * 60 * 60 * 1000);
-
-  // Countdown timer
-  useEffect(() => {
-    const updateTimer = () => {
-      const remaining = Math.max(0, endTime - Date.now());
-      const days = Math.floor(remaining / 86400000);
-      const hours = Math.floor((remaining % 86400000) / 3600000);
-      const minutes = Math.floor((remaining % 3600000) / 60000);
-      const seconds = Math.floor((remaining % 60000) / 1000);
-
-      if (days > 0) {
-        setTimeRemaining(`${days}d ${hours}h ${minutes}m`);
-      } else {
-        setTimeRemaining(
-          `${hours.toString().padStart(2, '0')}:${minutes
-            .toString()
-            .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`,
-        );
-      }
-    };
-
-    updateTimer();
-    timerRef.current = setInterval(updateTimer, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [endTime]);
 
   // Claim a reward tier
   const handleClaimReward = useCallback((eventId: string, tier: string) => {
@@ -453,9 +460,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
               <>
                 <View style={styles.exclusiveTimerRow}>
                   <Text style={styles.exclusiveTimerIcon}>{'\u{1F525}'}</Text>
-                  <Text style={styles.exclusiveTimerText}>
-                    Ends in {timeRemaining}
-                  </Text>
+                  <EventCountdownText endTime={endTime} style={styles.exclusiveTimerText} />
                 </View>
                 <Text style={styles.exclusiveHint}>
                   Reach the Gold tier to unlock this exclusive reward!

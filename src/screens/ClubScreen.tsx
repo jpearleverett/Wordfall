@@ -750,6 +750,11 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                     initialNumToRender={10}
                     maxToRenderPerBatch={10}
                     windowSize={5}
+                    // This list lives inside the screen's vertical ScrollView.
+                    // Android disables nested same-orientation scrolling by
+                    // default, which left the 240px chat pane unscrollable —
+                    // players could only ever read the newest few messages.
+                    nestedScrollEnabled
                     renderItem={({ item }) => (
                       <TouchableOpacity
                         onLongPress={() => handleMessageLongPress(item)}
