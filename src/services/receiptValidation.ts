@@ -211,11 +211,45 @@ async function serverValidate(
     return null;
   }
 
+  // The server derives the fulfilment UID ONLY from a verified Firebase ID
+  // token — it deliberately ignores the `userId` body field, and returns
+  // {valid:false, error:'Unauthenticated'} when the header is missing.
+  // Without this header EVERY production purchase failed validation: the
+  // player was charged, nothing was granted, the purchase was never
+  // acknowledged, and Google auto-refunded it three days later.
+  let idToken: string | null = null;
+  try {
+    // Lazy require so this module stays importable in tests/tools that
+    // never initialize Firebase.
+    const { auth } = require('../config/firebase') as {
+      auth?: { currentUser?: { getIdToken: (force?: boolean) => Promise<string> } | null };
+    };
+    idToken = (await auth?.currentUser?.getIdToken()) ?? null;
+  } catch (e) {
+    logger.warn('[ReceiptValidation] Could not obtain Firebase ID token:', e);
+  }
+
+  if (!idToken) {
+    // Fail loudly rather than posting a call the server will reject anyway.
+    // The caller treats a null return as "server not configured", which in
+    // production means the purchase is refused instead of silently lost.
+    logger.warn(
+      '[ReceiptValidation] No signed-in Firebase user — cannot validate receipt server-side',
+    );
+    return {
+      valid: false,
+      error: 'Not signed in — please restart the app and try again',
+    };
+  }
+
   const response = await fetchWithRetry(
     `${FIREBASE_FUNCTIONS_URL}/validateReceipt`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
       body: JSON.stringify({
         receipt,
         productId,

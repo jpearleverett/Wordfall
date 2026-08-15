@@ -147,7 +147,8 @@ export function solve(
 export function isSolvable(
   grid: Grid,
   words: string[],
-  wordPositions?: Map<string, CellPosition[]>
+  wordPositions?: Map<string, CellPosition[]>,
+  timeoutMs?: number
 ): boolean {
   if (words.length === 0) return true;
 
@@ -186,10 +187,15 @@ export function isSolvable(
     if (trySolveWithOrder(gridCopy, longFirst)) return true;
   }
 
-  // Slow path: budgeted full backtracking solve
-  // Budget scales with word count but caps to prevent hangs
+  // Slow path: budgeted full backtracking solve.
+  // The node budget alone is not enough of a guard — 5000 nodes of
+  // backtracking, each cloning the grid, can still run for over a second on
+  // a dense 8-word board. Callers that generate boards pass a wall-clock
+  // budget too, because discarding a candidate and reseeding is far cheaper
+  // than proving one bad candidate unsolvable.
   const budget: SolveBudget = {
     remaining: Math.min(5000, words.length <= 4 ? 500 : words.length <= 6 ? 2000 : 5000),
+    ...(timeoutMs ? { startTime: Date.now(), timeoutMs } : {}),
   };
   return solve(cloneGrid(grid), words, budget) !== null;
 }
@@ -657,7 +663,8 @@ export function solveShrinkingBoard(
 export function isSolvableShrinkingBoard(
   grid: Grid,
   words: string[],
-  wordsUntilShrink: number = 2
+  wordsUntilShrink: number = 2,
+  timeoutMs: number = 500
 ): boolean {
   if (words.length === 0) return true;
 
@@ -667,22 +674,62 @@ export function isSolvableShrinkingBoard(
   // If 2 or fewer words remain (no shrink will happen), any order works
   if (words.length <= wordsUntilShrink) return true;
 
-  // Try heuristic orderings
+  // Try heuristic orderings. Outermost-first matters here: a word near the
+  // perimeter must be cleared before the shrink that would destroy it, so
+  // clearing by distance-from-centre is the ordering most likely to work
+  // and it usually succeeds without touching the backtracker at all.
   const shortFirst = [...words].sort((a, b) => a.length - b.length);
   const longFirst = [...shortFirst].reverse();
-  const orderings = [words, shortFirst, longFirst];
+  const outermostFirst = orderWordsByPerimeterDistance(grid, words);
+  const orderings = outermostFirst
+    ? [outermostFirst, words, shortFirst, longFirst]
+    : [words, shortFirst, longFirst];
 
   for (const ordering of orderings) {
     if (trySolveWithOrderShrinking(cloneGrid(grid), ordering, wordsUntilShrink)) return true;
   }
 
-  // Budgeted backtracking
+  // Budgeted backtracking. `timeoutMs` is tightened by the generator, where
+  // discarding a candidate and reseeding is far cheaper than proving a bad
+  // candidate unsolvable.
   const budget: SolveBudget = {
     remaining: Math.min(5000, words.length <= 4 ? 500 : words.length <= 6 ? 2000 : 5000),
     startTime: Date.now(),
-    timeoutMs: 500,
+    timeoutMs,
   };
   return solveShrinkingBoard(cloneGrid(grid), words, wordsUntilShrink, budget) !== null;
+}
+
+/**
+ * Order words by how close their nearest cell sits to the grid perimeter
+ * (outermost first). Words on the edge die at the next shrink, so clearing
+ * them first is the ordering most likely to survive the whole schedule.
+ * Returns null if any word can't be located.
+ */
+function orderWordsByPerimeterDistance(grid: Grid, words: string[]): string[] | null {
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  if (rows === 0 || cols === 0) return null;
+
+  const scored: Array<{ word: string; depth: number }> = [];
+  for (const word of words) {
+    const occurrences = findWordInGrid(grid, word, 1);
+    if (occurrences.length === 0) return null;
+    // Best case for this word: the placement furthest from the perimeter.
+    let bestDepth = -1;
+    for (const positions of occurrences) {
+      let minDepth = Infinity;
+      for (const p of positions) {
+        const depth = Math.min(p.row, rows - 1 - p.row, p.col, cols - 1 - p.col);
+        if (depth < minDepth) minDepth = depth;
+      }
+      if (minDepth > bestDepth) bestDepth = minDepth;
+    }
+    scored.push({ word, depth: bestDepth });
+  }
+
+  scored.sort((a, b) => a.depth - b.depth);
+  return scored.map((s) => s.word);
 }
 
 /**

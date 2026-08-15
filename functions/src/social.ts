@@ -1321,7 +1321,12 @@ export const distributeWeeklyRewards = functions
   .pubsub.schedule('0 23 * * 0') // Sunday 23:00 UTC
   .timeZone('UTC')
   .onRun(async () => {
-    const weekId = getClosingWeekId();
+    // Look back 24h. This cron fires Sunday 23:00 UTC, but the week number
+    // rolls over at Sunday 00:00, so `getClosingWeekId()` at call time names
+    // the week that began 23 hours ago — meaning prizes were decided by a
+    // single Sunday's scores while the week that actually just finished was
+    // never rewarded at all.
+    const weekId = getClosingWeekId(new Date(Date.now() - 86_400_000));
     const startedAt = Date.now();
 
     // Pull the entire leaderboard for the closing week, ordered by
@@ -1579,11 +1584,18 @@ export const submitValidatedScore = functions.https.onCall(
 
 /** ISO week-number helper — mirrors src/utils/weekIdentifier.ts so the
  *  server doesn't need to import from client code. */
+/**
+ * Week bucket for leaderboard writes. MUST stay byte-identical to
+ * `getClosingWeekId` here and `getCurrentWeekId` on the client — this
+ * previously emitted ISO weeks as `2026-W33` (dash) while both readers
+ * queried `2026_W33` (underscore), so with `leaderboardValidationEnabled`
+ * on by default the weekly leaderboard was permanently empty and
+ * distributeWeeklyRewards never paid anyone.
+ */
 function weekIdFor(d: Date): string {
-  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dayNum = target.getUTCDay() || 7;
-  target.setUTCDate(target.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
-  const weekNum = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  return `${target.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+  const year = d.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  const days = Math.floor((d.getTime() - startOfYear.getTime()) / 86_400_000);
+  const weekNumber = Math.ceil((days + startOfYear.getUTCDay() + 1) / 7);
+  return `${year}_W${String(weekNumber).padStart(2, '0')}`;
 }

@@ -832,8 +832,13 @@ export const autoKickInactiveMembers = functions.pubsub
         // Never kick the club owner
         if (memberId === ownerId) continue;
 
+        // Only kick on POSITIVE evidence of inactivity. `memberLastActive`
+        // is written solely by clubGoalProgress, which nothing currently
+        // calls, so treating a missing entry as "idle" (the old `!lastActive
+        // ||` branch) would have stripped every club down to its owner on
+        // the first nightly run — including members who joined minutes ago.
         const lastActive = memberLastActive[memberId];
-        if (!lastActive || lastActive.toMillis() < cutoffTimestamp.toMillis()) {
+        if (lastActive && lastActive.toMillis() < cutoffTimestamp.toMillis()) {
           inactiveMembers.push(memberId);
         }
       }

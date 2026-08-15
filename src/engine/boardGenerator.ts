@@ -430,7 +430,7 @@ function checkSolvability(
   // shrinkingBoard: simulate the full shrink sequence to verify solvability
   // Words must survive outer ring removals that happen every 2 words cleared
   if (mode === 'shrinkingBoard') {
-    return isSolvableShrinkingBoard(grid, words, 2);
+    return isSolvableShrinkingBoard(grid, words, 2, GEN_SOLVE_BUDGET_MS);
   }
 
   // classic / timePressure / perfectSolve / etc: standard solvability with gravity
@@ -442,7 +442,7 @@ function checkSolvability(
   }
 
   // Fall back to budgeted full backtracking solver
-  return isSolvable(grid, words, wordPositions);
+  return isSolvable(grid, words, wordPositions, GEN_SOLVE_BUDGET_MS);
 }
 
 /**
@@ -540,6 +540,21 @@ function attemptGenerate(
 /** Absolute time limit for board generation to prevent UI hangs */
 const GENERATION_TIMEOUT_MS = 5000;
 
+/**
+ * Smallest board side the shrink schedule must leave intact for the final
+ * word. Drives the shrinkingBoard word-count cap — see generateBoard.
+ */
+const MIN_SHRINK_CORE = 5;
+
+/**
+ * Per-candidate solvability budget while GENERATING (ms). Deliberately far
+ * tighter than the in-game dead-end budget: during generation a rejected
+ * candidate costs nothing but another seed, so it is much cheaper to test
+ * many candidates briefly than to prove one candidate unsolvable slowly.
+ * At the old 500ms, ten failed candidates consumed the entire 5s budget.
+ */
+const GEN_SOLVE_BUDGET_MS = 60;
+
 export function generateBoard(
   config: BoardConfig,
   seed?: number,
@@ -574,11 +589,23 @@ export function generateBoard(
   // Minimum 3 words so the player sees the shrink mechanic (2 cleared → shrink → solve remaining).
   let effectiveConfig: BoardConfig;
   if (mode === 'shrinkingBoard') {
+    const shrinkRows = Math.max(clampedConfig.rows, 5) + 2;
+    const shrinkCols = Math.max(clampedConfig.cols, 5) + 2;
+    // The board loses its whole perimeter every 2 words, so the Nth word
+    // cleared must still fit inside a region inset by floor((N-1)/2) rings.
+    // Asking for more words than that geometry supports makes almost every
+    // candidate board unsolvable: generation then burns its entire 5s budget
+    // proving candidates wrong and falls back to an emergency 2-word board.
+    // Measured before this cap: levels 39+ took 2.6-5s (frequently hitting
+    // the timeout) on hardware faster than the low-end Android target.
+    const smallestSide = Math.min(shrinkRows, shrinkCols);
+    const maxShrinks = Math.max(0, Math.floor((smallestSide - MIN_SHRINK_CORE) / 2));
+    const maxShrinkWords = 2 * maxShrinks + 2;
     effectiveConfig = {
       ...clampedConfig,
-      rows: Math.max(clampedConfig.rows, 5) + 2,
-      cols: Math.max(clampedConfig.cols, 5) + 2,
-      wordCount: Math.max(clampedConfig.wordCount, 3),
+      rows: shrinkRows,
+      cols: shrinkCols,
+      wordCount: Math.min(Math.max(clampedConfig.wordCount, 3), maxShrinkWords),
     };
   } else {
     effectiveConfig = clampedConfig;

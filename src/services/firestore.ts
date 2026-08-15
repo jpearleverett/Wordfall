@@ -120,12 +120,20 @@ function getTodayDateString(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+/**
+ * Week bucket for leaderboard reads/writes. Must stay byte-identical to
+ * `weekIdFor` / `getClosingWeekId` in functions/src/social.ts. UTC-based:
+ * the previous local-time version put players in different buckets either
+ * side of midnight depending on their timezone, splitting one weekly
+ * leaderboard into several.
+ */
 function getCurrentWeekId(): string {
   const now = new Date();
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const year = now.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
   const days = Math.floor((now.getTime() - startOfYear.getTime()) / 86400000);
-  const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-  return `${now.getFullYear()}_W${String(weekNumber).padStart(2, '0')}`;
+  const weekNumber = Math.ceil((days + startOfYear.getUTCDay() + 1) / 7);
+  return `${year}_W${String(weekNumber).padStart(2, '0')}`;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

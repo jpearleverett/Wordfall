@@ -16,18 +16,63 @@ service cloud.firestore {
       match /pushToken/{tokenId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // THE CLOUD SAVE. Rules v2 does NOT cascade a parent match to
+      // subcollections, so without these two blocks every save silently
+      // failed: PlayerContext writes users/{uid}/data/player and
+      // EconomyContext writes users/{uid}/economy/current, both swallow the
+      // permission error, and the player had NO cloud backup at all —
+      // reinstalling or switching device lost level, stars, coins, gems,
+      // entitlements, and the local purchase-dedup ledger.
+      match /data/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /economy/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Device push tokens (notifications.ts writes users/{uid}/tokens/push).
+      match /tokens/{tokenId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Challenges are written TO a friend's subcollection by the sender,
+      // so the writer is not the owner. Reads stay owner-only.
+      match /challenges/{challengeId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null;
+        allow update, delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Server-owned (Admin SDK): purchase records and gift quota must never
+      // be client-writable — they are the anti-double-grant ledgers.
+      match /purchases/{purchaseId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+      match /giftQuota/{quotaId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
     }
 
     // Daily scores: owner can write own entry, anyone can read
     // Score bounds: 0..1_000_000 (sanity ceiling to prevent trivial leaderboard cheats)
+    // The doc id MUST start with the caller's uid ("{uid}_{date}"). Without
+    // that binding an attacker could pre-create dailyScores/{victimUid}_{today}
+    // carrying their OWN userId field; the victim's later write then becomes
+    // an update whose owner check can never pass, silently locking that player
+    // off the leaderboard for the day. Squatting is cheap and targeted.
     match /dailyScores/{docId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
+        && docId.split('_')[0] == request.auth.uid
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.score is number
         && request.resource.data.score >= 0
         && request.resource.data.score <= 1000000;
       allow update: if request.auth != null
+        && docId.split('_')[0] == request.auth.uid
         && resource.data.userId == request.auth.uid
         && request.resource.data.score is number
         && request.resource.data.score >= 0
@@ -38,11 +83,13 @@ service cloud.firestore {
     match /weeklyScores/{docId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
+        && docId.split('_')[0] == request.auth.uid
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.score is number
         && request.resource.data.score >= 0
         && request.resource.data.score <= 1000000;
       allow update: if request.auth != null
+        && docId.split('_')[0] == request.auth.uid
         && resource.data.userId == request.auth.uid
         && request.resource.data.score is number
         && request.resource.data.score >= 0
@@ -189,8 +236,15 @@ service cloud.firestore {
     // else's code mapping.
     match /referralCodes/{code} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null
+      allow create: if request.auth != null
         && request.resource.data.uid == request.auth.uid;
+      // On UPDATE the check must read the EXISTING doc. Checking
+      // request.resource (the attacker's own payload) was trivially
+      // satisfiable, so anyone could repoint a public 6-char referral code
+      // at their own uid and harvest every reward the real owner earned.
+      allow update: if request.auth != null
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid;
       allow delete: if false;
     }
 
@@ -207,7 +261,17 @@ service cloud.firestore {
     // rewards the server has already written.
     match /users/{userId}/rewards/{rewardId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      // Acknowledge-only. An unconstrained update let a client rewrite the
+      // granted amounts (gems: 1000000) and flip `claimed` back to false to
+      // re-claim indefinitely, since the client grants straight from these
+      // fields. The only legal transition is unclaimed -> claimed, touching
+      // nothing else.
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && resource.data.claimed == false
+        && request.resource.data.claimed == true
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['claimed', 'claimedAt']);
       allow create, delete: if false;
     }
   }
