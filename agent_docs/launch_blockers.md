@@ -549,6 +549,52 @@ tier-50 season pass ceremony, and the event leaderboard. Typechecking
 is unaffected (no new TS errors introduced). Run `npm test` to confirm
 the full suite still passes.
 
+---
+
+## Commerce hardening (2026-08-15, `claude/game-completion-optimization-orl091`)
+
+Two **real-money loss paths** were found by an adversarial review and are
+now closed. Both are worth re-testing by hand on a device with a real
+sandbox purchase before the first paid release.
+
+1. **Orphaned purchases were charged but never granted.** Fulfilment ran
+   only through the awaited `iapManager.purchase()` result. Purchases
+   completing any other way — `processPendingPurchases()` recovery after
+   the app was killed mid-purchase, a Play Billing redelivery, or a
+   success landing after the 120s timeout — went out through
+   `notifyListeners`, which had **no subscriber anywhere in the repo**.
+   The purchase had already been acknowledged *and consumed*, so Restore
+   could not recover it either. `useCommerce` now subscribes (before
+   `init()`, since recovery runs inside it) and fulfils orphans, with the
+   `transactionId` dedup keeping it idempotent.
+   - **Device test:** start a purchase, force-stop the app before the
+     grant lands, relaunch, open the Shop → the currency must appear.
+
+2. **A failed acknowledge could never be retried → Google auto-refund.**
+   If `acknowledgePurchaseAndroid` / `consumePurchaseAndroid` threw, the
+   replay guards rejected every redelivery *before* the ack code could
+   run. Google auto-refunds anything unacknowledged for 3 days, so each
+   transient ack failure was guaranteed revenue loss. A local
+   receipt-hash hit now reports `alreadyValidated` (a local hash is only
+   ever written after a successful validation on that device, so it means
+   redelivery, not attack), the SKU stays pending until the ack settles,
+   and the server answers same-user+same-product replays idempotently
+   while still rejecting cross-user reuse.
+   - **Server redeploy required:** `firebase deploy --only functions`
+     (the `validateReceipt` replay branch changed).
+
+Anti-double-grant now rests on the fulfilment ledger's `transactionId`
+dedup rather than the client hash store; that property is pinned by a
+test in `src/services/__tests__/iapCommerce.integration.test.ts`.
+
+Also fixed in the same pass: blind last-write-wins economy cloud sync
+(stale snapshots reverted currency, entitlements, and purchase history),
+multi-item restore silently dropping cosmetic grants, VIP daily claims
+reporting failure while granting, mastery tier-ups firing a puzzle late,
+Weekend Blitz progress resetting on Sunday with double-claimable tiers,
+unbounded `eventProgress` growth on the post-win persist path, and ~14MB
+of redundant audio-cache retention.
+
 ## What this list deliberately leaves out
 
 - Features that are **already wired** and that earlier docs said weren't.
