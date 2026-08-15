@@ -23,7 +23,18 @@ version has no visible seams. The in-app / launcher icon path
 
 Real gameplay screenshots cannot be synthesized — capture them on a device
 (1080×1920 or taller, portrait), then composite the matching caption pill
-from `captions/` onto the top third of each shot. The 8 shots and their
+from `captions/` onto the top third of each shot.
+
+**Rendering the app headlessly to automate this does not work, and was
+tried:** `npx expo export --platform web` fails because
+`react-native-google-mobile-ads` imports React Native internals that have
+no web implementation (`src/services/ads.ts` is imported at App.tsx top
+level, so the chain is unavoidable without restructuring the ads module).
+Making the web target build would mean surgery on the monetization path
+for a platform we do not ship — not worth it. Even if it built,
+react-native-web renders fonts, shadows, and gradients differently from
+native, so the result would not honestly represent the shipped game on a
+store listing. Capture on the real device. The 8 shots and their
 captions are specified in `agent_docs/store_listing.md` §G:
 
 1. Mid-puzzle trace → `captions/01.png`
