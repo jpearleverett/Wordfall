@@ -7,9 +7,14 @@
  * beyond the 40 curated chapters.
  */
 
-import { BoardConfig, Board, Difficulty, Chapter, GameMode } from '../types';
+import { BoardConfig, Board, Difficulty, Chapter, GameMode, GenerationProfile } from '../types';
 import { generateBoard } from './boardGenerator';
-import { getLevelConfig } from '../constants';
+import {
+  getLevelConfig,
+  getBreatherConfig,
+  isBreatherLevel,
+  isSpikeLevel,
+} from '../constants';
 import { getWordsByLength, getAllWords } from '../words';
 import {
   WORD_CATEGORIES,
@@ -221,34 +226,29 @@ const PROCEDURAL_THEMES = WORD_CATEGORIES.map(c => ({
   icon: c.icon,
 }));
 
+/** Drop one difficulty tier — used for breather chapters and breather levels. */
+function easeTier(difficulty: Difficulty): Difficulty {
+  switch (difficulty) {
+    case 'expert': return 'hard';
+    case 'hard': return 'medium';
+    case 'medium': return 'easy';
+    default: return difficulty;
+  }
+}
+
+/** Every 5th procedural chapter is a full breather chapter (one tier easier). */
+function isBreatherChapter(proceduralIndex: number): boolean {
+  return proceduralIndex > 0 && proceduralIndex % 5 === 0;
+}
+
 /**
  * Get the difficulty for a procedural chapter based on its index beyond the curated content.
  * Difficulty continues scaling beyond level 40's expert tier, with periodic
- * breather chapters (every 5th procedural chapter is one tier easier).
+ * breather chapters so the infinite tail keeps the curated sawtooth macro-rhythm.
  */
 function getProceduralDifficulty(proceduralIndex: number): Difficulty {
-  // Every 5th procedural chapter is a breather (one tier easier)
-  const isBreather = proceduralIndex > 0 && proceduralIndex % 5 === 0;
-
-  // Base progression: hard for first 10, then expert forever
-  let baseDifficulty: Difficulty;
-  if (proceduralIndex < 5) {
-    baseDifficulty = 'hard';
-  } else if (proceduralIndex < 10) {
-    baseDifficulty = 'expert';
-  } else {
-    baseDifficulty = 'expert';
-  }
-
-  if (isBreather) {
-    switch (baseDifficulty) {
-      case 'expert': return 'hard';
-      case 'hard': return 'medium';
-      default: return baseDifficulty;
-    }
-  }
-
-  return baseDifficulty;
+  const baseDifficulty: Difficulty = proceduralIndex < 5 ? 'hard' : 'expert';
+  return isBreatherChapter(proceduralIndex) ? easeTier(baseDifficulty) : baseDifficulty;
 }
 
 /**
@@ -291,12 +291,95 @@ function getProceduralBoardConfig(proceduralIndex: number, difficulty: Difficult
 }
 
 /**
+ * Rotate the board silhouette per procedural chapter — the same idea as the
+ * 1-600 endgame texture cycle — so consecutive same-tier chapters don't
+ * repeat one shape for 15 levels at a stretch. Honors the documented
+ * bounds: rows ≤ 10, cols 4-8, wordCount 2-10, word lengths 3-6.
+ */
+function applyProceduralTexture(config: BoardConfig, proceduralIndex: number): BoardConfig {
+  switch (proceduralIndex % 4) {
+    case 1: // tall + narrow — many shorter words, long gravity columns
+      return {
+        ...config,
+        rows: Math.min(10, config.rows + 1),
+        cols: Math.max(6, config.cols - 1),
+        wordCount: Math.max(4, config.wordCount - 1),
+        maxWordLength: Math.max(config.minWordLength + 1, 5),
+      };
+    case 2: // compact — fewer but longer words, tight board
+      return {
+        ...config,
+        rows: Math.max(config.cols, config.rows - 1),
+        wordCount: Math.max(4, config.wordCount - 1),
+        maxWordLength: 6,
+      };
+    case 3: // large — the roomiest silhouette of the cycle
+      return {
+        ...config,
+        rows: Math.min(10, config.rows + 1),
+      };
+    default: // standard mix — the base procedural config
+      return config;
+  }
+}
+
+/**
+ * Spike transformation for procedural levels: one more word + one longer
+ * word, mirroring the curated range's applySpike but with an explicit
+ * wordCount cap (procedural expert configs already reach the 10-word bound).
+ */
+function applyProceduralSpike(config: BoardConfig): BoardConfig {
+  return {
+    ...config,
+    wordCount: Math.min(10, config.wordCount + 1),
+    maxWordLength: Math.min(6, config.maxWordLength + 1),
+  };
+}
+
+/**
  * Generate a procedural chapter definition for chapters beyond the 40 curated ones.
  * Each chapter has a theme, 15 puzzles, and difficulty that continues scaling.
  *
  * @param chapterId - The chapter number (41+)
  * @returns A Chapter definition compatible with the curated chapter format
  */
+const PROCEDURAL_ADJECTIVES = [
+  'Hidden', 'Lost', 'Ancient', 'Mystic', 'Sacred', 'Golden', 'Silver',
+  'Crystal', 'Shadow', 'Ember', 'Frozen', 'Radiant', 'Eternal', 'Cosmic',
+  'Primal', 'Arcane', 'Phantom', 'Crimson', 'Azure', 'Emerald',
+  'Twilight', 'Obsidian', 'Ivory', 'Amber', 'Verdant', 'Sapphire',
+  'Gilded', 'Starlit', 'Thundering', 'Whispering', 'Sunken', 'Floating',
+  'Forgotten', 'Boundless', 'Luminous', 'Umbral', 'Astral', 'Tidal',
+  'Molten', 'Opaline',
+];
+
+const PROCEDURAL_NOUNS = [
+  'Vault', 'Archive', 'Sanctum', 'Garden', 'Citadel', 'Haven', 'Forge',
+  'Temple', 'Tower', 'Realm', 'Domain', 'Nexus', 'Passage', 'Chamber',
+  'Summit', 'Oasis', 'Bastion', 'Spire', 'Depths', 'Pinnacle',
+  'Atelier', 'Observatory', 'Rotunda', 'Crossing', 'Terrace', 'Grotto',
+  'Hollow', 'Expanse', 'Threshold', 'Menagerie', 'Reliquary', 'Solarium',
+  'Causeway', 'Wilds', 'Foundry', 'Gallery', 'Labyrinth', 'Conservatory',
+  'Enclave', 'Aerie',
+];
+
+/**
+ * Theme-name variants rotated once per full pass over PROCEDURAL_THEMES, so
+ * the second nature-themed chapter reads "Nature Expedition", not a xerox of
+ * the first pass's "Nature Mastery".
+ */
+const PROCEDURAL_THEME_VARIANTS = [
+  'Mastery', 'Expedition', 'Trials', 'Odyssey',
+  'Legacy', 'Frontier', 'Ascension', 'Chronicles',
+];
+
+const PROCEDURAL_DESCRIPTIONS: ReadonlyArray<(themeName: string) => string> = [
+  (t) => `A ${t}-themed challenge from the endless archive.`,
+  (t) => `Trace your way through ${t} words that grow trickier with every board.`,
+  (t) => `The library's ${t} shelves run deep — clear them word by word.`,
+  (t) => `Sharpen your ${t} vocabulary against ever-shifting boards.`,
+];
+
 export function generateProceduralChapter(chapterId: number): Chapter {
   if (chapterId <= CURATED_CHAPTER_COUNT) {
     throw new Error(`Chapter ${chapterId} is a curated chapter, not procedural`);
@@ -304,42 +387,58 @@ export function generateProceduralChapter(chapterId: number): Chapter {
 
   const proceduralIndex = chapterId - CURATED_CHAPTER_COUNT - 1; // 0-indexed
   const themeInfo = PROCEDURAL_THEMES[proceduralIndex % PROCEDURAL_THEMES.length];
+  const themeCycle = Math.floor(proceduralIndex / PROCEDURAL_THEMES.length);
   const category = getCategory(themeInfo.categoryId);
   const difficulty = getProceduralDifficulty(proceduralIndex);
 
   // Generate stars requirement based on chapter position
   const prevChapterStars = 234 + (proceduralIndex * 6); // Continues from chapter 40 (234 stars)
 
-  // Pick theme words from the category
-  const themeWords = category ? category.words.slice(0, 12).map(w => w.toLowerCase()) : [];
-
-  // Generate chapter name with variety
-  const adjectives = [
-    'Hidden', 'Lost', 'Ancient', 'Mystic', 'Sacred', 'Golden', 'Silver',
-    'Crystal', 'Shadow', 'Ember', 'Frozen', 'Radiant', 'Eternal', 'Cosmic',
-    'Primal', 'Arcane', 'Phantom', 'Crimson', 'Azure', 'Emerald',
-  ];
-  const nouns = [
-    'Vault', 'Archive', 'Sanctum', 'Garden', 'Citadel', 'Haven', 'Forge',
-    'Temple', 'Tower', 'Realm', 'Domain', 'Nexus', 'Passage', 'Chamber',
-    'Summit', 'Oasis', 'Bastion', 'Spire', 'Depths', 'Pinnacle',
-  ];
-
   const rng = createRng(chapterId * 31337);
-  const adj = adjectives[Math.floor(rng() * adjectives.length)];
-  const noun = nouns[Math.floor(rng() * nouns.length)];
+  const adj = PROCEDURAL_ADJECTIVES[Math.floor(rng() * PROCEDURAL_ADJECTIVES.length)];
+  const noun = PROCEDURAL_NOUNS[Math.floor(rng() * PROCEDURAL_NOUNS.length)];
+
+  // Rotate the theme-word window per visit instead of always taking the
+  // first 12 — repeat visits to a category get a fresh word list.
+  const wordPool = category
+    ? category.words.filter(w => w.length >= 3 && w.length <= 8)
+    : [];
+  const themeWords = shuffleWithRng(wordPool, rng)
+    .slice(0, 12)
+    .map(w => w.toLowerCase());
+
+  const variant = PROCEDURAL_THEME_VARIANTS[themeCycle % PROCEDURAL_THEME_VARIANTS.length];
+  const describe = PROCEDURAL_DESCRIPTIONS[Math.floor(rng() * PROCEDURAL_DESCRIPTIONS.length)];
+
+  // Mirror the curated sawtooth's generation levers: breather chapters get
+  // airy boards, wing finales get dense long-word boards, expert chapters
+  // pull from the rarer dictionary tier.
+  const finale = proceduralIndex % 5 === 4;
+  const breather = isBreatherChapter(proceduralIndex);
+  const densityLo = breather ? 0.1 : difficulty === 'expert' ? 0.02 : 0.06;
+  const densityHi = breather ? 0.14 : difficulty === 'expert' ? 0.06 : 0.1;
+  const emptyCellDensity =
+    Math.round((densityLo + rng() * (densityHi - densityLo)) * 100) / 100;
+  const profile: GenerationProfile = finale
+    ? { introducedMechanics: ['longWords', 'denseBoard'], dictionaryTier: 'expert' }
+    : {
+        introducedMechanics: difficulty === 'expert' ? ['longWords'] : ['fourLetter'],
+        emptyCellDensity,
+        dictionaryTier: difficulty === 'expert' ? 'expert' : 'standard',
+      };
 
   return {
     id: chapterId,
     name: `${adj} ${noun}`,
-    theme: `${themeInfo.name} Mastery`,
-    description: `A procedurally generated ${themeInfo.name.toLowerCase()}-themed challenge.`,
+    theme: `${themeInfo.name} ${variant}`,
+    description: describe(themeInfo.name.toLowerCase()),
     puzzleCount: PUZZLES_PER_CHAPTER,
     requiredStars: prevChapterStars,
     difficulty,
     themeWords,
     wingId: `procedural_${Math.floor(proceduralIndex / 5)}`,
     icon: themeInfo.icon,
+    profile,
   };
 }
 
@@ -352,19 +451,54 @@ export function getChapterExtended(chapterId: number, curatedChapters: Chapter[]
   return generateProceduralChapter(chapterId);
 }
 
+function proceduralChapterIndexForLevel(level: number): number {
+  const proceduralLevel = level - CURATED_LEVEL_COUNT;
+  return Math.floor((proceduralLevel - 1) / PUZZLES_PER_CHAPTER);
+}
+
 /**
  * Get the board config for a given level, supporting levels beyond the curated 600.
  * For curated levels (1-600), delegates to getLevelConfig.
- * For procedural levels (601+), generates appropriate difficulty.
+ * For procedural levels (601+), the tier ramp from getProceduralDifficulty is
+ * layered with the same per-level cadence the curated range has: every 5th
+ * level is a breather (one tier easier), spike levels (multiples of 13,
+ * RC-gated, breathers win collisions) add a word, and the board silhouette
+ * rotates per chapter so the infinite tail never flatlines into one shape.
  */
 export function getLevelConfigExtended(level: number): BoardConfig {
   if (level <= CURATED_LEVEL_COUNT) {
     return getLevelConfig(level);
   }
 
-  // Beyond curated content
-  const proceduralLevel = level - CURATED_LEVEL_COUNT;
-  const proceduralChapterIndex = Math.floor((proceduralLevel - 1) / PUZZLES_PER_CHAPTER);
-  const difficulty = getProceduralDifficulty(proceduralChapterIndex);
-  return getProceduralBoardConfig(proceduralChapterIndex, difficulty);
+  const chapterIndex = proceduralChapterIndexForLevel(level);
+  const difficulty = getProceduralDifficulty(chapterIndex);
+
+  // Breather levels play the standard silhouette one tier down — a real
+  // relief valve, not just a smaller spike.
+  if (isBreatherLevel(level)) {
+    return getProceduralBoardConfig(chapterIndex, easeTier(difficulty));
+  }
+
+  let config = getProceduralBoardConfig(chapterIndex, difficulty);
+  config = applyProceduralTexture(config, chapterIndex);
+  if (isSpikeLevel(level)) {
+    config = applyProceduralSpike(config);
+  }
+  return config;
+}
+
+/**
+ * Breather-mode config (used by the adaptive-difficulty "needsBreather" path)
+ * that stays correct past level 600. The curated-range getBreatherConfig maps
+ * a level to the phase config from 4 levels earlier, but past 600 that lands
+ * on the endgame texture cycle — which is HARDER than the early procedural
+ * tail. Here the procedural tail eases one tier instead.
+ */
+export function getBreatherConfigExtended(level: number): BoardConfig {
+  if (level <= CURATED_LEVEL_COUNT) {
+    return getBreatherConfig(level);
+  }
+  const chapterIndex = proceduralChapterIndexForLevel(level);
+  const difficulty = getProceduralDifficulty(chapterIndex);
+  return getProceduralBoardConfig(chapterIndex, easeTier(difficulty));
 }

@@ -102,7 +102,9 @@ function makeEasier(base: BoardConfig): BoardConfig {
     ...base,
     wordCount: Math.max(2, base.wordCount - 1),
     maxWordLength: Math.max(3, base.maxWordLength - 1),
-    rows: base.rows + 1,
+    // Procedural expert boards already sit at the 10-row ceiling — never
+    // push past the documented rows ≤ 10 bound.
+    rows: Math.min(10, base.rows + 1),
   };
 }
 

@@ -44,8 +44,7 @@ import { hasAcceptedTos } from './src/services/consent';
 import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
 import { getChapterForLevel } from './src/data/chapters';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
-import { getBreatherConfig } from './src/constants';
+import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
 import { useAuth } from './src/contexts/AuthContext';
 import { useEconomy } from './src/contexts/EconomyContext';
@@ -90,7 +89,7 @@ import {
 } from './src/services/notificationTriggers';
 import { eventManager } from './src/services/eventManager';
 import { getRemoteBoolean } from './src/services/remoteConfig';
-import { getChapterExtended, getLevelConfigExtended } from './src/engine/puzzleGenerator';
+import { getLevelConfigExtended, getBreatherConfigExtended } from './src/engine/puzzleGenerator';
 import {
   getPersonalizedHomeContent,
   getPersonalizedNotifications,
@@ -181,7 +180,7 @@ function EventScreenWrapperNav({ navigation }: any) {
 
     try {
       const modeLevel = player.currentLevel;
-      let config = getLevelConfig(modeLevel);
+      let config = getLevelConfigExtended(modeLevel);
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
       config = adjusted.config;
 
@@ -508,7 +507,7 @@ function ModesScreenWrapper({ navigation }: any) {
         ? player.currentLevel
         : player.getModeLevel(mode);
 
-      let config = getLevelConfig(modeLevel);
+      let config = getLevelConfigExtended(modeLevel);
 
       // Apply adaptive difficulty adjustment
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
@@ -641,7 +640,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       ? (params.level || 0) + 1
       : player.getModeLevel(mode);
     const useBreather = player.needsBreather();
-    let config = useBreather ? getBreatherConfig(modeLevel) : getLevelConfig(modeLevel);
+    let config = useBreather ? getBreatherConfigExtended(modeLevel) : getLevelConfigExtended(modeLevel);
     if (!useBreather) {
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
       config = adjusted.config;
@@ -769,7 +768,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         ? currentLevel + 1
         : player.getModeLevel(mode);
 
-      const config = getLevelConfig(nextModeLevel);
+      const config = getLevelConfigExtended(nextModeLevel);
       const seed = nextModeLevel * 1337 + Date.now();
       const chapter = mode === 'classic' ? getChapterForLevel(nextModeLevel) : undefined;
       let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
@@ -1389,9 +1388,9 @@ function HomeMainScreen({ route, navigation }: any) {
           if (difficulty) {
             config = DIFFICULTY_CONFIGS[difficulty];
           } else if (player.needsBreather()) {
-            config = getBreatherConfig(player.currentLevel);
+            config = getBreatherConfigExtended(player.currentLevel);
           } else {
-            config = getLevelConfig(player.currentLevel);
+            config = getLevelConfigExtended(player.currentLevel);
             // Apply adaptive difficulty adjustment (invisible to player)
             const adjusted = getAdjustedConfig(config, player.performanceMetrics);
             config = adjusted.config;
