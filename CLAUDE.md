@@ -140,8 +140,8 @@ The authoritative, verified list lives in **`agent_docs/launch_blockers.md`**. A
 **Remaining Tier 5 items (user-side, NOT code):**
 - `assetlinks.json` SHA256: replace the `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` placeholder in `wordfallgamesite/.well-known/assetlinks.json` with the Play App Signing fingerprint.
 - Register new SKUs in Play Console: `wordfall_wildcard_pack_5`, `wordfall_spotlight_pack_5`, `wordfall_shuffle_pack_5`.
-- Translate 5 non-EN locale files (`de / es-419 / fr / ja / pt-BR` — currently English structural stubs).
-- Hand-author puzzle overrides for levels 80–150 (`chapterOverrideJson` RC path exists).
+
+_(shipped 2026-08-15 on `claude/game-completion-optimization-orl091`)_ Locale translations for all 5 non-EN files (native quality, parity-guarded); post-600 procedural curve wired live in App.tsx (`getLevelConfigExtended` was dead code) with per-level breather/spike cadence + per-chapter silhouette rotation + 40×40 name tables + per-chapter `GenerationProfile`; chapters 41–48 seasonal payload staged at `remote-config/chapter-overrides-41-48.json`; Play listing assets generated in `store-assets/`; `/r/{code}` referral bounce added to the site. NOTE: the old "hand-author puzzle overrides for levels 80–150" idea was misframed — `chapterOverrideJson` validates ids 41+ only and can never override the authored chapters 1–40 (levels 1–600); curated-range tuning goes through `constants.ts` phase configs + the adaptive adjuster instead.
 
 _(resolved April 2026)_ GDPR account deletion UI + `requestAccountDeletion` Cloud Function (purges users + subcollections + club membership + consent ledger + push tokens, hashes receipts for audit trail); secure `sendGift`/`claimGift` callable path; Google Sign-In linking (`src/services/googleAuth.ts` with credential-already-in-use recovery fallback — final activation needs user-side OAuth setup).
 
@@ -168,7 +168,7 @@ _(resolved April 2026)_ GDPR account deletion UI + `requestAccountDeletion` Clou
 - iOS lane (Apple Developer enrollment, `GoogleService-Info.plist`, Universal Links, ATT verification).
 - Maestro CI wiring (flows 01–15 are authored in `.maestro/`; hosted CI runner with Android emulator is the remaining step).
 - GPU-accelerated VFX (Skia bloom / shader passes on tile clears) — premium polish, post-launch.
-- Hand-authored puzzle overrides for levels 80–150 — `chapterOverrideJson` RC path exists; current generation is procedural-deterministic.
+- Hand-authored boards for Daily / Weekly challenges (the one surface where curated-feel is most visible; the `chapterOverrideJson` RC path only extends chapters 41+, it cannot override the authored 1–40).
 
 ### Top-tier F2P parity (April 2026 — shipped work)
 The big monetization + social + feel-polish push landed across 13 branches. All 4 workstreams shipped except audio commissioning (D5 — blocked on external audio delivery) and the items now tracked in `agent_docs/launch_blockers.md`.

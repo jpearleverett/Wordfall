@@ -442,14 +442,16 @@ Fix: `WordChip` gains a `tensionActive` prop; on rising edge it fires a one-shot
 - **Work:** paste the fingerprint from Play Console → Setup → App
   Signing. Redeploy the Cloudflare Pages site.
 
-### U2. Translate 5 non-EN locales
+### U2. Translate 5 non-EN locales — ✅ SHIPPED (2026-08-15)
 
 - **Files:** `src/locales/{de,es-419,fr,ja,pt-BR}.json`.
-- **Current:** all 6 locale files are at structural parity (325 keys,
-  346 lines) but the non-EN files are English placeholder strings.
-  i18n plumbing is fully wired; only the translations are missing.
-- **Work:** commission translations (325 keys × 5 locales). EN-only is
-  fine for PH/CA soft launch. Do this before WW.
+- **Shipped:** all 5 non-EN files now carry native-quality translations
+  (informal register per market: du / tú / tu / です・ます / você;
+  F2P-standard terminology; brand "Wordfall" untranslated). Structural
+  parity + `{{token}}` preservation enforced by `locales.test.ts`. A dead
+  duplicate `result.stars` key inherited from en.json was removed across
+  all 6 files. Branch: `claude/game-completion-optimization-orl091`.
+- **Remaining (optional):** native-speaker review pass before WW launch.
 
 ### U3. Hand-curated chapter metadata for the post-600 tail
 
@@ -470,17 +472,27 @@ Fix: `WordChip` gains a `tensionActive` prop; on rising edge it fires a one-shot
   Mastery"), a cycling theme rotation, and a simpler scaling difficulty
   curve (`getLevelConfigExtended`) that loses the hand-tuned
   spike/breather cadence of levels 1–40.
-- **Work (all deferrable to v1.1 post-launch):**
-  1. Pre-stage 4–8 authored chapter metadata entries (IDs 41–48) in a
-     `chapterOverrideJson` payload — ready to flip via RC for a
-     seasonal drop.
-  2. Tighten `getLevelConfigExtended` so the post-600 difficulty curve
-     preserves the spike/breather cadence rather than flattening.
-  3. Expand the procedural adjective/noun tables and `PROCEDURAL_THEMES`
-     variety so chapters 41+ don't feel xeroxed across a long tail.
-  4. Optional: commission hand-authored boards for Daily / Weekly
-     challenges only — those are the surfaces where curated-feel is
-     most visible to players.
+- **Shipped (2026-08-15, branch `claude/game-completion-optimization-orl091`):**
+  1. ✅ Chapters 41–48 authored payload staged at
+     `remote-config/chapter-overrides-41-48.json` (wings `seasons` +
+     `wonders`, per-chapter profiles + palettes), validated in CI by
+     `proceduralCurve.test.ts` against the real `parseRemoteChapters`.
+  2. ✅ `getLevelConfigExtended` was actually DEAD CODE — App.tsx called
+     `getLevelConfig` everywhere, so levels 601+ fell through to the
+     endgame texture cycle. It is now wired live at all six board-config
+     sites (plus a new `getBreatherConfigExtended` for the needsBreather
+     path) and carries the full per-level cadence past 600: every-5th
+     breathers one tier down, spikes on multiples of 13 (RC-gated,
+     breathers win, +1 word capped at 10), and a 4-way per-chapter
+     silhouette rotation.
+  3. ✅ Name tables expanded 20×20 → 40×40; theme labels rotate per
+     category cycle (Mastery/Expedition/Trials/…); theme-word windows
+     re-shuffle per visit; every procedural chapter now ships a
+     `GenerationProfile` (density bands, dense finales, expert
+     dictionary tier) mirroring the curated sawtooth.
+- **Remaining (v1.1, optional):** commission hand-authored boards for
+  Daily / Weekly challenges only — those are the surfaces where
+  curated-feel is most visible to players.
 
 ### U4. Play Console / Firebase / AdMob chores
 
@@ -500,8 +512,11 @@ completeness.)
 - Author UMP consent message inside AdMob → Privacy & messaging → GDPR.
 - Run `firebase deploy --only firestore:rules,firestore:indexes,functions`.
 - Fill Play Console Data Safety form (draft in `agent_docs/data_safety.md`).
-- Upload store listing assets (icon, feature graphic, screenshots —
-  copy in `agent_docs/store_listing.md`).
+- Upload store listing assets — the 1024×1024 listing icon, 1024×500
+  feature graphic, and 8 caption-pill overlays are now generated and
+  upload-ready in `store-assets/` (regenerate via
+  `scripts/gen_store_assets.py`); only real device screenshots remain
+  to capture + composite (copy in `agent_docs/store_listing.md`).
 - Commission real audio per `agent_docs/audio_brief.md` (synth fallback
   already fully wired at 72 SFX + 10 BGM slots — drop in progressively).
 - **Google Sign-In activation:** `npm install --legacy-peer-deps
@@ -523,7 +538,8 @@ All 18 Tier 1–4 code gaps landed on branch `claude/assess-wordfall-launch-read
 | Tier 2 (monetization) | M1 M2 M3 | ✅ all shipped |
 | Tier 3 (social + ceremony) | S1 S2 MG1 MG2 MG3 | ✅ all shipped |
 | Tier 4 (feel polish) | C1 C2 P1 P2 | ✅ all shipped |
-| Tier 5 (user-side / content) | U1 U2 U3 U4 | ⏳ outside engineering |
+| Tier 5 (user-side / content) | U2 U3 | ✅ shipped 2026-08-15 (`claude/game-completion-optimization-orl091`) |
+| Tier 5 (user-side / content) | U1 U4 | ⏳ outside engineering |
 | Tier 6 (top-grosser parity) | B1 B2 B3 B4 B6 B7 | ✅ all shipped |
 | Tier 6 (top-grosser parity) | B5 | ⏸️ analyzed + deferred |
 
