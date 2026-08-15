@@ -551,6 +551,40 @@ the full suite still passes.
 
 ---
 
+## ⚠️ Play policy risk: `SCHEDULE_EXACT_ALARM` (decide before submitting)
+
+`app.json` declares `SCHEDULE_EXACT_ALARM` (line ~76). Google treats exact
+alarms as a **restricted permission**: an app is expected to have a core
+feature that genuinely needs exact timing (alarm clock, calendar, timer).
+A word puzzle almost certainly does not qualify, and declaring it can draw
+a policy review or rejection.
+
+**The evidence says we don't need it.** `src/services/notifications.ts`
+only ever builds `TIME_INTERVAL`, `DAILY`, and `WEEKLY` triggers (see the
+`expoTrigger` construction) — streak nudges and daily-challenge reminders,
+where a few minutes of drift is harmless and better for battery.
+
+**Why it was not simply removed here:** if expo-notifications' Android
+code calls `setExactAndAllowWhileIdle` without first checking
+`canScheduleExactAlarms()`, dropping the permission throws a
+SecurityException and **silently kills all scheduled notifications** —
+which would cost far more retention than the policy risk. That can only be
+confirmed on a device.
+
+**Do this before submitting:**
+1. Remove `"SCHEDULE_EXACT_ALARM"` from `android.permissions` in `app.json`.
+2. Rebuild the dev client and schedule a notification (a streak reminder or
+   a short `timeInterval` test trigger).
+3. Confirm it still fires. If it does — ship without the permission.
+4. If notifications break, restore the permission and be ready to justify
+   the use case in the Play Console exact-alarm declaration.
+
+Permission hygiene is otherwise good: the declared set is minimal, and
+`blockedPermissions` already strips `RECORD_AUDIO` / `MODIFY_AUDIO_SETTINGS`
+that expo-audio would otherwise pull in.
+
+---
+
 ## ⚠️ Production bundle was broken (fixed 2026-08-15)
 
 `npx expo export --platform android` — the bundling step every production
