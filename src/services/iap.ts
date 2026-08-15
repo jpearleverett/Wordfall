@@ -137,12 +137,19 @@ class IAPManager {
         throw new Error('react-native-iap native module not linked');
       }
 
-      // Dynamically import react-native-iap to avoid crashes when native
-      // module is not linked (Expo Go, web) or the package isn't installed.
-      // We use a variable for the package name to prevent Metro/TSC from
-      // trying to statically resolve the module at build time.
-      const rniapModuleName = 'react-native-iap';
-      const iap: RNIap = await import(/* webpackIgnore: true */ rniapModuleName as any).catch(() => null);
+      // Dynamically import react-native-iap so its module-level NativeModules
+      // access never runs when the native module isn't linked (Expo Go, web).
+      // The guard above is what provides that safety — NOT the import form.
+      //
+      // The specifier MUST be a string literal. Metro's babel plugin only
+      // rewrites literal `import()` calls into lazy requires; a computed
+      // specifier survives verbatim into the bundle, where Hermes fails with
+      // "Invalid expression encountered" and every production Android build
+      // dies at the hermesc step. Dev builds skip bytecode compilation, so
+      // this stayed invisible until a real `expo export` was run.
+      // react-native-iap is a real dependency (package.json), so static
+      // resolution is correct here; the import stays lazy either way.
+      const iap = (await import('react-native-iap').catch(() => null)) as RNIap | null;
       if (!iap) {
         throw new Error('react-native-iap package not installed');
       }
