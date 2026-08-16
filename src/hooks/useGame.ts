@@ -1023,7 +1023,7 @@ export function useGame(
 
     if (mode === 'gravityFlip') {
       const timer = setTimeout(() => {
-        setIsStuck(isDeadEndGravityFlip(grid, remainingWords, gravityDirection, moves));
+        setIsStuck(isDeadEndGravityFlip(grid, remainingWords, gravityDirection));
       }, DEBOUNCE_MS);
       return () => clearTimeout(timer);
     }

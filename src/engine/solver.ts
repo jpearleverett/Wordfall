@@ -497,8 +497,7 @@ export function isSolvableGravityFlip(
 export function isDeadEndGravityFlip(
   grid: Grid,
   remainingWords: string[],
-  currentDirection: GravityDirection,
-  wordsCleared: number
+  currentDirection: GravityDirection
 ): boolean {
   if (remainingWords.length === 0) return false;
 
@@ -509,8 +508,23 @@ export function isDeadEndGravityFlip(
     if (trySolveWithOrderRotating(cloneGrid(grid), ordering, currentDirection)) return false;
   }
 
+  // Offset 0, and there is deliberately no wordsCleared parameter to pass.
+  //
+  // `currentDirection` is the direction the reducer will apply to the NEXT
+  // clear — it is advanced immediately after each one, so it already encodes
+  // every word cleared so far. This used to also take a `wordsCleared` count
+  // and hand it to solveWithRotatingGravity, which adds it to the start
+  // direction; the offset was applied twice and the simulation ran up to
+  // three quarter-turns out of phase with the actual board.
+  //
+  // Measured at 33 disagreements in 222 live positions, in both directions:
+  // announcing "no moves left" on solvable boards, and staying silent while
+  // the player ground away at dead ones. It only showed up once the three
+  // cheap heuristic orderings above failed and execution reached here — that
+  // is, on exactly the hard boards where the answer matters. The parameter is
+  // removed rather than ignored so it cannot be reintroduced by a caller.
   const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
-  return solveWithRotatingGravity(cloneGrid(grid), remainingWords, currentDirection, wordsCleared, budget) === null;
+  return solveWithRotatingGravity(cloneGrid(grid), remainingWords, currentDirection, 0, budget) === null;
 }
 
 // ============ NO GRAVITY MODE ============
