@@ -579,6 +579,34 @@ export function getRemoteNumber(key: RemoteConfigKey): number {
 }
 
 /**
+ * A remote number that must land inside a sane range, or the caller's
+ * fallback is used instead.
+ *
+ * Every numeric knob that reaches gameplay or the economy goes through this
+ * rather than `getRemoteNumber` directly. Remote Config values are typed by
+ * a human in a web console, so the realistic failure is not a malicious
+ * value but a slip — an extra zero, an empty field parsed as 0, a unit
+ * confusion (seconds where milliseconds were meant). Those land as silent
+ * balance changes on every device at once, with no build to roll back.
+ *
+ * The NaN case matters as much as the range: `rc.getValue(key).asNumber()`
+ * returns NaN for an unparseable string, and NaN fails every comparison, so
+ * an un-guarded `count >= cap` would pass forever. Guarding here means each
+ * call site does not have to remember.
+ */
+export function getRemoteNumberClamped(
+  key: RemoteConfigKey,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const value = getRemoteNumber(key);
+  if (!Number.isFinite(value)) return fallback;
+  if (value < min || value > max) return fallback;
+  return value;
+}
+
+/**
  * Get a remote config value as a boolean.
  */
 export function getRemoteBoolean(key: RemoteConfigKey): boolean {

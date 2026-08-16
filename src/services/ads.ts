@@ -11,7 +11,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AD_CONFIG } from '../constants';
-import { getRemoteNumber } from './remoteConfig';
+import { getRemoteNumberClamped } from './remoteConfig';
 import { logger } from '../utils/logger';
 import { analytics } from './analytics';
 import { crashReporter } from './crashReporting';
@@ -106,8 +106,17 @@ function adCap(
   key: 'maxAdsPerDay' | 'maxInterstitialsPerDay' | 'interstitialIntervalMs',
   fallback: number,
 ): number {
-  const value = getRemoteNumber(key);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
+  // Upper bounds are as important as lower ones here: an accidental 1000
+  // ads/day is not a cap at all, and a multi-hour interstitial interval
+  // silently removes the format's revenue. Ranges are wide enough for any
+  // real tuning decision and narrow enough to catch a slipped digit.
+  const bounds = {
+    maxAdsPerDay: [1, 50],
+    maxInterstitialsPerDay: [1, 30],
+    interstitialIntervalMs: [10_000, 1_800_000],
+  } as const;
+  const [min, max] = bounds[key];
+  return getRemoteNumberClamped(key, fallback, min, max);
 }
 
 class AdManager {

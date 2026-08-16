@@ -15,6 +15,11 @@ import { AccessibilityInfo } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
+import {
+  economyDifficultyForLevel,
+  perfectClearGems,
+  puzzleCoinReward,
+} from '../data/economyTuning';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { GameMode, VictorySummaryItem } from '../types';
 import {
@@ -520,8 +525,12 @@ export function PuzzleComplete({
     ? 'You solved it without mistakes and kept the board perfectly under control.'
     : 'A clean clear with strong sequencing and smart gravity reads.';
 
-  const difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
-  const coinReward = ECONOMY.puzzleCompleteCoins[difficulty] + stars * ECONOMY.starBonus;
+  // Fallback figure for when the awarded total wasn't passed. It must come
+  // from the same source the grant does — when this read a constant and the
+  // grant read Remote Config, a retuned economy would award one number and
+  // display another, which reads to a player as the game shortchanging them.
+  const difficulty = economyDifficultyForLevel(level);
+  const coinReward = puzzleCoinReward(difficulty, stars);
 
   // 20 confetti is plenty visually — 40 was overkill and doubled the number
   // of concurrent Animated drivers during the puzzle-complete celebration.
@@ -748,7 +757,7 @@ export function PuzzleComplete({
                       style={styles.rewardChipGold}
                     >
                       <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImage} resizeMode="contain" />
-                      <Text style={styles.rewardTextGold}>+{totalGemsAwarded > 0 ? totalGemsAwarded : ECONOMY.perfectClearGems} gems</Text>
+                      <Text style={styles.rewardTextGold}>+{totalGemsAwarded > 0 ? totalGemsAwarded : perfectClearGems()} gems</Text>
                     </LinearGradient>
                   )}
                 </View>

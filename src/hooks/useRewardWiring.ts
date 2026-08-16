@@ -35,6 +35,7 @@ import {
   getPrestigeXpMultiplier,
 } from '../data/prestigeSystem';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
+import { puzzleCoinPayout, perfectClearGems } from '../data/economyTuning';
 
 /** Tier 6 B3 — defensive ceiling on the composed (cosmetic × prestige) bonus
  *  factor so a level-5 whale with a legendary frame doesn't accidentally
@@ -346,7 +347,16 @@ export function useRewardWiring({
       (1 + (cosmeticBonuses.xpMultiplier ?? 0)) * prestigeXp,
       MAX_BONUS_FACTOR,
     );
-    const baseCoinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
+    // Per-difficulty coin payout, remotely tunable. These four keys and
+    // gemsPerPerfectClear were declared as Remote Config and read by nothing,
+    // so the economy — the thing a soft launch exists to calibrate — could
+    // only be retuned by shipping a release. Clamped: the realistic failure
+    // is a slipped digit in a web console, and an extra zero here lands as a
+    // silent economy change on every device at once with no build to roll
+    // back. Defaults equal the constants, so nothing moves until someone
+    // moves it.
+    const baseCoinReward =
+      puzzleCoinPayout(difficulty) + (stars * ECONOMY.starBonus);
     const coinReward = Math.round(baseCoinReward * eventMultipliers.coins * coinBonusFactor);
     economy.addCoins(coinReward);
 
@@ -356,7 +366,7 @@ export function useRewardWiring({
 
     // Award gems for perfect clears (cosmetic gem multiplier applies)
     if (isPerfect) {
-      const perfectGems = Math.round(ECONOMY.perfectClearGems * gemBonusFactor);
+      const perfectGems = Math.round(perfectClearGems() * gemBonusFactor);
       economy.addGems(perfectGems);
       totalGemsAwarded += perfectGems;
     }
