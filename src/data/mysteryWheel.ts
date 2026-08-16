@@ -171,7 +171,17 @@ export const MYSTERY_BOX_REWARDS: { label: string; icon: string; reward: WheelRe
 /**
  * Weighted random selection using cumulative distribution.
  */
-export function spinWheel(state: MysteryWheelState): {
+export function spinWheel(
+  state: MysteryWheelState,
+  /**
+   * The wheel the player is actually looking at. Defaults to the standard
+   * wheel; the seasonal variants pass their own list. This MUST be the same
+   * array the UI renders and discloses odds from — spinning one list while
+   * drawing another desyncs the landing wedge from the prize, and makes the
+   * published loot-box odds untrue.
+   */
+  activeSegments: WheelSegment[] = WHEEL_SEGMENTS,
+): {
   segment: WheelSegment;
   segmentIndex: number;
   updatedState: MysteryWheelState;
@@ -180,11 +190,19 @@ export function spinWheel(state: MysteryWheelState): {
   const spinsSinceJackpot = newTotalSpins - state.lastJackpotSpin;
 
   // Pity system: if approaching pity limit, boost rare+ weights
-  let segments = WHEEL_SEGMENTS;
+  let segments = activeSegments;
   if (spinsSinceJackpot >= state.jackpotPity - 3) {
     // Force a rare+ segment when at pity limit
     if (spinsSinceJackpot >= state.jackpotPity) {
-      segments = segments.filter((s) => s.rarity === 'rare' || s.rarity === 'epic' || s.rarity === 'legendary');
+      const rarePlus = segments.filter(
+        (s) => s.rarity === 'rare' || s.rarity === 'epic' || s.rarity === 'legendary',
+      );
+      // Only narrow if the wheel actually HAS a rare+ segment. An empty list
+      // here would give a total weight of 0, leave selectedIndex at its
+      // initial value, and index into nothing — a crash on the spin that
+      // owes the player their pity reward. Safe on the standard wheel by
+      // luck; not something to rely on once wheels are swappable.
+      if (rarePlus.length > 0) segments = rarePlus;
     }
   }
 
@@ -203,8 +221,11 @@ export function spinWheel(state: MysteryWheelState): {
   const segment = segments[selectedIndex];
   const isJackpot = segment.rarity === 'rare' || segment.rarity === 'epic' || segment.rarity === 'legendary';
 
-  // Find the real index in WHEEL_SEGMENTS (in case we filtered for pity)
-  const realIndex = WHEEL_SEGMENTS.findIndex((s) => s.id === segment.id);
+  // Map back to the rendered wheel (we may have filtered for pity). Must be
+  // resolved against the ACTIVE segments, not the standard wheel — otherwise
+  // a seasonal spin returns an index into a list nobody is looking at and
+  // the pointer stops on the wrong wedge.
+  const realIndex = activeSegments.findIndex((s) => s.id === segment.id);
 
   return {
     segment,

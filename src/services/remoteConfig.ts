@@ -145,6 +145,15 @@ export interface RemoteConfigValues {
    */
   bonusTileEnabled: boolean;
 
+  /**
+   * Seasonal Mystery Wheel variants (spring / summer / autumn / winter), each
+   * with its own exclusive cosmetics. The registry shipped but nothing
+   * imported it, so every player span the standard wheel year-round. Kill
+   * switch in case a seasonal wheel's rewards need pulling mid-season —
+   * flipping this reverts to the standard wheel, odds disclosure included.
+   */
+  seasonalWheelEnabled: boolean;
+
   // First-purchase hard-modal offer — interrupts post-puzzle at level
   // [min, max] for non-payers exactly once per user. Set enabled=false to
   // kill the interrupt (offer still available via shelf).
@@ -346,6 +355,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
 
   // In-puzzle variable-reward coin tile
   bonusTileEnabled: true,
+
+  // Seasonal Mystery Wheel rotation
+  seasonalWheelEnabled: true,
 
   // First-purchase hard-modal offer — interrupt fires post-puzzle at
   // levels 5–6 for non-payers exactly once per user (guarded by
