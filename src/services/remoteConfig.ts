@@ -118,6 +118,15 @@ export interface RemoteConfigValues {
 
   // Feel polish — invalid-word shake + multi-tile bloom (Branch 11)
   invalidShakeEnabled: boolean;
+  /**
+   * Grants ONE free undo per level when the board is genuinely dead-ended
+   * and the player has no undo tokens. Preserves the stuck fail state (the
+   * player still hits the wall and must re-plan) while removing the toll —
+   * without it the only options are spending a token or restarting the
+   * level outright, and the game responds to a dead board by showing two
+   * purchase offers. Kill switch if it measurably softens the game too far.
+   */
+  freeStuckRescueEnabled: boolean;
   tileBloomEnabled: boolean;
   tileBloomParticlesPerTile: number;
 
@@ -320,6 +329,7 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
 
   // Feel polish — screen shake on invalid word + per-tile bloom particles
   invalidShakeEnabled: true,
+  freeStuckRescueEnabled: true,
   tileBloomEnabled: true,
   tileBloomParticlesPerTile: 2,
 

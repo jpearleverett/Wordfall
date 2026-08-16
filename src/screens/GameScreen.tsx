@@ -1696,6 +1696,42 @@ function GameScreenImpl({
     }
   }, [isStuck, status, level, playerActions]);
 
+  // Free rescue on a genuinely dead board.
+  //
+  // Getting stuck is a real, intended fail state — the order you clear words
+  // in reshapes the board, and choosing badly is supposed to cost you. What
+  // was NOT intended is the response: with no undo tokens the only remaining
+  // option is restarting the level outright, and the dead board also triggers
+  // two purchase offers (close_finish, hint_rescue). That monetises the
+  // single most frustrating moment in the game.
+  //
+  // One free undo per level, only when the solver says the board is actually
+  // dead and the player has nothing left to spend. The wall still happens and
+  // the player still has to re-plan — they just aren't taxed to learn the
+  // mechanic. Cannot be farmed: it requires a genuine dead end, fires once per
+  // puzzle, and grants a single undo.
+  const freeRescueUsedRef = useRef(false);
+  useEffect(() => {
+    freeRescueUsedRef.current = false;
+  }, [level, mode]);
+
+  useEffect(() => {
+    if (
+      isStuck &&
+      status === 'playing' &&
+      mode !== 'relax' &&
+      undosLeft <= 0 &&
+      undoTokens <= 0 &&
+      history.length > 0 &&
+      !freeRescueUsedRef.current &&
+      getRemoteBoolean('freeStuckRescueEnabled')
+    ) {
+      freeRescueUsedRef.current = true;
+      grantUndo();
+      void analytics.logEvent('free_stuck_rescue_granted', { level, mode });
+    }
+  }, [isStuck, status, mode, undosLeft, undoTokens, history.length, grantUndo, level]);
+
   // Show post-loss modal first (if applicable), then failed modal.
   // Tier 6 B1 — if the player qualifies for the fail-breather offer,
   // surface it ahead of PostLossModal on this loss. Rules:
