@@ -20,6 +20,7 @@ import { eventManager } from '../services/eventManager';
 import { DailyQuestEvent } from '../data/dailyQuests';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
+import { trackDifficultyPerception } from '../services/softLaunchAnalytics';
 import {
   triggerStreakReminder,
   triggerDailyChallengeReminder,
@@ -213,6 +214,7 @@ export function useRewardWiring({
     score: number,
     perfectRun: boolean = false,
     completionTimeSeconds: number = 0,
+    assists: { hintsUsed: number; undosUsed: number } = { hintsUsed: 0, undosUsed: 0 },
   ) => {
     try {
     const level = params.level || 0;
@@ -231,20 +233,23 @@ export function useRewardWiring({
     const isPerfect = perfectRun;
     const boardData = params.board as Board | undefined;
     const wordsFound = boardData ? boardData.words.length : 0;
+    // These three were hardcoded to 0 while completionTimeSeconds sat in
+    // scope and assists had simply never been plumbed through — so the
+    // primary completion event reported every puzzle as instant, hint-free
+    // and undo-free. Any difficulty read built on it was measuring nothing.
     void analytics.trackPuzzleComplete({
       level,
       mode,
       stars,
-      duration_seconds: 0,
-      hints_used: 0,
-      undos_used: 0,
+      duration_seconds: completionTimeSeconds,
+      hints_used: assists.hintsUsed,
+      undos_used: assists.undosUsed,
       words_found: wordsFound,
       score,
       flawless: perfectRun,
     });
-    // Phase 3.5: seed difficulty-tuning dataset. Reads what the reward hook
-    // has on hand — richer timing/hint data is still captured on the fail
-    // path in GameScreen. Pair with BigQuery later to retune thresholds.
+    // Phase 3.5: seed difficulty-tuning dataset. Pair with BigQuery later to
+    // retune thresholds.
     void analytics.trackDifficultyTelemetry({
       mode,
       level,
@@ -252,6 +257,22 @@ export function useRewardWiring({
       stars,
       words_found: wordsFound,
       words_total: wordsFound,
+    });
+    // Soft-launch difficulty signal. The whole point of a PH/CA soft launch
+    // is to find out whether the curve is right before global, and this
+    // module's nine track functions had no callers at all — the measurement
+    // plan produced zero data. Attempts comes from the adaptive adjuster's
+    // own per-level record, which is the same number it uses to decide
+    // whether to ease off.
+    void trackDifficultyPerception({
+      level,
+      mode,
+      attempts: player.performanceMetrics?.levelAttempts?.[level] ?? 1,
+      timeToComplete: completionTimeSeconds,
+      hintsUsed: assists.hintsUsed,
+      undosUsed: assists.undosUsed,
+      deadEndsHit: 0,
+      stars,
     });
     void analytics.updateUserProperties({
       player_level: Math.max(level + 1, player.currentLevel),

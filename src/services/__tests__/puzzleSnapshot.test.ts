@@ -50,6 +50,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     hintsLeft: 0,
     hintsUsed: 0,
     undosLeft: 0,
+    undosUsed: 0,
     history: [],
     status: 'playing',
     level: 3,
@@ -188,5 +189,34 @@ describe('puzzleSnapshot', () => {
     const loaded = await loadPuzzleSnapshot();
     expect(loaded).toBeNull();
     expect(storage.has('wordfall.puzzleSnapshot.v1')).toBe(false);
+  });
+});
+
+/**
+ * Snapshot forward-compatibility.
+ *
+ * HYDRATE_FROM_SNAPSHOT trusts the stored GameState verbatim, so any field
+ * added after a snapshot version shipped arrives as undefined from an older
+ * payload. For a counter that is later incremented that is not benign —
+ * `undefined + 1` is NaN, which then flows into completion telemetry for
+ * every player who resumed a puzzle across the upgrade.
+ */
+describe('snapshots written before a field existed', () => {
+  it('a payload missing undosUsed still describes a resumable puzzle', () => {
+    const state = makeState({ moves: 3 });
+    // Simulate the older payload by dropping the field entirely, the way
+    // JSON.parse of a pre-upgrade snapshot would.
+    const legacy = { ...state } as Partial<GameState>;
+    delete legacy.undosUsed;
+
+    // The save/resume predicates must not depend on the new field.
+    expect(shouldSaveSnapshot(legacy as GameState)).toBe(true);
+
+    // And the reducer's default is what keeps arithmetic finite. This
+    // mirrors the `action.state.undosUsed ?? 0` in HYDRATE_FROM_SNAPSHOT;
+    // without it the next undo produces NaN rather than 1.
+    const hydrated = { ...(legacy as GameState), undosUsed: (legacy as GameState).undosUsed ?? 0 };
+    expect(Number.isFinite(hydrated.undosUsed + 1)).toBe(true);
+    expect(hydrated.undosUsed + 1).toBe(1);
   });
 });

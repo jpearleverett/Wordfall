@@ -87,6 +87,7 @@ function createInitialState(
     hintsLeft: getHintsForMode(mode),
     hintsUsed: 0,
     undosLeft: getUndosForMode(mode),
+    undosUsed: 0,
     history: [],
     status: 'playing',
     level,
@@ -581,6 +582,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectionDirection: null,
         moves: state.moves - 1,
         undosLeft: state.undosLeft - 1,
+        undosUsed: state.undosUsed + 1,
         history: state.history.slice(0, -1),
         solveSequence: state.solveSequence.slice(0, -1),
         perfectRun: false,
@@ -617,6 +619,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // shouldn't survive the background -> foreground transition.
       return {
         ...action.state,
+        // Fields added after a snapshot version shipped arrive as undefined
+        // from an older payload, and the snapshot is trusted verbatim. A
+        // missing counter here is not benign: `state.undosUsed + 1` would
+        // evaluate to NaN and poison the completion telemetry for anyone
+        // who resumed a puzzle across the upgrade. Any future numeric field
+        // needs the same treatment or a version bump.
+        undosUsed: action.state.undosUsed ?? 0,
         selectedCells: [],
         selectionDirection: null,
         lastInvalidTap: null,

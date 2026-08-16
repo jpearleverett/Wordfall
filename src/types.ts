@@ -57,6 +57,12 @@ export interface GameState {
   hintsLeft: number;
   hintsUsed: number;
   undosLeft: number;
+  /**
+   * Monotonic count of undos actually spent this puzzle. Not derivable from
+   * `undosLeft`, which is also incremented by grants (the free stuck rescue),
+   * so the two would cancel out.
+   */
+  undosUsed: number;
   history: { grid: Grid; words: WordPlacement[]; wordsUntilShrink?: number; shrinkCount?: number }[];
   status: GameStatus;
   level: number;

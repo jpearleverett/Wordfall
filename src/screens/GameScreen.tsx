@@ -93,6 +93,13 @@ interface GameScreenProps {
     score: number,
     perfectRun: boolean,
     completionTimeSeconds: number,
+    /**
+     * Assist usage for this solve. Passed explicitly because the reward hook
+     * has no access to the game store — it was previously logging hardcoded
+     * zeros for these, which made every difficulty dashboard read as though
+     * nobody ever used a hint.
+     */
+    assists?: { hintsUsed: number; undosUsed: number },
   ) => void;
   onNextLevel: () => void;
   onHome: () => void;
@@ -1685,11 +1692,13 @@ function GameScreenImpl({
         startedAt > 0 ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0;
       const timer = setTimeout(() => {
         setShowComplete(true);
+        const finalState = store.getState();
         onCompleteRef.current(
           finalStars,
           finalScore,
           finalPerfectRun,
           completionTimeSeconds,
+          { hintsUsed: finalState.hintsUsed, undosUsed: finalState.undosUsed },
         );
       }, 300);
       return () => clearTimeout(timer);

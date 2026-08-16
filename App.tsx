@@ -677,10 +677,11 @@ function GameScreenWrapper({ route, navigation }: any) {
     score: number,
     perfectRun: boolean = false,
     completionTimeSeconds: number = 0,
+    assists?: { hintsUsed: number; undosUsed: number },
   ) => {
     // Track spins before completion to detect if a new one is awarded
     spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
-    handleCompleteInner(stars, score, perfectRun, completionTimeSeconds);
+    handleCompleteInner(stars, score, perfectRun, completionTimeSeconds, assists);
 
     // Pre-generate the next board while the player is looking at the
     // victory screen. Best-effort: failures fall through to the sync
