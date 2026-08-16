@@ -384,7 +384,14 @@ export function useRewardWiring({
       totalCoinsAwarded += dailyCoins;
       totalGemsAwarded += dailyGems;
       player.updateStreak();
-      void triggerStreakReminder(player.streaks.currentStreak + 1);
+      // updateStreak has just set lastPlayDate to today, so pass today
+      // explicitly rather than the pre-update value — otherwise the reminder
+      // is scheduled for tonight and tells a player who just played that
+      // their streak expires in a few hours.
+      void triggerStreakReminder(
+        player.streaks.currentStreak + 1,
+        new Date().toISOString().split('T')[0],
+      );
       void analytics.trackDailyChallengeComplete(player.streaks.currentStreak + 1);
       void analytics.logEvent('daily_login', {
         date: today,

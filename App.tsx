@@ -1094,9 +1094,14 @@ function HomeMainScreen({ route, navigation }: any) {
       // Initialize notifications with segment-personalized scheduling
       void notificationManager.init().then(() => {
         const notifConfig = getPersonalizedNotifications(player.segments);
-        // Streak reminder at 8 PM daily (if player has a streak)
+        // Streak reminder, aimed at the next evening the streak is actually
+        // at risk — passing lastPlayDate is what keeps it from firing on a
+        // day the player has already played.
         if (notifConfig.enabledCategories.includes('streak_reminder')) {
-          void triggerStreakReminder(player.streaks.currentStreak);
+          void triggerStreakReminder(
+            player.streaks.currentStreak,
+            player.streaks.lastPlayDate,
+          );
         }
         // Daily challenge reminder at 9 AM
         if (notifConfig.enabledCategories.includes('daily_challenge')) {

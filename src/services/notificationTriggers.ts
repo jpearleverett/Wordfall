@@ -13,22 +13,74 @@
 import { notificationManager } from './notifications';
 import { eventManager } from './eventManager';
 import { ENERGY } from '../constants';
-import { StreakData } from '../types';
 
 // ─── 1. Streak Reminder ──────────────────────────────────────────────────────
 
+/** Local hour the streak reminder fires on a day the streak is at risk. */
+const STREAK_REMINDER_HOUR = 20;
+
 /**
- * Schedule a streak reminder at 8 PM daily.
- * Call after streak is updated (updateStreak in PlayerContext or App.tsx).
- * Only schedules if the player has an active streak (>= 1 day).
- * Cancels if streak is 0.
+ * Seconds until the next 8 PM on a day the player has NOT already played.
+ * Returns null when no reminder should be scheduled.
+ *
+ * The reminder used to be a repeating daily trigger, which meant it fired on
+ * every single day including ones the player had already played — telling
+ * someone who finished a puzzle at 8 AM that their streak "expires tonight"
+ * is not just noise, it is false. Irrelevant notifications are the main
+ * reason players turn the channel off, and once it's off the whole
+ * re-engagement surface is gone, so the fix is worth more than the ping.
+ *
+ * Exported for testing: the arithmetic is date-boundary logic and the cost of
+ * getting it wrong is either silence or a lie.
  */
-export async function triggerStreakReminder(currentStreak: number): Promise<void> {
-  if (currentStreak <= 0) {
+export function streakReminderDelaySeconds(
+  currentStreak: number,
+  lastPlayDate: string,
+  now: Date = new Date(),
+): number | null {
+  if (currentStreak <= 0) return null;
+
+  const target = new Date(now);
+  target.setHours(STREAK_REMINDER_HOUR, 0, 0, 0);
+
+  // "Today" must mean the same thing here as it does to the streak itself.
+  // PlayerProgressContext records lastPlayDate as `toISOString().split('T')[0]`
+  // — a UTC day — so the comparison is UTC even though the reminder fires at
+  // 8 PM local. Using a local day here instead would make the reminder
+  // disagree with the system it is reporting on, which is how you end up
+  // pinging someone whose streak is already safe.
+  const playedToday = lastPlayDate === now.toISOString().split('T')[0];
+  if (playedToday || target.getTime() <= now.getTime()) {
+    // Either today is already safe, or 8 PM has passed — aim at tomorrow. A
+    // player who plays every morning therefore keeps rolling the reminder
+    // forward one day at a time and never sees it; one who skips a day gets
+    // it exactly on the evening it becomes true.
+    target.setDate(target.getDate() + 1);
+  }
+
+  const seconds = Math.round((target.getTime() - now.getTime()) / 1000);
+  return seconds > 0 ? seconds : null;
+}
+
+/**
+ * Schedule the streak reminder for the next evening the streak is actually
+ * at risk. Call after the streak is updated (updateStreak in PlayerContext
+ * or App.tsx) and on app open. Cancels if the streak is 0.
+ */
+export async function triggerStreakReminder(
+  currentStreak: number,
+  lastPlayDate: string = '',
+): Promise<void> {
+  const seconds = streakReminderDelaySeconds(currentStreak, lastPlayDate);
+  if (seconds === null) {
     await notificationManager.cancel('streak_reminder');
     return;
   }
-  await notificationManager.scheduleStreakReminder(currentStreak);
+  await notificationManager.schedule(
+    'streak_reminder',
+    { type: 'timeInterval', seconds },
+    { streak: currentStreak },
+  );
 }
 
 // ─── 2. Energy Full ──────────────────────────────────────────────────────────
@@ -134,42 +186,7 @@ export async function cancelComebackReminder(): Promise<void> {
   await notificationManager.cancel('comeback');
 }
 
-// ─── 7. Streak At Risk ──────────────────────────────────────────────────────
-
-/**
- * Schedule a streak-at-risk notification if the player has a meaningful streak
- * (>= 3 days) and hasn't played in 20+ hours. Fires 2 hours after being called.
- * Call periodically (e.g. on app open or AppState change).
- *
- * @param streak - The player's current streak data
- */
-export async function triggerStreakAtRiskNotification(streak: StreakData): Promise<void> {
-  // Only care about meaningful streaks
-  if (streak.currentStreak < 3) {
-    await notificationManager.cancel('streak_reminder');
-    return;
-  }
-
-  // Check if the last play was 20+ hours ago
-  const lastPlayMs = new Date(streak.lastPlayDate).getTime();
-  const hoursSinceLastPlay = (Date.now() - lastPlayMs) / (1000 * 60 * 60);
-
-  if (hoursSinceLastPlay < 20) {
-    // Not at risk yet — cancel any pending at-risk notification
-    await notificationManager.cancel('streak_reminder');
-    return;
-  }
-
-  // Schedule a notification 2 hours from now
-  const twoHoursInSeconds = 2 * 60 * 60;
-  await notificationManager.schedule(
-    'streak_reminder',
-    { type: 'timeInterval', seconds: twoHoursInSeconds },
-    { streak: streak.currentStreak },
-  );
-}
-
-// ─── 8. Social Proof ───────────────────────────────────────────────────────
+// ─── 7. Social Proof ───────────────────────────────────────────────────────
 
 /**
  * Schedule an immediate notification when a friend completes a chapter

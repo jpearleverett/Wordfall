@@ -465,12 +465,12 @@ class NotificationManager {
 
   // ─── Convenience Schedulers ───────────────────────────────────────────────
 
-  /** Schedule streak expiry warning at 8 PM local time */
-  async scheduleStreakReminder(currentStreak: number): Promise<void> {
-    await this.schedule('streak_reminder', { type: 'daily', hour: 20, minute: 0 }, {
-      streak: currentStreak,
-    });
-  }
+  // NOTE: there is deliberately no scheduleStreakReminder here. It used to
+  // schedule a REPEATING daily 8 PM trigger, which fired on days the player
+  // had already played and told them a streak that was safe would "expire
+  // tonight". triggerStreakReminder in notificationTriggers.ts now computes
+  // the next evening the streak is genuinely at risk and schedules a one-shot
+  // for it — put the repeating version back and the lie comes back with it.
 
   /** Schedule energy-full notification after refill time */
   async scheduleEnergyFull(secondsUntilFull: number): Promise<void> {
