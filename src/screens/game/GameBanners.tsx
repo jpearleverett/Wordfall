@@ -40,6 +40,14 @@ interface GameBannersProps {
    */
   isFirstStuck?: boolean;
   /**
+   * True when this attempt's undo was handed over by the free stuck rescue
+   * rather than owned or bought. Worth saying out loud: the rescue silently
+   * flips this banner from "tap to retry" to "tap to step back", so without
+   * a label the player reads it as having had an undo all along and the
+   * goodwill is spent on nothing.
+   */
+  freeUndoGranted?: boolean;
+  /**
    * True when the current puzzle is a "challenge spike" level — the
    * designed-harder-than-surrounding-ramp kind. Shows a persistent
    * gold banner so the player understands why this puzzle feels
@@ -66,6 +74,7 @@ function GameBannersImpl({
   undosLeft,
   strandedWords,
   isFirstStuck = false,
+  freeUndoGranted = false,
   isSpike = false,
   onIdleHintTap,
   onAdHintTap,
@@ -159,6 +168,9 @@ function GameBannersImpl({
       )}
       {showUndoBanner && (
         <Pressable style={styles.stuckBanner} onPress={onUndoTap}>
+          {freeUndoGranted && (
+            <Text style={styles.freeUndoTag}>FREE UNDO — ON US</Text>
+          )}
           <Text style={styles.stuckText}>{strandedHeadline} — tap to step back a move</Text>
           {isFirstStuck && (
             <Text style={styles.stuckSubtext}>
@@ -276,6 +288,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  freeUndoTag: {
+    color: COLORS.gold,
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textAlign: 'center',
+    marginBottom: 3,
   },
   stuckSubtext: {
     color: 'rgba(255, 255, 255, 0.85)',

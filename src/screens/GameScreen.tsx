@@ -1737,8 +1737,10 @@ function GameScreenImpl({
   // mechanic. Cannot be farmed: it requires a genuine dead end, fires once per
   // puzzle, and grants a single undo.
   const freeRescueUsedRef = useRef(false);
+  const [freeUndoGranted, setFreeUndoGranted] = useState(false);
   useEffect(() => {
     freeRescueUsedRef.current = false;
+    setFreeUndoGranted(false);
   }, [level, mode]);
 
   // First dead end ever: explain the mechanic instead of just announcing the
@@ -1788,6 +1790,10 @@ function GameScreenImpl({
     ) {
       freeRescueUsedRef.current = true;
       grantUndo();
+      // Say so. The rescue silently flipped the banner from "tap to retry"
+      // to "tap to step back", so the player read it as having had an undo
+      // all along — a moment of generosity nobody notices buys nothing.
+      setFreeUndoGranted(true);
       void analytics.logEvent('free_stuck_rescue_granted', { level, mode });
     }
   }, [isStuck, status, mode, undosLeft, undoTokens, history.length, grantUndo, level]);
@@ -1917,6 +1923,14 @@ function GameScreenImpl({
     newGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
     setShowComplete(false);
     completionHandled.current = false;
+    // A retry is a fresh attempt and gets a fresh safety net. The guard is
+    // keyed on level+mode, neither of which changes on retry, so without
+    // this the player who dead-ends, retries, and dead-ends again gets no
+    // rescue on attempt two — taxing exactly the player who is actively
+    // trying to learn the ordering. It still can't be farmed: retrying
+    // throws away all board progress, which costs far more than one undo.
+    freeRescueUsedRef.current = false;
+    setFreeUndoGranted(false);
 
     setShowFailed(false);
   }, [board, level, mode, effectiveMaxMoves, effectiveTimeLimit, newGame]);
@@ -2238,6 +2252,7 @@ function GameScreenImpl({
             undosLeft={undosLeft}
             strandedWords={strandedWords}
             isFirstStuck={showFirstStuckHelp}
+            freeUndoGranted={freeUndoGranted}
             isSpike={isSpike && !isDaily && mode !== 'weekly'}
             onIdleHintTap={stableHandleIdleHintBannerTap}
             onAdHintTap={stableHandleAdHintBannerTap}
