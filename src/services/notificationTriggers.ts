@@ -18,20 +18,49 @@ import { ENERGY } from '../constants';
 
 /** Local hour the streak reminder fires on a day the streak is at risk. */
 const STREAK_REMINDER_HOUR = 20;
+/** Local hour the daily-challenge reminder fires on a day it's unplayed. */
+const DAILY_CHALLENGE_HOUR = 9;
+
+/**
+ * Seconds until the next occurrence of `hour` on a day the player has NOT
+ * already done the thing being reminded about. Returns null when the target
+ * would land in the past.
+ *
+ * Both reminders used to be REPEATING daily triggers, which meant they fired
+ * on every single day including ones the player had already handled. Their
+ * copy is written as fact — "Your {streak}-day streak expires tonight",
+ * "Daily puzzle is ready!" — so on those days the app was simply wrong about
+ * the player's own account. Irrelevant notifications are the main reason
+ * people turn the channel off, and once it's off the whole re-engagement
+ * surface goes with it, including the pings that would have been true.
+ *
+ * Exported for testing: this is date-boundary arithmetic where both failure
+ * modes are bad. Too eager and it lies; too lazy and it never fires for the
+ * players who needed it.
+ */
+export function reminderDelaySeconds(
+  hour: number,
+  alreadyDoneToday: boolean,
+  now: Date = new Date(),
+): number | null {
+  const target = new Date(now);
+  target.setHours(hour, 0, 0, 0);
+
+  if (alreadyDoneToday || target.getTime() <= now.getTime()) {
+    // Either today is already covered, or the hour has passed — aim at
+    // tomorrow. A player who plays every morning therefore rolls the reminder
+    // forward one day at a time and never sees it; one who skips a day gets
+    // it exactly when it becomes true.
+    target.setDate(target.getDate() + 1);
+  }
+
+  const seconds = Math.round((target.getTime() - now.getTime()) / 1000);
+  return seconds > 0 ? seconds : null;
+}
 
 /**
  * Seconds until the next 8 PM on a day the player has NOT already played.
- * Returns null when no reminder should be scheduled.
- *
- * The reminder used to be a repeating daily trigger, which meant it fired on
- * every single day including ones the player had already played — telling
- * someone who finished a puzzle at 8 AM that their streak "expires tonight"
- * is not just noise, it is false. Irrelevant notifications are the main
- * reason players turn the channel off, and once it's off the whole
- * re-engagement surface is gone, so the fix is worth more than the ping.
- *
- * Exported for testing: the arithmetic is date-boundary logic and the cost of
- * getting it wrong is either silence or a lie.
+ * Returns null when there is no streak worth protecting.
  */
 export function streakReminderDelaySeconds(
   currentStreak: number,
@@ -39,27 +68,14 @@ export function streakReminderDelaySeconds(
   now: Date = new Date(),
 ): number | null {
   if (currentStreak <= 0) return null;
-
-  const target = new Date(now);
-  target.setHours(STREAK_REMINDER_HOUR, 0, 0, 0);
-
   // "Today" must mean the same thing here as it does to the streak itself.
   // PlayerProgressContext records lastPlayDate as `toISOString().split('T')[0]`
   // — a UTC day — so the comparison is UTC even though the reminder fires at
-  // 8 PM local. Using a local day here instead would make the reminder
-  // disagree with the system it is reporting on, which is how you end up
-  // pinging someone whose streak is already safe.
+  // 8 PM local. A local-day comparison here would disagree with the system
+  // being reported on, which is how you end up pinging someone whose streak
+  // is already safe.
   const playedToday = lastPlayDate === now.toISOString().split('T')[0];
-  if (playedToday || target.getTime() <= now.getTime()) {
-    // Either today is already safe, or 8 PM has passed — aim at tomorrow. A
-    // player who plays every morning therefore keeps rolling the reminder
-    // forward one day at a time and never sees it; one who skips a day gets
-    // it exactly on the evening it becomes true.
-    target.setDate(target.getDate() + 1);
-  }
-
-  const seconds = Math.round((target.getTime() - now.getTime()) / 1000);
-  return seconds > 0 ? seconds : null;
+  return reminderDelaySeconds(STREAK_REMINDER_HOUR, playedToday, now);
 }
 
 /**
@@ -141,12 +157,30 @@ export async function triggerEventNotifications(): Promise<void> {
 // ─── 4. Daily Challenge ──────────────────────────────────────────────────────
 
 /**
- * Schedule the daily challenge reminder at 9 AM.
- * Call on app open. The notification service handles idempotency
- * (cancels previous daily_challenge before scheduling).
+ * Schedule the daily-challenge reminder for the next 9 AM on a day whose
+ * daily is still unplayed. Call on app open and after completing a daily.
+ *
+ * A new daily unlocks at UTC midnight, so `dailyCompleted` is checked against
+ * the UTC day — the same boundary the daily board itself uses. Without this
+ * check the reminder was a repeating 9 AM trigger announcing "Daily puzzle is
+ * ready!" to players who had finished it at 8.
  */
-export async function triggerDailyChallengeReminder(): Promise<void> {
-  await notificationManager.scheduleDailyChallenge();
+export async function triggerDailyChallengeReminder(
+  dailyCompleted: string[] = [],
+): Promise<void> {
+  const today = new Date().toISOString().split('T')[0];
+  const seconds = reminderDelaySeconds(
+    DAILY_CHALLENGE_HOUR,
+    dailyCompleted.includes(today),
+  );
+  if (seconds === null) {
+    await notificationManager.cancel('daily_challenge');
+    return;
+  }
+  await notificationManager.schedule('daily_challenge', {
+    type: 'timeInterval',
+    seconds,
+  });
 }
 
 // ─── 5. Win Streak Milestone ─────────────────────────────────────────────────

@@ -28,7 +28,7 @@ jest.mock('../notifications', () => ({
   },
 }));
 
-import { streakReminderDelaySeconds } from '../notificationTriggers';
+import { reminderDelaySeconds, streakReminderDelaySeconds } from '../notificationTriggers';
 
 const HOUR = 3600;
 
@@ -110,6 +110,45 @@ describe('streakReminderDelaySeconds', () => {
       const seconds = streakReminderDelaySeconds(30, utcDay(morning), morning);
       // Always beyond tonight's 8 PM (12 hours away).
       expect(seconds!).toBeGreaterThan(12 * HOUR);
+    }
+  });
+});
+
+/**
+ * The daily-challenge reminder shares the same scheduler and had the same
+ * defect: a repeating 9 AM trigger announcing "Daily puzzle is ready!" to
+ * players who had already finished it that morning.
+ */
+describe('daily-challenge reminder timing', () => {
+  const NINE_AM = 9;
+
+  it('waits until tomorrow when today\'s daily is already done', () => {
+    const now = at(2026, 8, 16, 10);
+    const seconds = reminderDelaySeconds(NINE_AM, true, now);
+    // 10 AM today to 9 AM tomorrow.
+    expect(seconds).toBe(23 * HOUR);
+  });
+
+  it('fires this morning when the daily is still unplayed', () => {
+    const now = at(2026, 8, 16, 7);
+    expect(reminderDelaySeconds(NINE_AM, false, now)).toBe(2 * HOUR);
+  });
+
+  it('rolls past a 9 AM that has already gone by', () => {
+    const now = at(2026, 8, 16, 15);
+    expect(reminderDelaySeconds(NINE_AM, false, now)).toBe(18 * HOUR);
+  });
+
+  it('always lands in the future, whatever the hour', () => {
+    const base = at(2026, 8, 16, 0);
+    for (let step = 0; step < 96; step++) {
+      const now = new Date(base.getTime() + step * 15 * 60 * 1000);
+      for (const done of [true, false]) {
+        const seconds = reminderDelaySeconds(NINE_AM, done, now);
+        expect(seconds).not.toBeNull();
+        expect(seconds!).toBeGreaterThan(0);
+        expect(seconds!).toBeLessThanOrEqual(48 * HOUR);
+      }
     }
   });
 });

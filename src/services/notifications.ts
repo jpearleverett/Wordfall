@@ -478,10 +478,10 @@ class NotificationManager {
     await this.schedule('energy_full', { type: 'timeInterval', seconds: secondsUntilFull });
   }
 
-  /** Schedule daily challenge reminder at 9 AM */
-  async scheduleDailyChallenge(): Promise<void> {
-    await this.schedule('daily_challenge', { type: 'daily', hour: 9, minute: 0 });
-  }
+  // No scheduleDailyChallenge either, and for the same reason as the streak
+  // reminder above: a repeating 9 AM trigger announced "Daily puzzle is
+  // ready!" to players who had already finished it. triggerDailyChallengeReminder
+  // schedules a one-shot for the next morning the daily is genuinely unplayed.
 
   /** Schedule event ending warning */
   async scheduleEventEnding(eventName: string, hoursLeft: number): Promise<void> {

@@ -1103,9 +1103,9 @@ function HomeMainScreen({ route, navigation }: any) {
             player.streaks.lastPlayDate,
           );
         }
-        // Daily challenge reminder at 9 AM
+        // Daily challenge reminder, skipping mornings whose daily is done.
         if (notifConfig.enabledCategories.includes('daily_challenge')) {
-          void triggerDailyChallengeReminder();
+          void triggerDailyChallengeReminder(player.dailyCompleted);
         }
         // Event ending reminders for any active events
         void triggerEventNotifications();

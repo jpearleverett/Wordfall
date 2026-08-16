@@ -22,6 +22,7 @@ import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
 import {
   triggerStreakReminder,
+  triggerDailyChallengeReminder,
   triggerFriendBeatScoreNotification,
 } from '../services/notificationTriggers';
 import { firestoreService } from '../services/firestore';
@@ -122,6 +123,8 @@ interface PlayerContextLike {
   updateSeasonalQuest: (updates: Partial<SeasonalQuestState>) => void;
   updateStreak: () => void;
   recordDailyComplete: (dateString: string) => void;
+  /** UTC day strings for dailies already finished, used to skip a redundant reminder. */
+  dailyCompleted: string[];
   queueCeremony: (ceremony: CeremonyItem) => void;
   checkFeatureUnlocks: (level: number) => CeremonyItem[];
   checkAchievements: (extraData?: Record<string, unknown>) => CeremonyItem[];
@@ -392,6 +395,11 @@ export function useRewardWiring({
         player.streaks.currentStreak + 1,
         new Date().toISOString().split('T')[0],
       );
+      // Same reason: recordDailyComplete has just added today, but this
+      // closure holds the pre-update array. Push today's date in explicitly
+      // so tomorrow's 9 AM ping is scheduled instead of one for a couple of
+      // hours from now announcing a puzzle they just finished.
+      void triggerDailyChallengeReminder([...player.dailyCompleted, today]);
       void analytics.trackDailyChallengeComplete(player.streaks.currentStreak + 1);
       void analytics.logEvent('daily_login', {
         date: today,
