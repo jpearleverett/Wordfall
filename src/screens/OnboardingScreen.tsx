@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { VideoBackground } from '../components/common/VideoBackground';
-import { generateTutorialBoardA, generateTutorialBoardB, generateTutorialBoardC, TUTORIAL_STEPS } from '../data/tutorialBoards';
+import { generateTutorialBoardA, generateTutorialBoardB, generateTutorialBoardC, generateTutorialBoardD, TUTORIAL_STEPS } from '../data/tutorialBoards';
 import { GameGrid } from '../components/Grid';
 import { CellPosition } from '../types';
 import { TutorialOverlay } from '../components/TutorialOverlay';
@@ -50,7 +50,12 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
     const prevStep = tutorialStep > 0 ? TUTORIAL_STEPS[tutorialStep - 1] : null;
     if (prevStep && prevStep.board === step.board) return;
 
-    const generators = { A: generateTutorialBoardA, B: generateTutorialBoardB, C: generateTutorialBoardC };
+    const generators = {
+      A: generateTutorialBoardA,
+      B: generateTutorialBoardB,
+      C: generateTutorialBoardC,
+      D: generateTutorialBoardD,
+    };
     setTutorialBoard(generators[step.board]());
     setSelectedCells([]);
   }, [tutorialStep]);
@@ -144,8 +149,17 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
   const advanceTutorialStep = useCallback(() => {
     if (tutorialStep < TUTORIAL_STEPS.length - 1) {
       setTutorialStep(prev => prev + 1);
+      return;
     }
-  }, [tutorialStep]);
+    // Finishing on a dismiss step has to end the tutorial. This branch was
+    // previously a no-op, which was harmless only because the last step
+    // happened to be a word_submitted one — the completion path lived solely
+    // in handleTutorialCellPress. Ending on a dismiss step (as the
+    // order-matters demonstration does) would otherwise leave the player
+    // tapping "continue" on a screen with no way forward, on their first
+    // minute in the app.
+    transitionTo('celebrate');
+  }, [tutorialStep, transitionTo]);
 
   // Render phases
   if (phase === 'welcome') {
