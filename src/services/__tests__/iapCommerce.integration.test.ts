@@ -76,14 +76,28 @@ describe('commerce integration (receiptValidation)', () => {
     // to the "not configured" branch. That branch, under __DEV__, approves the
     // receipt and stores the hash — mirroring production's "server unavailable,
     // but it's a dev build" recovery path.
-    const result = await validateReceipt('offline_receipt_1', 'vip_weekly', 'uid1');
+    const result = await validateReceipt('offline_receipt_1', 'coins_pack_small', 'uid1');
     expect(result.valid).toBe(true);
 
     // A second attempt is recognized as a redelivery (the hash was persisted
     // even though validation came from the fallback path).
-    const replay = await validateReceipt('offline_receipt_1', 'vip_weekly', 'uid1');
+    const replay = await validateReceipt('offline_receipt_1', 'coins_pack_small', 'uid1');
     expect(replay.valid).toBe(true);
     expect(replay.alreadyValidated).toBe(true);
+  });
+
+  it('subscriptions never take the local redelivery shortcut', async () => {
+    // The shortcut cannot supply `expiresAt`, and a redelivery is NOT
+    // necessarily an already-fulfilled purchase — the app can die between
+    // validation and fulfilment, in which case the caller still grants from
+    // this result. applyCatalogPurchase falls back to 7 days when expiresAt
+    // is missing, so taking the shortcut would hand an annual VIP buyer one
+    // week. Subscriptions must always go out for a real expiry.
+    const first = await validateReceipt('sub_receipt_1', 'vip_annual', 'uid1');
+    expect(first.valid).toBe(true);
+
+    const replay = await validateReceipt('sub_receipt_1', 'vip_annual', 'uid1');
+    expect(replay.alreadyValidated).toBeFalsy();
   });
 
   it('double-grant protection — the fulfilment ledger refuses a repeated transactionId', () => {

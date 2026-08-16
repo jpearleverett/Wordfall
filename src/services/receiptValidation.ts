@@ -10,6 +10,15 @@ import { Platform } from 'react-native';
 import { logger } from '../utils/logger';
 import { crashReporter } from './crashReporting';
 import { secureStorage } from './secureStorage';
+import { getProductById } from '../data/shopProducts';
+
+/**
+ * Subscriptions carry a real expiry that only the store knows, so they must
+ * never be served from a local shortcut that cannot supply `expiresAt`.
+ */
+function isSubscriptionProduct(productId: string): boolean {
+  return getProductById(productId)?.category === 'subscription';
+}
 
 const FIREBASE_FUNCTIONS_URL =
   (typeof process !== 'undefined' &&
@@ -288,13 +297,20 @@ export async function validateReceipt(
   const hash = hashReceipt(receipt);
   const knownHashes = await loadReceiptHashes();
 
-  if (knownHashes.has(hash)) {
+  if (knownHashes.has(hash) && !isSubscriptionProduct(productId)) {
     // A LOCAL hash hit is not an attack: hashes are only written after this
     // device validated this receipt successfully. It means we are seeing a
     // redelivery — most often because acknowledge/consume failed last time.
     // Report it as already-validated so the caller can retry the ack (and
     // skip re-granting) rather than being permanently blocked, which used to
     // guarantee a Google auto-refund 3 days later.
+    //
+    // SUBSCRIPTIONS deliberately skip this shortcut. A redelivery is not
+    // necessarily an already-FULFILLED purchase — the app can die between
+    // validation and fulfilment — so the caller may still grant from this
+    // result. This branch has no `expiresAt`, and applyCatalogPurchase falls
+    // back to 7 days for VIP, which would hand an annual subscriber one week.
+    // Going to the server costs a round trip and returns the real expiry.
     logger.log(
       '[ReceiptValidation] Receipt already validated on this device — allowing acknowledge retry:',
       productId,

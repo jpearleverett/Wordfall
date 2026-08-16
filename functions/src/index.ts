@@ -392,6 +392,29 @@ async function validateReceiptCore(
         productId,
         uid: authenticatedUserId.slice(0, 6),
       });
+      // Re-validate against the store rather than returning a bare OK. A
+      // redelivery is not necessarily an already-FULFILLED purchase — the app
+      // can die between validation and fulfilment — so the client may still
+      // grant from this response. Without a real `expiresAt` a subscription
+      // granted on that path falls back to a 7-day default
+      // (commercialEntitlements applyCatalogPurchase), which would hand an
+      // annual VIP buyer one week. Skipping only the purchases-row write
+      // keeps the accounting idempotent while the entitlement data stays
+      // truthful.
+      try {
+        const revalidated =
+          platform === "ios"
+            ? await validateAppleReceipt(receipt, productId)
+            : await validateGoogleReceipt(receipt, productId);
+        if (revalidated.valid) {
+          return { ...revalidated, alreadyProcessed: true };
+        }
+      } catch (error) {
+        functions.logger.warn("Redelivery re-validation failed; returning bare OK", {
+          productId,
+          error,
+        });
+      }
       return { valid: true, alreadyProcessed: true, productId };
     }
 
