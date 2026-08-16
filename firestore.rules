@@ -36,11 +36,33 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
-      // Challenges are written TO a friend's subcollection by the sender,
-      // so the writer is not the owner. Reads stay owner-only.
+      // Challenges are written TO another player's subcollection by the
+      // sender, so the writer is deliberately not the owner. That makes this
+      // the only cross-user write path under users/{uid}, so the payload must
+      // be bound to the sender exactly like gifts and friendships are —
+      // otherwise any authenticated account (anonymous included) could list
+      // /users, harvest UIDs, and drop arbitrary documents carrying a forged
+      // challengerName into anyone's private namespace.
+      //
+      // Deliberately NOT requiring an accepted friendship: LeaderboardScreen
+      // sends challenges to arbitrary leaderboard entries, so a friendship
+      // predicate would break the shipped flow.
+      //
+      // Note the receive side is not wired yet (nothing reads this
+      // subcollection today), so treat challengerName as untrusted whenever
+      // it is: prefer resolving the display name from challengerId server-side
+      // over trusting the stored string.
       match /challenges/{challengeId} {
         allow read: if request.auth != null && request.auth.uid == userId;
-        allow create: if request.auth != null;
+        allow create: if request.auth != null
+          && request.resource.data.challengerId == request.auth.uid
+          && userId != request.auth.uid
+          && request.resource.data.challengerName is string
+          && request.resource.data.challengerName.size() <= 40
+          && request.resource.data.challengerScore is number
+          && request.resource.data.challengerScore >= 0
+          && request.resource.data.challengerScore <= 1000000
+          && request.resource.data.status == 'pending';
         allow update, delete: if request.auth != null && request.auth.uid == userId;
       }
 
@@ -51,6 +73,15 @@ service cloud.firestore {
         allow write: if false;
       }
       match /giftQuota/{quotaId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+      // Referral state — the "this account has already been referred" marker.
+      // MUST stay server-only: users/{uid} itself is owner-writable with no
+      // field constraints, so a marker kept on that document could just be
+      // deleted between claims, letting one account farm the referred-lane
+      // reward once per public referral code.
+      match /referralState/{docId} {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }

@@ -1258,7 +1258,11 @@ export const onReferralSuccess = functions.https.onCall(
       .collection('rewards')
       .doc(`referral_${timestamp}`);
 
-    const referredUserRef = db.collection('users').doc(referredUid);
+    const referredStateRef = db
+      .collection('users')
+      .doc(referredUid)
+      .collection('referralState')
+      .doc('current');
 
     const result = await db.runTransaction(async (tx) => {
       const existing = await tx.get(dedupRef);
@@ -1271,18 +1275,22 @@ export const onReferralSuccess = functions.https.onCall(
       // collect any number of public codes and claim the referred-lane
       // reward once per code — while each code owner also got paid, which
       // is trivially self-dealt with throwaway alts since the spam cap is
-      // per-referrer. `referredByCode` is server-owned (clients cannot
-      // write it: the users doc is owner-writable, but this marker is only
-      // ever read here and any client tampering only ever LOCKS them out of
-      // a future grant, never unlocks one).
-      const referredUserSnap = await tx.get(referredUserRef);
-      if (referredUserSnap.exists && referredUserSnap.data()?.referredByCode) {
+      // per-referrer.
+      //
+      // The marker lives in a SERVER-ONLY subcollection, not on the user
+      // document. users/{uid} is owner-writable with no field constraints,
+      // so a marker stored there could simply be deleted by the client
+      // between claims — one updateDoc and the whole guard is bypassed.
+      // referralState is `allow write: if false` in firestore.rules, the
+      // same pattern as the purchases and giftQuota ledgers.
+      const referredStateSnap = await tx.get(referredStateRef);
+      if (referredStateSnap.exists && referredStateSnap.data()?.referredByCode) {
         return { alreadyGranted: true as const };
       }
 
       const now = admin.firestore.FieldValue.serverTimestamp();
       tx.set(
-        referredUserRef,
+        referredStateRef,
         { referredByCode: referralCode.toUpperCase(), referredAt: now },
         { merge: true },
       );
