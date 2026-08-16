@@ -512,24 +512,46 @@ function attemptGenerate(
       ]);
     }
 
+    // Collect a few valid placements and keep the one that stacks least on
+    // top of already-placed words, instead of taking the first that fits.
+    //
+    // This is the root cause of the "stuck" fail state: clearing a word lets
+    // everything above it fall, which shifts any word overhead and can break
+    // its adjacency path. Words placed side by side stay independent, so most
+    // clear orders keep working. Filtering finished boards can only pick from
+    // what placement produces — this makes fair boards common at the source.
+    let best: CellPosition[] | null = null;
+    let bestPenalty = Infinity;
+    let considered = 0;
+
     for (const [startRow, startCol] of startPositions) {
       const positions = tryPlace(grid, word, startRow, startCol, rng);
+      if (!positions) continue;
       // For shrinkingBoard, verify all positions are within the interior
-      if (positions && isShrinking && positions.some(p => p.row < rowMin || p.row > rowMax || p.col < colMin || p.col > colMax)) {
+      if (isShrinking && positions.some(p => p.row < rowMin || p.row > rowMax || p.col < colMin || p.col > colMax)) {
         continue; // Word path wandered into outer ring — reject
       }
-      if (positions) {
-        placeWord(grid, word, positions);
-        placements.push({
-          word,
-          positions,
-          direction: 'horizontal', // Legacy field, paths are now freeform
-          found: false,
-        });
-        wordPositions.set(word, positions);
-        placed = true;
-        break;
+
+      const penalty = stackingPenalty(positions, placements);
+      if (penalty < bestPenalty) {
+        bestPenalty = penalty;
+        best = positions;
       }
+      considered++;
+      // A zero-penalty placement is already ideal; stop looking.
+      if (bestPenalty === 0 || considered >= PLACEMENT_CANDIDATES) break;
+    }
+
+    if (best) {
+      placeWord(grid, word, best);
+      placements.push({
+        word,
+        positions: best,
+        direction: 'horizontal', // Legacy field, paths are now freeform
+        found: false,
+      });
+      wordPositions.set(word, best);
+      placed = true;
     }
 
     if (!placed) return null;
@@ -600,6 +622,45 @@ const FORGIVENESS_SAMPLES = 12;
  * before we accept any solvable one. Bounds the worst-case level-load cost.
  */
 const FORGIVENESS_ATTEMPT_BUDGET = 12;
+
+/**
+ * How many valid placements to compare per word before choosing the one
+ * that stacks least over already-placed words. Small — each extra candidate
+ * costs a tryPlace DFS, and the first zero-penalty hit short-circuits.
+ */
+const PLACEMENT_CANDIDATES = 6;
+
+/**
+ * How much a candidate placement will INTERFERE with already-placed words.
+ *
+ * Gravity acts strictly per column, so two words occupying disjoint column
+ * sets can never disturb each other no matter what order they are cleared
+ * in — either one can go first and both stay traceable. Every shared column
+ * is a chance that clearing one word shifts the other and breaks its
+ * adjacency path, which is precisely the mechanism behind the "stuck" fail
+ * state.
+ *
+ * Counting shared-column cells is symmetric (unlike "cells above me", which
+ * merely pushes words upward and leaves them to be displaced by everything
+ * underneath) and cheap enough to evaluate per candidate placement.
+ */
+function stackingPenalty(
+  candidate: CellPosition[],
+  placements: WordPlacement[],
+): number {
+  if (placements.length === 0) return 0;
+
+  const candidateCols = new Set<number>();
+  for (const p of candidate) candidateCols.add(p.col);
+
+  let penalty = 0;
+  for (const placement of placements) {
+    for (const q of placement.positions) {
+      if (candidateCols.has(q.col)) penalty++;
+    }
+  }
+  return penalty;
+}
 
 /**
  * Minimum share of "play it naturally" attempts that must succeed, by

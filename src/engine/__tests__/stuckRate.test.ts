@@ -130,32 +130,32 @@ describe('stuck rate (player forgiveness)', () => {
   it('early game (levels 1-30) is forgiving', () => {
     const levels = Array.from({ length: 30 }, (_, i) => i + 1);
     const rate = measure(levels);
-    expect(rate).toBeLessThan(0.25); // measured ~0.19, was ~0.53
+    expect(rate).toBeLessThan(0.20); // measured ~0.12, was ~0.53
   }, 180_000);
 
   it('mid game (levels 31-120) is not a coin flip', () => {
     const levels = Array.from({ length: 30 }, (_, i) => 31 + i * 3);
     const rate = measure(levels);
-    expect(rate).toBeLessThan(0.75); // measured ~0.67, was ~0.80
+    expect(rate).toBeLessThan(0.65); // measured ~0.57, was ~0.80
   }, 180_000);
 });
 
 /**
- * KNOWN LIMITATION — mid/late game forgiveness.
+ * REMAINING LIMITATION — mid/late game forgiveness.
  *
- * Levels 31+ sit in the `expert` tier, where boards carry 7-8 words. At that
- * density, boards where most natural clear orders succeed are genuinely rare:
- * clearing a word drops the letters above it, which breaks the adjacency
- * paths of words stacked over it. Filtering candidates can only pick from
- * what placement produces, so pushing the expert threshold higher makes the
- * generator hunt until it burns its whole time budget (measured: p50 level
- * load climbing from 22ms to over 1.7s) for a modest fairness gain.
+ * Two mechanisms now work together: placement prefers words in disjoint
+ * COLUMNS (gravity acts per column, so column-disjoint words can never
+ * disturb each other), and generation then prefers candidates that survive
+ * random play. Together they took levels 1-30 from 53% stuck to ~12% and
+ * 31-120 from 80% to ~57%.
  *
- * The real fix is at PLACEMENT time, not filter time: bias word placement so
- * words do not stack vertically over one another (or place later-cleared
- * words lower), which makes most orders work by construction instead of by
- * rejection sampling. That is a larger change to `attemptGenerate` and wants
- * its own benchmarking pass against this suite.
+ * Mid/late game is still the weak spot, and it is a geometry problem: an
+ * expert board asks for 7-8 words on a grid only 7-8 columns wide, so column
+ * overlap is unavoidable and the placement heuristic runs out of room. The
+ * remaining levers are design ones rather than generator ones — fewer words
+ * on wider boards at expert tier, or making the stuck state cheap to recover
+ * from (a free shuffle when genuinely dead-ended, rather than spending a
+ * token). Worth an on-device play session before picking.
  */
 describe('forgiveness gate wiring', () => {
   it('is documented as a preference, not a hard requirement', () => {
