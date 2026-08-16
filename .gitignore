@@ -18,3 +18,4 @@ coverage/
 *.tsbuildinfo
 .claude/settings.local.json
 .claude/*.local.*
+web-build/
