@@ -141,21 +141,28 @@ describe('stuck rate (player forgiveness)', () => {
 });
 
 /**
- * REMAINING LIMITATION — mid/late game forgiveness.
+ * WHAT THESE NUMBERS DO AND DON'T MEAN — read before acting on them.
  *
- * Two mechanisms now work together: placement prefers words in disjoint
- * COLUMNS (gravity acts per column, so column-disjoint words can never
- * disturb each other), and generation then prefers candidates that survive
- * random play. Together they took levels 1-30 from 53% stuck to ~12% and
- * 31-120 from 80% to ~57%.
+ * Two mechanisms work together: placement prefers words in disjoint COLUMNS
+ * (gravity acts per column, so column-disjoint words can never disturb each
+ * other), and generation then prefers candidates that survive random play.
+ * Together they took levels 1-30 from 53% stuck to ~12% and 31-120 from 80%
+ * to ~57%.
  *
- * Mid/late game is still the weak spot, and it is a geometry problem: an
- * expert board asks for 7-8 words on a grid only 7-8 columns wide, so column
- * overlap is unavoidable and the placement heuristic runs out of room. The
- * remaining levers are design ones rather than generator ones — fewer words
- * on wider boards at expert tier, or making the stuck state cheap to recover
- * from (a free shuffle when genuinely dead-ended, rather than spending a
- * token). Worth an on-device play session before picking.
+ * The mid-game 57% looks alarming and was treated for a while as the game's
+ * difficulty. It is not. This benchmark models a player who picks uniformly
+ * at random among findable words — someone who has not noticed that clearing
+ * order reshapes the board. `skilledPlay.test.ts` runs the SAME boards with
+ * one-ply lookahead (prefer the word whose removal leaves the most others
+ * findable, which is what a person does after the tutorial's board D) and
+ * measures 0.0% stuck, early and mid alike.
+ *
+ * So every sampled board survives a single move of forethought, and the gap
+ * between 57% and 0% is skill, not unfairness. Keep this suite as the floor —
+ * it is what a confused player experiences, and it should not get worse — but
+ * do NOT reach for the generator to close it. The lever that moves this
+ * number is teaching, which is why the ordering lesson lives in the tutorial
+ * and the dead-end banner names the buried word.
  */
 describe('daily challenge fairness', () => {
   // The daily is the same board for every player and a core return hook, so

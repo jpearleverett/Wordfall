@@ -44,16 +44,26 @@ Extended list (grid gestures, game sub-components, contexts, engine, utility hoo
 
 ## Game-feel invariants (measured, with regression guards)
 
-Four benchmark suites pin properties that typecheck and unit tests cannot
+Five benchmark suites pin properties that typecheck and unit tests cannot
 see. Run them before touching the generator, the difficulty curve, or the
 reward tables — all support a `*_VERBOSE=1` env var to print full profiles.
 
 | Suite | Guards | Current |
 |---|---|---|
 | `engine/__tests__/boardGen.perf` | Level load is synchronous on the JS thread, so slow generation is a frozen screen | p50 44ms, p95 <900ms, max <1.5s |
-| `engine/__tests__/stuckRate` | How often natural play dead-ends ("stuck" is a real fail state with no advance warning) | 12% levels 1-30, 57% levels 31-120 |
+| `engine/__tests__/stuckRate` | Dead-end rate for a player choosing **at random** — the floor, not the difficulty | 12% levels 1-30, 57% levels 31-120 |
+| `engine/__tests__/skilledPlay` | Same boards, **one-ply lookahead** — what a player who learned the rule sees | 0.0% early, 0.0% mid |
 | `__tests__/rewardCadence` | No long stretch of levels without a scheduled payoff | ≤5 dry levels to L60, ≤9 to L150 |
 | `__tests__/curveProfile` + `spikeLevels` | Early levels never repeat a board or go backwards | monotonic through L14 |
+
+**Read those two stuck numbers together.** The 57% was treated for a while as
+the game's mid-game difficulty. It isn't — it is what a player who has not
+noticed that clearing order reshapes the board experiences. Run the identical
+boards with a single move of forethought and every one of them solves. The
+gap is skill, not unfairness, so the lever that moves it is **teaching**
+(tutorial board D, and the dead-end banner naming the buried word) rather than
+the generator. Keep `stuckRate` as a floor that must not get worse; do not
+try to close it by making boards easier.
 
 Key mechanics behind those numbers:
 
