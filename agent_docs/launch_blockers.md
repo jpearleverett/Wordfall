@@ -551,6 +551,60 @@ the full suite still passes.
 
 ---
 
+## Game-feel work (2026-08-16) — measured, not guessed
+
+Four things were found by measuring rather than reading, each with a
+benchmark left behind as a regression guard. Numbers are from a dev
+container, which is FASTER than the low-end Android soft-launch target.
+
+**1. Shrinking Board was effectively broken.** Past level ~39 generation
+took 2.6-5s and frequently hit its internal timeout, falling back to a
+degenerate 2-word board. Cause: the board loses its whole perimeter every
+2 words, so the 8th word had to fit inside a region inset by 3 rings —
+near-impossible geometry, so nearly every candidate failed an expensive
+solvability proof. Now capped to what the shrink schedule supports: **268ms
+max**.
+
+**2. Boards punished players for guessing.** Generation only ever required
+that ONE solving order exist, so a board could be technically solvable
+while being a coin flip. Natural play (trace whatever findable word you
+spot) dead-ended **53% of the time in levels 1-30 and 80% in 31-120, with
+several levels at 100%** — unfinishable without already knowing the answer,
+which contradicts the store promise of "no impossible boards". Two fixes:
+placement now prefers words in disjoint COLUMNS (gravity acts per column,
+so column-disjoint words never disturb each other), and generation prefers
+candidates that survive random play. Now **12% / 57%**.
+
+**3. The first three levels were the same puzzle.** L1-L3 were identical
+5x4 two-word boards, and level 5's "breather" replayed the level 1 board
+verbatim. With 2x3 letters clearing from 20 cells, gravity barely moved —
+under-selling the one mechanic that makes Wordfall not a plain word search,
+during the minutes that decide D1. Bands re-cut so every one changes
+something visible; breathers now start at level 12.
+
+**4. The reward schedule fell off a cliff at level 15.** Feature unlocks
+stop at L10, mode unlocks at L22; past that the only scheduled reward in
+the whole game was a chapter completion every 15 levels, leaving L23-29 and
+L31-44 completely empty. Extended to every 5 levels through 60, then every
+10 through 150.
+
+Also: a dead board used to offer only "spend an undo token" or "restart the
+level", while firing two purchase offers — the most frustrating moment in
+the game was monetised. Now one free undo per level on a genuine dead end
+(`freeStuckRescueEnabled`, default on). And streak grace now accrues with
+commitment (one, plus one per 14 unbroken days, capped at 4) instead of
+being a single lifetime allowance that a 200-day-streak player had spent on
+day 5.
+
+**Open design question for on-device play:** mid/late game still dead-ends
+57% of the time under random play. That is partly intended — clearing order
+is the game's core skill — but the levels measuring 100% are not. Filtering
+has hit its ceiling: an expert board wants 7-8 words on a grid 7-8 columns
+wide, so column overlap is forced. Remaining levers are design ones (fewer
+words on wider expert boards) rather than generator ones.
+
+---
+
 ## ⚠️ Play policy risk: `SCHEDULE_EXACT_ALARM` (decide before submitting)
 
 `app.json` declares `SCHEDULE_EXACT_ALARM` (line ~76). Google treats exact

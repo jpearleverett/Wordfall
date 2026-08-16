@@ -42,6 +42,36 @@ EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  
 
 Extended list (grid gestures, game sub-components, contexts, engine, utility hooks): **`agent_docs/critical_files.md`**.
 
+## Game-feel invariants (measured, with regression guards)
+
+Four benchmark suites pin properties that typecheck and unit tests cannot
+see. Run them before touching the generator, the difficulty curve, or the
+reward tables — all support a `*_VERBOSE=1` env var to print full profiles.
+
+| Suite | Guards | Current |
+|---|---|---|
+| `engine/__tests__/boardGen.perf` | Level load is synchronous on the JS thread, so slow generation is a frozen screen | p50 44ms, p95 <900ms, max <1.5s |
+| `engine/__tests__/stuckRate` | How often natural play dead-ends ("stuck" is a real fail state with no advance warning) | 12% levels 1-30, 57% levels 31-120 |
+| `__tests__/rewardCadence` | No long stretch of levels without a scheduled payoff | ≤5 dry levels to L60, ≤9 to L150 |
+| `__tests__/curveProfile` + `spikeLevels` | Early levels never repeat a board or go backwards | monotonic through L14 |
+
+Key mechanics behind those numbers:
+
+- **Gravity acts per column.** Two words in disjoint columns can never
+  disturb each other, whatever order they are cleared in. Placement scores
+  candidates by shared-column overlap for this reason — see
+  `stackingPenalty`. (Penalising "letters above" instead is wrong and was
+  measurably worse: it just pushes words to the top of the grid where
+  everything underneath shears them.)
+- **Forgiveness is a preference, not a requirement.** `generateBoard`
+  insists on a fair board for its first 12 attempts, then accepts any
+  solvable one. Making it unconditional sent p50 level load from 22ms to
+  1.8s, because fair boards get rare at 7-8 words.
+- **Breathers and spikes both skip the learning phase** (`BREATHER_MIN_LEVEL`
+  / `SPIKE_MIN_LEVEL`). A breather replays the config from 4 levels earlier,
+  which is a gentle dip once bands are wide but replayed level 1 verbatim at
+  level 5 when they were not.
+
 ## Gotchas
 
 Build, native-module, and runtime quirks (`Reanimated` worklet pitfalls, SDK 55 native deps, Babel plugin order, Firebase hybrid SDK, Termux EAS quirks, etc.) live in **`agent_docs/gotchas.md`**. Consult that file when a build or runtime issue surfaces.
