@@ -501,7 +501,18 @@ export async function initRemoteConfig(): Promise<void> {
     await rc.setDefaults(REMOTE_CONFIG_DEFAULTS as Record<string, any>);
     await rc.fetchAndActivate();
 
+    // Must be set BEFORE notifying: getRemoteValue short-circuits to the
+    // compile-time defaults while `initialized` is false, so listeners would
+    // otherwise be handed the values they already had.
     initialized = true;
+
+    // Publish the freshly activated values. Without this the normal startup
+    // path activated a config nobody was told about — most visibly the
+    // seasonal chapter overlay (`chapterOverrideJson`), which is ingested
+    // inside notifyListeners and so never loaded at all. Only the real-time
+    // onConfigUpdated hook and the manual refresh called this, and neither
+    // runs on a cold start.
+    notifyListeners();
   } catch {
     // Fetch failed (e.g. offline) — defaults are still in place, which is fine.
     initialized = true;

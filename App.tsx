@@ -89,7 +89,7 @@ import {
   triggerWinStreakMilestoneNotification,
 } from './src/services/notificationTriggers';
 import { eventManager } from './src/services/eventManager';
-import { getRemoteBoolean } from './src/services/remoteConfig';
+import { getRemoteBoolean, initRemoteConfig } from './src/services/remoteConfig';
 import { getLevelConfigExtended, getBreatherConfigExtended } from './src/engine/puzzleGenerator';
 import {
   getPersonalizedHomeContent,
@@ -1956,6 +1956,20 @@ export default function App() {
     crashReporter.init();
     analytics.initFirebase();
     funnelTracker.trackStep('app_open');
+
+    // Remote Config had NO caller. Thirty-odd modules read values from it —
+    // every kill switch, every A/B variant, the offer pacing knobs, the
+    // chapter-override payload for chapters 41+ — and getRemoteValue returns
+    // the compile-time default whenever `initialized` is false, which it
+    // always was. The whole surface was inert: a feature that shipped broken
+    // could only be turned off by a store release.
+    //
+    // Fire-and-forget on purpose. It must never gate first paint: this runs
+    // before any screen mounts, and a device that is offline or on a bad
+    // network would otherwise hold the app on a spinner. Fetched values apply
+    // to reads that happen after activation (and, thanks to the 12h cache, to
+    // the next cold start) — the standard Firebase Remote Config contract.
+    void initRemoteConfig();
 
     // Post-mount rounded display font — not part of the hard-gated useFonts()
     // above, so a stalled fetch can't block the first render. Components
