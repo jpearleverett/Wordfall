@@ -16,7 +16,7 @@ import {
   SolveStep,
 } from '../types';
 import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
-import { findWordInGrid, isWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard } from '../engine/solver';
+import { findWordInGrid, isWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard, getHintNoGravity, getHintGravityFlip } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 import { instrumentReducer } from '../utils/perfInstrument';
 import { createGameStore, GameStore } from '../stores/gameStore';
@@ -63,6 +63,35 @@ function getUndosForMode(mode: GameMode): number {
     default:
       // Persistent inventory: undos come from economy tokens, not per-level allocation
       return 0;
+  }
+}
+
+/**
+ * Pick a hint using the clear rule the CURRENT MODE actually has.
+ *
+ * The generic `getHint` simulates downward gravity — the classic rule. In
+ * noGravity, cleared cells stay as permanent holes; in gravityFlip the
+ * direction rotates a quarter-turn after every clear. Planning either of
+ * those with downward gravity diverges from the real board immediately and
+ * can suggest a word whose removal strands another.
+ *
+ * Hints are bought (tokens for the normal one, gems for the premium one),
+ * which makes a wrong hint worse than no hint: the player pays to be walked
+ * into a dead end. Both dispatch sites share this so they cannot drift.
+ */
+function pickHintForMode(
+  state: GameState,
+  remainingWords: string[],
+): { word: string; positions: CellPosition[] } | null {
+  switch (state.mode) {
+    case 'shrinkingBoard':
+      return getHintShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink);
+    case 'noGravity':
+      return getHintNoGravity(state.board.grid, remainingWords);
+    case 'gravityFlip':
+      return getHintGravityFlip(state.board.grid, remainingWords, state.gravityDirection);
+    default:
+      return getHint(state.board.grid, remainingWords);
   }
 }
 
@@ -537,10 +566,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         .filter(w => !w.found)
         .map(w => w.word);
 
-      // shrinkingBoard: use shrink-aware hint that accounts for future outer ring removals
-      const hint = state.mode === 'shrinkingBoard'
-        ? getHintShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink)
-        : getHint(state.board.grid, remainingWords);
+      const hint = pickHintForMode(state, remainingWords);
       if (!hint) return state;
 
       return {
@@ -799,10 +825,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         .filter(w => !w.found)
         .map(w => w.word);
 
-      // Premium hint: reveal the exact next word (same as USE_HINT but marked as premium)
-      const hint = state.mode === 'shrinkingBoard'
-        ? getHintShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink)
-        : getHint(state.board.grid, remainingWords);
+      // Premium hint: reveal the exact next word (same as USE_HINT but marked
+      // as premium). Mode-aware for the same reason USE_HINT is — and more
+      // so, since this one is bought with gems. A hint that plans against
+      // downward gravity on a board that has none is a paid wrong answer.
+      const hint = pickHintForMode(state, remainingWords);
       if (!hint) return state;
 
       return {

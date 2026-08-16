@@ -593,6 +593,121 @@ export function isDeadEndNoGravity(grid: Grid, remainingWords: string[]): boolea
   return !areAllWordsIndependentlyFindable(grid, remainingWords);
 }
 
+/**
+ * A hint for noGravity mode: a word AND the specific path that keeps the rest
+ * of the board solvable.
+ *
+ * The generic `getHint` cannot be used here. It simulates downward gravity —
+ * the classic rule — while noGravity leaves cleared cells as permanent holes,
+ * so it happily suggests a word whose removal strands another. Hints are
+ * bought with tokens, which makes a wrong one worse than none: the player
+ * pays to be walked into a dead end.
+ *
+ * Correctness in this mode means picking a path out of a full non-overlapping
+ * assignment for every remaining word, not just any occurrence of the word —
+ * the same word can appear in several places, and only some of them leave
+ * room for the others.
+ */
+export function getHintNoGravity(
+  grid: Grid,
+  remainingWords: string[]
+): { word: string; positions: CellPosition[] } | null {
+  if (remainingWords.length === 0) return null;
+
+  const wordPaths = remainingWords.map(word => ({
+    word,
+    paths: findWordInGrid(grid, word, 50),
+  }));
+  if (wordPaths.some(wp => wp.paths.length === 0)) return null;
+
+  // Most-constrained first, matching areAllWordsIndependentlyFindable so the
+  // hint agrees with the dead-end check rather than contradicting it.
+  wordPaths.sort((a, b) => a.paths.length - b.paths.length);
+
+  const assignment = new Map<string, CellPosition[]>();
+  const budget = { remaining: 10000 };
+  if (!collectNonOverlappingAssignment(wordPaths, 0, new Set<string>(), assignment, budget)) {
+    return null;
+  }
+
+  // Suggest the most-constrained word: it has the fewest places to go, so it
+  // is both the most useful nudge and the one most likely to be lost if the
+  // player clears something else first.
+  const first = wordPaths[0];
+  const positions = assignment.get(first.word);
+  return positions ? { word: first.word, positions } : null;
+}
+
+/**
+ * As findNonOverlappingAssignment, but records the assignment it found rather
+ * than only reporting that one exists.
+ */
+function collectNonOverlappingAssignment(
+  wordPaths: { word: string; paths: CellPosition[][] }[],
+  index: number,
+  usedCells: Set<string>,
+  out: Map<string, CellPosition[]>,
+  budget: { remaining: number }
+): boolean {
+  if (index === wordPaths.length) return true;
+  if (budget.remaining <= 0) return false;
+  budget.remaining--;
+
+  const { word, paths } = wordPaths[index];
+
+  for (const path of paths) {
+    const cellKeys = path.map(p => `${p.row},${p.col}`);
+    if (cellKeys.some(k => usedCells.has(k))) continue;
+
+    for (const key of cellKeys) usedCells.add(key);
+    out.set(word, path);
+    if (collectNonOverlappingAssignment(wordPaths, index + 1, usedCells, out, budget)) {
+      return true;
+    }
+    out.delete(word);
+    for (const key of cellKeys) usedCells.delete(key);
+  }
+
+  return false;
+}
+
+/**
+ * A hint for gravityFlip mode.
+ *
+ * Same problem as noGravity: `getHint` simulates downward gravity, while this
+ * mode rotates the direction a quarter-turn after every clear, so a
+ * downward-gravity plan diverges from the real board immediately. The word
+ * returned here is the first step of a solve that uses the actual rotating
+ * cycle from the live direction.
+ */
+export function getHintGravityFlip(
+  grid: Grid,
+  remainingWords: string[],
+  currentDirection: GravityDirection
+): { word: string; positions: CellPosition[] } | null {
+  if (remainingWords.length === 0) return null;
+
+  const shortFirst = [...remainingWords].sort((a, b) => a.length - b.length);
+  const orderings = [remainingWords, shortFirst, [...shortFirst].reverse()];
+
+  let solution: string[] | null = null;
+  for (const ordering of orderings) {
+    if (trySolveWithOrderRotating(cloneGrid(grid), ordering, currentDirection)) {
+      solution = ordering;
+      break;
+    }
+  }
+  if (!solution) {
+    const budget: SolveBudget = { remaining: 10000, startTime: Date.now(), timeoutMs: 300 };
+    solution = solveWithRotatingGravity(cloneGrid(grid), remainingWords, currentDirection, 0, budget);
+  }
+  if (!solution || solution.length === 0) return null;
+
+  const word = solution[0];
+  const occurrences = findWordInGrid(grid, word, 1);
+  return occurrences.length > 0 ? { word, positions: occurrences[0] } : null;
+}
+
 // ============ SHRINKING BOARD MODE ============
 
 /**
