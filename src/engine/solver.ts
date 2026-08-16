@@ -236,6 +236,70 @@ export function countSolutions(
   return count;
 }
 
+/**
+ * Estimate how FORGIVING a board is: the fraction of "play it naturally"
+ * attempts that finish, where a natural attempt traces a uniformly random
+ * currently-findable word each turn.
+ *
+ * This is deliberately not `countSolutions`. What hurts players is not how
+ * many winning orders exist in the abstract, but how likely the order they
+ * actually pick is to work — nothing on screen signals which word must be
+ * cleared first, so a board with one winning order out of thousands reads
+ * as unfair even though it is technically solvable.
+ *
+ * Cheap by design (samples x words word-searches, no backtracking) so it
+ * can run on every candidate board during generation.
+ */
+export function estimateForgiveness(
+  grid: Grid,
+  words: string[],
+  samples: number,
+  rng: () => number,
+  /**
+   * Optional acceptance threshold. When supplied the sampling stops as soon
+   * as the verdict is decided either way — a hopeless board bails after the
+   * first couple of failures instead of paying for every sample. Generation
+   * runs this on every candidate, so that early exit is the difference
+   * between a cheap filter and a multi-second stall.
+   */
+  minRate?: number,
+): number {
+  if (words.length <= 1) return 1;
+
+  const needed = minRate === undefined ? Infinity : Math.ceil(minRate * samples);
+  let completed = 0;
+  for (let s = 0; s < samples; s++) {
+    if (minRate !== undefined) {
+      const remaining = samples - s;
+      // Already guaranteed to pass / already impossible to pass.
+      if (completed >= needed) break;
+      if (completed + remaining < needed) return completed / samples;
+    }
+    let current = grid;
+    let remaining = words;
+    let ok = true;
+
+    while (remaining.length > 0) {
+      const findable: string[] = [];
+      for (const w of remaining) {
+        if (findWordInGrid(current, w, 1).length > 0) findable.push(w);
+      }
+      if (findable.length === 0) {
+        ok = false;
+        break;
+      }
+      const pick = findable[Math.floor(rng() * findable.length)];
+      const occurrences = findWordInGrid(current, pick, 1);
+      current = removeCellsAndApplyGravity(current, occurrences[0]);
+      remaining = remaining.filter((w) => w !== pick);
+    }
+
+    if (ok) completed++;
+  }
+
+  return completed / samples;
+}
+
 function countSolutionsBudgeted(
   grid: Grid,
   remainingWords: string[],

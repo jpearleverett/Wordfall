@@ -79,8 +79,12 @@ describe('board generation performance', () => {
     // No single level may come anywhere near the 5s internal timeout —
     // that would be a multi-second frozen screen on the level-load path.
     expect(stats.max).toBeLessThan(1500);
-    // The typical level should be imperceptible.
-    expect(stats.p95).toBeLessThan(600);
+    // Headroom raised from 600ms when the forgiveness gate landed: the
+    // generator now samples candidate boards for fairness before accepting
+    // one (see MIN_FORGIVENESS_BY_DIFFICULTY), which is a deliberate trade
+    // of some generation time for a far lower stuck rate. Still bounded so
+    // level load never reads as a freeze.
+    expect(stats.p95).toBeLessThan(900);
   }, 180_000);
 
   it('procedural tail (levels 601-1500, every 13th) does not degrade', () => {
@@ -96,7 +100,7 @@ describe('board generation performance', () => {
     const stats = summarize('procedural 601-1500', samples);
 
     expect(stats.max).toBeLessThan(1500);
-    expect(stats.p95).toBeLessThan(600);
+    expect(stats.p95).toBeLessThan(900);
   }, 180_000);
 
   it('non-classic modes generate within budget', () => {
