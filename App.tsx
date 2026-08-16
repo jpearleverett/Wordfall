@@ -41,7 +41,8 @@ import MasteryScreen from './src/screens/MasteryScreen';
 import SeasonPassScreen from './src/screens/SeasonPassScreen';
 import { ConsentGate } from './src/components/ConsentGate';
 import { hasAcceptedTos } from './src/services/consent';
-import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
+import { generateBoard, generateDailyBoard, generateWeeklyBoard } from './src/engine/boardGenerator';
+import { getWeekId } from './src/utils/weekId';
 import { getChapterForLevel } from './src/data/chapters';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
@@ -444,6 +445,25 @@ function ModesScreenWrapper({ navigation }: any) {
   const player = usePlayer();
   const economy = useEconomy();
 
+  // Warm the shared-board caches while the player is reading the mode list.
+  //
+  // Daily and weekly shop through many candidates for the fairest board, and
+  // that search is bounded in wall-clock rather than being free — the weekly's
+  // is up to ~700ms. Paying it here, after interactions have settled, means
+  // the tap itself is a cache hit. Best-effort: a failure just leaves the tap
+  // to generate synchronously as before.
+  useEffect(() => {
+    const handle = InteractionManager.runAfterInteractions(() => {
+      try {
+        generateDailyBoard(new Date().toISOString().split('T')[0]);
+        generateWeeklyBoard(getWeekId());
+      } catch {
+        // Warming is opportunistic; tap-time generation is the source of truth.
+      }
+    });
+    return () => handle.cancel();
+  }, []);
+
   const handleSelectMode = useCallback((modeId: string) => {
     const mode = modeId as GameMode;
 
@@ -496,7 +516,10 @@ function ModesScreenWrapper({ navigation }: any) {
       }
 
       if (mode === 'weekly') {
-        board = generateBoard(DIFFICULTY_CONFIGS.hard, Date.now());
+        // Deterministic from the week id — weekly scores go to a shared
+        // leaderboard, so a per-entry board meant players were ranked on
+        // different puzzles and could re-enter to reroll for an easy one.
+        board = generateWeeklyBoard(getWeekId());
         navigation.navigate('Game', { board, level: 0, mode: 'weekly' });
         return;
       }

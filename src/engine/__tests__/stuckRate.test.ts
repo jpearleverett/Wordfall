@@ -16,7 +16,7 @@
  *
  * Run `STUCK_VERBOSE=1 npx jest stuckRate` for the per-level breakdown.
  */
-import { generateBoard, generateDailyBoard } from '../boardGenerator';
+import { generateBoard, generateDailyBoard, generateWeeklyBoard } from '../boardGenerator';
 import { getLevelConfigExtended } from '../puzzleGenerator';
 import { getChapterForLevel } from '../../data/chapters';
 import { findWordInGrid, isDeadEnd } from '../solver';
@@ -198,6 +198,47 @@ describe('daily challenge fairness', () => {
     // days at 100% (unfinishable by natural play).
     expect(stuck / runs).toBeLessThan(0.25);
   }, 120_000);
+});
+
+describe('weekly challenge fairness', () => {
+  // The weekly is the harshest shared board: one puzzle, one leaderboard,
+  // seven days. If it's a coin flip, the player's only options are to eat the
+  // loss or to not compete at all — and unlike a level they cannot retry into
+  // a different board.
+  it('a year of weekly boards is not a coin flip', () => {
+    let stuck = 0;
+    let runs = 0;
+    const worst: Array<{ week: string; rate: number }> = [];
+
+    for (let week = 1; week <= 52; week += 2) {
+      const weekId = `2026_W${String(week).padStart(2, '0')}`;
+      const board = generateWeeklyBoard(weekId);
+      const words = board.words.map((w) => w.word);
+      const rng = makeRng(week * 131 + 5);
+
+      let weekStuck = 0;
+      for (let i = 0; i < 8; i++) {
+        if (playRandomly(board.grid, words, rng).stuck) weekStuck++;
+        runs++;
+      }
+      stuck += weekStuck;
+      worst.push({ week: weekId, rate: weekStuck / 8 });
+    }
+
+    if (VERBOSE) {
+      const top = [...worst].sort((a, b) => b.rate - a.rate).slice(0, 6);
+      // eslint-disable-next-line no-console
+      console.log(
+        `\nweekly stuck rate: ${((stuck / runs) * 100).toFixed(1)}% (${stuck}/${runs})`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `worst weeks: ${top.map((w) => `${w.week}:${(w.rate * 100).toFixed(0)}%`).join('  ')}`,
+      );
+    }
+
+    expect(stuck / runs).toBeLessThan(0.5);
+  }, 180_000);
 });
 
 describe('forgiveness gate wiring', () => {

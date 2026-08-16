@@ -2,6 +2,8 @@ import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition, GameMode, 
 import { applyGravity } from './gravity';
 import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating, isSolvableShrinkingBoard, estimateForgiveness } from './solver';
 import { getWordsByLength } from '../words';
+import { weekIdSeed } from '../utils/weekId';
+import { DIFFICULTY_CONFIGS } from '../constants';
 
 // Simple seeded PRNG (mulberry32)
 function createRng(seed: number) {
@@ -870,40 +872,70 @@ export function getDailyVariant(dateString: string): { name: string; config: Boa
  */
 const DAILY_FAIRNESS_ATTEMPTS = 16;
 const DAILY_FAIRNESS_TARGET = 0.6;
+const DAILY_FAIRNESS_SAMPLES = 12;
+/**
+ * Wall-clock ceiling on the search. Shopping runs on the JS thread the moment
+ * the player taps the mode, so an attempt count alone is not a bound: an
+ * unlucky config made the weekly's 64-attempt search take 3.5s in the worst
+ * case, which is a frozen app, not a slow one. The budget is what actually
+ * caps the freeze; attempts and target just stop it early when they can.
+ */
+const DAILY_FAIRNESS_BUDGET_MS = 400;
 
-export function generateDailyBoard(dateString: string): Board {
-  const cached = dailyBoardCache.get(dateString);
-  if (cached) return cached;
+interface FairnessBudget {
+  attempts: number;
+  target: number;
+  samples: number;
+  budgetMs: number;
+}
 
-  const { config } = getDailyVariant(dateString);
-  const baseSeed = dailyBoardSeed(dateString);
+const DAILY_FAIRNESS: FairnessBudget = {
+  attempts: DAILY_FAIRNESS_ATTEMPTS,
+  target: DAILY_FAIRNESS_TARGET,
+  samples: DAILY_FAIRNESS_SAMPLES,
+  budgetMs: DAILY_FAIRNESS_BUDGET_MS,
+};
 
-  // Pick the FAIREST of several candidates rather than the first generated.
-  //
-  // Every player gets the same daily board, so an unfair one is felt by the
-  // entire playerbase at once, on the mode that exists to bring people back —
-  // and there is no "just play a different level" escape valve. Measured
-  // before this: 34% of natural playthroughs dead-ended across a sampled
-  // year, with individual days at 100% (unfinishable without foreknowledge).
-  //
-  // Selection stays fully deterministic (seed derived from the date plus the
-  // attempt index), so the "same puzzle for everyone" guarantee holds. Cost
-  // is bounded and paid once per day behind the cache.
+/**
+ * Generate the FAIREST of several candidate boards rather than the first one.
+ *
+ * Used by the shared-board modes (daily, weekly). Everyone plays the same
+ * board there, so an unfair one is felt by the entire playerbase at once, on
+ * exactly the modes that exist to bring people back — and there is no "just
+ * play a different level" escape valve. Measured on the daily before this:
+ * 34% of natural playthroughs dead-ended across a sampled year, with
+ * individual days at 100% (unfinishable without foreknowledge).
+ *
+ * Candidate seeds derive from `baseSeed` plus the attempt index, so the "same
+ * puzzle for everyone" guarantee holds for any player who runs the same
+ * number of attempts. The time budget can cut the search short on a slow
+ * device, which is a deliberate trade: a device-dependent board is a far
+ * smaller problem than a multi-second freeze, and both boards came out of the
+ * same fairness-ranked sequence.
+ */
+function shopFairestBoard(
+  config: BoardConfig,
+  baseSeed: number,
+  budget: FairnessBudget = DAILY_FAIRNESS,
+): Board {
+  const deadline = Date.now() + budget.budgetMs;
+
   let board = generateBoard(config, baseSeed);
   let bestScore = estimateForgiveness(
     board.grid,
     board.words.map((w) => w.word),
-    12,
+    budget.samples,
     createRng(baseSeed),
   );
 
-  for (let attempt = 1; attempt < DAILY_FAIRNESS_ATTEMPTS && bestScore < DAILY_FAIRNESS_TARGET; attempt++) {
+  for (let attempt = 1; attempt < budget.attempts && bestScore < budget.target; attempt++) {
+    if (Date.now() >= deadline) break;
     const seed = baseSeed + attempt * 7919;
     const candidate = generateBoard(config, seed);
     const score = estimateForgiveness(
       candidate.grid,
       candidate.words.map((w) => w.word),
-      12,
+      budget.samples,
       createRng(seed),
     );
     if (score > bestScore) {
@@ -911,6 +943,16 @@ export function generateDailyBoard(dateString: string): Board {
       board = candidate;
     }
   }
+
+  return board;
+}
+
+export function generateDailyBoard(dateString: string): Board {
+  const cached = dailyBoardCache.get(dateString);
+  if (cached) return cached;
+
+  const { config } = getDailyVariant(dateString);
+  const board = shopFairestBoard(config, dailyBoardSeed(dateString));
 
   dailyBoardCache.set(dateString, board);
 
@@ -921,6 +963,58 @@ export function generateDailyBoard(dateString: string): Board {
     if (firstKey !== undefined) dailyBoardCache.delete(firstKey);
   }
 
+  return board;
+}
+
+// ── Weekly challenge ────────────────────────────────────────────────────────
+
+const weeklyBoardCache = new Map<string, Board>();
+
+/**
+ * The weekly gets a far larger search budget than the daily: it is generated
+ * once every SEVEN days rather than once a day, and the player is stuck with
+ * the result for that whole week with no second board to move to. At the
+ * daily's budget the weekly measured 27% stuck with individual weeks at 63%,
+ * because the weekly runs the `hard` config — denser boards, less room for
+ * the column-disjoint placement that keeps a board forgiving.
+ */
+const WEEKLY_FAIRNESS: FairnessBudget = {
+  attempts: 64,
+  target: 0.85,
+  // More samples per candidate than the daily. With 12 samples the estimator
+  // is noisy enough to crown a board that a play simulation then finds
+  // dead-ends 88% of the time; the extra samples cost attempts but buy a
+  // measurement worth acting on.
+  samples: 24,
+  budgetMs: 700,
+};
+
+/**
+ * The weekly challenge board for a given week id.
+ *
+ * Like the daily, this MUST be identical for every player: weekly scores go
+ * to a shared leaderboard (`submitWeeklyScore`), so a per-player board means
+ * players are ranked against each other on different puzzles. It was
+ * previously generated with `generateBoard(DIFFICULTY_CONFIGS.hard,
+ * Date.now())` — a fresh board per player AND per entry, so re-entering the
+ * weekly rerolled the puzzle until you got an easy one, which is a
+ * leaderboard exploit as much as a fairness problem.
+ *
+ * Deterministic from the week id, cached, and shops for the fairest of
+ * several candidates for the same reason the daily does: everyone is stuck
+ * with this one board for a whole week.
+ */
+export function generateWeeklyBoard(weekId: string): Board {
+  const cached = weeklyBoardCache.get(weekId);
+  if (cached) return cached;
+
+  const board = shopFairestBoard(DIFFICULTY_CONFIGS.hard, weekIdSeed(weekId), WEEKLY_FAIRNESS);
+
+  weeklyBoardCache.set(weekId, board);
+  if (weeklyBoardCache.size > 4) {
+    const firstKey = weeklyBoardCache.keys().next().value;
+    if (firstKey !== undefined) weeklyBoardCache.delete(firstKey);
+  }
   return board;
 }
 
