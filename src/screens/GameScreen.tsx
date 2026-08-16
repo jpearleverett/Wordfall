@@ -22,6 +22,7 @@ import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import LocalErrorBoundary from '../components/LocalErrorBoundary';
 import { crashReporter } from '../services/crashReporting';
+import { findWordInGrid } from '../engine/solver';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -327,6 +328,16 @@ const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
 
 // --- Word-Clear Particle Pop ---
 const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', '#ff9100'];
+
+/**
+ * Tooltip key for the one-time "why did the board die" explainer. Lives in
+ * the same `tooltipsShown` ledger as the other once-ever tips so it persists
+ * across sessions and reinstall-free reloads.
+ */
+const FIRST_STUCK_TOOLTIP = 'first_stuck_gravity';
+
+/** Stable empty array so the stranded-words memo can't churn GameBanners. */
+const EMPTY_STRING_LIST: string[] = [];
 
 function WordClearParticle({ delay, startX, startY }: { delay: number; startX: number; startY: number }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -1730,6 +1741,40 @@ function GameScreenImpl({
     freeRescueUsedRef.current = false;
   }, [level, mode]);
 
+  // First dead end ever: explain the mechanic instead of just announcing the
+  // wall. A player who doesn't yet connect "I cleared the wrong word first"
+  // to "the board is now unsolvable" reads a dead end as the game being
+  // broken — the banner names the word gravity buried, and this adds the one
+  // sentence that turns the loss into a rule they can use. Latched into
+  // state so the text doesn't switch to the short form while they're reading
+  // it, and marked shown immediately so it can't reappear on the next level.
+  const [showFirstStuckHelp, setShowFirstStuckHelp] = useState(false);
+  const firstStuckHandledRef = useRef(false);
+  useEffect(() => {
+    firstStuckHandledRef.current = false;
+    setShowFirstStuckHelp(false);
+  }, [level, mode]);
+
+  // Which remaining words gravity has actually buried. `isStuck` means no
+  // clearing ORDER finishes the board, which does not imply every word is
+  // unreachable — some may still be traceable and simply lead nowhere. The
+  // banner names only the genuinely unreachable ones, so the filter happens
+  // here where the live grid is. Only computed on a dead board; on every
+  // other render this is an empty array and costs nothing.
+  const strandedWords = useMemo(() => {
+    if (!isStuck || status !== 'playing') return EMPTY_STRING_LIST;
+    return remainingWords.filter((w) => findWordInGrid(grid, w, 1).length === 0);
+  }, [isStuck, status, remainingWords, grid]);
+
+  useEffect(() => {
+    if (!isStuck || status !== 'playing' || firstStuckHandledRef.current) return;
+    firstStuckHandledRef.current = true;
+    if (tooltipsShown.includes(FIRST_STUCK_TOOLTIP)) return;
+    setShowFirstStuckHelp(true);
+    markTooltipShown(FIRST_STUCK_TOOLTIP);
+    void analytics.logEvent('first_stuck_explainer_shown', { level, mode });
+  }, [isStuck, status, tooltipsShown, markTooltipShown, level, mode]);
+
   useEffect(() => {
     if (
       isStuck &&
@@ -2191,6 +2236,8 @@ function GameScreenImpl({
             canShowAdHint={!isAdFree && adManager.canShowAd('hint_reward')}
             isStuck={isStuck}
             undosLeft={undosLeft}
+            strandedWords={strandedWords}
+            isFirstStuck={showFirstStuckHelp}
             isSpike={isSpike && !isDaily && mode !== 'weekly'}
             onIdleHintTap={stableHandleIdleHintBannerTap}
             onAdHintTap={stableHandleAdHintBannerTap}

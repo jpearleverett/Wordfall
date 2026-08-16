@@ -25,6 +25,21 @@ interface GameBannersProps {
   isStuck: boolean;
   undosLeft: number;
   /**
+   * The remaining words that can no longer be traced at all — NOT simply the
+   * remaining words. A board is "stuck" when no clearing order finishes it,
+   * which does not imply every word is unreachable: some may still be
+   * traceable and just lead nowhere. Naming one of those as "cut off" would
+   * be a visibly false claim on the screen where the player is already
+   * suspicious the game is broken, so the caller filters first.
+   */
+  strandedWords?: string[];
+  /**
+   * True until the player has been stuck once. The first dead end gets the
+   * long explanation; after that the short form is enough and the long one
+   * would just be in the way.
+   */
+  isFirstStuck?: boolean;
+  /**
    * True when the current puzzle is a "challenge spike" level — the
    * designed-harder-than-surrounding-ramp kind. Shows a persistent
    * gold banner so the player understands why this puzzle feels
@@ -49,6 +64,8 @@ function GameBannersImpl({
   canShowAdHint,
   isStuck,
   undosLeft,
+  strandedWords,
+  isFirstStuck = false,
   isSpike = false,
   onIdleHintTap,
   onAdHintTap,
@@ -61,6 +78,24 @@ function GameBannersImpl({
   const showWildcardBanner = wildcardMode;
   const showUndoBanner = isStuck && isPlaying && undosLeft > 0;
   const showRetryBanner = isStuck && isPlaying && undosLeft <= 0;
+
+  // Name what actually went wrong. "Stuck?" asked a question the player
+  // could already answer and taught nothing. When gravity has genuinely
+  // buried a word, saying so gives them something concrete to look for and
+  // makes the rule click; the shortest one is the easiest to scan the grid
+  // for. When nothing is buried but no order finishes, say THAT instead —
+  // claiming a still-traceable word is "cut off" reads as a bug.
+  const stranded = strandedWords ?? [];
+  const shortestStranded = stranded.reduce<string | null>(
+    (best, w) => (best === null || w.length < best.length ? w : best),
+    null,
+  );
+  const strandedHeadline =
+    shortestStranded === null
+      ? 'No order finishes this board'
+      : stranded.length === 1
+        ? `${shortestStranded} is cut off`
+        : `${shortestStranded} and ${stranded.length - 1} more are cut off`;
   const showIdleHelpBanner =
     showIdleHint &&
     !showUndoBanner &&
@@ -124,16 +159,19 @@ function GameBannersImpl({
       )}
       {showUndoBanner && (
         <Pressable style={styles.stuckBanner} onPress={onUndoTap}>
-          <Text style={styles.stuckText}>
-            Stuck? Tap here to undo your last move
-          </Text>
+          <Text style={styles.stuckText}>{strandedHeadline} — tap to step back a move</Text>
+          {isFirstStuck && (
+            <Text style={styles.stuckSubtext}>
+              {shortestStranded === null
+                ? 'The words are all still there, just not in an order that finishes. Step back and clear a different one first.'
+                : 'Clearing a word drops the letters above it. Clear that one earlier next time.'}
+            </Text>
+          )}
         </Pressable>
       )}
       {showRetryBanner && (
         <Pressable style={[styles.stuckBanner, styles.stuckBannerRetry]} onPress={onRetryTap}>
-          <Text style={styles.stuckText}>
-            No moves left — tap to retry this puzzle
-          </Text>
+          <Text style={styles.stuckText}>{strandedHeadline} — tap to retry this puzzle</Text>
         </Pressable>
       )}
     </>
@@ -238,5 +276,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  stuckSubtext: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    fontFamily: FONTS.bodyRegular,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
   },
 });
