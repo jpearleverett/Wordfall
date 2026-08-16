@@ -21,27 +21,35 @@ import { PlayerMetrics } from '../types';
 
 const getToday = (): string => new Date().toISOString().split('T')[0];
 
-/** A grace day is earned back for every this-many days of unbroken streak. */
-const GRACE_EARNED_EVERY_DAYS = 14;
-/** Cap so a very long streak can't bank unlimited skips. */
-const MAX_GRACE_DAYS = 4;
+/** Minimum days between two grace days — one skip per fortnight of play. */
+const GRACE_COOLDOWN_DAYS = 14;
 
 /**
- * How many grace days (missed-day forgiveness) a streak of this length is
- * entitled to.
+ * Whether a missed day may be forgiven right now.
  *
- * `graceDaysUsed` only resets when the streak actually BREAKS, so a flat
- * allowance of 1 meant a player who used their grace on day 5 of a 200-day
- * streak then went 195 days with zero forgiveness. Losing a long streak to a
- * single missed day is one of the most reliable churn moments in a daily
- * game — and long-streak players are the most valuable ones to protect.
+ * Losing a long streak to a single missed day is one of the most reliable
+ * churn moments in a daily game, and long-streak players are the most
+ * valuable ones to protect — so forgiveness has to keep existing for as long
+ * as the streak does.
  *
- * Forgiveness now accrues with commitment: one grace to start, then another
- * for every two unbroken weeks, capped so it never becomes "play whenever".
- * A real break still resets the counter to 0 (see newGraceDaysUsed below).
+ * This was a counter: `graceDaysUsed` against an allowance that grew with
+ * streak length and capped at 4. The counter only reset when the streak
+ * BROKE, so the cap was a lifetime budget rather than a rate. Someone on a
+ * 365-day streak who had used their four graces by day 60 then went 300 days
+ * with no forgiveness at all — the exact opposite of the intent, applied to
+ * the exact player it was meant to protect.
+ *
+ * A cooldown expresses the intended policy directly and uniformly: one
+ * missed day forgiven per fortnight, at any streak length, forever. It is no
+ * more generous than the counter was early on (the first grace is still
+ * free) and strictly more generous where the counter failed.
  */
-function graceAllowance(currentStreak: number): number {
-  return Math.min(MAX_GRACE_DAYS, 1 + Math.floor(currentStreak / GRACE_EARNED_EVERY_DAYS));
+function canUseGrace(lastGraceDate: string | undefined, todayDate: Date): boolean {
+  if (!lastGraceDate) return true;
+  const lastMs = new Date(lastGraceDate).getTime();
+  if (Number.isNaN(lastMs)) return true;
+  const daysSince = Math.floor((todayDate.getTime() - lastMs) / (1000 * 60 * 60 * 24));
+  return daysSince >= GRACE_COOLDOWN_DAYS;
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -69,6 +77,7 @@ export interface PlayerProgressData {
     bestStreak: number;
     lastPlayDate: string;
     graceDaysUsed: number;
+    lastGraceDate?: string;
     streakShieldAvailable: boolean;
     lastShieldDate: string;
     /**
@@ -293,7 +302,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         newStreak = streaks.currentStreak + 1;
       } else if (diffDays === 0) {
         newStreak = streaks.currentStreak;
-      } else if (diffDays === 2 && streaks.graceDaysUsed < graceAllowance(streaks.currentStreak)) {
+      } else if (diffDays === 2 && canUseGrace(streaks.lastGraceDate, todayDate)) {
         newStreak = streaks.currentStreak + 1;
         graceUsed = true;
       } else if (diffDays >= 2 && shieldFresh) {
@@ -308,9 +317,16 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         }
       }
 
+      // graceDaysUsed is now telemetry only — the cooldown decides
+      // eligibility. A real break clears both, so a fresh streak starts with
+      // forgiveness available rather than inheriting the old one's cooldown.
+      const streakBroke = diffDays >= 3 && !shieldConsumed;
       const newGraceDaysUsed = graceUsed
         ? streaks.graceDaysUsed + 1
-        : diffDays >= 3 ? 0 : streaks.graceDaysUsed;
+        : streakBroke ? 0 : streaks.graceDaysUsed;
+      const newLastGraceDate = graceUsed
+        ? today
+        : streakBroke ? undefined : streaks.lastGraceDate;
 
       const newLoginDates = prev.dailyLoginDates.includes(today)
         ? prev.dailyLoginDates
@@ -355,6 +371,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
           bestStreak: Math.max(streaks.bestStreak, newStreak),
           lastPlayDate: today,
           graceDaysUsed: shieldConsumed ? streaks.graceDaysUsed : newGraceDaysUsed,
+          lastGraceDate: shieldConsumed ? streaks.lastGraceDate : newLastGraceDate,
           streakShieldAvailable: shieldConsumed ? false : streaks.streakShieldAvailable,
           recentBreak: didBreakStreak
             ? { prevStreak: streaks.currentStreak, brokenAtMs: Date.now() }
@@ -369,14 +386,16 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     let success = false;
     setData((prev) => {
       const { streaks } = prev;
-      if (streaks.graceDaysUsed >= graceAllowance(streaks.currentStreak)) return prev;
+      const today = getToday();
+      if (!canUseGrace(streaks.lastGraceDate, new Date(today))) return prev;
       success = true;
       return {
         ...prev,
         streaks: {
           ...streaks,
           graceDaysUsed: streaks.graceDaysUsed + 1,
-          lastPlayDate: getToday(),
+          lastGraceDate: today,
+          lastPlayDate: today,
         },
       };
     });

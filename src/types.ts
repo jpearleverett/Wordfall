@@ -513,7 +513,19 @@ export interface StreakData {
   currentStreak: number;
   bestStreak: number;
   lastPlayDate: string;
+  /**
+   * Telemetry only since Aug 2026 — grace eligibility is a cooldown now
+   * (see canUseGrace in PlayerProgressContext), not a budget. Kept because
+   * it is already persisted and is a useful "how forgiving has this player
+   * needed us to be" signal.
+   */
   graceDaysUsed: number;
+  /**
+   * UTC day the last grace day was spent. Absent means grace is available.
+   * Cleared when a streak genuinely breaks so the next streak doesn't
+   * inherit the previous one's cooldown.
+   */
+  lastGraceDate?: string;
   streakShieldAvailable: boolean;
   lastShieldDate?: string;
   /**
