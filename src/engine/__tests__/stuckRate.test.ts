@@ -16,7 +16,7 @@
  *
  * Run `STUCK_VERBOSE=1 npx jest stuckRate` for the per-level breakdown.
  */
-import { generateBoard } from '../boardGenerator';
+import { generateBoard, generateDailyBoard } from '../boardGenerator';
 import { getLevelConfigExtended } from '../puzzleGenerator';
 import { getChapterForLevel } from '../../data/chapters';
 import { findWordInGrid, isDeadEnd } from '../solver';
@@ -157,6 +157,49 @@ describe('stuck rate (player forgiveness)', () => {
  * from (a free shuffle when genuinely dead-ended, rather than spending a
  * token). Worth an on-device play session before picking.
  */
+describe('daily challenge fairness', () => {
+  // The daily is the same board for every player and a core return hook, so
+  // an unfair one is felt collectively and on the day it matters most —
+  // there is no "just play a different level" escape valve.
+  it('a year of daily boards is at least as fair as the curated game', () => {
+    let stuck = 0;
+    let runs = 0;
+    const worst: Array<{ date: string; rate: number }> = [];
+
+    for (let day = 0; day < 60; day++) {
+      const date = new Date(Date.UTC(2026, 0, 1 + day * 6)).toISOString().split('T')[0];
+      const board = generateDailyBoard(date);
+      const words = board.words.map((w) => w.word);
+      const rng = makeRng(day * 97 + 11);
+
+      let dayStuck = 0;
+      for (let i = 0; i < 8; i++) {
+        if (playRandomly(board.grid, words, rng).stuck) dayStuck++;
+        runs++;
+      }
+      stuck += dayStuck;
+      worst.push({ date, rate: dayStuck / 8 });
+    }
+
+    if (VERBOSE) {
+      const top = [...worst].sort((a, b) => b.rate - a.rate).slice(0, 6);
+      // eslint-disable-next-line no-console
+      console.log(
+        `\ndaily stuck rate: ${((stuck / runs) * 100).toFixed(1)}% (${stuck}/${runs})`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `worst dailies: ${top.map((d) => `${d.date}:${(d.rate * 100).toFixed(0)}%`).join('  ')}`,
+      );
+    }
+
+    // Measured ~0.16 after the daily shops for the fairest candidate; it was
+    // ~0.34 when it simply took the first board generated, with individual
+    // days at 100% (unfinishable by natural play).
+    expect(stuck / runs).toBeLessThan(0.25);
+  }, 120_000);
+});
+
 describe('forgiveness gate wiring', () => {
   it('is documented as a preference, not a hard requirement', () => {
     // Guard against someone turning the gate into an unconditional filter
