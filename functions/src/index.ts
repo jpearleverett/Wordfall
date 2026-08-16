@@ -804,7 +804,12 @@ export const clubGoalProgress = functions.https.onCall(
  *
  * Removes club members who have been inactive for more than 14 days.
  */
-export const autoKickInactiveMembers = functions.pubsub
+// Scans every club sequentially. On the v1 default 60s timeout this was
+// killed mid-scan once the club count grew, and since it always restarts
+// from the beginning, the tail of the collection would never be processed.
+export const autoKickInactiveMembers = functions
+  .runWith({ timeoutSeconds: 540, memory: "512MB" })
+  .pubsub
   .schedule("every day 03:00")
   .timeZone("UTC")
   .onRun(async () => {
@@ -974,11 +979,67 @@ export const requestAccountDeletion = functions.https.onRequest(
 
     try {
       const userRef = db.collection("users").doc(uid);
-      for (const subName of ["consent", "blockedUsers", "pushTokens", "inventory", "notifications"]) {
-        stats.userSubcollections += await deleteCollection(userRef.collection(subName));
+      // Enumerate subcollections instead of guessing names. The old
+      // hardcoded list ("consent","blockedUsers","pushTokens","inventory",
+      // "notifications") missed almost everything the app actually writes —
+      // data/ (the save), economy/ (currency + purchase history), rewards/,
+      // purchases/, tokens/, puzzleResults/, giftQuota/, challenges/ — and
+      // two of the listed names don't exist at all. Deleting the parent doc
+      // does NOT remove subcollections in Firestore, so all of that survived
+      // while the response reported a successful purge.
+      const userSubcollections = await userRef.listCollections();
+      for (const sub of userSubcollections) {
+        stats.userSubcollections += await deleteCollection(sub);
       }
 
       await userRef.delete().catch(() => undefined);
+
+      // Sweep the top-level collections that carry this UID (doc ids are
+      // "{uid}_{date}" / "{uid}_{weekId}", so query by the userId field).
+      for (const scoreCollection of ["dailyScores", "weeklyScores"]) {
+        const scoreDocs = await db
+          .collection(scoreCollection)
+          .where("userId", "==", uid)
+          .get();
+        if (!scoreDocs.empty) {
+          const batch = db.batch();
+          scoreDocs.docs.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          stats.userSubcollections += scoreDocs.size;
+        }
+      }
+
+      for (const giftField of ["fromUserId", "toUserId"]) {
+        const giftDocs = await db.collection("gifts").where(giftField, "==", uid).get();
+        if (!giftDocs.empty) {
+          const batch = db.batch();
+          giftDocs.docs.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          stats.userSubcollections += giftDocs.size;
+        }
+      }
+
+      const friendships = await db
+        .collection("friendships")
+        .where("users", "array-contains", uid)
+        .get();
+      if (!friendships.empty) {
+        const batch = db.batch();
+        friendships.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        stats.userSubcollections += friendships.size;
+      }
+
+      const referralCodes = await db
+        .collection("referralCodes")
+        .where("uid", "==", uid)
+        .get();
+      if (!referralCodes.empty) {
+        const batch = db.batch();
+        referralCodes.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        stats.userSubcollections += referralCodes.size;
+      }
 
       const playerRef = db.collection("players").doc(uid);
       const playerSnap = await playerRef.get();

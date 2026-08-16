@@ -64,6 +64,27 @@ const CLUB_GOAL_TEMPLATES: ClubGoalTemplate[] = [
  * Triggered when a user completes a puzzle.
  * Updates their club's cooperative goal progress.
  */
+/**
+ * Ceiling for a single puzzle's contribution to a club's weekly score.
+ * Mirrors the per-puzzle plausibility ceiling submitValidatedScore uses.
+ */
+const MAX_CLUB_SCORE_CONTRIBUTION = 250_000;
+
+/** Ceiling for any single goal increment (words/stars from one puzzle). */
+const MAX_GOAL_INCREMENT = 1_000;
+
+/** Coerce a client-supplied numeric field into a sane, non-negative bound. */
+function clampCount(value: unknown, max: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(Math.floor(n), max);
+}
+
+/**
+ * Every field of `result` comes from a CLIENT-WRITTEN document, so each is
+ * clamped. Unclamped, a single forged result could complete and permanently
+ * burn a shared club goal (`wordsFound: 999999`) or swing the club's score.
+ */
 function computeGoalIncrement(
   trackingKey: string,
   result: admin.firestore.DocumentData,
@@ -72,19 +93,19 @@ function computeGoalIncrement(
     case 'puzzlesSolved':
       return 1;
     case 'wordsFound':
-      return result.wordsFound ?? 0;
+      return clampCount(result.wordsFound, MAX_GOAL_INCREMENT);
     case 'starsEarned':
-      return result.stars ?? 0;
+      return clampCount(result.stars, 3);
     case 'perfectSolves':
       return result.isPerfect ? 1 : 0;
     case 'totalScore':
-      return result.score ?? 0;
+      return clampCount(result.score, MAX_CLUB_SCORE_CONTRIBUTION);
     case 'chainsTriggered':
-      return result.chainCount ?? 0;
+      return clampCount(result.chainCount, MAX_GOAL_INCREMENT);
     case 'noHintClears':
       return result.hintsUsed === 0 ? 1 : 0;
     case 'combosTriggered':
-      return (result.maxCombo ?? 0) > 1 ? 1 : 0;
+      return (Number(result.maxCombo) || 0) > 1 ? 1 : 0;
     default:
       return 0;
   }
@@ -102,6 +123,14 @@ export const onPuzzleComplete = functions.firestore
     if (!userData?.clubId) return;
 
     const clubId = userData.clubId;
+
+    // Both the trigger document AND users/{uid}.clubId are client-writable,
+    // so neither can be trusted. Verify the caller is actually a member of
+    // the club they claim, or an attacker could point `clubId` at a rival
+    // club and mutate its goals and weekly score.
+    const clubDoc = await db.doc(`clubs/${clubId}`).get();
+    const clubMemberIds = (clubDoc.data()?.memberIds as string[]) ?? [];
+    if (!clubMemberIds.includes(userId)) return;
 
     // Personal (per-member) goals and shared (cluster-level) goals live in
     // two separate subcollections — fetch both concurrently.
@@ -138,9 +167,18 @@ export const onPuzzleComplete = functions.firestore
       }
     }
 
-    // Update club weekly score
+    // Update club weekly score. Clamped: the score comes from a
+    // client-written document, and an unsigned/unbounded increment let a
+    // single forged result carry a huge negative value and wipe out a
+    // club's whole weekly total (or an absurd positive one to top the
+    // leaderboard). MAX_CLUB_SCORE_CONTRIBUTION mirrors the per-puzzle
+    // ceiling submitValidatedScore enforces.
+    const rawScore = Number(result.score);
+    const clampedScore = Number.isFinite(rawScore)
+      ? Math.max(0, Math.min(rawScore, MAX_CLUB_SCORE_CONTRIBUTION))
+      : 0;
     batch.update(db.doc(`clubs/${clubId}`), {
-      weeklyScore: admin.firestore.FieldValue.increment(result.score ?? 0),
+      weeklyScore: admin.firestore.FieldValue.increment(clampedScore),
     });
 
     await batch.commit();
@@ -153,15 +191,18 @@ export const onPuzzleComplete = functions.firestore
       const inc = computeGoalIncrement(goal.trackingKey, result);
       const currentProgress = (goal.progress ?? 0) + inc;
       if (currentProgress >= goal.target && !goal.completed) {
-        await goalDoc.ref.update({
-          completed: true,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        // Membership lives in the club document's `memberIds` array — there
+        // is no `clubs/{id}/members` subcollection anywhere in the project.
+        // Reading one returned an empty snapshot, so the reward batch was
+        // always empty while `completed: true` had ALREADY been written:
+        // every personal club goal silently paid nobody and could never pay
+        // out on a later run. Mirrors the shared-goal branch below.
+        const clubSnap = await db.doc(`clubs/${clubId}`).get();
+        const memberIds = (clubSnap.data()?.memberIds as string[]) ?? [];
 
-        const membersSnap = await db.collection(`clubs/${clubId}/members`).get();
         const rewardBatch = db.batch();
-        for (const memberDoc of membersSnap.docs) {
-          rewardBatch.set(db.doc(`users/${memberDoc.id}/rewards/${goalDoc.id}`), {
+        for (const memberId of memberIds) {
+          rewardBatch.set(db.doc(`users/${memberId}/rewards/${goalDoc.id}`), {
             type: 'club_goal_complete',
             goalLabel: goal.label,
             coins: goal.rewardCoins ?? 600,
@@ -170,6 +211,12 @@ export const onPuzzleComplete = functions.firestore
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
         }
+        // Flip `completed` in the SAME batch as the grants, so the goal can
+        // never be burned without its rewards landing.
+        rewardBatch.update(goalDoc.ref, {
+          completed: true,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         await rewardBatch.commit();
       }
     }
@@ -235,6 +282,13 @@ export const updateClubLeaderboard = functions.pubsub
 
     const entries: Array<{ clubId: string; name: string; score: number; rank: number; tier: string }> = [];
 
+    // Tier writes go in a batch. They were previously fire-and-forget
+    // `doc.ref.update(...)` inside forEach: never awaited, so they could be
+    // dropped when the function's promise settled first, and any rejection
+    // became an unhandled rejection that kills the instance. At most 100
+    // docs here, well inside the 500-op batch limit.
+    const tierBatch = db.batch();
+
     clubsSnap.docs.forEach((doc, index) => {
       const data = doc.data();
       const rank = index + 1;
@@ -251,9 +305,10 @@ export const updateClubLeaderboard = functions.pubsub
         tier,
       });
 
-      // Update club tier
-      doc.ref.update({ tier, leaderboardRank: rank });
+      tierBatch.update(doc.ref, { tier, leaderboardRank: rank });
     });
+
+    await tierBatch.commit();
 
     // Write leaderboard snapshot
     await db.doc('leaderboards/clubs_weekly').set({
@@ -499,7 +554,11 @@ export const sendPushNotification = functions.https.onCall(
  */
 const STREAK_REMINDER_BATCH_SIZE = 500;
 const STREAK_REMINDER_BATCH_SLEEP_MS = 1000;
-const STREAK_REMINDER_TIME_BUDGET_MS = 9 * 60 * 1000; // leave ~60s headroom
+// 8 minutes against a 540s (9 min) timeout — genuinely leaves ~60s of
+// headroom. This was 9*60*1000, exactly equal to the timeout, so a batch
+// that started near the deadline was killed by the platform mid-send with
+// no summary log and no cursor progress.
+const STREAK_REMINDER_TIME_BUDGET_MS = 8 * 60 * 1000;
 /** The local hour we target for streak reminders (player's timezone). */
 const STREAK_REMINDER_TARGET_LOCAL_HOUR = 20; // 8 PM local
 
@@ -703,7 +762,14 @@ export const processDay7Reengagement = functions
 /**
  * Runs weekly on Monday at midnight UTC to rotate club goals.
  */
-export const rotateClubGoals = functions.pubsub
+// Two queries + a batch commit PER CLUB, sequentially, always starting from
+// the beginning of the collection. On the v1 default 60s timeout the tail
+// clubs would never rotate: they keep last week's goals forever and never
+// get weeklyScore reset, which also pins them permanently at the top of
+// updateClubLeaderboard.
+export const rotateClubGoals = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub
   .schedule('0 0 * * 1')
   .timeZone('UTC')
   .onRun(async () => {
@@ -1188,13 +1254,34 @@ export const onReferralSuccess = functions.https.onCall(
       .collection('rewards')
       .doc(`referral_${timestamp}`);
 
+    const referredUserRef = db.collection('users').doc(referredUid);
+
     const result = await db.runTransaction(async (tx) => {
       const existing = await tx.get(dedupRef);
       if (existing.exists) {
         return { alreadyGranted: true as const };
       }
 
+      // One referral per referred ACCOUNT, forever. The dedup doc above is
+      // keyed (referredUid, code), so without this a single account could
+      // collect any number of public codes and claim the referred-lane
+      // reward once per code — while each code owner also got paid, which
+      // is trivially self-dealt with throwaway alts since the spam cap is
+      // per-referrer. `referredByCode` is server-owned (clients cannot
+      // write it: the users doc is owner-writable, but this marker is only
+      // ever read here and any client tampering only ever LOCKS them out of
+      // a future grant, never unlocks one).
+      const referredUserSnap = await tx.get(referredUserRef);
+      if (referredUserSnap.exists && referredUserSnap.data()?.referredByCode) {
+        return { alreadyGranted: true as const };
+      }
+
       const now = admin.firestore.FieldValue.serverTimestamp();
+      tx.set(
+        referredUserRef,
+        { referredByCode: referralCode.toUpperCase(), referredAt: now },
+        { merge: true },
+      );
       tx.set(dedupRef, {
         referrerUid,
         referredUid,

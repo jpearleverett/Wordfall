@@ -134,11 +134,31 @@ service cloud.firestore {
     }
 
     // Gifts: sender can create, recipient can read/update (claim)
+    // The sendGift callable is the intended writer (it enforces a 5/day
+    // quota and an idempotency key); this direct path is only the offline
+    // fallback. It previously accepted ANY payload from the sender, so a
+    // player could loop self-addressed gifts and mint unlimited lives/hints
+    // (GiftInbox grants min(amount, 10) per doc). Constrained so the
+    // fallback still works but carries no exploit: no self-gifting, bounded
+    // amount, and it must arrive unclaimed.
     match /gifts/{giftId} {
-      allow create: if request.auth != null && request.resource.data.fromUserId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.fromUserId == request.auth.uid
+        && request.resource.data.toUserId is string
+        && request.resource.data.toUserId != request.auth.uid
+        && request.resource.data.amount is int
+        && request.resource.data.amount >= 1
+        && request.resource.data.amount <= 5
+        && request.resource.data.claimed == false;
       allow read: if request.auth != null &&
         (resource.data.toUserId == request.auth.uid || resource.data.fromUserId == request.auth.uid);
-      allow update: if request.auth != null && resource.data.toUserId == request.auth.uid;
+      // Recipient may only flip it to claimed — not rewrite the amount.
+      allow update: if request.auth != null
+        && resource.data.toUserId == request.auth.uid
+        && resource.data.claimed == false
+        && request.resource.data.claimed == true
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['claimed', 'claimedAt']);
     }
 
     // Clubs: members can read/write; create is tightly constrained so
@@ -162,7 +182,16 @@ service cloud.firestore {
         && request.resource.data.weeklyScore == 0
         && request.resource.data.totalScore == 0
         && request.resource.data.createdAt == request.time;
-      allow update: if request.auth != null && request.auth.uid in resource.data.memberIds;
+      // Members may only edit presentation fields. This was unrestricted,
+      // which made the careful create-time guards above pointless: any
+      // member could set weeklyScore to 999999999 (updateClubLeaderboard
+      // ranks that field directly, awarding the diamond tier), rewrite
+      // memberIds to expel everyone else, or make themselves ownerId.
+      // Scores and membership are mutated by Admin-SDK functions only.
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.memberIds
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name', 'description', 'lastActivityAt', 'recentEmojis', 'icon']);
 
       // Club messages
       // Must be a club member. Message size is capped server-side to prevent
