@@ -265,9 +265,22 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, BoardConfig> = {
 const BREATHER_INTERVAL = 5;
 const SPIKE_INTERVAL = 13;
 const SPIKE_MIN_LEVEL = 13; // no spikes during early-game learning phase
+/**
+ * No breathers during the learning phase either — symmetric with
+ * SPIKE_MIN_LEVEL and for the same reason.
+ *
+ * A breather plays the phase config from 4 levels earlier. Once the bands
+ * are wide (level 20+) that lands in the same or an adjacent band, so it
+ * reads as a gentle dip — exactly the intended relief valve. But the early
+ * bands are only 2-3 levels wide, so level 5 replayed the LEVEL 1 board
+ * verbatim and level 10 replayed level 6. A player four puzzles in is not
+ * fatigued; handing them a visibly smaller board reads as losing progress
+ * at precisely the moment they are deciding whether the game has depth.
+ */
+const BREATHER_MIN_LEVEL = 12;
 
 export function isBreatherLevel(level: number): boolean {
-  return level > 1 && level % BREATHER_INTERVAL === 0;
+  return level >= BREATHER_MIN_LEVEL && level % BREATHER_INTERVAL === 0;
 }
 
 /**
@@ -303,14 +316,21 @@ function applySpike(base: BoardConfig): BoardConfig {
 
 /** Base phase-driven board config for the given level, ignoring spike/breather. */
 function getPhaseConfig(effectiveLevel: number): BoardConfig {
-  // Phase 1: Tutorial / Easy (levels 1-5) — gentle ramp from 2 to 3 words
-  if (effectiveLevel <= 3) {
+  // Phase 1: Tutorial / Easy (levels 1-7) — every band changes something
+  // visible. This used to be three IDENTICAL 5x4 two-word boards at L1-L3,
+  // so a new player's first three puzzles looked the same; and with only
+  // 2x3 letters clearing out of 20 cells, gravity barely moved anything —
+  // under-selling the one mechanic that separates Wordfall from every other
+  // word search, during the exact minutes that decide D1 retention.
+  if (effectiveLevel <= 2) {
+    // Learn the trace gesture on the smallest possible board.
     return { rows: 5, cols: 4, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' };
   }
-  if (effectiveLevel <= 5) {
+  if (effectiveLevel <= 4) {
+    // Third word + a taller board: now ~9 of 25 cells clear, so the fall is
+    // unmistakable. This is the "oh, the board CHANGES" moment.
     return { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
   }
-  // Phase 2: Early game (levels 6-10) — introduce bigger grids gradually
   if (effectiveLevel <= 7) {
     return { rows: 6, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
   }
