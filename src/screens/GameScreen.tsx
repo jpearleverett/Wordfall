@@ -33,6 +33,11 @@ import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWo
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
 import {
+  canShowOfferNow,
+  recordOfferShown,
+  offersShownThisSession,
+} from '../utils/offerPacing';
+import {
   usePlayerStore,
   usePlayerActions,
   selectEquippedTheme,
@@ -740,7 +745,16 @@ function GameScreenImpl({
     const bypassGate = type === 'close_finish_premium';
     if (offerSuppressed) return false;
     if (!bypassGate && offerShownThisLevel.current) return false;
+    // Session-level pacing. The one-per-level gate above was previously the
+    // ONLY limit, so a level-2 player could be shown a purchase offer on
+    // every single level — the pattern players describe as "the game keeps
+    // asking me for money". Adds a grace period before the first offer, a
+    // per-session cap, and a cooldown between offers. All RC-tunable.
+    // close_finish_premium is an escalation of an offer the player is already
+    // looking at, so it bypasses pacing exactly as it bypasses the level gate.
+    if (!bypassGate && !canShowOfferNow(puzzlesSolved)) return false;
     offerShownThisLevel.current = true;
+    if (!bypassGate) recordOfferShown();
     trackTimeout(() => {
       setActiveOffer(type);
       void analytics.logEvent('offer_shown', {
@@ -748,10 +762,11 @@ function GameScreenImpl({
         level,
         mode,
         difficulty,
+        offersThisSession: offersShownThisSession(),
       });
     }, 750);
     return true;
-  }, [offerSuppressed, level, mode, difficulty, trackTimeout]);
+  }, [offerSuppressed, level, mode, difficulty, trackTimeout, puzzlesSolved]);
 
   // booster_pack: show on first entry to a hard/expert level
   useEffect(() => {

@@ -127,6 +127,14 @@ export interface RemoteConfigValues {
    * purchase offers. Kill switch if it measurably softens the game too far.
    */
   freeStuckRescueEnabled: boolean;
+  /**
+   * In-game purchase-offer pacing. GameScreen gates offers to one per level,
+   * but without these a level-2 player could see an offer on every single
+   * level. 0 means "use the built-in default" (see utils/offerPacing.ts).
+   */
+  offerMinLevel: number;
+  offerMaxPerSession: number;
+  offerCooldownMinutes: number;
   tileBloomEnabled: boolean;
   tileBloomParticlesPerTile: number;
 
@@ -330,6 +338,9 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Feel polish — screen shake on invalid word + per-tile bloom particles
   invalidShakeEnabled: true,
   freeStuckRescueEnabled: true,
+  offerMinLevel: 6,
+  offerMaxPerSession: 3,
+  offerCooldownMinutes: 8,
   tileBloomEnabled: true,
   tileBloomParticlesPerTile: 2,
 
