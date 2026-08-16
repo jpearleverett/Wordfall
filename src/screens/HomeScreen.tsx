@@ -338,9 +338,14 @@ export function HomeScreen({
   const showMissions = legacyTaskCardsEnabled && (hasSegmentContent
     ? segmentHomeContent.includes('missions') && dailyMissions.length > 0
     : (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0);
-  const showMysteryWheel = hasSegmentContent
+  // `mysteryWheelEnabled` was a declared Remote Config key that nothing read,
+  // so the gacha had no off switch — the one feature class most likely to
+  // need darkening at short notice (a mispriced segment, a cosmetic granted
+  // in error, a regional gambling-disclosure question). Defaults true, so
+  // this changes nothing until someone flips it.
+  const showMysteryWheel = getRemoteBoolean('mysteryWheelEnabled') && (hasSegmentContent
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
-    : (playerStage !== 'new' || (mysteryWheelSpins > 0)) && onOpenWheel;
+    : (playerStage !== 'new' || (mysteryWheelSpins > 0)) && onOpenWheel);
   const mysteryWheelVisible = Boolean(showMysteryWheel);
 
   // Slow spin for the wheel disc icon (matches bento design — 8s per rotation).

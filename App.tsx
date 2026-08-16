@@ -1670,8 +1670,13 @@ function HomeMainScreen({ route, navigation }: any) {
         </View>
       )}
 
-      {/* Mystery Wheel Overlay */}
-      {showMysteryWheel && (
+      {/* Mystery Wheel Overlay.
+          Gated here as well as on the HomeScreen entry: the wheel has a
+          second entrance via the `openWheel` route param from the post-puzzle
+          spin prompt, and a kill switch that closes one of two doors is not a
+          kill switch. This render is the choke point every path passes
+          through. */}
+      {showMysteryWheel && getRemoteBoolean('mysteryWheelEnabled') && (
         <MysteryWheel
           wheelState={player.mysteryWheel}
           gems={economy.gems}

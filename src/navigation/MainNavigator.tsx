@@ -205,6 +205,7 @@ function ProfileMainScreen({ navigation }: any) {
     <ProfileScreen
       onOpenSettings={() => navigation.navigate('Settings')}
       onEditProfile={() => navigation.navigate('EditProfile')}
+      onOpenClub={() => navigation.navigate('Club')}
     />
   );
 }

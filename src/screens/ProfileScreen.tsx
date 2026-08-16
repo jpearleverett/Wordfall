@@ -46,6 +46,7 @@ import {
   getFrame,
   getTitleLabel,
 } from '../data/cosmetics';
+import { getRemoteBoolean } from '../services/remoteConfig';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import {
   canPrestige,
@@ -84,6 +85,15 @@ interface ProfileScreenProps {
   player?: any;
   onEditProfile?: () => void;
   onOpenSettings?: () => void;
+  /**
+   * Opens the Clubs screen. ClubScreen was registered in the Profile stack
+   * but NOTHING navigated to it — the entire social layer (club goals,
+   * shared goals, chat, gift inbox, browse-clubs) was reachable only by
+   * following someone else's invite deep link. Onboarding's economy primer
+   * even teaches the player what Clubs are, so the game explained a feature
+   * it then gave no way to open.
+   */
+  onOpenClub?: () => void;
   onOpenMastery?: () => void;
 }
 
@@ -118,6 +128,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   player: playerProp,
   onEditProfile: onEditProfileProp,
   onOpenSettings: onOpenSettingsProp,
+  onOpenClub: onOpenClubProp,
   onOpenMastery: onOpenMasteryProp,
 }) => {
   const [loading, setLoading] = useState(true);
@@ -138,6 +149,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const playerActions = usePlayerActions();
   const onEditProfile = onEditProfileProp ?? (() => {});
   const onOpenSettings = onOpenSettingsProp ?? (() => {});
+  const onOpenClub = onOpenClubProp ?? null;
+  // `clubsEnabled` was a declared Remote Config key that nothing read, so the
+  // most incident-prone feature in the app (Cloud Functions, member chat,
+  // Perspective-API moderation, collective goals) had no off switch. Defaults
+  // true — this only matters the day something needs darkening.
+  const clubsVisible = Boolean(onOpenClub) && getRemoteBoolean('clubsEnabled');
   const onOpenMastery = onOpenMasteryProp ?? (() => {});
 
   useEffect(() => {
@@ -626,6 +643,30 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
           <Text style={styles.masteryChevron}>{'\u203A'}</Text>
         </TouchableOpacity>
+
+        {/* Clubs Button */}
+        {clubsVisible && (
+          <TouchableOpacity
+            style={styles.masteryButton}
+            onPress={onOpenClub!}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Open Clubs"
+          >
+            <LinearGradient
+              colors={[COLORS.teal + '25', COLORS.teal + '10'] as [string, string]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
+            <Text style={styles.masteryButtonIcon}>{'\u{1F465}'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.masteryButtonTitle}>Clubs</Text>
+              <Text style={styles.masteryButtonSub}>Team up for shared goals and rewards</Text>
+            </View>
+            <Text style={styles.masteryChevron}>{'\u203A'}</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Edit Profile Button */}
         <TouchableOpacity style={styles.editButton} onPress={onEditProfile} accessibilityRole="button" accessibilityLabel="Edit profile">
