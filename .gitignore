@@ -19,3 +19,6 @@ coverage/
 .claude/settings.local.json
 .claude/*.local.*
 web-build/
+
+# Scratch files written by audit subagents — never deliverables.
+**/zz_*_tmp*.test.ts
