@@ -609,6 +609,40 @@ export const EARLY_GAME_BONUSES: {
   { level: 10, coins: 200 },                                // End of early game milestone
   { level: 12, gems: 5, coins: 100 },                       // Time Pressure unlock
   { level: 15, coins: 150, gems: 5 },                       // Mid-game milestone
+
+  // ── Sustained milestone cadence (levels 20+) ──────────────────────────
+  //
+  // Everything above fires in the first 15 levels, and the other scheduled
+  // payoffs run out just as fast: feature unlocks stop at level 10, mode
+  // unlocks at level 22. Past that the only scheduled reward in the entire
+  // game was a chapter completion every 15 levels — so a player who got
+  // through the onboarding arc hit a content cliff at exactly the point
+  // where the D1-to-D7 habit is still forming, and stretches like 23-29 and
+  // 31-44 handed out nothing at all.
+  //
+  // Every 5 levels to 60, then every 10 to 150. Values stay in line with the
+  // existing milestones (~150-300 coins, 3-8 gems) rather than escalating —
+  // this is a steady drumbeat of "the game noticed", not an economy faucet.
+  // A hint refill is 50 coins and a booster 200, so each gift is worth a
+  // couple of concrete things the player can immediately spend.
+  { level: 20, coins: 200, gems: 5 },
+  { level: 25, coins: 200, hints: 2 },
+  { level: 30, coins: 250, gems: 8 },                       // Chapter 2 complete
+  { level: 35, coins: 200, gems: 5 },
+  { level: 40, coins: 250, hints: 2, wheelSpins: 1 },
+  { level: 45, coins: 250, gems: 8 },                       // Chapter 3 complete
+  { level: 50, coins: 300, gems: 10, wheelSpins: 1 },       // Half-century marker
+  { level: 55, coins: 250, hints: 2 },
+  { level: 60, coins: 300, gems: 8 },                       // Chapter 4 complete
+  { level: 70, coins: 300, gems: 8 },
+  { level: 80, coins: 300, hints: 3, wheelSpins: 1 },
+  { level: 90, coins: 350, gems: 10 },
+  { level: 100, coins: 500, gems: 15, wheelSpins: 1 },      // Century marker
+  { level: 110, coins: 350, gems: 8 },
+  { level: 120, coins: 350, hints: 3 },
+  { level: 130, coins: 400, gems: 10 },
+  { level: 140, coins: 400, hints: 3, wheelSpins: 1 },
+  { level: 150, coins: 600, gems: 20, wheelSpins: 1 },      // Sesquicentennial
 ];
 
 // Starter pack activation delay — don't start the 72hr timer until player
