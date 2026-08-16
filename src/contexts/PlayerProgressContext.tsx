@@ -21,6 +21,29 @@ import { PlayerMetrics } from '../types';
 
 const getToday = (): string => new Date().toISOString().split('T')[0];
 
+/** A grace day is earned back for every this-many days of unbroken streak. */
+const GRACE_EARNED_EVERY_DAYS = 14;
+/** Cap so a very long streak can't bank unlimited skips. */
+const MAX_GRACE_DAYS = 4;
+
+/**
+ * How many grace days (missed-day forgiveness) a streak of this length is
+ * entitled to.
+ *
+ * `graceDaysUsed` only resets when the streak actually BREAKS, so a flat
+ * allowance of 1 meant a player who used their grace on day 5 of a 200-day
+ * streak then went 195 days with zero forgiveness. Losing a long streak to a
+ * single missed day is one of the most reliable churn moments in a daily
+ * game — and long-streak players are the most valuable ones to protect.
+ *
+ * Forgiveness now accrues with commitment: one grace to start, then another
+ * for every two unbroken weeks, capped so it never becomes "play whenever".
+ * A real break still resets the counter to 0 (see newGraceDaysUsed below).
+ */
+function graceAllowance(currentStreak: number): number {
+  return Math.min(MAX_GRACE_DAYS, 1 + Math.floor(currentStreak / GRACE_EARNED_EVERY_DAYS));
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface PlayerProgressData {
@@ -270,7 +293,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         newStreak = streaks.currentStreak + 1;
       } else if (diffDays === 0) {
         newStreak = streaks.currentStreak;
-      } else if (diffDays === 2 && streaks.graceDaysUsed < 1) {
+      } else if (diffDays === 2 && streaks.graceDaysUsed < graceAllowance(streaks.currentStreak)) {
         newStreak = streaks.currentStreak + 1;
         graceUsed = true;
       } else if (diffDays >= 2 && shieldFresh) {
@@ -346,7 +369,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     let success = false;
     setData((prev) => {
       const { streaks } = prev;
-      if (streaks.graceDaysUsed >= 1) return prev;
+      if (streaks.graceDaysUsed >= graceAllowance(streaks.currentStreak)) return prev;
       success = true;
       return {
         ...prev,

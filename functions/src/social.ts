@@ -655,7 +655,11 @@ export const processStreakReminders = functions
 
 const REENG_BATCH_SIZE = 500;
 const REENG_BATCH_SLEEP_MS = 1000;
-const REENG_TIME_BUDGET_MS = 9 * 60 * 1000;
+// 8 minutes against the 540s (9 min) timeout below, leaving ~60s of real
+// headroom. Same trap as the streak-reminder pass: a budget exactly equal to
+// the platform timeout means a batch started near the deadline is killed
+// mid-send, with no summary log and no record of how far it got.
+const REENG_TIME_BUDGET_MS = 8 * 60 * 1000;
 const REENG_TARGET_LOCAL_HOUR = 19; // 7 PM local — bucket for both D2 + D7
 
 function dateDaysAgo(nowMs: number, days: number): string {
