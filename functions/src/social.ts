@@ -1708,3 +1708,220 @@ function weekIdFor(d: Date): string {
   const weekNumber = Math.ceil((days + startOfYear.getUTCDay() + 1) / 7);
   return `${year}_W${String(weekNumber).padStart(2, '0')}`;
 }
+
+// ─── Club Membership (joinClub / leaveClub) ──────────────────────────────────
+//
+// firestore.rules deliberately restrict client updates on clubs/{clubId} to
+// presentation fields — memberIds / memberCount are Admin-SDK only, so join
+// and leave MUST go through these callables. Both are idempotent (safe to
+// retry on flaky networks) and repair memberCount drift by recomputing it
+// from the authoritative memberIds array on every write.
+
+const CLUB_DEFAULT_MAX_MEMBERS = 30;
+const CLUB_MEMBERSHIP_RATE_LIMIT = 10; // joins+leaves per hour per UID
+const CLUB_MEMBERSHIP_RATE_WINDOW_SECONDS = 3600;
+
+function validateClubIdArg(clubId: unknown): string {
+  if (
+    typeof clubId !== 'string' ||
+    clubId.length === 0 ||
+    clubId.length > 128
+  ) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid clubId');
+  }
+  return clubId;
+}
+
+/**
+ * joinClub — HTTPS Callable
+ *
+ * Adds the caller to clubs/{clubId}.memberIds inside a transaction:
+ *   - not-found if the club doesn't exist
+ *   - idempotent success if the caller is already a member
+ *   - failed-precondition if the caller already belongs to a DIFFERENT club
+ *     (the client leaves first — one club per player)
+ *   - resource-exhausted if the club is at maxMembers capacity
+ *
+ * The membership query runs inside the transaction (Admin SDK supports
+ * tx.get(query)) so two concurrent joins can't land the caller in two clubs.
+ */
+export const joinClub = functions.https.onCall(
+  async (data: { clubId: string }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Authentication required',
+      );
+    }
+    const uid = context.auth.uid;
+    const clubId = validateClubIdArg(data?.clubId);
+
+    const withinBudget = await checkFirestoreRateLimit(
+      uid,
+      'joinClub',
+      CLUB_MEMBERSHIP_RATE_LIMIT,
+      CLUB_MEMBERSHIP_RATE_WINDOW_SECONDS,
+    );
+    if (!withinBudget) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Too many club membership changes. Try again later.',
+      );
+    }
+
+    const clubRef = db.collection('clubs').doc(clubId);
+    const membershipQuery = db
+      .collection('clubs')
+      .where('memberIds', 'array-contains', uid)
+      .limit(1);
+
+    return db.runTransaction(async (tx) => {
+      const [clubSnap, membershipSnap] = await Promise.all([
+        tx.get(clubRef),
+        tx.get(membershipQuery),
+      ]);
+
+      if (!clubSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'Club not found');
+      }
+
+      const club = clubSnap.data() ?? {};
+      const memberIds = Array.isArray(club.memberIds)
+        ? (club.memberIds as string[])
+        : [];
+
+      if (memberIds.includes(uid)) {
+        // Idempotent replay — already in this club.
+        return {
+          success: true,
+          clubId,
+          memberCount: memberIds.length,
+          alreadyMember: true,
+        };
+      }
+
+      if (!membershipSnap.empty) {
+        const existingClubId = membershipSnap.docs[0].id;
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `Already a member of club ${existingClubId} — leave it first`,
+        );
+      }
+
+      const maxMembers =
+        Number(club.maxMembers) > 0
+          ? Number(club.maxMembers)
+          : CLUB_DEFAULT_MAX_MEMBERS;
+      if (memberIds.length >= maxMembers) {
+        throw new functions.https.HttpsError(
+          'resource-exhausted',
+          'Club is full',
+        );
+      }
+
+      const newMemberIds = [...memberIds, uid];
+      tx.update(clubRef, {
+        memberIds: newMemberIds,
+        memberCount: newMemberIds.length,
+        [`memberLastActive.${uid}`]:
+          admin.firestore.FieldValue.serverTimestamp(),
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {
+        success: true,
+        clubId,
+        memberCount: newMemberIds.length,
+        alreadyMember: false,
+      };
+    });
+  },
+);
+
+/**
+ * leaveClub — HTTPS Callable
+ *
+ * Removes the caller from clubs/{clubId}.memberIds inside a transaction:
+ *   - idempotent success if the club is gone or the caller isn't a member
+ *   - ownership transfers to the longest-standing remaining member when the
+ *     owner leaves
+ *   - the club document is deleted when the last member leaves (subcollection
+ *     docs are orphaned, but every read rule on them requires membership via
+ *     the parent doc, so they become unreachable; autoKick-style cleanup can
+ *     reap them later)
+ */
+export const leaveClub = functions.https.onCall(
+  async (data: { clubId: string }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Authentication required',
+      );
+    }
+    const uid = context.auth.uid;
+    const clubId = validateClubIdArg(data?.clubId);
+
+    const withinBudget = await checkFirestoreRateLimit(
+      uid,
+      'leaveClub',
+      CLUB_MEMBERSHIP_RATE_LIMIT,
+      CLUB_MEMBERSHIP_RATE_WINDOW_SECONDS,
+    );
+    if (!withinBudget) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Too many club membership changes. Try again later.',
+      );
+    }
+
+    const clubRef = db.collection('clubs').doc(clubId);
+
+    return db.runTransaction(async (tx) => {
+      const clubSnap = await tx.get(clubRef);
+
+      if (!clubSnap.exists) {
+        // Idempotent — the club is already gone.
+        return { success: true, clubId, alreadyLeft: true, clubDeleted: false };
+      }
+
+      const club = clubSnap.data() ?? {};
+      const memberIds = Array.isArray(club.memberIds)
+        ? (club.memberIds as string[])
+        : [];
+
+      if (!memberIds.includes(uid)) {
+        return { success: true, clubId, alreadyLeft: true, clubDeleted: false };
+      }
+
+      const newMemberIds = memberIds.filter((id) => id !== uid);
+
+      if (newMemberIds.length === 0) {
+        tx.delete(clubRef);
+        return { success: true, clubId, alreadyLeft: false, clubDeleted: true };
+      }
+
+      const update: Record<string, unknown> = {
+        memberIds: newMemberIds,
+        memberCount: newMemberIds.length,
+        [`memberLastActive.${uid}`]: admin.firestore.FieldValue.delete(),
+        [`memberContributions.${uid}`]: admin.firestore.FieldValue.delete(),
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (club.ownerId === uid) {
+        // memberIds preserves join order (arrayUnion appends), so index 0 is
+        // the longest-standing remaining member.
+        update.ownerId = newMemberIds[0];
+      }
+      tx.update(clubRef, update);
+
+      return {
+        success: true,
+        clubId,
+        alreadyLeft: false,
+        clubDeleted: false,
+        memberCount: newMemberIds.length,
+        newOwnerId: club.ownerId === uid ? newMemberIds[0] : undefined,
+      };
+    });
+  },
+);

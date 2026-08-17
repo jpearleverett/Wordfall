@@ -984,6 +984,32 @@ class FirestoreService {
   }
 
   /**
+   * Cross-device membership discovery: find the club (if any) whose
+   * memberIds contains this uid. Membership is mutated only by the
+   * joinClub/leaveClub Cloud Functions, so this query is the source of
+   * truth on a fresh install — the locally persisted clubId is just a
+   * cache of this answer.
+   */
+  async findClubByMembership(uid: string): Promise<any | null> {
+    if (!this.enabled || !uid) return null;
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, 'clubs'),
+          where('memberIds', 'array-contains', uid),
+          firestoreLimit(1),
+        ),
+      );
+      if (snap.empty) return null;
+      const docSnap = snap.docs[0];
+      return { id: docSnap.id, ...docSnap.data() };
+    } catch (e) {
+      logger.warn('[Firestore] findClubByMembership failed:', e);
+      return null;
+    }
+  }
+
+  /**
    * List public clubs that the player can browse + join (S1 in
    * launch_blockers.md). Sorted by weeklyScore descending so active
    * clubs appear first. Empty filter arguments match all clubs.
