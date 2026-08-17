@@ -85,17 +85,9 @@ back-to-back)
 
 ### Retention (session-to-session) — from the 2026-08-17 retention audit
 
-- **R1. Flawless streak pays nothing and dies permanently at 20.**
-  `PlayerContext.tsx:1489-1508` lifetime rewardsClaimed; no
-  ceremonyEconomyGrant case. FIX: reset claims on streak break (re-earnable
-  per run), add escalating grant case (3→50c … 20→gems+booster), repeating
-  milestone every 10 past 20. ~40 lines. Highest-value retention fix.
 - **R2. Notification cap counts scheduling not delivery** (one app open burns
   the whole daily budget, `notifications.ts:332-356`); per-segment
   streakReminderHour/dailyChallengeHour authored but read nowhere. ~30 lines.
-- **R3. Play-streak milestones [7,14,30,60,100]** — nothing in D2-D6 where
-  habits form, 16-day hole at 14→30. FIX: [3,5,7,10,14,21,30,45,60,100] with
-  small new-tier rewards (pure data change, `constants.ts:785`).
 - **R4. Events' Play button starts a plain classic puzzle**
   (`App.tsx:232-233` hardcodes mode='classic', event rules never consulted).
   FIX: map speedSolve→timePressure, perfectClear/expertGauntlet→perfectSolve,
@@ -127,6 +119,19 @@ legacyTaskCardsEnabled=false, honest reminder scheduling.
 
 ## SHIPPED
 
+- 2026-08-17 (batch 4 — streak systems pay + never dead-end):
+  - **R1** flawless-streak milestones are re-earnable per run
+    (rewardsClaimed resets on break — losing a real streak IS the
+    anti-farm), pay escalating rewards via a new
+    ceremonyEconomyGrant/flawlessMilestoneGrant case (3→50c up to
+    20→800c+50g, then 400c+25g every 10 past 20 so the ladder never ends),
+    ceremony shows the exact credited amount, autoDismissMs 3500 (three can
+    land in one strong session — they shouldn't each demand a tap).
+    FlawlessStreakCard always has a next milestone.
+  - **R3** play-streak ladder [7,14,30,60,100] →
+    [3,5,7,10,14,21,30,45,60,100]: tiers in the D2-D6 habit window and no
+    gap >15 days until 30. Pure data change; ceremonyQueue pins updated to
+    assert the properties (early tier ≤3, bounded gaps), not the old array.
 - 2026-08-17 (batch 3 — fail-state feel + visible gravity):
   - **J2 (core)** the board dying now has a beat: `puzzleFailStuck` synth
     chord over ducked BGM + new Warning-grade `stuckHaptic` + screen-reader

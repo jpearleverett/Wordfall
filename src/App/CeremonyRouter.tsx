@@ -108,6 +108,12 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           icon={'\u{1F31F}'}
           title={activeCeremony.data.label || `${activeCeremony.data.streak} Flawless!`}
           description={`You solved ${activeCeremony.data.streak} puzzles in a row without hints, undos, or shuffle.`}
+          rewardLabel={(() => {
+            // Same source the pop-time grant uses, so what is shown is
+            // exactly what was credited.
+            const grant = ceremonyEconomyGrant(activeCeremony);
+            return grant ? ceremonyGrantLabel(grant) : undefined;
+          })()}
           accentColor={COLORS.gold}
           buttonText="INCREDIBLE"
           onDismiss={onDismiss}

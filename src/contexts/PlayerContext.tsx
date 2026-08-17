@@ -1475,6 +1475,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             ...prev.flawlessStreak,
             currentStreak: 0,
             lastFlawlessDate: null,
+            // Milestones are per-RUN, not per-lifetime. With a lifetime
+            // list, a player who hit 20 in week one had permanently
+            // exhausted every ceremony in the game's headline dopamine
+            // system — rebuilding a streak celebrated nothing forever.
+            // Reset-on-break makes each rebuilt run re-earn its ladder
+            // (that IS the anti-farm: you must lose a real streak to
+            // re-earn, and grants are tuned accordingly).
+            rewardsClaimed: [],
           },
         };
       }
@@ -1483,7 +1491,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const newStreak = prev.flawlessStreak.currentStreak + 1;
       const newBest = Math.max(newStreak, prev.flawlessStreak.bestStreak);
 
+      // Fixed ladder to 20, then a repeating milestone every 10 so the
+      // system never dead-ends at "Max milestone reached!". Rewards are
+      // granted at ceremony POP time via ceremonyEconomyGrant's
+      // flawless_streak_milestone case (single source for display+credit).
       const milestones = [3, 5, 7, 10, 15, 20];
+      if (newStreak > 20 && newStreak % 10 === 0) milestones.push(newStreak);
       let pendingCeremonies = prev.pendingCeremonies;
       let rewardsClaimed = prev.flawlessStreak.rewardsClaimed;
       for (const milestone of milestones) {
@@ -1497,6 +1510,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             {
               type: 'flawless_streak_milestone' as const,
               data: { streak: milestone, label: labels[milestone] || `${milestone} Flawless!` },
+              // Celebratory, not demanding: three of these can land inside
+              // one strong session — they self-dismiss instead of each
+              // requiring a tap.
+              autoDismissMs: 3500,
             },
           ];
           rewardsClaimed = [...rewardsClaimed, milestone];

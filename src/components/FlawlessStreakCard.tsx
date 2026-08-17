@@ -23,7 +23,9 @@ function getNextMilestone(current: number): number | null {
   for (const m of MILESTONES) {
     if (m > current) return m;
   }
-  return null;
+  // Past 20 the ladder repeats every 10 (30/40/50…) — there is always a
+  // next milestone; "Max milestone reached!" was a dead end.
+  return (Math.floor(current / 10) + 1) * 10;
 }
 
 export const FlawlessStreakCard: React.FC<FlawlessStreakCardProps> = React.memo(

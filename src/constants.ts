@@ -782,11 +782,22 @@ export const ENERGY = {
 export const STREAK = {
   graceDays: 1,
   shieldCooldownDays: 30,
-  milestones: [7, 14, 30, 60, 100],
+  // D2-D6 is where daily habits form, and the old ladder ([7,14,30,60,100])
+  // paid NOTHING before day 7 — while the flawless streak celebrated at
+  // 3 and 5. New tiers fill the front (3, 5, 10) and the old 16-day
+  // 14→30 hole (21) plus 30→60 (45). updateStreak iterates this array
+  // generically and ceremonyEconomyGrant pays from the reward objects, so
+  // this is a pure data change.
+  milestones: [3, 5, 7, 10, 14, 21, 30, 45, 60, 100],
   milestoneRewards: {
+    3: { coins: 150, gems: 0 },
+    5: { coins: 250, gems: 5 },
     7: { coins: 500, gems: 10 },
+    10: { coins: 600, gems: 15 },
     14: { coins: 1000, gems: 25 },
+    21: { coins: 1500, gems: 35 },
     30: { coins: 2500, gems: 50, cosmetic: 'streak_30_frame' },
+    45: { coins: 3500, gems: 75 },
     60: { coins: 5000, gems: 100, cosmetic: 'streak_60_title' },
     100: { coins: 10000, gems: 200, cosmetic: 'streak_100_badge' },
   },

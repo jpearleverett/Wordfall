@@ -55,6 +55,27 @@ function isEmpty(grant: CeremonyGrant): boolean {
   return grant.coins === 0 && grant.gems === 0 && grant.hintTokens === 0 && !grant.rareTile;
 }
 
+/**
+ * Escalating flawless-streak milestone rewards. Fixed table through 20,
+ * then a repeating grant every 10 (30/40/50…) so the ladder never dead-ends
+ * at "Max milestone reached!".
+ */
+export function flawlessMilestoneGrant(streak: number): CeremonyGrant | null {
+  const fixed: Record<number, { coins: number; gems: number }> = {
+    3: { coins: 50, gems: 0 },
+    5: { coins: 100, gems: 5 },
+    7: { coins: 150, gems: 10 },
+    10: { coins: 300, gems: 20 },
+    15: { coins: 500, gems: 30 },
+    20: { coins: 800, gems: 50 },
+  };
+  const entry =
+    fixed[streak] ??
+    (streak > 20 && streak % 10 === 0 ? { coins: 400, gems: 25 } : null);
+  if (!entry) return null;
+  return normalize(entry);
+}
+
 /** Returns the amounts to credit for this ceremony, or null when nothing is owed. */
 export function ceremonyEconomyGrant(ceremony: CeremonyItem): CeremonyGrant | null {
   switch (ceremony.type) {
@@ -78,6 +99,15 @@ export function ceremonyEconomyGrant(ceremony: CeremonyItem): CeremonyGrant | nu
       if (!reward) return null;
       const grant = normalize(reward);
       return isEmpty(grant) ? null : grant;
+    }
+    case 'flawless_streak_milestone': {
+      // The headline dopamine system used to celebrate with NOTHING attached
+      // — full-screen ceremony, zero currency. Escalating grants, resolved
+      // from the milestone here so display and credit share one source.
+      // Milestones are re-earnable per streak run (rewardsClaimed resets on
+      // break), so amounts are tuned as "nice", not "jackpot".
+      const grant = flawlessMilestoneGrant(Number(ceremony.data?.streak) || 0);
+      return grant && !isEmpty(grant) ? grant : null;
     }
     case 'win_streak_milestone': {
       // The ceremony carries only {streak, label}; the amounts live in the

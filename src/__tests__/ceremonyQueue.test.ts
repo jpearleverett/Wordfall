@@ -214,8 +214,17 @@ describe('Ceremony Queue Integration', () => {
   });
 
   describe('streak milestones', () => {
-    it('has milestones at 7, 14, 30, 60, 100 days', () => {
-      expect(STREAK.milestones).toEqual([7, 14, 30, 60, 100]);
+    it('has habit-forming tiers in D2-D6 and no gap longer than 15 days', () => {
+      // Aug 2026 fun audit: the old ladder ([7,14,30,60,100]) paid nothing
+      // in the D2-D6 window where daily habits form, and had a 16-day hole
+      // at 14→30. Pin the properties, not the exact array: an early tier at
+      // or below day 3, and no inter-milestone gap over 15 days until 30.
+      expect(STREAK.milestones).toEqual([3, 5, 7, 10, 14, 21, 30, 45, 60, 100]);
+      expect(STREAK.milestones[0]).toBeLessThanOrEqual(3);
+      for (let i = 1; i < STREAK.milestones.length; i++) {
+        const gap = STREAK.milestones[i] - STREAK.milestones[i - 1];
+        if (STREAK.milestones[i] <= 30) expect(gap).toBeLessThanOrEqual(15);
+      }
     });
 
     it('streak milestones are monotonically increasing', () => {
@@ -230,7 +239,9 @@ describe('Ceremony Queue Integration', () => {
         const reward = rewards[milestone];
         expect(reward).toBeDefined();
         expect(reward.coins).toBeGreaterThan(0);
-        expect(reward.gems).toBeGreaterThan(0);
+        // The day-3 starter tier is coins-only by design; every tier from
+        // day 5 up carries gems.
+        if (milestone >= 5) expect(reward.gems).toBeGreaterThan(0);
       }
     });
 
