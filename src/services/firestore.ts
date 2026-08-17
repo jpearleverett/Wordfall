@@ -1016,6 +1016,40 @@ class FirestoreService {
   }
 
   /**
+   * Batch-fetch display names for a club's member list. Reads users/{uid}
+   * profile docs (written by syncPlayerProfile) in documentId-in batches of
+   * 10. UIDs without a profile doc fall back to 'Player'.
+   */
+  async getClubMemberProfiles(
+    memberIds: string[],
+  ): Promise<Array<{ id: string; displayName: string }>> {
+    if (!this.enabled || memberIds.length === 0) return [];
+    try {
+      const ids = memberIds.slice(0, 30);
+      const nameById = new Map<string, string>();
+      for (let i = 0; i < ids.length; i += 10) {
+        const batch = ids.slice(i, i + 10);
+        const snap = await getDocs(
+          query(collection(db, 'users'), where(documentId(), 'in', batch)),
+        );
+        for (const d of snap.docs) {
+          const name = d.data().displayName;
+          if (typeof name === 'string' && name.length > 0) {
+            nameById.set(d.id, name);
+          }
+        }
+      }
+      return ids.map((id) => ({
+        id,
+        displayName: nameById.get(id) ?? 'Player',
+      }));
+    } catch (e) {
+      logger.warn('[Firestore] getClubMemberProfiles failed:', e);
+      return memberIds.slice(0, 30).map((id) => ({ id, displayName: 'Player' }));
+    }
+  }
+
+  /**
    * List public clubs that the player can browse + join (S1 in
    * launch_blockers.md). Sorted by weeklyScore descending so active
    * clubs appear first. Empty filter arguments match all clubs.
