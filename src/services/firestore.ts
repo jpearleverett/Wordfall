@@ -989,9 +989,15 @@ class FirestoreService {
    * joinClub/leaveClub Cloud Functions, so this query is the source of
    * truth on a fresh install — the locally persisted clubId is just a
    * cache of this answer.
+   *
+   * Return values are three-state on purpose:
+   *   - club object → member of that club
+   *   - null        → query succeeded, definitively NOT in any club
+   *   - undefined   → unknown (offline / disabled / query error) — callers
+   *                   must NOT clear a locally cached clubId on undefined
    */
-  async findClubByMembership(uid: string): Promise<any | null> {
-    if (!this.enabled || !uid) return null;
+  async findClubByMembership(uid: string): Promise<any | null | undefined> {
+    if (!this.enabled || !uid) return undefined;
     try {
       const snap = await getDocs(
         query(
@@ -1005,7 +1011,7 @@ class FirestoreService {
       return { id: docSnap.id, ...docSnap.data() };
     } catch (e) {
       logger.warn('[Firestore] findClubByMembership failed:', e);
-      return null;
+      return undefined;
     }
   }
 

@@ -354,6 +354,11 @@ export interface PlayerContextType extends PlayerData {
   sendHintGift: (friendId: string) => boolean;
   sendTileGift: (friendId: string, tileLetter: string) => boolean;
 
+  // Clubs — clubId cache setter. Actual membership mutation happens via the
+  // joinClub/leaveClub Cloud Functions (src/services/clubMembership.ts);
+  // this only records the result locally (and syncs it via cloud save).
+  setClubId: (clubId: string | null) => void;
+
   // Mystery Wheel
   updateMysteryWheel: (updates: Partial<PlayerData['mysteryWheel']>) => void;
   awardFreeSpin: () => void;
@@ -646,6 +651,7 @@ const PlayerContext = createContext<PlayerContextType>({
   checkAchievements: () => [],
   sendHintGift: () => false,
   sendTileGift: () => false,
+  setClubId: () => {},
   updateMysteryWheel: () => {},
   awardFreeSpin: () => {},
   updateWinStreak: () => {},
@@ -1227,6 +1233,37 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       };
     });
   }, []);
+
+  // ── Clubs ───────────────────────────────────────────────────────────────
+
+  // Local cache of the server-authoritative membership. Set after a
+  // successful joinClub/leaveClub callable, and reconciled on app open by
+  // the membership-discovery effect below.
+  const setClubId = useCallback((clubId: string | null) => {
+    setData((prev) => (prev.clubId === clubId ? prev : { ...prev, clubId }));
+  }, []);
+
+  // Cross-device membership discovery (runs once per app open, after auth).
+  // A fresh install has clubId: null even though the server still lists the
+  // uid in a club's memberIds; conversely a stale local clubId survives a
+  // leave performed on another device. The array-contains query is the
+  // source of truth; `undefined` means "couldn't check" (offline) and MUST
+  // NOT clear the local cache.
+  const clubDiscoveryDone = useRef(false);
+  useEffect(() => {
+    if (!loaded || !user || clubDiscoveryDone.current) return;
+    clubDiscoveryDone.current = true;
+    (async () => {
+      try {
+        const { firestoreService } = await import('../services/firestore');
+        const club = await firestoreService.findClubByMembership(user.uid);
+        if (club === undefined) return; // unknown — keep local cache
+        setClubId(club ? (club.id as string) : null);
+      } catch (e) {
+        logger.warn('[Player] club membership discovery failed:', e);
+      }
+    })();
+  }, [loaded, user, setClubId]);
 
   // ── Gifting (extracted to PlayerSocialContext) ──────────────────────────
 
@@ -1905,6 +1942,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       checkAchievements,
       sendHintGift,
       sendTileGift,
+      setClubId,
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
@@ -1973,6 +2011,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       checkAchievements,
       sendHintGift,
       sendTileGift,
+      setClubId,
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
@@ -2046,6 +2085,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       checkAchievements,
       sendHintGift,
       sendTileGift,
+      setClubId,
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
@@ -2113,6 +2153,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       checkAchievements,
       sendHintGift,
       sendTileGift,
+      setClubId,
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
