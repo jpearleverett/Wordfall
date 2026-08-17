@@ -357,7 +357,7 @@ never connected the wires.
 - **Work:** add a `cardStyleInterpolator` that uses a spring for Home
   ↔ Game and slide-from-right for Profile. Respect `useReduceMotion`.
   ~30 lines.
-- **Status:** ✅ SHIPPED. New `cardSpringFadeInterpolator` in
+- **Status:** ❌ NEVER RAN — the interpolator lived in `src/navigation/MainNavigator.tsx`, which no module imported (the live navigators are in App.tsx). File deleted Aug 2026; re-implement against App.tsx's `screenOptions` to actually ship. Original claim: New `cardSpringFadeInterpolator` in
   `MainNavigator.tsx` plus open/close `TransitionSpec` (spring stiffness
   180 damping 22 for push, 220ms cubic-out for pop). React Navigation
   honors OS reduce-motion automatically.

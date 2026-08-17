@@ -17,16 +17,24 @@ import fs from 'fs';
 import path from 'path';
 
 const SRC = path.join(__dirname, '..');
-const NAVIGATOR = path.join(SRC, 'navigation/MainNavigator.tsx');
+// The app's real navigators live in App.tsx. A previous version of this
+// test scanned src/navigation/MainNavigator.tsx — which turned out to be
+// imported by nothing, so the test was auditing dead code while the live
+// navigator went unchecked. That file is deleted; if a dedicated navigator
+// module returns, point this at wherever the screens are actually
+// registered.
+const NAVIGATOR = path.join(SRC, '../App.tsx');
 
 /**
  * Routes with no in-app navigation on purpose. Each needs a reason, so that
  * adding one is a decision rather than an oversight.
  */
 const INTENTIONALLY_UNREACHABLE: Record<string, string> = {
-  // Currently empty, and that is the point — anything added here is a
-  // decision someone made on purpose rather than a screen that quietly lost
-  // its caller.
+  // RootStack renders `Onboarding OR MainTabs` via a ternary on onboarding
+  // state, so BOTH are initial routes of their branch — but only the first
+  // declared one is caught by the initial-route heuristic below. Nothing
+  // navigates to MainTabs by name; it mounts by construction.
+  MainTabs: 'conditionally-rendered root — the non-onboarding branch of RootStack',
   //
   // Not listed: WeeklyLeaderboardScreen. It is not a registered route at all
   // — the file exists but no navigator declares it — so it never reaches this
@@ -98,7 +106,7 @@ describe('navigator route reachability', () => {
 
     if (!reachable) {
       throw new Error(
-        `Route "${route}" is registered in MainNavigator but nothing navigates to it. ` +
+        `Route "${route}" is registered in the navigator but nothing navigates to it. ` +
           `Either wire an entry point, or add it to INTENTIONALLY_UNREACHABLE with a reason.`,
       );
     }

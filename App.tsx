@@ -274,6 +274,7 @@ function ProfileMainScreen({ navigation }: any) {
       onOpenSettings={() => navigation.navigate('Settings')}
       onEditProfile={() => navigation.navigate('EditProfile')}
       onOpenMastery={() => navigation.navigate('Mastery')}
+      onOpenClub={() => navigation.navigate('Club')}
     />
   );
 }
