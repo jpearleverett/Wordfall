@@ -4,6 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { WordPlacement } from '../types';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { useColors } from '../hooks/useColors';
+import { useSettings } from '../contexts/SettingsContext';
 
 interface WordChipProps {
   wordPlacement: WordPlacement;
@@ -151,11 +153,37 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   // moment while nothing in the render output referenced it. The active/valid
   // visual comes entirely from wordChipActive / wordChipValid styles.
 
+  // CVD-aware semantic colors. The static chip styles bake in the designer
+  // palette; when a colorblind mode is on, inline overrides re-point the
+  // state colors (found=green axis, active=accent axis, last=gold axis) at
+  // the remapped palette. Gated on the mode so the default look is
+  // bit-for-bit unchanged when it's off.
+  const palette = useColors();
+  const { colorblindMode } = useSettings();
+  const cvdActive = colorblindMode !== 'off';
+
   const getChipStyle = () => {
     if (wordPlacement.found) return styles.wordChipFound;
     if (isActive && isValidWord) return styles.wordChipValid;
     if (isActive) return styles.wordChipActive;
     return null;
+  };
+
+  const getChipCvdOverride = () => {
+    if (!cvdActive) return null;
+    if (wordPlacement.found || (isActive && isValidWord)) {
+      return { borderColor: palette.green, shadowColor: palette.green };
+    }
+    if (isActive) return { borderColor: palette.accent, shadowColor: palette.accent };
+    return null;
+  };
+
+  const getTextCvdOverride = () => {
+    if (!cvdActive) return null;
+    if (wordPlacement.found) return { color: palette.wordFound, textShadowColor: palette.greenGlow };
+    if (isActive && isValidWord) return { color: palette.green, textShadowColor: palette.greenGlow };
+    if (isActive) return { color: palette.wordActive, textShadowColor: palette.accentGlow };
+    return { color: palette.wordPending };
   };
 
   // Tier 6 B7 — tension pulse maps tensionScaleAnim to a scale overshoot.
@@ -172,6 +200,10 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         styles.wordChip,
         getChipStyle(),
         isLastRemaining && !wordPlacement.found && styles.wordChipLastRemaining,
+        getChipCvdOverride(),
+        isLastRemaining && !wordPlacement.found && cvdActive
+          ? { borderColor: palette.gold, shadowColor: palette.gold }
+          : null,
         {
           transform: [
             { scale: Animated.multiply(Animated.multiply(scaleAnim, lastRemainingAnim), tensionScale) },
@@ -206,6 +238,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
           wordPlacement.found && styles.wordTextFound,
           isActive && !isValidWord && styles.wordTextActive,
           isActive && isValidWord && styles.wordTextValid,
+          getTextCvdOverride(),
         ]}
       >
         {wordPlacement.word}
@@ -214,7 +247,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
       {wordPlacement.found && (
         <Animated.View style={[styles.checkContainer, { opacity: foundAnim }]}>
           <LinearGradient
-            colors={[COLORS.green, COLORS.teal] as [string, string]}
+            colors={[palette.green, COLORS.teal] as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}

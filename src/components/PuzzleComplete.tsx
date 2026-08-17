@@ -39,6 +39,7 @@ import NeonStarBurst from './victory/NeonStarBurst';
 import FlawlessBadge from './victory/FlawlessBadge';
 import { ShareCard } from './ShareCard';
 import { useShareVictory } from '../hooks/useShareVictory';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -363,6 +364,7 @@ export function PuzzleComplete({
 }: PuzzleCompleteProps) {
   const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
+  const reduceMotion = useReduceMotion();
 
   // Victory card share (Phase 4C). Captures the off-screen <ShareCard/>
   // into a PNG and hands it to the system share sheet. Falls back to a
@@ -591,7 +593,10 @@ export function PuzzleComplete({
           and starts a playback loop. SparkleField / CelebrationBurst / 20
           confetti particles collectively add ~100+ native views. Deferring
           them cuts PuzzleComplete mount time from ~180-220ms to ~60-90ms. */}
-      {decorationsMounted && (
+      {/* Under reduce motion the celebration video and falling confetti are
+          skipped entirely (SparkleField / CelebrationBurst self-gate). The
+          card, stars, and badge still appear — content, not motion. */}
+      {decorationsMounted && !reduceMotion && (
         <>
           <VideoBackground
             source={LOCAL_VIDEOS.victoryCelebration}
@@ -687,7 +692,7 @@ export function PuzzleComplete({
                   solve gets this; streak milestones get a full-screen ceremony
                   on top. */}
               {perfectRun && (
-                <FlawlessBadge visible={starsRevealed} delay={700} />
+                <FlawlessBadge visible={starsRevealed} delay={700} reduceMotion={reduceMotion} />
               )}
 
               {/* Chrome score panel with CRT scan lines */}

@@ -126,6 +126,47 @@ export function getColorblindOverrides(
 }
 
 /**
+ * Tile-face gradient ramps (5 stops, light → dark) for the states whose
+ * FACE color carries meaning. LetterCell's designer ramps are static module
+ * constants, so without these the CVD palette only ever reached the tile
+ * borders — a deutan player still saw a magenta selected face vs a green
+ * valid face, exactly the confusion pair the palette exists to remove.
+ * A `null` member means the designer default is already CVD-safe for that
+ * mode and should be kept.
+ */
+export type TileFaceRamp = [string, string, string, string, string];
+export interface TileFaceRamps {
+  selected: TileFaceRamp | null;
+  valid: TileFaceRamp | null;
+  selectedHint: TileFaceRamp | null;
+}
+
+/** Deutan/protan: selected → cyan, valid → blue; gold hint is already safe. */
+const DEUTAN_FACE_RAMPS: TileFaceRamps = {
+  selected: ['#2ec9ff', '#00bfff', '#00a4e0', '#0086bd', '#006494'],
+  valid: ['#5ea8ff', '#3392ff', '#2478e8', '#185fc4', '#0e4694'],
+  selectedHint: null,
+};
+
+/** Tritan: gold/cyan collapse — hint → pink; magenta/green pair is safe. */
+const TRITAN_FACE_RAMPS: TileFaceRamps = {
+  selected: null,
+  valid: null,
+  selectedHint: ['#ff9ed6', '#ff71c0', '#ea5aab', '#cc4694', '#a83378'],
+};
+
+const FACE_RAMPS: Record<Exclude<ColorblindMode, 'off'>, TileFaceRamps> = {
+  deuteranopia: DEUTAN_FACE_RAMPS,
+  protanopia: DEUTAN_FACE_RAMPS,
+  tritanopia: TRITAN_FACE_RAMPS,
+};
+
+export function getColorblindTileRamps(mode: ColorblindMode): TileFaceRamps | null {
+  if (mode === 'off') return null;
+  return FACE_RAMPS[mode];
+}
+
+/**
  * Human-readable labels for the Settings screen.
  */
 export const COLORBLIND_MODE_LABELS: Record<ColorblindMode, string> = {
