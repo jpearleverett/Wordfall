@@ -4,6 +4,7 @@ import {
   Alert,
   AppState,
   Animated,
+  Easing,
   InteractionManager,
   Pressable,
   SafeAreaView,
@@ -15,7 +16,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import {
+  createStackNavigator,
+  StackCardInterpolationProps,
+  StackNavigationOptions,
+} from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts, loadAsync as loadFontAsync } from 'expo-font';
 import { markRoundedFontReady } from './src/services/fontReady';
@@ -109,22 +114,97 @@ import { ceremonyEconomyGrant } from './src/utils/ceremonyGrants';
 import { getLoginCalendarDay } from './src/data/loginCalendar';
 
 const Tab = createBottomTabNavigator();
-const HomeStack = createNativeStackNavigator();
-const PlayStack = createNativeStackNavigator();
-const CollectionsStack = createNativeStackNavigator();
-const LibraryStack = createNativeStackNavigator();
-const ProfileStack = createNativeStackNavigator();
-const RootStack = createNativeStackNavigator();
+const HomeStack = createStackNavigator();
+const PlayStack = createStackNavigator();
+const CollectionsStack = createStackNavigator();
+const LibraryStack = createStackNavigator();
+const ProfileStack = createStackNavigator();
+const RootStack = createStackNavigator();
 
-const screenOptions = {
+// P2 in launch_blockers.md (re-landed Aug 2026): the custom spring/fade
+// transition was originally authored in the dead src/navigation/
+// MainNavigator.tsx and never ran. These are the REAL navigators, on the JS
+// stack (@react-navigation/stack) because native-stack cannot run a custom
+// cardStyleInterpolator. The card transform/opacity animate on the native
+// driver, so the transition itself stays off the JS thread; freezeOnBlur
+// still keeps covered screens from burning frames.
+//
+// Push = spring (stiffness 180 / damping 22, clamped — no overshoot blur)
+// tuned to the in-game ceremony settle feel; pop = 220ms cubic-out so
+// back-nav feels snappier than forward-nav. React Navigation itself honors
+// the OS reduce-motion flag for stack transitions.
+type StackTransitionSpec = NonNullable<StackNavigationOptions['transitionSpec']>;
+
+const springOpenSpec: StackTransitionSpec['open'] = {
+  animation: 'spring',
+  config: {
+    stiffness: 180,
+    damping: 22,
+    mass: 1,
+    overshootClamping: true,
+    restDisplacementThreshold: 0.01,
+    restSpeedThreshold: 0.01,
+  },
+};
+
+const timingCloseSpec: StackTransitionSpec['close'] = {
+  animation: 'timing',
+  config: {
+    duration: 220,
+    easing: Easing.out(Easing.cubic),
+  },
+};
+
+// Incoming card: 6% slide-in + 0.96→1 scale + fade; outgoing card dims to
+// 92% behind a matching overlay so the push reads as depth, not a cover.
+function cardSpringFadeInterpolator({
+  current,
+  next,
+  layouts,
+}: StackCardInterpolationProps) {
+  const translateX = current.progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [layouts.screen.width * 0.06, 0],
+  });
+  const scale = current.progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.96, 1],
+  });
+  const opacity = current.progress.interpolate({
+    inputRange: [0, 0.3, 1],
+    outputRange: [0, 0.6, 1],
+  });
+  const nextOpacity = next
+    ? next.progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 0.92],
+      })
+    : 1;
+  return {
+    cardStyle: {
+      transform: [{ translateX }, { scale }],
+      opacity,
+    },
+    overlayStyle: {
+      opacity: Animated.subtract(1, nextOpacity),
+    },
+  };
+}
+
+const screenOptions: StackNavigationOptions = {
   headerShown: false,
-  // native-stack uses `contentStyle` for the screen background (JS stack
-  // used `cardStyle`). Same effect, different field name.
-  contentStyle: { backgroundColor: COLORS.bg },
+  // JS stack uses `cardStyle` for the screen background (native-stack used
+  // `contentStyle`). Same effect, different field name.
+  cardStyle: { backgroundColor: COLORS.bg },
   // Freeze screens that are pushed behind the current one. Without this, every
   // previous screen keeps running its backdrop animations, setIntervals, and
   // effects in the background — a 5-screen stack = 5x animation load.
   freezeOnBlur: true,
+  cardStyleInterpolator: cardSpringFadeInterpolator,
+  transitionSpec: {
+    open: springOpenSpec,
+    close: timingCloseSpec,
+  },
 };
 
 // Home Tab Stack
