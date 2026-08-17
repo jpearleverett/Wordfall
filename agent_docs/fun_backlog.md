@@ -30,11 +30,10 @@ back-to-back)
   perfectRun (no hints/undos/shuffles), 2★ = one assist; small coin grants +
   autoDismissMs on 3/5/7 flawless milestones. Interacts with R1 — ship
   together. ~25 lines + tests (starThresholds defined and unread).
-- **F-minor:** economy primer hardcoded EN (i18n); onboardingMilestones
-  advertise wrong unlock levels (3/8/12 vs actual 2/6/8); getNextMilestone
-  returns LAST eligible so keep_going can never display; auto-advance timer
-  not suppressed while a ceremony is on screen (PuzzleComplete:485-489);
-  LoadingTip/loadingTips.ts never imported.
+- **F-minor (remaining):** economy primer hardcoded EN (i18n);
+  LoadingTip/loadingTips.ts never imported (wire into board-gen wait or
+  delete). Mode-tease milestone levels lag their unlocks by 1-4 levels —
+  copy is still true ("unlocked"), left as cadence.
 
 ### Juice (moment-to-moment) — from the 2026-08-17 feel audit
 
@@ -43,9 +42,6 @@ back-to-back)
   path + slide the banner in with a spring instead of a hard mount.
 - **J3-remainder.** Idle gate fix shipped; still open: pre-monetization ~45s
   "still findable" chip shimmer (reassurance tier before the hint/ad CTA).
-- **J7. Trace pitch ladder collapses on confident swipes** (one sound per
-  40ms batch, `PlayField.tsx:144-168`). FIX: schedule per-cell taps at ~22ms
-  offsets, cap 4/batch, keep single haptic. ~15 lines.
 - **J8. Score popup: opaque slab at fixed top:33% for ~900ms.** FIX: origin
   at cleared-word centroid via `cellPositionToScreen`, translucent chip,
   ~350ms hold. ~60 lines (grid-area offset threading is the fiddly part).
@@ -68,9 +64,6 @@ back-to-back)
   suppressed on break days, calendar defers to ceremonies, shield defers to
   calendar). Still open: a full overlayOwner sequencer covering
   welcome-back overlay + MysteryWheel + SessionEndReminder.
-- **R6. No "almost done" meta goal on Home.** NextGoalCard picking the
-  closest-to-completion goal (chapter stars / wing / atlas page / mastery
-  tier), one CTA. ~80 lines.
 - **R8. Ten modes unlock by L22 then nothing pulls players back.** Render
   modeStats on cards, per-mode 3-tier goals, deep-link the recommendation,
   late unlock beats (L60/L80). ~60 lines.
@@ -84,6 +77,20 @@ coordination, victory polish, humane stuck-rescue logic,
 legacyTaskCardsEnabled=false, honest reminder scheduling.
 
 ## SHIPPED
+
+- 2026-08-17 (batch 8 — goal card, pitch ladder, onboarding fixes):
+  - **R6** NextGoalCard on the YOUR JOURNEY band: one closest-to-completion
+    meta goal with a progress bar — the next unmet chapter star gate within
+    3 chapters, else mastery of the current chapter. Pure picker
+    (src/data/nextGoal.ts) + unit suite; taps into onPlay.
+  - **J7** the rising-pitch trace ladder no longer collapses on confident
+    swipes: one tap sound per crossed cell at 22ms offsets (rate stepped
+    per index, capped 4/batch), single haptic per batch kept.
+  - **F-minor** the shadowed keep_going milestone (same triggerLevel as
+    mystery_wheel — could never display) deleted with a distinct-levels
+    NOTE; auto-advance no longer navigates to the next level UNDERNEATH an
+    active ceremony modal (isCeremonyVisible() module flag from
+    useCeremonyQueue, checked at fire time — cancels rather than defers).
 
 - 2026-08-17 (batch 7 — session hooks + calm big words + timers live):
   - **F10** the first session finally has an ending hook: the built-but-dead

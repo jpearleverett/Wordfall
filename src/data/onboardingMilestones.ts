@@ -14,14 +14,10 @@ export const ONBOARDING_MILESTONES: OnboardingMilestone[] = [
     action: 'play',
     icon: '🎮',
   },
-  {
-    id: 'keep_going',
-    triggerLevel: 2,
-    message: 'Great solve! Keep the momentum going.',
-    ctaLabel: 'NEXT PUZZLE',
-    action: 'play_again',
-    icon: '🔥',
-  },
+  // NOTE: milestones must have DISTINCT triggerLevels — getNextMilestone
+  // returns the highest eligible entry, so two at the same level means the
+  // earlier one can effectively never display (the shadowed 'keep_going'
+  // that used to sit at level 2 was deleted for exactly this reason).
   {
     id: 'mystery_wheel',
     triggerLevel: 2,
@@ -32,6 +28,8 @@ export const ONBOARDING_MILESTONES: OnboardingMilestone[] = [
   },
   {
     id: 'try_relax',
+    // Relax actually unlocks at level 2 (MODE_CONFIGS); the banner fires at
+    // 3 so it doesn't collide with the wheel milestone and stays true.
     triggerLevel: 3,
     message: 'New mode unlocked: Relax! No pressure, unlimited undos.',
     ctaLabel: 'TRY IT',

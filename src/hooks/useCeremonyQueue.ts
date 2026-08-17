@@ -6,6 +6,19 @@ import { soundManager } from '../services/sound';
 /** Maximum ceremonies to show per puzzle completion to prevent modal fatigue */
 const MAX_CEREMONIES_PER_BATCH = 2;
 
+/**
+ * Module-level "a ceremony modal is on screen right now" flag, for consumers
+ * that can't reach App's ceremony state (e.g. PuzzleComplete's auto-advance
+ * timer, which must not navigate to the next level UNDERNEATH an active
+ * first_win modal). Read-only outside this hook; maintained by the effect
+ * below. Polling a module flag beats threading a prop through GameScreen for
+ * a value only checked at one instant.
+ */
+let ceremonyVisible = false;
+export function isCeremonyVisible(): boolean {
+  return ceremonyVisible;
+}
+
 interface UseCeremonyQueueOptions {
   /** Function to pop the next ceremony from the player context queue */
   popCeremony: () => CeremonyItem | null;
@@ -42,6 +55,12 @@ export function useCeremonyQueue({
   isBlocked,
 }: UseCeremonyQueueOptions): UseCeremonyQueueResult {
   const [activeCeremony, setActiveCeremony] = useState<CeremonyItem | null>(null);
+  useEffect(() => {
+    ceremonyVisible = activeCeremony !== null;
+    return () => {
+      ceremonyVisible = false;
+    };
+  }, [activeCeremony]);
   // Bumped by resetBatchCounter so the processing effect re-runs. The reset
   // used to only zero a ref — which none of the effect's dependencies
   // observe — so ceremonies deferred by the batch cap stayed stuck until

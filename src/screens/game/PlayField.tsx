@@ -159,12 +159,30 @@ function PlayFieldImpl({
       const now = Date.now();
       if (now - lastTapFeedbackAt.current > 40) {
         lastTapFeedbackAt.current = now;
+        // ONE haptic per batch (haptic spam is worse than audio spam), but
+        // the rising-pitch ladder plays per cell: a confident swipe across a
+        // 7-letter word used to collapse to a single tap sound — the moment
+        // of highest fluency went mute while hesitant tracing got the full
+        // ladder. Stagger one tap per crossed cell at 22ms with the rate
+        // stepping per index, capped at 4 so a pathological drag can't
+        // machine-gun.
         void tapHaptic();
-        void soundManager.playSound('tap', { rate: tapRateForTrace() });
+        const baseLen = selectionLenRef.current;
+        const count = Math.min(positions.length, 4);
+        for (let i = 0; i < count; i++) {
+          const rate = 1 + Math.min(8, baseLen + i) * 0.06;
+          if (i === 0) {
+            void soundManager.playSound('tap', { rate });
+          } else {
+            setTimeout(() => {
+              void soundManager.playSound('tap', { rate });
+            }, i * 22);
+          }
+        }
       }
       dispatch({ type: 'SELECT_CELLS', positions });
     },
-    [dispatch, onCellInteraction, tapRateForTrace],
+    [dispatch, onCellInteraction],
   );
 
   // ── Release a dead trace on finger lift ────────────────────────────────

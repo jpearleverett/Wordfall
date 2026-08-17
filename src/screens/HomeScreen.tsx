@@ -54,6 +54,7 @@ import {
 } from '../stores/playerStore';
 import { getNextMilestone } from '../data/onboardingMilestones';
 import DailyRewardTimers from '../components/DailyRewardTimers';
+import { getNextGoal } from '../data/nextGoal';
 
 interface DailyMissionDisplay {
   id: string;
@@ -202,6 +203,15 @@ export function HomeScreen({
 
   const playerStreaks = usePlayerStore(selectStreaks);
   const pendingCeremonies = usePlayerStore(selectPendingCeremonies);
+
+  // R6: single closest-to-completion meta goal for the YOUR JOURNEY band.
+  const nextGoal = useMemo(() => {
+    const totalStars = Object.values(progress.starsByLevel).reduce(
+      (a, b) => a + b,
+      0,
+    );
+    return getNextGoal(totalStars, progress.currentLevel, progress.starsByLevel);
+  }, [progress.starsByLevel, progress.currentLevel]);
 
   useEffect(() => {
     if (streakOfferDismissed.current || streakShieldActive) return;
@@ -935,6 +945,36 @@ export function HomeScreen({
             onLevelPress={() => onPlay()}
           />
         </LinearGradient>
+        {/* R6: the ONE closest-to-completion meta goal, with a bar. The
+            long arcs (chapter gates, chapter mastery) were invisible from
+            Home — the only long goal shown was the monthly-resetting season
+            pass, so felt progression read as a treadmill. */}
+        {nextGoal && (
+          <Pressable
+            onPress={() => onPlay()}
+            accessibilityRole="button"
+            accessibilityLabel={`Next goal: ${nextGoal.title}. ${nextGoal.detail}. Play now.`}
+          >
+            <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.nextGoalCard}>
+              <Text style={styles.nextGoalIcon}>{nextGoal.icon}</Text>
+              <View style={styles.nextGoalBody}>
+                <Text style={styles.nextGoalTitle} numberOfLines={1}>
+                  {nextGoal.title}
+                </Text>
+                <View style={styles.nextGoalBarBg}>
+                  <View
+                    style={[
+                      styles.nextGoalBarFill,
+                      { width: `${Math.round(nextGoal.progress * 100)}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.nextGoalDetail}>{nextGoal.detail}</Text>
+              </View>
+              <Text style={styles.nextGoalChevron}>›</Text>
+            </LinearGradient>
+          </Pressable>
+        )}
         {/* Flawless Streak — consecutive clean solves. Active card shines gold;
             empty state teaches what earns the streak. */}
         <FlawlessStreakCard
@@ -1930,6 +1970,48 @@ const styles = StyleSheet.create({
   },
 
   // Neon Highway shell — Bento cyan
+  nextGoalCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+  },
+  nextGoalIcon: {
+    fontSize: 26,
+  },
+  nextGoalBody: {
+    flex: 1,
+    gap: 5,
+  },
+  nextGoalTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  nextGoalBarBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.surface2,
+    overflow: 'hidden',
+  },
+  nextGoalBarFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: COLORS.teal,
+  },
+  nextGoalDetail: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  nextGoalChevron: {
+    fontSize: 24,
+    color: COLORS.textMuted,
+  },
   highwayShell: {
     ...bentoPanel('cyan'),
     padding: 0, // children manage their own padding

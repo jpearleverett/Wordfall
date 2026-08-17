@@ -40,6 +40,7 @@ import FlawlessBadge from './victory/FlawlessBadge';
 import { ShareCard } from './ShareCard';
 import { useShareVictory } from '../hooks/useShareVictory';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { isCeremonyVisible } from '../hooks/useCeremonyQueue';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -484,7 +485,18 @@ export function PuzzleComplete({
 
   useEffect(() => {
     if (autoAdvanceRemainingMs === null) return;
-    const id = setTimeout(() => onNextLevel(), autoAdvanceRemainingMs);
+    const id = setTimeout(() => {
+      // A ceremony modal (first_win, mode unlock, …) may have opened over
+      // the victory screen. Auto-advancing would navigate to the next level
+      // UNDERNEATH it — the player dismisses the modal onto a board they
+      // never chose. Cancel instead of deferring: after reading a ceremony
+      // the next move is theirs.
+      if (isCeremonyVisible()) {
+        setAutoAdvanceCancelled(true);
+        return;
+      }
+      onNextLevel();
+    }, autoAdvanceRemainingMs);
     return () => clearTimeout(id);
   }, [autoAdvanceRemainingMs, onNextLevel]);
 
