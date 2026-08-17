@@ -64,4 +64,27 @@ describe('difficulty curve profile', () => {
     }
     expect(worstRun).toBeLessThanOrEqual(3);
   });
+
+  it('grid SHAPE changes at least every 3 levels through L14', () => {
+    // The full-config run guard above passes even when six straight levels
+    // share the same rows×cols (a word-count bump resets the run key). But
+    // the SHAPE is what the player's eye reads as "a new board" — L5-L10
+    // once shipped six 6x5 grids in a row and passed. Pin shape variety
+    // separately through the first-session window.
+    let runLength = 1;
+    let worstRun = 1;
+    let prevShape = '';
+    for (let level = 1; level <= 14; level++) {
+      const c = getLevelConfig(level);
+      const shape = `${c.rows}x${c.cols}`;
+      if (shape === prevShape) {
+        runLength++;
+        worstRun = Math.max(worstRun, runLength);
+      } else {
+        runLength = 1;
+      }
+      prevShape = shape;
+    }
+    expect(worstRun).toBeLessThanOrEqual(2);
+  });
 });

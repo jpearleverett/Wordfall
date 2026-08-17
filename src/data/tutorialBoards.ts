@@ -213,6 +213,13 @@ export interface TutorialGuideStep {
   highlightWord?: string;
   waitForAction?: 'tap_cells' | 'word_submitted' | 'gravity_done' | 'dismiss';
   showHandPointer?: boolean;
+  /**
+   * Keep highlightPositions for input validation (and for the gravity-replay
+   * integrity test) but do NOT render them as hints — the player locates the
+   * word themselves. This is the difference between teaching word-searching
+   * and teaching tap-where-we-point.
+   */
+  hideHighlight?: boolean;
   delay?: number;
   board?: 'A' | 'B' | 'C' | 'D';
 }
@@ -231,7 +238,7 @@ export interface TutorialGuideStep {
  */
 export const TUTORIAL_STEPS: TutorialGuideStep[] = [
   {
-    message: 'Tap the letters C, A, T to find the hidden word!',
+    message: 'Tap or drag across C, A, T to spell the first word on your list!',
     highlightPositions: [{ row: 2, col: 0 }, { row: 2, col: 1 }, { row: 2, col: 2 }],
     highlightWord: 'CAT',
     waitForAction: 'word_submitted',
@@ -245,11 +252,17 @@ export const TUTORIAL_STEPS: TutorialGuideStep[] = [
     board: 'B',
   },
   {
-    message: 'Now find DOG — gravity moved it down!',
+    // The real skill loop is read-the-list → scan the grid → trace. This is
+    // the one step where the player does it unaided: DOG's post-gravity
+    // positions stay authored (input validation + the gravity-replay
+    // integrity test) but are not shown, and there is no hand pointer. A
+    // 5×4 board keeps the search trivially winnable.
+    message: 'DOG is still on your list — find it!',
     highlightPositions: [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
     highlightWord: 'DOG',
     waitForAction: 'word_submitted',
-    showHandPointer: true,
+    showHandPointer: false,
+    hideHighlight: true,
     delay: 300,
     board: 'B',
   },

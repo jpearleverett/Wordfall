@@ -926,6 +926,16 @@ interface FairnessBudget {
   target: number;
   samples: number;
   budgetMs: number;
+  /**
+   * When true, the wall-clock deadline is IGNORED and the search is bounded
+   * by `attempts` alone, making the result a pure function of the seed.
+   * Required for the weekly: its scores rank on a shared leaderboard, and a
+   * time-cut search returns "best of however many candidates fit in the
+   * budget" — which varied not just across devices but across runs on the
+   * SAME device once theme words made candidates slower (cache eviction +
+   * regeneration produced a different board; caught by sharedBoards.test).
+   */
+  deterministic?: boolean;
 }
 
 const DAILY_FAIRNESS: FairnessBudget = {
@@ -969,7 +979,7 @@ function shopFairestBoard(
   );
 
   for (let attempt = 1; attempt < budget.attempts && bestScore < budget.target; attempt++) {
-    if (Date.now() >= deadline) break;
+    if (!budget.deterministic && Date.now() >= deadline) break;
     const seed = baseSeed + attempt * 7919;
     const candidate = generateBoard(config, seed, undefined, undefined, themeWords);
     const score = estimateForgiveness(
@@ -1026,7 +1036,12 @@ const weeklyBoardCache = new Map<string, Board>();
  * the column-disjoint placement that keeps a board forgiving.
  */
 const WEEKLY_FAIRNESS: FairnessBudget = {
-  attempts: 64,
+  // 64 → 24 alongside the deterministic flag: without a wall-clock cut the
+  // attempt count IS the time bound, and a full 64-attempt search with
+  // theme words measured up to ~2.5s on a fast machine. 24 attempts caps
+  // the once-a-week worst case near ~1s while most weeks still early-stop
+  // on the 0.85 target within a handful of candidates.
+  attempts: 24,
   target: 0.85,
   // More samples per candidate than the daily. With 12 samples the estimator
   // is noisy enough to crown a board that a play simulation then finds
@@ -1034,6 +1049,7 @@ const WEEKLY_FAIRNESS: FairnessBudget = {
   // measurement worth acting on.
   samples: 24,
   budgetMs: 700,
+  deterministic: true,
 };
 
 /**

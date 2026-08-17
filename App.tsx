@@ -50,6 +50,7 @@ import { hasAcceptedTos } from './src/services/consent';
 import { generateBoard, generateDailyBoard, generateWeeklyBoard } from './src/engine/boardGenerator';
 import { getWeekId } from './src/utils/weekId';
 import { getChapterForLevel } from './src/data/chapters';
+import { getCurrentEvent, getEventPlayConfig } from './src/data/events';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
@@ -230,7 +231,12 @@ function EventScreenWrapperNav({ navigation }: any) {
   const economy = useEconomy();
 
   const handlePlayEventPuzzle = useCallback(() => {
-    const mode: GameMode = 'classic';
+    // Events run in the mode their rules describe (speedSolve → timer,
+    // perfectClear/expertGauntlet → perfect-solve, gravity championship →
+    // gravityFlip, theme week → themed word list). This used to hardcode
+    // classic and ignore rules entirely — see getEventPlayConfig.
+    const eventPlay = getEventPlayConfig(getCurrentEvent());
+    const mode: GameMode = eventPlay.mode;
 
     // Energy check (same pattern as ModesScreenWrapper)
     const isFreeMode = ENERGY.FREE_MODES.includes(mode);
@@ -267,10 +273,20 @@ function EventScreenWrapperNav({ navigation }: any) {
       let config = getLevelConfigExtended(modeLevel);
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
       config = adjusted.config;
+      if (eventPlay.difficulty) {
+        // Expert gauntlet: the event promises expert boards.
+        config = { ...config, difficulty: eventPlay.difficulty };
+      }
 
       const seed = Date.now() + modeLevel * 1337;
       const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
-      let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
+      let board = generateBoard(
+        config,
+        seed,
+        mode,
+        chapter?.profile,
+        eventPlay.themeWords ?? chapter?.themeWords,
+      );
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.navigate('Game', {
@@ -278,7 +294,7 @@ function EventScreenWrapperNav({ navigation }: any) {
         level: modeLevel,
         mode,
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
-        timeLimit: modeConfig.rules.timerSeconds || 0,
+        timeLimit: eventPlay.timeLimitSeconds ?? modeConfig.rules.timerSeconds ?? 0,
       });
     } catch (e: any) {
       if (e?.message?.includes('timed out')) {

@@ -229,6 +229,7 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           title="You Did It!"
           description={`Your first puzzle is complete! +${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems, and a free Mystery Wheel spin!`}
           accentColor={COLORS.gold}
+          tips={activeCeremony.data.tips}
           rewardLabel={`+${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems`}
           buttonText="AMAZING!"
           onDismiss={onDismiss}

@@ -243,3 +243,58 @@ export function getCurrentEvent(): GameEvent | null {
 
   return event;
 }
+
+// ── Event play configuration ────────────────────────────────────────────────
+
+export interface EventPlayConfig {
+  /** GameMode the event's puzzles actually run in. */
+  mode: import('../types').GameMode;
+  /** Countdown seconds (timePressure-mapped events only). */
+  timeLimitSeconds?: number;
+  /** Difficulty override (expert gauntlet). */
+  difficulty?: import('../types').Difficulty;
+  /** Theme word list (theme week). */
+  themeWords?: string[];
+}
+
+/**
+ * Map an event's authored rules onto the existing mode machinery.
+ *
+ * The event Play button used to hardcode mode:'classic' and never consult
+ * `rules` at all — a player tapping Play during Expert Gauntlet got their
+ * ordinary next level and correctly concluded events are a reskinned score
+ * counter. Nothing new is invented here: every mapping reuses a shipped
+ * mode (timer, perfect-solve, gravity flip) or the themeWords parameter the
+ * generator already takes. Events with rules the engine can't express yet
+ * (mysteryWords' hidden bank, clubRally's team scoring) stay classic.
+ */
+export function getEventPlayConfig(event: GameEvent | null): EventPlayConfig {
+  if (!event) return { mode: 'classic' };
+  switch (event.type) {
+    case 'speedSolve':
+      return {
+        mode: 'timePressure',
+        timeLimitSeconds: Number(event.rules?.timeLimit) > 0 ? Number(event.rules.timeLimit) : 60,
+      };
+    case 'perfectClear':
+      return { mode: 'perfectSolve' };
+    case 'expertGauntlet':
+      return { mode: 'perfectSolve', difficulty: 'expert' };
+    case 'gravityFlipChampionship':
+      return { mode: 'gravityFlip' };
+    case 'themeWeek': {
+      // Curated nature list reusing the shared-board authoring bank.
+      const { DAILY_THEMES } = require('./sharedBoardThemes') as
+        typeof import('./sharedBoardThemes');
+      const nature = DAILY_THEMES.filter((t) =>
+        ['Garden Path', 'Jungle Trek', 'Rainstorm', 'Harvest Home'].includes(t.name),
+      );
+      return {
+        mode: 'classic',
+        themeWords: nature.flatMap((t) => t.words),
+      };
+    }
+    default:
+      return { mode: 'classic' };
+  }
+}

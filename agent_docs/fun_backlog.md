@@ -24,25 +24,12 @@ Constraints (from `game_mechanics.md` — read it before editing this list):
 (~20 blocking interruptions before L10; player never plays 2 puzzles
 back-to-back)
 
-- **F2. Tutorial teaches "tap where we point", never word-searching.**
-  `OnboardingScreen.tsx:114-117` rejects taps outside highlightPositions; no
-  WordBank rendered; copy spells answers letter-by-letter. FIX: render
-  WordBank chips from tutorialBoard.words; step 3 loses highlightPositions
-  (keep chip pulse) so the player locates DOG unaided; mention drag. ~60 ln.
-- **F6. first_win ceremony drops its teaching payload** — data.tips built in
-  `useRewardWiring.ts:450-462`, MilestoneCeremony has no tips prop; two
-  onboarding phases were deleted on the promise this ceremony carried their
-  content. FIX: optional tips prop + render in first_win branch,
-  autoDismissMs 4000→6000. ~30 lines.
 - **F7. Stars are a hidden boolean** (moves ≤ totalWords is ALWAYS true → 3★
   = hintsUsed===0) so 3★ + FLAWLESS both fire on every early win; three
   rewardless flawless ceremonies inside session 1. FIX: align 3★ with
   perfectRun (no hints/undos/shuffles), 2★ = one assist; small coin grants +
   autoDismissMs on 3/5/7 flawless milestones. Interacts with R1 — ship
   together. ~25 lines + tests (starThresholds defined and unread).
-- **F8. L5-10 = same 6×5 board six times** (`constants.ts:334-339`). FIX:
-  split bands (L7 6×6 len3-5 introduces first 5-letter word, L10 7×6);
-  tighten curveProfile to assert ≤2 consecutive same rows×cols. ~10 lines.
 - **F10. First session has no ending hook.** SessionEndReminder is dead code
   (setShowSessionReminder never called); comeback ping is 3 days out.
   FIX: fire reminder on Home when puzzlesSolved≥3 && daily not done; 20h
@@ -88,10 +75,6 @@ back-to-back)
 - **R2. Notification cap counts scheduling not delivery** (one app open burns
   the whole daily budget, `notifications.ts:332-356`); per-segment
   streakReminderHour/dailyChallengeHour authored but read nowhere. ~30 lines.
-- **R4. Events' Play button starts a plain classic puzzle**
-  (`App.tsx:232-233` hardcodes mode='classic', event rules never consulted).
-  FIX: map speedSolve→timePressure, perfectClear/expertGauntlet→perfectSolve,
-  gravityFlipChampionship→gravityFlip, themeWeek→themeWords. ~40 lines.
 - **R5. Returning-player modal pile-up** — login calendar (900ms), streak
   shield offer (1000ms), PostStreakBreakOffer, welcome-back, MysteryWheel,
   ceremonies — no sequencer. FIX: shared overlayOwner priority order;
@@ -118,6 +101,34 @@ coordination, victory polish, humane stuck-rescue logic,
 legacyTaskCardsEnabled=false, honest reminder scheduling.
 
 ## SHIPPED
+
+- 2026-08-17 (batch 5 — tutorial teaches searching + events play real rules):
+  - **F2** tutorial renders the find-list chips from step 1 (checked off as
+    found); step 3 hides the highlight + hand pointer so the player locates
+    DOG unaided (positions stay authored for input validation and the
+    gravity-replay integrity test — new `hideHighlight` step flag); step-1
+    copy teaches drag as well as tap.
+  - **F6** MilestoneCeremony gained a `tips` prop; the first_win ceremony
+    now renders the three gravity/order teaching rows it always carried in
+    data (two onboarding phases were deleted on the promise it would), and
+    auto-dismiss went 4000 → 6000ms so they're readable.
+  - **F8** L5-10 board-shape monotony broken: 6×5 → 6×6 (first 5-letter
+    word at L7) → 7×6 (L8-9) → 6×5 breather at L10. curveProfile now pins
+    shape (rows×cols) runs ≤2 through L14 — the old guard keyed on full
+    config and passed six identical shapes.
+  - **R4** events play their rules: speedSolve → timePressure (authored 60s),
+    perfectClear → perfectSolve, expertGauntlet → perfectSolve at expert,
+    gravityFlipChampionship → gravityFlip, themeWeek → curated nature word
+    list; the rest stay classic deliberately. Pure mapping layer
+    `getEventPlayConfig` in events.ts + unit suite.
+  - **Weekly board is now a pure function of the week id**: theme words made
+    candidates slow enough that the 700ms wall-clock cut returned different
+    boards across runs on the SAME device (cache eviction → different
+    puzzle, caught by sharedBoards.test). The weekly search now ignores the
+    clock (`deterministic: true`) and is bounded by attempts (64 → 24;
+    worst measured ~1.9s). Follow-up idea: prewarm the weekly cache off the
+    tap path (InteractionManager after Home mount) to hide the rare slow
+    week on low-end devices.
 
 - 2026-08-17 (batch 4 — streak systems pay + never dead-end):
   - **R1** flawless-streak milestones are re-earnable per run

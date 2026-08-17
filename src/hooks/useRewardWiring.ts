@@ -458,7 +458,10 @@ export function useRewardWiring({
             { icon: '\uD83D\uDCA1', text: 'Use hints when you get stuck' },
           ],
         },
-        autoDismissMs: 4000,  // Tier 2: auto-dismiss, slightly longer for first win
+        // Long enough to actually read the three teaching tips — this
+        // ceremony is the carrier for content two onboarding phases were
+        // deleted in favour of.
+        autoDismissMs: 6000,
       });
     }
 

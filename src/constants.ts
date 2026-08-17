@@ -331,10 +331,28 @@ function getPhaseConfig(effectiveLevel: number): BoardConfig {
     // unmistakable. This is the "oh, the board CHANGES" moment.
     return { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
   }
-  if (effectiveLevel <= 7) {
+  // L5-L10 used to be the SAME 6x5 grid six levels running (the only
+  // visible change was one extra word chip at L8) — the identical-boards
+  // churn problem the L1-L3 comment above describes, reintroduced in the
+  // exact window where a first session's "is this going anywhere?" read is
+  // formed. Now the grid shape changes at least every two levels, and L7
+  // introduces the first 5-letter word (an emotional highlight per the
+  // mechanics doc — long words are satisfying to trace, not harder).
+  if (effectiveLevel <= 6) {
     return { rows: 6, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
   }
+  if (effectiveLevel <= 7) {
+    // First 5-letter word on a wider board.
+    return { rows: 6, cols: 6, wordCount: 3, minWordLength: 3, maxWordLength: 5, difficulty: 'easy' };
+  }
+  if (effectiveLevel <= 9) {
+    // Bigger canvas — a two-level preview of the phase-3 board size.
+    return { rows: 7, cols: 6, wordCount: 4, minWordLength: 3, maxWordLength: 4, difficulty: 'medium' };
+  }
   if (effectiveLevel <= 10) {
+    // Back to the compact grid: L10 is a breather slot (every 5th level
+    // must dip — difficultyCurve pins it), and the shape change itself
+    // keeps the variety cadence.
     return { rows: 6, cols: 5, wordCount: 4, minWordLength: 3, maxWordLength: 4, difficulty: 'medium' };
   }
   // Phase 3: Building confidence (levels 11-15) — 4-5 words, longer words creep in
