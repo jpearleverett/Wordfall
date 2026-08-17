@@ -200,3 +200,37 @@ describe('undo accounting', () => {
     expect(afterUndo.perfectRun).toBe(false);
   });
 });
+
+describe('undo rolls the score back with the board', () => {
+  it('re-finding an undone word does not double-score', () => {
+    // History used to snapshot grid/words/shrink but NOT score, so an
+    // undone word kept its points and re-finding it scored again — with
+    // purchased undos, an unbounded score pump straight into the
+    // daily/weekly leaderboards.
+    const base = withUndos(createInitialState(makeBoard(), 1, 'classic'), 1);
+    expect(base.score).toBe(0);
+
+    const afterClear = clearCat(base);
+    const scoreAfterFirstFind = afterClear.score;
+    expect(scoreAfterFirstFind).toBeGreaterThan(0);
+
+    const afterUndo = gameReducer(afterClear, { type: 'UNDO_MOVE' });
+    expect(afterUndo.score).toBe(0);
+
+    const afterRefind = clearCat(afterUndo);
+    expect(afterRefind.score).toBe(scoreAfterFirstFind);
+  });
+
+  it('a legacy history entry without a score falls back to the current score', () => {
+    const base = withUndos(createInitialState(makeBoard(), 1, 'classic'), 1);
+    const afterClear = clearCat(base);
+    // Simulate a snapshot persisted before the field existed.
+    const legacy = {
+      ...afterClear,
+      history: afterClear.history.map(({ score: _score, ...rest }) => rest),
+    } as typeof afterClear;
+    const afterUndo = gameReducer(legacy, { type: 'UNDO_MOVE' });
+    expect(Number.isFinite(afterUndo.score)).toBe(true);
+    expect(afterUndo.score).toBe(afterClear.score);
+  });
+});

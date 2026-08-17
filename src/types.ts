@@ -63,7 +63,19 @@ export interface GameState {
    * so the two would cancel out.
    */
   undosUsed: number;
-  history: { grid: Grid; words: WordPlacement[]; wordsUntilShrink?: number; shrinkCount?: number }[];
+  history: {
+    grid: Grid;
+    words: WordPlacement[];
+    wordsUntilShrink?: number;
+    shrinkCount?: number;
+    /**
+     * Score BEFORE the clear this entry precedes. Undo must restore it:
+     * without this, undoing a word kept its points and re-finding it scored
+     * again — pay one undo token, duplicate a word's score, repeat. Optional
+     * because snapshots persisted before this field existed lack it.
+     */
+    score?: number;
+  }[];
   status: GameStatus;
   level: number;
   maxMoves: number;

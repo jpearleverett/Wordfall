@@ -432,6 +432,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         words: board.words.map(w => ({ ...w })),
         wordsUntilShrink: state.wordsUntilShrink,
         shrinkCount: state.shrinkCount,
+        score: state.score,
       };
 
       // Remove letters from grid
@@ -607,6 +608,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectedCells: [],
         selectionDirection: null,
         moves: state.moves - 1,
+        // Roll the score back with the board. Leaving it meant an undone
+        // word kept its points AND scored again on re-find — with purchased
+        // undos, an unbounded score pump straight into the daily/weekly
+        // leaderboards. Legacy snapshots without the field keep the current
+        // score (one puzzle, then the field exists).
+        score: lastHistory.score ?? state.score,
         undosLeft: state.undosLeft - 1,
         undosUsed: state.undosUsed + 1,
         history: state.history.slice(0, -1),
