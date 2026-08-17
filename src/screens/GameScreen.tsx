@@ -23,6 +23,7 @@ import { PuzzleComplete } from '../components/PuzzleComplete';
 import LocalErrorBoundary from '../components/LocalErrorBoundary';
 import { crashReporter } from '../services/crashReporting';
 import { findWordInGrid } from '../engine/solver';
+import { resolveUndoSource } from '../utils/undoGate';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -1876,9 +1877,15 @@ function GameScreenImpl({
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
-    if (mode !== 'relax') {
-      // Spend from persistent inventory and grant into game state
-      if (undoTokens <= 0) return;
+    // Two undo pools: game-store `undosLeft` (granted into this puzzle — the
+    // free stuck rescue's grant lands there) and economy `undoTokens`. The
+    // old gate checked ONLY tokens, and the rescue fires precisely when
+    // tokens are 0 — so the "FREE UNDO — ON US" banner it shows was a
+    // labeled gift whose tap did nothing. resolveUndoSource consumes the
+    // granted pool first (it expires with the puzzle; tokens persist).
+    const source = resolveUndoSource(mode, undosLeft, undoTokens);
+    if (source === 'blocked') return;
+    if (source === 'token') {
       spendUndoToken();
       grantUndo();
     }
@@ -1919,7 +1926,7 @@ function GameScreenImpl({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, grantUndo, level, mode, undosAvailable, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
+  }, [undoMove, grantUndo, level, mode, undosAvailable, undosLeft, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
