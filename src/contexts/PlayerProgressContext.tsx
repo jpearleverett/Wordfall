@@ -10,7 +10,7 @@
  */
 import { useCallback } from 'react';
 import { CeremonyItem, WeeklyGoalsState } from '../types';
-import { CHAPTERS, getChapterForLevel, getLastLevelOfChapter } from '../data/chapters';
+import { CHAPTERS, WING_NAMES, getChapterForLevel, getLastLevelOfChapter } from '../data/chapters';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
@@ -236,9 +236,17 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       const newlyRestoredWings = completedWingIds.filter(
         (wingId) => !prev.restoredWings.includes(wingId),
       );
+      // wingName was the raw id ('nature Complete!'); the reward rides in
+      // data so the pop-time grant (ceremonyEconomyGrant) pays it — restoring
+      // a wing is 5 chapters / 75 levels, and the 1000c/25g bonus for it
+      // previously lived only in an unreachable duplicate method.
       const wingCeremonies: CeremonyItem[] = newlyRestoredWings.map((wingId) => ({
         type: 'wing_complete' as const,
-        data: { wingId, wingName: wingId },
+        data: {
+          wingId,
+          wingName: WING_NAMES[wingId] ?? wingId,
+          reward: { coins: 1000, gems: 25 },
+        },
       }));
 
       return {
@@ -298,9 +306,19 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       // "50 gems to save your streak" offer on next open. Small breaks
       // (1–2 day streaks) are not worth an offer.
       let didBreakStreak = false;
-      if (diffDays === 1) {
+      if (!lastDate) {
+        // First play ever. This case used to fall into the diffDays === 0
+        // branch below (diffDays is hardcoded 0 when there is no prior
+        // date), which PRESERVES the current streak — i.e. left it at 0. The
+        // player's streak then read one day behind for its entire life:
+        // day one showed 0, day two showed 1, and every milestone arrived a
+        // day late.
+        newStreak = 1;
+      } else if (diffDays === 1) {
         newStreak = streaks.currentStreak + 1;
       } else if (diffDays === 0) {
+        // Same-day replay is normally caught by the early return above;
+        // this remains only as a guard against day-granularity edge cases.
         newStreak = streaks.currentStreak;
       } else if (diffDays === 2 && canUseGrace(streaks.lastGraceDate, todayDate)) {
         newStreak = streaks.currentStreak + 1;
@@ -460,16 +478,22 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     setData((prev) => {
       const br = prev.streaks.recentBreak;
       if (!br) return prev;
-      restoredCount = br.prevStreak;
+      // The break was detected DURING a play: updateStreak had just set
+      // lastPlayDate to that day and reset currentStreak to 1 before writing
+      // recentBreak. So the day they broke, they played — restoring means
+      // prevStreak plus that day's play. The old code set the streak to
+      // prevStreak and backdated lastPlayDate to YESTERDAY, so the next
+      // play computed a 2-day gap and needed grace or a shield to survive —
+      // re-breaking the streak the player had just paid 50 gems to save,
+      // while the comment claimed the opposite. lastPlayDate is left alone:
+      // it already records the last day they actually played.
+      restoredCount = br.prevStreak + 1;
       return {
         ...prev,
         streaks: {
           ...prev.streaks,
-          currentStreak: br.prevStreak,
-          // Backdate lastPlayDate to yesterday so the next play continues the streak.
-          lastPlayDate: new Date(Date.now() - 24 * 60 * 60 * 1000)
-            .toISOString()
-            .slice(0, 10),
+          currentStreak: br.prevStreak + 1,
+          bestStreak: Math.max(prev.streaks.bestStreak, br.prevStreak + 1),
           recentBreak: null,
         },
       };

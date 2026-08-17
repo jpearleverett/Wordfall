@@ -77,6 +77,25 @@ describe('win-streak milestones pay the tier table', () => {
   });
 });
 
+describe('wing restoration pays its bonus', () => {
+  it('grants the 1000c/25g the ceremony displays', () => {
+    const grant = ceremonyEconomyGrant({
+      type: 'wing_complete',
+      data: { wingId: 'nature', wingName: 'Nature', reward: { coins: 1000, gems: 25 } },
+    });
+    expect(grant).toEqual({ coins: 1000, gems: 25, hintTokens: 0, rareTile: false });
+  });
+
+  it('a legacy queued ceremony without a reward grants nothing', () => {
+    // Ceremonies queued before this fix are still in players' persisted
+    // queues with only {wingId, wingName} — they must show without paying
+    // rather than NaN-ing.
+    expect(
+      ceremonyEconomyGrant({ type: 'wing_complete', data: { wingId: 'arts', wingName: 'arts' } }),
+    ).toBeNull();
+  });
+});
+
 describe('types whose own flows already grant are excluded', () => {
   // Granting any of these here would double-pay:
   // daily_quest_claim is credited at claim time in App.tsx; the wheel

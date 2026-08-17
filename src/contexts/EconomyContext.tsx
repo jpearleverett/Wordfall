@@ -1134,15 +1134,39 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       if (!prev.isVipSubscriber || prev.vipExpiresAt <= Date.now()) return prev;
       if (prev.vipDailyLastClaim === today) return prev;
 
+      // Pay the TIER the player bought. This was hardcoded to the weekly
+      // tier's 50 gems / 3 hints, so monthly subscribers were shorted 25
+      // gems and 2 hints a day and annual subscribers 50 gems and 5 hints —
+      // every day of a subscription whose store listing promises the larger
+      // number. The tier is recovered from the most recent vip_* purchase
+      // record; its declared rewards.dailyDrip is the same source the shop
+      // copy renders from, so the promise and the payout cannot diverge.
+      const drip = (() => {
+        for (let i = prev.purchaseHistory.length - 1; i >= 0; i--) {
+          const record = prev.purchaseHistory[i];
+          if (typeof record?.item === 'string' && record.item.startsWith('vip_')) {
+            const product = getProductById(record.item);
+            const declared = product?.rewards?.dailyDrip;
+            if (declared) {
+              return { gems: declared.gems ?? 0, hintTokens: declared.hintTokens ?? 0 };
+            }
+            break;
+          }
+        }
+        // No purchase record (e.g. server-side renewal restored the flag
+        // without a local record): the weekly tier is the conservative floor.
+        return { gems: 50, hintTokens: 3 };
+      })();
+
       return {
         ...prev,
         vipDailyLastClaim: today,
-        gems: prev.gems + 50,
-        hintTokens: prev.hintTokens + 3,
+        gems: prev.gems + drip.gems,
+        hintTokens: prev.hintTokens + drip.hintTokens,
         totalEarned: {
           ...prev.totalEarned,
-          gems: prev.totalEarned.gems + 50,
-          hintTokens: prev.totalEarned.hintTokens + 3,
+          gems: prev.totalEarned.gems + drip.gems,
+          hintTokens: prev.totalEarned.hintTokens + drip.hintTokens,
         },
       };
     });

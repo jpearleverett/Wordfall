@@ -61,6 +61,15 @@ export function ceremonyEconomyGrant(ceremony: CeremonyItem): CeremonyGrant | nu
       const grant = normalize(reward);
       return isEmpty(grant) ? null : grant;
     }
+    case 'wing_complete': {
+      // Restoring a library wing (all 5 of its chapters). The 1000c/25g
+      // bonus was authored in a method nothing called; the reachable
+      // detection path queued the ceremony with no reward at all.
+      const reward = ceremony.data?.reward;
+      if (!reward) return null;
+      const grant = normalize(reward);
+      return isEmpty(grant) ? null : grant;
+    }
     case 'collection_complete': {
       const reward = ceremony.data?.reward;
       if (!reward) return null;

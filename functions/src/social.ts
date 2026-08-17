@@ -1521,11 +1521,21 @@ interface SubmitValidatedScorePayload {
 
 /** Conservative per-level max score ceiling. Any submission above this is
  *  almost certainly manipulated. Tunable via Remote Config in a follow-up. */
-function maxPlausibleScore(mode: string, level: number): number {
+function maxPlausibleScore(mode: string, level: number, scope?: string): number {
   // Base ceiling: 1000 * (level+1), inflated for score-multiplier modes.
   const base = 1000 * (level + 1);
   const multiplier =
     mode === 'expert' ? 3 : mode === 'timePressure' ? 2 : mode === 'perfectSolve' ? 2 : 1;
+  // Weekly and event submissions are CUMULATIVE standings fed by puzzles the
+  // server can't see individually (the weekly board plays at level 0, events
+  // aggregate whatever the player runs). A per-level ceiling there rejected
+  // essentially every legitimate score once clients started omitting level —
+  // and even a correct level under-caps a cumulative total. Keep daily tight
+  // (one known board); give the cumulative scopes a flat generous ceiling
+  // that still blocks the absurd numbers manipulation produces.
+  if (scope === 'weekly' || scope === 'event') {
+    return Math.max(Math.min(base * multiplier, 250_000), 50_000);
+  }
   return Math.min(base * multiplier, 250_000);
 }
 
@@ -1564,7 +1574,7 @@ export const submitValidatedScore = functions.https.onCall(
     }
 
     // Score ceiling (mode × level)
-    const ceiling = maxPlausibleScore(mode, level);
+    const ceiling = maxPlausibleScore(mode, level, scope);
     if (score > ceiling) {
       functions.logger.warn('[submitValidatedScore] score above ceiling', {
         uid: uid.slice(0, 6),

@@ -1246,49 +1246,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  /**
-   * Check if a wing's chapters are all 3-starred and grant the wing completion bonus.
-   * Awards 1000 coins + 25 gems + queues wing_complete ceremony.
-   */
-  const checkWingCompletion = useCallback((wingId: string) => {
-    setData((prev) => {
-      if (prev.completedWingBonuses.includes(wingId)) return prev;
-
-      // Check if all chapters in this wing have 3 stars
-      const wingChapters = CHAPTERS.filter(ch => ch.wingId === wingId);
-      if (wingChapters.length === 0) return prev;
-
-      let cumulativeLevel = 0;
-      for (const ch of CHAPTERS) {
-        if (ch.wingId === wingId) {
-          // Check all puzzles in this chapter have 3 stars
-          for (let i = 1; i <= ch.puzzleCount; i++) {
-            const levelNum = cumulativeLevel + i;
-            if ((prev.starsByLevel[levelNum] ?? 0) < 3) return prev;
-          }
-        }
-        cumulativeLevel += ch.puzzleCount;
-      }
-
-      // All chapters in wing are 3-starred! Grant bonus.
-      return {
-        ...prev,
-        completedWingBonuses: [...prev.completedWingBonuses, wingId],
-        pendingCeremonies: [
-          ...prev.pendingCeremonies,
-          {
-            type: 'wing_complete' as const,
-            data: {
-              wingId,
-              wingName: wingId.charAt(0).toUpperCase() + wingId.slice(1),
-              bonusCoins: 1000,
-              bonusGems: 25,
-            },
-          },
-        ],
-      };
-    });
-  }, []);
+  // NOTE: a checkWingCompletion method used to live here — the 3-star wing
+  // "perfection bonus" (1000c/25g). Nothing ever called it, its ceremony
+  // embedded reward amounts that nothing granted, and it duplicated the
+  // reachable wing detection in PlayerProgressContext.recordPuzzleComplete,
+  // which now carries the bonus. completedWingBonuses stays in the persisted
+  // shape (removing persisted fields needs a migration and buys nothing).
 
   const placeDecoration = useCallback(
     (slotId: string, decorationId: string) => {

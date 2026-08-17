@@ -920,7 +920,14 @@ export function useRewardWiring({
     }
 
     if (userId) {
-      void firestoreService.submitWeeklyScore(userId, score, displayName);
+      // level + mode ride along for the server's plausibility ceiling —
+      // omitted, the callable assumed level 0 and rejected any score over
+      // 1000, which was essentially every real weekly submission. The weekly
+      // PUZZLE itself plays at level 0 (it has no level), so send the
+      // player's progression level for that case — it is what the ceiling is
+      // actually trying to scale by.
+      const ceilingLevel = level > 0 ? level : player.currentLevel;
+      void firestoreService.submitWeeklyScore(userId, score, displayName, ceilingLevel, mode);
     }
 
     // MG2: per-event cumulative score. eventManager keeps a list of
@@ -933,6 +940,8 @@ export function useRewardWiring({
           userId,
           score,
           displayName,
+          level,
+          mode,
         );
       }
     }

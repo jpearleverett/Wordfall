@@ -1848,9 +1848,8 @@ function AppContent() {
   }, [player.loaded, player.tutorialComplete]);
 
   // ── Deep link handling ──────────────────────────────────────────────────
-  const pendingDeepLinkRef = useRef<string | null>(null);
 
-  useDeepLinks({ player, navigationRef, pendingChallengeRef: pendingDeepLinkRef });
+  useDeepLinks({ player, navigationRef });
 
   // Track screen views on navigation state changes
   const handleNavigationReady = useCallback(() => {

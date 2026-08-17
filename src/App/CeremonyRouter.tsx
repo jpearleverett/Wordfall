@@ -141,6 +141,10 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           icon={'\u{1F4DA}'}
           title={`${activeCeremony.data.wingName} Complete!`}
           description="Another wing of the library has been fully restored!"
+          rewardLabel={(() => {
+            const grant = ceremonyEconomyGrant(activeCeremony);
+            return grant ? ceremonyGrantLabel(grant) : undefined;
+          })()}
           accentColor={COLORS.teal}
           onDismiss={onDismiss}
         />

@@ -425,15 +425,26 @@ class FirestoreService {
   async submitWeeklyScore(
     userId: string,
     score: number,
-    displayName: string
+    displayName: string,
+    level: number = 0,
+    mode: string = 'classic',
   ): Promise<void> {
     if (!this.enabled || !userId) return;
     if (leaderboardValidationEnabled()) {
       try {
+        // level/mode MUST be sent: the server's plausibility ceiling is
+        // 1000 * (level + 1) * modeMultiplier, and the callable defaults a
+        // missing level to 0 — so omitting them capped every weekly
+        // submission at 1000 points. Any real score bounced with
+        // permission-denied, and the catch below returns without falling
+        // back, which left the weekly leaderboard rejecting essentially all
+        // legitimate entries whenever validation was on.
         await submitValidatedScoreCallable({
           scope: 'weekly',
           score,
           displayName,
+          level,
+          mode,
         });
         return;
       } catch (e) {
@@ -473,15 +484,21 @@ class FirestoreService {
     userId: string,
     score: number,
     displayName: string,
+    level: number = 0,
+    mode: string = 'classic',
   ): Promise<void> {
     if (!this.enabled || !userId || !eventId) return;
     if (leaderboardValidationEnabled()) {
       try {
+        // Same as weekly: without level/mode the server assumes level 0 and
+        // rejects anything above 1000 points.
         await submitValidatedScoreCallable({
           scope: 'event',
           score,
           eventId,
           displayName,
+          level,
+          mode,
         });
         return;
       } catch (e) {
