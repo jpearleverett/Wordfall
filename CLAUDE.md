@@ -33,7 +33,7 @@ EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  
 
 | File | Role |
 |------|------|
-| `App.tsx` | Entry. ErrorBoundary, provider nesting, navigation, deep links. Ceremonies route through `src/App/CeremonyRouter.tsx` (20 render cases covering the 30-variant `CeremonyItem` union). |
+| `App.tsx` | Entry. ErrorBoundary, provider nesting, navigation, deep links. Ceremonies route through `src/App/CeremonyRouter.tsx` — **one render case per `CeremonyItem` variant, all 21, guarded by `__tests__/ceremonyCoverage`**. (This line used to read "20 cases covering 30 variants", which looks like ten dropped rewards but wasn't: nine of those thirty belonged to `VictorySummaryItem` — the inline victory-screen rows, a separate surface — and had been duplicated into the ceremony union where they could never render. They're gone from it now, so queueing one is a compile error rather than a silent no-op.) |
 | `src/hooks/useGame.ts` | Game store factory (zustand + redux middleware wrapping 22-action reducer). Returns store instance + stable action dispatchers. **No `state` return — consumers use selectors.** |
 | `src/stores/gameStore.ts` | Zustand store factory, `GameStoreContext`, `useGameStore` selector hook, `useGameDispatch`, 25+ pre-built selectors. |
 | `src/screens/game/PlayField.tsx` | Grid + selection rendering. Subscribes to per-tap state (`selectedCells`) via zustand selectors so GameScreen doesn't re-render on taps. |

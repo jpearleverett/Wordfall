@@ -778,6 +778,20 @@ export interface WeeklyGoalsState {
 }
 
 // ============ CEREMONY QUEUE ============
+/**
+ * A full-screen ceremony. EVERY member of this union must have a render case
+ * in src/App/CeremonyRouter.tsx — a queued ceremony the router does not
+ * handle is a reward the player never sees, and nothing fails to say so.
+ * `ceremonyCoverage.test.ts` pins that both ways.
+ *
+ * This union previously also carried nine members that belong to
+ * VictorySummaryItem (level_up, star_milestone, early_bonus, …) — the inline
+ * rows on the victory screen, which are a different render surface entirely.
+ * They were unreachable as ceremonies but perfectly typecheckable, so
+ * `queueCeremony({ type: 'star_milestone', … })` compiled and would have
+ * silently dropped the reward. Narrowing the union makes that a compile
+ * error instead of a live bug waiting for an autocomplete.
+ */
 export interface CeremonyItem {
   type:
     | 'feature_unlock'
@@ -785,28 +799,19 @@ export interface CeremonyItem {
     | 'achievement'
     | 'streak_milestone'
     | 'collection_complete'
-    | 'level_up'
-    | 'difficulty_transition'
     | 'mystery_wheel_jackpot'
     | 'win_streak_milestone'
     | 'flawless_streak_milestone'
-    | 'star_milestone'
-    | 'perfect_milestone'
-    | 'decoration_unlock'
     | 'first_rare_tile'
     | 'first_booster'
     | 'wing_complete'
     | 'word_mastery_gold'
     | 'first_mode_clear'
     | 'wildcard_earned'
-    | 'mastery_tier_up'
     | 'quest_step_complete'
     | 'prestige'
     | 'first_win'
-    | 'early_bonus'
-    | 'library_teaser'
     | 'starter_pack_unlocked'
-    | 'tomorrow_preview'
     | 'daily_quest_claim'
     | 'first_purchase_offer'
     | 'season_pass_complete';
