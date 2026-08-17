@@ -2,7 +2,7 @@
 
 **Word search with gravity** (React Native + Expo). Each puzzle has a pre-authored list of words to find on a letter grid. The player traces letters with their finger — when the trace matches a list word it auto-resolves (no submit button), those cells clear, and remaining letters fall via gravity into the empty spaces. 10 modes, 40 hand-curated chapters covering levels 1–600 (names, themes, 12-word theme lists, star gates, per-chapter difficulty profile), then unbounded procedural chapters past level 600 via `generateProceduralChapter()`. Every board is procedurally generated from a seed — there are no hand-placed grids in the repo. Clubs, VIP, prestige.
 
-**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**66 suites**).
+**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**92 suites**).
 
 For detailed architecture see `agent_docs/architecture.md` — it's a short **index** that routes you to per-domain slices (state, engine, screens, cloud) so you only read what the current question needs.
 
@@ -22,7 +22,7 @@ For detailed architecture see `agent_docs/architecture.md` — it's a short **in
 ```bash
 npx expo start --dev-client            # Metro bundler (Expo Go NOT supported)
 npm run typecheck                      # tsc --noEmit
-npm test                               # jest (70 suites)
+npm test                               # jest (92 suites)
 npx expo export --platform android     # REQUIRED before release — only local check that runs hermesc
                                        # (typecheck + tests pass even when the prod bundle is broken)
 npm install --legacy-peer-deps         # .npmrc sets this by default
@@ -44,7 +44,7 @@ Extended list (grid gestures, game sub-components, contexts, engine, utility hoo
 
 ## Game-feel invariants (measured, with regression guards)
 
-Five benchmark suites pin properties that typecheck and unit tests cannot
+Seven benchmark suites pin properties that typecheck and unit tests cannot
 see. Run them before touching the generator, the difficulty curve, or the
 reward tables — all support a `*_VERBOSE=1` env var to print full profiles.
 
@@ -53,6 +53,8 @@ reward tables — all support a `*_VERBOSE=1` env var to print full profiles.
 | `engine/__tests__/boardGen.perf` | Level load is synchronous on the JS thread, so slow generation is a frozen screen | p50 44ms, p95 <900ms, max <1.5s |
 | `engine/__tests__/stuckRate` | Dead-end rate for a player choosing **at random** — the floor, not the difficulty | 12% levels 1-30, 57% levels 31-120 |
 | `engine/__tests__/skilledPlay` | Same boards, **one-ply lookahead** — what a player who learned the rule sees | 0.0% early, 0.0% mid |
+| `engine/__tests__/hintPerf` | Hints run synchronously on tap, so a slow one is a frozen board | classic p95 33ms, noGravity p95 1ms, gravityFlip p95 49ms |
+| `engine/__tests__/modeSolvability` | Every generated board is solvable under **its own mode's** clear rule | 0 unsolvable across 8 modes |
 | `__tests__/rewardCadence` | No long stretch of levels without a scheduled payoff | ≤5 dry levels to L60, ≤9 to L150 |
 | `__tests__/curveProfile` + `spikeLevels` | Early levels never repeat a board or go backwards | monotonic through L14 |
 
