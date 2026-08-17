@@ -20,6 +20,7 @@ import {
   selectTotalStars,
   selectPuzzlesSolved,
   selectTooltipsShown,
+  selectModeStats,
 } from '../stores/playerStore';
 import { Tooltip } from '../components/common/Tooltip';
 
@@ -56,6 +57,7 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
   const totalStars = usePlayerStore(selectTotalStars);
   const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
   const tooltipsShown = usePlayerStore(selectTooltipsShown);
+  const modeStats = usePlayerStore(selectModeStats);
   const { markTooltipShown } = usePlayerActions();
   const onSelectMode = onSelectModeProp ?? ((_mode: string) => {});
   const unlockedModes = unlockedModesProp ?? playerUnlockedModes;
@@ -122,7 +124,23 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
             {mode.name}
           </Text>
           {accessible ? (
-            <Text style={styles.cardDesc}>{mode.desc}</Text>
+            <>
+              <Text style={styles.cardDesc}>{mode.desc}</Text>
+              {/* R8: the player's own history on the card. modeStats was
+                  tracked from day one and rendered nowhere, so every mode
+                  looked untouched forever — nothing invited a return visit. */}
+              {(() => {
+                const stats = modeStats[mode.id];
+                if (!stats || stats.played <= 0) return null;
+                return (
+                  <Text style={styles.cardStats}>
+                    {stats.played} played · best{' '}
+                    {stats.bestScore.toLocaleString()}
+                    {stats.wins > 0 ? ` · ${stats.wins} won` : ''}
+                  </Text>
+                );
+              })()}
+            </>
           ) : (
             <Text style={styles.lockText}>
               {reason}
@@ -291,6 +309,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
+  },
+  cardStats: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
   },
   lockText: {
     fontSize: 11,

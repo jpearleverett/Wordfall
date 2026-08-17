@@ -542,7 +542,7 @@ function MainTabs() {
 }
 
 // Modes screen wrapper - wires navigation to start game in selected mode
-function ModesScreenWrapper({ navigation }: any) {
+function ModesScreenWrapper({ navigation, route }: any) {
   const player = usePlayer();
   const economy = useEconomy();
 
@@ -681,6 +681,18 @@ function ModesScreenWrapper({ navigation }: any) {
       }
     }
   }, [player.currentLevel, navigation, player, economy]);
+
+  // R8: Home's "Try X Mode" recommendation deep-links straight into the
+  // recommended mode instead of dropping the player on the grid to find it
+  // again. Param cleared before starting so back-nav can't re-trigger.
+  const autoStartHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    const autoStartMode = route?.params?.autoStartMode;
+    if (!autoStartMode || autoStartHandledRef.current === autoStartMode) return;
+    autoStartHandledRef.current = autoStartMode;
+    navigation.setParams({ autoStartMode: undefined });
+    handleSelectMode(autoStartMode);
+  }, [route?.params?.autoStartMode, handleSelectMode, navigation]);
 
   return <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={() => navigation.navigate('Leaderboard')} />;
 }
@@ -1476,7 +1488,13 @@ function HomeMainScreen({ route, navigation }: any) {
           : player.segments.motivations.includes('achiever')
           ? 'Perfect for earning stars and achievements!'
           : 'You unlocked this mode — give it a go!',
-        action: () => navigation.navigate('Play'),
+        // Deep-link into the recommended mode (R8) — landing on the grid to
+        // hunt for the mode we just recommended made the card feel inert.
+        action: () =>
+          navigation.navigate('Play', {
+            screen: 'Modes',
+            params: { autoStartMode: segmentMode },
+          }),
       };
     }
 
@@ -1488,7 +1506,11 @@ function HomeMainScreen({ route, navigation }: any) {
         icon: config?.icon || '🎮',
         title: `Try ${config?.name || modeId} Mode`,
         subtitle: 'You unlocked this mode — give it a go!',
-        action: () => navigation.navigate('Play'),
+        action: () =>
+          navigation.navigate('Play', {
+            screen: 'Modes',
+            params: { autoStartMode: modeId },
+          }),
       };
     }
 

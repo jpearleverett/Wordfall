@@ -30,16 +30,12 @@ back-to-back)
   perfectRun (no hints/undos/shuffles), 2★ = one assist; small coin grants +
   autoDismissMs on 3/5/7 flawless milestones. Interacts with R1 — ship
   together. ~25 lines + tests (starThresholds defined and unread).
-- **F-minor (remaining):** economy primer hardcoded EN (i18n);
-  LoadingTip/loadingTips.ts never imported (wire into board-gen wait or
-  delete). Mode-tease milestone levels lag their unlocks by 1-4 levels —
-  copy is still true ("unlocked"), left as cadence.
+- **F-minor (remaining):** economy primer hardcoded EN (i18n). Mode-tease
+  milestone levels lag their unlocks by 1-4 levels — copy is still true
+  ("unlocked"), left as cadence.
 
 ### Juice (moment-to-moment) — from the 2026-08-17 feel audit
 
-- **J2-remainder (visual only).** Stuck-fail audio/haptic/a11y shipped in
-  batch 3; still open: dim the stranded-word tiles via the spotlight-dim
-  path + slide the banner in with a spring instead of a hard mount.
 - **J3-remainder.** Idle gate fix shipped; still open: pre-monetization ~45s
   "still findable" chip shimmer (reassurance tier before the hint/ad CTA).
 - **J8. Score popup: opaque slab at fixed top:33% for ~900ms.** FIX: origin
@@ -64,9 +60,6 @@ back-to-back)
   suppressed on break days, calendar defers to ceremonies, shield defers to
   calendar). Still open: a full overlayOwner sequencer covering
   welcome-back overlay + MysteryWheel + SessionEndReminder.
-- **R8. Ten modes unlock by L22 then nothing pulls players back.** Render
-  modeStats on cards, per-mode 3-tier goals, deep-link the recommendation,
-  late unlock beats (L60/L80). ~60 lines.
 
 ### Verified-good (do NOT break)
 
@@ -77,6 +70,22 @@ coordination, victory polish, humane stuck-rescue logic,
 legacyTaskCardsEnabled=false, honest reminder scheduling.
 
 ## SHIPPED
+
+- 2026-08-17 (batch 9 — mode history, banner entrance, dead code):
+  - **R8 (core)** mode cards render the player's own history ("12 played ·
+    best 4,320 · 3 won" from the always-tracked modeStats) so modes stop
+    looking untouched forever; Home's "Try X Mode" recommendation
+    deep-links straight into the recommended mode via a one-shot
+    autoStartMode param (was: dropped the player on the grid to hunt for
+    it). Still open from R8: per-mode 3-tier goals, late unlock beats.
+  - **J2 (complete)** stuck/retry banners spring in (220ms slide+fade,
+    instant under reduce-motion) matching the audio/haptic beat on the same
+    rising edge. Stranded-tile dimming dropped — the banner NAMES the
+    buried word; dimming the whole word's tiles reads as "these are gone"
+    which is false (they're traceable, just not completable).
+  - **F-minor** LoadingTip/loadingTips deleted — board generation is
+    synchronous, so a "loading tip" component has no frame in which it
+    could ever render; dead by architecture, not by accident.
 
 - 2026-08-17 (batch 8 — goal card, pitch ladder, onboarding fixes):
   - **R6** NextGoalCard on the YOUR JOURNEY band: one closest-to-completion

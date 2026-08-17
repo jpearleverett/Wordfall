@@ -1,7 +1,45 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS, FONTS } from '../../constants';
 import { GameMode, GameStatus, GravityDirection } from '../../types';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
+
+/**
+ * Spring-in wrapper for the dead-end banners. The stuck/retry strip used to
+ * hard-mount into the layout in the same frame the solver flagged the board
+ * — the core fail state arriving as a pop-in. A 220ms slide+fade matches
+ * the audio/haptic beat GameScreen fires on the same rising edge. Under
+ * reduce-motion the banner appears instantly (today's behavior).
+ */
+function BannerEntrance({ children }: { children: React.ReactNode }) {
+  const reduceMotion = useReduceMotion();
+  const anim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) {
+      anim.setValue(1);
+      return;
+    }
+    Animated.spring(anim, {
+      toValue: 1,
+      stiffness: 220,
+      damping: 22,
+      mass: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [anim, reduceMotion]);
+  return (
+    <Animated.View
+      style={{
+        opacity: anim,
+        transform: [
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+        ],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 /**
  * GameBanners — the collection of conditional banner strips that float
@@ -167,24 +205,28 @@ function GameBannersImpl({
         </Pressable>
       )}
       {showUndoBanner && (
-        <Pressable style={styles.stuckBanner} onPress={onUndoTap}>
-          {freeUndoGranted && (
-            <Text style={styles.freeUndoTag}>FREE UNDO — ON US</Text>
-          )}
-          <Text style={styles.stuckText}>{strandedHeadline} — tap to step back a move</Text>
-          {isFirstStuck && (
-            <Text style={styles.stuckSubtext}>
-              {shortestStranded === null
-                ? 'The words are all still there, just not in an order that finishes. Step back and clear a different one first.'
-                : 'Clearing a word drops the letters above it. Clear that one earlier next time.'}
-            </Text>
-          )}
-        </Pressable>
+        <BannerEntrance>
+          <Pressable style={styles.stuckBanner} onPress={onUndoTap}>
+            {freeUndoGranted && (
+              <Text style={styles.freeUndoTag}>FREE UNDO — ON US</Text>
+            )}
+            <Text style={styles.stuckText}>{strandedHeadline} — tap to step back a move</Text>
+            {isFirstStuck && (
+              <Text style={styles.stuckSubtext}>
+                {shortestStranded === null
+                  ? 'The words are all still there, just not in an order that finishes. Step back and clear a different one first.'
+                  : 'Clearing a word drops the letters above it. Clear that one earlier next time.'}
+              </Text>
+            )}
+          </Pressable>
+        </BannerEntrance>
       )}
       {showRetryBanner && (
-        <Pressable style={[styles.stuckBanner, styles.stuckBannerRetry]} onPress={onRetryTap}>
-          <Text style={styles.stuckText}>{strandedHeadline} — tap to retry this puzzle</Text>
-        </Pressable>
+        <BannerEntrance>
+          <Pressable style={[styles.stuckBanner, styles.stuckBannerRetry]} onPress={onRetryTap}>
+            <Text style={styles.stuckText}>{strandedHeadline} — tap to retry this puzzle</Text>
+          </Pressable>
+        </BannerEntrance>
       )}
     </>
   );
