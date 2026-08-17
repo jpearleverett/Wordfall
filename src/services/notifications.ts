@@ -185,6 +185,29 @@ function resolveMaxPerDay(): number {
   return DEFAULT_MAX_NOTIFICATIONS_PER_DAY;
 }
 
+/**
+ * Per-segment reminder hours. Authored in getPersonalizedNotifications
+ * (at-risk players ping at 19:00, hardcore at 21:00, …) but read by nothing
+ * until Aug 2026 — notificationTriggers hardcoded 20:00/09:00, so all the
+ * per-cohort tuning was inert. Null when no segments are known; callers
+ * fall back to their defaults.
+ */
+export function resolveReminderHours(): {
+  streakReminderHour: number | null;
+  dailyChallengeHour: number | null;
+} {
+  if (currentSegments) {
+    const p = getPersonalizedNotifications(currentSegments);
+    return {
+      streakReminderHour:
+        typeof p.streakReminderHour === 'number' ? p.streakReminderHour : null,
+      dailyChallengeHour:
+        typeof p.dailyChallengeHour === 'number' ? p.dailyChallengeHour : null,
+    };
+  }
+  return { streakReminderHour: null, dailyChallengeHour: null };
+}
+
 function isCategoryAllowedForSegment(category: NotificationCategory): boolean {
   if (!currentSegments) return true;
   const personalized = getPersonalizedNotifications(currentSegments);
@@ -329,7 +352,18 @@ class NotificationManager {
 
     // Frequency cap: segment maxPerDay > RC maxNotificationsPerDay > default 3.
     // (Skip for daily recurring triggers — those have their own day-of-week logic.)
-    if (trigger.type === 'timeInterval') {
+    //
+    // The cap counts NEW categories per day, not schedule() calls. Every
+    // schedule for a category REPLACES its pending notification (see the
+    // cancel below), so a reschedule delivers nothing extra — but it used to
+    // burn a cap slot anyway: one app open (streak + daily-challenge +
+    // event) consumed the whole default budget, and the SECOND open's
+    // streak-reminder reschedule was silently dropped. Worse than wasteful:
+    // a cap-blocked reschedule leaves the STALE notification live (e.g.
+    // "your streak expires tonight!" scheduled before the player played).
+    // Replacements are exempt; the cap still bounds distinct categories/day.
+    const isReplacement = this.scheduledIds.has(category);
+    if (trigger.type === 'timeInterval' && !isReplacement) {
       try {
         const today = new Date().toISOString().split('T')[0];
         const stored = await AsyncStorage.getItem(FREQ_CAP_STORAGE_KEY);

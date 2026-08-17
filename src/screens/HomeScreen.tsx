@@ -49,6 +49,8 @@ import {
   selectMysteryWheel,
   selectSeasonalQuest,
   selectFlawlessStreak,
+  selectStreaks,
+  selectPendingCeremonies,
 } from '../stores/playerStore';
 import { getNextMilestone } from '../data/onboardingMilestones';
 
@@ -192,10 +194,22 @@ export function HomeScreen({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const streakOfferDismissed = useRef(false);
 
+  const playerStreaks = usePlayerStore(selectStreaks);
+  const pendingCeremonies = usePlayerStore(selectPendingCeremonies);
+
   useEffect(() => {
     if (streakOfferDismissed.current || streakShieldActive) return;
     const streak = progress.currentStreak;
     if (streak <= 0) return;
+    // Never sell prevention on a comeback day: if the streak just BROKE
+    // (PostStreakBreakOffer's 24h restore window is live), an upsell for
+    // the shield that would have prevented it is the worst possible first
+    // impression — and the two paywalls were landing simultaneously.
+    const rb = playerStreaks.recentBreak;
+    if (rb && Date.now() - rb.brokenAtMs < 24 * 60 * 60 * 1000) return;
+    // One overlay at a time: the login calendar auto-opens at 900ms; wait
+    // until it's closed (this effect re-runs on calendarOpen change).
+    if (calendarOpen) return;
 
     const now = new Date();
     const currentHour = now.getHours();
@@ -211,7 +225,7 @@ export function HomeScreen({
       const timer = setTimeout(() => setShowStreakOffer(true), 1000);
       return () => clearTimeout(timer);
     }
-  }, [progress.currentStreak, streakGraceDaysUsed, streakShieldActive, dailyDone]);
+  }, [progress.currentStreak, streakGraceDaysUsed, streakShieldActive, dailyDone, playerStreaks, calendarOpen]);
 
   const handleStreakOfferAccept = useCallback(() => {
     // Navigate to shop for streak shield purchase
@@ -375,12 +389,17 @@ export function HomeScreen({
   // hero entry animation + the below-fold deferred mount.
   useEffect(() => {
     if (!showDailyRewards || claimedLoginToday || autoOpenedCalendarThisSession) return;
+    // Ceremonies first: on an unlock-heavy open (mode unlocks, milestones)
+    // the queue drains as full-screen modals — auto-opening the calendar
+    // underneath them stacked three overlays on the returning player's
+    // first two seconds. This effect re-runs when the queue empties.
+    if (pendingCeremonies.length > 0) return;
     const timer = setTimeout(() => {
       autoOpenedCalendarThisSession = true;
       setCalendarOpen(true);
     }, 900);
     return () => clearTimeout(timer);
-  }, [showDailyRewards, claimedLoginToday]);
+  }, [showDailyRewards, claimedLoginToday, pendingCeremonies.length]);
 
   // ── Seasonal Quest ──────────────────────────────────────────────────
   const seasonalQuest = getCurrentSeasonalQuest();

@@ -72,20 +72,13 @@ back-to-back)
 
 ### Retention (session-to-session) — from the 2026-08-17 retention audit
 
-- **R2. Notification cap counts scheduling not delivery** (one app open burns
-  the whole daily budget, `notifications.ts:332-356`); per-segment
-  streakReminderHour/dailyChallengeHour authored but read nowhere. ~30 lines.
-- **R5. Returning-player modal pile-up** — login calendar (900ms), streak
-  shield offer (1000ms), PostStreakBreakOffer, welcome-back, MysteryWheel,
-  ceremonies — no sequencer. FIX: shared overlayOwner priority order;
-  suppress shield UPSELL when break RESTORE is showing. ~50 lines.
+- **R5-remainder.** Worst pile-ups fixed in batch 6 (shield upsell
+  suppressed on break days, calendar defers to ceremonies, shield defers to
+  calendar). Still open: a full overlayOwner sequencer covering
+  welcome-back overlay + MysteryWheel + SessionEndReminder.
 - **R6. No "almost done" meta goal on Home.** NextGoalCard picking the
   closest-to-completion goal (chapter stars / wing / atlas page / mastery
   tier), one CTA. ~80 lines.
-- **R7. Mid-game skill gap taught once, in the easy zone.** Dead-end
-  explainer is once-per-lifetime and burns at L1-30 (12% zone); 57% zone is
-  L31+. FIX: re-show per difficulty phase (~4 lifetime), L31 entry banner,
-  stuck-banner CTA "see which word to clear first" using order-safe getHint.
 - **R8. Ten modes unlock by L22 then nothing pulls players back.** Render
   modeStats on cards, per-mode 3-tier goals, deep-link the recommendation,
   late unlock beats (L60/L80). ~60 lines.
@@ -101,6 +94,21 @@ coordination, victory polish, humane stuck-rescue logic,
 legacyTaskCardsEnabled=false, honest reminder scheduling.
 
 ## SHIPPED
+
+- 2026-08-17 (batch 6 — re-teaching, honest notifications, overlay de-stack):
+  - **R7** the dead-end explainer re-shows once per 15-level difficulty
+    phase (4 lifetime, legacy key = phase 0) instead of once per lifetime —
+    the long-form lesson + banner subtext now re-land at L31+ where the
+    57% regime actually starts.
+  - **R2** notification cap counts NEW categories/day, not schedule() calls
+    (a reschedule replaces its pending notification; cap-blocking it left a
+    STALE untrue ping live); per-segment reminder hours
+    (at-risk 19:00 / hardcore 21:00) now actually reach the triggers via
+    resolveReminderHours — they were authored and read by nothing.
+  - **R5 (core)** comeback-day paywall collision fixed: the streak-shield
+    upsell is suppressed for 24h after a streak break (the restore offer
+    owns that moment), defers while the login calendar is open, and the
+    calendar defers while unlock ceremonies are draining.
 
 - 2026-08-17 (batch 5 — tutorial teaches searching + events play real rules):
   - **F2** tutorial renders the find-list chips from step 1 (checked off as

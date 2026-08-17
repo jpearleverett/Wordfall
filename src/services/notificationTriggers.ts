@@ -10,15 +10,15 @@
  * graceful degradation when notifications are unavailable.
  */
 
-import { notificationManager } from './notifications';
+import { notificationManager, resolveReminderHours } from './notifications';
 import { eventManager } from './eventManager';
 import { ENERGY } from '../constants';
 
 // ─── 1. Streak Reminder ──────────────────────────────────────────────────────
 
-/** Local hour the streak reminder fires on a day the streak is at risk. */
+/** Default local hour for the streak reminder (segment hour wins when set). */
 const STREAK_REMINDER_HOUR = 20;
-/** Local hour the daily-challenge reminder fires on a day it's unplayed. */
+/** Default local hour for the daily-challenge reminder (segment hour wins). */
 const DAILY_CHALLENGE_HOUR = 9;
 
 /**
@@ -75,7 +75,8 @@ export function streakReminderDelaySeconds(
   // being reported on, which is how you end up pinging someone whose streak
   // is already safe.
   const playedToday = lastPlayDate === now.toISOString().split('T')[0];
-  return reminderDelaySeconds(STREAK_REMINDER_HOUR, playedToday, now);
+  const hour = resolveReminderHours().streakReminderHour ?? STREAK_REMINDER_HOUR;
+  return reminderDelaySeconds(hour, playedToday, now);
 }
 
 /**
@@ -170,7 +171,7 @@ export async function triggerDailyChallengeReminder(
 ): Promise<void> {
   const today = new Date().toISOString().split('T')[0];
   const seconds = reminderDelaySeconds(
-    DAILY_CHALLENGE_HOUR,
+    resolveReminderHours().dailyChallengeHour ?? DAILY_CHALLENGE_HOUR,
     dailyCompleted.includes(today),
   );
   if (seconds === null) {

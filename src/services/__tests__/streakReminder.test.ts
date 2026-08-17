@@ -26,6 +26,12 @@ jest.mock('../notifications', () => ({
     scheduleEventEnding: jest.fn(),
     scheduleComebackReminder: jest.fn(),
   },
+  // No segments in these tests — triggers fall back to their default hours,
+  // which is exactly what the arithmetic under test assumes.
+  resolveReminderHours: () => ({
+    streakReminderHour: null,
+    dailyChallengeHour: null,
+  }),
 }));
 
 import { reminderDelaySeconds, streakReminderDelaySeconds } from '../notificationTriggers';

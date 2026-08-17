@@ -371,11 +371,22 @@ const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
 const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', '#ff9100'];
 
 /**
- * Tooltip key for the one-time "why did the board die" explainer. Lives in
- * the same `tooltipsShown` ledger as the other once-ever tips so it persists
- * across sessions and reinstall-free reloads.
+ * Tooltip key for the "why did the board die" explainer. Lives in the same
+ * `tooltipsShown` ledger as the other tips so it persists across sessions.
+ *
+ * NOT once-per-lifetime any more: the explainer almost always burned in
+ * L1-30, where random-play dead-ends run ~12% and a stuck board is a
+ * curiosity — then the ~57% regime arrives at L31+ with only the short
+ * banner. One show per 15-level difficulty phase (4 lifetime max, keyed
+ * below), so the lesson re-lands right where the boards start demanding it.
+ * The legacy un-suffixed key doubles as phase 0 so existing players don't
+ * re-see the early-game show.
  */
 const FIRST_STUCK_TOOLTIP = 'first_stuck_gravity';
+function stuckTooltipKeyForLevel(level: number): string {
+  const phase = Math.min(3, Math.floor(Math.max(0, level - 1) / 15));
+  return phase === 0 ? FIRST_STUCK_TOOLTIP : `${FIRST_STUCK_TOOLTIP}_p${phase}`;
+}
 
 // Last-word tension only fires on boards with at least this many words —
 // on 2-3 word early boards the "climax" landed seconds into the puzzle.
@@ -1899,9 +1910,10 @@ function GameScreenImpl({
   useEffect(() => {
     if (!isStuck || status !== 'playing' || firstStuckHandledRef.current) return;
     firstStuckHandledRef.current = true;
-    if (tooltipsShown.includes(FIRST_STUCK_TOOLTIP)) return;
+    const tooltipKey = stuckTooltipKeyForLevel(level);
+    if (tooltipsShown.includes(tooltipKey)) return;
     setShowFirstStuckHelp(true);
-    markTooltipShown(FIRST_STUCK_TOOLTIP);
+    markTooltipShown(tooltipKey);
     void analytics.logEvent('first_stuck_explainer_shown', { level, mode });
   }, [isStuck, status, tooltipsShown, markTooltipShown, level, mode]);
 
