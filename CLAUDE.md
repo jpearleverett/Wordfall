@@ -204,11 +204,20 @@ A 137-agent adversarial sweep over money, cloud, state, and UX surfaces produced
 - **Cloud client halves**: puzzle completions now write `users/{uid}/puzzleResults/*` — the `onPuzzleComplete` trigger's input; without it club goals and club `weeklyScore` were frozen at 0 forever. Weekly-leaderboard + club-goal inbox rewards are claimed on app open via `useRewardInboxClaim` (exactly-once via the rules-enforced unclaimed→claimed transition).
 - Also fixed: language restored on settings hydration; Settings "reset progress" actually resets; `club_invite` deep link targets the correct stack; wing-completion bonus paid + wing named; achievement catch-up tiers pay their rewards; streak-restore purchase restores the streak.
 
-### Known issues (post-sweep ledger — start here next session)
+### Clubs end-to-end + polish batch (August 2026, second pass — same branch)
 
-- **ClubScreen's in-club view is unreachable (top item, deliberately NOT half-wired).** `clubId` in the player store has no setter, `clubData` is never fetched, JOIN/CREATE call no-op prop defaults, and `route.params.joinClubId` is unread — only the no-club browse view ever renders, and `GiftInbox` (mounted only inside `renderClub()`) is unreachable. A real fix requires: `joinClub`/`leaveClub` Cloud Functions (firestore.rules deliberately reserve `memberIds` mutation for the Admin SDK — even self-removal cannot be a client write), `clubId` persistence + cross-device membership discovery (query clubs where `memberIds` array-contains uid), a `getClub()` fetch to populate the screen, and wiring join/create/leave + the deep-link param. A create-only club nobody can join would be worse than the browse view, so nothing was half-shipped.
+Cleared the top of the post-sweep ledger (suites 97 → 99, ~1495 tests):
+
+- **Clubs are real end to end.** `joinClub`/`leaveClub` HTTPS callables in `functions/src/social.ts` (transactional, idempotent, maxMembers enforced, memberCount recomputed from memberIds, 10 changes/hr/UID rate limit, owner transfer on leave, club doc deleted when last member leaves — inventory 19 → 21 functions, RIDES THE PENDING `firebase deploy`). Client wrapper `src/services/clubMembership.ts`; `firestoreService.findClubByMembership(uid)` (three-state: club / null=definitely-none / undefined=offline-unknown) drives once-per-open cross-device discovery in PlayerContext; `setClubId` is the new PlayerContext action caching the server-authoritative membership. ClubScreen wires JOIN (browse + code), CREATE (rules-permitted client `createClub`), LEAVE (confirm → callable), reads `route.params.joinClubId` from the `club_invite` deep link (confirm-before-join), fetches the club doc + member display names (`getClubMemberProfiles`), and shows a loading/retry pane instead of the browse view while the doc is in flight. GiftInbox + ClubSharedGoals are now reachable.
+- **Inbox rewards celebrate.** `useRewardInboxClaim` queues one `inbox_reward` ceremony per sweep (single reward shows its own label; several aggregate). Display-only — on the `ceremonyEconomyGrant` exclusion list because the sweep already credited at the rules-enforced unclaimed→claimed transition. Pure builder `buildInboxRewardCeremony` is unit-tested.
+- **Spring/fade nav transition actually runs.** App.tsx's six real stacks converted native-stack → `@react-navigation/stack` (native-stack can't run a custom `cardStyleInterpolator`); card transform/opacity animate on the native driver, `freezeOnBlur` retained. Clamped spring open (stiffness 180/damping 22), 220ms cubic-out close. Needs an on-device feel pass.
+- **Shared boards are hand-authored.** `src/data/sharedBoardThemes.ts`: 20 daily + 16 weekly themes, 12 dictionary-validated words each, deterministic UTC rotation; `shopFairestBoard` threads themeWords into daily/weekly generation and HomeScreen's daily card shows the theme name. `sharedBoardThemes.test.ts` pins the authoring contract end to end.
+- Verified already-shipped (don't redo): animated legendary frame glow (`ProfileScreen.tsx:245–279`, applied at 353).
+
+### Known issues (post-sweep ledger)
+
 - `lastFlawlessDate` is written but never read (vestigial). The flawless streak intentionally increments per flawless SOLVE (per `game_mechanics.md`), not per calendar day — a few stale comments say otherwise; the code is right, the comments are wrong.
-- Weekly-leaderboard/club-goal inbox rewards are granted silently on app open (credited + analytics, no celebration surface). Fine for launch; a visible inbox UI is a polish item.
+- Club member weekly scores render from `memberContributions` (written server-side by `onPuzzleComplete`); until the pending `firebase deploy` ships the new callables + trigger halves, live club data stays sparse.
 
 ### Real launch-blocking gaps (user-side, outside this repo)
 - Register `wordfall_*` IAP SKUs in Play Console (catalog: `src/data/shopProducts.ts`)
@@ -217,7 +226,7 @@ A 137-agent adversarial sweep over money, cloud, state, and UX surfaces produced
 - Set `EXPO_PUBLIC_SENTRY_DSN` as an EAS secret + `.env`
 - AdMob **app IDs** in `app.json` AND rewarded + interstitial **unit IDs** (via `EXPO_PUBLIC_ADMOB_REWARDED_ID*` / `..._INTERSTITIAL_ID*` env vars) are already real on the user's side. Only remaining AdMob step: confirm those env vars are populated in EAS secrets so production AABs don't fall through to the dev-only Google test unit fallback in `src/constants.ts`
 - Author the UMP consent message inside AdMob → Privacy & messaging → GDPR
-- Run `firebase deploy --only firestore:rules,firestore:indexes,functions` (one-time) — the Aug 2026 branch's `maxPlausibleScore` weekly/event scope floor in `functions/src/social.ts` rides this same deploy; until it runs, weekly submissions above the old ceiling are still rejected server-side
+- Run `firebase deploy --only firestore:rules,firestore:indexes,functions` (one-time) — the Aug 2026 branch's `maxPlausibleScore` weekly/event scope floor AND the new `joinClub`/`leaveClub` callables in `functions/src/social.ts` ride this same deploy; until it runs, weekly submissions above the old ceiling are still rejected server-side and club join/leave callables 404 (the client surfaces the error alert)
 - Fill Play Console Data Safety form (draft in `agent_docs/data_safety.md`)
 - Upload store listing assets (icon, feature graphic, screenshots — copy in `agent_docs/store_listing.md`)
 - Commission real audio (synth fallback works but sounds amateur)
