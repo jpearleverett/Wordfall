@@ -30,6 +30,16 @@ export async function errorHaptic(): Promise<void> {
   await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 }
 
+/**
+ * Stuck / dead-end board. Deliberately Warning, not Error — the board dying
+ * is a puzzle outcome to absorb, not a scolding (the rescue banner that
+ * follows is generous; the haptic shouldn't contradict its tone).
+ */
+export async function stuckHaptic(): Promise<void> {
+  if (!hapticsEnabled) return;
+  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+}
+
 export async function successHaptic(): Promise<void> {
   if (!hapticsEnabled) return;
   await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

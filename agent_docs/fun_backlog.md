@@ -29,11 +29,6 @@ back-to-back)
   WordBank rendered; copy spells answers letter-by-letter. FIX: render
   WordBank chips from tutorialBoard.words; step 3 loses highlightPositions
   (keep chip pulse) so the player locates DOG unaided; mention drag. ~60 ln.
-- **F3. Core gravity "aha" structurally invisible L1-10** (forgiveness 0.95 =
-  order never matters). FIX: for easy difficulty ADD requirement that ≥1 word
-  is NOT independently findable in the initial grid (buried-word reveal every
-  early level) — keep forgiveness at 0.95, don't trade it. ~40 lines in
-  attemptGenerate/checkSolvability. Needs boardGen.perf re-run after.
 - **F6. first_win ceremony drops its teaching payload** — data.tips built in
   `useRewardWiring.ts:450-462`, MilestoneCeremony has no tips prop; two
   onboarding phases were deleted on the promise this ceremony carried their
@@ -60,21 +55,11 @@ back-to-back)
 
 ### Juice (moment-to-moment) — from the 2026-08-17 feel audit
 
-- **J2. Stuck fail is silent + motionless.** `defeat` SFX fully built
-  (`sound.ts:134,261,755`) and never played anywhere; no haptic/dim/slide on
-  `isStuck`. FIX: rising-edge → defeat SFX + BGM duck + Warning haptic (new
-  `stuckHaptic`, not errorHaptic) + dim stranded-word tiles (spotlight-dim
-  path) + banner slide-in + a11y announce. ~50 lines.
-- **J3. Idle nudge unreachable for out-of-hints players.** Timer armed only
-  when `hintsAvailable > 0` (`GameScreen.tsx:1266-1274`) but the ad banner
-  requires `hintsAvailable === 0` → dead code. FIX: drop the gate (3 lines);
-  optionally add pre-monetization 45s "still findable" chip shimmer.
-- **J4. Gravity first-fall teleport frame + wave direction ignores cause.**
-  Lazy Animated.Value created after commit (`GameScreen.tsx:1381-1409`,
-  `Grid.tsx:547` reads undefined on first fall). FIX: create value lazily at
-  render in Grid (~10 lines). Also: order column stagger by distance from
-  cleared-word centroid (2 lines); move `gravityLandHaptic()` into the
-  reduce-motion else-branch (a11y regression — motion off ≠ feedback off).
+- **J2-remainder (visual only).** Stuck-fail audio/haptic/a11y shipped in
+  batch 3; still open: dim the stranded-word tiles via the spotlight-dim
+  path + slide the banner in with a spring instead of a hard mount.
+- **J3-remainder.** Idle gate fix shipped; still open: pre-monetization ~45s
+  "still findable" chip shimmer (reassurance tier before the hint/ad CTA).
 - **J6. Big-word celebration over-juiced** (`GameScreen.tsx:1523-1549`):
   random ALL-CAPS adjective + ±14px shake + 3 stacked haptics. FIX: factual
   "7 LETTERS" badge, ±6px or grid-breath, single haptic, real `bigWord` SFX
@@ -142,6 +127,25 @@ legacyTaskCardsEnabled=false, honest reminder scheduling.
 
 ## SHIPPED
 
+- 2026-08-17 (batch 3 — fail-state feel + visible gravity):
+  - **J2 (core)** the board dying now has a beat: `puzzleFailStuck` synth
+    chord over ducked BGM + new Warning-grade `stuckHaptic` + screen-reader
+    announcement naming the buried word, once per dead end; hard fails
+    (timeout → `puzzleFailTime`, violation → `puzzleFailInstant`) get the
+    same treatment with a double-play guard.
+  - **J3 (core)** idle-nudge timer no longer gated on having hints — the
+    out-of-hints ad banner was unreachable dead code; canShowAdHint still
+    suppresses it in no-hint modes.
+  - **J4** gravity fall values now created at Grid render time (transform
+    attached from a tile's first post-gravity frame — kills the
+    teleport-then-fall pop); column stagger radiates from the cleared word's
+    centroid instead of always sweeping left-to-right; gravityLandHaptic now
+    fires under reduce-motion too (motion off ≠ feedback off).
+  - **F3** easy gravity boards prefer a small shared-column overlap for the
+    last-placed word: 77% → 97% of L1-10 boards now have a clear order that
+    visibly moves another word's letters, forgiveness gate unchanged at
+    0.95. Pinned by new `visibleGravity.test.ts` (≥90% floor); all perf/
+    stuck/skilled guards re-run green. Suites 99 → 100.
 - 2026-08-17 (batch 2 — trace release + FTUE de-interruption):
   - **J1** dead traces release silently ~180ms after finger lift (per-gesture
     multi-cell detection in Grid keeps tap-by-tap selection working; valid

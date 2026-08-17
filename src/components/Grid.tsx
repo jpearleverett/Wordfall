@@ -559,7 +559,19 @@ function GameGridImpl({
                     const selIndex = selectedSet.get(key) ?? -1;
                     const isSelected = selIndex >= 0;
                     const isHinted = hintedSet.has(key);
-                    const cellFallAnim = fallAnimMap ? fallAnimMap.get(cell.id) : undefined;
+                    // Create the fall value lazily at RENDER time so the
+                    // translateY transform is attached from a tile's very
+                    // first post-gravity frame. Created only in the effect
+                    // (post-commit), a first-time mover rendered at its
+                    // DESTINATION with no transform until the setMovedCells
+                    // re-render landed — a visible teleport-then-fall pop.
+                    // With the node always attached, the effect's setValue
+                    // applies on the UI thread without waiting for React.
+                    let cellFallAnim = fallAnimMap ? fallAnimMap.get(cell.id) : undefined;
+                    if (!cellFallAnim && fallAnimMap) {
+                      cellFallAnim = new Animated.Value(0);
+                      fallAnimMap.set(cell.id, cellFallAnim);
+                    }
 
                     return (
                       <LetterCell

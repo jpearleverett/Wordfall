@@ -503,8 +503,27 @@ function attemptGenerate(
   const colMin = isShrinking ? 1 : 0;
   const colMax = isShrinking ? config.cols - 2 : config.cols - 1;
 
-  for (const word of sortedWords) {
+  // Easy boards actively SHOW gravity. stackingPenalty below steers every
+  // word toward column-disjoint placement — correct for fairness, but on
+  // 2-3 word easy boards it routinely produces layouts where NO clear order
+  // moves a single letter of another word, so the game's one differentiating
+  // mechanic (clearing order reshapes the board) is invisible for the first
+  // ~10 levels and the tutorial's buried-word lesson is never reinforced.
+  // For the LAST word placed on an easy gravity board, prefer a small
+  // shared-column overlap (penalty 1-4) over a fully disjoint spot: some
+  // order now visibly drops letters, while the 0.95 forgiveness gate in
+  // checkSolvability still guarantees nearly every order wins. Not applied
+  // to noGravity (no falls) or shrinkingBoard (its own geometry).
+  const wantVisibleGravity =
+    config.difficulty === 'easy' &&
+    mode !== 'noGravity' &&
+    mode !== 'shrinkingBoard';
+
+  for (let wi = 0; wi < sortedWords.length; wi++) {
+    const word = sortedWords[wi];
     let placed = false;
+    const preferStacked =
+      wantVisibleGravity && wi === sortedWords.length - 1 && wi > 0;
 
     // Try random starting positions within the allowed region
     const startPositions: [number, number][] = [];
@@ -525,6 +544,10 @@ function attemptGenerate(
     // what placement produces — this makes fair boards common at the source.
     let best: CellPosition[] | null = null;
     let bestPenalty = Infinity;
+    // Best small-overlap candidate for the easy-board visible-gravity
+    // preference (see wantVisibleGravity above).
+    let bestStacked: CellPosition[] | null = null;
+    let bestStackedPenalty = Infinity;
     let considered = 0;
 
     for (const [startRow, startCol] of startPositions) {
@@ -540,12 +563,27 @@ function attemptGenerate(
         bestPenalty = penalty;
         best = positions;
       }
+      if (
+        preferStacked &&
+        penalty >= 1 &&
+        penalty <= 4 &&
+        penalty < bestStackedPenalty
+      ) {
+        bestStackedPenalty = penalty;
+        bestStacked = positions;
+      }
       considered++;
-      // A zero-penalty placement is already ideal; stop looking.
-      if (bestPenalty === 0 || considered >= PLACEMENT_CANDIDATES) break;
+      // Stop as soon as the ideal candidate for this word exists: a small
+      // overlap when we're showing gravity, a zero-penalty spot otherwise.
+      const idealFound = preferStacked
+        ? bestStackedPenalty === 1
+        : bestPenalty === 0;
+      if (idealFound || considered >= PLACEMENT_CANDIDATES) break;
     }
 
-    if (best) {
+    const chosen = preferStacked && bestStacked ? bestStacked : best;
+    if (chosen) {
+      best = chosen;
       placeWord(grid, word, best);
       placements.push({
         word,

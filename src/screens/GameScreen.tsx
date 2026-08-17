@@ -31,7 +31,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic } from '../services/haptics';
+import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic, stuckHaptic } from '../services/haptics';
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
 import {
@@ -1260,7 +1260,12 @@ function GameScreenImpl({
   const resetIdleTimer = useCallback(() => {
     setShowIdleHint(false);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    if (statusRef.current === 'playing' && hintsAvailableRef.current > 0) {
+    // No hintsAvailable gate here: the out-of-hints ad banner REQUIRES
+    // hintsAvailable === 0, so arming only when > 0 made it unreachable dead
+    // code — the player most in need of a nudge (stalled, no hints) got
+    // nothing at any idle duration. GameBanners decides which banner renders
+    // (and canShowAdHint already suppresses the ad path in no-hint modes).
+    if (statusRef.current === 'playing') {
       idleTimerRef.current = setTimeout(() => {
         setShowIdleHint(true);
       }, idleHintDelay);
@@ -1364,10 +1369,21 @@ function GameScreenImpl({
         }
         const cellStride = cellSize + CELL_GAP;
 
-        // Stagger delay per column for wave effect
+        // Stagger delay per column, radiating OUT from the cleared word's
+        // centroid so the wave reads as caused by the clear. A plain
+        // left-to-right sweep (the old ascending-col sort) always started at
+        // the grid's left edge regardless of where the word was.
         const staggerDelay = ANIM.gravityStagger || 30;
         const movedCols = new Set(moved.map(c => c.col));
-        const colOrder = Array.from(movedCols).sort((a, b) => a - b);
+        const submitted = lastSubmittedCellsRef.current;
+        const centroidCol = submitted.length > 0
+          ? submitted.reduce((s, c) => s + c.col, 0) / submitted.length
+          : null;
+        const colOrder = Array.from(movedCols).sort((a, b) =>
+          centroidCol === null
+            ? a - b
+            : Math.abs(a - centroidCol) - Math.abs(b - centroidCol) || a - b,
+        );
         const colDelayMap = new Map<number, number>();
         colOrder.forEach((c, i) => colDelayMap.set(c, i * staggerDelay));
 
@@ -1425,6 +1441,11 @@ function GameScreenImpl({
         // existing (often empty) array reference so PlayField/GameGrid skip
         // two pointless grid-wide reconciliations during the clear window.
         setMovedCells(prev => (prev.length === 0 && moved.length === 0 ? prev : moved));
+        // Reduce-motion suppresses the spring, not the settle confirmation —
+        // motion off must not mean feedback off. Tiles still moved; say so.
+        if (reduceMotion && moved.length > 0) {
+          void gravityLandHaptic();
+        }
       }
 
       const timer = setTimeout(
@@ -1842,6 +1863,39 @@ function GameScreenImpl({
     return remainingWords.filter((w) => findWordInGrid(grid, w, 1).length === 0);
   }, [isStuck, status, remainingWords, grid]);
 
+  // The board dying is the game's core fail state, and it used to happen in
+  // total silence: a static banner popped into the layout and nothing else —
+  // no sound (the `defeat` slot was authored, registered, synth-defined, and
+  // never played), no haptic, no screen-reader signal. The generous rescue
+  // logic underneath landed with zero presentation, so nobody registered the
+  // favour. One beat per dead end: sad-but-not-punishing chord over ducked
+  // BGM, a Warning (not Error) haptic, and an a11y announcement naming the
+  // buried word the way the visual banner does.
+  const stuckFeltRef = useRef(false);
+  const failFeltRef = useRef(false);
+  useEffect(() => {
+    stuckFeltRef.current = false;
+    failFeltRef.current = false;
+  }, [level, mode, board]);
+  useEffect(() => {
+    if (!isStuck || status !== 'playing') {
+      if (!isStuck) stuckFeltRef.current = false;
+      return;
+    }
+    if (stuckFeltRef.current) return;
+    stuckFeltRef.current = true;
+    soundManager.duckMusicFor(1800, 0.35);
+    void soundManager.playSound('puzzleFailStuck');
+    void stuckHaptic();
+    const headline =
+      strandedWords.length > 0
+        ? `${strandedWords[0]} is cut off by gravity.`
+        : 'No remaining order finishes this board.';
+    AccessibilityInfo.announceForAccessibility(
+      `Board is stuck. ${headline} Step back a move or retry the puzzle.`,
+    );
+  }, [isStuck, status, strandedWords]);
+
   useEffect(() => {
     if (!isStuck || status !== 'playing' || firstStuckHandledRef.current) return;
     firstStuckHandledRef.current = true;
@@ -1883,6 +1937,17 @@ function GameScreenImpl({
   //   • mode !== 'relax' (relax mode has no fail state)
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && !showFailed) {
+      // Hard fails (timeout, perfect-solve violation) get the same single
+      // sad-but-not-punishing beat as a stuck board — unless the stuck
+      // effect above already played it for this attempt.
+      if (!failFeltRef.current && !stuckFeltRef.current) {
+        failFeltRef.current = true;
+        soundManager.duckMusicFor(1800, 0.35);
+        void soundManager.playSound(
+          status === 'timeout' ? 'puzzleFailTime' : 'puzzleFailInstant',
+        );
+        void stuckHaptic();
+      }
       const breatherEligible =
         getRemoteBoolean('failBreatherEnabled') &&
         mode !== 'relax' &&
