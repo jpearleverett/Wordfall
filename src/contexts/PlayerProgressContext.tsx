@@ -702,6 +702,21 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         const ltId = getAchievementTierId(achievement.id, lt.level);
         if (!data.achievementIds.includes(ltId) && !newAchievementIds.includes(ltId)) {
           newAchievementIds.push(ltId);
+          // A player who jumps straight past a tier (e.g. a big score in one
+          // puzzle) still EARNED it. These used to be recorded as owned
+          // without being returned, so their rewards silently skipped —
+          // return them like any other earn so the caller grants them.
+          ceremonies.push({
+            type: 'achievement',
+            data: {
+              id: ltId,
+              icon: achievement.icon,
+              name: achievement.name,
+              description: achievement.description,
+              tier: lt.level,
+              reward: lt.reward,
+            },
+          });
         }
       }
 

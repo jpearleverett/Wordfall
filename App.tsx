@@ -104,6 +104,7 @@ import { firestoreService, FirestoreGift } from './src/services/firestore';
 // Extracted modules for decomposition
 import { useRewardWiring, playerStageFromPuzzles } from './src/hooks/useRewardWiring';
 import { useCeremonyQueue } from './src/hooks/useCeremonyQueue';
+import { ceremonyEconomyGrant } from './src/utils/ceremonyGrants';
 import { getLoginCalendarDay } from './src/data/loginCalendar';
 
 const Tab = createBottomTabNavigator();
@@ -1785,8 +1786,31 @@ function AppContent() {
   }, []);
 
   // Ceremony queue — rendered at app level so modals overlay all screens
+  // Credit a ceremony's displayed reward the moment it is popped for
+  // showing. Pop removes it from the persisted queue, so the grant is
+  // exactly-once; granting anywhere later (dismiss, render) can re-fire if
+  // the app dies mid-ceremony. Streak milestones, Atlas completions and
+  // win-streak tiers all rendered coin/gem amounts that NO code path
+  // credited — a full-screen celebration of currency the player never got.
+  const popCeremonyWithGrant = useCallback((): CeremonyItem | null => {
+    const ceremony = player.popCeremony();
+    if (ceremony) {
+      const grant = ceremonyEconomyGrant(ceremony);
+      if (grant) {
+        if (grant.coins > 0) economy.addCoins(grant.coins);
+        if (grant.gems > 0) economy.addGems(grant.gems);
+        if (grant.hintTokens > 0) economy.addHintTokens(grant.hintTokens);
+        if (grant.rareTile) {
+          const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+          player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+        }
+      }
+    }
+    return ceremony;
+  }, [player.popCeremony, player.addRareTile, economy.addCoins, economy.addGems, economy.addHintTokens]);
+
   const { activeCeremony, handleDismissCeremony, resetBatchCounter } = useCeremonyQueue({
-    popCeremony: player.popCeremony,
+    popCeremony: popCeremonyWithGrant,
     pendingCeremonyCount: player.pendingCeremonies.length,
     loaded: player.loaded,
     isBlocked: showOnboarding,

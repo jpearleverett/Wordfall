@@ -1,0 +1,94 @@
+/**
+ * The economy grant a ceremony's displayed reward corresponds to.
+ *
+ * A ceremony presents a reward the game has ALREADY given — that is the
+ * contract the rest of this branch works to. Three ceremony types broke it:
+ * streak milestones and Atlas collection completions rendered "+500 coins /
+ * +10 gems" numbers that no code path credited, and win-streak milestones
+ * had a whole reward table (WIN_STREAK_TIERS) defined and never paid. The
+ * player was shown a full-screen celebration of currency they did not get,
+ * which is worse than no celebration: anyone who checks their balance
+ * concludes the game stole from them.
+ *
+ * This is a pure function so the grant and the display can be driven from
+ * the SAME source: App.tsx applies it when a ceremony is popped for showing
+ * (pop removes it from the persisted queue, so the grant is exactly-once),
+ * and the router can render a reward label from it. Types deliberately NOT
+ * handled here because their reward is granted by their own flow already —
+ * granting them again would double-pay:
+ *   - daily_quest_claim   → claimDailyQuest returns the reward to App.tsx,
+ *                           which credits it at claim time
+ *   - mystery_wheel_jackpot → the wheel spin flow grants the segment
+ *   - quest_step_complete / season_pass_complete / feature unlocks → no
+ *                           currency amounts are displayed
+ */
+import { CeremonyItem } from '../types';
+import { WIN_STREAK_TIERS } from '../data/eventLayers';
+
+export interface CeremonyGrant {
+  coins: number;
+  gems: number;
+  hintTokens: number;
+  rareTile: boolean;
+}
+
+function normalize(reward: {
+  coins?: number;
+  gems?: number;
+  hintTokens?: number;
+  hints?: number;
+  rareTile?: boolean;
+}): CeremonyGrant {
+  return {
+    coins: reward.coins ?? 0,
+    gems: reward.gems ?? 0,
+    // The win-streak table calls them `hints`, everything else `hintTokens`.
+    hintTokens: reward.hintTokens ?? reward.hints ?? 0,
+    rareTile: reward.rareTile === true,
+  };
+}
+
+function isEmpty(grant: CeremonyGrant): boolean {
+  return grant.coins === 0 && grant.gems === 0 && grant.hintTokens === 0 && !grant.rareTile;
+}
+
+/** Returns the amounts to credit for this ceremony, or null when nothing is owed. */
+export function ceremonyEconomyGrant(ceremony: CeremonyItem): CeremonyGrant | null {
+  switch (ceremony.type) {
+    case 'streak_milestone': {
+      const reward = ceremony.data?.reward;
+      if (!reward) return null;
+      const grant = normalize(reward);
+      return isEmpty(grant) ? null : grant;
+    }
+    case 'collection_complete': {
+      const reward = ceremony.data?.reward;
+      if (!reward) return null;
+      const grant = normalize(reward);
+      return isEmpty(grant) ? null : grant;
+    }
+    case 'win_streak_milestone': {
+      // The ceremony carries only {streak, label}; the amounts live in the
+      // tier table. Looking them up here means the grant and any displayed
+      // label cannot disagree. (Tier 2 in that table has no matching
+      // ceremony milestone and remains unpaid dead data — documented in
+      // eventLayers, not silently granted here.)
+      const tier = WIN_STREAK_TIERS.find((t) => t.streak === ceremony.data?.streak);
+      if (!tier) return null;
+      const grant = normalize(tier.reward);
+      return isEmpty(grant) ? null : grant;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Short human label for a grant, e.g. "+200 coins · +3 gems". */
+export function ceremonyGrantLabel(grant: CeremonyGrant): string {
+  const parts: string[] = [];
+  if (grant.coins > 0) parts.push(`+${grant.coins} coins`);
+  if (grant.gems > 0) parts.push(`+${grant.gems} gems`);
+  if (grant.hintTokens > 0) parts.push(`+${grant.hintTokens} hint${grant.hintTokens > 1 ? 's' : ''}`);
+  if (grant.rareTile) parts.push('+1 rare tile');
+  return parts.join(' · ');
+}

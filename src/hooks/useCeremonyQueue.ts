@@ -42,6 +42,12 @@ export function useCeremonyQueue({
   isBlocked,
 }: UseCeremonyQueueOptions): UseCeremonyQueueResult {
   const [activeCeremony, setActiveCeremony] = useState<CeremonyItem | null>(null);
+  // Bumped by resetBatchCounter so the processing effect re-runs. The reset
+  // used to only zero a ref — which none of the effect's dependencies
+  // observe — so ceremonies deferred by the batch cap stayed stuck until
+  // something ELSE happened to change the queue length. The player earned
+  // them, then never saw them.
+  const [resumeTick, setResumeTick] = useState(0);
   const ceremonyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ceremonyShownAtRef = useRef<number>(0);
   // Track ceremonies shown in the current batch to enforce cap
@@ -75,7 +81,7 @@ export function useCeremonyQueue({
         setActiveCeremony(next);
       }
     }
-  }, [loaded, pendingCeremonyCount, activeCeremony, isBlocked, popCeremony]);
+  }, [loaded, pendingCeremonyCount, activeCeremony, isBlocked, popCeremony, resumeTick]);
 
   // Track when a ceremony is displayed + set auto-dismiss timer
   const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -160,6 +166,7 @@ export function useCeremonyQueue({
 
   const resetBatchCounter = useCallback(() => {
     batchCountRef.current = 0;
+    setResumeTick((t) => t + 1);
   }, []);
 
   return { activeCeremony, handleDismissCeremony, processNext, resetBatchCounter };

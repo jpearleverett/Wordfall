@@ -11,6 +11,7 @@ import SeasonPassCompleteCeremony from '../components/SeasonPassCompleteCeremony
 import { FirstPurchaseOfferModal } from '../components/FirstPurchaseOfferModal';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { CeremonyItem } from '../types';
+import { ceremonyEconomyGrant, ceremonyGrantLabel } from '../utils/ceremonyGrants';
 import { COLORS } from '../constants';
 
 interface CeremonyEconomy {
@@ -91,6 +92,12 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           icon={'\u{1F525}'}
           title={activeCeremony.data.label || `${activeCeremony.data.streak} Wins!`}
           description={`You won ${activeCeremony.data.streak} puzzles in a row!`}
+          rewardLabel={(() => {
+            // Same source the pop-time grant used, so what is shown is
+            // exactly what was credited.
+            const grant = ceremonyEconomyGrant(activeCeremony);
+            return grant ? ceremonyGrantLabel(grant) : undefined;
+          })()}
           accentColor={COLORS.orange}
           onDismiss={onDismiss}
         />

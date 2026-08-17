@@ -705,7 +705,14 @@ export function useRewardWiring({
     // The reward/unlock still happens in checkAchievements, we just don't queue modals.
     const achievementCeremonies = player.checkAchievements();
     for (const ceremony of achievementCeremonies) {
-      // Track analytics but don't show a modal — player discovers via Profile/badges
+      // Tier 3: no modal — but the REWARD is not optional. The comment above
+      // this loop used to claim "the reward/unlock still happens" while the
+      // loop only logged analytics; every achievement tier's declared
+      // coins/gems went ungranted. The achievement screen shows the amounts,
+      // so pay them.
+      const reward = ceremony.data?.reward as { coins?: number; gems?: number } | undefined;
+      if (reward?.coins) economy.addCoins(reward.coins);
+      if (reward?.gems) economy.addGems(reward.gems);
       if (ceremony.data?.achievementId && ceremony.data?.tier) {
         void analytics.trackAchievementEarned(ceremony.data.achievementId, ceremony.data.tier);
       }
