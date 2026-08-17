@@ -947,6 +947,25 @@ export function useRewardWiring({
     }
 
     if (userId) {
+      // The onPuzzleComplete Cloud Function (club goal progress + club
+      // weekly score) triggers on this document's CREATION — it listened
+      // on a path no client ever wrote, so club goals and weekly club
+      // scores were frozen at zero. handleComplete runs once per
+      // completion (GameScreen guards double-fires) and this write is not
+      // retried, so a fresh id per call cannot double-fire the trigger.
+      const resultId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      void firestoreService.recordPuzzleResult(userId, resultId, {
+        score,
+        stars,
+        wordsFound,
+        isPerfect,
+        hintsUsed: assists.hintsUsed,
+        level,
+        mode,
+      });
+    }
+
+    if (userId) {
       void firestoreService.syncPlayerProfile(userId, {
         displayName,
         level: newLevel,

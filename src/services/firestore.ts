@@ -1397,6 +1397,93 @@ class FirestoreService {
   }
 
   /**
+   * Record a puzzle completion at users/{uid}/puzzleResults/{resultId}.
+   * This document is the trigger input for the onPuzzleComplete Cloud
+   * Function (club goal progress, shared-goal contributions, club
+   * weeklyScore) — which listened on a path nothing ever wrote. Nothing
+   * reads it client-side; fire-and-forget from useRewardWiring.
+   */
+  async recordPuzzleResult(
+    userId: string,
+    resultId: string,
+    result: {
+      score: number;
+      stars: number;
+      wordsFound: number;
+      isPerfect: boolean;
+      hintsUsed: number;
+      level: number;
+      mode: string;
+    },
+  ): Promise<boolean> {
+    if (!this.enabled || !userId || !resultId) return false;
+    try {
+      await setDoc(doc(db, 'users', userId, 'puzzleResults', resultId), {
+        ...result,
+        createdAt: serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      logFirestoreError('recordPuzzleResult', 'puzzleResults', e);
+      return false;
+    }
+  }
+
+  /**
+   * Generic reward-inbox reader for the server-granted types no dedicated
+   * surface covers: weekly-leaderboard payouts (distributeWeeklyRewards)
+   * and personal club-goal completions (onPuzzleComplete). Referral and
+   * shared-goal types have their own readers + claim UIs.
+   */
+  async getPendingInboxRewards(
+    userId: string,
+  ): Promise<Array<{
+    id: string;
+    type: 'weekly_leaderboard' | 'club_goal_complete';
+    label: string;
+    coins: number;
+    gems: number;
+    decorations: string[];
+  }>> {
+    if (!this.enabled || !userId) return [];
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'rewards'),
+        where('type', 'in', ['weekly_leaderboard', 'club_goal_complete']),
+        where('claimed', '==', false),
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const type = data.type as 'weekly_leaderboard' | 'club_goal_complete';
+        return {
+          id: d.id,
+          type,
+          label:
+            type === 'weekly_leaderboard'
+              ? `Weekly leaderboard — ${data.tierLabel ?? `rank ${data.rank ?? '?'}`}`
+              : ((data.goalLabel as string) ?? 'Club goal complete'),
+          coins: Number(data.coins) || 0,
+          gems: Number(data.gems) || 0,
+          decorations: Array.isArray(data.decorations) ? (data.decorations as string[]) : [],
+        };
+      });
+    } catch (e) {
+      logger.warn('[Firestore] getPendingInboxRewards failed:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Flip any inbox reward doc to claimed. The rules only allow the
+   * unclaimed → claimed transition, so when two devices race exactly one
+   * update succeeds — the loser must NOT grant locally.
+   */
+  async markInboxRewardClaimed(userId: string, rewardId: string): Promise<boolean> {
+    return this.markReferralRewardClaimed(userId, rewardId);
+  }
+
+  /**
    * Check if Firebase is configured and available.
    */
   isAvailable(): boolean {

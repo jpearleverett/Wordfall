@@ -104,6 +104,7 @@ import { firestoreService, FirestoreGift } from './src/services/firestore';
 // Extracted modules for decomposition
 import { useRewardWiring, playerStageFromPuzzles } from './src/hooks/useRewardWiring';
 import { useCeremonyQueue } from './src/hooks/useCeremonyQueue';
+import { useRewardInboxClaim } from './src/hooks/useRewardInbox';
 import { ceremonyEconomyGrant } from './src/utils/ceremonyGrants';
 import { getLoginCalendarDay } from './src/data/loginCalendar';
 
@@ -992,6 +993,10 @@ function HomeMainScreen({ route, navigation }: any) {
   const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
+  // Sweep the server-side reward inbox (weekly-leaderboard payouts,
+  // personal club-goal completions) once per app run — these types had no
+  // client reader, so the grants were invisible and unclaimable.
+  useRewardInboxClaim(user?.uid, economy, player);
   const [loading, setLoading] = useState(false);
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
   const [comebackCoins, setComebackCoins] = useState(0);
