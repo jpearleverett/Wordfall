@@ -29,7 +29,7 @@ export interface MiniEvent {
   rewards: { threshold: number; reward: { coins?: number; gems?: number; hints?: number } }[];
 }
 
-const MINI_EVENT_TEMPLATES: MiniEvent[] = [
+export const MINI_EVENT_TEMPLATES: MiniEvent[] = [
   {
     id: 'coin_rush',
     name: 'Coin Rush',
@@ -211,14 +211,44 @@ export interface ActiveEventLayers {
  * Mini events trigger every 2-3 days.
  */
 export function getMiniEventForDate(dateStr: string): MiniEvent | null {
+  return getActiveMiniEvent(dateStr)?.event ?? null;
+}
+
+/**
+ * The mini event active on `dateStr`, with the date it STARTED.
+ *
+ * Mini events start every third day, but their declared duration can be 48
+ * hours — and the old lookup only answered for the start day, so a 48-hour
+ * event (Rare Tile Hunt) vanished after 24, stranding any progress earned
+ * toward its tiers. The start date matters as much as the event: the
+ * caller keys progress and computes the end time from it, and keying by
+ * "today" on day two would mint a fresh event id (progress wipe) and extend
+ * the window by another day.
+ */
+export function getActiveMiniEvent(
+  dateStr: string,
+): { event: MiniEvent; startDateStr: string } | null {
   const date = new Date(dateStr);
   const daysSinceEpoch = Math.floor(date.getTime() / (24 * 60 * 60 * 1000));
 
-  // Mini events run every 2-3 days
-  if (daysSinceEpoch % 3 !== 0) return null;
+  // Start day: a new mini event begins every third day.
+  if (daysSinceEpoch % 3 === 0) {
+    const index = daysSinceEpoch % MINI_EVENT_TEMPLATES.length;
+    return { event: MINI_EVENT_TEMPLATES[index], startDateStr: dateStr };
+  }
 
-  const index = daysSinceEpoch % MINI_EVENT_TEMPLATES.length;
-  return MINI_EVENT_TEMPLATES[index];
+  // Day two of a multi-day event: still active if yesterday's event runs
+  // longer than 24 hours.
+  if (daysSinceEpoch % 3 === 1) {
+    const startDay = daysSinceEpoch - 1;
+    const candidate = MINI_EVENT_TEMPLATES[startDay % MINI_EVENT_TEMPLATES.length];
+    if (candidate.durationHours > 24) {
+      const start = new Date(startDay * 24 * 60 * 60 * 1000);
+      return { event: candidate, startDateStr: start.toISOString().split('T')[0] };
+    }
+  }
+
+  return null;
 }
 
 /**

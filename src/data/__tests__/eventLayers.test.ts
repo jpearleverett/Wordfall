@@ -281,3 +281,47 @@ describe('WIN_STREAK_TIERS', () => {
     expect(WIN_STREAK_TIERS[WIN_STREAK_TIERS.length - 1].streak).toBe(20);
   });
 });
+
+describe('48-hour mini events survive their second day', () => {
+  // getActiveMiniEvent must serve a 48h event on BOTH its days, anchored to
+  // the start date — the old lookup answered only on the start day, so the
+  // Rare Tile Hunt vanished after 24 of its declared 48 hours, stranding
+  // tier progress. Anchoring matters as much as serving: keyed to "today"
+  // on day two, the manager would mint a fresh event id (progress wipe) and
+  // extend the window by a day.
+  const { getActiveMiniEvent, MINI_EVENT_TEMPLATES } = require('../eventLayers');
+
+  function dayString(daysSinceEpoch: number): string {
+    return new Date(daysSinceEpoch * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  }
+
+  it('serves a 48h event on its second day with the original start date', () => {
+    // Find a start day whose template is the 48h one.
+    for (let day = 0; day < MINI_EVENT_TEMPLATES.length * 3; day += 3) {
+      const startStr = dayString(day);
+      const onStart = getActiveMiniEvent(startStr);
+      if (!onStart || onStart.event.durationHours <= 24) continue;
+
+      const dayTwo = getActiveMiniEvent(dayString(day + 1));
+      expect(dayTwo).not.toBeNull();
+      expect(dayTwo!.event.id).toBe(onStart.event.id);
+      expect(dayTwo!.startDateStr).toBe(startStr);
+      return;
+    }
+    throw new Error('no 48h mini event found in templates — test needs updating');
+  });
+
+  it('does NOT serve a 24h event on its second day', () => {
+    for (let day = 0; day < MINI_EVENT_TEMPLATES.length * 3; day += 3) {
+      const onStart = getActiveMiniEvent(dayString(day));
+      if (!onStart || onStart.event.durationHours !== 24) continue;
+      expect(getActiveMiniEvent(dayString(day + 1))).toBeNull();
+      return;
+    }
+    throw new Error('no 24h mini event found in templates — test needs updating');
+  });
+
+  it('day three is always a gap day', () => {
+    expect(getActiveMiniEvent(dayString(3 * 100 + 2))).toBeNull();
+  });
+});
