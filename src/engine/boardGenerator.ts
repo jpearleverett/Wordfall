@@ -3,6 +3,7 @@ import { applyGravity } from './gravity';
 import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating, isSolvableShrinkingBoard, estimateForgiveness } from './solver';
 import { getWordsByLength } from '../words';
 import { weekIdSeed } from '../utils/weekId';
+import { getDailyTheme, getWeeklyTheme } from '../data/sharedBoardThemes';
 import { DIFFICULTY_CONFIGS } from '../constants';
 
 // Simple seeded PRNG (mulberry32)
@@ -917,10 +918,11 @@ function shopFairestBoard(
   config: BoardConfig,
   baseSeed: number,
   budget: FairnessBudget = DAILY_FAIRNESS,
+  themeWords?: string[],
 ): Board {
   const deadline = Date.now() + budget.budgetMs;
 
-  let board = generateBoard(config, baseSeed);
+  let board = generateBoard(config, baseSeed, undefined, undefined, themeWords);
   let bestScore = estimateForgiveness(
     board.grid,
     board.words.map((w) => w.word),
@@ -931,7 +933,7 @@ function shopFairestBoard(
   for (let attempt = 1; attempt < budget.attempts && bestScore < budget.target; attempt++) {
     if (Date.now() >= deadline) break;
     const seed = baseSeed + attempt * 7919;
-    const candidate = generateBoard(config, seed);
+    const candidate = generateBoard(config, seed, undefined, undefined, themeWords);
     const score = estimateForgiveness(
       candidate.grid,
       candidate.words.map((w) => w.word),
@@ -952,7 +954,14 @@ export function generateDailyBoard(dateString: string): Board {
   if (cached) return cached;
 
   const { config } = getDailyVariant(dateString);
-  const board = shopFairestBoard(config, dailyBoardSeed(dateString));
+  // Hand-authored theme words (sharedBoardThemes.ts) give the shared daily
+  // its curated feel: up to half the find-list comes from the day's theme.
+  const board = shopFairestBoard(
+    config,
+    dailyBoardSeed(dateString),
+    DAILY_FAIRNESS,
+    getDailyTheme(dateString).words,
+  );
 
   dailyBoardCache.set(dateString, board);
 
@@ -1008,7 +1017,12 @@ export function generateWeeklyBoard(weekId: string): Board {
   const cached = weeklyBoardCache.get(weekId);
   if (cached) return cached;
 
-  const board = shopFairestBoard(DIFFICULTY_CONFIGS.hard, weekIdSeed(weekId), WEEKLY_FAIRNESS);
+  const board = shopFairestBoard(
+    DIFFICULTY_CONFIGS.hard,
+    weekIdSeed(weekId),
+    WEEKLY_FAIRNESS,
+    getWeeklyTheme(weekId).words,
+  );
 
   weeklyBoardCache.set(weekId, board);
   if (weeklyBoardCache.size > 4) {

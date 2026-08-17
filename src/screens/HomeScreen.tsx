@@ -21,6 +21,7 @@ import { soundManager } from '../services/sound';
 import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 import { getDailyVariant } from '../engine/boardGenerator';
+import { getDailyTheme } from '../data/sharedBoardThemes';
 import { useDeferredMount } from '../utils/perfInstrument';
 
 // Session-scoped guard so the login-calendar auto-present fires once per app
@@ -566,7 +567,7 @@ export function HomeScreen({
                   <Text style={styles.dailySubtitle}>
                     {dailyDone
                       ? 'Come back tomorrow!'
-                      : `${getDailyVariant(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
+                      : `${getDailyVariant(today).name} · ${getDailyTheme(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
                   </Text>
                 </View>
                 <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>
