@@ -524,6 +524,8 @@ function GameScreenImpl({
     activateSmartShuffle,
     activateBoosterCombo,
     expireBoosterCombo,
+    activateScoreDoubler,
+    activateBoardFreeze,
     isStuck,
     stars,
     foundWords,
@@ -654,6 +656,8 @@ function GameScreenImpl({
     spendCoins,
     spendGems,
     processAdReward,
+    hasTemporaryEntitlement,
+    consumeTemporaryEntitlement,
   } = useEconomyActions();
   const [activeOffer, setActiveOffer] = useState<OfferType | null>(null);
   const offerShownThisLevel = useRef(false);
@@ -1751,6 +1755,28 @@ function GameScreenImpl({
   useEffect(() => {
     freeRescueUsedRef.current = false;
     setFreeUndoGranted(false);
+  }, [level, mode]);
+
+  // Purchased one-shot effects from the coin shop. The shop stores them as
+  // temporary entitlements (so an unused purchase survives an app restart);
+  // this is the point where they become real: activate in the game store,
+  // then consume so the effect cannot apply twice. Board Freeze is only
+  // meaningful where a shrink exists, so it is left banked in other modes
+  // rather than burned uselessly.
+  useEffect(() => {
+    if (hasTemporaryEntitlement('score_doubler')) {
+      activateScoreDoubler();
+      consumeTemporaryEntitlement('score_doubler');
+      void analytics.logEvent('temporary_effect_activated', { effect: 'score_doubler', level, mode });
+    }
+    if (mode === 'shrinkingBoard' && hasTemporaryEntitlement('board_freeze')) {
+      activateBoardFreeze();
+      consumeTemporaryEntitlement('board_freeze');
+      void analytics.logEvent('temporary_effect_activated', { effect: 'board_freeze', level, mode });
+    }
+    // Keyed per puzzle load — the entitlement check is cheap and the consume
+    // makes re-runs harmless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level, mode]);
 
   // First dead end ever: explain the mechanic instead of just announcing the

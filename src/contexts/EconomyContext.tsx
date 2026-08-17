@@ -198,6 +198,8 @@ export interface EconomyContextType extends Economy {
   hasTemporaryEntitlement: (effectId: CommercialEffectId) => boolean;
   getTemporaryEntitlementExpiry: (effectId: CommercialEffectId) => number;
   grantTemporaryEntitlement: (effectId: CommercialEffectId, durationMinutes: number) => void;
+  /** Clear a temporary entitlement after its one-shot effect has been applied in-game. */
+  consumeTemporaryEntitlement: (effectId: CommercialEffectId) => void;
 }
 
 const STORAGE_KEY = '@wordfall_economy';
@@ -297,6 +299,7 @@ const EconomyContext = createContext<EconomyContextType>({
   hasTemporaryEntitlement: () => false,
   getTemporaryEntitlementExpiry: () => 0,
   grantTemporaryEntitlement: () => {},
+  consumeTemporaryEntitlement: () => {},
 });
 
 export function EconomyProvider({ children }: { children: ReactNode }) {
@@ -970,6 +973,20 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     setState((prev) => activateTemporaryEntitlement(prev, effectId, durationMinutes));
   }, []);
 
+  /**
+   * One-shot effects (board freeze, score doubler) are stored as expiry
+   * timestamps but semantically are "next puzzle" items. GameScreen calls
+   * this after dispatching the in-game activation, so the entitlement can't
+   * apply twice — the expiry window only exists so an unused purchase
+   * survives an app restart.
+   */
+  const consumeTemporaryEntitlement = useCallback((effectId: CommercialEffectId): void => {
+    setState((prev) => ({
+      ...prev,
+      temporaryEntitlements: { ...prev.temporaryEntitlements, [effectId]: 0 },
+    }));
+  }, []);
+
   const hasTemporaryEntitlement = useCallback((effectId: CommercialEffectId): boolean => {
     return isTemporaryEntitlementActive(
       latestStateRef.current.temporaryEntitlements,
@@ -1217,6 +1234,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
       grantTemporaryEntitlement,
+      consumeTemporaryEntitlement,
     }),
     [
       state,
@@ -1259,6 +1277,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
       grantTemporaryEntitlement,
+      consumeTemporaryEntitlement,
     ],
   );
 
@@ -1305,6 +1324,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
       grantTemporaryEntitlement,
+      consumeTemporaryEntitlement,
     }),
     [
       loaded,
@@ -1342,6 +1362,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
       grantTemporaryEntitlement,
+      consumeTemporaryEntitlement,
     ],
   );
 

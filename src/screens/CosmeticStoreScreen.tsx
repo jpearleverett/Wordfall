@@ -178,7 +178,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
   const equippedTitle = usePlayerStore(selectEquippedTitle);
   const placedDecorations = usePlayerStore(selectPlacedDecorations);
   const unlockedCosmetics = usePlayerStore(selectUnlockedCosmetics);
-  const { equipCosmetic, unlockCosmetic } = usePlayerActions();
+  const { equipCosmetic, unlockCosmetic, unlockDecoration } = usePlayerActions();
 
   const [activeTab, setActiveTab] = useState<TabId>('themes');
   const [selectedItem, setSelectedItem] = useState<NormalizedItem | null>(null);
@@ -228,12 +228,20 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
       }
       // libraryPoints: no spend method exists, just unlock
 
-      unlockCosmetic(item.id);
+      // Decorations have their own ledger (ownedDecorations, written by
+      // unlockDecoration). unlockCosmetic early-returns for any id that is
+      // not a theme/frame/title, so routing a decoration through it charged
+      // the currency, recorded nothing, and left the item buyable forever.
+      if (item.tabType === 'decorations') {
+        unlockDecoration(item.id);
+      } else {
+        unlockCosmetic(item.id);
+      }
       setSelectedItem((prev) =>
         prev && prev.id === item.id ? { ...prev, owned: true } : prev,
       );
     },
-    [libraryPoints, canAfford, spendCoins, spendGems, unlockCosmetic],
+    [libraryPoints, canAfford, spendCoins, spendGems, unlockCosmetic, unlockDecoration],
   );
 
   const handleEquip = useCallback(

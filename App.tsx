@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts, loadAsync as loadFontAsync } from 'expo-font';
 import { markRoundedFontReady } from './src/services/fontReady';
 import { Ionicons } from '@expo/vector-icons';
@@ -1577,7 +1578,21 @@ function HomeMainScreen({ route, navigation }: any) {
         mysteryWheelSpins={player.mysteryWheel.spinsAvailable}
         dailyFreeSpinAvailable={checkDailyFreeSpin(player.mysteryWheel.lastDailySpinDate)}
         freeSpinToast={freeSpinToast}
-        onBuyDeal={(deal) => {
+        onBuyDeal={async (deal) => {
+          // One purchase per day. Without this, the daily deal could be
+          // re-bought on every tap — which for the Lucky Draw meant an
+          // unbounded gem drain, since its delivery branch was also missing.
+          const today = new Date().toISOString().slice(0, 10);
+          const dealGuardKey = '@wordfall_daily_deal_purchase';
+          try {
+            const prior = await AsyncStorage.getItem(dealGuardKey);
+            if (prior === `${deal.id}:${today}`) {
+              Alert.alert('Already Purchased', "Today's deal is one per day — come back tomorrow!");
+              return;
+            }
+          } catch {
+            // Guard read failed — allow the purchase rather than block it.
+          }
           const canAfford = economy.canAfford(deal.currency, deal.salePrice);
           if (!canAfford) {
             Alert.alert('Not Enough ' + (deal.currency === 'coins' ? 'Coins' : 'Gems'),
@@ -1591,6 +1606,18 @@ function HomeMainScreen({ route, navigation }: any) {
             if (deal.contents.coins) economy.addCoins(deal.contents.coins);
             if (deal.contents.gems) economy.addGems(deal.contents.gems);
             if (deal.contents.hintTokens) economy.addHintTokens(deal.contents.hintTokens);
+            // The Lucky Draw declares ONLY this content, and there was no
+            // branch for it: 25 gems bought an alert and nothing else, on 75
+            // days of the year. A rare tile is what its copy promises.
+            if (deal.contents.cosmetic === 'random_rare_tile') {
+              const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+              player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+            }
+            try {
+              await AsyncStorage.setItem(dealGuardKey, `${deal.id}:${today}`);
+            } catch {
+              // Non-fatal: worst case the guard doesn't persist this once.
+            }
             Alert.alert('Deal Purchased!', `${deal.name} has been delivered!`);
           }
         }}

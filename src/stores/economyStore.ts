@@ -84,6 +84,7 @@ export type EconomyActions = Pick<
   | 'hasTemporaryEntitlement'
   | 'getTemporaryEntitlementExpiry'
   | 'grantTemporaryEntitlement'
+  | 'consumeTemporaryEntitlement'
 > & { loaded: boolean };
 
 export const EconomyActionsContext = createContext<EconomyActions | null>(null);

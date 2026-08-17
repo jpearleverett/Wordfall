@@ -6,8 +6,12 @@ import {
 } from '../coinShop';
 
 describe('COIN_SHOP_ITEMS data', () => {
-  it('contains exactly 13 items', () => {
-    expect(COIN_SHOP_ITEMS.length).toBe(18);
+  it('contains exactly 17 items', () => {
+    // Was 18: coin_premium_hint was removed — it sold the identical generic
+    // hint token the 100-coin item grants, at 250 coins, while its copy
+    // promised the premium reveal (effectId 'premium_hint' was read by
+    // nothing). See purchaseDelivery.test.ts for the guard that keeps it out.
+    expect(COIN_SHOP_ITEMS.length).toBe(17);
   });
 
   it('every item has required fields', () => {
