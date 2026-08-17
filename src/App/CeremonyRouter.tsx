@@ -251,6 +251,30 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           onDismiss={onDismiss}
         />
       )}
+      {activeCeremony?.type === 'inbox_reward' && (
+        <MilestoneCeremony
+          ribbon={
+            activeCeremony.data?.rewardType === 'weekly_leaderboard'
+              ? 'WEEKLY REWARDS!'
+              : activeCeremony.data?.rewardType === 'club_goal_complete'
+                ? 'CLUB GOAL COMPLETE!'
+                : 'REWARDS DELIVERED!'
+          }
+          icon={activeCeremony.data?.icon || '\u{1F4E5}'}
+          title={activeCeremony.data?.title || 'Rewards Delivered!'}
+          description={
+            activeCeremony.data?.description ||
+            'Rewards you earned while you were away have been added to your stash.'
+          }
+          // Display-only: the amounts were already credited by
+          // useRewardInboxClaim (rules-enforced exactly-once claim), so this
+          // type is deliberately absent from ceremonyEconomyGrant.
+          rewardLabel={activeCeremony.data?.rewardLabel}
+          accentColor={COLORS.gold}
+          buttonText="COLLECT"
+          onDismiss={onDismiss}
+        />
+      )}
       {activeCeremony?.type === 'starter_pack_unlocked' && (
         <MilestoneCeremony
           ribbon="SPECIAL OFFER!"

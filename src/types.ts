@@ -826,7 +826,8 @@ export interface CeremonyItem {
     | 'starter_pack_unlocked'
     | 'daily_quest_claim'
     | 'first_purchase_offer'
-    | 'season_pass_complete';
+    | 'season_pass_complete'
+    | 'inbox_reward';
   data: Record<string, any>;
   /** If set, ceremony auto-dismisses after this many ms (Tier 2 behavior). */
   autoDismissMs?: number;

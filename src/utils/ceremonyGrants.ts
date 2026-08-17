@@ -21,6 +21,9 @@
  *   - mystery_wheel_jackpot → the wheel spin flow grants the segment
  *   - quest_step_complete / season_pass_complete / feature unlocks → no
  *                           currency amounts are displayed
+ *   - inbox_reward        → useRewardInboxClaim credits the amounts at the
+ *                           rules-enforced unclaimed→claimed transition and
+ *                           only then queues the ceremony (display-only)
  */
 import { CeremonyItem } from '../types';
 import { WIN_STREAK_TIERS } from '../data/eventLayers';
