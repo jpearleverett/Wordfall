@@ -181,6 +181,7 @@ export function HomeScreen({
 
   // Pre-compute daily completion for streak offer check
   const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().split('T')[0];
   const dailyDone = progress.dailyCompleted.includes(today);
 
   // Below-the-fold cards mount a beat after first paint (see render).
@@ -566,7 +567,11 @@ export function HomeScreen({
                   <Text style={styles.dailyTitle}>{dailyDone ? 'Daily completed' : "Today's challenge"}</Text>
                   <Text style={styles.dailySubtitle}>
                     {dailyDone
-                      ? 'Come back tomorrow!'
+                      ? // Name tomorrow's board instead of a generic farewell —
+                        // a concrete promise ("Tall Tower · Night Sky") is the
+                        // best return hook the daily has, and both resolvers
+                        // are pure functions of the date.
+                        `Tomorrow: ${getDailyVariant(tomorrow).name} · ${getDailyTheme(tomorrow).name}`
                       : `${getDailyVariant(today).name} · ${getDailyTheme(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
                   </Text>
                 </View>

@@ -1187,9 +1187,17 @@ function HomeMainScreen({ route, navigation }: any) {
         // at risk — passing lastPlayDate is what keeps it from firing on a
         // day the player has already played.
         if (notifConfig.enabledCategories.includes('streak_reminder')) {
+          // updateStreak() ran above in this same effect, but `player.streaks`
+          // here is the pre-update render snapshot — lastPlayDate is still
+          // yesterday, which schedules a "your streak expires tonight!" ping
+          // for an evening the player already secured. Same stale-snapshot
+          // bug fixed at useRewardWiring.ts's call site: pass today
+          // explicitly (updateStreak unconditionally sets lastPlayDate to
+          // today). The streak count floors at 1 because post-update it is
+          // always ≥1 — a stale 0 would wrongly CANCEL tomorrow's reminder.
           void triggerStreakReminder(
-            player.streaks.currentStreak,
-            player.streaks.lastPlayDate,
+            Math.max(1, player.streaks.currentStreak),
+            new Date().toISOString().split('T')[0],
           );
         }
         // Daily challenge reminder, skipping mornings whose daily is done.
