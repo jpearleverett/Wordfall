@@ -291,6 +291,8 @@ interface TimerMovesBarsProps {
   hasTimer: boolean;
   hasMoveLimit: boolean;
   timeRemaining: number;
+  /** Full time budget for the puzzle — suppresses warnings that would fire at start. */
+  totalSeconds: number;
   moves: number;
   maxMoves: number;
 }
@@ -298,9 +300,40 @@ const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
   hasTimer,
   hasMoveLimit,
   timeRemaining,
+  totalSeconds,
   moves,
   maxMoves,
 }: TimerMovesBarsProps) {
+  // Tier 4 C2 — 30s/10s threshold warnings (haptic + SFX). These were
+  // authored in components/modes/TimerDisplay.tsx, which nothing ever
+  // mounted; that component also ran its own setInterval countdown, so
+  // mounting it would have raced the reducer's authoritative timer. The
+  // warnings live here instead, driven by the store's timeRemaining.
+  const warned30Ref = useRef(false);
+  const warned10Ref = useRef(false);
+  const prevTimeRef = useRef(timeRemaining);
+  useEffect(() => {
+    const prev = prevTimeRef.current;
+    prevTimeRef.current = timeRemaining;
+    if (!hasTimer) return;
+    if (timeRemaining > prev) {
+      // Timer refilled (new puzzle / time bonus) — re-arm the crossings.
+      if (timeRemaining > 30) warned30Ref.current = false;
+      if (timeRemaining > 10) warned10Ref.current = false;
+      return;
+    }
+    if (!warned30Ref.current && timeRemaining <= 30 && timeRemaining > 10 && totalSeconds > 30) {
+      warned30Ref.current = true;
+      void errorHaptic();
+      void soundManager.playSound('timerWarning30s');
+    }
+    if (!warned10Ref.current && timeRemaining <= 10 && timeRemaining > 0 && totalSeconds > 10) {
+      warned10Ref.current = true;
+      void errorHaptic();
+      void soundManager.playSound('timerWarning10s');
+    }
+  }, [timeRemaining, hasTimer, totalSeconds]);
+
   return (
     <>
       {hasTimer && (
@@ -1215,8 +1248,13 @@ function GameScreenImpl({
   );
 
   // Hints/undos use persistent economy tokens (not per-level allocation)
-  // Relax mode still uses unlimited per-level allocation
-  const hintsAvailable = mode === 'relax' ? hintsLeft : hintTokens;
+  // Relax mode still uses unlimited per-level allocation.
+  // allowHints was only ever read by GameHeader (hiding the button), so
+  // expert/perfectSolve players with tokens still got a tappable idle-hint
+  // banner — and the ad-hint banner when they had none. Forcing availability
+  // to 0 here starves every downstream surface at once.
+  const hintsAllowed = modeConfig.rules.allowHints;
+  const hintsAvailable = !hintsAllowed ? 0 : mode === 'relax' ? hintsLeft : hintTokens;
   const undosAvailable = mode === 'relax' ? undosLeft : undoTokens;
 
   // Idle hint prompt — use refs to avoid recreating on every state change
@@ -1890,6 +1928,10 @@ function GameScreenImpl({
   // relevant changes via onCellInteraction / onValidWordChange callbacks.
 
   const handleHint = useCallback(() => {
+    // Modes that forbid hints (expert, perfectSolve) must refuse here too,
+    // not just hide buttons — this is the single choke point every hint
+    // surface routes through.
+    if (!hintsAllowed) return;
     if (mode !== 'relax') {
       // Spend from persistent inventory and grant into game state
       if (hintTokens <= 0) return;
@@ -1899,7 +1941,7 @@ function GameScreenImpl({
     void soundManager.playSound('hintUsed');
     void analytics.logEvent('hint_used', { level, mode, hintsAvailable });
     useHint();
-  }, [useHint, grantHint, level, mode, hintsAvailable, hintTokens, spendHintToken]);
+  }, [useHint, grantHint, level, mode, hintsAvailable, hintTokens, spendHintToken, hintsAllowed]);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
@@ -2214,6 +2256,7 @@ function GameScreenImpl({
         hasTimer={modeConfig.rules.hasTimer ?? false}
         hasMoveLimit={modeConfig.rules.hasMoveLimit ?? false}
         timeRemaining={timeRemaining}
+        totalSeconds={effectiveTimeLimit}
         moves={moves}
         maxMoves={effectiveMaxMoves}
       />
@@ -2289,7 +2332,7 @@ function GameScreenImpl({
             status={status}
             showIdleHint={showIdleHint}
             hintsAvailable={hintsAvailable}
-            canShowAdHint={!isAdFree && adManager.canShowAd('hint_reward')}
+            canShowAdHint={hintsAllowed && !isAdFree && adManager.canShowAd('hint_reward')}
             isStuck={isStuck}
             undosLeft={undosLeft}
             strandedWords={strandedWords}
