@@ -531,9 +531,16 @@ class NotificationManager {
     await this.schedule('mystery_wheel', { type: 'timeInterval', seconds: 3600 }); // 1 hour later
   }
 
-  /** Schedule comeback notification for inactive players (3 days) */
-  async scheduleComebackReminder(): Promise<void> {
-    await this.schedule('comeback', { type: 'timeInterval', seconds: 3 * 24 * 3600 });
+  /**
+   * Schedule the comeback notification. 3 days for established players; a
+   * brand-new player (fewer than 10 puzzles) gets a 20-hour ping instead —
+   * D1 is where a new install is won or lost, and the only return hook they
+   * previously had was this ping arriving on day 3, after the habit window
+   * had already closed.
+   */
+  async scheduleComebackReminder(puzzlesSolved: number = Infinity): Promise<void> {
+    const seconds = puzzlesSolved < 10 ? 20 * 3600 : 3 * 24 * 3600;
+    await this.schedule('comeback', { type: 'timeInterval', seconds });
   }
 
   /**

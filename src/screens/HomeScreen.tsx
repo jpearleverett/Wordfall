@@ -53,6 +53,7 @@ import {
   selectPendingCeremonies,
 } from '../stores/playerStore';
 import { getNextMilestone } from '../data/onboardingMilestones';
+import DailyRewardTimers from '../components/DailyRewardTimers';
 
 interface DailyMissionDisplay {
   id: string;
@@ -109,6 +110,9 @@ interface HomeScreenProps {
   onOpenLibrary?: () => void;
   /** Navigate to season pass screen */
   onOpenSeasonPass?: () => void;
+  /** R9: staggered 4/6/8/12h claim timers — timerId → last-claim ms. */
+  rewardTimerStates?: Record<string, number>;
+  onClaimRewardTimer?: (timerId: string) => void;
   claimedLoginToday?: boolean;
   onClaimLoginReward?: () => void;
 }
@@ -135,6 +139,8 @@ export function HomeScreen({
   progress,
   onPlay,
   onDaily,
+  rewardTimerStates,
+  onClaimRewardTimer,
   onResetProgress,
   onOpenShop,
   onOpenSettings,
@@ -872,6 +878,16 @@ export function HomeScreen({
           </Pressable>
         )}
       </LiveRail>
+
+      {/* R9: staggered claim timers (4/6/8/12h) — the multi-session-per-day
+          driver that was fully built and rendered nowhere. Below the fold,
+          deferred with the other heavy cards. */}
+      {belowFoldMounted && rewardTimerStates && onClaimRewardTimer && (
+        <DailyRewardTimers
+          timerStates={rewardTimerStates}
+          onClaim={onClaimRewardTimer}
+        />
+      )}
 
 
       {/* Free Spin Toast */}

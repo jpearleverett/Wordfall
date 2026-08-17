@@ -205,12 +205,13 @@ export async function triggerWinStreakMilestoneNotification(streak: number): Pro
 // ─── 6. Comeback Reminder ────────────────────────────────────────────────────
 
 /**
- * Schedule a comeback notification for 3 days from now.
+ * Schedule a comeback notification — 3 days out, or 20 hours for a player
+ * with fewer than 10 puzzles solved (the D1 window decides new installs).
  * Call when the app goes to background (AppState change handler in App.tsx).
  * The notification service handles cancelling any previous comeback notification.
  */
-export async function triggerComebackReminder(): Promise<void> {
-  await notificationManager.scheduleComebackReminder();
+export async function triggerComebackReminder(puzzlesSolved?: number): Promise<void> {
+  await notificationManager.scheduleComebackReminder(puzzlesSolved);
 }
 
 /**

@@ -51,6 +51,7 @@ import { generateBoard, generateDailyBoard, generateWeeklyBoard } from './src/en
 import { getWeekId } from './src/utils/weekId';
 import { getChapterForLevel } from './src/data/chapters';
 import { getCurrentEvent, getEventPlayConfig } from './src/data/events';
+import { DAILY_REWARD_TIMERS, canClaimTimer, rollBonusChestReward } from './src/data/dailyRewardTimers';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
 import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
@@ -1108,8 +1109,31 @@ function HomeMainScreen({ route, navigation }: any) {
   const [pendingGifts, setPendingGifts] = useState<FirestoreGift[]>([]);
   const [claimingGift, setClaimingGift] = useState(false);
 
-  // Session end reminder
+  // Session end reminder — a 4s self-dismissing toast, previously dead code
+  // (nothing ever set it true). Fires once per session, shortly after the
+  // 3rd solve of the session, when today's daily is still unplayed: the
+  // Daily is free, unlocked at level 1, and is what starts the streak — the
+  // best possible "one more thing before you go" for a player who is
+  // clearly engaged today but hasn't planted tomorrow's hook yet.
   const [showSessionReminder, setShowSessionReminder] = useState(false);
+  const sessionStartPuzzlesRef = useRef<number | null>(null);
+  const sessionReminderFiredRef = useRef(false);
+  useEffect(() => {
+    if (!player.loaded) return;
+    if (sessionStartPuzzlesRef.current === null) {
+      sessionStartPuzzlesRef.current = player.puzzlesSolved;
+      return;
+    }
+    if (sessionReminderFiredRef.current) return;
+    const solvedThisSession = player.puzzlesSolved - sessionStartPuzzlesRef.current;
+    const today = new Date().toISOString().split('T')[0];
+    if (solvedThisSession >= 3 && !player.dailyCompleted.includes(today)) {
+      sessionReminderFiredRef.current = true;
+      // Let the victory flow settle before the toast slides in.
+      const timer = setTimeout(() => setShowSessionReminder(true), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [player.loaded, player.puzzlesSolved, player.dailyCompleted]);
 
   // Mystery Wheel state
   const [showMysteryWheel, setShowMysteryWheel] = useState(false);
@@ -1257,6 +1281,11 @@ function HomeMainScreen({ route, navigation }: any) {
     }
   }, [player.loaded]);
 
+  // Latest puzzle count for the background handler below — the listener is
+  // registered once, so it must read through a ref, not a stale closure.
+  const puzzlesSolvedRef = useRef(player.puzzlesSolved);
+  puzzlesSolvedRef.current = player.puzzlesSolved;
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -1265,8 +1294,9 @@ function HomeMainScreen({ route, navigation }: any) {
         void cancelComebackReminder();
       } else if (state === 'background') {
         void analytics.endSession('background');
-        // Player left — schedule comeback reminder for 3 days from now
-        void triggerComebackReminder();
+        // Player left — schedule the comeback reminder (20h for brand-new
+        // players with <10 puzzles, 3 days for everyone else).
+        void triggerComebackReminder(puzzlesSolvedRef.current);
       }
     });
     return () => {
@@ -1591,6 +1621,38 @@ function HomeMainScreen({ route, navigation }: any) {
     }, 50);
   }, [navigation, economy, player]);
 
+  // Daily reward timers (R9): DailyRewardTimers was fully built and
+  // rendered nowhere. Claim = validate the cooldown, credit the reward,
+  // stamp the claim time in the persisted player blob. Guarding with
+  // canClaimTimer here (not just in the UI) means a double-tap or stale
+  // render can't double-credit.
+  const handleClaimRewardTimer = useCallback(
+    (timerId: string) => {
+      const lastClaimed = player.rewardTimerClaims[timerId] ?? 0;
+      if (!canClaimTimer(timerId, lastClaimed)) return;
+      const timer = DAILY_REWARD_TIMERS.find((t) => t.id === timerId);
+      if (!timer) return;
+      const reward: { coins?: number; gems?: number; hints?: number; spins?: number } =
+        timer.reward.random ? rollBonusChestReward() : timer.reward;
+      if (reward.coins) economy.addCoins(reward.coins);
+      if (reward.gems) economy.addGems(reward.gems);
+      if (reward.hints) economy.addHintTokens(reward.hints);
+      if (reward.spins) player.awardFreeSpin();
+      player.updateProgress({
+        rewardTimerClaims: {
+          ...player.rewardTimerClaims,
+          [timerId]: Date.now(),
+        },
+      });
+      void analytics.logEvent('reward_timer_claimed', {
+        timer_id: timerId,
+        coins: reward.coins ?? 0,
+        gems: reward.gems ?? 0,
+      });
+    },
+    [player, economy],
+  );
+
   const handleReset = useCallback(() => {
     Alert.alert(
       'Reset Local Data',
@@ -1684,6 +1746,8 @@ function HomeMainScreen({ route, navigation }: any) {
         onPlay={startGame}
         onDaily={startDaily}
         onResetProgress={handleReset}
+        rewardTimerStates={player.rewardTimerClaims}
+        onClaimRewardTimer={handleClaimRewardTimer}
         onOpenShop={() => navigation.navigate('Shop')}
         onOpenSettings={() => navigation.navigate('Settings')}
         onOpenSeasonPass={() => navigation.navigate('SeasonPass')}

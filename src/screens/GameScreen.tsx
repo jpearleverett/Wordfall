@@ -1551,23 +1551,25 @@ function GameScreenImpl({
       });
       void wordFoundHaptic();
 
-      // Big word celebration variance (Task 2)
+      // Big word celebration (Task 2, re-tuned Aug 2026 feel audit).
+      // Calibrated for a calm word game: per game_mechanics.md a long word
+      // is "emotionally satisfying to trace, not mechanically harder" — a
+      // texture, not an achievement. The old treatment (random slot-machine
+      // adjective + ±14px camera shake + a haptic stacked on the one that
+      // just fired) was the register of a match-3 cascade. The length IS
+      // the flex, so the badge states it; the bloom carries the delight;
+      // wordFoundHaptic above already provides the tactile beat.
       if (wordLen >= 7) {
         void soundManager.playSound('combo');
-        void successHaptic();
-        // Show "AMAZING!" / "INCREDIBLE!" overlay
-        const labels = ['AMAZING!', 'INCREDIBLE!', 'PHENOMENAL!', 'SPECTACULAR!'];
-        setBigWordLabel(labels[Math.floor(Math.random() * labels.length)]);
+        setBigWordLabel(`${wordLen} LETTERS!`);
         bigWordAnim.setValue(0);
         if (!reduceMotion) {
-          // Extra screen shake for 7+ letter words
+          // Gentle grid nudge, not a camera shake.
           Animated.sequence([
-            Animated.timing(shakeAnim, { toValue: 14, duration: 35, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: -12, duration: 35, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 10, duration: 30, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: -7, duration: 30, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 4, duration: 25, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 0, duration: 25, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 6, duration: 35, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: -5, duration: 35, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 3, duration: 30, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 0, duration: 30, useNativeDriver: true }),
           ]).start();
 
           Animated.sequence([

@@ -202,6 +202,10 @@ export interface PlayerData {
   // once for this player. Any non-null value prevents re-trigger forever.
   firstPurchaseModalShownAt: number | null;
 
+  // Daily reward timers (4/6/8/12h staggered claims on Home's LIVE NOW
+  // rail) — timerId → last-claimed timestamp (ms). Missing key = claimable.
+  rewardTimerClaims: Record<string, number>;
+
   // Mystery Wheel
   mysteryWheel: {
     spinsAvailable: number;
@@ -534,6 +538,9 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
   tileGiftsSentToday: 0,
 
   firstPurchaseModalShownAt: null,
+
+  // Daily reward timers — empty = every timer claimable on first open.
+  rewardTimerClaims: {},
 
   // Mystery Wheel
   mysteryWheel: {

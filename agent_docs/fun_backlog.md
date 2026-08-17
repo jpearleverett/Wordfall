@@ -30,10 +30,6 @@ back-to-back)
   perfectRun (no hints/undos/shuffles), 2★ = one assist; small coin grants +
   autoDismissMs on 3/5/7 flawless milestones. Interacts with R1 — ship
   together. ~25 lines + tests (starThresholds defined and unread).
-- **F10. First session has no ending hook.** SessionEndReminder is dead code
-  (setShowSessionReminder never called); comeback ping is 3 days out.
-  FIX: fire reminder on Home when puzzlesSolved≥3 && daily not done; 20h
-  comeback ping when puzzlesSolved<10. ~40 lines.
 - **F-minor:** economy primer hardcoded EN (i18n); onboardingMilestones
   advertise wrong unlock levels (3/8/12 vs actual 2/6/8); getNextMilestone
   returns LAST eligible so keep_going can never display; auto-advance timer
@@ -47,10 +43,6 @@ back-to-back)
   path + slide the banner in with a spring instead of a hard mount.
 - **J3-remainder.** Idle gate fix shipped; still open: pre-monetization ~45s
   "still findable" chip shimmer (reassurance tier before the hint/ad CTA).
-- **J6. Big-word celebration over-juiced** (`GameScreen.tsx:1523-1549`):
-  random ALL-CAPS adjective + ±14px shake + 3 stacked haptics. FIX: factual
-  "7 LETTERS" badge, ±6px or grid-breath, single haptic, real `bigWord` SFX
-  slot. ~25 lines.
 - **J7. Trace pitch ladder collapses on confident swipes** (one sound per
   40ms batch, `PlayField.tsx:144-168`). FIX: schedule per-cell taps at ~22ms
   offsets, cap 4/batch, keep single haptic. ~15 lines.
@@ -82,8 +74,6 @@ back-to-back)
 - **R8. Ten modes unlock by L22 then nothing pulls players back.** Render
   modeStats on cards, per-mode 3-tier goals, deep-link the recommendation,
   late unlock beats (L60/L80). ~60 lines.
-- **R9. DailyRewardTimers fully built, rendered nowhere** — wire into LIVE
-  NOW rail or delete.
 
 ### Verified-good (do NOT break)
 
@@ -94,6 +84,24 @@ coordination, victory polish, humane stuck-rescue logic,
 legacyTaskCardsEnabled=false, honest reminder scheduling.
 
 ## SHIPPED
+
+- 2026-08-17 (batch 7 — session hooks + calm big words + timers live):
+  - **F10** the first session finally has an ending hook: the built-but-dead
+    SessionEndReminder toast now fires once per session after the 3rd solve
+    when today's daily is unplayed (the daily is free, unlocked at L1, and
+    starts the streak); the comeback ping is 20h instead of 3 days for
+    players with <10 puzzles — D1 decides new installs.
+  - **J6** big-word celebration re-tuned for the genre: factual
+    "8 LETTERS!" badge instead of a random slot-machine adjective, ±6px
+    grid nudge instead of a ±14px camera shake, and the stacked duplicate
+    haptic removed (wordFoundHaptic carries the beat). Bloom + 1.6x popup
+    kept. (The 'combo' SFX slot keeps its name — the composer manifest
+    references slot names; rename rides audio commissioning.)
+  - **R9** DailyRewardTimers is live: 4/6/8/12h staggered claims rendered
+    below the LIVE NOW rail, claim state persisted in the player blob
+    (rewardTimerClaims), rewards credited through the real economy paths
+    (coins/gems/hint tokens/wheel spin, bonus chest rolls), cooldown
+    re-validated at claim time so double-taps can't double-credit.
 
 - 2026-08-17 (batch 6 — re-teaching, honest notifications, overlay de-stack):
   - **R7** the dead-end explainer re-shows once per 15-level difficulty
