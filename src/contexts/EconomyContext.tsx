@@ -40,6 +40,7 @@ import {
 } from '../stores/economyStore';
 import { computeRefilledLives } from '../utils/lives';
 import { createPersistQueue } from '../utils/persistQueue';
+import { stripUndefinedDeep } from '../utils/firestoreSanitize';
 
 interface Economy {
   coins: number;
@@ -442,7 +443,11 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
           // Route through withRetry so transient network errors are
           // retried with exponential backoff AND the sync-status bus
           // lights up NotSyncedBanner when writes keep failing.
-          await withRetry(() => setDoc(docRef, stamped, { merge: true }), {
+          // Same guard as the player payload: setDoc throws on nested
+          // undefined and the throw lands in a fire-and-forget queue, so an
+          // optional field hydrating as undefined would silently stop every
+          // economy save.
+          await withRetry(() => setDoc(docRef, stripUndefinedDeep(stamped), { merge: true }), {
             label: 'economy-firestore',
           });
         } catch (e) {

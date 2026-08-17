@@ -324,6 +324,13 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       const newGraceDaysUsed = graceUsed
         ? streaks.graceDaysUsed + 1
         : streakBroke ? 0 : streaks.graceDaysUsed;
+      // NEVER let this become an `undefined` VALUE on the object. Firestore's
+      // setDoc rejects nested undefined outright (the app does not enable
+      // ignoreUndefinedProperties), and this object rides inside the full
+      // player payload — one undefined here made every cloud save throw and
+      // be silently dropped for any player who had never used a grace day.
+      // "Cleared" is expressed by deleting the key below, not by storing
+      // undefined under it.
       const newLastGraceDate = graceUsed
         ? today
         : streakBroke ? undefined : streaks.lastGraceDate;
@@ -365,18 +372,29 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         loginCycleDay,
         unlockedCosmetics,
         pendingCeremonies,
-        streaks: {
-          ...streaks,
-          currentStreak: newStreak,
-          bestStreak: Math.max(streaks.bestStreak, newStreak),
-          lastPlayDate: today,
-          graceDaysUsed: shieldConsumed ? streaks.graceDaysUsed : newGraceDaysUsed,
-          lastGraceDate: shieldConsumed ? streaks.lastGraceDate : newLastGraceDate,
-          streakShieldAvailable: shieldConsumed ? false : streaks.streakShieldAvailable,
-          recentBreak: didBreakStreak
-            ? { prevStreak: streaks.currentStreak, brokenAtMs: Date.now() }
-            : streaks.recentBreak,
-        },
+        streaks: (() => {
+          const nextStreaks = {
+            ...streaks,
+            currentStreak: newStreak,
+            bestStreak: Math.max(streaks.bestStreak, newStreak),
+            lastPlayDate: today,
+            graceDaysUsed: shieldConsumed ? streaks.graceDaysUsed : newGraceDaysUsed,
+            streakShieldAvailable: shieldConsumed ? false : streaks.streakShieldAvailable,
+            recentBreak: didBreakStreak
+              ? { prevStreak: streaks.currentStreak, brokenAtMs: Date.now() }
+              : streaks.recentBreak,
+          };
+          const finalLastGraceDate = shieldConsumed
+            ? streaks.lastGraceDate
+            : newLastGraceDate;
+          // Key present with a string, or absent — never present-but-undefined.
+          if (finalLastGraceDate === undefined) {
+            delete nextStreaks.lastGraceDate;
+          } else {
+            nextStreaks.lastGraceDate = finalLastGraceDate;
+          }
+          return nextStreaks;
+        })(),
         lastActiveDate: today,
       };
     });

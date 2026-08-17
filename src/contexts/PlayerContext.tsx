@@ -33,6 +33,7 @@ import { createProgressMethods } from './PlayerProgressContext';
 import { createSocialMethods } from './PlayerSocialContext';
 import { generateReferralCode, REFERRAL_MILESTONES } from '../data/referralSystem';
 import { createPersistQueue } from '../utils/persistQueue';
+import { stripUndefinedDeep } from '../utils/firestoreSanitize';
 import { firestoreService } from '../services/firestore';
 import { recordReferralSuccessSecure } from '../services/referralRewards';
 import { analytics } from '../services/analytics';
@@ -759,7 +760,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // exponential backoff AND the sync-status bus lights up
         // NotSyncedBanner when writes keep failing. Permanent errors
         // (permission-denied etc.) short-circuit immediately.
-        await withRetry(() => setDoc(docRef, payload, { merge: true }), {
+        // stripUndefinedDeep: setDoc throws on any nested `undefined`, and a
+        // throw here is a silently dropped save. An optional field that
+        // hydrates as undefined for existing players (as streaks.lastGraceDate
+        // once did) would otherwise kill cloud sync for everyone at once.
+        await withRetry(() => setDoc(docRef, stripUndefinedDeep(payload), { merge: true }), {
           label: 'player-firestore',
         });
       } catch (e) {
