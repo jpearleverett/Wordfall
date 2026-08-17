@@ -291,7 +291,12 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // segmentation logic misfires on any tier post-launch.
   dynamicOffersEnabled: true,
   // Tier 6 B2 — queue first-purchase offer on first HomeScreen arrival.
-  firstSessionStarterBundleEnabled: true,
+  // OFF since the Aug 2026 fun audit: the App.tsx FTUE queue path was
+  // removed (paywall-before-first-puzzle, and it cannibalized the L5-6
+  // offer's one-shot guard). Flag retained so Ops can re-test a day-1
+  // bundle later — any new caller must gate on puzzlesSolved >= 3 and go
+  // through offerPacing, not onboarding completion.
+  firstSessionStarterBundleEnabled: false,
   // Tier 6 B7 — last-word tension chip pulse; kill-switch if reduce-motion
   // compliance flags any issue post-launch.
   lastWordTensionPulseEnabled: true,

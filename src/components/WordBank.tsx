@@ -6,6 +6,7 @@ import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { useColors } from '../hooks/useColors';
 import { useSettings } from '../contexts/SettingsContext';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface WordChipProps {
   wordPlacement: WordPlacement;
@@ -50,6 +51,10 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   const wasFound = useRef(false);
   const lastRemainingLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const tensionFiredRef = useRef(false);
+  // The last-word pulse loops indefinitely until the puzzle resolves — the
+  // textbook case reduce-motion exists for. The static gold border that
+  // isLastRemaining already applies carries the meaning without motion.
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     if (wordPlacement.found && !wasFound.current) {
@@ -104,13 +109,14 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
     }
     if (!isLastRemaining || wordPlacement.found) return;
     if (tensionFiredRef.current) return;
+    if (reduceMotion) return;
     if (!getRemoteBoolean('lastWordTensionPulseEnabled')) return;
     tensionFiredRef.current = true;
     Animated.sequence([
       Animated.timing(tensionScaleAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
       Animated.spring(tensionScaleAnim, { toValue: 0.35, friction: 5, tension: 160, useNativeDriver: true }),
     ]).start();
-  }, [tensionActive, isLastRemaining, wordPlacement.found]);
+  }, [tensionActive, isLastRemaining, wordPlacement.found, reduceMotion]);
 
   useEffect(() => {
     // Last-remaining-word pulse: loop scale 1.0 → 1.08 → 1.0 while this is the
@@ -119,7 +125,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
       lastRemainingLoopRef.current.stop();
       lastRemainingLoopRef.current = null;
     }
-    if (isLastRemaining && !wordPlacement.found) {
+    if (isLastRemaining && !wordPlacement.found && !reduceMotion) {
       lastRemainingAnim.setValue(1);
       const loop = Animated.loop(
         Animated.sequence([
@@ -146,7 +152,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         lastRemainingLoopRef.current = null;
       }
     };
-  }, [isLastRemaining, wordPlacement.found]);
+  }, [isLastRemaining, wordPlacement.found, reduceMotion]);
 
   // NOTE: the old glow layer's Animated.Value was removed along with its
   // driver effect — it fired a ~1.85s native sequence at every word-match

@@ -41,7 +41,12 @@ interface GridProps {
    */
   onCellsPress?: (positions: CellPosition[]) => void;
   onDragStart?: () => void;
-  onDragEnd?: () => void;
+  /**
+   * Fired on finger lift / gesture cancel. `didTraceMultiple` is true only
+   * when THIS gesture selected 2+ cells (a real drag-trace) — single taps
+   * report false so tap-by-tap selection is never auto-released.
+   */
+  onDragEnd?: (didTraceMultiple: boolean) => void;
   wildcardCells?: CellPosition[];
   spotlightDimmedCells?: Set<string>;
   gravityDirection?: GravityDirection;
@@ -210,6 +215,9 @@ function GameGridImpl({
   const gridLayoutRef = useRef({ x: 0, y: 0 });
   const lastDragCellRef = useRef<string | null>(null);
   const lastDragPosRef = useRef<{ x: number; y: number } | null>(null);
+  // Cells selected during the CURRENT gesture (not the store's selection
+  // length) — distinguishes a real drag-trace from tap-by-tap selection.
+  const dragCellCountRef = useRef(0);
   const isDraggingRef = useRef(false);
   const dragGlowAnim = useRef(new Animated.Value(0)).current;
 
@@ -350,12 +358,14 @@ function GameGridImpl({
         Animated.timing(dragGlowAnim, { toValue: 1, duration: 90, useNativeDriver: true }).start();
         lastDragCellRef.current = null;
         lastDragPosRef.current = { x: e.x, y: e.y };
+        dragCellCountRef.current = 0;
         perfDragStart();
         onDragStartRef.current?.();
         const cell = hitTestCell(e.x, e.y);
         if (cell) {
           const key = `${cell.row},${cell.col}`;
           lastDragCellRef.current = key;
+          dragCellCountRef.current = 1;
           perfDragDispatch();
           onCellPressRef.current(cell);
         }
@@ -370,6 +380,7 @@ function GameGridImpl({
           const key = `${cell.row},${cell.col}`;
           if (key === lastDragCellRef.current) return;
           lastDragCellRef.current = key;
+          dragCellCountRef.current += 1;
           crossedCells.push(cell);
         };
         if (prev) {
@@ -412,13 +423,17 @@ function GameGridImpl({
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
         perfDragEnd();
-        onDragEndRef.current?.();
+        onDragEndRef.current?.(dragCellCountRef.current > 1);
       })
       .onFinalize(() => {
         isDraggingRef.current = false;
         Animated.timing(dragGlowAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start();
         lastDragCellRef.current = null;
         lastDragPosRef.current = null;
+        // Cancelled gestures (e.g. finger strayed off-grid) skip onEnd, so a
+        // dead trace would stay lit forever without this. onEnd + onFinalize
+        // both firing is fine — the release timer just gets replaced.
+        onDragEndRef.current?.(dragCellCountRef.current > 1);
       });
 
     const tapGesture = Gesture.Tap()

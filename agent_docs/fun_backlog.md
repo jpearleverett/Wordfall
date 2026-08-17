@@ -20,16 +20,46 @@ Constraints (from `game_mechanics.md` — read it before editing this list):
 
 ## OPEN (ranked — top item is next to ship)
 
+### First-session (FTUE) — from the 2026-08-17 first-session audit
+(~20 blocking interruptions before L10; player never plays 2 puzzles
+back-to-back)
+
+- **F2. Tutorial teaches "tap where we point", never word-searching.**
+  `OnboardingScreen.tsx:114-117` rejects taps outside highlightPositions; no
+  WordBank rendered; copy spells answers letter-by-letter. FIX: render
+  WordBank chips from tutorialBoard.words; step 3 loses highlightPositions
+  (keep chip pulse) so the player locates DOG unaided; mention drag. ~60 ln.
+- **F3. Core gravity "aha" structurally invisible L1-10** (forgiveness 0.95 =
+  order never matters). FIX: for easy difficulty ADD requirement that ≥1 word
+  is NOT independently findable in the initial grid (buried-word reveal every
+  early level) — keep forgiveness at 0.95, don't trade it. ~40 lines in
+  attemptGenerate/checkSolvability. Needs boardGen.perf re-run after.
+- **F6. first_win ceremony drops its teaching payload** — data.tips built in
+  `useRewardWiring.ts:450-462`, MilestoneCeremony has no tips prop; two
+  onboarding phases were deleted on the promise this ceremony carried their
+  content. FIX: optional tips prop + render in first_win branch,
+  autoDismissMs 4000→6000. ~30 lines.
+- **F7. Stars are a hidden boolean** (moves ≤ totalWords is ALWAYS true → 3★
+  = hintsUsed===0) so 3★ + FLAWLESS both fire on every early win; three
+  rewardless flawless ceremonies inside session 1. FIX: align 3★ with
+  perfectRun (no hints/undos/shuffles), 2★ = one assist; small coin grants +
+  autoDismissMs on 3/5/7 flawless milestones. Interacts with R1 — ship
+  together. ~25 lines + tests (starThresholds defined and unread).
+- **F8. L5-10 = same 6×5 board six times** (`constants.ts:334-339`). FIX:
+  split bands (L7 6×6 len3-5 introduces first 5-letter word, L10 7×6);
+  tighten curveProfile to assert ≤2 consecutive same rows×cols. ~10 lines.
+- **F10. First session has no ending hook.** SessionEndReminder is dead code
+  (setShowSessionReminder never called); comeback ping is 3 days out.
+  FIX: fire reminder on Home when puzzlesSolved≥3 && daily not done; 20h
+  comeback ping when puzzlesSolved<10. ~40 lines.
+- **F-minor:** economy primer hardcoded EN (i18n); onboardingMilestones
+  advertise wrong unlock levels (3/8/12 vs actual 2/6/8); getNextMilestone
+  returns LAST eligible so keep_going can never display; auto-advance timer
+  not suppressed while a ceremony is on screen (PuzzleComplete:485-489);
+  LoadingTip/loadingTips.ts never imported.
+
 ### Juice (moment-to-moment) — from the 2026-08-17 feel audit
 
-- **J1. Failed trace never releases + restart fires the error treatment.**
-  `Grid.tsx:409-422` onEnd only clears refs; `clearSelection` action has ZERO
-  production call sites; non-adjacent restart tap → `lastSelectionResetTap` →
-  full invalid flash (error haptic + red flash + ±8px shake,
-  `GameScreen.tsx:1236-1248`). Contradicts game_mechanics.md ("invalid-word
-  rejection doesn't exist"). FIX: onDragEnd → CLEAR_SELECTION after ~180ms
-  grace (auto-submit timer must win), silent trail fade-out, delete the
-  invalid-flash wiring for restarts. ~40 lines. THE top feel fix.
 - **J2. Stuck fail is silent + motionless.** `defeat` SFX fully built
   (`sound.ts:134,261,755`) and never played anywhere; no haptic/dim/slide on
   `isStuck`. FIX: rising-edge → defeat SFX + BGM duck + Warning haptic (new
@@ -45,9 +75,6 @@ Constraints (from `game_mechanics.md` — read it before editing this list):
   render in Grid (~10 lines). Also: order column stagger by distance from
   cleared-word centroid (2 lines); move `gravityLandHaptic()` into the
   reduce-motion else-branch (a11y regression — motion off ≠ feedback off).
-- **J5. Last-word chip pulse ignores reduce-motion** (`WordBank.tsx:115-149`
-  indefinite loop, no useReduceMotion import). One-line guard; fall back to
-  static gold border. Ship with J1/J2 batch.
 - **J6. Big-word celebration over-juiced** (`GameScreen.tsx:1523-1549`):
   random ALL-CAPS adjective + ±14px shake + 3 stacked haptics. FIX: factual
   "7 LETTERS" badge, ±6px or grid-breath, single haptic, real `bigWord` SFX
@@ -115,12 +142,30 @@ legacyTaskCardsEnabled=false, honest reminder scheduling.
 
 ## SHIPPED
 
-- 2026-08-17: **Streak reminder stale-snapshot fix** (App.tsx passes
-  post-update today + floor-1 streak — kills the false "expires tonight!"
-  ping on days already played); **hardcore segment gets streak_reminder**
-  (the cohort with the most to lose had zero safety net, maxPerDay 1→2);
-  **daily card names tomorrow's board** ("Tomorrow: Tall Tower · Night Sky"
-  instead of "Come back tomorrow!").
+- 2026-08-17 (batch 2 — trace release + FTUE de-interruption):
+  - **J1** dead traces release silently ~180ms after finger lift (per-gesture
+    multi-cell detection in Grid keeps tap-by-tap selection working; valid
+    words always win via the 50ms auto-submit); the restart-tap error
+    treatment (error haptic + red flash + shake) is deleted — restarting a
+    trace is normal play, per game_mechanics.md.
+  - **J5** last-word chip pulse + tension overshoot now respect
+    reduce-motion (static gold border carries the meaning).
+  - **F1** the FTUE paywall-before-first-puzzle is gone (App.tsx queue block
+    removed, `firstSessionStarterBundleEnabled` default false) — the
+    well-timed L5-6 offer in useRewardWiring is the only first-purchase
+    surface again.
+  - **F4** last-word tension gated to boards with ≥4 words
+    (LAST_WORD_TENSION_MIN_WORDS) — no more climax on the first word of L1.
+  - **F5** level-1 baseline unlocks (Play tab, Classic/Daily) no longer fire
+    congratulation ceremonies; state still set.
+  - **F9** NEXT always gives the next puzzle — the free-spin prompt no
+    longer hijacks it on L1/L5/L10 (still fires on the Home exit path).
+- 2026-08-17 (batch 1): **Streak reminder stale-snapshot fix** (App.tsx
+  passes post-update today + floor-1 streak — kills the false "expires
+  tonight!" ping on days already played); **hardcore segment gets
+  streak_reminder** (the cohort with the most to lose had zero safety net,
+  maxPerDay 1→2); **daily card names tomorrow's board** ("Tomorrow: Tall
+  Tower · Night Sky" instead of "Come back tomorrow!").
 
 ## REJECTED (considered, decided against — with reason)
 

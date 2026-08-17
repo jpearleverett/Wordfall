@@ -377,6 +377,10 @@ const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', 
  */
 const FIRST_STUCK_TOOLTIP = 'first_stuck_gravity';
 
+// Last-word tension only fires on boards with at least this many words —
+// on 2-3 word early boards the "climax" landed seconds into the puzzle.
+const LAST_WORD_TENSION_MIN_WORDS = 4;
+
 /** Stable empty array so the stranded-words memo can't churn GameBanners. */
 const EMPTY_STRING_LIST: string[] = [];
 
@@ -1226,26 +1230,16 @@ function GameScreenImpl({
     }
   }, [invalidFlashAnim, reduceMotion, shakeAnim]);
 
-  // Invalid-tap feedback: a non-adjacent tap that breaks an active 2+ cell
-  // trace is the game's one "you can't do that" gesture (empty cells aren't
-  // even hit-testable). The reducer records it as lastSelectionResetTap;
-  // watching it through a transient subscription keeps the per-tap marker out
-  // of this component's render path entirely. Starting a fresh trace from a
-  // single selected cell stays silent — that's normal play, not an error.
-  const fireInvalidTapFeedback = useStableCallback(showInvalidFlashAnim);
-  useEffect(
-    () =>
-      store.subscribe((s, prev) => {
-        if (
-          s.lastSelectionResetTap &&
-          s.lastSelectionResetTap !== prev.lastSelectionResetTap &&
-          prev.selectedCells.length >= 2
-        ) {
-          fireInvalidTapFeedback();
-        }
-      }),
-    [store, fireInvalidTapFeedback],
-  );
+  // NOTE (Aug 2026 feel audit): the "invalid tap" error treatment that used
+  // to fire here — error haptic + wordInvalid SFX + red flash + screen shake
+  // whenever a non-adjacent tap broke a 2+ cell trace — is deliberately GONE.
+  // game_mechanics.md is explicit that invalid-word rejection is not a moment
+  // this game has, and the gesture it punished (abandon a guess, start a new
+  // one) is the single most common transition in exploratory play. Dead
+  // traces now release silently on finger lift (see PlayField's
+  // handleDragEnd), and a restart tap is just normal play. The reducer still
+  // records lastSelectionResetTap; showInvalidFlashAnim stays for any future
+  // surface that needs a genuine error flash.
 
   // Hints/undos use persistent economy tokens (not per-level allocation)
   // Relax mode still uses unlimited per-level allocation.
@@ -1447,9 +1441,15 @@ function GameScreenImpl({
   // effect re-runs. `starEarn` is currently the synth fallback; swap to
   // `last_word_sting` when real audio lands.
   const lastWordTensionFiredRef = useRef(false);
+  // Below 4 words the "tension peak" fires seconds into the puzzle — on the
+  // 2-word L1 board it landed on the FIRST word a brand-new player ever
+  // found, before they even knew what the word bank was, training them to
+  // ignore the cue before it meant anything. Early levels stay quiet; the
+  // beat debuts around L8 where 4-word boards make it earned.
+  const tensionEligible = totalWords >= LAST_WORD_TENSION_MIN_WORDS;
   useEffect(() => {
     const remaining = totalWords - foundWords;
-    if (remaining !== 1 || status !== 'playing') {
+    if (remaining !== 1 || status !== 'playing' || !tensionEligible) {
       if (remaining !== 1) lastWordTensionFiredRef.current = false;
       return;
     }
@@ -1465,7 +1465,7 @@ function GameScreenImpl({
       mode,
       timeIntoPuzzleMs,
     });
-  }, [foundWords, totalWords, status, level, mode, store]);
+  }, [foundWords, totalWords, status, level, mode, store, tensionEligible]);
 
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && showFailed) {
@@ -2227,7 +2227,7 @@ function GameScreenImpl({
 
       <GameplayMascot
         foundCount={foundWords}
-        tensionActive={totalWords - foundWords === 1}
+        tensionActive={tensionEligible && totalWords - foundWords === 1}
         flawlessStreak={flawlessStreakCurrent}
       />
 

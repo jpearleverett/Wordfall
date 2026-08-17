@@ -954,14 +954,17 @@ function GameScreenWrapper({ route, navigation }: any) {
     }
   }, [earnedNewSpin, navigation]);
 
+  // NEXT always gives the next puzzle. It used to divert through the spin
+  // prompt whenever a spin was earned (every 5th win, plus the first) —
+  // hijacking the most important button in the game at L1/L5/L10 and, on
+  // accept, chaining the player out of the play loop into wheel → Home →
+  // login calendar. The spin still surfaces via the prompt on the HOME path
+  // (a deliberate exit) and the wheel badge on Home; momentum wins here.
   const handleNextWithPrompt = useCallback(() => {
-    if (earnedNewSpin) {
-      setPendingNavAction('next');
-      setShowSpinPrompt(true);
-    } else {
-      handleNextLevel();
-    }
-  }, [earnedNewSpin, handleNextLevel]);
+    // earnedNewSpin deliberately NOT cleared — if the player later exits to
+    // Home, the prompt still fires there, where it belongs.
+    handleNextLevel();
+  }, [handleNextLevel]);
 
   const handleSpinPromptAccept = useCallback(() => {
     setShowSpinPrompt(false);
@@ -2020,17 +2023,25 @@ function AppContent() {
                   onComplete={() => {
                     player.updateProgress({ tutorialComplete: true });
 
-                    // Unlock features at current level and queue ceremonies
+                    // Unlock features at current level. Baseline level-1
+                    // unlocks (the Play tab, Classic/Daily modes) are NOT
+                    // celebrated — the first modals a player ever sees must
+                    // not congratulate them for having a Play button. State
+                    // still gets set; only the ceremony is skipped.
                     const level = player.currentLevel || 1;
                     const featureCeremonies = player.checkFeatureUnlocks(level);
                     for (const ceremony of featureCeremonies) {
+                      if ((ceremony.data?.unlockLevel ?? 0) <= 1) continue;
                       player.queueCeremony(ceremony);
                     }
 
-                    // Auto-unlock modes at or below current level (mirrors useRewardWiring)
+                    // Auto-unlock modes at or below current level (mirrors
+                    // useRewardWiring). Level-1 baselines unlock silently —
+                    // same reasoning as the feature ceremonies above.
                     for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
                       if (config.unlockLevel <= level && !player.unlockedModes.includes(modeId)) {
                         player.unlockMode(modeId);
+                        if (config.unlockLevel <= 1) continue;
                         player.queueCeremony({
                           type: 'mode_unlock',
                           data: {
@@ -2044,28 +2055,15 @@ function AppContent() {
                       }
                     }
 
-                    // Tier 6 B2 — Day-1 starter bundle in FTUE.
-                    // Queue the first-purchase offer ceremony on post-
-                    // onboarding HomeScreen arrival so it lands as a
-                    // dismissible modal rather than gating the flow.
-                    // Gated by:
-                    //   - RC flag `firstSessionStarterBundleEnabled`
-                    //   - zero lifetime purchases (economy side)
-                    //   - modal never-shown marker
-                    const rcStarterOn = getRemoteBoolean('firstSessionStarterBundleEnabled');
-                    const isNonPayer = (economy.purchaseHistory?.length ?? 0) === 0;
-                    const notYetShown = !player.firstPurchaseModalShownAt;
-                    if (rcStarterOn && isNonPayer && notYetShown) {
-                      setTimeout(() => {
-                        player.queueCeremony({
-                          type: 'first_purchase_offer',
-                          data: { source: 'ftue_day1' },
-                        });
-                        void analytics.logEvent('starter_bundle_offered_day1', {
-                          level,
-                        });
-                      }, 500);
-                    }
+                    // The Tier 6 B2 "Day-1 starter bundle" queue that lived
+                    // here is deliberately GONE (Aug 2026 fun audit): it
+                    // fired a paywall modal before the player had played a
+                    // single puzzle — the most reliable D0 churn trigger in
+                    // mobile puzzle — and by stamping firstPurchaseModalShownAt
+                    // it permanently cannibalized the well-timed L5-6 offer in
+                    // useRewardWiring (which respects the non-payer guard AND
+                    // offerPacing's min-level-6 rule this path bypassed). The
+                    // L5-6 path is now the only first-purchase surface.
 
                     setShowOnboarding(false);
                   }}
