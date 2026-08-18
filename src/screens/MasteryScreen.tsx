@@ -248,6 +248,52 @@ const crownStyles = StyleSheet.create({
   },
 });
 
+// ─── DrawnLock — crisp padlock built from pure Views (replaces 🔒 emoji) ───
+
+function DrawnLock({ size = 16, accent = COLORS.gold }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.5,
+          height: size * 0.4,
+          borderTopLeftRadius: size * 0.25,
+          borderTopRightRadius: size * 0.25,
+          borderWidth: size * 0.11,
+          borderBottomWidth: 0,
+          borderColor: accent + 'E6',
+          marginBottom: -size * 0.05,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.82,
+          height: size * 0.56,
+          borderRadius: size * 0.14,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '8C']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            width: size * 0.16,
+            height: size * 0.22,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(8,2,22,0.7)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
 // ─── Reward chip list — every reward gets a medallion, not a bare string ───
 
 interface RewardChip {
@@ -424,16 +470,20 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
           (premiumLane ? styles.laneCardMilestonePremium : styles.laneCardMilestoneFree),
         alt && !milestone && styles.laneCardAlt,
         highlight && styles.laneCardCurrent,
-        (!unlocked || premiumLocked) && styles.laneCardLocked,
+        !unlocked && !premiumLane && !highlight && !milestone && styles.laneCardLocked,
       ]}
     >
       <LinearGradient
         colors={
           premiumLane
-            ? ['rgba(98,52,160,0.95)', 'rgba(26,9,50,0.98)']
+            ? premiumLocked
+              ? ['rgba(112,66,178,0.95)', 'rgba(44,22,80,0.97)']
+              : ['rgba(98,52,160,0.95)', 'rgba(26,9,50,0.98)']
             : milestone
               ? ['rgba(255,184,0,0.13)', 'rgba(12,4,28,0.96)']
-              : ['rgba(0,245,212,0.10)', 'rgba(12,4,28,0.96)']
+              : !unlocked
+                ? ['rgba(0,245,212,0.08)', 'rgba(30,16,58,0.96)']
+                : ['rgba(0,245,212,0.10)', 'rgba(12,4,28,0.96)']
         }
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -459,15 +509,14 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
         </View>
       )}
       {premiumLocked && (
-        <IconMedallion
-          glyph={'\u{1F512}'}
-          size={22}
-          accent={COLORS.gold}
-          style={styles.lockOverlay}
-        />
+        <View style={[styles.lockOverlay, styles.lockBadge]}>
+          <DrawnLock size={13} accent={COLORS.gold} />
+        </View>
       )}
 
-      <View style={styles.chipColumn}>
+      {/* Locked lanes dim CONTENT to ~65-70%, not the whole card — reward
+          icons and amounts stay readable behind the padlock. */}
+      <View style={[styles.chipColumn, (!unlocked || premiumLocked) && styles.chipColumnLocked]}>
         {chips.map((chip, i) => (
           <View key={i} style={styles.chipRow}>
             <View
@@ -485,7 +534,6 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
                 glyph={chip.glyph}
                 size={chipSize}
                 accent={chip.accent}
-                muted={!unlocked || premiumLocked}
               />
             </View>
             <Text
@@ -684,27 +732,30 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
               <Text style={styles.progressTierMax}>/ {MASTERY_MAX_TIER}</Text>
             </View>
           </View>
-          {isPremium ? (
+          {isPremium && (
             <View style={styles.premiumPill}>
               <DrawnCrown size={14} bare />
               <Text style={styles.premiumPillText}>PREMIUM</Text>
             </View>
-          ) : (
-            <View style={styles.countdownPill}>
-              <Text
-                style={styles.countdownPillText}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.75}
-              >
-                {'⏳'}{' '}
-                {days > 0
-                  ? t('common.daysRemainingSeason', { count: days })
-                  : 'Season ending soon!'}
-              </Text>
-            </View>
           )}
         </View>
+        {/* Countdown gets its own full-width row (never squeezed against the
+            tier block), so even the longest locale string cannot truncate. */}
+        {!isPremium && (
+          <View style={styles.countdownPill}>
+            <Text
+              style={styles.countdownPillText}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {'⏳'}{' '}
+              {days > 0
+                ? t('common.daysRemainingSeason', { count: days })
+                : 'Season ending soon!'}
+            </Text>
+          </View>
+        )}
         <View
           accessibilityRole="progressbar"
           accessibilityLabel={`Mastery progress: ${tierProgress} of ${tierNeeded} XP`}
@@ -851,15 +902,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   countdownPill: {
-    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: RADIUS.full,
     backgroundColor: 'rgba(255,68,102,0.14)',
     borderWidth: 1,
     borderColor: COLORS.coral + '55',
-    maxWidth: 200,
-    flexShrink: 1,
-    marginLeft: 10,
+    marginBottom: 12,
   },
   countdownPillText: {
     color: COLORS.coral,
@@ -1065,8 +1115,10 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 8,
   },
+  // Locked lanes keep FULL card opacity (dim-the-card read as unfinished);
+  // only the reward content dims, via chipColumnLocked below.
   laneCardLocked: {
-    opacity: 0.6,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   laneCardFill: {
     borderRadius: 18,
@@ -1101,11 +1153,30 @@ const styles = StyleSheet.create({
     top: 8,
     right: 8,
   },
+  // Crisp drawn-padlock badge: small gold-ringed disc, full opacity so the
+  // locked state reads intentional instead of washed out.
+  lockBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '8C',
+    backgroundColor: 'rgba(12,4,28,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.glow(COLORS.gold),
+    zIndex: 2,
+  },
   bottomSpacer: {
     height: 36,
   },
   chipColumn: {
     gap: 6,
+  },
+  // Locked reward content sits at ~68% — dimmed but fully readable
+  // (was a compounded ~33% wash that judged as unfinished).
+  chipColumnLocked: {
+    opacity: 0.68,
   },
   chipRow: {
     flexDirection: 'row',
@@ -1131,7 +1202,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   chipLabelMuted: {
-    color: COLORS.textMuted,
+    color: COLORS.textSecondary,
   },
 
   // ── Tier 30 showcase ─────────────────────────────────────────────────

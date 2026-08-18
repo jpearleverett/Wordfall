@@ -46,8 +46,8 @@ const RARITY_COLORS: Record<string, string> = {
   legendary: COLORS.rarityLegendary,
 };
 
-const FRAME_CARD_SIZE = 104;
-const THEME_CARD_SIZE = 112;
+const FRAME_CARD_SIZE = 128;
+const THEME_CARD_SIZE = 136;
 const LIST_GAP = 12;
 
 /** Small accent check bubble marking the equipped cosmetic. */
@@ -399,7 +399,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           accessibilityState={{ selected: equipped, disabled: !owned }}
           style={({ pressed }) => [
             styles.frameCard,
-            { borderColor: owned ? rarityColor + '55' : COLORS.borderDisabled },
+            { borderColor: owned ? rarityColor + '66' : rarityColor + '40' },
             equipped && {
               borderColor: rarityColor,
               ...SHADOWS.glow(rarityColor),
@@ -413,16 +413,18 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
           />
-          {/* Rarity glow wash behind the preview ring */}
-          {owned && (
-            <LinearGradient
-              colors={[rarityColor + '2E', 'transparent']}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 0.8 }}
-            />
-          )}
-          {owned ? (
+          {/* Rarity glow wash behind the preview ring — locked cards keep a
+              softer wash so rarity color still reads through the dim. */}
+          <LinearGradient
+            colors={[rarityColor + (owned ? '4D' : '21'), 'transparent']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.8 }}
+          />
+          {/* Locked frames render the SAME preview ring, dimmed, with a small
+              lock badge — the reward stays visible instead of hiding behind a
+              placeholder lock medallion. */}
+          <View style={!owned && styles.framePreviewLockedDim}>
             <View
               style={[
                 styles.framePreviewRing,
@@ -466,9 +468,10 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                 <View style={styles.framePreviewShine} pointerEvents="none" />
               </View>
             </View>
-          ) : (
-            <GlyphMedallion size={50} accent={rarityColor} muted>
-              <LockGlyph size={22} accent={rarityColor} />
+          </View>
+          {!owned && (
+            <GlyphMedallion size={26} accent={rarityColor} style={styles.frameLockBadge}>
+              <LockGlyph size={13} accent={rarityColor} />
             </GlyphMedallion>
           )}
           <Text style={[styles.frameName, !owned && styles.lockedText]} numberOfLines={1}>
@@ -507,7 +510,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           accessibilityState={{ selected: equipped, disabled: !owned }}
           style={({ pressed }) => [
             styles.themeCard,
-            { borderColor: owned ? theme.colors.accent + '55' : COLORS.borderDisabled },
+            { borderColor: owned ? theme.colors.accent + '66' : theme.colors.accent + '38' },
             equipped && {
               borderColor: theme.colors.accent,
               ...SHADOWS.glow(theme.colors.accent),
@@ -521,14 +524,12 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
           />
-          {owned && (
-            <LinearGradient
-              colors={[theme.colors.accent + '24', 'transparent']}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 0.8 }}
-            />
-          )}
+          <LinearGradient
+            colors={[theme.colors.accent + (owned ? '3D' : '1A'), 'transparent']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.8 }}
+          />
           {/* Color swatches */}
           <View style={styles.swatchRow}>
             {[theme.colors.bg, theme.colors.surface, theme.colors.accent, theme.colors.cellSelected].map(
@@ -538,7 +539,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                   style={[
                     styles.swatch,
                     { backgroundColor: color },
-                    !owned && { opacity: 0.4 },
+                    !owned && { opacity: 0.55 },
                   ]}
                 >
                   <View style={styles.swatchShine} />
@@ -593,7 +594,9 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
       backdrop="profile"
       onBack={() => navigation?.goBack()}
     >
-      {/* Live Preview — hero card */}
+      {/* Live Preview — dominant hero card. The equipped theme paints a
+          full-bleed gradient across the card top so the preview reads as a
+          showcase, not a settings group. */}
       <View style={[bentoPanel('pink', { padding: 0 }), styles.previewClip]}>
         <LinearGradient
           colors={previewGradients}
@@ -601,9 +604,20 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         />
+        {/* Full-bleed equipped-theme wash across the card top */}
+        <LinearGradient
+          colors={[
+            `${equippedThemeData.colors.accent}59`,
+            `${equippedThemeData.colors.cellSelected}26`,
+            'transparent',
+          ]}
+          style={styles.previewThemeBleed}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
         {/* Soft rarity aura behind the avatar */}
         <LinearGradient
-          colors={[frameRarityColor + '30', 'transparent']}
+          colors={[frameRarityColor + '3D', 'transparent']}
           style={StyleSheet.absoluteFill}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 0.65 }}
@@ -806,30 +820,39 @@ const styles = StyleSheet.create({
   },
   previewBody: {
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 30,
+  },
+  // Equipped-theme gradient bleeding from the card's top edge.
+  previewThemeBleed: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 170,
   },
   avatarRing: {
-    width: 108,
-    height: 108,
-    borderRadius: 54,
-    borderWidth: 3,
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    borderWidth: 3.5,
     alignItems: 'center',
     justifyContent: 'center',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.7,
-    shadowRadius: 22,
+    shadowRadius: 24,
     elevation: 12,
   },
   avatarCircle: {
-    width: 94,
-    height: 94,
-    borderRadius: 47,
+    width: 116,
+    height: 116,
+    borderRadius: 58,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarLetter: {
-    fontSize: 42,
+    fontSize: 52,
     fontFamily: FONTS.display,
     color: COLORS.accent,
     textShadowColor: COLORS.accentGlow,
@@ -856,39 +879,39 @@ const styles = StyleSheet.create({
   avatarOrbit: {
     position: 'absolute',
     alignSelf: 'center',
-    top: 6,
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    top: 8,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     borderWidth: 1,
   },
   avatarDiamond: {
     position: 'absolute',
     alignSelf: 'center',
-    top: 19,
-    width: 56,
-    height: 56,
+    top: 24,
+    width: 68,
+    height: 68,
     borderWidth: 1.5,
-    borderRadius: 10,
+    borderRadius: 12,
     transform: [{ rotate: '45deg' }],
   },
   avatarDiamondSmall: {
     position: 'absolute',
     alignSelf: 'center',
-    top: 29,
-    width: 36,
-    height: 36,
+    top: 36,
+    width: 44,
+    height: 44,
     borderWidth: 1,
-    borderRadius: 7,
+    borderRadius: 8,
     borderColor: 'rgba(255,255,255,0.09)',
     transform: [{ rotate: '45deg' }],
   },
   avatarShine: {
     position: 'absolute',
-    top: 8,
-    left: 18,
-    right: 18,
-    height: 22,
+    top: 10,
+    left: 22,
+    right: 22,
+    height: 26,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.10)',
     transform: [{ scaleY: 0.8 }],
@@ -912,7 +935,7 @@ const styles = StyleSheet.create({
     color: COLORS.bg,
   },
   playerName: {
-    fontSize: 24,
+    fontSize: 27,
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     marginTop: 12,
@@ -959,34 +982,34 @@ const styles = StyleSheet.create({
   frameCard: {
     width: FRAME_CARD_SIZE,
     borderRadius: RADIUS.xl,
-    padding: 12,
+    padding: 14,
     alignItems: 'center',
     borderWidth: 1.5,
     overflow: 'hidden',
     ...SHADOWS.soft,
   },
   framePreviewRing: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2.5,
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
-    shadowRadius: 8,
+    shadowRadius: 10,
     elevation: 5,
   },
   framePreviewCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   framePreviewLetter: {
-    fontSize: 20,
+    fontSize: 25,
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     textShadowOffset: { width: 0, height: 0 },
@@ -994,31 +1017,40 @@ const styles = StyleSheet.create({
   },
   framePreviewShine: {
     position: 'absolute',
-    top: 4,
-    left: 9,
-    right: 9,
-    height: 7,
-    borderRadius: 4,
+    top: 5,
+    left: 12,
+    right: 12,
+    height: 9,
+    borderRadius: 5,
     backgroundColor: 'rgba(255,255,255,0.16)',
   },
   framePreviewOrbit: {
     position: 'absolute',
     alignSelf: 'center',
-    top: 3,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    top: 4,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     borderWidth: 1,
   },
   framePreviewDiamond: {
     position: 'absolute',
     alignSelf: 'center',
-    top: 9,
-    width: 24,
-    height: 24,
+    top: 12,
+    width: 32,
+    height: 32,
     borderWidth: 1,
-    borderRadius: 5,
+    borderRadius: 6,
     transform: [{ rotate: '45deg' }],
+  },
+  // Locked frame preview: dimmed to ~55% but still fully drawn.
+  framePreviewLockedDim: {
+    opacity: 0.55,
+  },
+  frameLockBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
   },
   framePreviewLetterUnder: {
     position: 'absolute',
@@ -1032,10 +1064,10 @@ const styles = StyleSheet.create({
     transform: [{ translateY: 1.5 }, { translateX: 1 }],
   },
   frameName: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
-    marginTop: 6,
+    marginTop: 8,
     textAlign: 'center',
   },
   frameRarity: {
@@ -1105,7 +1137,7 @@ const styles = StyleSheet.create({
   themeCard: {
     width: THEME_CARD_SIZE,
     borderRadius: RADIUS.xl,
-    padding: 12,
+    padding: 14,
     alignItems: 'center',
     borderWidth: 1.5,
     overflow: 'hidden',
@@ -1113,26 +1145,26 @@ const styles = StyleSheet.create({
   },
   swatchRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 8,
-    marginTop: 2,
+    gap: 7,
+    marginBottom: 10,
+    marginTop: 4,
   },
   swatch: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.3)',
     overflow: 'hidden',
   },
   swatchShine: {
     position: 'absolute',
-    top: 2,
-    left: 4,
-    right: 4,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.28)',
+    top: 3,
+    left: 5,
+    right: 5,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   themeLockBadge: {
     position: 'absolute',
@@ -1140,7 +1172,7 @@ const styles = StyleSheet.create({
     right: 6,
   },
   themeName: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
     textAlign: 'center',

@@ -770,6 +770,21 @@ const EventScreen: React.FC<EventScreenProps> = ({
   const multipliers = eventManager.getEventMultipliers();
   const hasActiveMultipliers = multipliers.coins > 1 || multipliers.xp > 1 || multipliers.rareTileChance > 1;
 
+  /** Reward-specific glyph for a tier's PRIMARY payout — locked tiers show
+   *  the actual reward dimly instead of an identical padlock everywhere. */
+  const getTierRewardGlyph = (
+    rewards: { coins?: number; gems?: number; hintTokens?: number; badge?: string; decoration?: string },
+    accent: string,
+    size: number,
+  ): React.ReactNode => {
+    if (rewards.badge) return <TrophyGlyph size={size} accent={COLORS.gold} />;
+    if (rewards.decoration) return <StarBurstGlyph size={size} accent={accent} />;
+    if (rewards.gems) return <DiamondGlyph size={size} accent={COLORS.cyan} />;
+    if (rewards.coins) return <CoinGlyph size={size} />;
+    if (rewards.hintTokens) return <BoltGlyph size={size} accent={accent} />;
+    return <GiftGlyph size={size} />;
+  };
+
   const getRewardTypeGlyph = (type: string, accent: string, size: number): React.ReactNode => {
     switch (type) {
       case 'frame': return <NestedSquaresGlyph size={size} accent={accent} />;
@@ -977,24 +992,35 @@ const EventScreen: React.FC<EventScreenProps> = ({
                 rewards={activeEvent.rewards}
               />
 
-              {/* Reward Tiers — medallion cards; claimable ones glow gold */}
+              {/* Reward Tiers — cards scale up with reward magnitude; every
+                  tier shows its OWN reward glyph (locked ones dimmed behind a
+                  small lock badge), with distinct reached / next / far states. */}
               <Animated.View style={[styles.rewardTiersRow, { transform: [{ scale: claimAnim }] }]}>
-                {activeEvent.rewards.map((reward) => {
+                {activeEvent.rewards.map((reward, tierIdx) => {
                   const canClaim = reward.reached && !reward.claimed;
+                  const nextIdx = activeEvent.rewards.findIndex((r) => !r.reached);
+                  const isNext = !reward.reached && tierIdx === nextIdx;
+                  const isFar = !reward.reached && !isNext;
                   const tierAccent = reward.claimed
                     ? COLORS.green
                     : canClaim
                       ? COLORS.gold
                       : color;
+                  // Bigger tiers = bigger cards: medallion + halo grow up the ladder.
+                  const medSize = 32 + Math.min(tierIdx, 3) * 4;
+                  const haloSize = medSize + 14;
                   return (
                     <Pressable
                       key={reward.tier}
                       onPress={() => canClaim && handleClaimReward(activeEvent.id, reward.tier)}
                       disabled={!canClaim}
                       accessibilityRole="button"
-                      accessibilityLabel={`${reward.tier} tier reward${reward.claimed ? ', claimed' : reward.reached ? ', tap to claim' : ', locked'}`}
+                      accessibilityLabel={`${reward.tier} tier reward${reward.claimed ? ', claimed' : reward.reached ? ', tap to claim' : isNext ? ', next up' : ', locked'}`}
                       style={({ pressed }) => [
                         styles.rewardTierCard,
+                        { paddingTop: 10 + Math.min(tierIdx, 3) * 3 },
+                        isNext && [styles.rewardTierCardNext, { borderColor: color + '77' }],
+                        isFar && styles.rewardTierCardFar,
                         canClaim && styles.rewardTierCardClaimable,
                         reward.claimed && styles.rewardTierCardClaimed,
                         pressed && canClaim && styles.pressedScale,
@@ -1004,7 +1030,9 @@ const EventScreen: React.FC<EventScreenProps> = ({
                         colors={
                           canClaim
                             ? ([COLORS.gold + '26', 'rgba(26,10,46,0.92)'] as [string, string])
-                            : ([...GRADIENTS.surfaceCard] as [string, string])
+                            : isNext
+                              ? ([color + '1F', 'rgba(26,10,46,0.92)'] as [string, string])
+                              : ([...GRADIENTS.surfaceCard] as [string, string])
                         }
                         style={StyleSheet.absoluteFill}
                         start={{ x: 0.5, y: 0 }}
@@ -1014,30 +1042,51 @@ const EventScreen: React.FC<EventScreenProps> = ({
                         style={[
                           styles.rewardTierHalo,
                           {
-                            borderColor: tierAccent + (reward.reached ? '66' : '33'),
+                            width: haloSize,
+                            height: haloSize,
+                            borderRadius: haloSize / 2,
+                            borderColor: tierAccent + (reward.reached ? '66' : isNext ? '55' : '33'),
                             backgroundColor: tierAccent + '12',
-                            ...(reward.reached ? SHADOWS.glow(tierAccent) : null),
+                            ...(reward.reached || isNext ? SHADOWS.glow(tierAccent) : null),
                           },
                         ]}
                       >
-                        <DrawnMedallion size={36} accent={tierAccent} muted={!reward.reached}>
+                        <DrawnMedallion size={medSize} accent={tierAccent} muted={isFar}>
                           {reward.claimed ? (
-                            <CheckGlyph size={18} accent={COLORS.green} />
+                            <CheckGlyph size={medSize * 0.5} accent={COLORS.green} />
                           ) : reward.reached ? (
-                            <GiftGlyph size={18} />
+                            <GiftGlyph size={medSize * 0.5} />
                           ) : (
-                            <LockGlyph size={18} accent={tierAccent} />
+                            getTierRewardGlyph(reward.rewards, tierAccent, medSize * 0.5)
                           )}
                         </DrawnMedallion>
+                        {!reward.reached && (
+                          <View style={styles.tierLockBadge}>
+                            <LockGlyph size={10} accent={COLORS.gold} />
+                          </View>
+                        )}
                       </View>
-                      <Text style={styles.rewardTierThreshold}>{fmt(reward.threshold)}</Text>
+                      <Text
+                        style={[
+                          styles.rewardTierThreshold,
+                          (reward.reached || isNext) && { color: COLORS.textSecondary },
+                        ]}
+                      >
+                        {fmt(reward.threshold)}
+                      </Text>
                       <Text style={[
                         styles.rewardTierLabel,
+                        isNext && { color },
                         reward.reached && { color: COLORS.textPrimary },
                         reward.claimed && { color: COLORS.green },
                       ]}>
                         {reward.tier.charAt(0).toUpperCase() + reward.tier.slice(1)}
                       </Text>
+                      {isNext && (
+                        <View style={[styles.nextPill, { borderColor: color + '66', backgroundColor: color + '1A' }]}>
+                          <Text style={[styles.nextPillText, { color }]}>NEXT</Text>
+                        </View>
+                      )}
                       {canClaim && (
                         <View style={styles.claimPill}>
                           <LinearGradient
@@ -1406,10 +1455,12 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
 
-  // Reward Tiers
+  // Reward Tiers — cards align to the row's bottom so the size ramp
+  // (bronze → diamond) reads as an ascending ladder.
   rewardTiersRow: {
     flexDirection: 'row',
     gap: 8,
+    alignItems: 'flex-end',
   },
   rewardTierCard: {
     flex: 1,
@@ -1420,16 +1471,49 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 4,
     overflow: 'hidden',
-    opacity: 0.65,
+  },
+  // Next tier to hit: fully lit with an accent edge.
+  rewardTierCardNext: {
+    borderWidth: 1.5,
+  },
+  // Distant tiers: dimmed to ~75% — visibly future, still readable.
+  rewardTierCardFar: {
+    opacity: 0.75,
   },
   rewardTierCardClaimable: {
-    opacity: 1,
     borderColor: COLORS.gold + '77',
     ...SHADOWS.glow(COLORS.gold),
   },
   rewardTierCardClaimed: {
-    opacity: 0.85,
+    opacity: 0.9,
     borderColor: COLORS.green + '44',
+  },
+  // Small drawn-padlock badge overlaying a locked tier's reward medallion.
+  tierLockBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '8C',
+    backgroundColor: 'rgba(12,4,28,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  nextPill: {
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginTop: 2,
+  },
+  nextPillText: {
+    fontSize: 8,
+    fontFamily: FONTS.display,
+    letterSpacing: 1.5,
   },
   rewardTierMedallion: {
     marginBottom: 6,

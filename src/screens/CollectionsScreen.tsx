@@ -128,20 +128,33 @@ function DrawnMedallion({
       ]}
     >
       <LinearGradient
-        colors={[muted ? 'rgba(255,255,255,0.05)' : accent + '3D', 'rgba(8, 2, 22, 0.92)']}
+        colors={[muted ? 'rgba(255,255,255,0.05)' : accent + '52', 'rgba(8, 2, 22, 0.92)']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
+      {/* White highlight edge — brighter glass bar + hairline top rim so the
+          glyph silhouette pops off the dark body. */}
       <View
         style={{
           position: 'absolute',
-          top: size * 0.06,
+          top: size * 0.05,
           left: size * 0.16,
           right: size * 0.16,
-          height: size * 0.16,
-          borderRadius: size * 0.08,
-          backgroundColor: 'rgba(255,255,255,0.14)',
+          height: size * 0.17,
+          borderRadius: size * 0.09,
+          backgroundColor: 'rgba(255,255,255,0.22)',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: 1,
+          left: size * 0.24,
+          right: size * 0.24,
+          height: 1.5,
+          borderRadius: 1,
+          backgroundColor: 'rgba(255,255,255,0.45)',
         }}
       />
       {children}
@@ -986,8 +999,46 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
   const stamps = collections?.stamps ?? DEFAULT_STAMPS;
   const seasonName = collections?.seasonName ?? 'Spring Awakening';
 
+  const renderAtlasWordList = (page: any, accent: string) => (
+    <View style={[styles.atlasWordList, { borderColor: accent + '24' }]}>
+      {page.words.map((word: string) => {
+        const isFound = page.foundWords.includes(word);
+        return (
+          <View
+            key={word}
+            style={[
+              styles.atlasWordChip,
+              isFound && [styles.atlasWordChipFound, { borderColor: accent + '73' }],
+            ]}
+          >
+            <Text
+              style={[
+                styles.atlasWordText,
+                isFound ? { color: accent } : styles.atlasWordHidden,
+              ]}
+            >
+              {isFound ? word.toUpperCase() : '????'}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+
   const renderWordAtlas = () => {
     const completedPages = atlasPages.filter((p) => p.found >= p.total).length;
+    // The page the player is actively filling (else the next unstarted one)
+    // renders as a large featured card — the rest drop into a 2-column grid
+    // so the tab stops reading as a repeating full-width list.
+    const featured =
+      atlasPages.find((p) => p.found > 0 && p.found < p.total) ??
+      atlasPages.find((p) => p.found < p.total) ??
+      atlasPages[0];
+    const featuredComplete = featured.found >= featured.total;
+    const featuredAccent = featuredComplete
+      ? COLORS.gold
+      : ATLAS_ACCENT_BY_ID[featured.id] ?? ATLAS_PALETTE[0];
+    const gridPages = atlasPages.filter((p) => p.id !== featured.id);
     return (
       <ScrollView
         style={styles.tabContent}
@@ -999,7 +1050,59 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
           accent={COLORS.cyan}
           meta={`${completedPages}/${atlasPages.length} PAGES`}
         />
-        {atlasPages.map((page: any, pageIndex: number) => {
+        <Pressable
+          style={({ pressed }) => [
+            styles.atlasFeaturedCard,
+            { borderColor: featuredAccent + '59', shadowColor: featuredAccent },
+            pressed && styles.pressedCard,
+          ]}
+          onPress={() =>
+            setExpandedAtlasId(expandedAtlasId === featured.id ? null : featured.id)
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`${featured.name}: ${featured.found} of ${featured.total} words found${featuredComplete ? ', complete' : ''}`}
+          accessibilityState={{ expanded: expandedAtlasId === featured.id }}
+        >
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <LinearGradient
+            colors={[featuredAccent + '2E', 'transparent']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.9, y: 0.9 }}
+          />
+          {featuredComplete && <CardShine reduceMotion={reduceMotion} />}
+          <DrawnMedallion
+            accent={featuredAccent}
+            size={64}
+            shape="squircle"
+            style={styles.atlasMedallion}
+          >
+            <AtlasGlyph pageId={featured.id} accent={featuredAccent} size={36} />
+          </DrawnMedallion>
+          <View style={styles.atlasInfo}>
+            <Text style={[styles.atlasFeaturedEyebrow, { color: featuredAccent }]}>
+              {featuredComplete ? 'COMPLETE' : featured.found > 0 ? 'IN PROGRESS' : 'UP NEXT'}
+            </Text>
+            <Text style={styles.atlasFeaturedName}>{featured.name}</Text>
+            <Text style={styles.atlasProgress}>
+              {featured.found} / {featured.total} words
+            </Text>
+            <NeonProgressBar
+              progress={featured.total > 0 ? featured.found / featured.total : 0}
+              color={featuredAccent}
+              height={9}
+              showGlowDot={!featuredComplete}
+            />
+          </View>
+        </Pressable>
+        {expandedAtlasId === featured.id && renderAtlasWordList(featured, featuredAccent)}
+        <View style={styles.atlasGridWrap}>
+        {gridPages.map((page: any, pageIndex: number) => {
           const isComplete = page.found >= page.total;
           const pageAccent =
             ATLAS_ACCENT_BY_ID[page.id] ?? ATLAS_PALETTE[pageIndex % ATLAS_PALETTE.length];
@@ -1008,8 +1111,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             <React.Fragment key={page.id}>
               <Pressable
                 style={({ pressed }) => [
-                  styles.atlasCard,
-                  bentoPanel(isComplete ? 'gold' : 'cyan', { padding: 14, marginBottom: 10 }),
+                  styles.atlasCompactCard,
                   { borderColor: accent + '3D', shadowColor: accent },
                   pressed && styles.pressedCard,
                 ]}
@@ -1033,24 +1135,27 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                 {isComplete && <CardShine reduceMotion={reduceMotion} />}
                 <DrawnMedallion
                   accent={accent}
-                  size={46}
+                  size={54}
                   shape="squircle"
-                  style={styles.atlasMedallion}
+                  style={styles.atlasCompactMedallion}
                 >
-                  <AtlasGlyph pageId={page.id} accent={accent} size={26} />
+                  <AtlasGlyph pageId={page.id} accent={accent} size={30} />
                 </DrawnMedallion>
-                <View style={styles.atlasInfo}>
-                  <Text style={[styles.atlasName, isComplete && styles.atlasNameComplete]}>
-                    {page.name}
-                  </Text>
-                  <Text style={styles.atlasProgress}>
-                    {page.found} / {page.total} words
-                  </Text>
+                <Text
+                  style={[styles.atlasCompactName, isComplete && styles.atlasNameComplete]}
+                  numberOfLines={1}
+                >
+                  {page.name}
+                </Text>
+                <Text style={styles.atlasCompactProgress}>
+                  {page.found} / {page.total} words
+                </Text>
+                <View style={styles.atlasCompactBar}>
                   <NeonProgressBar
                     progress={page.total > 0 ? page.found / page.total : 0}
                     color={accent}
-                    height={7}
-                    showGlowDot={!isComplete}
+                    height={6}
+                    showGlowDot={false}
                   />
                 </View>
                 {isComplete && (
@@ -1060,33 +1165,14 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                 )}
               </Pressable>
               {expandedAtlasId === page.id && (
-                <View style={[styles.atlasWordList, { borderColor: accent + '24' }]}>
-                  {page.words.map((word: string) => {
-                    const isFound = page.foundWords.includes(word);
-                    return (
-                      <View
-                        key={word}
-                        style={[
-                          styles.atlasWordChip,
-                          isFound && [styles.atlasWordChipFound, { borderColor: accent + '73' }],
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.atlasWordText,
-                            isFound ? { color: accent } : styles.atlasWordHidden,
-                          ]}
-                        >
-                          {isFound ? word.toUpperCase() : '????'}
-                        </Text>
-                      </View>
-                    );
-                  })}
+                <View style={styles.atlasGridWordListWrap}>
+                  {renderAtlasWordList(page, accent)}
                 </View>
               )}
             </React.Fragment>
           );
         })}
+        </View>
         <View style={styles.bottomSpacer} />
       </ScrollView>
     );
@@ -1530,13 +1616,78 @@ const styles = StyleSheet.create({
   atlasGrid: {
     paddingHorizontal: 16,
   },
-  atlasCard: {
+  // Featured atlas page — large hero card at the top of the tab.
+  atlasFeaturedCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: RADIUS.xl,
+    borderWidth: 1.5,
+    padding: 16,
+    marginBottom: 12,
     overflow: 'hidden',
-    // Opaque base under the gradient fills — reward content sits ON the
-    // card instead of blending into the hex grid behind it.
     backgroundColor: 'rgba(12,4,28,0.96)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 7,
+  },
+  atlasFeaturedEyebrow: {
+    fontSize: 9,
+    fontFamily: FONTS.display,
+    letterSpacing: 2.5,
+    marginBottom: 2,
+  },
+  atlasFeaturedName: {
+    fontSize: 19,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.5,
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  // 2-column grid for the remaining pages — breaks the repeating-list feel.
+  atlasGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 10,
+  },
+  atlasCompactCard: {
+    width: '48.4%',
+    alignItems: 'center',
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(12,4,28,0.96)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  atlasCompactMedallion: {
+    marginBottom: 8,
+  },
+  atlasCompactName: {
+    fontSize: 13,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.5,
+    color: COLORS.textPrimary,
+    marginBottom: 1,
+    textAlign: 'center',
+  },
+  atlasCompactProgress: {
+    fontSize: 11,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  atlasCompactBar: {
+    alignSelf: 'stretch',
+  },
+  // Full-width break inside the wrap grid for an expanded word list.
+  atlasGridWordListWrap: {
+    width: '100%',
   },
   pressedCard: {
     transform: [{ scale: 0.98 }],
