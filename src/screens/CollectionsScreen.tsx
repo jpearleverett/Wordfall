@@ -25,7 +25,8 @@ import {
   selectTooltipsShown,
 } from '../stores/playerStore';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import { ATLAS_PAGES } from '../data/collections';
+import { ATLAS_PAGES, SEASONAL_ALBUMS, getCurrentSeasonAlbum } from '../data/collections';
+import GameIcon from '../components/icons/GameIcon';
 
 const { width } = Dimensions.get('window');
 const TILE_SIZE = (width - 80) / 7;
@@ -65,20 +66,6 @@ const TILE_SETS = [
   { name: 'STELLAR', letters: ['S', 'T', 'E', 'L', 'A', 'R'] },
 ];
 
-const DEFAULT_STAMPS = [
-  { id: 'spring1', name: 'First Bloom', icon: '\u{1F338}', collected: false },
-  { id: 'spring2', name: 'Rain Shower', icon: '\u{1F327}️', collected: false },
-  { id: 'spring3', name: 'Butterfly', icon: '\u{1F98B}', collected: false },
-  { id: 'spring4', name: 'Seedling', icon: '\u{1F331}', collected: false },
-  { id: 'spring5', name: 'Rainbow', icon: '\u{1F308}', collected: false },
-  { id: 'spring6', name: 'Bird Song', icon: '\u{1F426}', collected: false },
-  { id: 'spring7', name: 'Picnic', icon: '\u{1F9FA}', collected: false },
-  { id: 'spring8', name: 'Garden', icon: '\u{1F33B}', collected: false },
-  { id: 'spring9', name: 'Kite', icon: '\u{1FA81}', collected: false },
-  { id: 'spring10', name: 'Egg Hunt', icon: '\u{1F95A}', collected: false },
-  { id: 'spring11', name: 'Ladybug', icon: '\u{1F41E}', collected: false },
-  { id: 'spring12', name: 'Cherry', icon: '\u{1F352}', collected: false },
-];
 
 // ─── Drawn glyph kit — layered Views/gradients, no emoji (same technique as
 // ModesScreen's ModeGlyph family / LeaderboardScreen's GlyphMedallion). ─────
@@ -996,8 +983,20 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
   const collectedTiles: string[] = collections?.rareTiles
     ? Object.keys(collections.rareTiles).filter(l => collections.rareTiles[l] > 0)
     : [];
-  const stamps = collections?.stamps ?? DEFAULT_STAMPS;
-  const seasonName = collections?.seasonName ?? 'Spring Awakening';
+  // Live seasonal album. The screen used to read `collections.stamps` —
+  // a key NOTHING writes (progress lands in `collections.seasonalStamps`
+  // keyed by album id, as stamp INDICES) — so earned stamps could never
+  // display. Derive from the real album + real progress instead.
+  const album = getCurrentSeasonAlbum() ?? SEASONAL_ALBUMS[0];
+  const earnedStampIdx: number[] =
+    (collections?.seasonalStamps as Record<string, number[]> | undefined)?.[album.id] ?? [];
+  const stamps = album.stamps.map((s, i) => ({
+    id: s.id,
+    name: s.name,
+    icon: s.icon,
+    collected: earnedStampIdx.includes(i),
+  }));
+  const seasonName = `${album.season} ${album.year}`;
 
   const renderAtlasWordList = (page: any, accent: string) => (
     <View style={[styles.atlasWordList, { borderColor: accent + '24' }]}>
@@ -1359,11 +1358,14 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                 muted={!stamp.collected}
                 style={styles.stampMedallion}
               >
-                <StampSealGlyph
-                  size={28}
-                  accent={COLORS.purple}
-                  collected={!!stamp.collected}
-                />
+                {stamp.collected ? (
+                  // Each stamp shows ITS icon once earned (the album data
+                  // carries one per stamp) — a sheet of identical seals
+                  // reads as placeholder art.
+                  <GameIcon glyph={stamp.icon} size={26} />
+                ) : (
+                  <StampSealGlyph size={28} accent={COLORS.purple} collected={false} />
+                )}
               </DrawnMedallion>
               <Text
                 style={[
