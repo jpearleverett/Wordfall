@@ -3,13 +3,15 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, FONTS, MODE_CONFIGS } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { COLORS, GRADIENTS, FONTS, RADIUS, SHADOWS, MODE_CONFIGS } from '../constants';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import IconMedallion from '../components/common/IconMedallion';
+import NeonProgressBar from '../components/common/NeonProgressBar';
 import { ModeConfig } from '../types';
 import {
   usePlayerStore,
@@ -33,9 +35,18 @@ const MODES = Object.values(MODE_CONFIGS)
     name: mode.name,
     icon: mode.icon,
     desc: mode.description,
+    color: mode.color,
     unlockLevel: mode.unlockLevel,
   }))
   .sort((a, b) => a.unlockLevel - b.unlockLevel);
+
+/** Compact progress readout rendered on a locked card instead of the old
+ *  floating gold string: a chip label + a meter toward the requirement. */
+interface LockMeter {
+  current: number;
+  total: number;
+  label: string;
+}
 
 interface ModesScreenProps {
   onSelectMode?: (mode: string) => void;
@@ -62,64 +73,111 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
   const onSelectMode = onSelectModeProp ?? ((_mode: string) => {});
   const unlockedModes = unlockedModesProp ?? playerUnlockedModes;
   const playerLevel = playerLevelProp ?? playerCurrentLevel;
-  const isModeAccessible = (modeId: string): { accessible: boolean; reason: string } => {
+  const isModeAccessible = (
+    modeId: string,
+  ): { accessible: boolean; reason: string; meter: LockMeter } => {
     const modeConfig = MODE_CONFIGS[modeId as keyof typeof MODE_CONFIGS] as ModeConfig | undefined;
-    if (!modeConfig) return { accessible: false, reason: 'Unknown mode' };
+    if (!modeConfig) {
+      return { accessible: false, reason: 'Unknown mode', meter: { current: 0, total: 1, label: 'LOCKED' } };
+    }
 
     if (playerLevel < modeConfig.unlockLevel && !unlockedModes.includes(modeId)) {
-      return { accessible: false, reason: `Reach level ${modeConfig.unlockLevel}` };
+      return {
+        accessible: false,
+        reason: `Reach level ${modeConfig.unlockLevel}`,
+        meter: { current: playerLevel, total: modeConfig.unlockLevel, label: `LV ${modeConfig.unlockLevel}` },
+      };
     }
 
     const gate = modeConfig.rules.skillGate;
     if (gate) {
       if (gate.perfectSolves && perfectSolves < gate.perfectSolves) {
-        return { accessible: false, reason: `Need ${gate.perfectSolves} perfect solves (${perfectSolves}/${gate.perfectSolves})` };
+        return {
+          accessible: false,
+          reason: `Need ${gate.perfectSolves} perfect solves (${perfectSolves}/${gate.perfectSolves})`,
+          meter: { current: perfectSolves, total: gate.perfectSolves, label: `${perfectSolves}/${gate.perfectSolves} PERFECT` },
+        };
       }
       if (gate.minStars && totalStars < gate.minStars) {
-        return { accessible: false, reason: `Need ${gate.minStars} stars (${totalStars}/${gate.minStars})` };
+        return {
+          accessible: false,
+          reason: `Need ${gate.minStars} stars (${totalStars}/${gate.minStars})`,
+          meter: { current: totalStars, total: gate.minStars, label: `${totalStars}/${gate.minStars} ★` },
+        };
       }
       if (gate.puzzlesSolved && puzzlesSolved < gate.puzzlesSolved) {
-        return { accessible: false, reason: `Need ${gate.puzzlesSolved} puzzles solved (${puzzlesSolved}/${gate.puzzlesSolved})` };
+        return {
+          accessible: false,
+          reason: `Need ${gate.puzzlesSolved} puzzles solved (${puzzlesSolved}/${gate.puzzlesSolved})`,
+          meter: { current: puzzlesSolved, total: gate.puzzlesSolved, label: `${puzzlesSolved}/${gate.puzzlesSolved} SOLVED` },
+        };
       }
     }
 
-    return { accessible: true, reason: '' };
+    return { accessible: true, reason: '', meter: { current: 1, total: 1, label: '' } };
   };
 
   const renderModeCard = (mode: typeof MODES[number]) => {
-    const { accessible, reason } = isModeAccessible(mode.id);
+    const { accessible, reason, meter } = isModeAccessible(mode.id);
+    const accent = mode.color;
+    const special = mode.id === 'daily' || mode.id === 'weekly';
 
     return (
-      <TouchableOpacity
+      <Pressable
         key={mode.id}
-        style={[
+        style={({ pressed }) => [
           styles.card,
-          accessible ? styles.cardUnlocked : styles.cardLocked,
+          accessible
+            ? [{ borderColor: accent + '59' }, SHADOWS.glow(accent)]
+            : styles.cardLocked,
+          pressed && accessible && styles.cardPressed,
         ]}
         onPress={() => accessible && onSelectMode(mode.id)}
-        activeOpacity={accessible ? 0.7 : 1}
         accessibilityRole="button"
         accessibilityLabel={`${mode.name} mode${accessible ? '' : ', locked'}: ${accessible ? mode.desc : reason}`}
         accessibilityState={{ disabled: !accessible }}
       >
-        {accessible ? (
+        <LinearGradient
+          colors={
+            accessible
+              ? [...GRADIENTS.surfaceCard]
+              : (['rgba(18,6,32,0.94)', 'rgba(10,0,21,0.96)'] as const)
+          }
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+        {accessible && (
           <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-        ) : (
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
+            colors={[accent + '2E', 'transparent']}
+            style={styles.accentWash}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
           />
         )}
-        {accessible && <View style={styles.cardGlow} />}
+        {accessible && (
+          <View
+            style={[
+              styles.topTick,
+              { backgroundColor: special ? COLORS.gold : accent },
+              SHADOWS.neonEdge(special ? COLORS.gold : accent),
+            ]}
+          />
+        )}
         <View style={styles.cardContent}>
-          <Text style={styles.cardIcon}>{accessible ? mode.icon : '\u{1F512}'}</Text>
+          {special && accessible && (
+            <Text style={styles.specialEyebrow}>
+              {mode.id === 'daily' ? 'DAILY EVENT' : 'WEEKLY EVENT'}
+            </Text>
+          )}
+          <IconMedallion
+            glyph={accessible ? mode.icon : '\u{1F512}'}
+            accent={accessible ? accent : COLORS.gold}
+            size={48}
+            shape="squircle"
+            muted={!accessible}
+            style={styles.medallion}
+          />
           <Text style={[styles.cardName, !accessible && styles.textLocked]}>
             {mode.name}
           </Text>
@@ -142,15 +200,30 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
               })()}
             </>
           ) : (
-            <Text style={styles.lockText}>
-              {reason}
-            </Text>
+            <View style={styles.lockBlock}>
+              <View style={styles.lockChip}>
+                <Text style={styles.lockChipText}>{meter.label}</Text>
+              </View>
+              <View style={styles.lockMeter}>
+                <NeonProgressBar
+                  progress={meter.total > 0 ? meter.current / meter.total : 0}
+                  color={COLORS.gold}
+                  height={5}
+                  showGlowDot={false}
+                />
+              </View>
+            </View>
           )}
         </View>
         {accessible && (
-          <View style={styles.cardAccent} />
+          <View
+            style={[
+              styles.cardAccent,
+              { backgroundColor: accent, shadowColor: accent },
+            ]}
+          />
         )}
-      </TouchableOpacity>
+      </Pressable>
     );
   };
 
@@ -159,85 +232,58 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
   );
 
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="modes" />
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>GAME MODES</Text>
-          {onOpenLeaderboard && (
-            <TouchableOpacity style={styles.leaderboardBtn} onPress={onOpenLeaderboard} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Open leaderboard">
-              <Text style={styles.leaderboardBtnText}>{'\u{1F3C6}'} Leaderboard</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <Text style={styles.headerSubtitle}>
-          {unlockedModes.length} of {MODES.length} unlocked
-        </Text>
+    <ScreenScaffold
+      title="GAME MODES"
+      subtitle={`${unlockedModes.length} of ${MODES.length} unlocked`}
+      backdrop="modes"
+      scroll={false}
+      headerRight={
+        onOpenLeaderboard ? (
+          <Pressable
+            onPress={onOpenLeaderboard}
+            accessibilityRole="button"
+            accessibilityLabel="Open leaderboard"
+            hitSlop={8}
+            style={({ pressed }) => [pressed && styles.headerBtnPressed]}
+          >
+            <IconMedallion glyph={'\u{1F3C6}'} accent={COLORS.gold} size={40} />
+          </Pressable>
+        ) : undefined
+      }
+    >
+      {/* Zero-height anchor: the Tooltip positions itself 100px below its
+          parent, so anchoring it here (below the scaffold header) keeps it
+          floating over the grid without ever occluding the header. */}
+      <View style={styles.tooltipAnchor} pointerEvents="box-none">
+        <Tooltip
+          message="Each mode has unique rules! Unlock more modes by advancing through levels."
+          visible={showTooltip}
+          onDismiss={() => {
+            setShowTooltip(false);
+            markTooltipShown('modes_screen');
+          }}
+          position="top"
+        />
       </View>
-      <Tooltip
-        message="Each mode has unique rules! Unlock more modes by advancing through levels."
-        visible={showTooltip}
-        onDismiss={() => {
-          setShowTooltip(false);
-          markTooltipShown('modes_screen');
-        }}
-        position="top"
-      />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.grid}
         showsVerticalScrollIndicator={false}
       >
         {MODES.map(renderModeCard)}
-        <View style={styles.bottomSpacer} />
       </ScrollView>
-    </View>
+    </ScreenScaffold>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
+  tooltipAnchor: {
+    height: 0,
+    zIndex: 50,
   },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  headerRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 12,
-  },
-  leaderboardBtn: {
-    backgroundColor: COLORS.gold + '20',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: COLORS.gold + '30',
-  },
-  leaderboardBtnText: {
-    fontSize: 12,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.gold,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    letterSpacing: 4,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 8,
+  headerBtnPressed: {
+    transform: [{ scale: 0.93 }],
+    opacity: 0.85,
   },
   scrollView: {
     flex: 1,
@@ -246,58 +292,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 110,
     gap: 16,
   },
   card: {
     width: CARD_WIDTH,
-    borderRadius: 20,
+    borderRadius: RADIUS.xl,
     overflow: 'hidden',
-    minHeight: 165,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  cardUnlocked: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    minHeight: 184,
+    borderWidth: 1.5,
   },
   cardLocked: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
-    opacity: 0.55,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...SHADOWS.soft,
   },
-  cardGlow: {
+  cardPressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.9,
+  },
+  accentWash: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    height: 72,
+  },
+  topTick: {
+    position: 'absolute',
+    top: 0,
+    alignSelf: 'center',
+    width: 40,
     height: 3,
-    backgroundColor: COLORS.accent,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.7,
-    shadowRadius: 16,
-    elevation: 8,
+    borderBottomLeftRadius: RADIUS.sm,
+    borderBottomRightRadius: RADIUS.sm,
   },
   cardContent: {
-    padding: 16,
+    padding: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
   },
-  cardIcon: {
-    fontSize: 36,
+  specialEyebrow: {
+    fontSize: 9,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 2,
+    marginBottom: 6,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+  medallion: {
     marginBottom: 10,
   },
   cardName: {
-    fontSize: 16,
-    fontFamily: FONTS.bodyBold,
+    fontSize: 15,
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     textAlign: 'center',
+    letterSpacing: 0.5,
     marginBottom: 6,
-    textShadowColor: 'rgba(255,255,255,0.1)',
+    textShadowColor: 'rgba(255,255,255,0.12)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 4,
   },
@@ -306,37 +362,48 @@ const styles = StyleSheet.create({
   },
   cardDesc: {
     fontSize: 12,
+    fontFamily: FONTS.bodyMedium,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
   },
   cardStats: {
     fontSize: 11,
+    fontFamily: FONTS.bodyMedium,
     color: COLORS.textMuted,
     textAlign: 'center',
     marginTop: 4,
   },
-  lockText: {
-    fontSize: 11,
+  lockBlock: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  lockChip: {
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '66',
+    backgroundColor: 'rgba(255,184,0,0.10)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  lockChipText: {
+    fontSize: 10,
+    fontFamily: FONTS.display,
     color: COLORS.gold,
-    textAlign: 'center',
-    fontFamily: FONTS.bodySemiBold,
-    textShadowColor: 'rgba(255,215,0,0.3)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
+    letterSpacing: 1.5,
+  },
+  lockMeter: {
+    alignSelf: 'stretch',
+    paddingHorizontal: 6,
   },
   cardAccent: {
     height: 3,
-    backgroundColor: COLORS.accent,
-    shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.5,
     shadowRadius: 8,
     elevation: 4,
-  },
-  bottomSpacer: {
-    height: 40,
-    width: '100%',
   },
 });
 

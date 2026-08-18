@@ -1,18 +1,24 @@
-import React, { useState, useCallback } from 'react';
+/**
+ * MasteryScreen — 30-tier seasonal mastery track with free + premium lanes.
+ *
+ * Shares the Season Pass "reward track" visual language (glowing center
+ * spine, medallion tier nodes, dual lane cards) but with its own teal /
+ * purple accent so the two tracks read as siblings, not clones. Rewards
+ * unlock automatically as mastery XP crosses tier thresholds — there is
+ * no per-tier claim step on this track.
+ */
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { COLORS, FONTS, GRADIENTS, RADIUS, SHADOWS } from '../constants';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import SectionHeader from '../components/common/SectionHeader';
+import IconMedallion from '../components/common/IconMedallion';
+import PrimaryButton from '../components/common/PrimaryButton';
+import NeonProgressBar from '../components/common/NeonProgressBar';
+import { bentoPanel } from '../styles/bentoPanel';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { usePlayerStore, selectPuzzlesSolved } from '../stores/playerStore';
 import { useEconomyStore, selectIsPremiumPassFlag } from '../stores/economyStore';
 import {
@@ -26,17 +32,363 @@ import {
 import { CollectionReward } from '../types';
 import { useCommerce } from '../hooks/useCommerce';
 
-const { width } = Dimensions.get('window');
-
 interface MasteryScreenProps {
   onBack?: () => void;
 }
+
+// ─── Reward chip list — every reward gets a medallion, not a bare string ───
+
+interface RewardChip {
+  glyph: string;
+  label: string;
+  accent: string;
+}
+
+function buildRewardChips(reward: CollectionReward): RewardChip[] {
+  const chips: RewardChip[] = [];
+  if (reward.coins > 0) {
+    chips.push({ glyph: '\u{1FA99}', label: `${reward.coins}`, accent: COLORS.gold });
+  }
+  if (reward.gems > 0) {
+    chips.push({ glyph: '\u{1F48E}', label: `${reward.gems}`, accent: COLORS.cyan });
+  }
+  if (reward.hintTokens > 0) {
+    chips.push({ glyph: '\u{1F4A1}', label: `${reward.hintTokens}`, accent: COLORS.orange });
+  }
+  if (reward.badge) {
+    chips.push({ glyph: '\u{1F396}\u{FE0F}', label: 'Badge', accent: COLORS.purple });
+  }
+  if (reward.decoration) {
+    chips.push({ glyph: '\u{2728}', label: 'Decor', accent: COLORS.purple });
+  }
+  return chips;
+}
+
+// ─── Tier node on the center spine ─────────────────────────────────────────
+
+interface MasteryNodeProps {
+  tier: number;
+  unlocked: boolean;
+  isCurrent: boolean;
+  isMilestone: boolean;
+  milestoneGlyph?: string;
+  reduceMotion: boolean;
+}
+
+const MasteryNode = memo(function MasteryNode({
+  tier,
+  unlocked,
+  isCurrent,
+  isMilestone,
+  milestoneGlyph,
+  reduceMotion,
+}: MasteryNodeProps) {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion || !isCurrent) {
+      pulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, isCurrent, reduceMotion]);
+
+  const size = isCurrent ? 52 : isMilestone ? 46 : 40;
+  const radius = isMilestone ? size * 0.3 : size / 2;
+  const accent = isMilestone ? COLORS.gold : COLORS.teal;
+  const ringColor = unlocked || isCurrent ? accent + 'B3' : 'rgba(255,255,255,0.16)';
+  const textColor = unlocked ? COLORS.teal : isCurrent ? COLORS.textPrimary : COLORS.textMuted;
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.85] });
+
+  return (
+    <Animated.View style={[styles.nodeWrap, { transform: [{ scale }] }]}>
+      {isCurrent && !reduceMotion && (
+        <Animated.View
+          style={[
+            styles.nodePulseRing,
+            {
+              width: size + 14,
+              height: size + 14,
+              borderRadius: isMilestone ? radius + 7 : (size + 14) / 2,
+              opacity: ringOpacity,
+            },
+          ]}
+        />
+      )}
+      {isCurrent && (
+        <View
+          style={[
+            styles.nodeCurrentRing,
+            {
+              width: size + 10,
+              height: size + 10,
+              borderRadius: isMilestone ? radius + 5 : (size + 10) / 2,
+            },
+          ]}
+        />
+      )}
+      <View
+        style={[
+          styles.node,
+          {
+            width: size,
+            height: size,
+            borderRadius: radius,
+            borderColor: ringColor,
+          },
+          (unlocked || isCurrent) && SHADOWS.glow(accent),
+          !unlocked && !isCurrent && styles.nodeMuted,
+        ]}
+      >
+        <LinearGradient
+          colors={[accent + '3D', 'rgba(8,2,22,0.94)']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
+        />
+        <Text style={[styles.nodeText, { color: textColor, fontSize: size * 0.36 }]}>
+          {isMilestone && milestoneGlyph ? milestoneGlyph : unlocked ? '✓' : tier}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+});
+
+// ─── Lane card (free / premium) ────────────────────────────────────────────
+
+interface MasteryLaneCardProps {
+  lane: 'free' | 'premium';
+  reward: CollectionReward;
+  unlocked: boolean;
+  premiumOwned: boolean;
+}
+
+const MasteryLaneCard = memo(function MasteryLaneCard({
+  lane,
+  reward,
+  unlocked,
+  premiumOwned,
+}: MasteryLaneCardProps) {
+  const premiumLane = lane === 'premium';
+  const laneAccent = premiumLane ? COLORS.purple : COLORS.teal;
+  const premiumLocked = premiumLane && !premiumOwned;
+  const chips = useMemo(() => buildRewardChips(reward), [reward]);
+
+  return (
+    <View
+      style={[
+        styles.laneCard,
+        premiumLane ? styles.laneCardPremium : styles.laneCardFree,
+        (!unlocked || premiumLocked) && styles.laneCardLocked,
+      ]}
+    >
+      <LinearGradient
+        colors={
+          premiumLane
+            ? ['rgba(200,77,255,0.16)', 'rgba(26,10,46,0.94)']
+            : ['rgba(0,245,212,0.10)', 'rgba(26,10,46,0.94)']
+        }
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={[StyleSheet.absoluteFillObject, styles.laneCardFill]}
+      />
+      {premiumLane && (
+        <LinearGradient
+          colors={[...GRADIENTS.synthwave.holographic]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.holoStrip}
+        />
+      )}
+      {premiumLane && (
+        <View style={styles.premiumRibbon}>
+          <LinearGradient
+            colors={[...GRADIENTS.button.gold]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <Text style={styles.premiumRibbonText}>PREMIUM</Text>
+        </View>
+      )}
+      {premiumLocked && (
+        <IconMedallion
+          glyph={'\u{1F512}'}
+          size={22}
+          accent={COLORS.gold}
+          style={styles.lockOverlay}
+        />
+      )}
+
+      <View style={styles.chipColumn}>
+        {chips.map((chip, i) => (
+          <View key={i} style={styles.chipRow}>
+            <IconMedallion
+              glyph={chip.glyph}
+              size={26}
+              accent={chip.accent}
+              muted={!unlocked || premiumLocked}
+            />
+            <Text
+              style={[
+                styles.chipLabel,
+                (!unlocked || premiumLocked) && styles.chipLabelMuted,
+              ]}
+              numberOfLines={1}
+            >
+              {chip.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+});
+
+// ─── Tier row: free card | spine | premium card ────────────────────────────
+
+interface MasteryTierRowProps {
+  tier: number;
+  free: CollectionReward;
+  premium: CollectionReward;
+  unlocked: boolean;
+  nextUnlocked: boolean;
+  premiumOwned: boolean;
+  isCurrent: boolean;
+  reduceMotion: boolean;
+}
+
+function milestoneGlyphFor(tier: number): string {
+  return tier === 10 ? '⭐' : tier === 20 ? '\u{1F48E}' : tier === 30 ? '\u{1F451}' : '\u{1F3C6}';
+}
+
+const MasteryTierRow = memo(function MasteryTierRow({
+  tier,
+  free,
+  premium,
+  unlocked,
+  nextUnlocked,
+  premiumOwned,
+  isCurrent,
+  reduceMotion,
+}: MasteryTierRowProps) {
+  const isMilestone = tier % 5 === 0;
+
+  if (tier === MASTERY_MAX_TIER) {
+    return (
+      <View>
+        <View style={styles.showcaseSpineStub}>
+          <View style={[styles.spineSeg, unlocked && styles.spineSegOn]} />
+        </View>
+        <View style={[styles.showcaseCard, unlocked && styles.showcaseCardUnlocked]}>
+          <LinearGradient
+            colors={['rgba(0,245,212,0.16)', 'rgba(26,10,46,0.96)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, styles.showcaseFill]}
+          />
+          <LinearGradient
+            colors={[...GRADIENTS.synthwave.holographic]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.showcaseHoloStrip}
+          />
+          <IconMedallion
+            glyph={'\u{1F3C6}'}
+            size={64}
+            accent={COLORS.teal}
+            shape="squircle"
+            muted={!unlocked}
+            style={styles.showcaseMedallion}
+          />
+          <Text style={styles.showcaseEyebrow}>TIER 30</Text>
+          <Text style={styles.showcaseTitle}>GRAND MASTERY</Text>
+          <Text style={styles.showcaseSubtitle}>
+            The champion badge, the grand statue & the season's richest haul.
+          </Text>
+          <View style={styles.showcaseLanes}>
+            <MasteryLaneCard
+              lane="free"
+              reward={free}
+              unlocked={unlocked}
+              premiumOwned={premiumOwned}
+            />
+            <View style={styles.showcaseLaneGap} />
+            <MasteryLaneCard
+              lane="premium"
+              reward={premium}
+              unlocked={unlocked}
+              premiumOwned={premiumOwned}
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.tierRow}>
+      <MasteryLaneCard
+        lane="free"
+        reward={free}
+        unlocked={unlocked}
+        premiumOwned={premiumOwned}
+      />
+      <View style={styles.spineCol}>
+        <View
+          style={[
+            styles.spineSeg,
+            unlocked && styles.spineSegOn,
+            tier === 1 && styles.spineSegHidden,
+          ]}
+        />
+        <MasteryNode
+          tier={tier}
+          unlocked={unlocked}
+          isCurrent={isCurrent}
+          isMilestone={isMilestone}
+          milestoneGlyph={isMilestone ? milestoneGlyphFor(tier) : undefined}
+          reduceMotion={reduceMotion}
+        />
+        <View style={[styles.spineSeg, nextUnlocked && styles.spineSegOn]} />
+      </View>
+      <MasteryLaneCard
+        lane="premium"
+        reward={premium}
+        unlocked={unlocked && premiumOwned}
+        premiumOwned={premiumOwned}
+      />
+    </View>
+  );
+});
+
+// ─── Screen ────────────────────────────────────────────────────────────────
 
 const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
   const { t } = useTranslation();
   const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
   const isPremiumPass = useEconomyStore(selectIsPremiumPassFlag);
   const commerce = useCommerce();
+  const reduceMotion = useReduceMotion();
 
   // Use puzzlesSolved * 100 as mastery XP proxy
   const masteryXP = (puzzlesSolved ?? 0) * 100;
@@ -69,540 +421,475 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
     }
   }, [commerce, isPremium, purchasingPass]);
 
-  // ── Render helpers ────────────────────────────────────────────────────
-
-  const renderRewardSummary = (reward: CollectionReward, label: string, unlocked: boolean, isPremiumLane: boolean) => {
-    const items: string[] = [];
-    if (reward.coins > 0) items.push(`${reward.coins} coins`);
-    if (reward.gems > 0) items.push(`${reward.gems} gems`);
-    if (reward.hintTokens > 0) items.push(`${reward.hintTokens} hints`);
-    if (reward.badge) items.push('Badge');
-    if (reward.decoration) items.push('Decoration');
-
-    const showLock = isPremiumLane && !isPremium;
-
-    return (
-      <View style={[styles.rewardColumn, !unlocked && styles.rewardLocked]}>
-        <View style={styles.rewardLabelRow}>
-          <Text style={[styles.rewardLabel, !unlocked && styles.textLocked, isPremiumLane && styles.premiumLabel]}>
-            {label}
-          </Text>
-          {showLock && <Text style={styles.lockIcon}>{'\u{1F512}'}</Text>}
-        </View>
-        {items.map((item, i) => (
-          <Text key={i} style={[styles.rewardItem, !unlocked && styles.textLocked]}>
-            {item}
-          </Text>
-        ))}
-      </View>
-    );
-  };
-
-  const renderTierCard = (tierIndex: number) => {
-    const reward = MASTERY_REWARDS[tierIndex];
-    if (!reward) return null;
-
-    const tier = reward.tier;
-    const unlocked = currentTier >= tier;
-    const isCurrent = currentTier === tier - 1;
-    const isMilestone = tier % 5 === 0;
-    const premiumUnlocked = unlocked && isPremium;
-
-    return (
-      <View
-        key={tier}
-        style={[
-          styles.tierCard,
-          unlocked && styles.tierCardUnlocked,
-          isCurrent && styles.tierCardCurrent,
-          isMilestone && styles.tierCardMilestone,
-          !isPremium && isMilestone && styles.tierCardMilestoneLocked,
-        ]}
-      >
-        {unlocked ? (
-          <LinearGradient
-            colors={isMilestone ? [COLORS.gold + '30', COLORS.gold + '10'] : [...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-        ) : (
-          <LinearGradient
-            colors={['#121636', '#0e1230']}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-        )}
-
-        <View style={styles.tierHeader}>
-          <View style={[styles.tierBadge, unlocked && styles.tierBadgeUnlocked, isMilestone && styles.tierBadgeMilestone]}>
-            <Text style={[styles.tierNumber, unlocked && styles.tierNumberUnlocked, isMilestone && styles.tierNumberMilestone]}>
-              {tier}
-            </Text>
-          </View>
-          {unlocked && (
-            <Text style={styles.unlockedCheck}>{'\u2713'}</Text>
-          )}
-          {isCurrent && (
-            <View style={styles.currentIndicator}>
-              <Text style={styles.currentText}>CURRENT</Text>
-            </View>
-          )}
-          {isMilestone && (
-            <Text style={styles.milestoneIcon}>
-              {tier === 10 ? '\u2B50' : tier === 20 ? '\u{1F48E}' : tier === 30 ? '\u{1F451}' : '\u{1F3C6}'}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.rewardsRow}>
-          {renderRewardSummary(reward.free, 'FREE', unlocked, false)}
-          <View style={styles.rewardDivider} />
-          {renderRewardSummary(reward.premium, 'PREMIUM', premiumUnlocked, true)}
-        </View>
-      </View>
-    );
-  };
-
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="mastery" />
-      {/* Header */}
-      <View style={styles.header}>
-        {onBack && (
-          <TouchableOpacity style={styles.backButton} onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back">
-            <Text style={styles.backText}>{'\u2190'}</Text>
-          </TouchableOpacity>
-        )}
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>MASTERY TRACK</Text>
-          <Text style={styles.seasonName}>{seasonName}</Text>
-        </View>
-      </View>
-
-      {/* Season Countdown */}
-      <View style={styles.countdownBar}>
-        <LinearGradient
-          colors={[COLORS.coral + '20', COLORS.orange + '10']}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        />
-        <Text style={styles.countdownIcon}>{'\u23F3'}</Text>
-        <Text style={styles.countdownText}>
-          {days > 0 ? t('common.daysRemainingSeason', { count: days }) : 'Season ending soon!'}
-        </Text>
-      </View>
-
-      {/* Premium CTA (if not premium) */}
-      {!isPremium && (
-        <View style={styles.premiumCta}>
-          <LinearGradient
-            colors={[COLORS.gold + '20', COLORS.gold + '08']}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          <View style={styles.premiumCtaContent}>
-            <Text style={styles.premiumCtaIcon}>{'\u{1F451}'}</Text>
-            <View style={styles.premiumCtaInfo}>
-              <Text style={styles.premiumCtaTitle}>GET PREMIUM</Text>
-              <Text style={styles.premiumCtaDesc}>
-                Unlock exclusive rewards at every tier!
-              </Text>
-              {days <= 14 && days > 0 && (
-                <Text style={styles.fomoText}>
-                  {t('common.daysLeftRewards', { count: days })}
-                </Text>
-              )}
-            </View>
-            <TouchableOpacity
-              style={styles.premiumCtaButton}
-              onPress={handleBuyPremium}
-              activeOpacity={0.7}
-              disabled={purchasingPass}
-              accessibilityRole="button"
-              accessibilityLabel="Buy premium mastery pass for $4.99"
-            >
-              <LinearGradient
-                colors={[COLORS.gold, '#e6b800']}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-              {purchasingPass ? (
-                <ActivityIndicator size="small" color={COLORS.bg} />
-              ) : (
-                <Text style={styles.premiumCtaButtonText}>$4.99</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Progress Summary */}
-      <View style={styles.progressCard}>
+    <ScreenScaffold
+      title="MASTERY TRACK"
+      eyebrow={seasonName.toUpperCase()}
+      accent={COLORS.teal}
+      backdrop="mastery"
+      onBack={onBack}
+    >
+      {/* Progress hero */}
+      <View style={styles.progressPanel}>
         <LinearGradient
           colors={[...GRADIENTS.surfaceCard]}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[StyleSheet.absoluteFillObject, styles.panelFill]}
         />
-        <View style={styles.progressHeader}>
-          <Text style={styles.progressTierLabel}>Tier {currentTier}</Text>
-          <Text style={styles.progressTierMax}>/ {MASTERY_MAX_TIER}</Text>
-          {isPremium && (
-            <View style={styles.premiumBadge}>
-              <Text style={styles.premiumBadgeText}>{'\u{1F451}'} PREMIUM</Text>
+        <View style={styles.progressTopRow}>
+          <View style={styles.progressTierBlock}>
+            <Text style={styles.progressTierNumber}>{currentTier}</Text>
+            <Text style={styles.progressTierMax}>/ {MASTERY_MAX_TIER}</Text>
+          </View>
+          {isPremium ? (
+            <View style={styles.premiumPill}>
+              <Text style={styles.premiumPillText}>{'\u{1F451}'} PREMIUM</Text>
+            </View>
+          ) : (
+            <View style={styles.countdownPill}>
+              <Text style={styles.countdownPillText}>
+                {'⏳'}{' '}
+                {days > 0
+                  ? t('common.daysRemainingSeason', { count: days })
+                  : 'Season ending soon!'}
+              </Text>
             </View>
           )}
         </View>
-        <View style={styles.progressBarContainer} accessibilityRole="progressbar" accessibilityLabel={`Mastery progress: ${tierProgress} of ${tierNeeded} XP`} accessibilityValue={{ min: 0, max: tierNeeded, now: tierProgress }}>
-          <View style={styles.progressBarTrack}>
-            <LinearGradient
-              colors={[COLORS.accent, COLORS.teal]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.progressBarFill, { width: `${progressPercent}%` }]}
-            />
-          </View>
-          <Text style={styles.progressXP}>
-            {tierProgress} / {tierNeeded} XP
-          </Text>
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel={`Mastery progress: ${tierProgress} of ${tierNeeded} XP`}
+          accessibilityValue={{ min: 0, max: tierNeeded, now: tierProgress }}
+        >
+          <NeonProgressBar progress={progressPercent / 100} color={COLORS.teal} height={12} />
         </View>
+        <Text style={styles.progressXP}>
+          {tierProgress} / {tierNeeded} XP
+        </Text>
         <Text style={styles.progressHint}>
           {currentTier >= MASTERY_MAX_TIER
             ? 'Mastery track complete! Check back next season.'
             : `${tierNeeded - tierProgress} XP to next tier`}
         </Text>
+        {isPremium && (
+          <Text style={styles.countdownInline}>
+            {'⏳'}{' '}
+            {days > 0
+              ? t('common.daysRemainingSeason', { count: days })
+              : 'Season ending soon!'}
+          </Text>
+        )}
       </View>
 
-      {/* Tier List */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.tierList}
-        showsVerticalScrollIndicator={false}
-      >
-        {MASTERY_REWARDS.map((_, i) => renderTierCard(i))}
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-    </View>
+      {/* Premium upsell hero */}
+      {!isPremium && (
+        <View style={styles.upsellPanel}>
+          <LinearGradient
+            colors={['rgba(255,184,0,0.16)', 'rgba(26,10,46,0.94)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, styles.panelFill]}
+          />
+          <View style={styles.upsellRow}>
+            <IconMedallion glyph={'\u{1F451}'} size={52} accent={COLORS.gold} shape="squircle" />
+            <View style={styles.upsellCopy}>
+              <Text style={styles.upsellTitle}>GET PREMIUM</Text>
+              <Text style={styles.upsellDesc}>Unlock exclusive rewards at every tier!</Text>
+              {days <= 14 && days > 0 && (
+                <Text style={styles.fomoText}>{t('common.daysLeftRewards', { count: days })}</Text>
+              )}
+            </View>
+          </View>
+          <PrimaryButton
+            label={purchasingPass ? 'PROCESSING…' : 'UNLOCK PREMIUM — $4.99'}
+            variant="gold"
+            size="large"
+            fullWidth
+            disabled={purchasingPass}
+            onPress={handleBuyPremium}
+            accessibilityLabel="Buy premium mastery pass for $4.99"
+            style={styles.upsellButton}
+          />
+        </View>
+      )}
+
+      <SectionHeader
+        label="REWARD TRACK"
+        meta={`TIER ${currentTier} / ${MASTERY_MAX_TIER}`}
+        accent={COLORS.teal}
+      />
+      <View style={styles.laneTagsRow}>
+        <View style={[styles.laneTag, styles.laneTagFree]}>
+          <Text style={[styles.laneTagText, { color: COLORS.teal }]}>FREE</Text>
+        </View>
+        <View style={styles.laneTagSpacer} />
+        <View style={[styles.laneTag, styles.laneTagPremium]}>
+          <Text style={[styles.laneTagText, { color: COLORS.purpleLight }]}>PREMIUM</Text>
+        </View>
+      </View>
+
+      {MASTERY_REWARDS.map((reward) => (
+        <MasteryTierRow
+          key={reward.tier}
+          tier={reward.tier}
+          free={reward.free}
+          premium={reward.premium}
+          unlocked={currentTier >= reward.tier}
+          nextUnlocked={currentTier >= reward.tier + 1}
+          premiumOwned={isPremium}
+          isCurrent={currentTier === reward.tier - 1}
+          reduceMotion={reduceMotion}
+        />
+      ))}
+    </ScreenScaffold>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  backText: {
-    color: COLORS.textPrimary,
-    fontSize: 20,
-  },
-  headerCenter: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    letterSpacing: 3,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-  seasonName: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-    fontFamily: FONTS.bodySemiBold,
-  },
+  panelFill: { borderRadius: 18 },
 
-  // ── Countdown bar ─────────────────────────────────────────────────────
-  countdownBar: {
-    marginHorizontal: 16,
-    marginBottom: 10,
+  // ── Progress hero ────────────────────────────────────────────────────
+  progressPanel: {
+    ...bentoPanel('cyan', { padding: 16 }),
+  },
+  progressTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
-    padding: 10,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.coral + '30',
-  },
-  countdownIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  countdownText: {
-    fontSize: 13,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.coral,
-  },
-
-  // ── Premium CTA ───────────────────────────────────────────────────────
-  premiumCta: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.gold + '40',
-  },
-  premiumCtaContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-  },
-  premiumCtaIcon: {
-    fontSize: 28,
-    marginRight: 12,
-  },
-  premiumCtaInfo: {
-    flex: 1,
-  },
-  premiumCtaTitle: {
-    fontSize: 16,
-    fontFamily: FONTS.display,
-    color: COLORS.gold,
-    letterSpacing: 2,
-  },
-  premiumCtaDesc: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  fomoText: {
-    fontSize: 11,
-    color: COLORS.coral,
-    fontFamily: FONTS.bodySemiBold,
-    marginTop: 4,
-  },
-  premiumCtaButton: {
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    overflow: 'hidden',
-    marginLeft: 10,
-  },
-  premiumCtaButtonText: {
-    fontSize: 16,
-    fontFamily: FONTS.display,
-    color: COLORS.bg,
-  },
-
-  // ── Progress card ─────────────────────────────────────────────────────
-  progressCard: {
-    marginHorizontal: 16,
-    borderRadius: 20,
-    padding: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    ...SHADOWS.medium,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
-  progressTierLabel: {
-    fontSize: 32,
+  progressTierBlock: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  progressTierNumber: {
     fontFamily: FONTS.display,
-    color: COLORS.gold,
-    textShadowColor: COLORS.goldGlow,
+    fontSize: 34,
+    color: COLORS.teal,
+    letterSpacing: 1,
+    textShadowColor: COLORS.tealGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
   },
   progressTierMax: {
-    fontSize: 16,
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 15,
     color: COLORS.textMuted,
     marginLeft: 6,
-    fontFamily: FONTS.bodySemiBold,
   },
-  premiumBadge: {
-    marginLeft: 'auto',
-    backgroundColor: COLORS.gold + '25',
-    borderRadius: 8,
+  premiumPill: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255,184,0,0.18)',
+    borderWidth: 1,
+    borderColor: COLORS.gold + '80',
+    ...SHADOWS.glow(COLORS.gold),
   },
-  premiumBadgeText: {
+  premiumPillText: {
+    color: COLORS.gold,
     fontSize: 11,
     fontFamily: FONTS.display,
-    color: COLORS.gold,
     letterSpacing: 1,
   },
-  progressBarContainer: {
-    marginBottom: 8,
+  countdownPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255,68,102,0.14)',
+    borderWidth: 1,
+    borderColor: COLORS.coral + '55',
+    maxWidth: 190,
   },
-  progressBarTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
+  countdownPillText: {
+    color: COLORS.coral,
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
+    letterSpacing: 0.5,
   },
   progressXP: {
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 12,
     color: COLORS.textSecondary,
-    marginTop: 6,
     textAlign: 'right',
-    fontFamily: FONTS.bodySemiBold,
+    marginTop: 10,
   },
   progressHint: {
+    fontFamily: FONTS.bodyMedium,
     fontSize: 13,
     color: COLORS.textMuted,
-    fontFamily: FONTS.bodyMedium,
+    marginTop: 4,
+  },
+  countdownInline: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: COLORS.coral,
+    marginTop: 8,
   },
 
-  // ── Tier list ─────────────────────────────────────────────────────────
-  scrollView: {
-    flex: 1,
-    marginTop: 16,
+  // ── Premium upsell hero ──────────────────────────────────────────────
+  upsellPanel: {
+    ...bentoPanel('gold', { padding: 16 }),
   },
-  tierList: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  tierCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    padding: 16,
-  },
-  tierCardUnlocked: {
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  tierCardCurrent: {
-    borderColor: COLORS.accent + '60',
-    ...SHADOWS.glow(COLORS.accent),
-  },
-  tierCardMilestone: {
-    borderColor: COLORS.gold + '40',
-  },
-  tierCardMilestoneLocked: {
-    borderColor: COLORS.gold + '20',
-  },
-  tierHeader: {
+  upsellRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 10,
+    marginBottom: 14,
   },
-  tierBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  upsellCopy: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  upsellTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 18,
+    color: COLORS.gold,
+    letterSpacing: 2.5,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  upsellDesc: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  fomoText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 11,
+    color: COLORS.coral,
+    marginTop: 4,
+  },
+  upsellButton: {
+    marginTop: 2,
+  },
+
+  // ── Lane tags ────────────────────────────────────────────────────────
+  laneTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  laneTag: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  laneTagFree: {
+    borderColor: 'rgba(0,245,212,0.30)',
+    backgroundColor: 'rgba(0,245,212,0.07)',
+  },
+  laneTagPremium: {
+    borderColor: 'rgba(200,77,255,0.35)',
+    backgroundColor: 'rgba(200,77,255,0.08)',
+  },
+  laneTagSpacer: {
+    width: 56,
+  },
+  laneTagText: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 2.5,
+  },
+
+  // ── Tier row + spine ─────────────────────────────────────────────────
+  tierRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  spineCol: {
+    width: 56,
+    alignItems: 'center',
+  },
+  spineSeg: {
+    flex: 1,
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  spineSegOn: {
+    backgroundColor: COLORS.teal,
+    ...SHADOWS.neonEdge(COLORS.teal),
+  },
+  spineSegHidden: {
+    opacity: 0,
+  },
+  nodeWrap: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginVertical: 4,
   },
-  tierBadgeUnlocked: {
-    backgroundColor: COLORS.accent + '25',
+  nodePulseRing: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: COLORS.teal,
+    ...SHADOWS.neonGlow(COLORS.teal),
   },
-  tierBadgeMilestone: {
-    backgroundColor: COLORS.gold + '25',
+  nodeCurrentRing: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: COLORS.teal + 'CC',
+    ...SHADOWS.glow(COLORS.teal),
   },
-  tierNumber: {
-    fontSize: 14,
+  node: {
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(8,2,22,0.92)',
+  },
+  nodeMuted: {
+    opacity: 0.6,
+  },
+  nodeText: {
     fontFamily: FONTS.display,
-    color: COLORS.textMuted,
-  },
-  tierNumberUnlocked: {
-    color: COLORS.accent,
-  },
-  tierNumberMilestone: {
-    color: COLORS.gold,
-  },
-  unlockedCheck: {
-    fontSize: 16,
-    color: COLORS.green,
-    fontFamily: FONTS.display,
-  },
-  currentIndicator: {
-    backgroundColor: COLORS.accent + '20',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  currentText: {
-    fontSize: 10,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    letterSpacing: 1,
-  },
-  milestoneIcon: {
-    fontSize: 20,
-    marginLeft: 'auto',
+    letterSpacing: 0.5,
   },
 
-  // ── Rewards ───────────────────────────────────────────────────────────
-  rewardsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rewardColumn: {
+  // ── Lane cards ───────────────────────────────────────────────────────
+  laneCard: {
     flex: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 12,
+    paddingTop: 16,
+    marginBottom: 14,
+    minHeight: 112,
   },
-  rewardLocked: {
-    opacity: 0.4,
+  laneCardFree: {
+    borderColor: 'rgba(0,245,212,0.22)',
+    ...SHADOWS.soft,
   },
-  rewardLabelRow: {
+  laneCardPremium: {
+    borderColor: 'rgba(200,77,255,0.30)',
+    shadowColor: COLORS.purple,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  laneCardLocked: {
+    opacity: 0.6,
+  },
+  laneCardFill: {
+    borderRadius: 18,
+  },
+  holoStrip: {
+    position: 'absolute',
+    top: 0,
+    left: 14,
+    right: 14,
+    height: 2.5,
+    borderRadius: 2,
+    opacity: 0.85,
+  },
+  premiumRibbon: {
+    position: 'absolute',
+    top: -7,
+    alignSelf: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    overflow: 'hidden',
+    ...SHADOWS.glow(COLORS.gold),
+  },
+  premiumRibbonText: {
+    fontFamily: FONTS.display,
+    fontSize: 8,
+    letterSpacing: 1.5,
+    color: COLORS.bg,
+  },
+  lockOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  chipColumn: {
+    gap: 6,
+  },
+  chipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 6,
+    gap: 8,
   },
-  rewardLabel: {
-    fontSize: 10,
-    fontFamily: FONTS.display,
-    color: COLORS.textSecondary,
-    letterSpacing: 1,
-  },
-  premiumLabel: {
-    color: COLORS.gold,
-  },
-  lockIcon: {
-    fontSize: 10,
-  },
-  rewardItem: {
+  chipLabel: {
+    flex: 1,
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 12,
     color: COLORS.textPrimary,
-    fontFamily: FONTS.bodySemiBold,
-    marginBottom: 2,
   },
-  textLocked: {
+  chipLabelMuted: {
     color: COLORS.textMuted,
   },
-  rewardDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
 
-  bottomSpacer: {
-    height: 40,
+  // ── Tier 30 showcase ─────────────────────────────────────────────────
+  showcaseSpineStub: {
+    alignItems: 'center',
+    height: 18,
+  },
+  showcaseCard: {
+    borderRadius: RADIUS.xxl,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,245,212,0.40)',
+    padding: 18,
+    paddingTop: 22,
+    alignItems: 'center',
+    marginBottom: 14,
+    ...SHADOWS.glow(COLORS.teal),
+  },
+  showcaseCardUnlocked: {
+    borderColor: COLORS.teal + '99',
+    ...SHADOWS.neonGlow(COLORS.teal),
+  },
+  showcaseFill: {
+    borderRadius: RADIUS.xxl,
+  },
+  showcaseHoloStrip: {
+    position: 'absolute',
+    top: 0,
+    left: 24,
+    right: 24,
+    height: 3,
+    borderRadius: 2,
+  },
+  showcaseMedallion: {
+    marginBottom: 10,
+  },
+  showcaseEyebrow: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 3,
+    color: COLORS.purpleLight,
+  },
+  showcaseTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 22,
+    letterSpacing: 3,
+    color: COLORS.teal,
+    marginTop: 2,
+    textShadowColor: COLORS.tealGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
+  },
+  showcaseSubtitle: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  showcaseLanes: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+  },
+  showcaseLaneGap: {
+    width: 12,
   },
 });
 

@@ -6,20 +6,31 @@
  * this screen. Premium lane is gated on `isPremium`; unlocking premium via
  * IAP (`season_pass_premium`) retroactively allows claiming all already-reached
  * premium tiers.
+ *
+ * Visual language (2026 redesign): a glowing vertical spine connects tier
+ * medallion nodes; free-lane and premium-lane reward cards float on either
+ * side. Claimable nodes pulse gold (gated behind reduce-motion), the current
+ * tier scales up with a glow ring, and tier 50 gets a grand-reward showcase.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
+  Animated,
+  Easing,
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, FONTS, SHADOWS } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { COLORS, FONTS, GRADIENTS, RADIUS, SHADOWS } from '../constants';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import SectionHeader from '../components/common/SectionHeader';
+import IconMedallion from '../components/common/IconMedallion';
+import PrimaryButton from '../components/common/PrimaryButton';
+import NeonProgressBar from '../components/common/NeonProgressBar';
+import { bentoPanel } from '../styles/bentoPanel';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
   useEconomyStore,
   useEconomyActions,
@@ -42,13 +53,389 @@ interface SeasonPassScreenProps {
 
 // Stable data/footer identities for the virtualized tier ladder.
 const TIER_NUMBERS = Array.from({ length: MAX_SEASON_TIER }, (_, i) => i + 1);
-const LADDER_FOOTER = <View style={{ height: 40 }} />;
+const LADDER_FOOTER = <View style={{ height: 110 }} />;
+
+// ─── Tier node — the medallion on the center spine ─────────────────────────
+
+interface TierNodeProps {
+  tier: number;
+  reached: boolean;
+  allClaimed: boolean;
+  isCurrent: boolean;
+  isMilestone: boolean;
+  pulseActive: boolean;
+  reduceMotion: boolean;
+}
+
+const TierNode = memo(function TierNode({
+  tier,
+  reached,
+  allClaimed,
+  isCurrent,
+  isMilestone,
+  pulseActive,
+  reduceMotion,
+}: TierNodeProps) {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion || !pulseActive) {
+      pulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, pulseActive, reduceMotion]);
+
+  const size = isCurrent ? 52 : isMilestone ? 46 : 40;
+  const radius = isMilestone ? size * 0.3 : size / 2;
+  const accent = allClaimed ? COLORS.green : reached ? COLORS.gold : COLORS.purple;
+  const ringColor = reached || allClaimed ? accent + 'B3' : 'rgba(255,255,255,0.16)';
+  const textColor = allClaimed
+    ? COLORS.green
+    : reached
+      ? COLORS.goldLight
+      : COLORS.textMuted;
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.85] });
+
+  return (
+    <Animated.View style={[styles.nodeWrap, { transform: [{ scale }] }]}>
+      {pulseActive && !reduceMotion && (
+        <Animated.View
+          style={[
+            styles.nodePulseRing,
+            {
+              width: size + 14,
+              height: size + 14,
+              borderRadius: isMilestone ? radius + 7 : (size + 14) / 2,
+              opacity: ringOpacity,
+            },
+          ]}
+        />
+      )}
+      {isCurrent && (
+        <View
+          style={[
+            styles.nodeCurrentRing,
+            {
+              width: size + 10,
+              height: size + 10,
+              borderRadius: isMilestone ? radius + 5 : (size + 10) / 2,
+            },
+          ]}
+        />
+      )}
+      <View
+        style={[
+          styles.node,
+          {
+            width: size,
+            height: size,
+            borderRadius: radius,
+            borderColor: ringColor,
+          },
+          reached ? SHADOWS.glow(accent) : null,
+          !reached && styles.nodeMuted,
+        ]}
+      >
+        <LinearGradient
+          colors={[accent + '3D', 'rgba(8,2,22,0.94)']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
+        />
+        <Text style={[styles.nodeText, { color: textColor, fontSize: size * 0.36 }]}>
+          {allClaimed ? '✓' : tier}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+});
+
+// ─── Lane reward card (free / premium) ─────────────────────────────────────
+
+interface LaneCardProps {
+  tier: number;
+  lane: 'free' | 'premium';
+  reward: PassReward;
+  reached: boolean;
+  claimed: boolean;
+  isPremiumUser: boolean;
+  onClaim: (tier: number, lane: 'free' | 'premium') => void;
+}
+
+const LaneCard = memo(function LaneCard({
+  tier,
+  lane,
+  reward,
+  reached,
+  claimed,
+  isPremiumUser,
+  onClaim,
+}: LaneCardProps) {
+  const premiumLane = lane === 'premium';
+  const laneAccent = premiumLane ? COLORS.gold : COLORS.cyan;
+  const premiumLocked = premiumLane && !isPremiumUser;
+  const claimable = reached && !claimed && (!premiumLane || isPremiumUser);
+
+  const handlePress = useCallback(() => onClaim(tier, lane), [onClaim, tier, lane]);
+
+  return (
+    <View
+      style={[
+        styles.laneCard,
+        premiumLane ? styles.laneCardPremium : styles.laneCardFree,
+        claimed && styles.laneCardClaimed,
+      ]}
+    >
+      <LinearGradient
+        colors={
+          premiumLane
+            ? ['rgba(255,184,0,0.14)', 'rgba(26,10,46,0.94)']
+            : [...GRADIENTS.surfaceCard]
+        }
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={[StyleSheet.absoluteFillObject, styles.laneCardFill]}
+      />
+      {premiumLane && (
+        <LinearGradient
+          colors={[...GRADIENTS.synthwave.holographic]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.holoStrip}
+        />
+      )}
+      {premiumLane && (
+        <View style={styles.premiumRibbon}>
+          <LinearGradient
+            colors={[...GRADIENTS.button.gold]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <Text style={styles.premiumRibbonText}>PREMIUM</Text>
+        </View>
+      )}
+
+      <View style={styles.rewardMedallionWrap}>
+        <IconMedallion
+          glyph={reward.icon}
+          size={42}
+          accent={laneAccent}
+          muted={!reached || premiumLocked}
+        />
+        {premiumLocked && (
+          <IconMedallion
+            glyph={'\u{1F512}'}
+            size={22}
+            accent={COLORS.gold}
+            style={styles.lockOverlay}
+          />
+        )}
+      </View>
+      <Text
+        style={[styles.rewardLabel, (!reached || premiumLocked) && styles.rewardLabelMuted]}
+        numberOfLines={2}
+      >
+        {reward.label}
+      </Text>
+
+      {claimable ? (
+        <PrimaryButton
+          label="CLAIM"
+          variant="gold"
+          size="small"
+          onPress={handlePress}
+          accessibilityLabel={`Claim ${lane} reward for tier ${tier}`}
+          style={styles.claimButton}
+        />
+      ) : (
+        <View
+          style={[
+            styles.statusChip,
+            claimed && styles.statusChipClaimed,
+            premiumLocked && reached && styles.statusChipPremium,
+          ]}
+          accessibilityLabel={
+            claimed
+              ? `Tier ${tier} ${lane} reward claimed`
+              : premiumLocked
+                ? `Tier ${tier} premium reward requires premium pass`
+                : `Tier ${tier} ${lane} reward locked`
+          }
+        >
+          <Text
+            style={[
+              styles.statusChipText,
+              claimed && styles.statusChipTextClaimed,
+              premiumLocked && reached && styles.statusChipTextPremium,
+            ]}
+          >
+            {claimed ? '✓ CLAIMED' : premiumLocked && reached ? 'PREMIUM' : 'LOCKED'}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+});
+
+// ─── Tier row: free card | spine node | premium card ───────────────────────
+
+interface SeasonTierRowProps {
+  tier: number;
+  reached: boolean;
+  nextReached: boolean;
+  freeClaimed: boolean;
+  premiumClaimed: boolean;
+  isPremiumUser: boolean;
+  isCurrent: boolean;
+  reduceMotion: boolean;
+  onClaim: (tier: number, lane: 'free' | 'premium') => void;
+}
+
+const SeasonTierRow = memo(function SeasonTierRow({
+  tier,
+  reached,
+  nextReached,
+  freeClaimed,
+  premiumClaimed,
+  isPremiumUser,
+  isCurrent,
+  reduceMotion,
+  onClaim,
+}: SeasonTierRowProps) {
+  const def = SEASON_PASS_TIERS[tier - 1];
+  const isMilestone = tier % 5 === 0;
+  const allClaimed = reached && freeClaimed && (premiumClaimed || !isPremiumUser);
+  const claimablePulse =
+    reached && (!freeClaimed || (isPremiumUser && !premiumClaimed));
+
+  if (tier === MAX_SEASON_TIER) {
+    return (
+      <View>
+        <View style={styles.showcaseSpineStub}>
+          <View style={[styles.spineSeg, reached && styles.spineSegOn]} />
+        </View>
+        <View style={[styles.showcaseCard, reached && styles.showcaseCardReached]}>
+          <LinearGradient
+            colors={['rgba(200,77,255,0.22)', 'rgba(26,10,46,0.96)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, styles.showcaseFill]}
+          />
+          <LinearGradient
+            colors={[...GRADIENTS.synthwave.holographic]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.showcaseHoloStrip}
+          />
+          <IconMedallion
+            glyph={'\u{1F451}'}
+            size={64}
+            accent={COLORS.gold}
+            shape="squircle"
+            muted={!reached}
+            style={styles.showcaseMedallion}
+          />
+          <Text style={styles.showcaseEyebrow}>TIER 50</Text>
+          <Text style={styles.showcaseTitle}>GRAND REWARD</Text>
+          <Text style={styles.showcaseSubtitle}>{def.premiumReward.label}</Text>
+          <View style={styles.showcaseLanes}>
+            <LaneCard
+              tier={tier}
+              lane="free"
+              reward={def.freeReward}
+              reached={reached}
+              claimed={freeClaimed}
+              isPremiumUser={isPremiumUser}
+              onClaim={onClaim}
+            />
+            <View style={styles.showcaseLaneGap} />
+            <LaneCard
+              tier={tier}
+              lane="premium"
+              reward={def.premiumReward}
+              reached={reached}
+              claimed={premiumClaimed}
+              isPremiumUser={isPremiumUser}
+              onClaim={onClaim}
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.tierRow}>
+      <LaneCard
+        tier={tier}
+        lane="free"
+        reward={def.freeReward}
+        reached={reached}
+        claimed={freeClaimed}
+        isPremiumUser={isPremiumUser}
+        onClaim={onClaim}
+      />
+      <View style={styles.spineCol}>
+        <View
+          style={[
+            styles.spineSeg,
+            reached && styles.spineSegOn,
+            tier === 1 && styles.spineSegHidden,
+          ]}
+        />
+        <TierNode
+          tier={tier}
+          reached={reached}
+          allClaimed={allClaimed}
+          isCurrent={isCurrent}
+          isMilestone={isMilestone}
+          pulseActive={claimablePulse}
+          reduceMotion={reduceMotion}
+        />
+        <View style={[styles.spineSeg, nextReached && styles.spineSegOn]} />
+      </View>
+      <LaneCard
+        tier={tier}
+        lane="premium"
+        reward={def.premiumReward}
+        reached={reached}
+        claimed={premiumClaimed}
+        isPremiumUser={isPremiumUser}
+        onClaim={onClaim}
+      />
+    </View>
+  );
+});
+
+// ─── Screen ────────────────────────────────────────────────────────────────
 
 const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
   const pass = useEconomyStore(selectSeasonPass);
   const { claimSeasonPassTier } = useEconomyActions();
   const { unlockCosmetic, queueCeremony } = usePlayerActions();
   const commerce = useCommerce();
+  const reduceMotion = useReduceMotion();
 
   const [purchasing, setPurchasing] = useState(false);
   const season = useMemo(() => getCurrentSeason(), []);
@@ -68,6 +455,22 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
     () => getXPProgress(state.currentXP, state.currentTier),
     [state.currentXP, state.currentTier],
   );
+
+  const daysLeft = useMemo(() => {
+    const endMs = new Date(state.seasonEndDate).getTime();
+    if (Number.isNaN(endMs)) return 0;
+    return Math.max(0, Math.ceil((endMs - Date.now()) / 86_400_000));
+  }, [state.seasonEndDate]);
+
+  // "Season 8: Ocean Depths" → eyebrow "SEASON 8", subtitle "Ocean Depths".
+  const [seasonEyebrow, seasonTheme] = useMemo(() => {
+    const idx = season.name.indexOf(':');
+    if (idx === -1) return [season.name.toUpperCase(), undefined] as const;
+    return [
+      season.name.slice(0, idx).toUpperCase(),
+      season.name.slice(idx + 1).trim(),
+    ] as const;
+  }, [season.name]);
 
   const handleBuyPremium = useCallback(async () => {
     if (state.isPremium || purchasing) return;
@@ -119,374 +522,518 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
     [claimSeasonPassTier, unlockCosmetic, queueCeremony, season.name],
   );
 
-  const renderReward = (reward: PassReward) => (
-    <View style={styles.rewardInner}>
-      <Text style={styles.rewardIcon}>{reward.icon}</Text>
-      <Text style={styles.rewardLabel} numberOfLines={2}>
-        {reward.label}
-      </Text>
-    </View>
-  );
-
   const keyExtractorTier = useCallback((tier: number) => String(tier), []);
 
-  const renderTier = (tier: number) => {
-    const def = SEASON_PASS_TIERS[tier - 1];
-    const reached = state.currentTier >= tier;
-    const freeClaimed = state.claimedFreeTiers.includes(tier);
-    const premiumClaimed = state.claimedPremiumTiers.includes(tier);
-    const isMilestone = tier % 5 === 0;
+  const renderItem = useCallback(
+    ({ item: tier }: { item: number }) => (
+      <SeasonTierRow
+        tier={tier}
+        reached={state.currentTier >= tier}
+        nextReached={state.currentTier >= tier + 1}
+        freeClaimed={state.claimedFreeTiers.includes(tier)}
+        premiumClaimed={state.claimedPremiumTiers.includes(tier)}
+        isPremiumUser={state.isPremium}
+        isCurrent={tier === Math.min(state.currentTier + 1, MAX_SEASON_TIER)}
+        reduceMotion={reduceMotion}
+        onClaim={handleClaim}
+      />
+    ),
+    [
+      state.currentTier,
+      state.claimedFreeTiers,
+      state.claimedPremiumTiers,
+      state.isPremium,
+      reduceMotion,
+      handleClaim,
+    ],
+  );
 
-    return (
-      <View
-        key={tier}
-        style={[
-          styles.tierRow,
-          reached && styles.tierRowReached,
-          isMilestone && styles.tierRowMilestone,
-        ]}
-      >
-        <View style={styles.tierBadge}>
-          <Text style={styles.tierBadgeText}>{tier}</Text>
-        </View>
-
-        <View style={[styles.rewardCell, freeClaimed && styles.rewardCellClaimed]}>
-          {renderReward(def.freeReward)}
-          <TouchableOpacity
-            style={[
-              styles.claimButton,
-              (!reached || freeClaimed) && styles.claimButtonDisabled,
-            ]}
-            disabled={!reached || freeClaimed}
-            onPress={() => handleClaim(tier, 'free')}
-            accessibilityRole="button"
-            accessibilityLabel={`Claim free reward for tier ${tier}`}
-          >
-            <Text style={styles.claimButtonText}>
-              {freeClaimed ? 'CLAIMED' : reached ? 'CLAIM' : 'LOCKED'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View
-          style={[
-            styles.rewardCell,
-            styles.premiumCell,
-            premiumClaimed && styles.rewardCellClaimed,
-          ]}
-        >
-          {renderReward(def.premiumReward)}
-          <TouchableOpacity
-            style={[
-              styles.claimButton,
-              styles.claimButtonPremium,
-              (!reached || premiumClaimed || !state.isPremium) && styles.claimButtonDisabled,
-            ]}
-            disabled={!reached || premiumClaimed || !state.isPremium}
-            onPress={() => handleClaim(tier, 'premium')}
-            accessibilityRole="button"
-            accessibilityLabel={`Claim premium reward for tier ${tier}`}
-          >
-            <Text style={styles.claimButtonText}>
-              {!state.isPremium
-                ? 'PREMIUM'
-                : premiumClaimed
-                  ? 'CLAIMED'
-                  : reached
-                    ? 'CLAIM'
-                    : 'LOCKED'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="shop" />
-
-      <View style={styles.header}>
-        {onBack && (
-          <TouchableOpacity style={styles.backButton} onPress={onBack} accessibilityLabel="Back">
-            <Text style={styles.backText}>{'\u2190'}</Text>
-          </TouchableOpacity>
-        )}
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>SEASON PASS</Text>
-          <Text style={styles.headerSubtitle}>{season.name}</Text>
-        </View>
-      </View>
-
-      <View style={styles.progressCard}>
+  const listHeader = (
+    <View>
+      {/* Tier progress hero */}
+      <View style={styles.progressPanel}>
         <LinearGradient
-          colors={[COLORS.purple + '30', COLORS.cyan + '15', COLORS.surface]}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          colors={[...GRADIENTS.surfaceCard]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[StyleSheet.absoluteFillObject, styles.panelFill]}
         />
-        <View style={styles.progressRow}>
-          <Text style={styles.progressTier}>
-            Tier {state.currentTier} / {MAX_SEASON_TIER}
-          </Text>
-          {state.isPremium && (
+        <View style={styles.progressTopRow}>
+          <View style={styles.progressTierBlock}>
+            <Text style={styles.progressTierNumber}>{state.currentTier}</Text>
+            <Text style={styles.progressTierMax}>/ {MAX_SEASON_TIER}</Text>
+          </View>
+          {state.isPremium ? (
             <View style={styles.premiumPill}>
               <Text style={styles.premiumPillText}>{'\u{1F451}'} PREMIUM</Text>
             </View>
+          ) : (
+            <View style={styles.countdownPill}>
+              <Text style={styles.countdownPillText}>
+                {'⏳'} {daysLeft > 0 ? `ENDS IN ${daysLeft}D` : 'ENDING SOON'}
+              </Text>
+            </View>
           )}
         </View>
-        <View style={styles.barTrack}>
-          <View style={[styles.barFill, { width: `${progress.percent}%` }]} />
-        </View>
+        <NeonProgressBar
+          progress={progress.percent / 100}
+          color={COLORS.purple}
+          height={12}
+        />
         <Text style={styles.progressXP}>
           {state.currentTier >= MAX_SEASON_TIER
             ? 'Max tier reached!'
             : `${progress.current} / ${progress.required} XP to next tier`}
         </Text>
+        {state.isPremium && (
+          <Text style={styles.countdownInline}>
+            {'⏳'} {daysLeft > 0 ? `Season ends in ${daysLeft} days` : 'Season ending soon!'}
+          </Text>
+        )}
       </View>
 
+      {/* Premium upsell hero */}
       {!state.isPremium && (
-        <TouchableOpacity
-          style={styles.premiumCta}
-          onPress={handleBuyPremium}
-          disabled={purchasing}
-          accessibilityRole="button"
-          accessibilityLabel="Upgrade to Premium Season Pass for $9.99"
-        >
+        <View style={styles.upsellPanel}>
           <LinearGradient
-            colors={[COLORS.gold, COLORS.orange]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+            colors={['rgba(255,184,0,0.16)', 'rgba(26,10,46,0.94)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, styles.panelFill]}
           />
-          {purchasing ? (
-            <ActivityIndicator size="small" color={COLORS.bg} />
-          ) : (
-            <Text style={styles.premiumCtaText}>{'UPGRADE TO PREMIUM \u2014 $9.99'}</Text>
-          )}
-        </TouchableOpacity>
+          <View style={styles.upsellRow}>
+            <IconMedallion glyph={'\u{1F451}'} size={52} accent={COLORS.gold} shape="squircle" />
+            <View style={styles.upsellCopy}>
+              <Text style={styles.upsellTitle}>GO PREMIUM</Text>
+              <Text style={styles.upsellDesc}>
+                Unlock the gold lane — exclusive frames, titles & gems on all 50 tiers.
+              </Text>
+            </View>
+          </View>
+          <PrimaryButton
+            label={purchasing ? 'PROCESSING…' : 'UPGRADE TO PREMIUM — $9.99'}
+            variant="gold"
+            size="large"
+            fullWidth
+            disabled={purchasing}
+            onPress={handleBuyPremium}
+            accessibilityLabel="Upgrade to Premium Season Pass for $9.99"
+            style={styles.upsellButton}
+          />
+        </View>
       )}
 
-      <View style={styles.laneHeader}>
-        <Text style={styles.laneHeaderText}>TIER</Text>
-        <Text style={[styles.laneHeaderText, styles.laneHeaderCenter]}>FREE</Text>
-        <Text style={[styles.laneHeaderText, styles.laneHeaderCenter]}>PREMIUM</Text>
+      <SectionHeader
+        label="REWARD TRACK"
+        meta={`TIER ${state.currentTier} / ${MAX_SEASON_TIER}`}
+        accent={COLORS.gold}
+      />
+      <View style={styles.laneTagsRow}>
+        <View style={[styles.laneTag, styles.laneTagFree]}>
+          <Text style={[styles.laneTagText, { color: COLORS.cyan }]}>FREE</Text>
+        </View>
+        <View style={styles.laneTagSpacer} />
+        <View style={[styles.laneTag, styles.laneTagPremium]}>
+          <Text style={[styles.laneTagText, { color: COLORS.gold }]}>PREMIUM</Text>
+        </View>
       </View>
+    </View>
+  );
 
-      {/* Virtualized ladder: only ~8 of the 50 tier rows (~14 views each)
-          mount at open instead of all ~700, and claims re-render windows,
-          not the whole ladder. */}
+  return (
+    <ScreenScaffold
+      title="SEASON PASS"
+      eyebrow={seasonEyebrow}
+      subtitle={seasonTheme}
+      accent={COLORS.gold}
+      backdrop="event"
+      onBack={onBack}
+      scroll={false}
+    >
+      {/* Virtualized ladder: only ~8 of the 50 tier rows mount at open
+          instead of all ~700 views, and claims re-render windows, not the
+          whole ladder. */}
       <FlatList
         data={TIER_NUMBERS}
         keyExtractor={keyExtractorTier}
-        renderItem={({ item }) => renderTier(item)}
+        renderItem={renderItem}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={7}
+        ListHeaderComponent={listHeader}
         ListFooterComponent={LADDER_FOOTER}
       />
-    </View>
+    </ScreenScaffold>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 12 },
+  panelFill: { borderRadius: 18 },
+
+  // ── Progress hero ────────────────────────────────────────────────────
+  progressPanel: {
+    ...bentoPanel('purple', { padding: 16 }),
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  backText: { color: COLORS.textPrimary, fontSize: 20 },
-  headerCenter: { flex: 1 },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-    fontFamily: FONTS.display,
-    letterSpacing: 1,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  progressCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 14,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.purple + '50',
-    ...SHADOWS.medium,
-  },
-  progressRow: {
+  progressTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  progressTier: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+  progressTierBlock: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  progressTierNumber: {
     fontFamily: FONTS.display,
+    fontSize: 34,
+    color: COLORS.gold,
+    letterSpacing: 1,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  progressTierMax: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 15,
+    color: COLORS.textMuted,
+    marginLeft: 6,
   },
   premiumPill: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: COLORS.gold + '30',
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255,184,0,0.18)',
     borderWidth: 1,
-    borderColor: COLORS.gold,
+    borderColor: COLORS.gold + '80',
+    ...SHADOWS.glow(COLORS.gold),
   },
   premiumPillText: {
     color: COLORS.gold,
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
   },
-  barTrack: {
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: COLORS.surface,
-    overflow: 'hidden',
-    marginBottom: 8,
+  countdownPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255,68,102,0.14)',
+    borderWidth: 1,
+    borderColor: COLORS.coral + '55',
   },
-  barFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: COLORS.purple,
+  countdownPillText: {
+    color: COLORS.coral,
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
   },
   progressXP: {
+    fontFamily: FONTS.bodyMedium,
     fontSize: 12,
     color: COLORS.textSecondary,
     textAlign: 'center',
+    marginTop: 10,
   },
-  premiumCta: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    height: 48,
-    borderRadius: 10,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...SHADOWS.medium,
-  },
-  premiumCtaText: {
-    color: COLORS.bg,
-    fontWeight: '800',
-    fontSize: 15,
-    letterSpacing: 0.5,
-  },
-  laneHeader: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 6,
-  },
-  laneHeaderText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.textMuted,
-    letterSpacing: 1,
-    width: 48,
-  },
-  laneHeaderCenter: {
-    flex: 1,
+  countdownInline: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: COLORS.coral,
     textAlign: 'center',
-    width: undefined,
+    marginTop: 6,
   },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16 },
+
+  // ── Premium upsell hero ──────────────────────────────────────────────
+  upsellPanel: {
+    ...bentoPanel('gold', { padding: 16 }),
+  },
+  upsellRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  upsellCopy: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  upsellTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 18,
+    color: COLORS.gold,
+    letterSpacing: 2.5,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
+  upsellDesc: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  upsellButton: {
+    marginTop: 2,
+  },
+
+  // ── Lane tags ────────────────────────────────────────────────────────
+  laneTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  laneTag: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  laneTagFree: {
+    borderColor: 'rgba(0,229,255,0.30)',
+    backgroundColor: 'rgba(0,229,255,0.08)',
+  },
+  laneTagPremium: {
+    borderColor: 'rgba(255,184,0,0.35)',
+    backgroundColor: 'rgba(255,184,0,0.08)',
+  },
+  laneTagSpacer: {
+    width: 56,
+  },
+  laneTagText: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 2.5,
+  },
+
+  // ── Tier row + spine ─────────────────────────────────────────────────
   tierRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    marginBottom: 8,
-    borderRadius: 10,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.textMuted + '25',
-    overflow: 'hidden',
-    minHeight: 80,
   },
-  tierRowReached: {
-    borderColor: COLORS.purple + '55',
+  spineCol: {
+    width: 56,
+    alignItems: 'center',
   },
-  tierRowMilestone: {
-    borderColor: COLORS.gold + '55',
+  spineSeg: {
+    flex: 1,
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
-  tierBadge: {
-    width: 48,
+  spineSegOn: {
+    backgroundColor: COLORS.purple,
+    ...SHADOWS.neonEdge(COLORS.purple),
+  },
+  spineSegHidden: {
+    opacity: 0,
+  },
+  nodeWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bg,
+    marginVertical: 4,
   },
-  tierBadgeText: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
+  nodePulseRing: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: COLORS.gold,
+    ...SHADOWS.neonGlow(COLORS.gold),
   },
-  rewardCell: {
+  nodeCurrentRing: {
+    position: 'absolute',
+    borderWidth: 2,
+    borderColor: COLORS.goldLight + 'CC',
+    ...SHADOWS.glow(COLORS.gold),
+  },
+  node: {
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(8,2,22,0.92)',
+  },
+  nodeMuted: {
+    opacity: 0.6,
+  },
+  nodeText: {
+    fontFamily: FONTS.display,
+    letterSpacing: 0.5,
+  },
+
+  // ── Lane cards ───────────────────────────────────────────────────────
+  laneCard: {
     flex: 1,
-    padding: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 12,
+    paddingTop: 16,
+    marginBottom: 14,
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 136,
   },
-  premiumCell: {
-    backgroundColor: COLORS.purple + '18',
+  laneCardFree: {
+    borderColor: 'rgba(0,229,255,0.20)',
+    ...SHADOWS.soft,
   },
-  rewardCellClaimed: {
-    opacity: 0.55,
+  laneCardPremium: {
+    borderColor: 'rgba(255,184,0,0.30)',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  rewardInner: {
-    alignItems: 'center',
+  laneCardClaimed: {
+    opacity: 0.6,
+  },
+  laneCardFill: {
+    borderRadius: 18,
+  },
+  holoStrip: {
+    position: 'absolute',
+    top: 0,
+    left: 14,
+    right: 14,
+    height: 2.5,
+    borderRadius: 2,
+    opacity: 0.85,
+  },
+  premiumRibbon: {
+    position: 'absolute',
+    top: -7,
+    alignSelf: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    overflow: 'hidden',
+    ...SHADOWS.glow(COLORS.gold),
+  },
+  premiumRibbonText: {
+    fontFamily: FONTS.display,
+    fontSize: 8,
+    letterSpacing: 1.5,
+    color: COLORS.bg,
+  },
+  rewardMedallionWrap: {
     marginBottom: 6,
   },
-  rewardIcon: {
-    fontSize: 22,
-    marginBottom: 2,
+  lockOverlay: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
   },
   rewardLabel: {
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 11,
     color: COLORS.textPrimary,
     textAlign: 'center',
-    fontWeight: '600',
+    lineHeight: 15,
+    marginBottom: 8,
+  },
+  rewardLabelMuted: {
+    color: COLORS.textMuted,
   },
   claimButton: {
-    minWidth: 76,
-    height: 26,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    backgroundColor: COLORS.accent,
+    alignSelf: 'stretch',
+  },
+  statusChip: {
+    alignSelf: 'stretch',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  claimButtonPremium: {
-    backgroundColor: COLORS.purple,
+  statusChipClaimed: {
+    borderColor: COLORS.green + '55',
+    backgroundColor: 'rgba(0,255,135,0.08)',
   },
-  claimButtonDisabled: {
-    backgroundColor: COLORS.textMuted + '40',
+  statusChipPremium: {
+    borderColor: COLORS.gold + '45',
+    backgroundColor: 'rgba(255,184,0,0.08)',
   },
-  claimButtonText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  statusChipText: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: COLORS.textMuted,
+  },
+  statusChipTextClaimed: {
+    color: COLORS.green,
+  },
+  statusChipTextPremium: {
+    color: COLORS.gold,
+  },
+
+  // ── Tier 50 showcase ─────────────────────────────────────────────────
+  showcaseSpineStub: {
+    alignItems: 'center',
+    height: 18,
+  },
+  showcaseCard: {
+    borderRadius: RADIUS.xxl,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,184,0,0.40)',
+    padding: 18,
+    paddingTop: 22,
+    alignItems: 'center',
+    ...SHADOWS.glow(COLORS.gold),
+  },
+  showcaseCardReached: {
+    borderColor: COLORS.gold + '99',
+    ...SHADOWS.neonGlow(COLORS.gold),
+  },
+  showcaseFill: {
+    borderRadius: RADIUS.xxl,
+  },
+  showcaseHoloStrip: {
+    position: 'absolute',
+    top: 0,
+    left: 24,
+    right: 24,
+    height: 3,
+    borderRadius: 2,
+  },
+  showcaseMedallion: {
+    marginBottom: 10,
+  },
+  showcaseEyebrow: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 3,
+    color: COLORS.purpleLight,
+  },
+  showcaseTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 22,
+    letterSpacing: 3,
+    color: COLORS.gold,
+    marginTop: 2,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
+  },
+  showcaseSubtitle: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  showcaseLanes: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+  },
+  showcaseLaneGap: {
+    width: 12,
   },
 });
 
