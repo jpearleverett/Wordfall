@@ -55,7 +55,7 @@ export const WINGS: WingDef[] = [
     icon: 'flask',
     accent: '#5b8fe8',
     aura: 'rgba(91, 143, 232, 0.16)',
-    tagline: 'Answers, neatly filed.',
+    tagline: 'Answers, filed.',
     lore:
       'Beakers for bookends and a periodic table set in the parquet floor. The Science Wing indexes everything twice — once by what it is, once by what it might become. Its reading lamps are powered by argument.',
     restorationLine:
@@ -68,7 +68,7 @@ export const WINGS: WingDef[] = [
     icon: 'sword',
     accent: '#c84dff',
     aura: 'rgba(200, 77, 255, 0.16)',
-    tagline: 'Where heroes are kept.',
+    tagline: 'Heroes, at rest.',
     lore:
       'Marble columns, a ceiling of painted constellations, and books that insist on being legends. Careful with the epics on the top shelf — some of them still bite. The dragons filed themselves under D, out of politeness.',
     restorationLine:
@@ -107,7 +107,7 @@ export const WINGS: WingDef[] = [
     icon: 'planet',
     accent: '#7c5cff',
     aura: 'rgba(124, 92, 255, 0.16)',
-    tagline: 'Reading with no ceiling.',
+    tagline: 'No ceiling here.',
     lore:
       'The dome opens straight onto the cosmos, and the catalog is arranged by constellation. Star charts shelve themselves at dawn. Somewhere in the observatory stacks is the first word spoken to the night sky — filed under “hello.”',
     restorationLine:
@@ -120,7 +120,7 @@ export const WINGS: WingDef[] = [
     icon: 'scroll',
     accent: '#c99b45',
     aura: 'rgba(201, 155, 69, 0.16)',
-    tagline: 'What happened. In order.',
+    tagline: 'Time, shelved.',
     lore:
       'Scroll racks by the mile and a card catalog older than some empires it describes. The History Wing files every ending next to the beginning it came from. Its dust is archival grade and quietly proud of it.',
     restorationLine:
@@ -133,7 +133,7 @@ export const WINGS: WingDef[] = [
     icon: 'flame',
     accent: '#e0562a',
     aura: 'rgba(224, 86, 42, 0.16)',
-    tagline: 'The Library’s forge.',
+    tagline: 'The beating forge.',
     lore:
       'Fire keeps the lamps, water keeps the ink, wind turns the pages, and stone holds the whole thing up. The final wing is the Library’s engine room — restore it, and every other hall burns a little brighter.',
     restorationLine:
