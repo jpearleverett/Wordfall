@@ -607,7 +607,16 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
                 )}
               </View>
               <View style={styles.wingLabelPlate}>
-                <Text style={[styles.wingLabel, w.state === 'ruined' && styles.wingLabelRuined]} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.wingLabel,
+                    // Long names (MYTHOLOGY, ELEMENTS) shrink instead of
+                    // ellipsizing — a truncated label reads as a layout bug.
+                    w.def.name.length > 7 && styles.wingLabelLong,
+                    w.state === 'ruined' && styles.wingLabelRuined,
+                  ]}
+                  numberOfLines={1}
+                >
                   {w.def.name.toUpperCase()}
                 </Text>
               </View>
@@ -679,6 +688,10 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(4, 1, 12, 0.95)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 5,
+  },
+  wingLabelLong: {
+    fontSize: 10,
+    letterSpacing: 0.4,
   },
   wingLabelRuined: {
     color: '#cabfe4',
