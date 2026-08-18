@@ -160,7 +160,7 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
         return (
           <MilestoneCeremony
             ribbon="WING RESTORED"
-            emblem={<WingCeremonyEmblem accent={wing.accent} iconName={wing.icon} size={170} />}
+            emblem={<WingCeremonyEmblem wingId={activeCeremony.data.wingId} accent={wing.accent} iconName={wing.icon} size={170} />}
             title={`${wing.name} Wing Restored!`}
             description={wing.restorationLine}
             rewardCapsules={capsules.length > 0 ? capsules : undefined}

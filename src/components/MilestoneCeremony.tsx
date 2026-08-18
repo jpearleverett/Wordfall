@@ -1,11 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import GameIcon, { GameIconName } from './icons/GameIcon';
+import { gradId } from './icons/IconBase';
 
 /**
  * General-purpose milestone ceremony for celebrations that don't need
@@ -91,8 +93,30 @@ export function MilestoneCeremony({
     transform: [{ scale: interpolate(rewardPop.value, [0, 0.6, 1], [0.4, 1.12, 1]) }],
   }));
 
+  const vignetteId = useMemo(() => gradId('milestoneVignette'), []);
+
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
+      {/* Radial vignette, darkest at center-bottom where home-screen copy
+          sits — together with the near-opaque scrim nothing behind the
+          card stays legible during the reward moment. */}
+      <Svg
+        width="100%"
+        height="100%"
+        style={StyleSheet.absoluteFill}
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        pointerEvents="none"
+      >
+        <Defs>
+          <RadialGradient id={vignetteId} cx="0.5" cy="0.7" rx="0.75" ry="0.55">
+            <Stop offset="0" stopColor="#000000" stopOpacity="0.55" />
+            <Stop offset="0.7" stopColor="#000000" stopOpacity="0.28" />
+            <Stop offset="1" stopColor="#000000" stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100" height="100" fill={`url(#${vignetteId})`} />
+      </Svg>
       {decorationsMounted && (
         <SparkleField count={16} intensity="medium" colors={[accentColor, COLORS.gold, '#fff']} />
       )}
@@ -161,8 +185,9 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     // Near-opaque so background UI never bleeds half-legible text around
-    // the ceremony card — the modal must float on a clean field.
-    backgroundColor: 'rgba(6, 2, 14, 0.94)',
+    // the ceremony card — the modal must float on a clean field. A radial
+    // vignette (rendered above) adds extra depth at center-bottom.
+    backgroundColor: 'rgba(4, 1, 10, 0.97)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,

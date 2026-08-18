@@ -8,6 +8,12 @@ export type PrimaryButtonSize = 'small' | 'medium' | 'large';
 
 interface PrimaryButtonProps {
   label: string;
+  /**
+   * Optional second line rendered under the label — smaller, tighter
+   * tracking. Use it for context (chapter name, price) so the main label
+   * NEVER ellipsizes; only this subtitle may tail-truncate.
+   */
+  subLabel?: string;
   onPress: () => void;
   /** Visual intent: primary (pink), gold (deals/claims), green (success), danger. */
   variant?: PrimaryButtonVariant;
@@ -56,6 +62,7 @@ const VARIANT_GLOW: Record<PrimaryButtonVariant, string> = {
  */
 export default function PrimaryButton({
   label,
+  subLabel,
   onPress,
   variant = 'primary',
   size = 'medium',
@@ -74,7 +81,7 @@ export default function PrimaryButton({
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityLabel={accessibilityLabel ?? (subLabel ? `${label}, ${subLabel}` : label)}
       accessibilityState={{ disabled }}
       style={({ pressed }) => [
         fullWidth && styles.fullWidth,
@@ -105,6 +112,18 @@ export default function PrimaryButton({
         >
           {label}
         </Text>
+        {subLabel ? (
+          <Text
+            style={[
+              styles.subLabel,
+              { color: disabled ? COLORS.textDisabled : VARIANT_LABEL_COLOR[variant] },
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {subLabel}
+          </Text>
+        ) : null}
       </LinearGradient>
     </Pressable>
   );
@@ -126,5 +145,14 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     letterSpacing: 2,
     textAlign: 'center',
+  },
+  subLabel: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textAlign: 'center',
+    marginTop: 2,
+    opacity: 0.78,
+    maxWidth: '100%',
   },
 });

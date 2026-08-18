@@ -544,12 +544,23 @@ export function HomeScreen({
         <View
           style={styles.heroCard}
         >
-          <View style={styles.heroLogoGlow}>
-            <Image
-              source={LOCAL_IMAGES.wordfallLogo}
-              style={styles.heroLogo}
-              resizeMode="contain"
-            />
+          <View style={styles.heroLogoBlock}>
+            {/* Soft radial-ish backing glow — three stacked low-alpha
+                purple/magenta ellipses approximate a radial gradient and
+                lift the wordmark's drip tails off the near-black page so
+                they read as lit art instead of dissolving into compression
+                mush (Aug 2026 blind review). Plain Views: no image assets,
+                no per-frame cost, works on all platforms. */}
+            <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowOuter]} />
+            <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowMid]} />
+            <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowInner]} />
+            <View style={styles.heroLogoGlow}>
+              <Image
+                source={LOCAL_IMAGES.wordfallLogo}
+                style={styles.heroLogo}
+                resizeMode="contain"
+              />
+            </View>
           </View>
           <View style={styles.statsRow}>
             {([
@@ -702,7 +713,12 @@ export function HomeScreen({
           }}
         >
           <LinearGradient
-            colors={['rgba(200,77,255,0.16)', 'rgba(255,45,149,0.07)'] as [string, string]}
+            // Lifted violet-plum fill, clearly lighter than the page bg —
+            // the old 0.16/0.07 wash read "near-black on near-black … as a
+            // disabled element" in the Aug 2026 blind review.
+            colors={['rgba(172,86,255,0.42)', 'rgba(118,44,196,0.26)'] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.milestoneBanner}
           >
             <View style={styles.milestoneBannerIconWrap}>
@@ -1484,10 +1500,37 @@ const styles = StyleSheet.create({
       : null),
   },
   heroLogo: {
-    width: '100%',
-    height: 180,
-    marginBottom: 8,
+    // Aug 2026 blind review: the wordmark "eats roughly a third of the
+    // screen" — shrunk ~24% (180 → 136 tall, full → 78% wide) so the card
+    // system below moves up and owns the fold.
+    width: '78%',
+    height: 136,
     alignSelf: 'center',
+  },
+  heroLogoBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  heroGlowLayer: {
+    position: 'absolute',
+    alignSelf: 'center',
+    borderRadius: 999,
+  },
+  heroGlowOuter: {
+    width: '100%',
+    height: 150,
+    backgroundColor: 'rgba(168,91,255,0.08)',
+  },
+  heroGlowMid: {
+    width: '80%',
+    height: 116,
+    backgroundColor: 'rgba(200,77,255,0.10)',
+  },
+  heroGlowInner: {
+    width: '58%',
+    height: 84,
+    backgroundColor: 'rgba(255,45,149,0.08)',
   },
   subtitle: {
     color: COLORS.textSecondary,
@@ -2300,15 +2343,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textAlign: 'right',
   },
-  // Onboarding milestone banner — Bento gold
-  // Purple-family wash (was a mustard-gold gradient the Aug 2026 blind
-  // design review called "off-brand") — gold now appears only as the icon
-  // ring + CTA accent, matching how the rest of Home uses it.
+  // Onboarding milestone banner — celebration surface.
+  // Lifted violet-plum gradient (see JSX) over the bento purple shell, with
+  // a gold-tinted hairline + warm gold glow so it registers as a moment,
+  // not a disabled element (Aug 2026 blind review). Gold stays confined to
+  // the border tint, icon ring, and CTA — the fill itself is purple-family.
   milestoneBanner: {
     ...bentoPanel('purple'),
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
+    borderColor: 'rgba(255,184,0,0.35)',
+    shadowColor: COLORS.gold,
+    shadowOpacity: 0.3,
   },
   milestoneBannerIconWrap: {
     width: 46,

@@ -129,6 +129,109 @@ function SvgMedallion({
   );
 }
 
+/**
+ * DecorationMedallion — collection-grade disc for the decoration cards.
+ * Reads as a dimensional rendered item instead of a flat glyph in a plain
+ * circle: 2px rarity-gradient ring, tinted body gradient, glass top
+ * highlight arc, bottom inner shadow, and a soft rarity-tinted glow behind
+ * owned items. Unowned keeps the teaser tint, one notch brighter than the
+ * standard medallion teaser.
+ */
+function DecorationMedallion({
+  name,
+  accent,
+  owned,
+  size = 48,
+  style,
+}: {
+  name: GameIconName;
+  accent: string;
+  owned: boolean;
+  size?: number;
+  style?: object;
+}) {
+  const ring = size + 4;
+  const alpha = (a: string) => (/^#[0-9a-fA-F]{6}$/.test(accent) ? accent + a : accent);
+  return (
+    <View
+      style={[
+        {
+          width: ring,
+          height: ring,
+          borderRadius: ring / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: owned ? accent : '#000',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: owned ? 0.7 : 0.25,
+          shadowRadius: size * 0.3,
+          elevation: owned ? 8 : 3,
+        },
+        style as object,
+      ]}
+    >
+      {/* Rarity-gradient ring — bright top-left fading to dim, a 2px
+          gradient stroke around the disc. */}
+      <LinearGradient
+        colors={(owned ? [alpha('F2'), alpha('59')] : [alpha('7A'), alpha('2B')]) as [string, string]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: ring / 2 }]}
+      />
+      {/* Disc body */}
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8,2,22,0.96)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[owned ? alpha('47') : alpha('30'), 'rgba(8,2,22,0.95)'] as [string, string]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        {owned ? (
+          <GameIcon name={name} size={size * 0.58} />
+        ) : (
+          <View style={{ opacity: 0.55 }}>
+            <GameIcon name={name} size={size * 0.58} accent={accent} />
+          </View>
+        )}
+        {/* Glass top highlight arc */}
+        <LinearGradient
+          colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)'] as [string, string]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: size * 0.05,
+            left: size * 0.16,
+            right: size * 0.16,
+            height: size * 0.32,
+            borderRadius: size * 0.2,
+            opacity: owned ? 1 : 0.6,
+          }}
+        />
+        {/* Bottom inner shadow — seats the icon in the disc. */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)'] as [string, string]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: size * 0.34 }}
+        />
+      </View>
+    </View>
+  );
+}
+
 // ─── Decoration metadata resolver ───────────────────────────────────────────
 // The grid used to render MILESTONE_DECORATIONS only, which made decorations
 // bought in the cosmetic store (LIBRARY_DECORATIONS) or granted by seasons /
@@ -416,6 +519,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   // Folio's next find — the first unowned decoration, teased at the foot of
   // the screen so the collection ends on a goal instead of empty space.
   const nextFind = decorationGridItems.find((item) => !item.owned)?.meta ?? null;
+
+  // The decorations grid lays out 3-up; when the collection count isn't a
+  // multiple of 3 the last row would hold orphaned cards beside empty dark
+  // space. Fill the leftover slots with "future find" placeholders so every
+  // row reads complete.
+  const futureSlotCount = (3 - (decorationGridItems.length % 3)) % 3;
 
   const heroStats = [
     { label: 'Level', value: currentLevel },
@@ -822,7 +931,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             {/* Primary CTA — continue / replay / locked, per wing state. */}
             {selectedWingState === 'current' && activeChapter ? (
               <PrimaryButton
-                label={`CONTINUE CHAPTER ${activeChapter.id} — ${activeChapter.name.toUpperCase()}`}
+                label={`CONTINUE CHAPTER ${activeChapter.id}`}
+                subLabel={activeChapter.name.toUpperCase()}
                 onPress={() => launchLevel(currentLevel)}
                 variant="gold"
                 fullWidth
@@ -980,12 +1090,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
                       />
-                      <SvgMedallion
+                      <DecorationMedallion
                         name={meta.iconName}
                         accent={pickable ? COLORS.teal : rarityAccent}
-                        teaser={!owned}
-                        size={40}
-                        style={{ marginBottom: 6 }}
+                        owned={owned}
+                        size={48}
+                        style={{ marginBottom: 7 }}
                       />
                       <Text
                         style={[styles.decorationName, !owned && { color: COLORS.textMuted }]}
@@ -1022,6 +1132,19 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     </Pressable>
                   );
                 })}
+                {Array.from({ length: futureSlotCount }, (_, slotIndex) => (
+                  <View
+                    key={`future-slot-${slotIndex}`}
+                    style={[styles.decorationItem, styles.decorationItemFuture]}
+                    accessible
+                    accessibilityLabel="A future find, still buried in the stacks"
+                  >
+                    <View style={styles.futureChest}>
+                      <GameIcon name="chest" size={26} accent="#8a7ba8" />
+                    </View>
+                    <Text style={styles.decorationFutureText}>One day{'…'}</Text>
+                  </View>
+                ))}
               </View>
               {showDecorationPicker && (
                 <Pressable
@@ -1087,8 +1210,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               <SvgMedallion name="trophy" accent={COLORS.gold} size={42} />
             )}
           </View>
-
-          <View style={styles.bottomSpacer} />
         </ScrollView>
         )}
       </ScreenScaffold>
@@ -1107,7 +1228,10 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 110,
+    // The tab bar sits in-flow below the scroll view, so this only needs a
+    // breath of air after the last panel — 110 here left a third of the
+    // screen as empty backdrop.
+    paddingBottom: 20,
   },
   cardPressed: {
     transform: [{ scale: 0.97 }],
@@ -1712,6 +1836,24 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontFamily: FONTS.display,
   },
+  decorationItemFuture: {
+    justifyContent: 'center',
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  futureChest: {
+    opacity: 0.4,
+    marginBottom: 6,
+  },
+  decorationFutureText: {
+    fontSize: 9,
+    letterSpacing: 1,
+    color: COLORS.textMuted,
+    fontFamily: FONTS.bodyMedium,
+    fontStyle: 'italic',
+    opacity: 0.7,
+  },
   // ── Folio's next find ─────────────────────────────────────────────────
   folioFindPanel: {
     ...bentoPanel('gold', { borderRadius: RADIUS.xxl, padding: 16, marginBottom: 0 }),
@@ -1777,9 +1919,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     fontFamily: FONTS.bodySemiBold,
-  },
-  bottomSpacer: {
-    height: 8,
   },
 });
 
