@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { AccessibilityInfo } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
+import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, RADIUS, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
 import {
   economyDifficultyForLevel,
@@ -182,6 +182,12 @@ function AnimatedScore({ targetScore }: { targetScore: number }) {
   return <Text style={styles.scoreValue}>{displayScore.toLocaleString()}</Text>;
 }
 
+const MEDALLION_TICK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
+// Metallic gold star medallion. Earned: radial-feel gold disc (light top-left
+// → bronze bottom-right) with an inner shine face, a beveled bright-gold star,
+// and 8 tiny ray ticks. Unearned: dark recessed socket with a dim star ghost.
+// Pop-in animation params + delays are IDENTICAL to the old flat Star.
 function Star({ filled, delay, size }: { filled: boolean; delay: number; size: number }) {
   const anim = useRef(new Animated.Value(0)).current;
 
@@ -198,7 +204,10 @@ function Star({ filled, delay, size }: { filled: boolean; delay: number; size: n
     ]).start();
   }, [anim, delay, filled]);
 
-  const glowSize = size + 24;
+  const disc = size + 16;
+  const glowSize = disc + 10;
+  const starSize = Math.round(size * 0.7);
+  const tickLen = Math.max(4, Math.round(size * 0.11));
 
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', width: size + 28, height: size + 28 }}>
@@ -206,34 +215,121 @@ function Star({ filled, delay, size }: { filled: boolean; delay: number; size: n
         <View
           style={[
             styles.starGlowRing,
-            {
-              width: glowSize,
-              height: glowSize,
-              borderRadius: glowSize / 2,
-            },
+            { width: glowSize, height: glowSize, borderRadius: glowSize / 2 },
           ]}
         />
       )}
-      <Animated.Text
+      {/* Medallion rim: metallic gold when earned, recessed socket when not */}
+      <LinearGradient
+        colors={(filled
+          ? [COLORS.goldLight, COLORS.gold, COLORS.tierBronze]
+          : [COLORS.bg, COLORS.starEmpty]) as [string, string, ...string[]]}
+        start={{ x: 0.25, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
         style={[
-          styles.star,
-          {
-            fontSize: size,
-            lineHeight: size,
-            width: size + 28,
-            height: size,
-            textAlign: 'center',
-            opacity: filled ? 1 : 0.25,
-            position: 'absolute',
-            transform: [
-              { scale: anim.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 1.28, 1] }) },
-              { rotate: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['0deg', '-12deg', '0deg'] }) },
-            ],
-          },
+          filled ? styles.medallionRim : styles.medallionSocketRim,
+          { width: disc, height: disc, borderRadius: disc / 2 },
         ]}
       >
-        ★
-      </Animated.Text>
+        {/* Inner face: shine-from-top on earned metal, top shadow on socket */}
+        <LinearGradient
+          colors={(filled
+            ? ['rgba(255,255,255,0.38)', 'rgba(255,255,255,0.05)', 'rgba(0,0,0,0.22)']
+            : ['rgba(0,0,0,0.55)', 'rgba(0,0,0,0.08)', 'rgba(255,255,255,0.06)']) as [string, string, ...string[]]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[styles.medallionFace, { width: disc - 5, height: disc - 5, borderRadius: (disc - 5) / 2 }]}
+        />
+        {!filled && (
+          <Text style={[styles.starSocketGlyph, { fontSize: starSize, lineHeight: starSize + 6 }]}>★</Text>
+        )}
+      </LinearGradient>
+      {filled && (
+        <Animated.View
+          style={[
+            styles.medallionStarCluster,
+            { width: disc, height: disc },
+            {
+              transform: [
+                { scale: anim.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 1.28, 1] }) },
+                { rotate: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['0deg', '-12deg', '0deg'] }) },
+              ],
+            },
+          ]}
+        >
+          {MEDALLION_TICK_ANGLES.map((angle) => (
+            <View
+              key={angle}
+              style={[
+                styles.medallionTick,
+                {
+                  height: tickLen,
+                  transform: [{ rotate: `${angle}deg` }, { translateY: -(starSize / 2 + tickLen / 2 + 3) }],
+                },
+              ]}
+            />
+          ))}
+          <Text style={[styles.starBevel, { fontSize: starSize, lineHeight: starSize + 6 }]}>★</Text>
+          <Text style={[styles.starBright, { fontSize: starSize, lineHeight: starSize + 6 }]}>★</Text>
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+// Small accent-tinted medallion disc that turns raw emoji (or drawn marks)
+// into designed bullets on the summary rows.
+function IconMedallion({ tint, size = 34, children }: { tint: string; size?: number; children: React.ReactNode }) {
+  return (
+    <View
+      style={[
+        styles.iconMedallion,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: tint + '1F',
+          borderColor: tint + '55',
+          shadowColor: tint,
+        },
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+// Drawn flame: three layered orange/gold gradient teardrops (sharp corner
+// rotated to the top). Static — no loop, so no reduce-motion gate needed.
+function FlameMark({ size = 18 }: { size?: number }) {
+  const mid = Math.round(size * 0.6);
+  const core = Math.round(size * 0.32);
+  return (
+    <View style={{ width: size + 2, height: size + 4, alignItems: 'center' }}>
+      <LinearGradient
+        colors={[COLORS.sunsetWarm, COLORS.orange] as [string, string]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={[styles.flameDrop, { width: size, height: size, borderRadius: size / 2, top: 1 }]}
+      />
+      <LinearGradient
+        colors={[COLORS.goldLight, COLORS.gold] as [string, string]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={[styles.flameDrop, { width: mid, height: mid, borderRadius: mid / 2, top: 1 + Math.round((size - mid) * 0.75) }]}
+      />
+      <View
+        style={[
+          styles.flameDrop,
+          {
+            width: core,
+            height: core,
+            borderRadius: core / 2,
+            backgroundColor: COLORS.goldLight,
+            top: 1 + Math.round((size - core) * 0.82),
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -307,7 +403,9 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
           colors={['rgba(255,215,0,0.10)', 'rgba(255,159,0,0.05)'] as [string, string]}
           style={hookStyles.milestoneCard}
         >
-          <Text style={hookStyles.milestoneIcon}>{'🎯'}</Text>
+          <IconMedallion tint={COLORS.gold} size={34}>
+            <Text style={hookStyles.milestoneIcon}>{'🎯'}</Text>
+          </IconMedallion>
           <Text style={hookStyles.milestoneText}>{milestoneMsg}</Text>
         </LinearGradient>
       )}
@@ -319,7 +417,9 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
           style={hookStyles.streakCard}
         >
           <View style={hookStyles.streakLeft}>
-            <Text style={hookStyles.streakFireIcon}>{'🔥'}</Text>
+            <IconMedallion tint={COLORS.orange} size={36}>
+              <FlameMark size={18} />
+            </IconMedallion>
             <Text style={hookStyles.streakNumber}>{currentStreak}</Text>
           </View>
           <View style={hookStyles.streakRight}>
@@ -757,23 +857,41 @@ export function PuzzleComplete({
               >
                 <Text style={styles.rewardsTitle}>{t('result.rewards')}</Text>
                 <View style={styles.rewardRow}>
+                  {/* Coins: gold glass capsule */}
                   <LinearGradient
-                    colors={['#1a2050', '#222860'] as [string, string, ...string[]]}
+                    colors={['rgba(255,210,77,0.22)', 'rgba(255,149,0,0.08)'] as [string, string, ...string[]]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.rewardChip}
                   >
-                    <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.rewardIconImage} resizeMode="contain" />
+                    <LinearGradient
+                      colors={GRADIENTS.glassOverlay as unknown as [string, string, ...string[]]}
+                      style={styles.rewardChipShine}
+                      pointerEvents="none"
+                    />
+                    <View style={styles.rewardIconWrap}>
+                      <View style={[styles.rewardIconHalo, { backgroundColor: COLORS.goldGlow, shadowColor: COLORS.gold }]} />
+                      <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.rewardIconImage} resizeMode="contain" />
+                    </View>
                     <Text style={styles.rewardText}>+{totalCoinsAwarded > 0 ? totalCoinsAwarded : coinReward} coins</Text>
                   </LinearGradient>
+                  {/* Gems: purple/cyan glass capsule */}
                   {(perfectRun || totalGemsAwarded > 0) && (
                     <LinearGradient
-                      colors={['rgba(255,215,0,0.18)', 'rgba(255,159,0,0.12)'] as [string, string, ...string[]]}
+                      colors={['rgba(200,77,255,0.22)', 'rgba(0,229,255,0.10)'] as [string, string, ...string[]]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.rewardChipGold}
                     >
-                      <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImage} resizeMode="contain" />
+                      <LinearGradient
+                        colors={GRADIENTS.glassOverlay as unknown as [string, string, ...string[]]}
+                        style={styles.rewardChipShine}
+                        pointerEvents="none"
+                      />
+                      <View style={styles.rewardIconWrap}>
+                        <View style={[styles.rewardIconHalo, { backgroundColor: COLORS.purpleGlow, shadowColor: COLORS.purple }]} />
+                        <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImage} resizeMode="contain" />
+                      </View>
                       <Text style={styles.rewardTextGold}>+{totalGemsAwarded > 0 ? totalGemsAwarded : perfectClearGems()} gems</Text>
                     </LinearGradient>
                   )}
@@ -825,7 +943,9 @@ export function PuzzleComplete({
               {/* First Win badge */}
               {isFirstWin && (
                 <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.gold + '20', borderColor: COLORS.gold + '40', opacity: statsAnim }]}>
-                  <Text style={styles.levelUpEmoji}>{'\uD83C\uDF89'}</Text>
+                  <IconMedallion tint={COLORS.gold} size={36}>
+                    <Text style={styles.levelUpEmoji}>{'\uD83C\uDF89'}</Text>
+                  </IconMedallion>
                   <View>
                     <Text style={[styles.levelUpText, { color: COLORS.gold }]}>{t('result.welcomeToWordfall')}</Text>
                     <Text style={styles.levelUpSubtext}>{t('result.adventureBegins')}</Text>
@@ -851,7 +971,9 @@ export function PuzzleComplete({
                         key={index}
                         style={[styles.summaryItem, { backgroundColor: item.accentColor + '15', borderColor: item.accentColor + '30' }]}
                       >
-                        <Text style={styles.summaryItemIcon}>{item.icon}</Text>
+                        <IconMedallion tint={item.accentColor} size={34}>
+                          <Text style={styles.summaryItemIcon}>{item.icon}</Text>
+                        </IconMedallion>
                         <View style={styles.summaryItemText}>
                           <Text style={[styles.summaryItemLabel, { color: item.accentColor }]}>{item.label}</Text>
                           {item.sublabel && <Text style={styles.summaryItemSublabel}>{item.sublabel}</Text>}
@@ -879,7 +1001,9 @@ export function PuzzleComplete({
               {/* Event Multiplier Label */}
               {eventMultiplierLabel && (
                 <Animated.View style={[styles.friendCompare, { opacity: statsAnim, backgroundColor: 'rgba(255, 159, 67, 0.15)' }]}>
-                  <Text style={styles.friendCompareIcon}>{'\u{1F525}'}</Text>
+                  <IconMedallion tint={COLORS.orange} size={28}>
+                    <FlameMark size={13} />
+                  </IconMedallion>
                   <Text style={[styles.friendCompareText, { color: COLORS.orange }]}>
                     {eventMultiplierLabel}
                   </Text>
@@ -889,7 +1013,9 @@ export function PuzzleComplete({
               {/* Friend Score Comparison */}
               {friendComparison && friendComparison.total > 0 && (
                 <Animated.View style={[styles.friendCompare, { opacity: statsAnim }]}>
-                  <Text style={styles.friendCompareIcon}>👥</Text>
+                  <IconMedallion tint={COLORS.cyan} size={28}>
+                    <Text style={styles.friendCompareIcon}>👥</Text>
+                  </IconMedallion>
                   <Text style={styles.friendCompareText}>
                     You beat {friendComparison.beaten} of {friendComparison.total} friends!
                   </Text>
@@ -911,7 +1037,12 @@ export function PuzzleComplete({
                     ] as [string, string]}
                     style={styles.nextUnlockGradient}
                   >
-                    <Text style={styles.nextUnlockIcon}>{nextUnlockPreview.icon}</Text>
+                    <IconMedallion
+                      tint={nextUnlockPreview.unlockLevel - level <= 1 ? COLORS.gold : COLORS.purple}
+                      size={36}
+                    >
+                      <Text style={styles.nextUnlockIcon}>{nextUnlockPreview.icon}</Text>
+                    </IconMedallion>
                     <View style={styles.nextUnlockInfo}>
                       <Text style={[
                         styles.nextUnlockLabel,
@@ -1029,7 +1160,7 @@ export function PuzzleComplete({
                       accessibilityRole="button"
                       accessibilityLabel="Challenge a friend"
                     >
-                      <Text style={styles.challengeButtonText}>{'\u2694\uFE0F'} Challenge</Text>
+                      <Text style={styles.challengeButtonText}>Challenge</Text>
                     </Pressable>
                   )}
                 </View>
@@ -1182,10 +1313,69 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  star: {
-    color: COLORS.star,
+  medallionRim: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.30)',
+    ...SHADOWS.glow(COLORS.gold),
+  },
+  medallionSocketRim: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  medallionFace: {
+    position: 'absolute',
+  },
+  starSocketGlyph: {
+    position: 'absolute',
+    color: COLORS.textTertiary,
+    opacity: 0.55,
+    textAlign: 'center',
+  },
+  medallionStarCluster: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  medallionTick: {
+    position: 'absolute',
+    width: 2,
+    borderRadius: 1,
+    backgroundColor: COLORS.goldLight,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 3,
+  },
+  starBevel: {
+    position: 'absolute',
+    color: COLORS.sunsetDeep,
+    textAlign: 'center',
+    transform: [{ translateY: 2 }],
+  },
+  starBright: {
+    position: 'absolute',
+    color: COLORS.goldLight,
+    textAlign: 'center',
     textShadowColor: COLORS.goldGlow,
-    textShadowRadius: 34,
+    textShadowRadius: 14,
+  },
+  iconMedallion: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  flameDrop: {
+    position: 'absolute',
+    borderTopLeftRadius: 0,
+    transform: [{ rotate: '45deg' }],
   },
   scorePanel: {
     alignItems: 'center',
@@ -1265,31 +1455,54 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  // Gold glass capsule — coins
   rewardChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,210,77,0.40)',
     ...SHADOWS.soft,
-    shadowColor: COLORS.accent,
-    shadowOpacity: 0.15,
+    shadowColor: COLORS.gold,
+    shadowOpacity: 0.3,
   },
+  // Purple/cyan glass capsule — gems
   rewardChipGold: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.25)',
+    borderColor: 'rgba(200,77,255,0.45)',
     ...SHADOWS.soft,
-    shadowColor: COLORS.gold,
-    shadowOpacity: 0.25,
+    shadowColor: COLORS.purple,
+    shadowOpacity: 0.3,
+  },
+  rewardChipShine: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: RADIUS.full,
+  },
+  rewardIconWrap: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rewardIconHalo: {
+    position: 'absolute',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    opacity: 0.4,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 3,
   },
   trophyCrownDecor: {
     position: 'absolute',
@@ -1301,24 +1514,25 @@ const styles = StyleSheet.create({
     left: '50%',
     marginLeft: -40,
   },
-  rewardIcon: {
-    fontSize: 16,
-  },
   rewardIconImage: {
-    width: 20,
-    height: 20,
+    width: 24,
+    height: 24,
   },
   rewardText: {
-    color: COLORS.textPrimary,
-    fontFamily: FONTS.bodyBold,
-    fontSize: 13,
+    color: COLORS.goldLight,
+    fontFamily: FONTS.display,
+    fontSize: 14,
+    letterSpacing: 0.3,
+    textShadowColor: COLORS.goldGlow,
+    textShadowRadius: 8,
   },
   rewardTextGold: {
-    color: COLORS.gold,
+    color: COLORS.purpleLight,
     fontFamily: FONTS.display,
-    fontSize: 13,
-    textShadowColor: COLORS.goldGlow,
-    textShadowRadius: 6,
+    fontSize: 14,
+    letterSpacing: 0.3,
+    textShadowColor: COLORS.purpleGlow,
+    textShadowRadius: 8,
   },
   actionsColumn: {
     gap: 10,
@@ -1372,6 +1586,8 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: COLORS.textPrimary,
     fontFamily: FONTS.display,
+    fontSize: 13,
+    letterSpacing: 0.8,
   },
   buttonPressed: {
     transform: [{ scale: 0.97 }],
@@ -1389,7 +1605,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accent + '30',
   },
   levelUpEmoji: {
-    fontSize: 22,
+    fontSize: 16,
+    textAlign: 'center',
   },
   levelUpText: {
     color: COLORS.accent,
@@ -1416,7 +1633,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   summaryItemIcon: {
-    fontSize: 20,
+    fontSize: 15,
+    textAlign: 'center',
   },
   summaryItemText: {
     flex: 1,
@@ -1456,7 +1674,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(168,85,247,0.25)',
   },
   nextUnlockIcon: {
-    fontSize: 22,
+    fontSize: 16,
+    textAlign: 'center',
   },
   nextUnlockInfo: {
     flex: 1,
@@ -1498,7 +1717,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 212, 255, 0.15)',
   },
   friendCompareIcon: {
-    fontSize: 14,
+    fontSize: 12,
+    textAlign: 'center',
   },
   friendCompareText: {
     color: COLORS.accent,
@@ -1506,26 +1726,30 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyBold,
   },
   shareButton: {
-    borderColor: COLORS.accent + '30',
-    backgroundColor: COLORS.accent + '10',
+    borderColor: COLORS.accent + '35',
+    backgroundColor: COLORS.accent + '12',
   },
   shareButtonText: {
     color: COLORS.accent,
     fontFamily: FONTS.display,
+    fontSize: 13,
+    letterSpacing: 0.8,
   },
   challengeButton: {
     flex: 1,
-    backgroundColor: COLORS.purple + '15',
+    backgroundColor: COLORS.purple + '12',
     borderRadius: 18,
     paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.purple + '40',
+    borderColor: COLORS.purple + '35',
     ...SHADOWS.soft,
   },
   challengeButtonText: {
     color: COLORS.purple,
     fontFamily: FONTS.display,
+    fontSize: 13,
+    letterSpacing: 0.8,
   },
   tomorrowPreview: {
     borderRadius: 12,
@@ -1564,7 +1788,8 @@ const hookStyles = StyleSheet.create({
     borderColor: 'rgba(255,215,0,0.15)',
   },
   milestoneIcon: {
-    fontSize: 18,
+    fontSize: 15,
+    textAlign: 'center',
   },
   milestoneText: {
     flex: 1,
@@ -1585,9 +1810,6 @@ const hookStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-  },
-  streakFireIcon: {
-    fontSize: 20,
   },
   streakNumber: {
     color: COLORS.orange,
