@@ -20,6 +20,7 @@ import {
 } from '../stores/economyStore';
 import { getXPProgress, MAX_SEASON_TIER, getCurrentSeason } from '../data/seasonPass';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import GameIcon from './icons/GameIcon';
 
 interface SeasonPassHomeCardProps {
   onPress: () => void;
@@ -55,7 +56,9 @@ const SeasonPassHomeCard: React.FC<SeasonPassHomeCardProps> = ({ onPress }) => {
       />
 
       <View style={styles.header}>
-        <Text style={styles.icon}>{isPremium ? '\u{1F451}' : '\u{1F3C6}'}</Text>
+        <View style={styles.icon}>
+          <GameIcon name={isPremium ? 'crown' : 'trophy'} size={32} />
+        </View>
         <View style={styles.headerInfo}>
           <Text style={styles.title} numberOfLines={1}>
             {season.name}
@@ -102,7 +105,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   icon: {
-    fontSize: 32,
     marginRight: 10,
   },
   headerInfo: {

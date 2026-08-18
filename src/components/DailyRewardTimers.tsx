@@ -13,6 +13,7 @@ import {
   getTimeRemaining,
   DailyRewardTimer,
 } from '../data/dailyRewardTimers';
+import GameIcon from './icons/GameIcon';
 
 interface DailyRewardTimersProps {
   /** Maps timer ID to the timestamp (ms) when it was last claimed */
@@ -125,7 +126,9 @@ const TimerCard = React.memo(function TimerCard({
             isReady && styles.cardReady,
           ]}
         >
-          <Text style={styles.cardIcon}>{timer.icon}</Text>
+          <View style={styles.cardIcon}>
+            <GameIcon glyph={timer.icon} size={26} />
+          </View>
           <Text
             style={styles.cardLabel}
             numberOfLines={1}
@@ -224,7 +227,6 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   cardIcon: {
-    fontSize: 24,
     marginBottom: 4,
   },
   cardLabel: {
