@@ -21,6 +21,7 @@ import {
   Animated,
   Easing,
   Alert,
+  type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, RADIUS, SHADOWS } from '../constants';
@@ -54,6 +55,210 @@ interface SeasonPassScreenProps {
 // Stable data/footer identities for the virtualized tier ladder.
 const TIER_NUMBERS = Array.from({ length: MAX_SEASON_TIER }, (_, i) => i + 1);
 const LADDER_FOOTER = <View style={{ height: 110 }} />;
+
+// ─── DrawnCrown — crown built from pure Views (replaces the 👑 emoji) ──────
+// Gradient gold band + three triangle points + jewel dots + glow. By default
+// it sits in a squircle medallion shell so it drops in where IconMedallion
+// used to render the emoji; `bare` renders just the crown for inline pills.
+
+interface DrawnCrownProps {
+  /** Outer medallion size (or crown width when `bare`). */
+  size?: number;
+  /** Render just the crown, no squircle shell. */
+  bare?: boolean;
+  /** Dims for locked states (mirrors IconMedallion's muted). */
+  muted?: boolean;
+  style?: ViewStyle;
+}
+
+const DrawnCrown = memo(function DrawnCrown({
+  size = 52,
+  bare = false,
+  muted = false,
+  style,
+}: DrawnCrownProps) {
+  const w = bare ? size : size * 0.6;
+  const pointW = w * 0.32;
+  const sideH = w * 0.4;
+  const midH = w * 0.56;
+  const bandH = w * 0.28;
+  const jewel = Math.max(3, Math.round(w * 0.16));
+
+  const crown = (
+    <View style={{ width: w, height: midH + bandH }}>
+      <View style={[crownStyles.pointsRow, { height: midH }]}>
+        <View
+          style={[
+            crownStyles.point,
+            {
+              borderLeftWidth: pointW / 2,
+              borderRightWidth: pointW / 2,
+              borderBottomWidth: sideH,
+              borderBottomColor: '#ffb800',
+            },
+          ]}
+        />
+        <View
+          style={[
+            crownStyles.point,
+            {
+              borderLeftWidth: pointW / 2,
+              borderRightWidth: pointW / 2,
+              borderBottomWidth: midH,
+              borderBottomColor: '#ffd24d',
+            },
+          ]}
+        />
+        <View
+          style={[
+            crownStyles.point,
+            {
+              borderLeftWidth: pointW / 2,
+              borderRightWidth: pointW / 2,
+              borderBottomWidth: sideH,
+              borderBottomColor: '#ffb800',
+            },
+          ]}
+        />
+      </View>
+      <LinearGradient
+        colors={[...GRADIENTS.button.gold]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: midH - 1,
+          height: bandH,
+          borderRadius: bandH * 0.35,
+        }}
+      />
+      {/* Jewel dots: side point tips, center point tip, band center */}
+      <View
+        style={[
+          crownStyles.jewel,
+          {
+            width: jewel * 0.8,
+            height: jewel * 0.8,
+            borderRadius: jewel * 0.4,
+            backgroundColor: COLORS.cyan,
+            top: midH - sideH - jewel * 0.35,
+            left: pointW / 2 - jewel * 0.4,
+          },
+        ]}
+      />
+      <View
+        style={[
+          crownStyles.jewel,
+          {
+            width: jewel,
+            height: jewel,
+            borderRadius: jewel / 2,
+            backgroundColor: COLORS.pink,
+            top: -jewel * 0.35,
+            left: w / 2 - jewel / 2,
+          },
+        ]}
+      />
+      <View
+        style={[
+          crownStyles.jewel,
+          {
+            width: jewel * 0.8,
+            height: jewel * 0.8,
+            borderRadius: jewel * 0.4,
+            backgroundColor: COLORS.cyan,
+            top: midH - sideH - jewel * 0.35,
+            right: pointW / 2 - jewel * 0.4,
+          },
+        ]}
+      />
+      <View
+        style={[
+          crownStyles.jewel,
+          {
+            width: jewel,
+            height: jewel,
+            borderRadius: jewel / 2,
+            backgroundColor: COLORS.pink,
+            top: midH + bandH / 2 - jewel / 2 - 1,
+            left: w / 2 - jewel / 2,
+          },
+        ]}
+      />
+    </View>
+  );
+
+  if (bare) {
+    return <View style={style}>{crown}</View>;
+  }
+
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size * 0.3,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : COLORS.gold + '8C',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(12,4,28,0.97)',
+          shadowColor: muted ? '#000' : COLORS.gold,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={['rgba(255,184,0,0.22)', 'rgba(12,4,28,0.97)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: size * 0.68,
+          height: size * 0.68,
+          borderRadius: size * 0.34,
+          backgroundColor: 'rgba(255,184,0,0.14)',
+        }}
+      />
+      {crown}
+    </View>
+  );
+});
+
+const crownStyles = StyleSheet.create({
+  pointsRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  point: {
+    width: 0,
+    height: 0,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  jewel: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+  },
+});
 
 // ─── Tier node — the medallion on the center spine ─────────────────────────
 
@@ -209,7 +414,7 @@ const LaneCard = memo(function LaneCard({
       <LinearGradient
         colors={
           premiumLane
-            ? ['rgba(255,184,0,0.14)', 'rgba(26,10,46,0.94)']
+            ? ['rgba(98,52,160,0.95)', 'rgba(26,9,50,0.98)']
             : [...GRADIENTS.surfaceCard]
         }
         start={{ x: 0.5, y: 0 }}
@@ -348,14 +553,7 @@ const SeasonTierRow = memo(function SeasonTierRow({
             end={{ x: 1, y: 0.5 }}
             style={styles.showcaseHoloStrip}
           />
-          <IconMedallion
-            glyph={'\u{1F451}'}
-            size={64}
-            accent={COLORS.gold}
-            shape="squircle"
-            muted={!reached}
-            style={styles.showcaseMedallion}
-          />
+          <DrawnCrown size={64} muted={!reached} style={styles.showcaseMedallion} />
           <Text style={styles.showcaseEyebrow}>TIER 50</Text>
           <Text style={styles.showcaseTitle}>GRAND REWARD</Text>
           <Text style={styles.showcaseSubtitle}>{def.premiumReward.label}</Text>
@@ -568,7 +766,8 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
           </View>
           {state.isPremium ? (
             <View style={styles.premiumPill}>
-              <Text style={styles.premiumPillText}>{'\u{1F451}'} PREMIUM</Text>
+              <DrawnCrown size={14} bare />
+              <Text style={styles.premiumPillText}>PREMIUM</Text>
             </View>
           ) : (
             <View style={styles.countdownPill}>
@@ -610,7 +809,7 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
             style={[StyleSheet.absoluteFillObject, styles.panelFill]}
           />
           <View style={styles.upsellRow}>
-            <IconMedallion glyph={'\u{1F451}'} size={52} accent={COLORS.gold} shape="squircle" />
+            <DrawnCrown size={52} />
             <View style={styles.upsellCopy}>
               <Text style={styles.upsellTitle}>GO PREMIUM</Text>
               <Text style={styles.upsellDesc}>
@@ -695,6 +894,9 @@ const styles = StyleSheet.create({
   // ── Progress hero ────────────────────────────────────────────────────
   progressPanel: {
     ...bentoPanel('purple', { padding: 16 }),
+    // Opaque base so the synthwave wireframe backdrop can't bleed through
+    // the translucent gradient fill layered on top.
+    backgroundColor: 'rgba(12,4,28,0.94)',
   },
   progressTopRow: {
     flexDirection: 'row',
@@ -729,6 +931,9 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   premiumPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: RADIUS.full,
@@ -786,6 +991,7 @@ const styles = StyleSheet.create({
   // ── Premium upsell hero ──────────────────────────────────────────────
   upsellPanel: {
     ...bentoPanel('gold', { padding: 16 }),
+    backgroundColor: 'rgba(12,4,28,0.94)',
   },
   upsellRow: {
     flexDirection: 'row',
@@ -942,16 +1148,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 136,
+    // Opaque base under the gradient fill — content sits ON the card
+    // instead of blending into the floor grid behind it.
+    backgroundColor: 'rgba(12,4,28,0.96)',
   },
   laneCardFree: {
     borderColor: 'rgba(0,229,255,0.20)',
     ...SHADOWS.soft,
   },
   laneCardPremium: {
-    borderColor: 'rgba(255,184,0,0.30)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,196,32,0.55)',
+    backgroundColor: 'rgba(28,11,54,0.97)',
     shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.28,
     shadowRadius: 12,
     elevation: 5,
   },
@@ -1050,6 +1261,7 @@ const styles = StyleSheet.create({
     padding: 18,
     paddingTop: 22,
     alignItems: 'center',
+    backgroundColor: 'rgba(12,4,28,0.96)',
     ...SHADOWS.glow(COLORS.gold),
   },
   showcaseCardReached: {

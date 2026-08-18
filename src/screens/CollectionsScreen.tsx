@@ -636,6 +636,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0,229,255,0.28)',
     overflow: 'hidden',
+    // Opaque base so the hex-grid backdrop can't bleed through the
+    // translucent gradient fill layered on top.
+    backgroundColor: 'rgba(12,4,28,0.94)',
     ...SHADOWS.soft,
   },
   coachBannerPressed: {
@@ -733,6 +736,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
+    // Opaque base under the gradient fills — reward content sits ON the
+    // card instead of blending into the hex grid behind it.
+    backgroundColor: 'rgba(12,4,28,0.96)',
   },
   pressedCard: {
     transform: [{ scale: 0.98 }],
@@ -787,6 +793,7 @@ const styles = StyleSheet.create({
   },
   tileSetsSection: {
     overflow: 'hidden',
+    backgroundColor: 'rgba(12,4,28,0.96)',
   },
   tileSetRow: {
     marginBottom: 12,
@@ -879,6 +886,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     marginTop: 12,
+    backgroundColor: 'rgba(12,4,28,0.96)',
   },
   seasonEyebrow: {
     fontSize: 10,
@@ -918,6 +926,7 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: 'center',
     overflow: 'hidden',
+    backgroundColor: 'rgba(12,4,28,0.96)',
   },
   stampMissing: {
     backgroundColor: COLORS.bgLight,
@@ -945,7 +954,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: COLORS.surface + '60',
+    backgroundColor: 'rgba(18,7,36,0.94)',
     borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: 'rgba(0,229,255,0.14)',
