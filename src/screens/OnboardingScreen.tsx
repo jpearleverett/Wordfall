@@ -20,6 +20,7 @@ import { CellPosition } from '../types';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 import { funnelTracker } from '../services/funnelTracker';
 import { removeCellsAndApplyGravity } from '../engine/gravity';
+import GameIcon from '../components/icons/GameIcon';
 
 const { width, height } = Dimensions.get('window');
 
@@ -196,7 +197,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
           <Animated.View style={[styles.glowCircle, { transform: [{ scale: pulseAnim }] }]} />
           <View style={styles.glowRingOuter} />
           <View style={styles.glowRingInner} />
-          <Text style={styles.welcomeEmoji}>🎮</Text>
+          <View style={styles.welcomeEmoji}><GameIcon name="gamepad" size={83} /></View>
           <Text style={styles.welcomeTitle}>{t('onboarding.welcomeTo')}</Text>
           <Text style={styles.welcomeTitleAccent}>WORDFALL</Text>
           <Text style={styles.welcomeSubtext}>{t('onboarding.welcomeTagline')}</Text>
@@ -294,7 +295,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
       <View style={styles.container}>
         <Animated.View style={[styles.centerContent, { opacity: fadeAnim }]}>
           <Animated.View style={[styles.glowCircleGreen, { transform: [{ scale: pulseAnim }] }]} />
-          <Text style={styles.celebrateEmoji}>🎉</Text>
+          <View style={styles.celebrateEmoji}><GameIcon name="sparkle" size={83} /></View>
           <Text style={styles.celebrateTitle}>{t('onboarding.celebrateTitle')}</Text>
           <Text style={styles.celebrateSubtext}>{t('onboarding.celebrateMessage')}</Text>
 
@@ -330,7 +331,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
           <Text style={styles.primerTitle}>Your toolkit</Text>
 
           <View style={styles.primerRow}>
-            <Text style={styles.primerIcon}>🪙</Text>
+            <View style={styles.primerIcon}><GameIcon name="coin" size={37} /></View>
             <View style={styles.primerCopyCol}>
               <Text style={styles.primerRowTitle}>Coins</Text>
               <Text style={styles.primerRowBody}>
@@ -339,7 +340,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
             </View>
           </View>
           <View style={styles.primerRow}>
-            <Text style={styles.primerIcon}>💎</Text>
+            <View style={styles.primerIcon}><GameIcon name="gem" size={37} /></View>
             <View style={styles.primerCopyCol}>
               <Text style={styles.primerRowTitle}>Gems</Text>
               <Text style={styles.primerRowBody}>
@@ -348,7 +349,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
             </View>
           </View>
           <View style={styles.primerRow}>
-            <Text style={styles.primerIcon}>👥</Text>
+            <View style={styles.primerIcon}><GameIcon name="people" size={37} /></View>
             <View style={styles.primerCopyCol}>
               <Text style={styles.primerRowTitle}>Clubs</Text>
               <Text style={styles.primerRowBody}>
@@ -458,7 +459,6 @@ const styles = StyleSheet.create({
     shadowRadius: 35,
   },
   welcomeEmoji: {
-    fontSize: 72,
     marginBottom: 20,
   },
   welcomeTitle: {
@@ -579,7 +579,6 @@ const styles = StyleSheet.create({
   },
   // Celebrate phase
   celebrateEmoji: {
-    fontSize: 72,
     marginBottom: 20,
   },
   celebrateTitle: {
@@ -628,7 +627,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
   },
   primerIcon: {
-    fontSize: 32,
     marginRight: 14,
   },
   primerCopyCol: {

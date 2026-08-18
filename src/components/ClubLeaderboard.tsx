@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { ClubLeaderboardEntry, getClubLeaderboardReward } from '../data/clubEvents';
+import GameIcon from './icons/GameIcon';
 
 const { width } = Dimensions.get('window');
 
@@ -19,10 +20,10 @@ const TIER_BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   diamond: { bg: COLORS.tierDiamond + '30', text: COLORS.tierDiamond },
 };
 
-const RANK_DECORATIONS: Record<number, { emoji: string; color: string }> = {
-  1: { emoji: '🏆', color: COLORS.gold },
-  2: { emoji: '🥈', color: COLORS.tierSilver },
-  3: { emoji: '🥉', color: COLORS.tierBronze },
+const RANK_DECORATIONS: Record<number, { icon: React.ReactNode; color: string }> = {
+  1: { icon: <GameIcon name="trophy" size={21} />, color: COLORS.gold },
+  2: { icon: <GameIcon name="medal" metal="silver" size={21} />, color: COLORS.tierSilver },
+  3: { icon: <GameIcon name="medal" metal="bronze" size={21} />, color: COLORS.tierBronze },
 };
 
 const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubId }) => {
@@ -36,7 +37,7 @@ const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubI
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerIcon}>{'🏅'}</Text>
+        <GameIcon name="medal" metal="gold" size={32} />
         <View>
           <Text style={styles.headerTitle}>{t('club.leaderboardTitle')}</Text>
           <Text style={styles.headerSubtitle}>{t('club.weeklyRankingsSub')}</Text>
@@ -48,15 +49,15 @@ const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubI
         <Text style={styles.rewardPreviewLabel}>{t('club.topClubRewards')}</Text>
         <View style={styles.rewardRow}>
           <View style={styles.rewardItem}>
-            <Text style={styles.rewardEmoji}>{'🏆'}</Text>
+            <View style={styles.rewardEmoji}><GameIcon name="trophy" size={21} /></View>
             <Text style={styles.rewardText}>2000c + 100g</Text>
           </View>
           <View style={styles.rewardItem}>
-            <Text style={styles.rewardEmoji}>{'🥈'}</Text>
+            <View style={styles.rewardEmoji}><GameIcon name="medal" metal="silver" size={21} /></View>
             <Text style={styles.rewardText}>1200c + 60g</Text>
           </View>
           <View style={styles.rewardItem}>
-            <Text style={styles.rewardEmoji}>{'🥉'}</Text>
+            <View style={styles.rewardEmoji}><GameIcon name="medal" metal="bronze" size={21} /></View>
             <Text style={styles.rewardText}>600c + 30g</Text>
           </View>
         </View>
@@ -81,7 +82,7 @@ const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubI
                 {/* Rank */}
                 <View style={styles.rankContainer}>
                   {rankDeco ? (
-                    <Text style={styles.rankEmoji}>{rankDeco.emoji}</Text>
+                    rankDeco.icon
                   ) : (
                     <Text style={styles.rankText}>{entry.rank}</Text>
                   )}
@@ -150,7 +151,7 @@ const ClubLeaderboard: React.FC<ClubLeaderboardProps> = ({ entries, currentClubI
         })
       ) : (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>{'📊'}</Text>
+          <View style={styles.emptyIcon}><GameIcon name="target" size={41} /></View>
           <Text style={styles.emptyText}>{t('club.noRankingsYet')}</Text>
           <Text style={styles.emptySubtext}>{t('club.playToEarnScore')}</Text>
         </View>
@@ -174,9 +175,6 @@ const styles = StyleSheet.create({
     padding: 18,
     paddingBottom: 12,
     gap: 12,
-  },
-  headerIcon: {
-    fontSize: 28,
   },
   headerTitle: {
     fontSize: 18,
@@ -214,7 +212,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rewardEmoji: {
-    fontSize: 18,
     marginBottom: 2,
   },
   rewardText: {
@@ -242,9 +239,6 @@ const styles = StyleSheet.create({
     width: 28,
     alignItems: 'center',
     marginRight: 10,
-  },
-  rankEmoji: {
-    fontSize: 18,
   },
   rankText: {
     fontSize: 14,
@@ -331,7 +325,6 @@ const styles = StyleSheet.create({
     padding: 30,
   },
   emptyIcon: {
-    fontSize: 36,
     marginBottom: 10,
   },
   emptyText: {

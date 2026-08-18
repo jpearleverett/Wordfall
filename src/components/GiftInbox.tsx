@@ -24,11 +24,12 @@ import { claimGiftSecure } from '../services/gifts';
 import { useEconomyActions } from '../stores/economyStore';
 import { useAuth } from '../contexts/AuthContext';
 import { crashReporter } from '../services/crashReporting';
+import GameIcon, { GameIconName } from './icons/GameIcon';
 
-const GIFT_ICON: Record<FirestoreGift['type'], string> = {
-  hint: '💡',
-  tile: '🔤',
-  life: '❤️',
+const GIFT_ICON: Record<FirestoreGift['type'], GameIconName> = {
+  hint: 'hint',
+  tile: 'puzzle',
+  life: 'heart',
 };
 
 const GIFT_I18N_KEY: Record<FirestoreGift['type'], string> = {
@@ -124,7 +125,9 @@ export const GiftInbox: React.FC = () => {
             end={{ x: 1, y: 1 }}
             style={styles.card}
           >
-            <Text style={styles.giftIcon}>{GIFT_ICON[gift.type] ?? '🎁'}</Text>
+            <View style={styles.giftIcon}>
+              <GameIcon name={GIFT_ICON[gift.type] ?? 'gift'} size={32} />
+            </View>
             <View style={styles.info}>
               <Text style={styles.from} numberOfLines={1}>
                 {fromName}
@@ -183,7 +186,6 @@ const styles = StyleSheet.create({
     ...SHADOWS.soft,
   },
   giftIcon: {
-    fontSize: 28,
     marginRight: 12,
   },
   info: {

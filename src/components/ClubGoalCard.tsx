@@ -11,6 +11,7 @@ import {
   formatTimeRemaining,
   getReachedTiers,
 } from '../data/clubEvents';
+import GameIcon from './icons/GameIcon';
 
 const { width } = Dimensions.get('window');
 
@@ -25,10 +26,10 @@ const TIER_COLORS: Record<string, string> = {
   gold: COLORS.tierGold,
 };
 
-const TIER_ICONS: Record<string, string> = {
-  bronze: '🥉',
-  silver: '🥈',
-  gold: '🥇',
+const TIER_METALS: Record<string, 'gold' | 'silver' | 'bronze'> = {
+  bronze: 'bronze',
+  silver: 'silver',
+  gold: 'gold',
 };
 
 const ClubGoalCard: React.FC<ClubGoalCardProps> = ({ goal, playerContribution = 0 }) => {
@@ -57,14 +58,14 @@ const ClubGoalCard: React.FC<ClubGoalCardProps> = ({ goal, playerContribution = 
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.goalIcon}>{goal.template.icon}</Text>
+          <View style={styles.goalIcon}><GameIcon glyph={goal.template.icon} size={37} /></View>
           <View style={styles.headerInfo}>
             <Text style={styles.goalName}>{goal.template.name}</Text>
             <Text style={styles.goalDesc}>{description}</Text>
           </View>
         </View>
         <View style={styles.timerBadge}>
-          <Text style={styles.timerIcon}>{'⏱'}</Text>
+          <View style={styles.timerIcon}><GameIcon name="hourglass" size={14} /></View>
           <Text style={styles.timerText}>{formatTimeRemaining(timeLeft)}</Text>
         </View>
       </View>
@@ -112,7 +113,9 @@ const ClubGoalCard: React.FC<ClubGoalCardProps> = ({ goal, playerContribution = 
                 reached && SHADOWS.glow(TIER_COLORS[rt.tier]),
               ]}
             >
-              <Text style={styles.tierEmoji}>{TIER_ICONS[rt.tier]}</Text>
+              <View style={styles.tierEmoji}>
+                <GameIcon name="medal" metal={TIER_METALS[rt.tier] ?? 'bronze'} size={21} />
+              </View>
               <Text
                 style={[
                   styles.tierLabel,
@@ -194,7 +197,6 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   goalIcon: {
-    fontSize: 32,
     marginRight: 12,
   },
   headerInfo: {
@@ -222,7 +224,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
   },
   timerIcon: {
-    fontSize: 12,
     marginRight: 4,
   },
   timerText: {
@@ -288,7 +289,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderSubtle,
   },
   tierEmoji: {
-    fontSize: 18,
     marginBottom: 3,
   },
   tierLabel: {
