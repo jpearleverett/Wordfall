@@ -499,10 +499,11 @@ const styles = StyleSheet.create({
     // row. This is the minimum that prevents that overlap while still
     // leaving the grid noticeably higher than the original 26px.
     marginBottom: 20,
-    // zIndex + elevation keep the chip band painted on top of the
-    // grid's shadow if it ever extends this far up.
+    // zIndex keeps the chip band painted on top of the grid's decorative
+    // glow if it ever extends this far up. Deliberately NO `elevation`
+    // here: Android elevation escapes normal sibling paint order, which
+    // let the chips draw on top of the PuzzleComplete victory overlay.
     zIndex: 2,
-    elevation: 2,
   },
   currentWordContainer: {
     alignItems: 'center',

@@ -106,7 +106,6 @@ interface LetterCellProps {
   isHinted: boolean;
   selectionIndex: number;
   isValidWord?: boolean;
-  isMoved?: boolean;
   isWildcard?: boolean;
   isSpotlightDimmed?: boolean;
   /**
@@ -114,8 +113,12 @@ interface LetterCellProps {
    * when the word containing it is found. Renders a small gold coin badge.
    */
   isBonusTile?: boolean;
-  /** Animated.Value driving gravity fall translateY (pixels, animates to 0) */
-  fallAnim?: Animated.Value;
+  /**
+   * Animated.ValueXY driving the gravity-fall translation (pixels, animates
+   * to {0,0}). XY so horizontal gravity (gravityFlip left/right) animates
+   * exactly like vertical falls.
+   */
+  fallAnim?: Animated.ValueXY;
   /** Grid row index (0-based). Used to build screen-reader position hints. */
   row?: number;
   /** Grid column index (0-based). Used to build screen-reader position hints. */
@@ -132,7 +135,6 @@ export const LetterCell = React.memo(function LetterCell({
   isHinted,
   selectionIndex,
   isValidWord = false,
-  isMoved = false,
   isWildcard = false,
   isSpotlightDimmed = false,
   isBonusTile = false,
@@ -180,7 +182,6 @@ export const LetterCell = React.memo(function LetterCell({
   // suggests. Full Reanimated migration was evaluated in Tier 6 B5 and
   // deferred — see `agent_docs/gotchas.md` for the tradeoff analysis.
   const scaleAnim = useSharedValue(1);
-  const movedAnim = useSharedValue(0);
 
   useEffect(() => {
     // One withSequence call per selection change. Scale pop is the only
@@ -199,18 +200,8 @@ export const LetterCell = React.memo(function LetterCell({
     }
   }, [isSelected, scaleAnim]);
 
-  useEffect(() => {
-    if (isMoved) {
-      movedAnim.value = 1;
-      movedAnim.value = withTiming(0, { duration: 400 });
-    }
-  }, [isMoved, movedAnim]);
-
   const scaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleAnim.value }],
-  }));
-  const movedOpacityStyle = useAnimatedStyle(() => ({
-    opacity: movedAnim.value,
   }));
 
   const borderRadius = size * 0.20;
@@ -274,7 +265,7 @@ export const LetterCell = React.memo(function LetterCell({
   const outerStyle = useMemo(() => {
     const s: any = {};
     if (isSpotlightDimmed) s.opacity = 0.3;
-    if (fallAnim) s.transform = [{ translateY: fallAnim }];
+    if (fallAnim) s.transform = fallAnim.getTranslateTransform();
     return s;
   }, [isSpotlightDimmed, fallAnim]);
 
@@ -319,24 +310,11 @@ export const LetterCell = React.memo(function LetterCell({
        * tap-to-commit latency.
        */}
 
-      {isMoved && (
-        <Reanimated.View
-          pointerEvents="none"
-          style={[
-            {
-              position: 'absolute',
-              top: -2,
-              left: -2,
-              right: -2,
-              bottom: -2,
-              borderRadius: borderRadius + 2,
-              borderWidth: 1.5,
-              borderColor: palette.accent,
-            },
-            movedOpacityStyle,
-          ]}
-        />
-      )}
+      {/* The old `isMoved` accent ring (a border flash on every tile that
+          gravity displaced) was removed in the gravity-animation rework —
+          the motion itself communicates the movement, and the ring's
+          mount/flash/unmount cycle on up to ~20 tiles per clear read as
+          flicker layered on top of the fall. */}
 
       <Reanimated.View
         style={[

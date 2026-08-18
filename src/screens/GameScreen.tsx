@@ -646,7 +646,6 @@ function GameScreenImpl({
   const modeTutorialSteps = useMemo(() => getModeTutorial(mode), [mode]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const prevFoundWordsRef = useRef(foundWords);
-  const [movedCells, setMovedCells] = useState<CellPosition[]>([]);
   // Multi-tile bloom queue — owned by the sibling `ClearParticleLayer` so
   // pushes/removes don't re-render the 2700-line GameScreen parent. We talk
   // to it through an imperative handle (Fix F, April 2026 perf pass).
@@ -672,9 +671,6 @@ function GameScreenImpl({
   const undoFlashAnim = useRef(new Animated.Value(0)).current;
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
-
-  // --- Per-tile gravity fall animation state ---
-  const fallAnimMap = useRef(new Map<string, Animated.Value>()).current;
 
   // --- Big word celebration state (Task 2) ---
   const [bigWordLabel, setBigWordLabel] = useState<string | null>(null);
@@ -1342,12 +1338,20 @@ function GameScreenImpl({
     };
   }, [mode, level, isDaily, board.words.length, board.config.rows, board.config.cols]);
 
-  // Track post-gravity moved cells + per-tile fall animation
+  // Gravity SFX + analytics on word found. The fall ANIMATION itself now
+  // lives entirely inside Grid.tsx — it diffs the grid data at render time
+  // and applies translate offsets in the same pass, so tiles can never
+  // paint at their destination before the animation starts (the old
+  // GameScreen-effect pipeline had a visible teleport/flicker window, and
+  // its Animated.parallel froze every in-flight tile when a second word
+  // interrupted it). GameScreen keeps the whoosh sound, analytics, and the
+  // reduce-motion settle haptic (Grid skips all motion under reduce-motion,
+  // so its onGravitySettled never fires there — feedback must not vanish
+  // with motion).
   useEffect(() => {
-    // Capture-then-update BEFORE branching: the word-found branch returns a
-    // cleanup function, so a trailing assignment would be unreachable and the
-    // stale ref would replay the gravity whoosh/haptic on every undo (which
-    // drops foundWords from N to N-1 — still above a never-updated 0).
+    // Capture-then-update BEFORE branching: the word-found branch returns
+    // early, so a trailing assignment would leave a stale ref that replays
+    // the gravity whoosh on every undo.
     const prevFound = prevFoundWordsRef.current;
     prevFoundWordsRef.current = foundWords;
     if (foundWords > prevFound && status === 'playing') {
@@ -1362,110 +1366,16 @@ function GameScreenImpl({
       requestAnimationFrame(() => {
         void analytics.logEvent('gravity_interaction', analyticsPayload);
       });
-      // Per-tile gravity fall animation. Prepare Animated.Values before
-      // publishing movedCells so the single render triggered by setMovedCells
-      // already contains the initial transform; avoid a separate fallActive
-      // render on start/end.
-      if (!reduceMotion && moved.length > 0) {
-        const rows = grid.length;
-        const cols = grid[0]?.length ?? 0;
-        // Compute cellStride (same formula as Grid.tsx)
-        const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-        let cellSize = Math.floor(availableWidth / cols);
-        if (gridAreaHeight > 0) {
-          const frameAllowance = 58;
-          const heightAvail = gridAreaHeight - frameAllowance;
-          const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
-          cellSize = Math.min(cellSize, heightBased);
-        }
-        const cellStride = cellSize + CELL_GAP;
-
-        // Stagger delay per column, radiating OUT from the cleared word's
-        // centroid so the wave reads as caused by the clear. A plain
-        // left-to-right sweep (the old ascending-col sort) always started at
-        // the grid's left edge regardless of where the word was.
-        const staggerDelay = ANIM.gravityStagger || 30;
-        const movedCols = new Set(moved.map(c => c.col));
-        const submitted = lastSubmittedCellsRef.current;
-        const centroidCol = submitted.length > 0
-          ? submitted.reduce((s, c) => s + c.col, 0) / submitted.length
-          : null;
-        const colOrder = Array.from(movedCols).sort((a, b) =>
-          centroidCol === null
-            ? a - b
-            : Math.abs(a - centroidCol) - Math.abs(b - centroidCol) || a - b,
-        );
-        const colDelayMap = new Map<number, number>();
-        colOrder.forEach((c, i) => colDelayMap.set(c, i * staggerDelay));
-
-        const animations: Animated.CompositeAnimation[] = [];
-        for (const cell of moved) {
-          // Get or create Animated.Value for this cell
-          let anim = fallAnimMap.get(cell.cellId);
-          if (!anim) {
-            anim = new Animated.Value(0);
-            fallAnimMap.set(cell.cellId, anim);
-          }
-          // Set offset so tile visually appears at old position
-          // fallRows > 0 means tile fell down, so start with negative translateY (above)
-          const offsetPx = -(cell.fallRows * cellStride);
-          anim.setValue(offsetPx);
-
-          const delay = colDelayMap.get(cell.col) ?? 0;
-          // Animate to 0 (final position) with gravity-like feel.
-          // Phase 3.10: friction dropped 12 → 9 for a subtle landing bounce
-          // overshoot (reduceMotion users already skip this block at line 1048).
-          animations.push(
-            Animated.sequence([
-              Animated.delay(delay),
-              Animated.spring(anim, {
-                toValue: 0,
-                tension: 180,
-                friction: 9,
-                useNativeDriver: true,
-              }),
-            ])
-          );
-        }
-        setMovedCells(moved);
-        Animated.parallel(animations).start(({ finished }) => {
-          // Interrupted runs (the next word's setValue force-stops in-flight
-          // springs on shared columns) must not fire the landing haptic while
-          // tiles are mid-air — the completed successor run handles both the
-          // haptic and the pruning with fresh state.
-          if (!finished) return;
-          // C1 in launch_blockers.md: fire the gravity-land haptic now that
-          // the spring animation has settled. Previously this function was
-          // defined in haptics.ts:51 but never called in production.
-          void gravityLandHaptic();
-          // Clean up animated values for cells no longer on the grid
-          const activeCellIds = new Set<string>();
-          grid.forEach(row =>
-            row.forEach(c => { if (c) activeCellIds.add(c.id); })
-          );
-          for (const id of fallAnimMap.keys()) {
-            if (!activeCellIds.has(id)) fallAnimMap.delete(id);
-          }
-        });
-      } else {
-        // Words cleared along the bottom rows move nothing — keep the state's
-        // existing (often empty) array reference so PlayField/GameGrid skip
-        // two pointless grid-wide reconciliations during the clear window.
-        setMovedCells(prev => (prev.length === 0 && moved.length === 0 ? prev : moved));
-        // Reduce-motion suppresses the spring, not the settle confirmation —
-        // motion off must not mean feedback off. Tiles still moved; say so.
-        if (reduceMotion && moved.length > 0) {
-          void gravityLandHaptic();
-        }
+      if (reduceMotion && moved.length > 0) {
+        void gravityLandHaptic();
       }
-
-      const timer = setTimeout(
-        () => setMovedCells(prev => (prev.length === 0 ? prev : [])),
-        400,
-      );
-      return () => clearTimeout(timer);
     }
   }, [foundWords, status]);
+
+  // Landing haptic — fired by Grid when every tile from a fall has settled.
+  const handleGravitySettled = useCallback(() => {
+    void gravityLandHaptic();
+  }, []);
 
   // Last-word tension hook (plan task 2). When `remainingWords` transitions to
   // exactly 1, crossfade to the tense BGM, fire a one-shot sting, and run a
@@ -2465,8 +2375,10 @@ function GameScreenImpl({
 
 
       {/* Word bank — reads selection state from the zustand store directly.
-          Renders above the grid area in its original layout position. */}
-      <ConnectedWordBank />
+          Renders above the grid area in its original layout position.
+          Hidden (opacity 0, layout preserved) while any completion overlay
+          is up so the chips can never paint over the victory/failure UI. */}
+      <ConnectedWordBank hidden={showComplete || showFailed || showPostLoss} />
 
       {/* Grid area — onLayout measures the available space for Grid sizing */}
       <View style={styles.gridArea} onLayout={handleGridLayout}>
@@ -2488,8 +2400,7 @@ function GameScreenImpl({
           gridScaleStyle={gridScaleStyle}
           showValidFlash={showValidFlash}
           spotlightDimmedSet={spotlightDimmedSet}
-          fallAnimMap={fallAnimMap}
-          movedCells={movedCells}
+          onGravitySettled={handleGravitySettled}
           bonusCellId={bonusTile?.cellId ?? null}
         />
         </TilePaletteContext.Provider>

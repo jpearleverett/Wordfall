@@ -1050,6 +1050,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     paddingBottom: 20,
+    // Must always win the z-battle against gameplay chrome. The word-bank
+    // chips carry Android `elevation` for their shadows, which escapes
+    // plain sibling paint order — without an explicit higher elevation +
+    // zIndex here they floated on top of this overlay and tracked its
+    // scroll. 100 comfortably clears every in-game elevation (max 8).
+    zIndex: 100,
+    elevation: 100,
   },
   confettiParticle: {
     position: 'absolute',
