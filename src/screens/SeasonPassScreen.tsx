@@ -47,6 +47,23 @@ import {
 import { useCommerce } from '../hooks/useCommerce';
 import { usePlayerActions } from '../stores/playerStore';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
+import { getDecorationIconName } from '../data/library';
+
+/**
+ * Bespoke art for reward kinds whose catalog emoji resolves to a generic
+ * fallback icon ('✨' → sparkle, '⭐' → star). Decoration cosmetics resolve
+ * through the decoration icon table so a mapped id shows its own art, with
+ * the banner as the season-decoration default; rare tiles get the crystal.
+ * Returns undefined for kinds whose emoji already resolves to distinct art.
+ */
+function rewardIconName(reward: PassReward): GameIconName | undefined {
+  if (reward.type === 'rare_tile') return 'cascadeCrystal';
+  if (reward.type === 'cosmetic' && reward.cosmeticId && /(^|_)deco/.test(reward.cosmeticId)) {
+    const resolved = getDecorationIconName(reward.cosmeticId);
+    return resolved === 'chest' ? 'bannerDecor' : resolved;
+  }
+  return undefined;
+}
 
 /**
  * IconMedallion's shell (accent ring + glow + body gradient) hosting a
@@ -98,7 +115,10 @@ function SvgMedallion({
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
-      <GameIcon glyph={glyph} name={name} size={size * 0.58} />
+      {/* Icon-only dim on locked tiers so owned (unlocked) medallions pop. */}
+      <View style={muted ? { opacity: 0.6 } : undefined}>
+        <GameIcon glyph={glyph} name={name} size={size * 0.58} />
+      </View>
     </View>
   );
 }
@@ -511,6 +531,7 @@ const LaneCard = memo(function LaneCard({
             <View style={[styles.gildedRingInner, muted && styles.gildedRingInnerMuted]}>
               <SvgMedallion
                 glyph={reward.icon}
+                name={rewardIconName(reward)}
                 size={40}
                 accent={COLORS.gold}
                 muted={muted}
@@ -520,6 +541,7 @@ const LaneCard = memo(function LaneCard({
         ) : (
           <SvgMedallion
             glyph={reward.icon}
+            name={rewardIconName(reward)}
             size={42}
             accent={laneAccent}
             muted={muted}

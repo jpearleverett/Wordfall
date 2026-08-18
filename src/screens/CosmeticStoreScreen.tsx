@@ -14,6 +14,7 @@ import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import IconMedallion from '../components/common/IconMedallion';
 import ThemePreview from '../components/cosmetics/ThemePreview';
+import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
 import GameIcon from '../components/icons/GameIcon';
 import { useEconomy } from '../contexts/EconomyContext';
 import PrimaryButton from '../components/common/PrimaryButton';
@@ -94,75 +95,60 @@ const CURRENCY_ICONS: Record<string, string> = {
   libraryPoints: '\u{1F4DA}',
 };
 
-// ── Frame ring preview ───────────────────────────────────────────────────────
+// ── Frame art preview ────────────────────────────────────────────────────────
 
 /**
- * Layered ring mock for profile frames — nested gradient rings in the frame's
- * rarity color (replacing the old flat grey circle) so a frame card previews
- * as an actual frame around an avatar slot.
+ * Real frame art preview — ProfileFrameArt's bespoke SVG ring wrapped around
+ * a dark avatar-placeholder disc (matching ProfileScreen's avatar look), so
+ * store cards show the actual frame being browsed/bought. Locked/unowned
+ * cards render it dimmed via `dimmed`.
  */
-function FrameRingPreview({
-  color,
-  size = 52,
-  initial,
+function FramePreview({
+  frameId,
+  size = 76,
+  dimmed = false,
 }: {
-  color: string;
+  frameId: string;
   size?: number;
-  initial: string;
+  dimmed?: boolean;
 }) {
-  const innerSize = size - 12;
+  // Avatar disc at ~88% of size so the frame band seats on its rim
+  // (same ratio ProfileScreen uses: 88px disc in a 100px frame).
+  const discSize = Math.round(size * 0.88);
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: 2.5,
-        borderColor: color,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(10,0,21,0.6)',
-        ...SHADOWS.glow(color),
-      }}
-    >
-      <LinearGradient
-        colors={[color + '5C', color + '10'] as [string, string]}
-        style={[StyleSheet.absoluteFillObject, { borderRadius: size / 2 }]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      />
-      <View
-        style={{
-          width: innerSize,
-          height: innerSize,
-          borderRadius: innerSize / 2,
-          borderWidth: 1.5,
-          borderColor: color + '99',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'rgba(10,0,21,0.85)',
-          overflow: 'hidden',
-        }}
-      >
-        <LinearGradient
-          colors={[color + '38', 'transparent'] as [string, string]}
-          style={StyleSheet.absoluteFillObject}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-        />
-        <Text
+    <View style={dimmed && { opacity: 0.55 }}>
+      <ProfileFrameArt frameId={frameId} size={size}>
+        <View
           style={{
-            fontFamily: FONTS.display,
-            fontSize: size * 0.32,
-            color: COLORS.textPrimary,
-            textShadowColor: color,
-            textShadowOffset: { width: 0, height: 0 },
-            textShadowRadius: 8,
+            width: discSize,
+            height: discSize,
+            borderRadius: discSize / 2,
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            backgroundColor: 'rgba(10,0,21,0.92)',
           }}
         >
-          {initial}
-        </Text>
-      </View>
+          <LinearGradient
+            colors={['rgba(255,255,255,0.10)', 'rgba(8,2,22,0)'] as [string, string]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.72 }}
+          />
+          <Text
+            style={{
+              fontFamily: FONTS.display,
+              fontSize: discSize * 0.42,
+              color: COLORS.textPrimary,
+              textShadowColor: 'rgba(5,0,16,0.6)',
+              textShadowOffset: { width: 0, height: 2 },
+              textShadowRadius: 2,
+            }}
+          >
+            P
+          </Text>
+        </View>
+      </ProfileFrameArt>
     </View>
   );
 }
@@ -456,7 +442,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
           ) : item.icon ? (
             <IconMedallion glyph={item.icon} size={48} accent={rarityColor} />
           ) : item.tabType === 'frames' ? (
-            <FrameRingPreview color={rarityColor} size={52} initial={item.name.charAt(0)} />
+            <FramePreview frameId={item.id} size={76} dimmed={!isOwned} />
           ) : (
             <IconMedallion
               glyph={item.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
@@ -572,11 +558,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
               ) : selectedItem.icon ? (
                 <IconMedallion glyph={selectedItem.icon} size={80} accent={rarityColor} />
               ) : selectedItem.tabType === 'frames' ? (
-                <FrameRingPreview
-                  color={rarityColor}
-                  size={84}
-                  initial={selectedItem.name.charAt(0)}
-                />
+                <FramePreview frameId={selectedItem.id} size={120} dimmed={!isOwned} />
               ) : (
                 <IconMedallion
                   glyph={selectedItem.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}

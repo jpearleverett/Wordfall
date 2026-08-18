@@ -100,7 +100,7 @@ export default function SeasonPassCompleteCeremony({
 
           {cosmeticSetId && (
             <View style={[styles.rewardRow, styles.cosmeticRow]}>
-              <GameIcon name="sparkle" size={16} />
+              <GameIcon name="bannerDecor" size={16} />
               <Text style={styles.cosmeticLabel}>
                 Legendary set unlocked
               </Text>

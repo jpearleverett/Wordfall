@@ -20,6 +20,7 @@ import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
 import ThemePreview from '../components/cosmetics/ThemePreview';
+import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
 import { bentoPanel, bentoDividerColor } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
@@ -422,20 +423,14 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 0.8 }}
           />
-          {/* Locked frames render the SAME preview ring, dimmed, with a small
+          {/* Real frame art (ProfileFrameArt SVG ring) around a mini avatar
+              disc. Locked frames render the SAME art, dimmed, with a small
               lock badge — the reward stays visible instead of hiding behind a
-              placeholder lock medallion. */}
+              placeholder lock medallion. Equipped highlight (card border +
+              glow) stays OUTSIDE the frame art. */}
           <View style={!owned && styles.framePreviewLockedDim}>
-            <View
-              style={[
-                styles.framePreviewRing,
-                {
-                  borderColor: rarityColor,
-                  shadowColor: rarityColor,
-                },
-              ]}
-            >
-              <View style={styles.framePreviewCircle}>
+            <ProfileFrameArt frameId={frame.id} size={76}>
+              <View style={styles.framePreviewDisc}>
                 <LinearGradient
                   colors={[...GRADIENTS.surfaceCard]}
                   style={StyleSheet.absoluteFill}
@@ -448,11 +443,6 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                   start={{ x: 0.5, y: 0 }}
                   end={{ x: 0.5, y: 0.85 }}
                 />
-                {/* Miniature of the hero treatment: orbit + diamond + bevel glyph */}
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <View style={[styles.framePreviewOrbit, { borderColor: rarityColor + '2B' }]} />
-                  <View style={[styles.framePreviewDiamond, { borderColor: rarityColor + '33' }]} />
-                </View>
                 <View style={styles.avatarGlyphStack}>
                   <Text style={[styles.framePreviewLetter, styles.framePreviewLetterUnder]}>
                     {initial}
@@ -466,9 +456,8 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                     {initial}
                   </Text>
                 </View>
-                <View style={styles.framePreviewShine} pointerEvents="none" />
               </View>
-            </View>
+            </ProfileFrameArt>
           </View>
           {!owned && (
             <GlyphMedallion size={26} accent={rarityColor} style={styles.frameLockBadge}>
@@ -976,22 +965,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...SHADOWS.soft,
   },
-  framePreviewRing: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  framePreviewCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  // Avatar disc under ProfileFrameArt's SVG ring — ~88% of the 76px art box
+  // so the frame band seats on its rim (same ratio as ProfileScreen's hero).
+  framePreviewDisc: {
+    width: 67,
+    height: 67,
+    borderRadius: 33.5,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -1002,34 +981,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 6,
-  },
-  framePreviewShine: {
-    position: 'absolute',
-    top: 5,
-    left: 12,
-    right: 12,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-  },
-  framePreviewOrbit: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: 4,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-  },
-  framePreviewDiamond: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: 12,
-    width: 32,
-    height: 32,
-    borderWidth: 1,
-    borderRadius: 6,
-    transform: [{ rotate: '45deg' }],
   },
   // Locked frame preview: dimmed to ~55% but still fully drawn.
   framePreviewLockedDim: {
