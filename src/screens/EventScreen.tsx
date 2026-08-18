@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  TouchableOpacity,
   StyleSheet,
-  Dimensions,
   Animated,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import SectionHeader from '../components/common/SectionHeader';
+import IconMedallion from '../components/common/IconMedallion';
+import PrimaryButton from '../components/common/PrimaryButton';
+import NeonProgressBar from '../components/common/NeonProgressBar';
 import EventLeaderboardCard from '../components/events/EventLeaderboardCard';
 import { useAuth } from '../contexts/AuthContext';
 import { getCurrentEvent } from '../data/events';
@@ -23,8 +25,6 @@ import {
   selectOwnedDecorations,
   selectUnlockedCosmetics,
 } from '../stores/playerStore';
-
-const { width } = Dimensions.get('window');
 
 /**
  * Self-contained 1Hz countdown leaf (same pattern as ShopScreen's
@@ -60,6 +60,52 @@ const EventCountdownText = React.memo(function EventCountdownText({
   }, [format]);
 
   return <Text style={style}>Ends in {text}</Text>;
+});
+
+/**
+ * Event progress bar with milestone markers. Wraps the shared NeonProgressBar
+ * and overlays one marker dot per reward tier at its threshold position so
+ * the player can see exactly where the next payoff sits on the track.
+ */
+const MilestoneProgress = React.memo(function MilestoneProgress({
+  progress,
+  max,
+  color,
+  rewards,
+}: {
+  progress: number;
+  max: number;
+  color: string;
+  rewards: EventRewardTierDisplay[];
+}) {
+  const frac = max > 0 ? Math.min(progress / max, 1) : 0;
+  return (
+    <View style={styles.milestoneWrap}>
+      <NeonProgressBar progress={frac} color={color} height={12} />
+      <View style={styles.milestoneOverlay} pointerEvents="none">
+        {rewards.map((reward) => {
+          const at = max > 0 ? Math.min(reward.threshold / max, 1) : 0;
+          const reached = reward.reached;
+          return (
+            <View
+              key={reward.tier}
+              style={[
+                styles.milestoneMarker,
+                { left: `${at * 100}%` },
+                reached
+                  ? {
+                      backgroundColor: color,
+                      borderColor: '#fff',
+                      ...SHADOWS.neonGlow(color),
+                    }
+                  : null,
+              ]}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
 });
 
 interface EventScreenProps {
@@ -219,14 +265,20 @@ const EventScreen: React.FC<EventScreenProps> = ({
     return `${hours}h ${minutes}m`;
   };
 
+  const headerAccent = primaryEvent ? getEventTypeColor(primaryEvent.type) : COLORS.accent;
+
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="event" />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+    <ScreenScaffold
+      title="EVENTS"
+      eyebrow={
+        primaryEvent
+          ? `ENDS IN ${formatCountdown(endTime).toUpperCase()}`
+          : 'LIVE CHALLENGES'
+      }
+      accent={headerAccent}
+      backdrop="event"
+    >
+      <>
         {/* Active Event Multipliers Banner */}
         {hasActiveMultipliers && (
           <LinearGradient
@@ -235,7 +287,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            <Text style={styles.multiplierIcon}>{'\u{26A1}'}</Text>
+            <IconMedallion glyph={'\u{26A1}'} size={44} accent={COLORS.gold} style={styles.multiplierMedallion} />
             <View style={styles.multiplierInfo}>
               <Text style={styles.multiplierTitle}>ACTIVE BONUSES</Text>
               <View style={styles.multiplierRow}>
@@ -260,24 +312,40 @@ const EventScreen: React.FC<EventScreenProps> = ({
         )}
 
         {/* Active Events List */}
+        {activeEvents.length > 0 && (
+          <SectionHeader
+            label="LIVE NOW"
+            accent={headerAccent}
+            meta={`${activeEvents.length} ACTIVE`}
+          />
+        )}
         {activeEvents.map((activeEvent) => {
           const color = getEventTypeColor(activeEvent.type);
           const progress = activeEvent.progress;
           const maxThreshold = activeEvent.rewards.length > 0
             ? activeEvent.rewards[activeEvent.rewards.length - 1].threshold
             : 100;
-          const progressPercent = maxThreshold > 0 ? Math.min((progress / maxThreshold) * 100, 100) : 0;
 
           return (
-            <LinearGradient
+            <View
               key={activeEvent.id}
-              colors={[...GRADIENTS.surfaceCard] as [string, string]}
-              style={[styles.eventCard, { borderColor: color + '40' }]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              style={[styles.eventCard, { borderColor: color + '40', ...SHADOWS.glow(color) }]}
             >
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard] as [string, string]}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              />
+              {/* Accent top edge */}
+              <LinearGradient
+                colors={['transparent', color + 'AA', 'transparent'] as [string, string, string]}
+                style={styles.eventTopEdge}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+              />
               {/* Event Type Label */}
-              <View style={[styles.eventTypeBadge, { backgroundColor: color + '20' }]}>
+              <View style={[styles.eventTypeBadge, { backgroundColor: color + '20', borderColor: color + '55' }]}>
                 <Text style={[styles.eventTypeText, { color }]}>
                   {getEventTypeLabel(activeEvent.type)}
                 </Text>
@@ -285,9 +353,16 @@ const EventScreen: React.FC<EventScreenProps> = ({
 
               {/* Event Header */}
               <View style={styles.eventHeader}>
-                <Text style={styles.eventIcon}>{activeEvent.icon}</Text>
+                <IconMedallion
+                  glyph={activeEvent.icon}
+                  size={54}
+                  accent={color}
+                  style={styles.eventMedallion}
+                />
                 <View style={styles.eventTitleArea}>
-                  <Text style={[styles.eventName, { color }]}>{activeEvent.name}</Text>
+                  <Text style={[styles.eventName, { color, textShadowColor: color + '66' }]}>
+                    {activeEvent.name}
+                  </Text>
                   <Text style={styles.eventDesc}>{activeEvent.description}</Text>
                 </View>
               </View>
@@ -304,74 +379,98 @@ const EventScreen: React.FC<EventScreenProps> = ({
                 </Text>
               </LinearGradient>
 
-              {/* Progress Bar */}
+              {/* Progress Bar with milestone markers */}
               <View style={styles.eventProgressHeader}>
                 <Text style={styles.eventProgressLabel}>Progress</Text>
                 <Text style={styles.eventProgressValue}>
                   {progress} / {maxThreshold}
                 </Text>
               </View>
-              <View style={styles.eventProgressBarBg}>
-                <LinearGradient
-                  colors={[color, color + 'CC'] as [string, string]}
-                  style={[styles.eventProgressBarFill, { width: `${progressPercent}%` }]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                />
-              </View>
+              <MilestoneProgress
+                progress={progress}
+                max={maxThreshold}
+                color={color}
+                rewards={activeEvent.rewards}
+              />
 
-              {/* Reward Tiers */}
-              <View style={styles.rewardTiersRow}>
+              {/* Reward Tiers — medallion cards; claimable ones glow gold */}
+              <Animated.View style={[styles.rewardTiersRow, { transform: [{ scale: claimAnim }] }]}>
                 {activeEvent.rewards.map((reward) => {
                   const canClaim = reward.reached && !reward.claimed;
+                  const tierAccent = reward.claimed
+                    ? COLORS.green
+                    : canClaim
+                      ? COLORS.gold
+                      : color;
                   return (
-                    <TouchableOpacity
+                    <Pressable
                       key={reward.tier}
                       onPress={() => canClaim && handleClaimReward(activeEvent.id, reward.tier)}
                       disabled={!canClaim}
-                      activeOpacity={0.7}
                       accessibilityRole="button"
                       accessibilityLabel={`${reward.tier} tier reward${reward.claimed ? ', claimed' : reward.reached ? ', tap to claim' : ', locked'}`}
+                      style={({ pressed }) => [
+                        styles.rewardTierCard,
+                        canClaim && styles.rewardTierCardClaimable,
+                        reward.claimed && styles.rewardTierCardClaimed,
+                        pressed && canClaim && styles.pressedScale,
+                      ]}
                     >
-                      <View style={[
-                        styles.rewardTierItem,
-                        reward.reached && !reward.claimed && styles.rewardTierClaimable,
-                        reward.claimed && styles.rewardTierClaimed,
+                      <LinearGradient
+                        colors={
+                          canClaim
+                            ? ([COLORS.gold + '26', 'rgba(26,10,46,0.92)'] as [string, string])
+                            : ([...GRADIENTS.surfaceCard] as [string, string])
+                        }
+                        style={StyleSheet.absoluteFill}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                      />
+                      <IconMedallion
+                        glyph={reward.claimed ? '\u{2705}' : reward.reached ? '\u{1F381}' : '\u{1F512}'}
+                        size={38}
+                        accent={tierAccent}
+                        muted={!reward.reached}
+                        style={styles.rewardTierMedallion}
+                      />
+                      <Text style={styles.rewardTierThreshold}>{reward.threshold}</Text>
+                      <Text style={[
+                        styles.rewardTierLabel,
+                        reward.reached && { color: COLORS.textPrimary },
+                        reward.claimed && { color: COLORS.green },
                       ]}>
-                        <View style={[
-                          styles.rewardTierCircle,
-                          reward.reached && { borderColor: color, backgroundColor: color + '18' },
-                          reward.claimed && { borderColor: COLORS.green, backgroundColor: COLORS.green + '18' },
-                        ]}>
-                          <Text style={styles.rewardTierIcon}>
-                            {reward.claimed ? '\u{2705}' : reward.reached ? '\u{1F381}' : '\u{1F512}'}
-                          </Text>
+                        {reward.tier.charAt(0).toUpperCase() + reward.tier.slice(1)}
+                      </Text>
+                      {canClaim && (
+                        <View style={styles.claimPill}>
+                          <LinearGradient
+                            colors={[...GRADIENTS.button.gold] as [string, string, string]}
+                            style={StyleSheet.absoluteFill}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                          />
+                          <Text style={styles.claimPillText}>CLAIM</Text>
                         </View>
-                        <Text style={styles.rewardTierThreshold}>{reward.threshold}</Text>
-                        <Text style={[
-                          styles.rewardTierLabel,
-                          reward.reached && { color: COLORS.textPrimary },
-                          reward.claimed && { color: COLORS.green },
-                        ]}>
-                          {reward.tier.charAt(0).toUpperCase() + reward.tier.slice(1)}
-                        </Text>
-                        {canClaim && (
-                          <View style={[styles.claimButton, { backgroundColor: color }]}>
-                            <Text style={styles.claimButtonText}>Claim</Text>
-                          </View>
-                        )}
-                      </View>
-                    </TouchableOpacity>
+                      )}
+                    </Pressable>
                   );
                 })}
-              </View>
+              </Animated.View>
               {/* MG2: per-event leaderboard — degrades to null offline. */}
-              <EventLeaderboardCard
-                eventId={activeEvent.id}
-                currentUserId={user?.uid}
-                previewSize={5}
-              />
-            </LinearGradient>
+              <View style={styles.leaderboardGlass}>
+                <LinearGradient
+                  colors={[...GRADIENTS.glassOverlay] as [string, string]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                />
+                <EventLeaderboardCard
+                  eventId={activeEvent.id}
+                  currentUserId={user?.uid}
+                  previewSize={5}
+                />
+              </View>
+            </View>
           );
         })}
 
@@ -383,7 +482,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <Text style={styles.emptyIcon}>{'\u{1F3AE}'}</Text>
+            <IconMedallion glyph={'\u{1F3AE}'} size={64} accent={COLORS.purple} style={styles.emptyMedallion} />
             <Text style={styles.emptyTitle}>No Active Events</Text>
             <Text style={styles.emptyDesc}>Check back soon for new events and challenges!</Text>
           </LinearGradient>
@@ -408,14 +507,12 @@ const EventScreen: React.FC<EventScreenProps> = ({
               <Text style={styles.exclusiveLabel}>LIMITED TIME EXCLUSIVE</Text>
             </View>
             <View style={styles.exclusiveContent}>
-              <View style={[
-                styles.exclusiveIconCircle,
-                { borderColor: getRarityColor(exclusiveReward.rarity), ...SHADOWS.glow(getRarityColor(exclusiveReward.rarity)) },
-              ]}>
-                <Text style={styles.exclusiveIconText}>
-                  {getRewardTypeIcon(exclusiveReward.type)}
-                </Text>
-              </View>
+              <IconMedallion
+                glyph={getRewardTypeIcon(exclusiveReward.type)}
+                size={60}
+                accent={getRarityColor(exclusiveReward.rarity)}
+                style={styles.exclusiveMedallion}
+              />
               <View style={styles.exclusiveInfo}>
                 <Text style={styles.exclusiveRewardName}>
                   {exclusiveReward.name}
@@ -445,16 +542,14 @@ const EventScreen: React.FC<EventScreenProps> = ({
                 <Text style={[styles.exclusiveHint, { color: COLORS.gold }]}>
                   Gold tier reached! Claim your exclusive reward below.
                 </Text>
-                <TouchableOpacity onPress={handleClaimExclusiveReward} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={`Claim exclusive reward: ${exclusiveReward?.name}`}>
-                  <LinearGradient
-                    colors={[COLORS.gold, COLORS.rarityEpic] as [string, string]}
-                    style={styles.exclusiveClaimBtn}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  >
-                    <Text style={styles.exclusiveClaimBtnText}>Claim Reward</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                <PrimaryButton
+                  label="CLAIM REWARD"
+                  onPress={handleClaimExclusiveReward}
+                  variant="gold"
+                  size="medium"
+                  accessibilityLabel={`Claim exclusive reward: ${exclusiveReward?.name}`}
+                  style={styles.exclusiveClaimBtn}
+                />
               </>
             ) : (
               <>
@@ -471,90 +566,79 @@ const EventScreen: React.FC<EventScreenProps> = ({
         )}
 
         {/* Event Puzzles */}
-        <View style={styles.puzzlesSection}>
-          <View style={styles.puzzlesHeader}>
-            <Text style={styles.sectionTitle}>Event Puzzles</Text>
-            <TouchableOpacity onPress={onPlayEventPuzzle} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Play next event puzzle">
-              <LinearGradient
-                colors={[...GRADIENTS.button.primary] as [string, string, ...string[]]}
-                style={styles.playAllBtn}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.playAllText}>Play Next</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <SectionHeader label="EVENT PUZZLES" accent={COLORS.pink} />
+        <PrimaryButton
+          label="PLAY NEXT PUZZLE"
+          onPress={onPlayEventPuzzle}
+          variant="primary"
+          size="large"
+          fullWidth
+          accessibilityLabel="Play next event puzzle"
+          style={styles.playNextButton}
+        />
 
         {/* Event Shop Button */}
-        <TouchableOpacity onPress={onOpenEventShop} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Open event shop">
+        <SectionHeader label="EVENT SHOP" accent={COLORS.gold} />
+        <Pressable
+          onPress={onOpenEventShop}
+          accessibilityRole="button"
+          accessibilityLabel="Open event shop"
+          style={({ pressed }) => [styles.shopButton, pressed && styles.pressedScale]}
+        >
           <LinearGradient
             colors={[COLORS.gold + '20', COLORS.gold + '08'] as [string, string]}
-            style={styles.shopButton}
+            style={StyleSheet.absoluteFill}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.shopButtonIcon}>{'\u{1F6CD}\u{FE0F}'}</Text>
-            <View style={styles.shopButtonInfo}>
-              <Text style={styles.shopButtonTitle}>Event Shop</Text>
-              <Text style={styles.shopButtonDesc}>
-                Spend tokens on exclusive items
-              </Text>
-            </View>
-            <Text style={styles.shopChevron}>{'\u{203A}'}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+          />
+          <IconMedallion glyph={'\u{1F6CD}\u{FE0F}'} size={46} accent={COLORS.gold} style={styles.shopMedallion} />
+          <View style={styles.shopButtonInfo}>
+            <Text style={styles.shopButtonTitle}>Event Shop</Text>
+            <Text style={styles.shopButtonDesc}>
+              Spend tokens on exclusive items
+            </Text>
+          </View>
+          <Text style={styles.shopChevron}>{'\u{203A}'}</Text>
+        </Pressable>
 
         {/* Upcoming Events */}
-        <View style={styles.upcomingSection}>
-          <Text style={styles.sectionTitle}>Coming Up</Text>
+        <SectionHeader label="COMING UP" accent={COLORS.teal} />
+        <View style={styles.upcomingCard}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard] as [string, string]}
-            style={styles.upcomingCard}
+            style={StyleSheet.absoluteFill}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.upcomingHint}>
-              {eventManager.isWeekendBlitz()
-                ? 'Weekend Blitz is active! Enjoy double XP and boosted rare tile drops.'
-                : 'Weekend Blitz returns every Saturday & Sunday with 2x XP!'}
-            </Text>
-          </LinearGradient>
+          />
+          <Text style={styles.upcomingHint}>
+            {eventManager.isWeekendBlitz()
+              ? 'Weekend Blitz is active! Enjoy double XP and boosted rare tile drops.'
+              : 'Weekend Blitz returns every Saturday & Sunday with 2x XP!'}
+          </Text>
         </View>
-
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-    </View>
+      </>
+    </ScreenScaffold>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 60,
+  pressedScale: {
+    transform: [{ scale: 0.97 }],
+    opacity: 0.9,
   },
 
   // Multiplier Banner
   multiplierBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: RADIUS.xl,
     padding: 14,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: COLORS.gold + '40',
     ...SHADOWS.glow(COLORS.gold),
   },
-  multiplierIcon: {
-    fontSize: 28,
+  multiplierMedallion: {
     marginRight: 12,
   },
   multiplierInfo: {
@@ -593,18 +677,25 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     overflow: 'hidden',
-    ...SHADOWS.medium,
+  },
+  eventTopEdge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
   },
   eventTypeBadge: {
     alignSelf: 'flex-start',
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 3,
     marginBottom: 12,
   },
   eventTypeText: {
     fontSize: 10,
-    fontFamily: FONTS.bodyBold,
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
   },
   eventHeader: {
@@ -612,8 +703,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  eventIcon: {
-    fontSize: 40,
+  eventMedallion: {
     marginRight: 14,
   },
   eventTitleArea: {
@@ -624,6 +714,8 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     marginBottom: 4,
     letterSpacing: 0.5,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
   eventDesc: {
     fontSize: 13,
@@ -662,53 +754,59 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontVariant: ['tabular-nums'],
   },
-  eventProgressBarBg: {
-    height: 12,
-    backgroundColor: 'rgba(42, 48, 96, 0.6)',
-    borderRadius: 6,
-    overflow: 'hidden',
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+  // Milestone progress bar
+  milestoneWrap: {
+    marginBottom: 16,
+    paddingVertical: 4,
   },
-  eventProgressBarFill: {
-    height: '100%',
-    borderRadius: 6,
+  milestoneOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+  },
+  milestoneMarker: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -8,
+    marginLeft: -8,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(10,0,21,0.9)',
   },
 
   // Reward Tiers
   rewardTiersRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    gap: 8,
   },
-  rewardTierItem: {
+  rewardTierCard: {
+    flex: 1,
     alignItems: 'center',
-    width: (width - 80) / 4,
-    opacity: 0.6,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    overflow: 'hidden',
+    opacity: 0.65,
   },
-  rewardTierClaimable: {
+  rewardTierCardClaimable: {
     opacity: 1,
+    borderColor: COLORS.gold + '77',
+    ...SHADOWS.glow(COLORS.gold),
   },
-  rewardTierClaimed: {
-    opacity: 0.8,
+  rewardTierCardClaimed: {
+    opacity: 0.85,
+    borderColor: COLORS.green + '44',
   },
-  rewardTierCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(17, 22, 56, 0.8)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  rewardTierIcon: {
-    fontSize: 18,
+  rewardTierMedallion: {
+    marginBottom: 6,
   },
   rewardTierThreshold: {
     fontSize: 11,
-    fontFamily: FONTS.bodyBold,
+    fontFamily: FONTS.display,
     color: COLORS.textMuted,
   },
   rewardTierLabel: {
@@ -717,15 +815,29 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginBottom: 4,
   },
-  claimButton: {
-    borderRadius: 8,
+  claimPill: {
+    borderRadius: RADIUS.md,
     paddingHorizontal: 12,
     paddingVertical: 4,
+    overflow: 'hidden',
+    marginTop: 2,
   },
-  claimButtonText: {
+  claimPillText: {
     fontSize: 10,
-    fontFamily: FONTS.bodyBold,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
     color: COLORS.bg,
+  },
+
+  // Leaderboard glass wrap
+  leaderboardGlass: {
+    marginTop: 14,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.surfaceGlass,
+    overflow: 'hidden',
+    padding: 4,
   },
 
   // Empty State
@@ -738,13 +850,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     ...SHADOWS.medium,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 12,
+  emptyMedallion: {
+    marginBottom: 14,
   },
   emptyTitle: {
     fontSize: 18,
-    fontFamily: FONTS.bodyBold,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
     color: COLORS.textPrimary,
     marginBottom: 6,
   },
@@ -795,18 +907,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 14,
   },
-  exclusiveIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(17, 22, 56, 0.8)',
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+  exclusiveMedallion: {
     marginRight: 14,
-  },
-  exclusiveIconText: {
-    fontSize: 26,
   },
   exclusiveInfo: {
     flex: 1,
@@ -867,17 +969,9 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   exclusiveClaimBtn: {
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    alignItems: 'center',
     alignSelf: 'center',
-    marginTop: 10,
-  },
-  exclusiveClaimBtnText: {
-    fontSize: 14,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.bg,
+    marginTop: 12,
+    minWidth: 200,
   },
   exclusiveClaimedRow: {
     flexDirection: 'row',
@@ -896,48 +990,23 @@ const styles = StyleSheet.create({
   },
 
   // Puzzles
-  puzzlesSection: {
-    marginBottom: 14,
-  },
-  puzzlesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textPrimary,
-    textShadowColor: 'rgba(255,255,255,0.08)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  playAllBtn: {
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    ...SHADOWS.glow(COLORS.accent),
-  },
-  playAllText: {
-    fontSize: 13,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.bg,
+  playNextButton: {
+    marginBottom: 6,
   },
 
   // Shop Button
   shopButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 20,
+    borderRadius: RADIUS.xl,
+    padding: 16,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: COLORS.gold + '40',
+    overflow: 'hidden',
     ...SHADOWS.glow(COLORS.gold),
   },
-  shopButtonIcon: {
-    fontSize: 28,
+  shopMedallion: {
     marginRight: 14,
   },
   shopButtonInfo: {
@@ -945,7 +1014,8 @@ const styles = StyleSheet.create({
   },
   shopButtonTitle: {
     fontSize: 16,
-    fontFamily: FONTS.bodyBold,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
     color: COLORS.gold,
     marginBottom: 2,
     textShadowColor: COLORS.goldGlow,
@@ -962,25 +1032,18 @@ const styles = StyleSheet.create({
   },
 
   // Upcoming
-  upcomingSection: {
-    marginBottom: 14,
-  },
   upcomingCard: {
-    borderRadius: 16,
+    borderRadius: RADIUS.xl,
     padding: 18,
-    marginTop: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: COLORS.borderSubtle,
+    overflow: 'hidden',
     ...SHADOWS.medium,
   },
   upcomingHint: {
     fontSize: 14,
     color: COLORS.textSecondary,
     lineHeight: 20,
-  },
-
-  bottomSpacer: {
-    height: 40,
   },
 });
 

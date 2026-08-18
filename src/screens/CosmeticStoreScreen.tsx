@@ -3,15 +3,17 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Dimensions,
   Modal,
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS, TYPOGRAPHY } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import IconMedallion from '../components/common/IconMedallion';
+import PrimaryButton from '../components/common/PrimaryButton';
 import {
   useEconomyStore,
   useEconomyActions,
@@ -88,6 +90,79 @@ const CURRENCY_ICONS: Record<string, string> = {
   gems: '\u{1F48E}',
   libraryPoints: '\u{1F4DA}',
 };
+
+// ── Frame ring preview ───────────────────────────────────────────────────────
+
+/**
+ * Layered ring mock for profile frames — nested gradient rings in the frame's
+ * rarity color (replacing the old flat grey circle) so a frame card previews
+ * as an actual frame around an avatar slot.
+ */
+function FrameRingPreview({
+  color,
+  size = 52,
+  initial,
+}: {
+  color: string;
+  size?: number;
+  initial: string;
+}) {
+  const innerSize = size - 12;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 2.5,
+        borderColor: color,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(10,0,21,0.6)',
+        ...SHADOWS.glow(color),
+      }}
+    >
+      <LinearGradient
+        colors={[color + '5C', color + '10'] as [string, string]}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: size / 2 }]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      />
+      <View
+        style={{
+          width: innerSize,
+          height: innerSize,
+          borderRadius: innerSize / 2,
+          borderWidth: 1.5,
+          borderColor: color + '99',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(10,0,21,0.85)',
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[color + '38', 'transparent'] as [string, string]}
+          style={StyleSheet.absoluteFillObject}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+        <Text
+          style={{
+            fontFamily: FONTS.display,
+            fontSize: size * 0.32,
+            color: COLORS.textPrimary,
+            textShadowColor: color,
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: 8,
+          }}
+        >
+          {initial}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 // ── Normalize data into a common shape ───────────────────────────────────────
 
@@ -270,19 +345,38 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
 
   const renderTabBar = () => (
     <View style={styles.tabBar}>
-      {TABS.map((tab) => (
-        <TouchableOpacity
-          key={tab.id}
-          style={[styles.tab, activeTab === tab.id && styles.tabActive]}
-          onPress={() => setActiveTab(tab.id)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
-            {tab.label}
-          </Text>
-          {activeTab === tab.id && <View style={styles.tabIndicator} />}
-        </TouchableOpacity>
-      ))}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: RADIUS.xl }]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      />
+      {TABS.map((tab) => {
+        const active = activeTab === tab.id;
+        return (
+          <Pressable
+            key={tab.id}
+            style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
+            onPress={() => setActiveTab(tab.id)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`${tab.label} tab`}
+          >
+            {active && (
+              <LinearGradient
+                colors={[COLORS.accent + '30', COLORS.purple + '14'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: RADIUS.lg }]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+              />
+            )}
+            <Text style={[styles.tabText, active && styles.tabTextActive]}>
+              {tab.label}
+            </Text>
+            <View style={[styles.tabIndicator, active && styles.tabIndicatorActive]} />
+          </Pressable>
+        );
+      })}
     </View>
   );
 
@@ -316,68 +410,88 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     const affordable = hasCost && !isOwned ? canAffordItem(item) : true;
 
     return (
-      <TouchableOpacity
+      <Pressable
         key={item.id}
-        style={[styles.cardWrapper, isEquipped && { ...SHADOWS.glow(COLORS.accent) }]}
+        style={({ pressed }) => [
+          styles.card,
+          { borderColor: rarityColor + '55' },
+          isEquipped
+            ? { borderColor: COLORS.accent + '88', ...SHADOWS.glow(COLORS.accent) }
+            : SHADOWS.glow(rarityColor),
+          pressed && styles.pressedScale,
+        ]}
         onPress={() => setSelectedItem(item)}
-        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.name}, ${item.rarity} rarity${
+          isEquipped ? ', equipped' : isOwned ? ', owned' : ''
+        }`}
       >
+        {/* Rarity-tinted body gradient */}
         <LinearGradient
-          colors={[...GRADIENTS.surfaceCard]}
-          style={[styles.card, isEquipped && styles.cardEquipped]}
-        >
-          {/* Rarity badge */}
-          <View style={[styles.rarityBadge, { backgroundColor: rarityColor + '30' }]}>
-            <Text style={[styles.rarityText, { color: rarityColor }]}>
-              {RARITY_LABELS[item.rarity] ?? 'COMMON'}
+          colors={[rarityColor + '16', 'rgba(26,10,46,0.94)'] as [string, string]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+        {/* Rarity top edge */}
+        <LinearGradient
+          colors={['transparent', rarityColor, 'transparent'] as [string, string, string]}
+          style={styles.rarityTopEdge}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+        />
+
+        {/* Rarity badge */}
+        <View style={[styles.rarityBadge, { backgroundColor: rarityColor + '26', borderColor: rarityColor + '66' }]}>
+          <Text style={[styles.rarityText, { color: rarityColor }]}>
+            {RARITY_LABELS[item.rarity] ?? 'COMMON'}
+          </Text>
+        </View>
+
+        {/* Preview area */}
+        <View style={styles.cardPreviewArea}>
+          {item.tabType === 'themes' && item.preview ? (
+            renderThemePreview(item.preview)
+          ) : item.icon ? (
+            <IconMedallion glyph={item.icon} size={48} accent={rarityColor} />
+          ) : item.tabType === 'frames' ? (
+            <FrameRingPreview color={rarityColor} size={52} initial={item.name.charAt(0)} />
+          ) : (
+            <IconMedallion
+              glyph={item.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
+              size={48}
+              accent={rarityColor}
+            />
+          )}
+        </View>
+
+        {/* Name */}
+        <Text style={styles.cardName} numberOfLines={1}>
+          {item.name}
+        </Text>
+
+        {/* Status / Price */}
+        {isEquipped ? (
+          <View style={styles.equippedBadge}>
+            <Text style={styles.equippedText}>EQUIPPED</Text>
+          </View>
+        ) : isOwned ? (
+          <View style={styles.ownedBadge}>
+            <Text style={styles.ownedText}>{'\u2713'} OWNED</Text>
+          </View>
+        ) : hasCost ? (
+          <View style={[styles.priceChip, !affordable && styles.priceChipUnaffordable]}>
+            <Text style={[styles.priceIcon, !affordable && styles.priceIconUnaffordable]}>
+              {CURRENCY_ICONS[item.costCurrency!] ?? '\u{1FA99}'}
+            </Text>
+            <Text style={[styles.priceText, !affordable && styles.priceTextUnaffordable]}>
+              {formatPrice(item.costAmount!)}
             </Text>
           </View>
-
-          {/* Preview area */}
-          <View style={styles.cardPreviewArea}>
-            {item.tabType === 'themes' && item.preview ? (
-              renderThemePreview(item.preview)
-            ) : item.icon ? (
-              <Text style={styles.itemIcon}>{item.icon}</Text>
-            ) : item.tabType === 'frames' ? (
-              <View style={[styles.framePlaceholder, { borderColor: rarityColor }]}>
-                <Text style={styles.framePlaceholderText}>{item.name.charAt(0)}</Text>
-              </View>
-            ) : (
-              <Text style={styles.itemIcon}>
-                {item.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
-              </Text>
-            )}
-          </View>
-
-          {/* Name */}
-          <Text style={styles.cardName} numberOfLines={1}>
-            {item.name}
-          </Text>
-
-          {/* Status / Price */}
-          {isEquipped ? (
-            <View style={styles.equippedBadge}>
-              <Text style={styles.equippedText}>EQUIPPED</Text>
-            </View>
-          ) : isOwned ? (
-            <View style={styles.ownedBadge}>
-              <Text style={styles.ownedText}>{'\u2713'} OWNED</Text>
-            </View>
-          ) : hasCost ? (
-            <View style={[styles.priceRow, !affordable && styles.priceRowUnaffordable]}>
-              <Text style={[styles.priceIcon, !affordable && styles.priceIconUnaffordable]}>
-                {CURRENCY_ICONS[item.costCurrency!] ?? '\u{1FA99}'}
-              </Text>
-              <Text style={[styles.priceText, !affordable && styles.priceTextUnaffordable]}>
-                {formatPrice(item.costAmount!)}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.earnLabel}>Earn in-game</Text>
-          )}
-        </LinearGradient>
-      </TouchableOpacity>
+        ) : (
+          <Text style={styles.earnLabel}>Earn in-game</Text>
+        )}
+      </Pressable>
     );
   };
 
@@ -410,25 +524,37 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         onRequestClose={() => setSelectedItem(null)}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity
+          <Pressable
             style={StyleSheet.absoluteFill}
-            activeOpacity={1}
             onPress={() => setSelectedItem(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss"
           />
-          <LinearGradient
-            colors={[...GRADIENTS.victoryCard]}
-            style={styles.modalCard}
-          >
+          <View style={[styles.modalCard, { borderColor: rarityColor + '55', ...SHADOWS.glow(rarityColor) }]}>
+            <LinearGradient
+              colors={[...GRADIENTS.victoryCard]}
+              style={StyleSheet.absoluteFill}
+            />
+            {/* Rarity top edge */}
+            <LinearGradient
+              colors={['transparent', rarityColor, 'transparent'] as [string, string, string]}
+              style={styles.rarityTopEdge}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+            />
             {/* Close button */}
-            <TouchableOpacity
-              style={styles.closeButton}
+            <Pressable
+              style={({ pressed }) => [styles.closeButton, pressed && styles.pressedScale]}
               onPress={() => setSelectedItem(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={8}
             >
               <Text style={styles.closeButtonText}>{'\u2715'}</Text>
-            </TouchableOpacity>
+            </Pressable>
 
             {/* Rarity */}
-            <View style={[styles.modalRarityBadge, { backgroundColor: rarityColor + '25' }]}>
+            <View style={[styles.modalRarityBadge, { backgroundColor: rarityColor + '25', borderColor: rarityColor + '66' }]}>
               <Text style={[styles.modalRarityText, { color: rarityColor }]}>
                 {RARITY_LABELS[selectedItem.rarity] ?? 'COMMON'}
               </Text>
@@ -446,17 +572,19 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
                   ))}
                 </View>
               ) : selectedItem.icon ? (
-                <Text style={styles.modalIcon}>{selectedItem.icon}</Text>
+                <IconMedallion glyph={selectedItem.icon} size={80} accent={rarityColor} />
               ) : selectedItem.tabType === 'frames' ? (
-                <View style={[styles.framePlaceholderLarge, { borderColor: rarityColor }]}>
-                  <Text style={styles.framePlaceholderTextLarge}>
-                    {selectedItem.name.charAt(0)}
-                  </Text>
-                </View>
+                <FrameRingPreview
+                  color={rarityColor}
+                  size={84}
+                  initial={selectedItem.name.charAt(0)}
+                />
               ) : (
-                <Text style={styles.modalIcon}>
-                  {selectedItem.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
-                </Text>
+                <IconMedallion
+                  glyph={selectedItem.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
+                  size={80}
+                  accent={rarityColor}
+                />
               )}
             </View>
 
@@ -480,34 +608,24 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
                   <Text style={styles.equippedButtonText}>CURRENTLY EQUIPPED</Text>
                 </View>
               ) : isOwned ? (
-                <TouchableOpacity
-                  activeOpacity={0.7}
+                <PrimaryButton
+                  label={selectedItem.tabType === 'decorations' ? 'PLACE IN LIBRARY' : 'EQUIP'}
                   onPress={() => handleEquip(selectedItem)}
-                >
-                  <LinearGradient
-                    colors={[...GRADIENTS.button.primary]}
-                    style={styles.actionButton}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {selectedItem.tabType === 'decorations' ? 'PLACE IN LIBRARY' : 'EQUIP'}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                  variant="primary"
+                  size="large"
+                  fullWidth
+                  style={styles.modalActionButton}
+                />
               ) : hasCost && canBuy ? (
-                <TouchableOpacity
-                  activeOpacity={0.7}
+                <PrimaryButton
+                  label={`BUY ${CURRENCY_ICONS[selectedItem.costCurrency!]} ${formatPrice(selectedItem.costAmount!)}`}
                   onPress={() => handlePurchase(selectedItem)}
-                >
-                  <LinearGradient
-                    colors={[...GRADIENTS.button.gold]}
-                    style={styles.actionButton}
-                  >
-                    <Text style={styles.actionButtonTextDark}>
-                      BUY {CURRENCY_ICONS[selectedItem.costCurrency!]}{' '}
-                      {formatPrice(selectedItem.costAmount!)}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                  variant="gold"
+                  size="large"
+                  fullWidth
+                  accessibilityLabel={`Buy ${selectedItem.name} for ${formatPrice(selectedItem.costAmount!)} ${selectedItem.costCurrency}`}
+                  style={styles.modalActionButton}
+                />
               ) : hasCost && !canBuy ? (
                 <View style={styles.cantAffordButton}>
                   <Text style={styles.cantAffordButtonText}>
@@ -521,7 +639,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
                 </View>
               );
             })()}
-          </LinearGradient>
+          </View>
         </View>
       </Modal>
     );
@@ -530,23 +648,28 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
   // ── Main render ─────────────────────────────────────────────────────────
 
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="home" />
-
-      {/* Header */}
-      <View style={styles.header}>
-        {navigation && (
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>{'\u2190'}</Text>
-          </TouchableOpacity>
-        )}
-        <Text style={styles.title}>COSMETICS</Text>
-        <View style={styles.currencyRow}>
-          <Text style={styles.currencyText}>{'\u{1FA99}'} {coins}</Text>
-          <Text style={styles.currencyText}>{'\u{1F48E}'} {gems}</Text>
+    <ScreenScaffold
+      title="COSMETICS"
+      eyebrow="STYLE VAULT"
+      accent={COLORS.purple}
+      backdrop="shop"
+      onBack={navigation ? () => navigation.goBack() : undefined}
+      scroll={false}
+      headerRight={
+        <View style={styles.currencyCluster}>
+          <View style={styles.currencyChip}>
+            <Text style={styles.currencyGlyph}>{'\u{1FA99}'}</Text>
+            <Text style={styles.currencyText}>{coins.toLocaleString()}</Text>
+          </View>
+          <View style={styles.currencyChip}>
+            <Text style={styles.currencyGlyph}>{'\u{1F48E}'}</Text>
+            <Text style={[styles.currencyText, { color: COLORS.cyan }]}>
+              {gems.toLocaleString()}
+            </Text>
+          </View>
         </View>
-      </View>
-
+      }
+    >
       {renderTabBar()}
 
       <ScrollView
@@ -556,97 +679,92 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
       >
         {currentItems.map((item) => renderItemCard(item))}
         {/* Bottom spacing */}
-        <View style={{ height: 40 }} />
+        <View style={{ height: 40, width: '100%' }} />
       </ScrollView>
 
       {renderDetailModal()}
-    </View>
+    </ScreenScaffold>
   );
 };
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-    paddingTop: 60,
+  pressedScale: {
+    transform: [{ scale: 0.97 }],
+    opacity: 0.9,
   },
 
-  // Header
-  header: {
+  // Header currency cluster
+  currencyCluster: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  currencyChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.surfaceGlass,
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  backButtonText: {
-    color: COLORS.textPrimary,
-    fontSize: 20,
-  },
-  title: {
-    fontFamily: FONTS.display,
-    fontSize: 24,
-    letterSpacing: 2,
-    color: COLORS.textPrimary,
-    flex: 1,
-    textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 12,
-    textShadowOffset: { width: 0, height: 0 },
-  },
-  currencyRow: {
-    flexDirection: 'row',
-    gap: 12,
+  currencyGlyph: {
+    fontSize: 10,
   },
   currencyText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 14,
+    fontFamily: FONTS.display,
+    fontSize: 11,
     color: COLORS.gold,
+    fontVariant: ['tabular-nums'],
   },
 
   // Tab bar
   tabBar: {
     flexDirection: 'row',
     marginHorizontal: 16,
+    marginTop: 12,
     marginBottom: 12,
-    backgroundColor: COLORS.surface + '80',
-    borderRadius: 16,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
     padding: 4,
+    overflow: 'hidden',
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 9,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
   },
-  tabActive: {
-    backgroundColor: COLORS.accent + '25',
+  tabPressed: {
+    opacity: 0.8,
   },
   tabText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 13,
+    fontFamily: FONTS.display,
+    fontSize: 12,
     color: COLORS.textMuted,
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   tabTextActive: {
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   tabIndicator: {
-    width: 20,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
+    width: 22,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'transparent',
     marginTop: 4,
+  },
+  tabIndicatorActive: {
+    backgroundColor: COLORS.accent,
+    ...SHADOWS.neonEdge(COLORS.accent),
   },
 
   // Grid
@@ -658,23 +776,24 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     gap: CARD_GAP,
+    paddingBottom: 90,
   },
 
-  // Card
-  cardWrapper: {
-    width: CARD_WIDTH,
-    borderRadius: 16,
-    ...SHADOWS.medium,
-  },
+  // Card — rarity drives border, glow, and top edge
   card: {
-    borderRadius: 16,
+    width: CARD_WIDTH,
+    borderRadius: RADIUS.xl,
     padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    borderWidth: 1.5,
     minHeight: 170,
+    overflow: 'hidden',
   },
-  cardEquipped: {
-    borderColor: COLORS.accent + '50',
+  rarityTopEdge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
   },
 
   // Rarity badge
@@ -682,18 +801,19 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
     marginBottom: 8,
   },
   rarityText: {
-    fontFamily: FONTS.bodySemiBold,
+    fontFamily: FONTS.display,
     fontSize: 9,
     letterSpacing: 1.5,
   },
 
   // Preview area
   cardPreviewArea: {
-    height: 56,
+    height: 62,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -705,24 +825,9 @@ const styles = StyleSheet.create({
   themeSwatchLarge: {
     width: 28,
     height: 28,
-    borderRadius: 6,
-  },
-  itemIcon: {
-    fontSize: 36,
-  },
-  framePlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-  },
-  framePlaceholderText: {
-    fontFamily: FONTS.display,
-    fontSize: 20,
-    color: COLORS.textPrimary,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
 
   // Card name
@@ -763,22 +868,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Price
-  priceRow: {
+  // Price capsule
+  priceChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '55',
+    backgroundColor: COLORS.gold + '14',
   },
   priceIcon: {
-    fontSize: 14,
+    fontSize: 12,
   },
   priceText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 13,
+    fontFamily: FONTS.display,
+    fontSize: 12,
     color: COLORS.gold,
+    fontVariant: ['tabular-nums'],
   },
-  priceRowUnaffordable: {
+  priceChipUnaffordable: {
     opacity: 0.5,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   priceIconUnaffordable: {
     opacity: 0.6,
@@ -805,11 +920,10 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 360,
-    borderRadius: 24,
+    borderRadius: RADIUS.xxl,
     padding: 24,
-    borderWidth: 1,
-    borderColor: COLORS.borderMedium,
-    ...SHADOWS.strong,
+    borderWidth: 1.5,
+    overflow: 'hidden',
   },
   closeButton: {
     position: 'absolute',
@@ -818,7 +932,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceGlass,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
@@ -832,11 +948,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
     marginBottom: 16,
   },
   modalRarityText: {
-    fontFamily: FONTS.bodySemiBold,
+    fontFamily: FONTS.display,
     fontSize: 11,
     letterSpacing: 1.5,
   },
@@ -867,24 +984,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textTransform: 'capitalize',
   },
-  modalIcon: {
-    fontSize: 56,
-  },
-  framePlaceholderLarge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-  },
-  framePlaceholderTextLarge: {
-    fontFamily: FONTS.display,
-    fontSize: 30,
-    color: COLORS.textPrimary,
-  },
-
   modalName: {
     fontFamily: FONTS.display,
     fontSize: 22,
@@ -911,30 +1010,15 @@ const styles = StyleSheet.create({
   },
 
   // Action buttons
-  actionButton: {
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
+  modalActionButton: {
     marginTop: 8,
-  },
-  actionButtonText: {
-    fontFamily: FONTS.display,
-    fontSize: 16,
-    color: '#fff',
-    letterSpacing: 1.5,
-  },
-  actionButtonTextDark: {
-    fontFamily: FONTS.display,
-    fontSize: 16,
-    color: '#1a0a2e',
-    letterSpacing: 1.5,
   },
   equippedButtonDisabled: {
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: RADIUS.xl,
     alignItems: 'center',
     marginTop: 8,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceGlass,
     borderWidth: 1,
     borderColor: COLORS.accent + '40',
   },
@@ -946,10 +1030,10 @@ const styles = StyleSheet.create({
   },
   cantAffordButton: {
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: RADIUS.xl,
     alignItems: 'center',
     marginTop: 8,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceGlass,
     borderWidth: 1,
     borderColor: COLORS.coral + '30',
     opacity: 0.7,
@@ -962,10 +1046,10 @@ const styles = StyleSheet.create({
   },
   earnButton: {
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: RADIUS.xl,
     alignItems: 'center',
     marginTop: 8,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceGlass,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
   },
