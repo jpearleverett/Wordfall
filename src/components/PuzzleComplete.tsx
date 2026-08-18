@@ -42,6 +42,7 @@ import { useShareVictory } from '../hooks/useShareVictory';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { isCeremonyVisible } from '../hooks/useCeremonyQueue';
 import GameIcon from './icons/GameIcon';
+import { WINGS, getWing } from '../data/library';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -443,22 +444,29 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
   const currentChapter = usePlayerStore(selectCurrentChapter);
   const totalStars = Object.values(starsByLevel).reduce((sum, v) => sum + v, 0) + stars;
 
-  // Milestone proximity: library wing
-  const wingMilestoneMsg = useMemo(() => {
+  // Milestone proximity: library wing. Resolves the target wing's full
+  // identity (emblem + accent) by mapping the LIBRARY.wingChapters index
+  // into WINGS order (same authored order), so the card can render in the
+  // wing's own colors instead of generic gold.
+  const wingMilestone = useMemo(() => {
     const wingChapterThresholds = LIBRARY.wingChapters.map(([start]) => start);
-    for (const threshold of wingChapterThresholds) {
+    for (let wingIdx = 0; wingIdx < wingChapterThresholds.length; wingIdx++) {
+      const threshold = wingChapterThresholds[wingIdx];
       if (currentChapter < threshold) {
         const chaptersAway = threshold - currentChapter;
         if (chaptersAway <= 3) {
-          const wingIdx = wingChapterThresholds.indexOf(threshold);
-          const wingName = LIBRARY.wingNames[wingIdx] ?? 'new';
-          return t('common.chaptersAway', { count: chaptersAway, wing: wingName });
+          const wing = getWing(WINGS[wingIdx]?.id);
+          return {
+            wing,
+            msg: t('common.chaptersAway', { count: chaptersAway, wing: wing.name }),
+          };
         }
         break;
       }
     }
     return null;
   }, [currentChapter, t]);
+  const wingMilestoneMsg = wingMilestone?.msg ?? null;
 
   // Star milestone proximity
   const starMilestoneMsg = useMemo(() => {
@@ -480,14 +488,23 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
 
   return (
     <Animated.View style={[hookStyles.container, { opacity: statsAnim, transform: [{ translateY: statsAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
-      {/* Milestone Proximity */}
+      {/* Milestone Proximity — wing milestones render under the target
+          wing's emblem and accent; star milestones keep the gold target. */}
       {milestoneMsg && (
         <LinearGradient
-          colors={['rgba(255,215,0,0.10)', 'rgba(255,159,0,0.05)'] as [string, string]}
+          colors={
+            wingMilestone
+              ? ([`${wingMilestone.wing.accent}1A`, `${wingMilestone.wing.accent}0D`] as [string, string])
+              : (['rgba(255,215,0,0.10)', 'rgba(255,159,0,0.05)'] as [string, string])
+          }
           style={hookStyles.milestoneCard}
         >
-          <IconMedallion tint={COLORS.gold} size={34}>
-            <GameIcon name="target" size={17} />
+          <IconMedallion tint={wingMilestone ? wingMilestone.wing.accent : COLORS.gold} size={34}>
+            {wingMilestone ? (
+              <GameIcon name={wingMilestone.wing.icon} size={17} />
+            ) : (
+              <GameIcon name="target" size={17} />
+            )}
           </IconMedallion>
           <Text style={hookStyles.milestoneText}>{milestoneMsg}</Text>
         </LinearGradient>
@@ -1036,9 +1053,11 @@ export function PuzzleComplete({
               )}
 
               {/* Inline summary items — limited to 2 most important to keep victory screen clean.
-                  Priority: level_up > early_bonus > difficulty_transition > mode_unlock > everything else */}
+                  Priority: level_up > decoration_unlock > early_bonus > difficulty_transition >
+                  mode_unlock > everything else. decoration_unlock sits near the top so Grand
+                  Library rows aren't crowded out of the 2-slot cap. */}
               {summaryItems.length > 0 && (() => {
-                const priorityOrder = ['level_up', 'early_bonus', 'difficulty_transition', 'mode_unlock'];
+                const priorityOrder = ['level_up', 'decoration_unlock', 'early_bonus', 'difficulty_transition', 'mode_unlock'];
                 const sorted = [...summaryItems].sort((a, b) => {
                   const aIdx = priorityOrder.indexOf(a.type);
                   const bIdx = priorityOrder.indexOf(b.type);

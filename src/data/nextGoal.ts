@@ -5,15 +5,29 @@
  * mastery tiers) but none of it was visible from the screen they open — the
  * only long-arc goal on Home was the season pass, which resets monthly, so
  * felt progression read as a treadmill. This picks ONE concrete goal with a
- * progress bar: the next chapter star gate the player hasn't cleared, or —
- * when every nearby gate is already met — mastery of the current chapter.
+ * progress bar, in priority order:
+ *
+ *   1. Wing restoration — when the player is within 2 chapters of finishing
+ *      a Grand Library wing, the long-arc story goal wins the slot.
+ *   2. The next chapter star gate the player hasn't cleared.
+ *   3. Mastery of the current chapter (when every nearby gate is met).
  *
  * Pure function of already-loaded state; no I/O.
  */
 import { getAllChapters, getChapterForLevel } from './chapters';
+import { getWing } from './library';
+import { GameIconName } from '../components/icons/GameIcon';
 
 export interface NextGoal {
+  kind: 'wing' | 'chapter_gate' | 'chapter_mastery';
+  /** Emoji glyph (chapter icon) — legacy path, resolved via GameIcon glyph. */
   icon: string;
+  /** Direct GameIcon name — set for wing goals (the wing's emblem). */
+  iconName?: GameIconName;
+  /** Wing accent color — set for wing goals; tints the card/progress bar. */
+  accent?: string;
+  /** Set for wing goals. */
+  wingId?: string;
   /** e.g. "Unlock Chapter 5: Summit Trail" */
   title: string;
   /** e.g. "4 stars to go" */
@@ -34,6 +48,35 @@ export function getNextGoal(
   const current = getChapterForLevel(currentLevel);
   if (!current) return null;
 
+  // Wing restoration: when the finish line of the current wing is close
+  // (final 2 chapters), surface the Grand Library story goal ahead of star
+  // gates. Guard on the wing's chapter range actually containing the
+  // current chapter so procedural/annex wingIds (whose fallback range is
+  // synthetic) never claim the slot.
+  const wing = getWing(current.wingId);
+  const [wingStart, wingEnd] = wing.chapters;
+  if (current.id >= wingStart && current.id <= wingEnd) {
+    const chaptersToGo = wingEnd - current.id + 1; // current chapter counts
+    if (chaptersToGo <= 2) {
+      const firstWingLevel = (wingStart - 1) * PUZZLES_PER_CHAPTER + 1;
+      const totalWingLevels = (wingEnd - wingStart + 1) * PUZZLES_PER_CHAPTER;
+      const progress = Math.max(
+        0,
+        Math.min(0.99, (currentLevel - firstWingLevel) / totalWingLevels),
+      );
+      return {
+        kind: 'wing',
+        icon: current.icon,
+        iconName: wing.icon,
+        accent: wing.accent,
+        wingId: wing.id,
+        title: `Restore the ${wing.name} Wing`,
+        detail: `${chaptersToGo} chapter${chaptersToGo === 1 ? '' : 's'} to go`,
+        progress,
+      };
+    }
+  }
+
   // The next unmet star gate within the next three chapters — close enough
   // to feel reachable, far enough to be worth a bar.
   const upcomingGate = chapters.find(
@@ -45,6 +88,7 @@ export function getNextGoal(
   if (upcomingGate) {
     const remaining = upcomingGate.requiredStars - totalStars;
     return {
+      kind: 'chapter_gate',
       icon: upcomingGate.icon,
       title: `Unlock Chapter ${upcomingGate.id}: ${upcomingGate.name}`,
       detail: `${remaining} star${remaining === 1 ? '' : 's'} to go`,
@@ -61,6 +105,7 @@ export function getNextGoal(
   }
   if (chapterStars >= MAX_STARS_PER_CHAPTER) return null; // fully mastered
   return {
+    kind: 'chapter_mastery',
     icon: current.icon,
     title: `Master ${current.name}`,
     detail: `${chapterStars}/${MAX_STARS_PER_CHAPTER} stars in this chapter`,

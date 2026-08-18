@@ -10,6 +10,7 @@ import PrestigeResetCeremony from '../components/PrestigeResetCeremony';
 import SeasonPassCompleteCeremony from '../components/SeasonPassCompleteCeremony';
 import { FirstPurchaseOfferModal } from '../components/FirstPurchaseOfferModal';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { getWing } from '../data/library';
 import { CeremonyItem } from '../types';
 import { ceremonyEconomyGrant, ceremonyGrantLabel } from '../utils/ceremonyGrants';
 import { COLORS } from '../constants';
@@ -141,20 +142,28 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           onDismiss={onDismiss}
         />
       )}
-      {activeCeremony?.type === 'wing_complete' && (
-        <MilestoneCeremony
-          ribbon="WING RESTORED"
-          icon={'\u{1F4DA}'}
-          title={`${activeCeremony.data.wingName} Complete!`}
-          description="Another wing of the library has been fully restored!"
-          rewardLabel={(() => {
-            const grant = ceremonyEconomyGrant(activeCeremony);
-            return grant ? ceremonyGrantLabel(grant) : undefined;
-          })()}
-          accentColor={COLORS.teal}
-          onDismiss={onDismiss}
-        />
-      )}
+      {activeCeremony?.type === 'wing_complete' && (() => {
+        // Grand Library story beat: each wing restores in its own colors,
+        // under its own emblem, with Folio's per-wing line. getWing() never
+        // returns undefined (annex fallback), so remote/procedural wingIds
+        // are safe here too.
+        const wing = getWing(activeCeremony.data.wingId);
+        return (
+          <MilestoneCeremony
+            ribbon="WING RESTORED"
+            iconName={wing.icon}
+            title={`${wing.name} Wing Restored!`}
+            description={wing.restorationLine}
+            rewardLabel={(() => {
+              const grant = ceremonyEconomyGrant(activeCeremony);
+              return grant ? ceremonyGrantLabel(grant) : undefined;
+            })()}
+            accentColor={wing.accent}
+            buttonText="VISIT THE LIBRARY"
+            onDismiss={onDismiss}
+          />
+        );
+      })()}
       {activeCeremony?.type === 'word_mastery_gold' && (
         <MilestoneCeremony
           ribbon="GOLD MASTERY"
@@ -227,7 +236,7 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           ribbon="FIRST VICTORY!"
           icon={'\u{1F389}'}
           title="You Did It!"
-          description={`Your first puzzle is complete! +${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems, and a free Mystery Wheel spin!`}
+          description={`Your first puzzle is complete! +${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems, and a free Mystery Wheel spin! Folio the archivist stirs: 'Words! Real words! The Library will hear of this.'`}
           accentColor={COLORS.gold}
           tips={activeCeremony.data.tips}
           rewardLabel={`+${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems`}

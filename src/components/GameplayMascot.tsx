@@ -22,22 +22,32 @@ interface GameplayMascotProps {
   tensionActive: boolean;
   /** Player's current flawless streak. Shows the flame overlay when > 0. */
   flawlessStreak: number;
+  /**
+   * Accent of the current chapter's Grand Library wing (see
+   * src/data/library.ts getWing). Tints the bubble border/glow so Folio
+   * visibly belongs to the hall being restored. Falls back to the default
+   * accent when absent (daily / specialty modes).
+   */
+  wingAccent?: string;
 }
 
 /**
- * Tiny absolute-positioned mascot that reacts to gameplay events. Renders
- * the bespoke OwlIcon SVG (gold-tinted under last-word tension) so it can
- * ship and be tuned before dedicated art arrives. Swap the icon for
- * <Image source={sprite} /> when a real sprite is available.
+ * FOLIO, the owl archivist and Keeper of the Grand Library (canon lives in
+ * src/data/library.ts) — a tiny absolute-positioned mascot that reacts to
+ * gameplay events. Renders the bespoke OwlIcon SVG (gold-tinted under
+ * last-word tension) so it can ship and be tuned before dedicated art
+ * arrives. Swap the icon for <Image source={sprite} /> when a real Folio
+ * sprite is available.
  *
- * Mounted absolutely so it never displaces the grid layout. RC-gated via
- * `gameplayMascotEnabled` (default OFF). Reduce-motion-aware: animations
- * collapse to a static render.
+ * Mounted absolutely (pointerEvents none) so it never displaces the grid
+ * layout or intercepts taps. RC-gated via `gameplayMascotEnabled` (default
+ * ON). Reduce-motion-aware: animations collapse to a static render.
  */
 const GameplayMascot: React.FC<GameplayMascotProps> = ({
   foundCount,
   tensionActive,
   flawlessStreak,
+  wingAccent,
 }) => {
   const enabled = getRemoteBoolean('gameplayMascotEnabled');
   const reduceMotion = useReduceMotion();
@@ -87,10 +97,17 @@ const GameplayMascot: React.FC<GameplayMascotProps> = ({
   if (!enabled) return null;
 
   // Expression logic — tension retints the owl gold; flame overlay when
-  // streak > 0.
+  // streak > 0. Wing accent (static style, no per-frame cost) tints the
+  // bubble border + glow to the current Library wing.
   return (
     <View style={styles.container} pointerEvents="none">
-      <Animated.View style={[styles.bubble, animStyle]}>
+      <Animated.View
+        style={[
+          styles.bubble,
+          wingAccent ? { borderColor: wingAccent, shadowColor: wingAccent } : null,
+          animStyle,
+        ]}
+      >
         <OwlIcon size={25} accent={tensionActive ? COLORS.gold : undefined} />
         {flawlessStreak > 0 && (
           <View style={styles.streakOverlay}>

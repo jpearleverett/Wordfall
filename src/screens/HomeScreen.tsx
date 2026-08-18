@@ -977,7 +977,13 @@ export function HomeScreen({
             accessibilityLabel={`Next goal: ${nextGoal.title}. ${nextGoal.detail}. Play now.`}
           >
             <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.nextGoalCard}>
-              <GameIcon glyph={nextGoal.icon} size={30} />
+              {/* Wing goals carry the wing's SVG emblem + accent; chapter
+                  goals keep the legacy glyph path. */}
+              {nextGoal.kind === 'wing' && nextGoal.iconName ? (
+                <GameIcon name={nextGoal.iconName} size={30} accent={nextGoal.accent} />
+              ) : (
+                <GameIcon glyph={nextGoal.icon} size={30} />
+              )}
               <View style={styles.nextGoalBody}>
                 <Text style={styles.nextGoalTitle} numberOfLines={1}>
                   {nextGoal.title}
@@ -987,6 +993,7 @@ export function HomeScreen({
                     style={[
                       styles.nextGoalBarFill,
                       { width: `${Math.round(nextGoal.progress * 100)}%` },
+                      nextGoal.accent ? { backgroundColor: nextGoal.accent } : null,
                     ]}
                   />
                 </View>

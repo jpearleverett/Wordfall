@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
-import GameIcon from './icons/GameIcon';
+import GameIcon, { GameIconName } from './icons/GameIcon';
 
 /**
  * General-purpose milestone ceremony for celebrations that don't need
@@ -17,7 +17,13 @@ import GameIcon from './icons/GameIcon';
 
 interface MilestoneCeremonyProps {
   ribbon: string;
-  icon: string;
+  /** Emoji-glyph icon, resolved to SVG via GameIcon's glyph map. */
+  icon?: string;
+  /**
+   * Direct GameIcon name — preferred for new callers (e.g. wing restoration
+   * ceremonies pass the wing's emblem). Takes precedence over `icon`.
+   */
+  iconName?: GameIconName;
   title: string;
   description: string;
   accentColor?: string;
@@ -36,6 +42,7 @@ interface MilestoneCeremonyProps {
 export function MilestoneCeremony({
   ribbon,
   icon,
+  iconName,
   title,
   description,
   accentColor = COLORS.gold,
@@ -78,7 +85,8 @@ export function MilestoneCeremony({
             style={iconStyle}
           >
             <View style={[styles.iconBg, { backgroundColor: accentColor + '20', borderColor: accentColor + '40' }]}>
-              <GameIcon glyph={icon} size={41} />
+              {/* name takes precedence inside GameIcon; glyph is the legacy path */}
+              <GameIcon name={iconName} glyph={icon} size={41} />
             </View>
           </Animated.View>
 

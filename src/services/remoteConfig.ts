@@ -443,9 +443,10 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // for Wordscapes-style fill-in slots. Big UX change; ship as an
   // opt-in A/B once the chip layout is stable in internal.
   crosswordDashRevealEnabled: false,
-  // Mascot OFF — only an emoji placeholder today (🦉). Flip on once
-  // a real sprite lands.
-  gameplayMascotEnabled: false,
+  // Mascot ON — the owl is FOLIO, Keeper of the Grand Library (see
+  // src/data/library.ts). Renders the bespoke OwlIcon SVG with a per-wing
+  // accent tint; swap for a real sprite when dedicated art lands.
+  gameplayMascotEnabled: true,
 };
 
 // ---------------------------------------------------------------------------

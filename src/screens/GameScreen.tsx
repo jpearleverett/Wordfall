@@ -70,6 +70,7 @@ import GameplayMascot from '../components/GameplayMascot';
 import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCombos';
 import { getTheme } from '../data/cosmetics';
 import { getChapterForLevel, getChapterPalette, getChapterTileRamp } from '../data/chapters';
+import { getWing } from '../data/library';
 import { rollBonusTile } from '../utils/bonusTile';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
@@ -2283,6 +2284,9 @@ function GameScreenImpl({
         foundCount={foundWords}
         tensionActive={tensionEligible && totalWords - foundWords === 1}
         flawlessStreak={flawlessStreakCurrent}
+        // Folio wears the current wing's colors — same chapter resolution
+        // as the backdrop palette, so mascot + backdrop always agree.
+        wingAccent={chapterForBackdrop ? getWing(chapterForBackdrop.wingId).accent : undefined}
       />
 
       <GameHeader
