@@ -10,7 +10,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS, RADIUS, SHADOWS, MODE_CONFIGS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
-import IconMedallion from '../components/common/IconMedallion';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import { ModeConfig } from '../types';
 import {
@@ -38,6 +37,536 @@ const MODES = Object.values(MODE_CONFIGS)
     unlockLevel: mode.unlockLevel,
   }))
   .sort((a, b) => a.unlockLevel - b.unlockLevel);
+
+// ─── Drawn glyph kit — layered Views/gradients, no emoji (same technique as
+// LeaderboardScreen's GlyphMedallion / ClubScreen's ShieldCrest family). ────
+
+/**
+ * DrawnMedallion — IconMedallion's layered-gem shell, but hosting drawn
+ * View-based glyphs instead of raw emoji (the art review's residual flag).
+ */
+function DrawnMedallion({
+  size = 44,
+  accent = COLORS.purple,
+  shape = 'circle',
+  muted = false,
+  style,
+  children,
+}: {
+  size?: number;
+  accent?: string;
+  shape?: 'circle' | 'squircle';
+  muted?: boolean;
+  style?: object;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: shape === 'circle' ? size / 2 : size * 0.3,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : accent + '73',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style ?? null,
+      ]}
+    >
+      <LinearGradient
+        colors={[muted ? 'rgba(255,255,255,0.05)' : accent + '3D', 'rgba(8, 2, 22, 0.92)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.14)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/** Drawn mini letter tile — the classic-mode mark. */
+function LetterTileGlyph({ size = 24, accent = COLORS.accent }: { size?: number; accent?: string }) {
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.22,
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.35)',
+      }}
+    >
+      <LinearGradient
+        colors={[accent, accent + '99']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.08,
+          left: size * 0.12,
+          right: size * 0.12,
+          height: size * 0.18,
+          borderRadius: size * 0.09,
+          backgroundColor: 'rgba(255,255,255,0.30)',
+        }}
+      />
+      <Text style={{ fontFamily: FONTS.display, fontSize: size * 0.52, color: 'rgba(8,2,22,0.9)' }}>A</Text>
+    </View>
+  );
+}
+
+/** Drawn clock — ring + hour/minute hands + hub. */
+function ClockGlyph({ size = 24, accent = COLORS.orange }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: size * 0.1,
+          borderColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: size * 0.09,
+          height: size * 0.3,
+          borderRadius: size * 0.05,
+          backgroundColor: accent,
+          top: size * 0.18,
+          left: size / 2 - size * 0.045,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: size * 0.26,
+          height: size * 0.09,
+          borderRadius: size * 0.05,
+          backgroundColor: accent,
+          top: size / 2 - size * 0.045,
+          left: size / 2 - size * 0.02,
+        }}
+      />
+      <View style={{ width: size * 0.12, height: size * 0.12, borderRadius: size * 0.06, backgroundColor: COLORS.textPrimary }} />
+    </View>
+  );
+}
+
+/** Drawn floating tile with rising chevrons — the no-gravity mark. */
+function FloatTileGlyph({ size = 24, accent = COLORS.teal }: { size?: number; accent?: string }) {
+  const c = size * 0.4;
+  const chev = (top: number, opacity: number) => (
+    <View
+      key={top}
+      style={{
+        position: 'absolute',
+        top,
+        alignSelf: 'center',
+        width: c,
+        height: c,
+        borderTopWidth: size * 0.1,
+        borderRightWidth: size * 0.1,
+        borderColor: accent,
+        opacity,
+        transform: [{ rotate: '-45deg' }],
+      }}
+    />
+  );
+  return (
+    <View style={{ width: size, height: size }}>
+      {chev(size * 0.02, 1)}
+      {chev(size * 0.24, 0.5)}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          alignSelf: 'center',
+          width: size * 0.4,
+          height: size * 0.4,
+          borderRadius: size * 0.1,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '88']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn circular-arrows mark — two arcs + diamond arrowheads (gravity flip). */
+function CycleGlyph({ size = 24, accent = COLORS.coral }: { size?: number; accent?: string }) {
+  const t = size * 0.11;
+  const head = (left: number, top: number) => (
+    <View
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: t * 1.8,
+        height: t * 1.8,
+        backgroundColor: accent,
+        transform: [{ rotate: '45deg' }],
+      }}
+    />
+  );
+  return (
+    <View style={{ width: size, height: size }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: t,
+          borderColor: accent,
+          borderTopColor: 'transparent',
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: t,
+          borderColor: 'transparent',
+          borderTopColor: accent + '66',
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+      {head(size * 0.02, size * 0.02)}
+      {head(size - t * 2, size - t * 2.2)}
+    </View>
+  );
+}
+
+/** Drawn faceted diamond — rotated gradient square with facet highlight. */
+function DiamondGlyph({ size = 24, accent = COLORS.gold }: { size?: number; accent?: string }) {
+  const d = size * 0.62;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: d, height: d, borderRadius: d * 0.16, overflow: 'hidden', transform: [{ rotate: '45deg' }] }}>
+        <LinearGradient
+          colors={[accent + 'E6', accent + '66']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ position: 'absolute', top: 0, left: 0, width: d * 0.5, height: d * 0.5, backgroundColor: 'rgba(255,255,255,0.35)' }} />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn nested squares — the shrinking-board mark. */
+function NestedSquaresGlyph({ size = 24, accent = COLORS.coral }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size * 0.2,
+          borderWidth: size * 0.08,
+          borderColor: accent + '66',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: size * 0.62,
+          height: size * 0.62,
+          borderRadius: size * 0.14,
+          borderWidth: size * 0.08,
+          borderColor: accent + 'B3',
+        }}
+      />
+      <View style={{ width: size * 0.26, height: size * 0.26, borderRadius: size * 0.07, backgroundColor: accent }} />
+    </View>
+  );
+}
+
+/** Drawn leaf — gradient teardrop with vein (relax). */
+function LeafGlyph({ size = 24, accent = COLORS.green }: { size?: number; accent?: string }) {
+  const d = size * 0.74;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: d,
+          height: d,
+          borderTopLeftRadius: d * 0.06,
+          borderBottomRightRadius: d * 0.06,
+          borderTopRightRadius: d,
+          borderBottomLeftRadius: d,
+          overflow: 'hidden',
+          transform: [{ rotate: '45deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '77']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: d * 0.47,
+            left: -d * 0.1,
+            width: d * 1.2,
+            height: size * 0.05,
+            backgroundColor: 'rgba(8,2,22,0.35)',
+            transform: [{ rotate: '45deg' }],
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn 8-point star burst — two crossed gradient squares + hot core. */
+function StarBurstGlyph({ size = 24, accent = COLORS.gold }: { size?: number; accent?: string }) {
+  const sq = size * 0.68;
+  const square = {
+    position: 'absolute' as const,
+    width: sq,
+    height: sq,
+    borderRadius: sq * 0.18,
+    overflow: 'hidden' as const,
+  };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={[square, { transform: [{ rotate: '45deg' }] }]}>
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View style={square}>
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          width: sq * 0.34,
+          height: sq * 0.34,
+          borderRadius: sq * 0.17,
+          backgroundColor: 'rgba(255,255,255,0.6)',
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn sun — gold gradient core with crossed ray bars (daily). */
+function SunGlyph({ size = 24 }: { size?: number }) {
+  const core = size * 0.54;
+  const ray = { position: 'absolute' as const, width: size, height: size * 0.1, borderRadius: size * 0.05, backgroundColor: COLORS.gold + 'B3' };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={ray} />
+      <View style={[ray, { transform: [{ rotate: '45deg' }] }]} />
+      <View style={[ray, { transform: [{ rotate: '90deg' }] }]} />
+      <View style={[ray, { transform: [{ rotate: '135deg' }] }]} />
+      <View style={{ width: core, height: core, borderRadius: core / 2, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: core * 0.12,
+            left: core * 0.2,
+            width: core * 0.3,
+            height: core * 0.22,
+            borderRadius: core * 0.15,
+            backgroundColor: 'rgba(255,255,255,0.55)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn podium — three gradient ranking bars, center tallest (weekly). */
+function PodiumGlyph({ size = 24, accent = COLORS.purple }: { size?: number; accent?: string }) {
+  const bar = (h: number, colors: readonly [string, string], key: number) => (
+    <View key={key} style={{ width: size * 0.26, height: size * h, borderRadius: size * 0.06, overflow: 'hidden' }}>
+      <LinearGradient
+        colors={[...colors]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+    </View>
+  );
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        gap: size * 0.08,
+      }}
+    >
+      {bar(0.55, [accent, accent + '80'], 0)}
+      {bar(0.95, [COLORS.goldLight, COLORS.gold], 1)}
+      {bar(0.4, [accent + 'CC', accent + '66'], 2)}
+    </View>
+  );
+}
+
+/** Drawn mini padlock — ring shackle + gradient rounded-rect body. */
+function LockGlyph({ size = 22, accent = COLORS.gold }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.5,
+          height: size * 0.4,
+          borderTopLeftRadius: size * 0.25,
+          borderTopRightRadius: size * 0.25,
+          borderWidth: size * 0.11,
+          borderBottomWidth: 0,
+          borderColor: accent + 'D9',
+          marginBottom: -size * 0.05,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.82,
+          height: size * 0.56,
+          borderRadius: size * 0.14,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '8C']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            width: size * 0.16,
+            height: size * 0.22,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(8,2,22,0.7)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn light bulb — gradient globe + stacked base bands (coach tip). */
+function BulbGlyph({ size = 18, accent = COLORS.cyan }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View style={{ width: size * 0.6, height: size * 0.6, borderRadius: size * 0.3, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[accent, accent + '8C']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.07,
+            left: size * 0.1,
+            width: size * 0.16,
+            height: size * 0.12,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(255,255,255,0.6)',
+          }}
+        />
+      </View>
+      <View style={{ width: size * 0.26, height: size * 0.1, marginTop: size * 0.04, borderRadius: size * 0.03, backgroundColor: accent + '99' }} />
+      <View style={{ width: size * 0.18, height: size * 0.07, marginTop: size * 0.02, borderRadius: size * 0.03, backgroundColor: accent + '66' }} />
+    </View>
+  );
+}
+
+/** Per-mode drawn silhouette in the mode's accent color. */
+function ModeGlyph({ modeId, accent, size }: { modeId: string; accent: string; size: number }) {
+  switch (modeId) {
+    case 'classic':
+      return <LetterTileGlyph size={size} accent={accent} />;
+    case 'timePressure':
+      return <ClockGlyph size={size} accent={accent} />;
+    case 'noGravity':
+      return <FloatTileGlyph size={size} accent={accent} />;
+    case 'gravityFlip':
+      return <CycleGlyph size={size} accent={accent} />;
+    case 'perfectSolve':
+      return <DiamondGlyph size={size} accent={accent} />;
+    case 'shrinkingBoard':
+      return <NestedSquaresGlyph size={size} accent={accent} />;
+    case 'relax':
+      return <LeafGlyph size={size} accent={accent} />;
+    case 'daily':
+      return <SunGlyph size={size} />;
+    case 'weekly':
+      return <PodiumGlyph size={size} accent={accent} />;
+    case 'expert':
+    default:
+      return <StarBurstGlyph size={size} accent={accent} />;
+  }
+}
 
 /** Compact progress readout rendered on a locked card instead of the old
  *  floating gold string: a chip label + a meter toward the requirement. */
@@ -169,14 +698,19 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
               {mode.id === 'daily' ? 'DAILY EVENT' : 'WEEKLY EVENT'}
             </Text>
           )}
-          <IconMedallion
-            glyph={accessible ? mode.icon : '\u{1F512}'}
+          <DrawnMedallion
             accent={accessible ? accent : COLORS.gold}
             size={48}
             shape="squircle"
             muted={!accessible}
             style={styles.medallion}
-          />
+          >
+            {accessible ? (
+              <ModeGlyph modeId={mode.id} accent={accent} size={24} />
+            ) : (
+              <LockGlyph size={22} accent={COLORS.gold} />
+            )}
+          </DrawnMedallion>
           <Text style={[styles.cardName, !accessible && styles.textLocked]}>
             {mode.name}
           </Text>
@@ -245,7 +779,9 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
             hitSlop={8}
             style={({ pressed }) => [pressed && styles.headerBtnPressed]}
           >
-            <IconMedallion glyph={'\u{1F3C6}'} accent={COLORS.gold} size={40} />
+            <DrawnMedallion accent={COLORS.gold} size={40}>
+              <PodiumGlyph size={20} accent={COLORS.gold} />
+            </DrawnMedallion>
           </Pressable>
         ) : undefined
       }
@@ -275,7 +811,9 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           />
-          <IconMedallion glyph={'\u{1F4A1}'} accent={COLORS.cyan} size={30} shape="squircle" />
+          <DrawnMedallion accent={COLORS.cyan} size={30} shape="squircle">
+            <BulbGlyph size={17} accent={COLORS.cyan} />
+          </DrawnMedallion>
           <Text style={styles.coachBannerText}>
             Each mode has unique rules — advance through levels to unlock more.
           </Text>
