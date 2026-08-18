@@ -57,6 +57,18 @@ const HIGHLIGHT_DEFAULT: [string, string] = ['rgba(255,255,255,0.22)', 'rgba(255
 
 const DEFAULT_BORDER_COLOR = 'rgba(200, 77, 255, 0.40)';
 
+/** #rrggbb → rgba() with the given alpha; non-hex passes through. */
+function rampBorderColor(hex: string): string {
+  const m = hex.match(/^#([0-9a-fA-F]{6})$/);
+  if (!m) return DEFAULT_BORDER_COLOR;
+  const n = parseInt(m[1], 16);
+  // Lift toward white so the rim reads as a lit edge of the tile color.
+  const r = Math.min(255, ((n >> 16) & 0xff) + 70);
+  const g = Math.min(255, ((n >> 8) & 0xff) + 70);
+  const b = Math.min(255, (n & 0xff) + 70);
+  return `rgba(${r}, ${g}, ${b}, 0.55)`;
+}
+
 const GRADIENT_START_02_0 = { x: 0.2, y: 0 };
 const GRADIENT_END_08_1 = { x: 0.8, y: 1 };
 const GRADIENT_START_05_0 = { x: 0.5, y: 0 };
@@ -238,7 +250,10 @@ export const LetterCell = React.memo(function LetterCell({
     else if (isSelected && isHinted) border = palette.gold;
     else if (isSelected) border = palette.accent;
     else if (isWildcard) border = palette.gold;
-    else border = DEFAULT_BORDER_COLOR;
+    // Resting tiles rim in a lit edge of their own chapter color — a fixed
+    // purple rim on e.g. green nature tiles read as a clash in the blind
+    // design review.
+    else border = chapterTileRamp ? rampBorderColor(chapterTileRamp[0]) : DEFAULT_BORDER_COLOR;
 
     let shadow: string;
     if (isValidWord) shadow = palette.green;
@@ -408,7 +423,9 @@ export const LetterCell = React.memo(function LetterCell({
             style={{
               ...StyleSheet.absoluteFillObject,
               borderRadius: insetBR,
-              opacity: 0.18,
+              // 0.18 desaturated the brightened tile ramps back toward the
+              // "murky" look the design review flagged.
+              opacity: 0.1,
             }}
             resizeMode="cover"
           />
