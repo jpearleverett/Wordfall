@@ -54,7 +54,9 @@ interface SeasonPassScreenProps {
 
 // Stable data/footer identities for the virtualized tier ladder.
 const TIER_NUMBERS = Array.from({ length: MAX_SEASON_TIER }, (_, i) => i + 1);
-const LADDER_FOOTER = <View style={{ height: 110 }} />;
+// Tall enough to clear the floating tab bar (64pt + home-indicator inset)
+// with margin, so the last tier row is never cut off at max scroll.
+const LADDER_FOOTER = <View style={{ height: 150 }} />;
 
 // ─── DrawnCrown — crown built from pure Views (replaces the 👑 emoji) ──────
 // Gradient gold band + three triangle points + jewel dots + glow. By default
@@ -437,7 +439,7 @@ const LaneCard = memo(function LaneCard({
             end={{ x: 1, y: 0 }}
             style={StyleSheet.absoluteFillObject}
           />
-          <Text style={styles.premiumRibbonText}>PREMIUM</Text>
+          <Text style={styles.premiumRibbonText} numberOfLines={1}>PREMIUM</Text>
         </View>
       )}
 
@@ -494,6 +496,7 @@ const LaneCard = memo(function LaneCard({
               claimed && styles.statusChipTextClaimed,
               premiumLocked && reached && styles.statusChipTextPremium,
             ]}
+            numberOfLines={1}
           >
             {claimed ? '✓ CLAIMED' : premiumLocked && reached ? 'PREMIUM' : 'LOCKED'}
           </Text>

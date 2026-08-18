@@ -1397,6 +1397,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       style={styles.scrollView}
       contentContainerStyle={styles.noClubContent}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       {/* Hero recruitment panel */}
       <View style={styles.heroPanel}>
@@ -2048,7 +2049,10 @@ const styles = StyleSheet.create({
   noClubContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 40,
+    // Clears the floating tab bar (64pt + home-indicator inset) with margin,
+    // so the create-club input at the bottom never sits clipped against the
+    // screen edge — and stays reachable above the keyboard while focused.
+    paddingBottom: 150,
   },
   heroPanel: {
     ...bentoPanel('pink', { padding: 20, borderRadius: RADIUS.xxl }),

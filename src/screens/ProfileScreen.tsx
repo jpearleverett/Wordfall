@@ -997,7 +997,34 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             />
-            <Text style={[styles.avatarLetter, { color: equippedTheme.colors.accent }]}>{initial}</Text>
+            {/* Radial-ish rarity wash: bright top-center falling off downward,
+                plus a faint bottom counter-glow so the disc reads lit, not flat. */}
+            <LinearGradient
+              colors={[frameBorderColor + '3D', 'rgba(8,2,22,0)'] as [string, string]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 0.72 }}
+            />
+            <LinearGradient
+              colors={['rgba(8,2,22,0)', frameBorderColor + '20'] as [string, string]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0.5, y: 0.45 }}
+              end={{ x: 0.5, y: 1 }}
+            />
+            {/* Subtle geometric backdrop — orbit ring + rotated diamonds at
+                low alpha give the monogram designed depth. */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <View style={[styles.avatarOrbit, { borderColor: frameBorderColor + '26' }]} />
+              <View style={[styles.avatarDiamond, { borderColor: frameBorderColor + '30' }]} />
+              <View style={styles.avatarDiamondSmall} />
+            </View>
+            {/* Dual-layer bevel monogram: dark offset glyph under the lit glyph. */}
+            <View style={styles.avatarGlyphStack}>
+              <Text style={[styles.avatarLetter, styles.avatarLetterUnder]}>{initial}</Text>
+              <Text style={[styles.avatarLetter, { color: equippedTheme.colors.accent }]}>{initial}</Text>
+            </View>
+            {/* Glass top shine */}
+            <View style={styles.avatarShine} pointerEvents="none" />
           </View>
         </Animated.View>
         <View style={styles.levelBadge}>
@@ -1436,6 +1463,62 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.accentGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
+  },
+  // Dark offset copy rendered UNDER the lit glyph — reads as a bevel edge.
+  avatarLetterUnder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: 'rgba(5,0,16,0.65)',
+    textShadowColor: 'transparent',
+    textShadowRadius: 0,
+    transform: [{ translateY: 2.5 }, { translateX: 1.5 }],
+  },
+  avatarGlyphStack: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Low-alpha geometric backdrop inside the 88px disc (clipped by the circle).
+  avatarOrbit: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 6,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 1,
+  },
+  avatarDiamond: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 18,
+    width: 52,
+    height: 52,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    transform: [{ rotate: '45deg' }],
+  },
+  avatarDiamondSmall: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 27,
+    width: 34,
+    height: 34,
+    borderWidth: 1,
+    borderRadius: 7,
+    borderColor: 'rgba(255,255,255,0.09)',
+    transform: [{ rotate: '45deg' }],
+  },
+  avatarShine: {
+    position: 'absolute',
+    top: 7,
+    left: 17,
+    right: 17,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   levelBadge: {
     marginTop: -12,

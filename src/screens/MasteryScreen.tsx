@@ -455,7 +455,7 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
             end={{ x: 1, y: 0 }}
             style={StyleSheet.absoluteFillObject}
           />
-          <Text style={styles.premiumRibbonText}>PREMIUM</Text>
+          <Text style={styles.premiumRibbonText} numberOfLines={1}>PREMIUM</Text>
         </View>
       )}
       {premiumLocked && (
@@ -691,7 +691,12 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
             </View>
           ) : (
             <View style={styles.countdownPill}>
-              <Text style={styles.countdownPillText}>
+              <Text
+                style={styles.countdownPillText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+              >
                 {'⏳'}{' '}
                 {days > 0
                   ? t('common.daysRemainingSeason', { count: days })
@@ -785,6 +790,9 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
           reduceMotion={reduceMotion}
         />
       ))}
+      {/* Extra clearance beyond the scaffold's own bottom padding so the
+          final tier row scrolls fully clear of the floating tab bar. */}
+      <View style={styles.bottomSpacer} />
     </ScreenScaffold>
   );
 };
@@ -849,7 +857,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,68,102,0.14)',
     borderWidth: 1,
     borderColor: COLORS.coral + '55',
-    maxWidth: 190,
+    maxWidth: 200,
+    flexShrink: 1,
+    marginLeft: 10,
   },
   countdownPillText: {
     color: COLORS.coral,
@@ -1090,6 +1100,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
+  },
+  bottomSpacer: {
+    height: 36,
   },
   chipColumn: {
     gap: 6,

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Animated,
+  Easing,
   Image,
   Pressable,
   ScrollView,
@@ -36,7 +37,6 @@ import { soundManager } from '../services/sound';
 import ChromeText from './common/ChromeText';
 import ScanLineOverlay from './common/ScanLineOverlay';
 import NeonStarBurst from './victory/NeonStarBurst';
-import FlawlessBadge from './victory/FlawlessBadge';
 import { ShareCard } from './ShareCard';
 import { useShareVictory } from '../hooks/useShareVictory';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -330,6 +330,88 @@ function FlameMark({ size = 18 }: { size?: number }) {
           },
         ]}
       />
+    </View>
+  );
+}
+
+/**
+ * Gold "FLAWLESS" pill — identical reveal timing / a11y to the shared
+ * `victory/FlawlessBadge`, rebuilt here on a rounded, padded glow plate:
+ * the shadow container carries its own borderRadius + opaque base so the
+ * glow renders as a soft rounded halo instead of the hard-edged offset
+ * box the blind design review flagged as "badge slightly clipped".
+ */
+function FlawlessBadgePlate({
+  visible,
+  reduceMotion = false,
+  delay = 700,
+}: {
+  visible: boolean;
+  reduceMotion?: boolean;
+  delay?: number;
+}) {
+  const scale = useRef(new Animated.Value(reduceMotion ? 1 : 0.6)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!visible) {
+      scale.setValue(reduceMotion ? 1 : 0.6);
+      opacity.setValue(0);
+      return;
+    }
+    if (reduceMotion) {
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 280,
+        delay,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 180,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.spring(scale, {
+          toValue: 1.12,
+          friction: 5,
+          tension: 220,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scale, {
+          toValue: 1,
+          friction: 7,
+          tension: 160,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, [visible, reduceMotion, delay, scale, opacity]);
+
+  if (!visible) return null;
+
+  return (
+    <View style={styles.flawlessWrap} pointerEvents="none">
+      <Animated.View
+        style={[styles.flawlessShell, { opacity, transform: [{ scale }] }]}
+        accessibilityLabel="Flawless solve"
+      >
+        <LinearGradient
+          colors={['rgba(255, 215, 0, 0.95)', 'rgba(255, 184, 0, 0.95)'] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.flawlessPill}
+        >
+          <View style={styles.flawlessShine} />
+          <Text style={styles.flawlessText}>FLAWLESS</Text>
+        </LinearGradient>
+      </Animated.View>
     </View>
   );
 }
@@ -694,12 +776,6 @@ export function PuzzleComplete({
         colors={['rgba(4,6,18,0.15)', 'rgba(4,6,18,0.75)'] as [string, string]}
         style={StyleSheet.absoluteFill}
       />
-      {/* Trophy crown decorative element */}
-      <Image
-        source={LOCAL_IMAGES.trophyCrown}
-        style={styles.trophyCrownDecor}
-        resizeMode="contain"
-      />
       {/* Heavy decorations mount after 250ms so the main card appears fast.
           VideoBackground is especially expensive — it loads an H.264 decoder
           and starts a playback loop. SparkleField / CelebrationBurst / 20
@@ -804,7 +880,7 @@ export function PuzzleComplete({
                   solve gets this; streak milestones get a full-screen ceremony
                   on top. */}
               {perfectRun && (
-                <FlawlessBadge visible={starsRevealed} delay={700} reduceMotion={reduceMotion} />
+                <FlawlessBadgePlate visible={starsRevealed} delay={700} reduceMotion={reduceMotion} />
               )}
 
               {/* Chrome score panel with CRT scan lines */}
@@ -1504,15 +1580,47 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  trophyCrownDecor: {
-    position: 'absolute',
-    top: 20,
+  // FLAWLESS badge plate — padded wrapper gives the glow breathing room;
+  // the shell's own borderRadius + opaque base keeps the shadow rounded.
+  flawlessWrap: {
     alignSelf: 'center',
-    width: 80,
-    height: 80,
-    opacity: 0.35,
-    left: '50%',
-    marginLeft: -40,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+  },
+  flawlessShell: {
+    borderRadius: 21,
+    backgroundColor: COLORS.gold,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  flawlessPill: {
+    paddingHorizontal: 22,
+    paddingVertical: 8,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.55)',
+    overflow: 'hidden',
+  },
+  flawlessShine: {
+    position: 'absolute',
+    top: 0,
+    left: '12%',
+    right: '12%',
+    height: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 999,
+  },
+  flawlessText: {
+    fontFamily: FONTS.display,
+    color: '#1a0f00',
+    fontSize: 18,
+    letterSpacing: 6,
+    textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.55)',
+    textShadowRadius: 6,
   },
   rewardIconImage: {
     width: 24,

@@ -445,15 +445,25 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                   start={{ x: 0.5, y: 0 }}
                   end={{ x: 0.5, y: 0.85 }}
                 />
-                <View style={styles.framePreviewShine} />
-                <Text
-                  style={[
-                    styles.framePreviewLetter,
-                    { textShadowColor: rarityColor + 'B3' },
-                  ]}
-                >
-                  {initial}
-                </Text>
+                {/* Miniature of the hero treatment: orbit + diamond + bevel glyph */}
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                  <View style={[styles.framePreviewOrbit, { borderColor: rarityColor + '2B' }]} />
+                  <View style={[styles.framePreviewDiamond, { borderColor: rarityColor + '33' }]} />
+                </View>
+                <View style={styles.avatarGlyphStack}>
+                  <Text style={[styles.framePreviewLetter, styles.framePreviewLetterUnder]}>
+                    {initial}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.framePreviewLetter,
+                      { textShadowColor: rarityColor + 'B3' },
+                    ]}
+                  >
+                    {initial}
+                  </Text>
+                </View>
+                <View style={styles.framePreviewShine} pointerEvents="none" />
               </View>
             </View>
           ) : (
@@ -617,15 +627,31 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
               />
-              {/* Rarity-tinted radial-ish wash + glass highlight */}
+              {/* Rarity-tinted radial-ish wash + bottom counter-glow */}
               <LinearGradient
-                colors={[frameRarityColor + '2E', 'rgba(8,2,22,0)']}
+                colors={[frameRarityColor + '3D', 'rgba(8,2,22,0)']}
                 style={StyleSheet.absoluteFill}
                 start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 0.7 }}
+                end={{ x: 0.5, y: 0.72 }}
               />
-              <View style={styles.avatarShine} />
-              <Text style={[styles.avatarLetter, { color: equippedThemeData.colors.accent }]}>{initial}</Text>
+              <LinearGradient
+                colors={['rgba(8,2,22,0)', frameRarityColor + '20']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0.5, y: 0.45 }}
+                end={{ x: 0.5, y: 1 }}
+              />
+              {/* Subtle geometric backdrop — orbit ring + rotated diamonds */}
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <View style={[styles.avatarOrbit, { borderColor: frameRarityColor + '26' }]} />
+                <View style={[styles.avatarDiamond, { borderColor: frameRarityColor + '30' }]} />
+                <View style={styles.avatarDiamondSmall} />
+              </View>
+              {/* Dual-layer bevel monogram + glass top shine */}
+              <View style={styles.avatarGlyphStack}>
+                <Text style={[styles.avatarLetter, styles.avatarLetterUnder]}>{initial}</Text>
+                <Text style={[styles.avatarLetter, { color: equippedThemeData.colors.accent }]}>{initial}</Text>
+              </View>
+              <View style={styles.avatarShine} pointerEvents="none" />
             </View>
           </Animated.View>
           <View style={styles.levelBadge}>
@@ -810,14 +836,61 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
   },
+  // Dark offset copy rendered UNDER the lit glyph — reads as a bevel edge.
+  avatarLetterUnder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: 'rgba(5,0,16,0.65)',
+    textShadowColor: 'transparent',
+    textShadowRadius: 0,
+    transform: [{ translateY: 2.5 }, { translateX: 1.5 }],
+  },
+  avatarGlyphStack: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Low-alpha geometric backdrop inside the 94px disc (clipped by the circle).
+  avatarOrbit: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 6,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    borderWidth: 1,
+  },
+  avatarDiamond: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 19,
+    width: 56,
+    height: 56,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    transform: [{ rotate: '45deg' }],
+  },
+  avatarDiamondSmall: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 29,
+    width: 36,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 7,
+    borderColor: 'rgba(255,255,255,0.09)',
+    transform: [{ rotate: '45deg' }],
+  },
   avatarShine: {
     position: 'absolute',
     top: 8,
-    left: 20,
-    right: 20,
-    height: 16,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    left: 18,
+    right: 18,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.10)',
     transform: [{ scaleY: 0.8 }],
   },
   levelBadge: {
@@ -927,6 +1000,36 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  framePreviewOrbit: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 3,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  framePreviewDiamond: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: 9,
+    width: 24,
+    height: 24,
+    borderWidth: 1,
+    borderRadius: 5,
+    transform: [{ rotate: '45deg' }],
+  },
+  framePreviewLetterUnder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: 'rgba(5,0,16,0.6)',
+    textShadowColor: 'transparent',
+    textShadowRadius: 0,
+    transform: [{ translateY: 1.5 }, { translateX: 1 }],
   },
   frameName: {
     fontSize: 11,
