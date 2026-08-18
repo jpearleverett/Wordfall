@@ -29,7 +29,11 @@ coverage/
 .agents/
 .canvas/
 agent_docs/
-attached_assets/
+# attached_assets/ is NOT ignorable: localAssets.ts requires the three
+# generated_videos mp4s (synthwave grid, victory burst, neon aurora) into
+# the bundle. Dev builds never caught this — the dev client loads JS from
+# Metro at runtime — so the first production bundle was also the first
+# time the archive's completeness was tested, and it failed exactly here.
 store-metadata/
 docs/
 functions/
