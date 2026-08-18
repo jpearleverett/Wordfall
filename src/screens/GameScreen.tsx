@@ -5,6 +5,7 @@ import {
   Animated,
   Image,
   LayoutAnimation,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -1376,6 +1377,23 @@ function GameScreenImpl({
   const handleGravitySettled = useCallback(() => {
     void gravityLandHaptic();
   }, []);
+
+  // E2E driver hook — web only, and only when the page was opened with an
+  // `e2e` query param (never true in the shipped Android app; the web build
+  // is used solely by the screenshot/design-review pipeline, where headless
+  // Chromium cannot deliver the pointer events react-native-gesture-handler
+  // expects). Exposes the game store so the driver can select cells and
+  // read board state directly.
+  useEffect(() => {
+    if (
+      Platform.OS === 'web' &&
+      typeof window !== 'undefined' &&
+      typeof window.location?.search === 'string' &&
+      window.location.search.includes('e2e')
+    ) {
+      (window as unknown as Record<string, unknown>).__wfStore = store;
+    }
+  }, [store]);
 
   // Last-word tension hook (plan task 2). When `remainingWords` transitions to
   // exactly 1, crossfade to the tense BGM, fire a one-shot sting, and run a
