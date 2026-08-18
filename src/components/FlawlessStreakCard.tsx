@@ -11,6 +11,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS } from '../constants';
 import { bentoPanel } from '../styles/bentoPanel';
+import GameIcon from './icons/GameIcon';
 
 interface FlawlessStreakCardProps {
   currentStreak: number;
@@ -56,7 +57,9 @@ export const FlawlessStreakCard: React.FC<FlawlessStreakCardProps> = React.memo(
         />
 
         <View style={styles.row}>
-          <Text style={styles.icon}>{isActive ? '\u{1F31F}' : '\u{2728}'}</Text>
+          <View style={styles.icon}>
+            <GameIcon name={isActive ? 'star' : 'sparkle'} size={30} />
+          </View>
           <View style={styles.info}>
             <Text style={styles.title}>Flawless Streak</Text>
             {isActive ? (
@@ -103,7 +106,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   icon: {
-    fontSize: 30,
     marginRight: 12,
   },
   info: {
