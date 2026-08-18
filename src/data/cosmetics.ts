@@ -346,25 +346,25 @@ const BASE_PROFILE_TITLES: ProfileTitle[] = [
 
 export const LIBRARY_DECORATIONS: LibraryDecoration[] = [
   // Furniture
-  { id: 'reading_chair', name: 'Reading Chair', description: 'A cozy chair for word contemplation.', icon: '🪑', type: 'furniture', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 50 } },
-  { id: 'oak_desk', name: 'Oak Writing Desk', description: 'A sturdy desk for your word discoveries.', icon: '🪵', type: 'furniture', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 75 } },
-  { id: 'antique_table', name: 'Antique Table', description: 'An elegant table from a bygone era.', icon: '🏛️', type: 'furniture', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 150 } },
-  { id: 'throne_chair', name: 'Word Throne', description: 'Sit upon the throne of words.', icon: '👑', type: 'furniture', rarity: 'epic', owned: false, equipped: false, cost: { currency: 'gems', amount: 50 } },
-  { id: 'crystal_desk', name: 'Crystal Desk', description: 'A desk carved from pure crystal.', icon: '💎', type: 'furniture', rarity: 'legendary', owned: false, equipped: false, cost: { currency: 'gems', amount: 100 } },
+  { id: 'reading_chair', name: 'Reading Chair', description: 'For word contemplation.', icon: '🪑', type: 'furniture', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 50 } },
+  { id: 'oak_desk', name: 'Oak Writing Desk', description: 'For word discoveries.', icon: '🪵', type: 'furniture', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 75 } },
+  { id: 'antique_table', name: 'Antique Table', description: 'From a bygone era.', icon: '🏛️', type: 'furniture', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 150 } },
+  { id: 'throne_chair', name: 'Word Throne', description: 'The throne of words.', icon: '👑', type: 'furniture', rarity: 'epic', owned: false, equipped: false, cost: { currency: 'gems', amount: 50 } },
+  { id: 'crystal_desk', name: 'Crystal Desk', description: 'Carved from crystal.', icon: '💎', type: 'furniture', rarity: 'legendary', owned: false, equipped: false, cost: { currency: 'gems', amount: 100 } },
 
   // Lighting
-  { id: 'candle', name: 'Candle', description: 'A warm flickering candle.', icon: '🕯️', type: 'lighting', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 30 } },
-  { id: 'lantern', name: 'Paper Lantern', description: 'Soft light from an eastern lantern.', icon: '🏮', type: 'lighting', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 40 } },
-  { id: 'chandelier', name: 'Chandelier', description: 'A grand chandelier that illuminates the wing.', icon: '✨', type: 'lighting', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 120 } },
-  { id: 'fireplace', name: 'Fireplace', description: 'A roaring fireplace for cozy reading.', icon: '🔥', type: 'lighting', rarity: 'epic', owned: false, equipped: false, cost: { currency: 'gems', amount: 40 } },
-  { id: 'aurora_lamp', name: 'Aurora Lamp', description: 'Projects northern lights onto the ceiling.', icon: '🌌', type: 'lighting', rarity: 'legendary', owned: false, equipped: false, cost: { currency: 'gems', amount: 80 } },
+  { id: 'candle', name: 'Candle', description: 'Warm, flickering light.', icon: '🕯️', type: 'lighting', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 30 } },
+  { id: 'lantern', name: 'Paper Lantern', description: 'Soft eastern light.', icon: '🏮', type: 'lighting', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 40 } },
+  { id: 'chandelier', name: 'Chandelier', description: 'Lights the whole wing.', icon: '✨', type: 'lighting', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 120 } },
+  { id: 'fireplace', name: 'Fireplace', description: 'For cozy reading.', icon: '🔥', type: 'lighting', rarity: 'epic', owned: false, equipped: false, cost: { currency: 'gems', amount: 40 } },
+  { id: 'aurora_lamp', name: 'Aurora Lamp', description: 'Indoor northern lights.', icon: '🌌', type: 'lighting', rarity: 'legendary', owned: false, equipped: false, cost: { currency: 'gems', amount: 80 } },
 
   // Ornaments
-  { id: 'globe', name: 'World Globe', description: 'A spinning globe of word knowledge.', icon: '🌍', type: 'ornament', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 60 } },
-  { id: 'telescope', name: 'Telescope', description: 'Gaze into the universe of words.', icon: '🔭', type: 'ornament', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 100 } },
-  { id: 'hourglass', name: 'Hourglass', description: 'Time flows like letters falling.', icon: '⏳', type: 'ornament', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 100 } },
-  { id: 'golden_shelf', name: 'Golden Bookshelf', description: 'A shelf of pure gold for your finest tomes.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
-  { id: 'crystal_display', name: 'Crystal Display Case', description: 'Show off rare letter tiles.', icon: '🔮', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'globe', name: 'World Globe', description: 'A world of words.', icon: '🌍', type: 'ornament', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 60 } },
+  { id: 'telescope', name: 'Telescope', description: 'Scan the word cosmos.', icon: '🔭', type: 'ornament', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 100 } },
+  { id: 'hourglass', name: 'Hourglass', description: 'Time falls like letters.', icon: '⏳', type: 'ornament', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 100 } },
+  { id: 'golden_shelf', name: 'Golden Bookshelf', description: 'For your finest tomes.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'crystal_display', name: 'Crystal Display Case', description: 'Displays rare tiles.', icon: '🔮', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
 
   // Books
   { id: 'nature_tome', name: 'Tome of Nature', description: 'A beautifully illustrated nature book.', icon: '🌿', type: 'book', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 40 } },
@@ -374,27 +374,27 @@ export const LIBRARY_DECORATIONS: LibraryDecoration[] = [
   { id: 'forbidden_book', name: 'Forbidden Book', description: 'Its contents are known only to masters.', icon: '📕', type: 'book', rarity: 'legendary', owned: false, equipped: false },
 
   // Event rewards (no cost - earned through events)
-  { id: 'speed_trophy', name: 'Speed Trophy', description: 'Awarded to the fastest solvers.', icon: '⚡', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
-  { id: 'diamond_plaque', name: 'Diamond Plaque', description: 'For achieving perfection.', icon: '💎', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'speed_trophy', name: 'Speed Trophy', description: 'For the fastest solvers.', icon: '⚡', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'diamond_plaque', name: 'Diamond Plaque', description: 'For perfection.', icon: '💎', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
   { id: 'rally_banner', name: 'Rally Banner', description: 'Your club\'s rallying symbol.', icon: '🚩', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
-  { id: 'cascade_crystal', name: 'Cascade Crystal', description: 'Glows brighter with each chain.', icon: '🔥', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
-  { id: 'mystery_orb', name: 'Mystery Orb', description: 'Swirling with unknown words.', icon: '🔮', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'cascade_crystal', name: 'Cascade Crystal', description: 'Glows with each find.', icon: '🔥', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'mystery_orb', name: 'Mystery Orb', description: 'Swirls with unknown words.', icon: '🔮', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
   { id: 'retro_arcade', name: 'Retro Arcade Cabinet', description: 'A blast from the past.', icon: '🕹️', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
   { id: 'nature_painting', name: 'Nature Painting', description: 'A serene landscape painting.', icon: '🖼️', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
-  { id: 'lab_equipment', name: 'Lab Equipment', description: 'Bubbling beakers and test tubes.', icon: '🧪', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
-  { id: 'ship_wheel', name: 'Ship\'s Wheel', description: 'Navigate the seas of knowledge.', icon: '⚓', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'lab_equipment', name: 'Lab Equipment', description: 'Beakers, mid-bubble.', icon: '🧪', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'ship_wheel', name: 'Ship\'s Wheel', description: 'Steers the word seas.', icon: '⚓', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
   { id: 'gauntlet_shield', name: 'Gauntlet Shield', description: 'Survived the Expert Gauntlet.', icon: '🛡️', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
-  { id: 'community_statue', name: 'Community Statue', description: 'A monument to collective achievement.', icon: '🗽', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'community_statue', name: 'Community Statue', description: 'A monument to teamwork.', icon: '🗽', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
   { id: 'season_throne', name: 'Season Throne', description: 'The ultimate seasonal reward.', icon: '👑', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
   { id: 'fire_sconce', name: 'Fire Sconce', description: 'Eternal flames light the way.', icon: '🔥', type: 'lighting', rarity: 'epic', owned: false, equipped: false },
-  { id: 'ocean_globe', name: 'Ocean Globe', description: 'A miniature ocean in a sphere.', icon: '🌊', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'ocean_globe', name: 'Ocean Globe', description: 'An ocean in a sphere.', icon: '🌊', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
   { id: 'nature_plaque', name: 'Nature Plaque', description: 'Carved from ancient oak.', icon: '🌳', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
 
   // Bundle-exclusive decorations (IAP purchases)
-  { id: 'starter_bookend', name: 'Starter Bookend', description: 'A commemorative bookend for early supporters.', icon: '📚', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
-  { id: 'chapter_decoration', name: 'Chapter Decoration', description: 'A decorative chapter marker for your library.', icon: '🔖', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
-  { id: 'decoration_whale_trophy', name: 'Whale Trophy', description: 'A legendary trophy for the most dedicated supporters.', icon: '🐋', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
-  { id: 'decoration_platinum_exclusive', name: 'Platinum Display', description: 'An exclusive platinum display case.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'starter_bookend', name: 'Starter Bookend', description: 'For early supporters.', icon: '📚', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'chapter_decoration', name: 'Chapter Decoration', description: 'Marks your chapter.', icon: '🔖', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'decoration_whale_trophy', name: 'Whale Trophy', description: 'For true patrons.', icon: '🐋', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'decoration_platinum_exclusive', name: 'Platinum Display', description: 'Platinum-cased pride.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
 ];
 
 type FrameSeed = Omit<ProfileFrame, 'owned'> & { owned?: boolean };

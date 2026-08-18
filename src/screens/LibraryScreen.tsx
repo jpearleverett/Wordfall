@@ -164,7 +164,9 @@ function humanizeDecorationId(id: string): string {
     .split('_')
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+    .join(' ')
+    // "Season1" → "Season 1" — grant ids often glue a number onto a word.
+    .replace(/([a-zA-Z])(\d)/g, '$1 $2');
 }
 
 function getDecorationMeta(id: string): DecorationMeta {
@@ -199,7 +201,7 @@ function getDecorationMeta(id: string): DecorationMeta {
     glyph: '\u2728',
     iconName: getDecorationIconName(id),
     rarity: 'rare',
-    description: 'A rare curiosity Folio has not finished cataloguing.',
+    description: 'Still being catalogued.',
   };
 }
 
@@ -987,7 +989,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       />
                       <Text
                         style={[styles.decorationName, !owned && { color: COLORS.textMuted }]}
-                        numberOfLines={1}
+                        numberOfLines={2}
                         ellipsizeMode="tail"
                       >
                         {meta.name}
@@ -1675,6 +1677,7 @@ const styles = StyleSheet.create({
   },
   decorationName: {
     fontSize: 11,
+    lineHeight: 14,
     fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     textAlign: 'center',

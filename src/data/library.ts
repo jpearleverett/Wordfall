@@ -42,7 +42,7 @@ export const WINGS: WingDef[] = [
     icon: 'leaf',
     accent: '#35b892',
     aura: 'rgba(53, 184, 146, 0.16)',
-    tagline: 'Where the first words took root.',
+    tagline: 'Where words took root.',
     lore:
       'The oldest hall of the Library, grown as much as built — shelves of living oak, ivy for ladders, seed-catalogs that still sprout in spring. The first word ever written down is said to be pressed somewhere in its herbarium.',
     restorationLine:
@@ -55,7 +55,7 @@ export const WINGS: WingDef[] = [
     icon: 'flask',
     accent: '#5b8fe8',
     aura: 'rgba(91, 143, 232, 0.16)',
-    tagline: 'Every answer, filed next to its question.',
+    tagline: 'Answers, neatly filed.',
     lore:
       'Beakers for bookends and a periodic table set in the parquet floor. The Science Wing indexes everything twice — once by what it is, once by what it might become. Its reading lamps are powered by argument.',
     restorationLine:
@@ -68,7 +68,7 @@ export const WINGS: WingDef[] = [
     icon: 'sword',
     accent: '#c84dff',
     aura: 'rgba(200, 77, 255, 0.16)',
-    tagline: 'The shelf where heroes are kept.',
+    tagline: 'Where heroes are kept.',
     lore:
       'Marble columns, a ceiling of painted constellations, and books that insist on being legends. Careful with the epics on the top shelf — some of them still bite. The dragons filed themselves under D, out of politeness.',
     restorationLine:
@@ -81,7 +81,7 @@ export const WINGS: WingDef[] = [
     icon: 'wave',
     accent: '#42a5dd',
     aura: 'rgba(66, 165, 221, 0.16)',
-    tagline: 'Deep words for deep water.',
+    tagline: 'Deep words, deep water.',
     lore:
       'The only wing with a tide. Charts, shanties, and bottled letters line coral shelves, and the reading pools go down further than anyone has followed. Something large returns the books it borrows, always on time.',
     restorationLine:
@@ -94,7 +94,7 @@ export const WINGS: WingDef[] = [
     icon: 'palette',
     accent: '#ff2d95',
     aura: 'rgba(255, 45, 149, 0.16)',
-    tagline: 'Where words learn to sing.',
+    tagline: 'Words learn to sing.',
     lore:
       'Half gallery, half stage, entirely dramatic. The Arts Wing shelves librettos beside their standing ovations and keeps a spotlight warm for whoever restores it. The paintings gossip after closing time.',
     restorationLine:
@@ -107,7 +107,7 @@ export const WINGS: WingDef[] = [
     icon: 'planet',
     accent: '#7c5cff',
     aura: 'rgba(124, 92, 255, 0.16)',
-    tagline: 'A reading room with no ceiling.',
+    tagline: 'Reading with no ceiling.',
     lore:
       'The dome opens straight onto the cosmos, and the catalog is arranged by constellation. Star charts shelve themselves at dawn. Somewhere in the observatory stacks is the first word spoken to the night sky — filed under “hello.”',
     restorationLine:
@@ -120,7 +120,7 @@ export const WINGS: WingDef[] = [
     icon: 'scroll',
     accent: '#c99b45',
     aura: 'rgba(201, 155, 69, 0.16)',
-    tagline: 'Everything that happened, in order. Mostly.',
+    tagline: 'What happened. In order.',
     lore:
       'Scroll racks by the mile and a card catalog older than some empires it describes. The History Wing files every ending next to the beginning it came from. Its dust is archival grade and quietly proud of it.',
     restorationLine:
@@ -133,7 +133,7 @@ export const WINGS: WingDef[] = [
     icon: 'flame',
     accent: '#e0562a',
     aura: 'rgba(224, 86, 42, 0.16)',
-    tagline: 'The Library’s beating forge.',
+    tagline: 'The Library’s forge.',
     lore:
       'Fire keeps the lamps, water keeps the ink, wind turns the pages, and stone holds the whole thing up. The final wing is the Library’s engine room — restore it, and every other hall burns a little brighter.',
     restorationLine:
@@ -152,7 +152,7 @@ const FALLBACK_WING: Omit<WingDef, 'id' | 'chapters'> = {
   icon: 'sparkle',
   accent: '#c84dff',
   aura: 'rgba(200, 77, 255, 0.16)',
-  tagline: 'A hall beyond the original blueprints.',
+  tagline: 'Beyond the blueprints.',
   lore:
     'Past the eight great halls, the Library keeps growing — annexes and reading rooms the blueprints never imagined. Folio numbers them fondly and dusts them all.',
   restorationLine:
@@ -165,14 +165,14 @@ const KNOWN_EXTRA_WINGS: Record<string, Partial<WingDef>> = {
     icon: 'sun',
     accent: '#ffb800',
     aura: 'rgba(255, 184, 0, 0.16)',
-    tagline: 'Four rooms, one turning year.',
+    tagline: 'One turning year.',
   },
   wonders: {
     name: 'Wonders',
     icon: 'crystal',
     accent: '#00e5ff',
     aura: 'rgba(0, 229, 255, 0.16)',
-    tagline: 'The shelf of the impossible.',
+    tagline: 'Shelf of the impossible.',
   },
 };
 
@@ -276,16 +276,16 @@ export function getDecorationIconName(id: string, type?: string): GameIconName {
  * give them two lines.
  */
 export const MILESTONE_DECORATION_FLAVOR: Record<string, string> = {
-  bookend_oak: 'Solid oak, to hold the first shelf you refill.',
-  lamp_brass: 'Warm brass light for the late reading hours.',
-  globe_antique: 'Spin it to choose tonight’s reading voyage.',
-  clock_pendulum: 'Keeps Library time — a touch slow, on purpose.',
-  telescope_mini: 'For reading titles on the very top shelves.',
-  statue_thinker: 'Forever deciding what to read next.',
-  plant_fern: 'Thrives on lamplight and long silences.',
-  painting_sunset: 'The one sunset in the Library that never ends.',
-  crystal_ball: 'Shows the next word you were going to find.',
-  crown_wisdom: 'Worn by the Library’s finest word architects.',
+  bookend_oak: 'Holds your first shelf.',
+  lamp_brass: 'Light for late hours.',
+  globe_antique: 'Spin for a voyage.',
+  clock_pendulum: 'Slow, on purpose.',
+  telescope_mini: 'For top-shelf titles.',
+  statue_thinker: 'Deciding what to read.',
+  plant_fern: 'Thrives on lamplight.',
+  painting_sunset: 'A sunset without end.',
+  crystal_ball: 'Shows your next word.',
+  crown_wisdom: 'For word architects.',
 };
 
 /** Milestone decorations carry no rarity — derive one from unlock level. */
