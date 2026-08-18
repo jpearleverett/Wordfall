@@ -15,7 +15,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
-import IconMedallion from '../components/common/IconMedallion';
 import PrimaryButton from '../components/common/PrimaryButton';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import { bentoPanel, bentoDividerColor, type BentoAccent } from '../styles/bentoPanel';
@@ -77,6 +76,225 @@ function withAlpha(color: string, alphaHex: string): string {
   return /^#[0-9a-fA-F]{6}$/.test(color) ? color + alphaHex : color;
 }
 
+// ─── Drawn glyph kit — layered Views/gradients, no emoji (same technique as
+// ModesScreen's ModeGlyph family / LeaderboardScreen's GlyphMedallion). ─────
+
+type GlyphProps = { size?: number; accent?: string };
+
+/**
+ * DrawnMedallion — IconMedallion's layered-gem shell, but hosting drawn
+ * View-based glyphs instead of raw emoji (the art review's residual flag).
+ */
+function DrawnMedallion({
+  size = 34,
+  accent = COLORS.purple,
+  style,
+  children,
+}: {
+  size?: number;
+  accent?: string;
+  style?: object;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: accent + '73',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.55,
+          shadowRadius: size * 0.22,
+          elevation: 6,
+        },
+        style ?? null,
+      ]}
+    >
+      <LinearGradient
+        colors={[accent + '3D', 'rgba(8, 2, 22, 0.92)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.14)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/** Drawn speaker — driver box + flared cone + clipped-ring wave arcs (SFX). */
+function SpeakerGlyph({ size = 24, accent = COLORS.cyan }: GlyphProps) {
+  const arc = (d: number, right: number, opacity: number) => (
+    <View
+      key={d}
+      style={{
+        position: 'absolute',
+        right,
+        top: (size - d) / 2,
+        width: d / 2,
+        height: d,
+        overflow: 'hidden',
+        opacity,
+      }}
+    >
+      <View
+        style={{
+          position: 'absolute',
+          left: -d / 2,
+          width: d,
+          height: d,
+          borderRadius: d / 2,
+          borderWidth: size * 0.08,
+          borderColor: accent,
+        }}
+      />
+    </View>
+  );
+  return (
+    <View style={{ width: size, height: size, justifyContent: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.02,
+          top: size * 0.32,
+          width: size * 0.18,
+          height: size * 0.36,
+          borderRadius: size * 0.05,
+          backgroundColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.16,
+          top: size * 0.14,
+          width: 0,
+          height: 0,
+          borderTopWidth: size * 0.36,
+          borderBottomWidth: size * 0.36,
+          borderRightWidth: size * 0.3,
+          borderTopColor: 'transparent',
+          borderBottomColor: 'transparent',
+          borderRightColor: accent,
+        }}
+      />
+      {arc(size * 0.52, size * 0.24, 0.9)}
+      {arc(size * 0.84, size * 0.04, 0.5)}
+    </View>
+  );
+}
+
+/** Drawn music note — gradient disc + stem + flag (Music). */
+function NoteGlyph({ size = 24, accent = COLORS.cyan }: GlyphProps) {
+  const head = size * 0.42;
+  return (
+    <View style={{ width: size, height: size }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.1,
+          bottom: size * 0.02,
+          width: head,
+          height: head * 0.82,
+          borderRadius: head / 2,
+          overflow: 'hidden',
+          transform: [{ rotate: '-16deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.46,
+          top: size * 0.08,
+          width: size * 0.1,
+          height: size * 0.62,
+          borderRadius: size * 0.05,
+          backgroundColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.5,
+          top: size * 0.05,
+          width: size * 0.32,
+          height: size * 0.17,
+          borderTopRightRadius: size * 0.17,
+          borderBottomLeftRadius: size * 0.1,
+          backgroundColor: accent + 'CC',
+          transform: [{ rotate: '16deg' }],
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn 8-point star burst — two crossed gradient squares + hot core (Ceremony). */
+function StarBurstGlyph({ size = 24, accent = COLORS.cyan }: GlyphProps) {
+  const sq = size * 0.68;
+  const square = {
+    position: 'absolute' as const,
+    width: sq,
+    height: sq,
+    borderRadius: sq * 0.18,
+    overflow: 'hidden' as const,
+  };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={[square, { transform: [{ rotate: '45deg' }] }]}>
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View style={square}>
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          width: sq * 0.34,
+          height: sq * 0.34,
+          borderRadius: sq * 0.17,
+          backgroundColor: 'rgba(255,255,255,0.6)',
+        }}
+      />
+    </View>
+  );
+}
+
 /**
  * Volumes are stored as 0–1 fractions (see SettingsContext DEFAULT_SETTINGS:
  * sfxVolume 0.8). The old UI printed the raw fraction with a "%" suffix
@@ -87,6 +305,642 @@ function withAlpha(color: string, alphaHex: string): string {
  */
 const toPercent = (raw: number): number =>
   Math.round(Math.max(0, Math.min(100, raw <= 1 ? raw * 100 : raw)));
+
+/** Drawn phone with vibration bars — Haptics. */
+function PhoneVibeGlyph({ size = 24, accent = COLORS.pink }: GlyphProps) {
+  const bar = (left: number, rot: string) => (
+    <View
+      key={rot}
+      style={{
+        position: 'absolute',
+        left,
+        top: size * 0.3,
+        width: size * 0.07,
+        height: size * 0.4,
+        borderRadius: size * 0.04,
+        backgroundColor: accent + 'B3',
+        transform: [{ rotate: rot }],
+      }}
+    />
+  );
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: size * 0.44,
+          height: size * 0.78,
+          borderRadius: size * 0.1,
+          borderWidth: size * 0.07,
+          borderColor: accent,
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          paddingBottom: size * 0.05,
+        }}
+      >
+        <View
+          style={{
+            width: size * 0.12,
+            height: size * 0.05,
+            borderRadius: size * 0.03,
+            backgroundColor: accent,
+          }}
+        />
+      </View>
+      {bar(size * 0.02, '-14deg')}
+      {bar(size * 0.91, '14deg')}
+    </View>
+  );
+}
+
+/** Drawn bell — gradient dome + lip bar + clapper (Notifications). */
+function BellGlyph({ size = 24, accent = COLORS.pink }: GlyphProps) {
+  const w = size * 0.6;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: w,
+          height: size * 0.5,
+          borderTopLeftRadius: w / 2,
+          borderTopRightRadius: w / 2,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          width: size * 0.82,
+          height: size * 0.09,
+          borderRadius: size * 0.05,
+          backgroundColor: accent,
+          marginTop: size * 0.02,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.14,
+          height: size * 0.12,
+          borderBottomLeftRadius: size * 0.07,
+          borderBottomRightRadius: size * 0.07,
+          backgroundColor: accent + 'CC',
+          marginTop: size * 0.02,
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn eye — almond outline + iris + highlight (Colorblind mode). */
+function EyeGlyph({ size = 24, accent = COLORS.purple }: GlyphProps) {
+  const d = size * 0.94;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: d,
+          height: d * 0.6,
+          borderRadius: d * 0.3,
+          borderWidth: size * 0.07,
+          borderColor: accent,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.3,
+          height: size * 0.3,
+          borderRadius: size * 0.15,
+          backgroundColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: size * 0.1,
+          height: size * 0.1,
+          borderRadius: size * 0.05,
+          backgroundColor: 'rgba(255,255,255,0.85)',
+          transform: [{ translateX: size * 0.04 }, { translateY: -size * 0.04 }],
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn speech bubble — gradient bubble + tail + dots (Language). */
+function SpeechBubbleGlyph({ size = 24, accent = COLORS.cyan }: GlyphProps) {
+  const dot = size * 0.09;
+  return (
+    <View style={{ width: size, height: size }}>
+      <View
+        style={{
+          position: 'absolute',
+          bottom: size * 0.12,
+          left: size * 0.2,
+          width: size * 0.2,
+          height: size * 0.2,
+          borderRadius: size * 0.04,
+          backgroundColor: accent + 'B3',
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.08,
+          left: size * 0.02,
+          right: size * 0.02,
+          height: size * 0.62,
+          borderRadius: size * 0.2,
+          overflow: 'hidden',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: dot * 0.7,
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        {[0, 1, 2].map((i) => (
+          <View
+            key={i}
+            style={{
+              width: dot,
+              height: dot,
+              borderRadius: dot / 2,
+              backgroundColor: 'rgba(8,2,22,0.8)',
+            }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Drawn person — gradient head + shoulders (Account). */
+function PersonGlyph({ size = 24, accent = COLORS.gold }: GlyphProps) {
+  const head = size * 0.36;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.04,
+          width: head,
+          height: head,
+          borderRadius: head / 2,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          width: size * 0.72,
+          height: size * 0.36,
+          borderTopLeftRadius: size * 0.36,
+          borderTopRightRadius: size * 0.36,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '73']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn door with knob — Sign out. */
+function DoorGlyph({ size = 24, accent = COLORS.coral }: GlyphProps) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: size * 0.58,
+          height: size * 0.88,
+          borderRadius: size * 0.09,
+          borderWidth: size * 0.07,
+          borderColor: accent,
+          justifyContent: 'center',
+        }}
+      >
+        <View
+          style={{
+            alignSelf: 'flex-end',
+            marginRight: size * 0.07,
+            width: size * 0.1,
+            height: size * 0.1,
+            borderRadius: size * 0.05,
+            backgroundColor: accent,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn price tag — rotated gradient square + punch hole (Restore purchases). */
+function TagGlyph({ size = 24, accent = COLORS.gold }: GlyphProps) {
+  const d = size * 0.6;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: d,
+          height: d,
+          borderRadius: d * 0.18,
+          overflow: 'hidden',
+          transform: [{ rotate: '45deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: d * 0.12,
+            left: d * 0.12,
+            width: d * 0.16,
+            height: d * 0.16,
+            borderRadius: d * 0.08,
+            backgroundColor: 'rgba(8,2,22,0.8)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn payment card — gradient rect + mag stripe (Manage subscription). */
+function CardGlyph({ size = 24, accent = COLORS.gold }: GlyphProps) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size * 0.92, height: size * 0.62, borderRadius: size * 0.1, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[accent, accent + '80']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.12,
+            left: 0,
+            right: 0,
+            height: size * 0.11,
+            backgroundColor: 'rgba(8,2,22,0.75)',
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            bottom: size * 0.08,
+            left: size * 0.08,
+            width: size * 0.3,
+            height: size * 0.07,
+            borderRadius: size * 0.035,
+            backgroundColor: 'rgba(255,255,255,0.6)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn shield — tapered gradient crest (Ad removal / Spending limit). */
+function ShieldGlyph({ size = 24, accent = COLORS.gold }: GlyphProps) {
+  const w = size * 0.72;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: w,
+          height: size * 0.84,
+          borderTopLeftRadius: size * 0.1,
+          borderTopRightRadius: size * 0.1,
+          borderBottomLeftRadius: w / 2,
+          borderBottomRightRadius: w / 2,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '73']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: w / 2,
+            backgroundColor: 'rgba(255,255,255,0.18)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn crown — three spikes + gradient band (Premium Pass). */
+function CrownGlyph({ size = 24, accent = COLORS.gold }: GlyphProps) {
+  const spike = (left: number, h: number) => (
+    <View
+      key={left}
+      style={{
+        position: 'absolute',
+        bottom: size * 0.3,
+        left,
+        width: 0,
+        height: 0,
+        borderLeftWidth: size * 0.12,
+        borderRightWidth: size * 0.12,
+        borderBottomWidth: h,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderBottomColor: accent,
+      }}
+    />
+  );
+  return (
+    <View style={{ width: size, height: size }}>
+      {spike(size * 0.02, size * 0.34)}
+      {spike(size * 0.38, size * 0.46)}
+      {spike(size * 0.74, size * 0.34)}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: size * 0.12,
+          left: size * 0.02,
+          right: size * 0.02,
+          height: size * 0.2,
+          borderRadius: size * 0.05,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, accent]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn coin — gold gradient disc + inner ring (Monthly limit). */
+function CoinGlyph({ size = 24 }: GlyphProps) {
+  const d = size * 0.82;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: d,
+          height: d,
+          borderRadius: d / 2,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            width: d * 0.6,
+            height: d * 0.6,
+            borderRadius: d * 0.3,
+            borderWidth: size * 0.06,
+            borderColor: 'rgba(8,2,22,0.5)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn padlock — ring shackle + gradient body + keyhole (Purchase PIN). */
+function LockGlyph({ size = 24, accent = COLORS.purple }: GlyphProps) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.5,
+          height: size * 0.42,
+          borderTopLeftRadius: size * 0.25,
+          borderTopRightRadius: size * 0.25,
+          borderWidth: size * 0.08,
+          borderBottomWidth: 0,
+          borderColor: accent,
+          marginTop: size * 0.02,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.74,
+          height: size * 0.5,
+          borderRadius: size * 0.12,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginTop: -size * 0.04,
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            width: size * 0.1,
+            height: size * 0.2,
+            borderRadius: size * 0.05,
+            backgroundColor: 'rgba(8,2,22,0.8)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn bar chart — three gradient columns (Analytics). */
+function BarsGlyph({ size = 24, accent = COLORS.cyan }: GlyphProps) {
+  const bar = (h: number, colors: [string, string], key: number) => (
+    <View key={key} style={{ width: size * 0.22, height: size * h, borderRadius: size * 0.05, overflow: 'hidden' }}>
+      <LinearGradient
+        colors={colors}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+    </View>
+  );
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        gap: size * 0.08,
+      }}
+    >
+      {bar(0.45, [accent + 'CC', accent + '66'], 0)}
+      {bar(0.9, [accent, accent + '80'], 1)}
+      {bar(0.65, [accent + 'E6', accent + '73'], 2)}
+    </View>
+  );
+}
+
+/** Drawn target — concentric rings + bullseye dot (Personalized ads). */
+function TargetGlyph({ size = 24, accent = COLORS.cyan }: GlyphProps) {
+  const ring = (d: number, t: number) => (
+    <View
+      key={d}
+      style={{ position: 'absolute', width: d, height: d, borderRadius: d / 2, borderWidth: t, borderColor: accent }}
+    />
+  );
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      {ring(size, size * 0.07)}
+      {ring(size * 0.62, size * 0.06)}
+      <View style={{ width: size * 0.2, height: size * 0.2, borderRadius: size * 0.1, backgroundColor: accent }} />
+    </View>
+  );
+}
+
+/** Drawn info ring — circle outline + dot + bar (Version). */
+function InfoGlyph({ size = 24, accent = COLORS.purple }: GlyphProps) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: size * 0.08,
+          borderColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.2,
+          width: size * 0.11,
+          height: size * 0.11,
+          borderRadius: size * 0.06,
+          backgroundColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.42,
+          width: size * 0.11,
+          height: size * 0.32,
+          borderRadius: size * 0.05,
+          backgroundColor: accent,
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn document — gradient page + text lines (Privacy / Terms). */
+function DocGlyph({ size = 24, accent = COLORS.purple }: GlyphProps) {
+  const line = (top: number, w: number) => (
+    <View
+      key={top}
+      style={{
+        position: 'absolute',
+        top,
+        left: size * 0.12,
+        width: w,
+        height: size * 0.07,
+        borderRadius: size * 0.035,
+        backgroundColor: 'rgba(8,2,22,0.65)',
+      }}
+    />
+  );
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size * 0.66, height: size * 0.88, borderRadius: size * 0.08, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[accent + 'E6', accent + '80']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        {line(size * 0.16, size * 0.42)}
+        {line(size * 0.34, size * 0.42)}
+        {line(size * 0.52, size * 0.28)}
+      </View>
+    </View>
+  );
+}
+
+/** Drawn envelope — gradient rect + rotated flap (Contact support). */
+function EnvelopeGlyph({ size = 24, accent = COLORS.purple }: GlyphProps) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size * 0.9, height: size * 0.62, borderRadius: size * 0.09, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[accent, accent + '80']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: -size * 0.28,
+            alignSelf: 'center',
+            width: size * 0.56,
+            height: size * 0.56,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(8,2,22,0.35)',
+            transform: [{ rotate: '45deg' }],
+          }}
+        />
+      </View>
+    </View>
+  );
+}
 
 /** Glass bento card shell with accent-tinted border, glow, and surface gradient. */
 const Panel: React.FC<{ accent: BentoAccent; style?: ViewStyle; children: React.ReactNode }> = ({
@@ -353,7 +1207,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     );
   };
 
-  const renderVolumeControl = (label: string, settingKey: string, rawValue: number, glyph: string) => {
+  const renderVolumeControl = (
+    label: string,
+    settingKey: string,
+    rawValue: number,
+    glyph: React.ReactNode,
+  ) => {
     const pct = toPercent(rawValue);
     return (
       <View
@@ -364,7 +1223,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       >
         <View style={styles.volumeHeaderRow}>
           <View style={styles.rowLeft}>
-            <IconMedallion glyph={glyph} size={34} accent={COLORS.cyan} />
+            <DrawnMedallion size={34} accent={COLORS.cyan}>{glyph}</DrawnMedallion>
             <Text style={styles.settingLabel}>{label}</Text>
           </View>
           <Text style={styles.volumePct}>{pct}%</Text>
@@ -394,12 +1253,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     label: string,
     value: boolean,
     settingKey: string,
-    glyph: string,
+    glyph: React.ReactNode,
     accent: string,
   ) => (
     <View style={styles.settingRow}>
       <View style={styles.rowLeft}>
-        <IconMedallion glyph={glyph} size={34} accent={accent} />
+        <DrawnMedallion size={34} accent={accent}>{glyph}</DrawnMedallion>
         <Text style={styles.settingLabel}>{label}</Text>
       </View>
       <Pressable
@@ -463,22 +1322,66 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       backdrop="settings"
       onBack={navigation ? () => navigation.goBack() : undefined}
     >
+      {/* Hero status strip — a compact glass vignette so the screen opens with
+          player identity instead of a bare utility list. */}
+      <View
+        style={styles.heroStrip}
+        accessibilityRole="text"
+        accessibilityLabel={`${
+          linkedEmail ? `Signed in as ${linkedEmail}` : isSignedIn ? 'Signed in' : 'Guest player'
+        }. Ad removal ${adsRemoved ? 'active' : 'inactive'}. Premium pass ${
+          premiumPass ? 'active' : 'inactive'
+        }`}
+      >
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+        <LinearGradient
+          colors={[withAlpha(COLORS.accent, '29'), 'transparent']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        <DrawnMedallion size={44} accent={isSignedIn ? COLORS.gold : COLORS.accent}>
+          <PersonGlyph size={24} accent={isSignedIn ? COLORS.gold : COLORS.accent} />
+        </DrawnMedallion>
+        <View style={styles.heroInfo}>
+          <Text style={styles.heroTitle} numberOfLines={1}>
+            {linkedEmail ?? (isSignedIn ? 'Signed In' : 'Guest Player')}
+          </Text>
+          <Text style={styles.heroSub} numberOfLines={1}>
+            {isSignedIn ? 'Cloud backup active' : 'Progress stored on this device'}
+          </Text>
+        </View>
+        <View style={styles.heroBadges}>
+          <View style={[styles.heroPill, adsRemoved ? styles.heroPillOn : styles.heroPillOff]}>
+            <Text style={[styles.heroPillText, adsRemoved && styles.heroPillTextOn]}>AD-FREE</Text>
+          </View>
+          <View style={[styles.heroPill, premiumPass ? styles.heroPillGold : styles.heroPillOff]}>
+            <Text style={[styles.heroPillText, premiumPass && styles.heroPillTextGold]}>PASS</Text>
+          </View>
+        </View>
+      </View>
+
       {/* Sound */}
       <SectionHeader label="SOUND" accent={COLORS.cyan} />
       <Panel accent="cyan">
-        {renderVolumeControl('SFX Volume', 'sfxVolume', sfxVolume, '\u{1F50A}')}
+        {renderVolumeControl('SFX Volume', 'sfxVolume', sfxVolume, <SpeakerGlyph size={19} accent={COLORS.cyan} />)}
         <Divider accent="cyan" />
-        {renderVolumeControl('Music Volume', 'musicVolume', musicVolume, '\u{1F3B5}')}
+        {renderVolumeControl('Music Volume', 'musicVolume', musicVolume, <NoteGlyph size={19} accent={COLORS.cyan} />)}
         <Divider accent="cyan" />
-        {renderVolumeControl('Ceremony Volume', 'ceremonyVolume', ceremonyVolume, '\u{1F389}')}
+        {renderVolumeControl('Ceremony Volume', 'ceremonyVolume', ceremonyVolume, <StarBurstGlyph size={19} accent={COLORS.cyan} />)}
       </Panel>
 
       {/* Gameplay */}
       <SectionHeader label="GAMEPLAY" accent={COLORS.pink} />
       <Panel accent="pink">
-        {renderToggle('Haptics', hapticsEnabled, 'hapticsEnabled', '\u{1F4F3}', COLORS.pink)}
+        {renderToggle('Haptics', hapticsEnabled, 'hapticsEnabled', <PhoneVibeGlyph size={19} accent={COLORS.pink} />, COLORS.pink)}
         <Divider accent="pink" />
-        {renderToggle('Notifications', notificationsEnabled, 'notificationsEnabled', '\u{1F514}', COLORS.pink)}
+        {renderToggle('Notifications', notificationsEnabled, 'notificationsEnabled', <BellGlyph size={19} accent={COLORS.pink} />, COLORS.pink)}
       </Panel>
 
       {/* Accessibility */}
@@ -486,7 +1389,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <Panel accent="purple">
         <View style={styles.panelIntro}>
           <View style={styles.rowLeft}>
-            <IconMedallion glyph={'\u{1F441}'} size={34} accent={COLORS.purple} />
+            <DrawnMedallion size={34} accent={COLORS.purple}>
+              <EyeGlyph size={19} accent={COLORS.purple} />
+            </DrawnMedallion>
             <Text style={styles.settingLabel}>Colorblind Mode</Text>
           </View>
           <Text style={styles.panelIntroText}>
@@ -512,7 +1417,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <Panel accent="cyan">
         <View style={styles.panelIntro}>
           <View style={styles.rowLeft}>
-            <IconMedallion glyph={'\u{1F310}'} size={34} accent={COLORS.cyan} />
+            <DrawnMedallion size={34} accent={COLORS.cyan}>
+              <SpeechBubbleGlyph size={19} accent={COLORS.cyan} />
+            </DrawnMedallion>
             <Text style={styles.panelIntroText}>UI language. Puzzles remain English.</Text>
           </View>
         </View>
@@ -567,7 +1474,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     : 'Signed in'
               }
             >
-              <IconMedallion glyph={'\u{1F464}'} size={34} accent={COLORS.gold} />
+              <DrawnMedallion size={34} accent={COLORS.gold}>
+                <PersonGlyph size={19} accent={COLORS.gold} />
+              </DrawnMedallion>
               <Text style={styles.settingLabel}>
                 {linkedEmail ? 'Google Account' : 'Account'}
               </Text>
@@ -601,7 +1510,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               accessibilityState={{ busy: signingOut }}
               disabled={signingOut}
             >
-              <IconMedallion glyph={'\u{1F6AA}'} size={34} accent={COLORS.coral} />
+              <DrawnMedallion size={34} accent={COLORS.coral}>
+                <DoorGlyph size={19} accent={COLORS.coral} />
+              </DrawnMedallion>
               <Text style={[styles.settingLabel, { color: COLORS.coral, flex: 1 }]}>
                 Sign Out
               </Text>
@@ -621,7 +1532,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             accessibilityState={{ busy: signingIn }}
             disabled={signingIn}
           >
-            <IconMedallion glyph={'\u{1F464}'} size={34} accent={COLORS.accent} />
+            <DrawnMedallion size={34} accent={COLORS.accent}>
+              <PersonGlyph size={19} accent={COLORS.accent} />
+            </DrawnMedallion>
             <Text style={[styles.settingLabel, { color: COLORS.accent, flex: 1 }]}>
               {signingIn ? 'Signing in…' : 'Sign In with Google'}
             </Text>
@@ -644,7 +1557,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           disabled={restoring}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <IconMedallion glyph={'\u{1F9FE}'} size={34} accent={COLORS.gold} />
+          <DrawnMedallion size={34} accent={COLORS.gold}>
+            <TagGlyph size={19} accent={COLORS.gold} />
+          </DrawnMedallion>
           <Text style={[styles.settingLabel, { color: COLORS.accent, flex: 1 }]}>
             {restoring ? `${t('common.loading')}` : t('settings.restorePurchases')}
           </Text>
@@ -666,7 +1581,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               accessibilityHint="Opens the Google Play subscription management page."
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <IconMedallion glyph={'\u{1F4B3}'} size={34} accent={COLORS.gold} />
+              <DrawnMedallion size={34} accent={COLORS.gold}>
+                <CardGlyph size={19} accent={COLORS.gold} />
+              </DrawnMedallion>
               <Text style={[styles.settingLabel, { flex: 1 }]}>Manage Subscription</Text>
               <Text style={styles.chevron}>{'›'}</Text>
             </Pressable>
@@ -691,7 +1608,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <Panel accent="gold">
         <View style={styles.settingRow}>
           <View style={styles.rowLeft}>
-            <IconMedallion glyph={'\u{1F6E1}'} size={34} accent={COLORS.gold} />
+            <DrawnMedallion size={34} accent={COLORS.gold}>
+              <ShieldGlyph size={19} accent={COLORS.gold} />
+            </DrawnMedallion>
             <Text style={styles.settingLabel}>Ad Removal</Text>
           </View>
           <View
@@ -713,7 +1632,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <Divider accent="gold" />
         <View style={styles.settingRow}>
           <View style={styles.rowLeft}>
-            <IconMedallion glyph={'\u{1F451}'} size={34} accent={COLORS.gold} />
+            <DrawnMedallion size={34} accent={COLORS.gold}>
+              <CrownGlyph size={19} accent={COLORS.gold} />
+            </DrawnMedallion>
             <Text style={styles.settingLabel}>Premium Pass</Text>
           </View>
           <View
@@ -737,11 +1658,13 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* Parental Controls */}
       <SectionHeader label="PARENTAL CONTROLS" accent={COLORS.purple} />
       <Panel accent="purple">
-        {renderToggle('Spending Limit', settings?.spendingLimitEnabled ?? false, 'spendingLimitEnabled', '\u{1F6E1}', COLORS.purple)}
+        {renderToggle('Spending Limit', settings?.spendingLimitEnabled ?? false, 'spendingLimitEnabled', <ShieldGlyph size={19} accent={COLORS.purple} />, COLORS.purple)}
         <Divider accent="purple" />
         <View style={styles.settingRow}>
           <View style={styles.rowLeft}>
-            <IconMedallion glyph={'\u{1F4B0}'} size={34} accent={COLORS.purple} />
+            <DrawnMedallion size={34} accent={COLORS.purple}>
+              <CoinGlyph size={19} />
+            </DrawnMedallion>
             <Text style={styles.settingLabel}>Monthly Limit</Text>
           </View>
           <View style={styles.stepperGroup}>
@@ -763,7 +1686,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </View>
         </View>
         <Divider accent="purple" />
-        {renderToggle('Require PIN for Purchases', settings?.requirePurchasePin ?? false, 'requirePurchasePin', '\u{1F510}', COLORS.purple)}
+        {renderToggle('Require PIN for Purchases', settings?.requirePurchasePin ?? false, 'requirePurchasePin', <LockGlyph size={19} accent={COLORS.purple} />, COLORS.purple)}
       </Panel>
 
       {/* Privacy */}
@@ -773,7 +1696,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           'Analytics',
           settings?.analyticsEnabled ?? true,
           'analyticsEnabled',
-          '\u{1F4CA}',
+          <BarsGlyph size={19} accent={COLORS.cyan} />,
           COLORS.cyan,
         )}
         <Divider accent="cyan" />
@@ -781,7 +1704,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           'Personalized Ads',
           settings?.personalizedAdsEnabled ?? true,
           'personalizedAdsEnabled',
-          '\u{1F3AF}',
+          <TargetGlyph size={19} accent={COLORS.cyan} />,
           COLORS.cyan,
         )}
       </Panel>
@@ -791,7 +1714,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <Panel accent="purple">
         <View style={styles.settingRow}>
           <View style={styles.rowLeft}>
-            <IconMedallion glyph={'ℹ️'} size={34} accent={COLORS.purple} />
+            <DrawnMedallion size={34} accent={COLORS.purple}>
+              <InfoGlyph size={19} accent={COLORS.purple} />
+            </DrawnMedallion>
             <Text style={styles.settingLabel}>Version</Text>
           </View>
           <Text style={styles.rowValueText}>{appVersion}</Text>
@@ -804,7 +1729,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           onPress={() => openUrlSafe(PRIVACY_POLICY_URL, 'Privacy Policy')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <IconMedallion glyph={'\u{1F4C4}'} size={34} accent={COLORS.purple} />
+          <DrawnMedallion size={34} accent={COLORS.purple}>
+            <DocGlyph size={19} accent={COLORS.purple} />
+          </DrawnMedallion>
           <Text style={[styles.settingLabel, { flex: 1 }]}>Privacy Policy</Text>
           <Text style={styles.chevron}>{'›'}</Text>
         </Pressable>
@@ -816,7 +1743,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           onPress={() => openUrlSafe(TERMS_OF_SERVICE_URL, 'Terms of Service')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <IconMedallion glyph={'\u{1F4DC}'} size={34} accent={COLORS.purple} />
+          <DrawnMedallion size={34} accent={COLORS.purple}>
+            <DocGlyph size={19} accent={COLORS.purple} />
+          </DrawnMedallion>
           <Text style={[styles.settingLabel, { flex: 1 }]}>Terms of Service</Text>
           <Text style={styles.chevron}>{'›'}</Text>
         </Pressable>
@@ -833,7 +1762,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           }
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <IconMedallion glyph={'✉️'} size={34} accent={COLORS.purple} />
+          <DrawnMedallion size={34} accent={COLORS.purple}>
+            <EnvelopeGlyph size={19} accent={COLORS.purple} />
+          </DrawnMedallion>
           <Text style={[styles.settingLabel, { flex: 1 }]}>Contact Support</Text>
           <Text style={styles.chevron}>{'›'}</Text>
         </Pressable>
@@ -870,6 +1801,76 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 const styles = StyleSheet.create({
   panelClip: {
     overflow: 'hidden',
+  },
+
+  // Hero status strip
+  heroStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: withAlpha(COLORS.accent, '38'),
+    overflow: 'hidden',
+    marginBottom: 14,
+    backgroundColor: 'rgba(12,4,28,0.94)',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  heroInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  heroTitle: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.4,
+    color: COLORS.textPrimary,
+  },
+  heroSub: {
+    fontSize: 11,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  heroBadges: {
+    gap: 6,
+    alignItems: 'flex-end',
+  },
+  heroPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  heroPillOn: {
+    borderColor: withAlpha(COLORS.green, '59'),
+    backgroundColor: withAlpha(COLORS.green, '1F'),
+  },
+  heroPillGold: {
+    borderColor: withAlpha(COLORS.gold, '59'),
+    backgroundColor: withAlpha(COLORS.gold, '1F'),
+  },
+  heroPillOff: {
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  heroPillText: {
+    fontSize: 8,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
+    color: COLORS.textMuted,
+  },
+  heroPillTextOn: {
+    color: COLORS.green,
+  },
+  heroPillTextGold: {
+    color: COLORS.goldLight,
   },
   divider: {
     height: 1,

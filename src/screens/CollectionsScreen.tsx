@@ -14,7 +14,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS, RADIUS, SHADOWS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
-import IconMedallion from '../components/common/IconMedallion';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import { bentoPanel, bentoHeaderStyles, bentoDividerColor } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -80,6 +79,786 @@ const DEFAULT_STAMPS = [
   { id: 'spring11', name: 'Ladybug', icon: '\u{1F41E}', collected: false },
   { id: 'spring12', name: 'Cherry', icon: '\u{1F352}', collected: false },
 ];
+
+// ─── Drawn glyph kit — layered Views/gradients, no emoji (same technique as
+// ModesScreen's ModeGlyph family / LeaderboardScreen's GlyphMedallion). ─────
+
+type GlyphProps = { size?: number; accent?: string };
+
+/**
+ * DrawnMedallion — IconMedallion's layered-gem shell, but hosting drawn
+ * View-based glyphs instead of raw emoji (the art review's residual flag).
+ */
+function DrawnMedallion({
+  size = 44,
+  accent = COLORS.purple,
+  shape = 'circle',
+  muted = false,
+  style,
+  children,
+}: {
+  size?: number;
+  accent?: string;
+  shape?: 'circle' | 'squircle';
+  muted?: boolean;
+  style?: object;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: shape === 'circle' ? size / 2 : size * 0.3,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : accent + '73',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style ?? null,
+      ]}
+    >
+      <LinearGradient
+        colors={[muted ? 'rgba(255,255,255,0.05)' : accent + '3D', 'rgba(8, 2, 22, 0.92)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.14)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/** Drawn paw print — gradient pad + three toe dots (Animals). */
+function PawGlyph({ size = 24, accent = COLORS.orange }: GlyphProps) {
+  const toe = size * 0.22;
+  const toeDot = (left: number, top: number) => (
+    <View
+      key={`${left}`}
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: toe,
+        height: toe,
+        borderRadius: toe / 2,
+        backgroundColor: accent,
+      }}
+    />
+  );
+  return (
+    <View style={{ width: size, height: size }}>
+      {toeDot(size * 0.05, size * 0.24)}
+      {toeDot(size * 0.39, size * 0.06)}
+      {toeDot(size * 0.73, size * 0.24)}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: size * 0.02,
+          alignSelf: 'center',
+          width: size * 0.54,
+          height: size * 0.44,
+          borderTopLeftRadius: size * 0.27,
+          borderTopRightRadius: size * 0.27,
+          borderBottomLeftRadius: size * 0.2,
+          borderBottomRightRadius: size * 0.2,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn apple — gradient circle + green leaf + stem (Food & Drink). */
+function AppleGlyph({ size = 24, accent = COLORS.coral }: GlyphProps) {
+  const body = size * 0.66;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.02,
+          width: size * 0.09,
+          height: size * 0.24,
+          borderRadius: size * 0.05,
+          backgroundColor: 'rgba(255,255,255,0.55)',
+          transform: [{ rotate: '14deg' }],
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.04,
+          left: size * 0.56,
+          width: size * 0.28,
+          height: size * 0.17,
+          borderTopRightRadius: size * 0.17,
+          borderBottomLeftRadius: size * 0.17,
+          backgroundColor: COLORS.green,
+          transform: [{ rotate: '-22deg' }],
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          width: body,
+          height: body,
+          borderRadius: body / 2,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '8C']}
+          start={{ x: 0.3, y: 0 }}
+          end={{ x: 0.7, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: body * 0.14,
+            left: body * 0.16,
+            width: body * 0.3,
+            height: body * 0.2,
+            borderRadius: body * 0.15,
+            backgroundColor: 'rgba(255,255,255,0.4)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn sun-behind-cloud — gold disc peeking over white puffs (Weather). */
+function SunCloudGlyph({ size = 24 }: GlyphProps) {
+  const sun = size * 0.46;
+  const cloud = 'rgba(255,255,255,0.92)';
+  return (
+    <View style={{ width: size, height: size }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.02,
+          right: size * 0.06,
+          width: sun,
+          height: sun,
+          borderRadius: sun / 2,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.1,
+          bottom: size * 0.26,
+          width: size * 0.32,
+          height: size * 0.32,
+          borderRadius: size * 0.16,
+          backgroundColor: cloud,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.32,
+          bottom: size * 0.3,
+          width: size * 0.4,
+          height: size * 0.4,
+          borderRadius: size * 0.2,
+          backgroundColor: cloud,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.02,
+          bottom: size * 0.08,
+          width: size * 0.82,
+          height: size * 0.28,
+          borderRadius: size * 0.14,
+          backgroundColor: cloud,
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn house — accent roof triangle + gradient body + door (Home & Living). */
+function HouseGlyph({ size = 24, accent = COLORS.gold }: GlyphProps) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: 0,
+          height: 0,
+          borderLeftWidth: size * 0.42,
+          borderRightWidth: size * 0.42,
+          borderBottomWidth: size * 0.32,
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          borderBottomColor: accent,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.6,
+          height: size * 0.44,
+          borderBottomLeftRadius: size * 0.08,
+          borderBottomRightRadius: size * 0.08,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+        }}
+      >
+        <LinearGradient
+          colors={[accent + 'CC', accent + '73']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            width: size * 0.18,
+            height: size * 0.24,
+            borderTopLeftRadius: size * 0.09,
+            borderTopRightRadius: size * 0.09,
+            backgroundColor: 'rgba(8,2,22,0.75)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn heart — rotated square + two lobes (Human Body). */
+function HeartGlyph({ size = 24, accent = COLORS.accent }: GlyphProps) {
+  const d = size * 0.48;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: d,
+          height: d,
+          marginTop: size * 0.04,
+          transform: [{ rotate: '45deg' }],
+        }}
+      >
+        <View
+          style={{
+            position: 'absolute',
+            width: d,
+            height: d,
+            backgroundColor: accent,
+            borderBottomRightRadius: d * 0.16,
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: -d / 2,
+            left: 0,
+            width: d,
+            height: d,
+            borderRadius: d / 2,
+            backgroundColor: accent,
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: -d / 2,
+            width: d,
+            height: d,
+            borderRadius: d / 2,
+            backgroundColor: accent,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn swatch trio — three overlapping color discs (Colors & Light). */
+function SwatchTrioGlyph({ size = 24 }: GlyphProps) {
+  const d = size * 0.52;
+  const disc = (left: number, top: number, color: string) => (
+    <View
+      key={color}
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: d,
+        height: d,
+        borderRadius: d / 2,
+        backgroundColor: color,
+        opacity: 0.92,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.35)',
+      }}
+    />
+  );
+  return (
+    <View style={{ width: size, height: size }}>
+      {disc(size * 0.02, size * 0.06, COLORS.coral)}
+      {disc(size * 0.44, size * 0.06, COLORS.gold)}
+      {disc(size * 0.23, size * 0.42, COLORS.cyan)}
+    </View>
+  );
+}
+
+/** Drawn smiley — ring + eye dots + bottom-arc mouth (Emotions). */
+function SmileyGlyph({ size = 24, accent = COLORS.teal }: GlyphProps) {
+  const t = size * 0.09;
+  const eye = size * 0.13;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: t,
+          borderColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.3,
+          left: size * 0.28,
+          width: eye,
+          height: eye,
+          borderRadius: eye / 2,
+          backgroundColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.3,
+          right: size * 0.28,
+          width: eye,
+          height: eye,
+          borderRadius: eye / 2,
+          backgroundColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          bottom: size * 0.16,
+          width: size * 0.52,
+          height: size * 0.3,
+          borderRadius: size * 0.26,
+          borderWidth: t,
+          borderColor: 'transparent',
+          borderBottomColor: accent,
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn hammer — angled gradient head + handle (Tools & Craft). */
+function HammerGlyph({ size = 24, accent = COLORS.orange }: GlyphProps) {
+  return (
+    <View style={{ width: size, height: size }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.36,
+          top: size * 0.3,
+          width: size * 0.15,
+          height: size * 0.68,
+          borderRadius: size * 0.08,
+          backgroundColor: accent + '99',
+          transform: [{ rotate: '-42deg' }],
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.3,
+          top: size * 0.08,
+          width: size * 0.54,
+          height: size * 0.24,
+          borderRadius: size * 0.09,
+          overflow: 'hidden',
+          transform: [{ rotate: '48deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn music note — gradient disc + stem + flag (Music). */
+function NoteGlyph({ size = 24, accent = COLORS.accent }: GlyphProps) {
+  const head = size * 0.42;
+  return (
+    <View style={{ width: size, height: size }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.1,
+          bottom: size * 0.02,
+          width: head,
+          height: head * 0.82,
+          borderRadius: head / 2,
+          overflow: 'hidden',
+          transform: [{ rotate: '-16deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.46,
+          top: size * 0.08,
+          width: size * 0.1,
+          height: size * 0.62,
+          borderRadius: size * 0.05,
+          backgroundColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: size * 0.5,
+          top: size * 0.05,
+          width: size * 0.32,
+          height: size * 0.17,
+          borderTopRightRadius: size * 0.17,
+          borderBottomLeftRadius: size * 0.1,
+          backgroundColor: accent + 'CC',
+          transform: [{ rotate: '16deg' }],
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn compass — ring + rotated needle + hub (Travel). */
+function CompassGlyph({ size = 24, accent = COLORS.green }: GlyphProps) {
+  const t = size * 0.09;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: t,
+          borderColor: accent,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.16,
+          height: size * 0.54,
+          borderRadius: size * 0.08,
+          backgroundColor: accent,
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: size * 0.14,
+          height: size * 0.14,
+          borderRadius: size * 0.07,
+          backgroundColor: 'rgba(255,255,255,0.85)',
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn ringed planet — gradient disc + tilted orbit ring (Space). */
+function PlanetGlyph({ size = 24, accent = COLORS.cyan }: GlyphProps) {
+  const d = size * 0.56;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: d, height: d, borderRadius: d / 2, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[accent, accent + '73']}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.8, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: d * 0.12,
+            left: d * 0.16,
+            width: d * 0.3,
+            height: d * 0.2,
+            borderRadius: d * 0.15,
+            backgroundColor: 'rgba(255,255,255,0.45)',
+          }}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          width: size * 0.98,
+          height: size * 0.36,
+          borderRadius: size * 0.49,
+          borderWidth: size * 0.06,
+          borderColor: accent + 'B3',
+          transform: [{ rotate: '-24deg' }],
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn leaf — gradient teardrop with vein (Nature themes). */
+function LeafGlyph({ size = 24, accent = COLORS.green }: GlyphProps) {
+  const d = size * 0.74;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: d,
+          height: d,
+          borderTopLeftRadius: d * 0.06,
+          borderBottomRightRadius: d * 0.06,
+          borderTopRightRadius: d,
+          borderBottomLeftRadius: d,
+          overflow: 'hidden',
+          transform: [{ rotate: '45deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '77']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: d * 0.47,
+            left: -d * 0.1,
+            width: d * 1.2,
+            height: size * 0.05,
+            backgroundColor: 'rgba(8,2,22,0.35)',
+            transform: [{ rotate: '45deg' }],
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn 8-point star burst — two crossed gradient squares + hot core (Magic + fallback). */
+function StarBurstGlyph({ size = 24, accent = COLORS.gold }: GlyphProps) {
+  const sq = size * 0.68;
+  const square = {
+    position: 'absolute' as const,
+    width: sq,
+    height: sq,
+    borderRadius: sq * 0.18,
+    overflow: 'hidden' as const,
+  };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={[square, { transform: [{ rotate: '45deg' }] }]}>
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View style={square}>
+        <LinearGradient
+          colors={[accent, accent + '99']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          width: sq * 0.34,
+          height: sq * 0.34,
+          borderRadius: sq * 0.17,
+          backgroundColor: 'rgba(255,255,255,0.6)',
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn faceted diamond — rotated gradient square with facet highlight (coach banner). */
+function DiamondGlyph({ size = 24, accent = COLORS.cyan }: GlyphProps) {
+  const d = size * 0.62;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: d, height: d, borderRadius: d * 0.16, overflow: 'hidden', transform: [{ rotate: '45deg' }] }}>
+        <LinearGradient
+          colors={[accent + 'E6', accent + '66']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ position: 'absolute', top: 0, left: 0, width: d * 0.5, height: d * 0.5, backgroundColor: 'rgba(255,255,255,0.35)' }} />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn stamp seal — perforated dashed frame around a star burst (Seasonal Stamps). */
+function StampSealGlyph({
+  size = 24,
+  accent = COLORS.purple,
+  collected = true,
+}: GlyphProps & { collected?: boolean }) {
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.16,
+        borderWidth: 1.5,
+        borderStyle: 'dashed',
+        borderColor: collected ? accent + '99' : 'rgba(255,255,255,0.22)',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {collected ? (
+        <StarBurstGlyph size={size * 0.62} accent={accent} />
+      ) : (
+        <View
+          style={{
+            width: size * 0.34,
+            height: size * 0.34,
+            borderRadius: size * 0.17,
+            borderWidth: 1.5,
+            borderColor: 'rgba(255,255,255,0.3)',
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
+/** Keyed atlas-page glyph mapper — every category gets a drawn mark;
+ *  unknown/future pages fall back to the star burst. */
+function AtlasGlyph({ pageId, accent, size }: { pageId: string; accent: string; size: number }) {
+  switch (pageId) {
+    case 'animals':
+      return <PawGlyph size={size} accent={accent} />;
+    case 'food':
+      return <AppleGlyph size={size} accent={accent} />;
+    case 'weather':
+      return <SunCloudGlyph size={size} accent={accent} />;
+    case 'home':
+      return <HouseGlyph size={size} accent={accent} />;
+    case 'body':
+      return <HeartGlyph size={size} accent={accent} />;
+    case 'colors':
+      return <SwatchTrioGlyph size={size} accent={accent} />;
+    case 'emotions':
+      return <SmileyGlyph size={size} accent={accent} />;
+    case 'tools':
+      return <HammerGlyph size={size} accent={accent} />;
+    case 'music':
+      return <NoteGlyph size={size} accent={accent} />;
+    case 'travel':
+      return <CompassGlyph size={size} accent={accent} />;
+    case 'space_atlas':
+      return <PlanetGlyph size={size} accent={accent} />;
+    case 'nature':
+      return <LeafGlyph size={size} accent={accent} />;
+    case 'magic':
+    default:
+      return <StarBurstGlyph size={size} accent={accent} />;
+  }
+}
+
+/** Per-page accent hue — rows stop reading identical. Keyed by page id with a
+ *  rotating palette fallback for future pages. Adjacent list rows all differ. */
+const ATLAS_PALETTE = [
+  COLORS.cyan,
+  COLORS.gold,
+  COLORS.purple,
+  COLORS.coral,
+  COLORS.teal,
+  COLORS.orange,
+  COLORS.accent,
+  COLORS.green,
+] as const;
+
+const ATLAS_ACCENT_BY_ID: Record<string, string> = {
+  animals: COLORS.orange,
+  food: COLORS.coral,
+  weather: COLORS.cyan,
+  home: COLORS.gold,
+  body: COLORS.accent,
+  colors: COLORS.purple,
+  emotions: COLORS.teal,
+  tools: COLORS.orange,
+  music: COLORS.accent,
+  travel: COLORS.green,
+  space_atlas: COLORS.cyan,
+  magic: COLORS.purple,
+};
 
 /**
  * Looping gold sheen swept across a completed card. Reduce-motion users get
@@ -220,15 +999,18 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
           accent={COLORS.cyan}
           meta={`${completedPages}/${atlasPages.length} PAGES`}
         />
-        {atlasPages.map((page: any) => {
+        {atlasPages.map((page: any, pageIndex: number) => {
           const isComplete = page.found >= page.total;
-          const accent = isComplete ? COLORS.gold : COLORS.cyan;
+          const pageAccent =
+            ATLAS_ACCENT_BY_ID[page.id] ?? ATLAS_PALETTE[pageIndex % ATLAS_PALETTE.length];
+          const accent = isComplete ? COLORS.gold : pageAccent;
           return (
             <React.Fragment key={page.id}>
               <Pressable
                 style={({ pressed }) => [
                   styles.atlasCard,
                   bentoPanel(isComplete ? 'gold' : 'cyan', { padding: 14, marginBottom: 10 }),
+                  { borderColor: accent + '3D', shadowColor: accent },
                   pressed && styles.pressedCard,
                 ]}
                 onPress={() => setExpandedAtlasId(expandedAtlasId === page.id ? null : page.id)}
@@ -249,13 +1031,14 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                   end={{ x: 0.9, y: 0.9 }}
                 />
                 {isComplete && <CardShine reduceMotion={reduceMotion} />}
-                <IconMedallion
-                  glyph={page.icon}
+                <DrawnMedallion
                   accent={accent}
                   size={46}
                   shape="squircle"
                   style={styles.atlasMedallion}
-                />
+                >
+                  <AtlasGlyph pageId={page.id} accent={accent} size={26} />
+                </DrawnMedallion>
                 <View style={styles.atlasInfo}>
                   <Text style={[styles.atlasName, isComplete && styles.atlasNameComplete]}>
                     {page.name}
@@ -277,15 +1060,23 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                 )}
               </Pressable>
               {expandedAtlasId === page.id && (
-                <View style={styles.atlasWordList}>
+                <View style={[styles.atlasWordList, { borderColor: accent + '24' }]}>
                   {page.words.map((word: string) => {
                     const isFound = page.foundWords.includes(word);
                     return (
                       <View
                         key={word}
-                        style={[styles.atlasWordChip, isFound && styles.atlasWordChipFound]}
+                        style={[
+                          styles.atlasWordChip,
+                          isFound && [styles.atlasWordChipFound, { borderColor: accent + '73' }],
+                        ]}
                       >
-                        <Text style={[styles.atlasWordText, !isFound && styles.atlasWordHidden]}>
+                        <Text
+                          style={[
+                            styles.atlasWordText,
+                            isFound ? { color: accent } : styles.atlasWordHidden,
+                          ]}
+                        >
                           {isFound ? word.toUpperCase() : '????'}
                         </Text>
                       </View>
@@ -476,19 +1267,24 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                   end={{ x: 0, y: 1 }}
                 />
               )}
-              <IconMedallion
-                glyph={stamp.icon}
+              <DrawnMedallion
                 accent={COLORS.purple}
                 size={44}
                 muted={!stamp.collected}
                 style={styles.stampMedallion}
-              />
+              >
+                <StampSealGlyph
+                  size={28}
+                  accent={COLORS.purple}
+                  collected={!!stamp.collected}
+                />
+              </DrawnMedallion>
               <Text
                 style={[
                   styles.stampName,
                   !stamp.collected && styles.stampNameDim,
                 ]}
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {stamp.collected ? stamp.name : '???'}
               </Text>
@@ -538,7 +1334,9 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           />
-          <IconMedallion glyph={'\u{1F48E}'} accent={COLORS.cyan} size={30} shape="squircle" />
+          <DrawnMedallion accent={COLORS.cyan} size={30} shape="squircle">
+            <DiamondGlyph size={19} accent={COLORS.cyan} />
+          </DrawnMedallion>
           <Text style={styles.coachBannerText}>
             Collect words, rare tiles & seasonal stamps — complete sets for bonus rewards!
           </Text>
@@ -749,6 +1547,9 @@ const styles = StyleSheet.create({
   },
   atlasInfo: {
     flex: 1,
+    // minWidth 0 lets the flexed column actually shrink at narrow widths so
+    // names/progress wrap instead of pushing the row and clipping (390px fix).
+    minWidth: 0,
   },
   atlasName: {
     fontSize: 15,
