@@ -15,6 +15,7 @@ import {
   Easing,
   ViewStyle,
   StyleProp,
+  ImageSourcePropType,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS, SHADOWS, RADIUS } from '../constants';
@@ -214,6 +215,71 @@ function PriceCapsule({
 }
 
 /**
+ * HaloMedallion — bigger-presence product art for featured / flash cards:
+ * an outer accent ring with inner glow wash wrapping the shared
+ * IconMedallion, so hero product art reads as crafted rather than a small
+ * emoji floating on the card.
+ */
+function HaloMedallion({
+  glyph,
+  source,
+  size = 52,
+  accent,
+  style,
+}: {
+  glyph?: string;
+  source?: ImageSourcePropType;
+  size?: number;
+  accent: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const outer = size + 14;
+  return (
+    <View
+      style={[
+        {
+          width: outer,
+          height: outer,
+          borderRadius: outer / 2,
+          borderWidth: 1.5,
+          borderColor: accent + '59',
+          backgroundColor: accent + '14',
+          alignItems: 'center',
+          justifyContent: 'center',
+          ...SHADOWS.glow(accent),
+        },
+        style,
+      ]}
+    >
+      <IconMedallion glyph={glyph} source={source} size={size} accent={accent} />
+    </View>
+  );
+}
+
+/**
+ * Stacked-contents row for bundle cards — mini medallions of what's inside
+ * (AAA-shop treatment), replacing a plain "+"-joined text description.
+ */
+function BundleContentsRow({
+  items,
+  accent,
+}: {
+  items: { source?: ImageSourcePropType; glyph?: string; label: string }[];
+  accent: string;
+}) {
+  return (
+    <View style={helperStyles.bundleRow}>
+      {items.map((it, i) => (
+        <View key={i} style={[helperStyles.bundleChip, { borderColor: accent + '30' }]}>
+          <IconMedallion glyph={it.glyph} source={it.source} size={22} accent={accent} />
+          <Text style={helperStyles.bundleChipLabel}>{it.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
  * Animated shine sweep for the flash-sale card — a skewed light band loops
  * across the card. Skipped entirely under reduce-motion.
  */
@@ -321,6 +387,29 @@ const helperStyles = StyleSheet.create({
     height: '100%',
     transform: [{ skewX: '-20deg' }],
   },
+  bundleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  bundleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: RADIUS.full,
+    paddingLeft: 3,
+    paddingRight: 8,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(10,0,21,0.5)',
+  },
+  bundleChipLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: COLORS.textPrimary,
+  },
 });
 
 // ─── Static item data ────────────────────────────────────────────────────────
@@ -329,6 +418,8 @@ interface ShopItem {
   id: string;
   name: string;
   icon: string;
+  /** Real image asset for the medallion \u2014 takes priority over the emoji icon. */
+  image?: ImageSourcePropType;
   price: string;
   quantity?: number;
   bestValue?: boolean;
@@ -336,27 +427,40 @@ interface ShopItem {
 }
 
 const HINT_BUNDLES: ShopItem[] = [
-  { id: 'hints_10', name: '10 Hints', icon: '\u{1F4A1}', price: '$0.99', quantity: 10, iapProductId: 'hint_bundle_10' },
-  { id: 'hints_25', name: '25 Hints', icon: '\u{1F4A1}', price: '$1.99', quantity: 25, iapProductId: 'hint_bundle_25' },
-  { id: 'hints_50', name: '50 Hints', icon: '\u{1F4A1}', price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'hint_bundle_50' },
+  { id: 'hints_10', name: '10 Hints', icon: '\u{1F4A1}', image: LOCAL_IMAGES.iconHint, price: '$0.99', quantity: 10, iapProductId: 'hint_bundle_10' },
+  { id: 'hints_25', name: '25 Hints', icon: '\u{1F4A1}', image: LOCAL_IMAGES.iconHint, price: '$1.99', quantity: 25, iapProductId: 'hint_bundle_25' },
+  { id: 'hints_50', name: '50 Hints', icon: '\u{1F4A1}', image: LOCAL_IMAGES.iconHint, price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'hint_bundle_50' },
 ];
 
 const UNDO_BUNDLES: ShopItem[] = [
-  { id: 'undos_10', name: '10 Undos', icon: '\u21A9\uFE0F', price: '$0.99', quantity: 10, iapProductId: 'undo_bundle_10' },
-  { id: 'undos_25', name: '25 Undos', icon: '\u21A9\uFE0F', price: '$1.99', quantity: 25, iapProductId: 'undo_bundle_25' },
-  { id: 'undos_50', name: '50 Undos', icon: '\u21A9\uFE0F', price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'undo_bundle_50' },
+  { id: 'undos_10', name: '10 Undos', icon: '\u21A9\uFE0F', image: LOCAL_IMAGES.iconUndo, price: '$0.99', quantity: 10, iapProductId: 'undo_bundle_10' },
+  { id: 'undos_25', name: '25 Undos', icon: '\u21A9\uFE0F', image: LOCAL_IMAGES.iconUndo, price: '$1.99', quantity: 25, iapProductId: 'undo_bundle_25' },
+  { id: 'undos_50', name: '50 Undos', icon: '\u21A9\uFE0F', image: LOCAL_IMAGES.iconUndo, price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'undo_bundle_50' },
 ];
 
 const COIN_PACKS: ShopItem[] = [
-  { id: 'coins_500', name: '500 Coins', icon: '\u{1FA99}', price: '$0.99', quantity: 500 },
-  { id: 'coins_1500', name: '1,500 Coins', icon: '\u{1FA99}', price: '$2.99', quantity: 1500 },
-  { id: 'coins_5000', name: '5,000 Coins', icon: '\u{1FA99}', price: '$7.99', quantity: 5000, bestValue: true },
+  { id: 'coins_500', name: '500 Coins', icon: '\u{1FA99}', image: LOCAL_IMAGES.iconCoinGold, price: '$0.99', quantity: 500 },
+  { id: 'coins_1500', name: '1,500 Coins', icon: '\u{1FA99}', image: LOCAL_IMAGES.iconCoinGold, price: '$2.99', quantity: 1500 },
+  { id: 'coins_5000', name: '5,000 Coins', icon: '\u{1FA99}', image: LOCAL_IMAGES.iconCoinGold, price: '$7.99', quantity: 5000, bestValue: true },
 ];
 
 const GEM_PACKS: ShopItem[] = [
-  { id: 'gems_50', name: '50 Gems', icon: '\u{1F48E}', price: '$0.99', quantity: 50, iapProductId: 'gems_50' },
-  { id: 'gems_250', name: '250 Gems', icon: '\u{1F48E}', price: '$4.99', quantity: 250, iapProductId: 'gems_250' },
-  { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', price: '$9.99', quantity: 500, bestValue: true, iapProductId: 'gems_500' },
+  { id: 'gems_50', name: '50 Gems', icon: '\u{1F48E}', image: LOCAL_IMAGES.iconGemDiamond, price: '$0.99', quantity: 50, iapProductId: 'gems_50' },
+  { id: 'gems_250', name: '250 Gems', icon: '\u{1F48E}', image: LOCAL_IMAGES.iconGemDiamond, price: '$4.99', quantity: 250, iapProductId: 'gems_250' },
+  { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', image: LOCAL_IMAGES.iconGemDiamond, price: '$9.99', quantity: 500, bestValue: true, iapProductId: 'gems_500' },
+];
+
+// Stacked-contents rows for the hardcoded bundle cards (mini medallions).
+const STARTER_PACK_CONTENTS = [
+  { source: LOCAL_IMAGES.iconCoinGold, label: '500' },
+  { source: LOCAL_IMAGES.iconGemDiamond, label: '50' },
+  { source: LOCAL_IMAGES.iconHint, label: '10' },
+  { glyph: '\u{1F3A8}', label: 'DECOR' },
+];
+const WEEKEND_BUNDLE_CONTENTS = [
+  { source: LOCAL_IMAGES.iconGemDiamond, label: '100' },
+  { source: LOCAL_IMAGES.iconCoinGold, label: '3,000' },
+  { glyph: '\u{1F5BC}\uFE0F', label: 'FRAME' },
 ];
 
 // ─── Coin Shop categories ────────────────────────────────────────────────────
@@ -945,7 +1049,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
         />
-        <IconMedallion glyph={item.icon} size={44} accent={accent} style={styles.itemMedallion} />
+        <IconMedallion
+          glyph={item.icon}
+          source={item.image}
+          size={48}
+          accent={accent}
+          style={styles.itemMedallion}
+        />
         <Text style={styles.itemName}>{item.name}</Text>
         {anchor && (
           <View style={styles.itemDiscountBadge}>
@@ -1039,9 +1149,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               </View>
             </View>
             <View style={styles.flashSaleBody}>
-              <IconMedallion
+              <HaloMedallion
                 glyph={flashSale.icon}
-                size={56}
+                size={60}
                 accent={COLORS.coral}
                 style={styles.flashSaleMedallion}
               />
@@ -1135,7 +1245,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 {watchingAd ? (
                   <ActivityIndicator size="small" color={COLORS.gold} style={{ marginRight: 10 }} />
                 ) : (
-                  <IconMedallion glyph={'\u{1FA99}'} size={40} accent={COLORS.gold} style={styles.adMedallion} />
+                  <IconMedallion source={LOCAL_IMAGES.iconCoinGold} size={40} accent={COLORS.gold} style={styles.adMedallion} />
                 )}
                 <View style={styles.adInfo}>
                   <Text style={[styles.adTitle, { color: COLORS.gold }]}>Watch Ad for 50 Coins</Text>
@@ -1204,7 +1314,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             end={{ x: 0.5, y: 1 }}
           />
           <View style={styles.vipHeader}>
-            <IconMedallion glyph={'\u{1F48E}'} size={52} accent={COLORS.gold} style={styles.vipMedallion} />
+            <HaloMedallion source={LOCAL_IMAGES.iconGemDiamond} size={52} accent={COLORS.gold} style={styles.vipMedallion} />
             <View style={{ flex: 1 }}>
               <Text style={styles.vipTitle}>{t('shop.vipWeekly')}</Text>
               <Text style={styles.vipSubtitle}>The ultimate Wordfall experience</Text>
@@ -1438,7 +1548,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                         <Text style={styles.featuredBadgeText}>{offer.badge}</Text>
                       </View>
                     )}
-                    <IconMedallion glyph={icon} size={52} accent={COLORS.pink} style={styles.featuredMedallion} />
+                    <HaloMedallion glyph={icon} size={56} accent={COLORS.pink} style={styles.featuredMedallion} />
                     <Text style={styles.featuredName}>{name}</Text>
                     <Text style={styles.featuredDesc}>
                       {`${offer.discountPercent}% off for you`}
@@ -1487,11 +1597,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             <View style={styles.featuredBadge}>
               <Text style={styles.featuredBadgeText}>LIMITED TIME</Text>
             </View>
-            <IconMedallion glyph={'\u{1F381}'} size={52} accent={COLORS.accent} style={styles.featuredMedallion} />
+            <HaloMedallion glyph={'\u{1F381}'} size={56} accent={COLORS.accent} style={styles.featuredMedallion} />
             <Text style={styles.featuredName}>Starter Pack</Text>
-            <Text style={styles.featuredDesc}>
-              500 Coins + 50 Gems + 10 Hints + Exclusive Decoration
-            </Text>
+            <BundleContentsRow items={STARTER_PACK_CONTENTS} accent={COLORS.accent} />
             <View style={styles.featuredPriceRow}>
               <PriceCapsule
                 price="$1.99"
@@ -1529,11 +1637,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             <View style={[styles.featuredBadge, { backgroundColor: COLORS.purple }]}>
               <Text style={styles.featuredBadgeText}>SPECIAL</Text>
             </View>
-            <IconMedallion glyph={'\u2728'} size={52} accent={COLORS.purple} style={styles.featuredMedallion} />
+            <HaloMedallion glyph={'\u2728'} size={56} accent={COLORS.purple} style={styles.featuredMedallion} />
             <Text style={styles.featuredName}>Weekend Bundle</Text>
-            <Text style={styles.featuredDesc}>
-              100 Gems + 3000 Coins + Rare Frame
-            </Text>
+            <BundleContentsRow items={WEEKEND_BUNDLE_CONTENTS} accent={COLORS.purple} />
             <View style={styles.featuredPriceRow}>
               <PriceCapsule
                 price="$4.99"
@@ -1597,7 +1703,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 <Text style={styles.rotatingName}>{item.name}</Text>
                 <Text style={styles.rotatingDesc}>{item.description}</Text>
                 <View style={styles.gemPriceRow}>
-                  <Text style={styles.gemIcon}>{'\u{1F48E}'}</Text>
+                  <Image
+                    source={LOCAL_IMAGES.iconGemDiamond}
+                    style={styles.gemIconImg}
+                    resizeMode="contain"
+                  />
                   <Text style={[styles.gemPrice, { color: rarityColor }]}>{item.gemCost}</Text>
                 </View>
                 <Text style={styles.rotatingTimer}>
@@ -1760,13 +1870,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         <SectionHeader
           label={t('shop.spendCoins').toUpperCase()}
           accent={COLORS.gold}
-          meta={`\u{1FA99} ${coins.toLocaleString()}`}
+          meta={`${coins.toLocaleString()} COINS`}
         />
 
         {coinShopConfirmation && (
           <View style={styles.coinShopConfirmBanner}>
             <Text style={styles.coinShopConfirmText}>
-              {'\u2705'} {coinShopConfirmation} purchased!
+              {'\u2713'} {coinShopConfirmation} purchased!
             </Text>
           </View>
         )}
@@ -1818,8 +1928,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                         {item.description}
                       </Text>
                       <View style={[styles.coinShopPrice, cantAfford && styles.coinShopPriceDisabled]}>
+                        <Image
+                          source={LOCAL_IMAGES.iconCoinGold}
+                          style={[styles.coinPriceIcon, cantAfford && { opacity: 0.4 }]}
+                          resizeMode="contain"
+                        />
                         <Text style={[styles.coinShopPriceText, cantAfford && styles.coinShopPriceTextDisabled]}>
-                          {'\u{1FA99}'} {item.costCoins}
+                          {item.costCoins.toLocaleString()}
                         </Text>
                       </View>
                       {item.dailyLimit !== undefined && (
@@ -2230,6 +2345,10 @@ const styles = StyleSheet.create({
   gemIcon: {
     fontSize: 16,
   },
+  gemIconImg: {
+    width: 16,
+    height: 16,
+  },
   gemPrice: {
     fontSize: 18,
     fontFamily: FONTS.display,
@@ -2505,12 +2624,19 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.35)',
   },
   coinShopPrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: COLORS.gold + '26',
     borderRadius: RADIUS.full,
     borderWidth: 1,
     borderColor: COLORS.gold + '55',
     paddingHorizontal: 12,
     paddingVertical: 4,
+  },
+  coinPriceIcon: {
+    width: 12,
+    height: 12,
   },
   coinShopPriceDisabled: {
     backgroundColor: 'rgba(255,255,255,0.06)',

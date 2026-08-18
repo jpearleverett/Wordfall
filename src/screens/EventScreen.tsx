@@ -26,6 +26,9 @@ import {
   selectUnlockedCosmetics,
 } from '../stores/playerStore';
 
+/** Thousands-separated display numbers — "1,000,000", never "1000000". */
+const fmt = (n: number): string => n.toLocaleString('en-US');
+
 /**
  * Self-contained 1Hz countdown leaf (same pattern as ShopScreen's
  * LiveCountdownText). Owning the interval here means the tick re-renders one
@@ -98,9 +101,15 @@ const MilestoneProgress = React.memo(function MilestoneProgress({
                       borderColor: '#fff',
                       ...SHADOWS.neonGlow(color),
                     }
-                  : null,
+                  : // Unreached markers stay alive at 0%: accent-tinted ring
+                    // with an ember dot instead of a flat grey disc.
+                    { borderColor: color + '88', ...SHADOWS.glow(color) },
               ]}
-            />
+            >
+              {!reached && (
+                <View style={[styles.milestoneDot, { backgroundColor: color + '66' }]} />
+              )}
+            </View>
           );
         })}
       </View>
@@ -381,9 +390,25 @@ const EventScreen: React.FC<EventScreenProps> = ({
 
               {/* Progress Bar with milestone markers */}
               <View style={styles.eventProgressHeader}>
-                <Text style={styles.eventProgressLabel}>Progress</Text>
+                <View style={styles.eventProgressLabelRow}>
+                  <Text style={styles.eventProgressLabel}>Progress</Text>
+                  <View
+                    style={[
+                      styles.eventProgressPct,
+                      { borderColor: color + '55', backgroundColor: color + '1A' },
+                    ]}
+                  >
+                    <Text style={[styles.eventProgressPctText, { color }]}>
+                      {Math.min(
+                        100,
+                        Math.floor((progress / Math.max(maxThreshold, 1)) * 100),
+                      )}
+                      %
+                    </Text>
+                  </View>
+                </View>
                 <Text style={styles.eventProgressValue}>
-                  {progress} / {maxThreshold}
+                  {fmt(progress)} / {fmt(maxThreshold)}
                 </Text>
               </View>
               <MilestoneProgress
@@ -426,14 +451,24 @@ const EventScreen: React.FC<EventScreenProps> = ({
                         start={{ x: 0.5, y: 0 }}
                         end={{ x: 0.5, y: 1 }}
                       />
-                      <IconMedallion
-                        glyph={reward.claimed ? '\u{2705}' : reward.reached ? '\u{1F381}' : '\u{1F512}'}
-                        size={38}
-                        accent={tierAccent}
-                        muted={!reward.reached}
-                        style={styles.rewardTierMedallion}
-                      />
-                      <Text style={styles.rewardTierThreshold}>{reward.threshold}</Text>
+                      <View
+                        style={[
+                          styles.rewardTierHalo,
+                          {
+                            borderColor: tierAccent + (reward.reached ? '66' : '33'),
+                            backgroundColor: tierAccent + '12',
+                            ...(reward.reached ? SHADOWS.glow(tierAccent) : null),
+                          },
+                        ]}
+                      >
+                        <IconMedallion
+                          glyph={reward.claimed ? '\u{2705}' : reward.reached ? '\u{1F381}' : '\u{1F512}'}
+                          size={36}
+                          accent={tierAccent}
+                          muted={!reward.reached}
+                        />
+                      </View>
+                      <Text style={styles.rewardTierThreshold}>{fmt(reward.threshold)}</Text>
                       <Text style={[
                         styles.rewardTierLabel,
                         reward.reached && { color: COLORS.textPrimary },
@@ -503,8 +538,9 @@ const EventScreen: React.FC<EventScreenProps> = ({
               end={{ x: 0.5, y: 1 }}
             />
             <View style={styles.exclusiveLabelRow}>
-              <Text style={styles.exclusiveLabelIcon}>{'\u{231B}'}</Text>
+              <View style={styles.exclusiveLabelRule} />
               <Text style={styles.exclusiveLabel}>LIMITED TIME EXCLUSIVE</Text>
+              <View style={styles.exclusiveLabelRule} />
             </View>
             <View style={styles.exclusiveContent}>
               <IconMedallion
@@ -534,7 +570,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
             </View>
             {exclusiveAlreadyClaimed ? (
               <View style={styles.exclusiveClaimedRow}>
-                <Text style={styles.exclusiveClaimedIcon}>{'\u{2705}'}</Text>
+                <Text style={styles.exclusiveClaimedIcon}>{'✓'}</Text>
                 <Text style={styles.exclusiveClaimedText}>Claimed! Check your cosmetics.</Text>
               </View>
             ) : canClaimExclusive ? (
@@ -554,7 +590,6 @@ const EventScreen: React.FC<EventScreenProps> = ({
             ) : (
               <>
                 <View style={styles.exclusiveTimerRow}>
-                  <Text style={styles.exclusiveTimerIcon}>{'\u{1F525}'}</Text>
                   <EventCountdownText endTime={endTime} style={styles.exclusiveTimerText} />
                 </View>
                 <Text style={styles.exclusiveHint}>
@@ -743,10 +778,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 6,
   },
+  eventProgressLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   eventProgressLabel: {
     fontSize: 13,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
+  },
+  eventProgressPct: {
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 1,
+  },
+  eventProgressPctText: {
+    fontSize: 10,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.5,
+    fontVariant: ['tabular-nums'],
   },
   eventProgressValue: {
     fontSize: 13,
@@ -774,6 +826,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.35)',
     backgroundColor: 'rgba(10,0,21,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  milestoneDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 
   // Reward Tiers
@@ -802,6 +861,15 @@ const styles = StyleSheet.create({
     borderColor: COLORS.green + '44',
   },
   rewardTierMedallion: {
+    marginBottom: 6,
+  },
+  rewardTierHalo: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 6,
   },
   rewardTierThreshold: {
@@ -889,9 +957,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 14,
   },
-  exclusiveLabelIcon: {
-    fontSize: 14,
-    marginRight: 6,
+  exclusiveLabelRule: {
+    flex: 1,
+    height: 1,
+    maxWidth: 40,
+    marginHorizontal: 10,
+    backgroundColor: COLORS.gold + '55',
   },
   exclusiveLabel: {
     fontSize: 12,
@@ -947,11 +1018,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
     marginBottom: 8,
-  },
-  exclusiveTimerIcon: {
-    fontSize: 13,
-    marginRight: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '40',
+    backgroundColor: COLORS.gold + '14',
   },
   exclusiveTimerText: {
     fontSize: 13,
@@ -980,8 +1054,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   exclusiveClaimedIcon: {
-    fontSize: 18,
+    fontSize: 16,
     marginRight: 6,
+    color: COLORS.green,
+    fontFamily: FONTS.bodyBold,
   },
   exclusiveClaimedText: {
     fontSize: 13,

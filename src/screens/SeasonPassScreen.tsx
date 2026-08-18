@@ -559,9 +559,12 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
           style={[StyleSheet.absoluteFillObject, styles.panelFill]}
         />
         <View style={styles.progressTopRow}>
-          <View style={styles.progressTierBlock}>
-            <Text style={styles.progressTierNumber}>{state.currentTier}</Text>
-            <Text style={styles.progressTierMax}>/ {MAX_SEASON_TIER}</Text>
+          <View>
+            <Text style={styles.progressTierEyebrow}>TIER</Text>
+            <View style={styles.progressTierBlock}>
+              <Text style={styles.progressTierNumber}>{state.currentTier}</Text>
+              <Text style={styles.progressTierMax}>/ {MAX_SEASON_TIER}</Text>
+            </View>
           </View>
           {state.isPremium ? (
             <View style={styles.premiumPill}>
@@ -575,16 +578,21 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
             </View>
           )}
         </View>
+        <View style={styles.progressXPRow}>
+          <Text style={styles.progressXPLabel}>
+            {state.currentTier >= MAX_SEASON_TIER ? 'SEASON COMPLETE' : 'NEXT TIER'}
+          </Text>
+          <Text style={styles.progressXP}>
+            {state.currentTier >= MAX_SEASON_TIER
+              ? 'Max tier reached!'
+              : `${progress.current} / ${progress.required} XP`}
+          </Text>
+        </View>
         <NeonProgressBar
           progress={progress.percent / 100}
           color={COLORS.purple}
           height={12}
         />
-        <Text style={styles.progressXP}>
-          {state.currentTier >= MAX_SEASON_TIER
-            ? 'Max tier reached!'
-            : `${progress.current} / ${progress.required} XP to next tier`}
-        </Text>
         {state.isPremium && (
           <Text style={styles.countdownInline}>
             {'⏳'} {daysLeft > 0 ? `Season ends in ${daysLeft} days` : 'Season ending soon!'}
@@ -610,22 +618,31 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
               </Text>
             </View>
           </View>
-          <PrimaryButton
-            label={purchasing ? 'PROCESSING…' : 'UPGRADE TO PREMIUM — $9.99'}
-            variant="gold"
-            size="large"
-            fullWidth
-            disabled={purchasing}
-            onPress={handleBuyPremium}
-            accessibilityLabel="Upgrade to Premium Season Pass for $9.99"
-            style={styles.upsellButton}
-          />
+          {/* CTA + price live in separate elements so the label can never
+              truncate into "$9…" at narrow widths (390px design review). */}
+          <View style={styles.upsellCtaRow}>
+            <PrimaryButton
+              label={purchasing ? 'PROCESSING…' : 'UPGRADE NOW'}
+              variant="gold"
+              size="large"
+              disabled={purchasing}
+              onPress={handleBuyPremium}
+              accessibilityLabel="Upgrade to Premium Season Pass for $9.99"
+              style={styles.upsellButton}
+            />
+            <View style={styles.upsellPriceCapsule}>
+              <Text style={styles.upsellPriceText}>$9.99</Text>
+              <Text style={styles.upsellPriceNote}>ONE-TIME</Text>
+            </View>
+          </View>
         </View>
       )}
 
+      {/* Meta deliberately does NOT repeat "TIER n / 50" — the hero above is
+          the single place that stat reads (design-review hierarchy note). */}
       <SectionHeader
         label="REWARD TRACK"
-        meta={`TIER ${state.currentTier} / ${MAX_SEASON_TIER}`}
+        meta={`${MAX_SEASON_TIER} TIERS`}
         accent={COLORS.gold}
       />
       <View style={styles.laneTagsRow}>
@@ -689,6 +706,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
   },
+  progressTierEyebrow: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 3,
+    color: COLORS.textMuted,
+    marginBottom: 2,
+  },
   progressTierNumber: {
     fontFamily: FONTS.display,
     fontSize: 34,
@@ -733,12 +757,23 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     letterSpacing: 1,
   },
+  progressXPRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  progressXPLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 2,
+    color: COLORS.textMuted,
+  },
   progressXP: {
-    fontFamily: FONTS.bodyMedium,
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 12,
     color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 10,
+    fontVariant: ['tabular-nums'],
   },
   countdownInline: {
     fontFamily: FONTS.bodySemiBold,
@@ -777,8 +812,39 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 17,
   },
-  upsellButton: {
+  upsellCtaRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
     marginTop: 2,
+  },
+  upsellButton: {
+    flex: 1,
+  },
+  upsellPriceCapsule: {
+    marginLeft: 10,
+    paddingHorizontal: 14,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1.5,
+    borderColor: COLORS.gold + '66',
+    backgroundColor: 'rgba(255,184,0,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upsellPriceText: {
+    fontFamily: FONTS.display,
+    fontSize: 17,
+    color: COLORS.gold,
+    letterSpacing: 0.5,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  upsellPriceNote: {
+    fontFamily: FONTS.display,
+    fontSize: 7,
+    letterSpacing: 1.5,
+    color: COLORS.goldLight,
+    marginTop: 1,
   },
 
   // ── Lane tags ────────────────────────────────────────────────────────
