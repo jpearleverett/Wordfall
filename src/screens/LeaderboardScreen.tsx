@@ -229,63 +229,109 @@ function RankMedallion({ rank, size = 34 }: { rank: number; size?: number }) {
   );
 }
 
-/** Layered glass avatar disc — accent-tinted gradient body + initial. */
+/** Per-player hue pool — deterministic pick via name hash so rows differ. */
+const AVATAR_HUES = [
+  COLORS.purple,
+  COLORS.cyan,
+  COLORS.teal,
+  COLORS.gold,
+  COLORS.orange,
+  COLORS.green,
+  COLORS.accentLight,
+  COLORS.purpleLight,
+] as const;
+
+function nameHue(name: string): string {
+  let h = 5381;
+  for (let i = 0; i < name.length; i++) {
+    h = ((h * 33) ^ name.charCodeAt(i)) >>> 0;
+  }
+  return AVATAR_HUES[h % AVATAR_HUES.length];
+}
+
+/**
+ * GlassAvatar — "monogram gem". Layered gradient disc with a per-player hue
+ * (derived deterministically from the name hash), radial-ish inner highlight,
+ * tinted gradient ring, and display-font initial with a hue glow. Podium rows
+ * pass `rim` to wrap the gem in a metallic ring matching their rank metal.
+ */
 function GlassAvatar({
   name,
   size = 36,
-  accent = COLORS.purple,
   highlighted = false,
+  rim,
 }: {
   name: string;
   size?: number;
-  accent?: string;
   highlighted?: boolean;
+  rim?: readonly [string, string, string];
 }) {
-  const tint = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent + '3D' : accent;
-  const ring = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent + '66' : accent;
+  const hue = highlighted ? COLORS.accent : nameHue(name);
+  const ringColors: readonly [string, string, string] =
+    rim ?? ([hue + 'C9', hue + '4D', hue + '9E'] as const);
+  const pad = 1.5;
   return (
     <View
-      style={[
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: highlighted ? 2 : 1,
-          borderColor: highlighted ? COLORS.accent : ring,
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          backgroundColor: 'rgba(8, 2, 22, 0.92)',
-        },
-        highlighted && SHADOWS.glow(COLORS.accent),
-      ]}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        shadowColor: rim ? rim[1] : hue,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: highlighted || rim ? 0.6 : 0.35,
+        shadowRadius: size * 0.2,
+        elevation: highlighted || rim ? 7 : 4,
+      }}
     >
       <LinearGradient
-        colors={[tint, 'rgba(8, 2, 22, 0.92)']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          top: size * 0.07,
-          left: size * 0.18,
-          right: size * 0.18,
-          height: size * 0.15,
-          borderRadius: size * 0.08,
-          backgroundColor: 'rgba(255,255,255,0.12)',
-        }}
-      />
-      <Text
-        style={{
-          fontFamily: FONTS.display,
-          fontSize: size * 0.42,
-          color: COLORS.textPrimary,
-        }}
+        colors={[...ringColors]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={{ flex: 1, borderRadius: size / 2, padding: pad }}
       >
-        {name.charAt(0).toUpperCase()}
-      </Text>
+        <View
+          style={{
+            flex: 1,
+            borderRadius: (size - pad * 2) / 2,
+            overflow: 'hidden',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(8, 2, 22, 0.95)',
+          }}
+        >
+          <LinearGradient
+            colors={[hue + '59', hue + '17', 'rgba(8, 2, 22, 0.96)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          {/* Radial-ish top highlight */}
+          <View
+            style={{
+              position: 'absolute',
+              top: size * 0.05,
+              left: size * 0.16,
+              right: size * 0.16,
+              height: size * 0.3,
+              borderRadius: size * 0.15,
+              backgroundColor: 'rgba(255,255,255,0.14)',
+              transform: [{ scaleY: 0.55 }],
+            }}
+          />
+          <Text
+            style={{
+              fontFamily: FONTS.display,
+              fontSize: size * 0.42,
+              color: COLORS.textPrimary,
+              textShadowColor: hue + 'B3',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 6,
+            }}
+          >
+            {name.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+      </LinearGradient>
     </View>
   );
 }
@@ -304,6 +350,190 @@ const medStyles = StyleSheet.create({
     color: COLORS.textMuted,
   },
 });
+
+/**
+ * GlyphMedallion — IconMedallion's layered-gem body, but hosting drawn
+ * View-based glyphs instead of raw emoji (the art review's residual flag).
+ */
+function GlyphMedallion({
+  size = 38,
+  accent = COLORS.purple,
+  muted = false,
+  children,
+}: {
+  size?: number;
+  accent?: string;
+  muted?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : accent + '73',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+      ]}
+    >
+      <LinearGradient
+        colors={[
+          muted ? 'rgba(255,255,255,0.05)' : accent + '3D',
+          'rgba(8, 2, 22, 0.92)',
+        ]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.14)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/** Drawn sun — gold gradient core with crossed ray bars, no emoji. */
+function SunGlyph({ size = 20 }: { size?: number }) {
+  const core = size * 0.54;
+  const ray = { position: 'absolute' as const, width: size, height: size * 0.1, borderRadius: size * 0.05, backgroundColor: COLORS.gold + 'B3' };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={ray} />
+      <View style={[ray, { transform: [{ rotate: '45deg' }] }]} />
+      <View style={[ray, { transform: [{ rotate: '90deg' }] }]} />
+      <View style={[ray, { transform: [{ rotate: '135deg' }] }]} />
+      <View
+        style={{
+          width: core,
+          height: core,
+          borderRadius: core / 2,
+          overflow: 'hidden',
+          shadowColor: COLORS.gold,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.8,
+          shadowRadius: size * 0.3,
+          elevation: 4,
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: core * 0.12,
+            left: core * 0.2,
+            width: core * 0.3,
+            height: core * 0.22,
+            borderRadius: core * 0.15,
+            backgroundColor: 'rgba(255,255,255,0.55)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn broadcast/signal mark — concentric rings + hue dot, no emoji. */
+function SignalGlyph({ size = 12, accent = COLORS.purple }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1,
+          borderColor: accent + '66',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: size * 0.62,
+          height: size * 0.62,
+          borderRadius: size * 0.31,
+          borderWidth: 1,
+          borderColor: accent + '99',
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.28,
+          height: size * 0.28,
+          borderRadius: size * 0.14,
+          backgroundColor: accent,
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn 8-point star burst — two crossed gradient squares + hot core. */
+function StarBurstGlyph({ size = 30 }: { size?: number }) {
+  const sq = size * 0.68;
+  const square = {
+    position: 'absolute' as const,
+    width: sq,
+    height: sq,
+    borderRadius: sq * 0.18,
+    overflow: 'hidden' as const,
+  };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={[square, { transform: [{ rotate: '45deg' }] }]}>
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View style={square}>
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          width: sq * 0.34,
+          height: sq * 0.34,
+          borderRadius: sq * 0.17,
+          backgroundColor: 'rgba(255,255,255,0.6)',
+        }}
+      />
+    </View>
+  );
+}
 
 /**
  * SegmentedNeonTabs — the single tab control language for this screen. A
@@ -357,6 +587,14 @@ function SegmentedNeonTabs({
       style={[segStyles.track, compact && segStyles.trackCompact]}
       onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
     >
+      {/* Glass gradient fill so the track reads as a lit surface, not a flat pill */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0.07)', 'rgba(255,255,255,0.01)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: RADIUS.full }]}
+      />
       {segWidth > 0 && (
         <Animated.View
           pointerEvents="none"
@@ -522,12 +760,7 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
         <View style={styles.rankContainer}>
           <RankMedallion rank={entry.rank} size={30} />
         </View>
-        <GlassAvatar
-          name={entry.name}
-          size={36}
-          accent={isCurrentUser ? COLORS.accent : COLORS.purple}
-          highlighted={isCurrentUser}
-        />
+        <GlassAvatar name={entry.name} size={36} highlighted={isCurrentUser} />
         <View style={styles.listInfo}>
           <Text
             style={[styles.listName, isCurrentUser && styles.listNameHighlight]}
@@ -547,7 +780,14 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
             accessibilityRole="button"
             accessibilityLabel={`Challenge ${entry.name}`}
           >
-            <Text style={styles.challengeButtonText}>{'⚔️'}</Text>
+            <LinearGradient
+              pointerEvents="none"
+              colors={[COLORS.accent + '3D', COLORS.accent + '10']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <Text style={styles.challengeButtonText}>VS</Text>
           </Pressable>
         )}
         {!isCurrentUser && showGift && (
@@ -933,8 +1173,8 @@ const LeaderboardScreen: React.FC<
                 <GlassAvatar
                   name={entry.name}
                   size={isFirst ? 56 : 44}
-                  accent={isMe ? COLORS.accent : COLORS.purple}
                   highlighted={isMe}
+                  rim={metal}
                 />
                 <Text style={styles.topName} numberOfLines={1}>
                   {entry.name}
@@ -1009,13 +1249,22 @@ const LeaderboardScreen: React.FC<
             end={{ x: 1, y: 1 }}
             style={styles.dailyDateBanner}
           >
-            <IconMedallion glyph={'☀️'} size={38} accent={COLORS.gold} />
+            <GlyphMedallion size={38} accent={COLORS.gold}>
+              <SunGlyph size={20} />
+            </GlyphMedallion>
             <View>
               <Text style={styles.dailyDateTitle}>Daily Challenge</Text>
               <Text style={styles.dailyDateText}>{formatTodayDate()}</Text>
             </View>
             {!playerCompletedDaily && (
               <View style={styles.dailyNotCompleted}>
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={['rgba(255,210,77,0.18)', 'rgba(255,210,77,0.04)']}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
                 <Text style={styles.dailyNotCompletedText}>Not played yet</Text>
               </View>
             )}
@@ -1024,6 +1273,13 @@ const LeaderboardScreen: React.FC<
 
         {/* Friend Code + Add Friend */}
         <View style={styles.friendCodeBar}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[COLORS.accent + '14', 'rgba(255,255,255,0.02)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
           <View style={styles.friendCodeLeft}>
             <Text style={styles.friendCodeLabel}>Your Code:</Text>
             <Text style={styles.friendCodeValue}>{myFriendCode}</Text>
@@ -1034,6 +1290,13 @@ const LeaderboardScreen: React.FC<
             accessibilityRole="button"
             accessibilityLabel={showAddFriend ? 'Cancel adding friend' : 'Add friend'}
           >
+            <LinearGradient
+              pointerEvents="none"
+              colors={[COLORS.accent + '4D', COLORS.accent + '12']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
             <Text style={styles.addFriendButtonText}>
               {showAddFriend ? 'Cancel' : '+ Add Friend'}
             </Text>
@@ -1113,6 +1376,13 @@ const LeaderboardScreen: React.FC<
                       accessibilityRole="button"
                       accessibilityLabel={`Add ${r.displayName}`}
                     >
+                      <LinearGradient
+                        pointerEvents="none"
+                        colors={[COLORS.accent + '3D', COLORS.accent + '10']}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                        style={StyleSheet.absoluteFillObject}
+                      />
                       <Text style={styles.searchResultBtnText}>Add</Text>
                     </Pressable>
                   </View>
@@ -1124,7 +1394,16 @@ const LeaderboardScreen: React.FC<
 
         {!isFirestoreAvailable && (
           <View style={styles.offlinePill}>
-            <IconMedallion glyph={'📡'} size={24} accent={COLORS.purple} muted />
+            <LinearGradient
+              pointerEvents="none"
+              colors={[COLORS.purple + '14', 'rgba(255,255,255,0.01)']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <GlyphMedallion size={24} accent={COLORS.purple} muted>
+              <SignalGlyph size={12} accent={COLORS.purpleLight} />
+            </GlyphMedallion>
             <Text style={styles.offlinePillText}>
               Offline mode — showing simulated leaderboard
             </Text>
@@ -1162,7 +1441,9 @@ const LeaderboardScreen: React.FC<
             </View>
           ) : entries.length === 0 ? (
             <View style={styles.emptyState}>
-              <IconMedallion glyph={'🏆'} size={72} accent={COLORS.gold} />
+              <GlyphMedallion size={72} accent={COLORS.gold}>
+                <StarBurstGlyph size={34} />
+              </GlyphMedallion>
               <Text style={styles.emptyText}>
                 {scope === 'friends' ? 'No friend scores yet' : 'No leaderboard data yet'}
               </Text>
@@ -1210,12 +1491,7 @@ const LeaderboardScreen: React.FC<
             >
               <View style={styles.currentUserContent}>
                 <Text style={styles.currentUserRank}>#{currentUser.rank}</Text>
-                <GlassAvatar
-                  name={currentUser.name}
-                  size={36}
-                  accent={COLORS.accent}
-                  highlighted
-                />
+                <GlassAvatar name={currentUser.name} size={36} highlighted />
                 <Text style={styles.currentUserName} numberOfLines={1}>
                   {currentUser.name}
                 </Text>
@@ -1279,12 +1555,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    borderColor: 'rgba(255,210,77,0.38)',
+    overflow: 'hidden',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   dailyNotCompletedText: {
-    color: COLORS.textMuted,
+    color: COLORS.goldLight,
     fontSize: 10,
     fontFamily: FONTS.bodySemiBold,
+    letterSpacing: 0.3,
   },
   friendCodeBar: {
     flexDirection: 'row',
@@ -1296,7 +1579,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceGlass,
     borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    borderColor: COLORS.accent + '30',
+    overflow: 'hidden',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 3,
   },
   friendCodeLeft: {
     flexDirection: 'row',
@@ -1321,9 +1610,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.accent + '20',
+    backgroundColor: 'rgba(8, 2, 22, 0.6)',
     borderWidth: 1,
-    borderColor: COLORS.accent + '55',
+    borderColor: COLORS.accent + '66',
+    overflow: 'hidden',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
@@ -1410,9 +1700,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.accent + '20',
+    backgroundColor: 'rgba(8, 2, 22, 0.6)',
     borderWidth: 1,
-    borderColor: COLORS.accent + '40',
+    borderColor: COLORS.accent + '55',
+    overflow: 'hidden',
   },
   searchResultBtnText: {
     fontSize: 12,
@@ -1431,7 +1722,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceGlass,
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    borderColor: COLORS.purple + '40',
+    overflow: 'hidden',
   },
   offlinePillText: {
     fontSize: 11,
@@ -1611,14 +1903,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.accent + '20',
+    backgroundColor: 'rgba(8, 2, 22, 0.6)',
     borderWidth: 1,
-    borderColor: COLORS.accent + '40',
+    borderColor: COLORS.accent + '55',
+    overflow: 'hidden',
   },
   challengeButtonText: {
-    fontSize: 12,
-    fontFamily: FONTS.bodySemiBold,
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   bottomSpacer: {
     height: 40,

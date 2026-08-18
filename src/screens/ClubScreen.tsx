@@ -284,19 +284,572 @@ function MemberAvatar({
   );
 }
 
-/** Hero benefit bullet: small medallion + copy. */
+/**
+ * GlyphMedallion — IconMedallion's layered-gem body, but hosting drawn
+ * View-based glyphs instead of raw emoji (the art review's residual flag).
+ */
+function GlyphMedallion({
+  size = 34,
+  accent = COLORS.purple,
+  muted = false,
+  style,
+  children,
+}: {
+  size?: number;
+  accent?: string;
+  muted?: boolean;
+  style?: object;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : accent + '73',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={[
+          muted ? 'rgba(255,255,255,0.05)' : accent + '3D',
+          'rgba(8, 2, 22, 0.92)',
+        ]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.14)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/** Drawn 8-point star burst — two crossed gradient squares + hot core. */
+function StarBurstGlyph({ size = 18 }: { size?: number }) {
+  const sq = size * 0.68;
+  const square = {
+    position: 'absolute' as const,
+    width: sq,
+    height: sq,
+    borderRadius: sq * 0.18,
+    overflow: 'hidden' as const,
+  };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={[square, { transform: [{ rotate: '45deg' }] }]}>
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View style={square}>
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          width: sq * 0.34,
+          height: sq * 0.34,
+          borderRadius: sq * 0.17,
+          backgroundColor: 'rgba(255,255,255,0.6)',
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn chat bubble — gradient rounded rect, rotated-square tail, 3 dots. */
+function ChatBubbleGlyph({ size = 18, accent = COLORS.cyan }: { size?: number; accent?: string }) {
+  const w = size;
+  const h = size * 0.74;
+  const dot = w * 0.13;
+  return (
+    <View style={{ width: w, height: size }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: w * 0.16,
+          bottom: size * 0.04,
+          width: w * 0.24,
+          height: w * 0.24,
+          borderRadius: w * 0.05,
+          backgroundColor: accent,
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+      <View
+        style={{
+          width: w,
+          height: h,
+          borderRadius: h * 0.42,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + 'B3']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ flexDirection: 'row', gap: dot * 0.5 }}>
+          {[0, 1, 2].map((i) => (
+            <View
+              key={i}
+              style={{
+                width: dot,
+                height: dot,
+                borderRadius: dot / 2,
+                backgroundColor: 'rgba(8,2,22,0.75)',
+              }}
+            />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/** Drawn gift box — gradient body, lid band, gold ribbon + bow knots. */
+function GiftGlyph({ size = 18 }: { size?: number }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      {/* Bow knots */}
+      <View style={{ flexDirection: 'row', gap: size * 0.06, marginBottom: -size * 0.04 }}>
+        <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
+        <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
+      </View>
+      {/* Lid */}
+      <View style={{ width: size * 0.96, height: size * 0.24, borderRadius: size * 0.07, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[COLORS.accentLight, COLORS.accent]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      {/* Body */}
+      <View
+        style={{
+          width: size * 0.78,
+          height: size * 0.5,
+          marginTop: size * 0.03,
+          borderBottomLeftRadius: size * 0.09,
+          borderBottomRightRadius: size * 0.09,
+          overflow: 'hidden',
+          alignItems: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.accent, COLORS.accentDark]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ width: size * 0.14, height: '100%', backgroundColor: COLORS.gold }} />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn podium — three gradient ranking bars, center tallest. */
+function PodiumGlyph({ size = 18 }: { size?: number }) {
+  const bar = (h: number, colors: readonly [string, string]) => (
+    <View style={{ width: size * 0.26, height: size * h, borderRadius: size * 0.06, overflow: 'hidden' }}>
+      <LinearGradient
+        colors={[...colors]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+    </View>
+  );
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        gap: size * 0.08,
+      }}
+    >
+      {bar(0.55, [COLORS.cyan, COLORS.cyan + '80'])}
+      {bar(0.95, [COLORS.goldLight, COLORS.gold])}
+      {bar(0.4, [COLORS.purpleLight, COLORS.purple])}
+    </View>
+  );
+}
+
+/** Drawn magnifier — ring + angled handle. */
+function MagnifierGlyph({ size = 14, accent = COLORS.cyan }: { size?: number; accent?: string }) {
+  const ring = size * 0.66;
+  return (
+    <View style={{ width: size, height: size }}>
+      <View
+        style={{
+          width: ring,
+          height: ring,
+          borderRadius: ring / 2,
+          borderWidth: size * 0.13,
+          borderColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          right: size * 0.02,
+          bottom: size * 0.14,
+          width: size * 0.42,
+          height: size * 0.14,
+          borderRadius: size * 0.07,
+          backgroundColor: accent,
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn mini padlock — ring shackle + gradient rounded-rect body. */
+function LockGlyph({ size = 18, accent = COLORS.gold }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.5,
+          height: size * 0.4,
+          borderTopLeftRadius: size * 0.25,
+          borderTopRightRadius: size * 0.25,
+          borderWidth: size * 0.11,
+          borderBottomWidth: 0,
+          borderColor: accent + 'D9',
+          marginBottom: -size * 0.05,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.82,
+          height: size * 0.56,
+          borderRadius: size * 0.14,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '8C']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            width: size * 0.16,
+            height: size * 0.22,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(8,2,22,0.7)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn 2x2 letter-tile grid — the club puzzle mark. */
+function TileGridGlyph({ size = 20, accent = COLORS.accent }: { size?: number; accent?: string }) {
+  const cell = size * 0.44;
+  const tile = (filled: boolean, key: number) => (
+    <View
+      key={key}
+      style={{
+        width: cell,
+        height: cell,
+        borderRadius: cell * 0.24,
+        overflow: 'hidden',
+        borderWidth: filled ? 0 : 1,
+        borderColor: accent + '88',
+        backgroundColor: filled ? undefined : 'rgba(255,255,255,0.06)',
+      }}
+    >
+      {filled && (
+        <LinearGradient
+          colors={[COLORS.accentLight, accent]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      )}
+    </View>
+  );
+  return (
+    <View style={{ width: size, height: size, justifyContent: 'space-between' }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {tile(true, 0)}
+        {tile(false, 1)}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {tile(false, 2)}
+        {tile(true, 3)}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * ShieldCrest — designed club crest drawn entirely from Views/gradients:
+ * metallic-rim shield silhouette (rounded top block + rotated-diamond point),
+ * dark gem inner field with glass highlight and rivets, gold star spark over
+ * a display-font W emblem, and small gold wing accents. Replaces the emoji
+ * shield-on-disc the art review flagged.
+ */
+function ShieldCrest({ size = 92, muted = false }: { size?: number; muted?: boolean }) {
+  const w = size * 0.76;
+  const topH = size * 0.48;
+  const topR = size * 0.12;
+  const inset = size * 0.045;
+  const diag = w / Math.SQRT2;
+  const diagIn = (w - inset * 2) / Math.SQRT2;
+  // A rotated square's visual bounding box is side * sqrt(2) = w, so the
+  // point reaches w / 2 below the block bottom.
+  const height = topH + w / 2 + size * 0.02;
+  const rim = [COLORS.accentLight, COLORS.accent, COLORS.purple] as const;
+  const field = ['rgba(58,26,102,0.98)', 'rgba(12,4,28,0.99)'] as const;
+  const wing = (side: 'left' | 'right', idx: number) => {
+    const len = size * (0.3 - idx * 0.07);
+    const rot = (side === 'left' ? -1 : 1) * (14 + idx * 10);
+    return (
+      <View
+        key={`${side}${idx}`}
+        style={{
+          position: 'absolute',
+          top: size * (0.16 + idx * 0.13),
+          ...(side === 'left' ? { left: -size * 0.1 } : { right: -size * 0.1 }),
+          width: len,
+          height: size * 0.055,
+          borderRadius: size * 0.03,
+          overflow: 'hidden',
+          transform: [{ rotate: `${rot}deg` }],
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold + '66']}
+          start={side === 'left' ? { x: 1, y: 0.5 } : { x: 0, y: 0.5 }}
+          end={side === 'left' ? { x: 0, y: 0.5 } : { x: 1, y: 0.5 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    );
+  };
+  return (
+    <View
+      style={{
+        width: size * 1.2,
+        height: height,
+        alignItems: 'center',
+        opacity: muted ? 0.55 : 1,
+        shadowColor: COLORS.accent,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: muted ? 0.2 : 0.6,
+        shadowRadius: size * 0.2,
+        elevation: muted ? 2 : 9,
+      }}
+    >
+      {wing('left', 0)}
+      {wing('left', 1)}
+      {wing('left', 2)}
+      {wing('right', 0)}
+      {wing('right', 1)}
+      {wing('right', 2)}
+      {/* Metallic rim: top block */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          width: w,
+          height: topH + 1,
+          borderTopLeftRadius: topR,
+          borderTopRightRadius: topR,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[...rim]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      {/* Metallic rim: shield point */}
+      <View
+        style={{
+          position: 'absolute',
+          top: topH - diag / 2,
+          width: diag,
+          height: diag,
+          borderRadius: size * 0.07,
+          overflow: 'hidden',
+          transform: [{ rotate: '45deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[...rim]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      {/* Inner dark field: top block */}
+      <View
+        style={{
+          position: 'absolute',
+          top: inset,
+          width: w - inset * 2,
+          height: topH - inset + 1,
+          borderTopLeftRadius: topR * 0.72,
+          borderTopRightRadius: topR * 0.72,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[...field]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        {/* Glass highlight */}
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.035,
+            left: w * 0.16,
+            right: w * 0.16,
+            height: size * 0.09,
+            borderRadius: size * 0.05,
+            backgroundColor: 'rgba(255,255,255,0.13)',
+          }}
+        />
+        {/* Rivets */}
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.05,
+            left: w * 0.06,
+            width: size * 0.045,
+            height: size * 0.045,
+            borderRadius: size * 0.03,
+            backgroundColor: 'rgba(255,255,255,0.35)',
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.05,
+            right: w * 0.06,
+            width: size * 0.045,
+            height: size * 0.045,
+            borderRadius: size * 0.03,
+            backgroundColor: 'rgba(255,255,255,0.35)',
+          }}
+        />
+      </View>
+      {/* Inner dark field: point */}
+      <View
+        style={{
+          position: 'absolute',
+          top: topH - diagIn / 2,
+          width: diagIn,
+          height: diagIn,
+          borderRadius: size * 0.05,
+          overflow: 'hidden',
+          transform: [{ rotate: '45deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[...field]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      {/* Emblem: gold spark over display-font W */}
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.1,
+          width: w,
+          alignItems: 'center',
+        }}
+      >
+        <StarBurstGlyph size={size * 0.17} />
+        <Text
+          style={{
+            fontFamily: FONTS.display,
+            fontSize: size * 0.34,
+            lineHeight: size * 0.42,
+            color: COLORS.textPrimary,
+            textShadowColor: COLORS.accentGlow,
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: size * 0.1,
+            marginTop: size * 0.015,
+          }}
+        >
+          W
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** Hero benefit bullet: small drawn-glyph medallion + copy. */
 function BenefitRow({
-  glyph,
+  icon,
   accent,
   text,
 }: {
-  glyph: string;
+  icon: React.ReactNode;
   accent: string;
   text: string;
 }) {
   return (
     <View style={clubPrimStyles.benefitRow}>
-      <IconMedallion glyph={glyph} size={34} accent={accent} />
+      <GlyphMedallion size={34} accent={accent}>
+        {icon}
+      </GlyphMedallion>
       <Text style={clubPrimStyles.benefitText}>{text}</Text>
     </View>
   );
@@ -862,7 +1415,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 
         {/* Crest medallion cluster */}
         <View style={styles.crestCluster}>
-          <IconMedallion glyph={'🏆'} size={44} accent={COLORS.gold} style={styles.crestSideLeft} />
+          <GlyphMedallion size={44} accent={COLORS.gold} style={styles.crestSideLeft}>
+            <StarBurstGlyph size={22} />
+          </GlyphMedallion>
           <Animated.View
             style={{
               zIndex: 2,
@@ -876,9 +1431,11 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
               ],
             }}
           >
-            <IconMedallion glyph={'🛡️'} size={92} accent={COLORS.accent} />
+            <ShieldCrest size={96} />
           </Animated.View>
-          <IconMedallion glyph={'💬'} size={44} accent={COLORS.cyan} style={styles.crestSideRight} />
+          <GlyphMedallion size={44} accent={COLORS.cyan} style={styles.crestSideRight}>
+            <ChatBubbleGlyph size={20} accent={COLORS.cyan} />
+          </GlyphMedallion>
         </View>
 
         <Text style={styles.noClubTitle}>{t('club.joinOrCreate')}</Text>
@@ -888,9 +1445,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </Text>
 
         <View style={styles.benefitList}>
-          <BenefitRow glyph={'🎁'} accent={COLORS.gold} text="Send and receive booster gifts with clubmates" />
-          <BenefitRow glyph={'🏆'} accent={COLORS.cyan} text="Climb the weekly club rankings as a team" />
-          <BenefitRow glyph={'🤝'} accent={COLORS.purple} text="Chat, react, and clear shared goals together" />
+          <BenefitRow icon={<GiftGlyph size={17} />} accent={COLORS.gold} text="Send and receive booster gifts with clubmates" />
+          <BenefitRow icon={<PodiumGlyph size={17} />} accent={COLORS.cyan} text="Climb the weekly club rankings as a team" />
+          <BenefitRow icon={<ChatBubbleGlyph size={16} accent={COLORS.purpleLight} />} accent={COLORS.purple} text="Chat, react, and clear shared goals together" />
         </View>
 
         <View style={styles.heroCtas}>
@@ -915,7 +1472,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       <View style={styles.searchSection}>
         <SectionHeader label={t('club.findClub')} accent={COLORS.cyan} />
         <View style={[styles.searchBar, searchFocused && styles.inputFocused]}>
-          <IconMedallion glyph={'🔍'} size={28} accent={COLORS.cyan} />
+          <GlyphMedallion size={28} accent={COLORS.cyan}>
+            <MagnifierGlyph size={14} accent={COLORS.cyan} />
+          </GlyphMedallion>
           <TextInput
             ref={searchInputRef}
             style={styles.searchInput}
@@ -1060,7 +1619,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             accessibilityRole="button"
             accessibilityLabel="Create new club"
           >
-            <IconMedallion glyph={'➕'} size={36} accent={COLORS.accent} />
+            <GlyphMedallion size={36} accent={COLORS.accent}>
+              <Text style={styles.plusGlyph}>+</Text>
+            </GlyphMedallion>
             <Text style={styles.createButtonText}>{t('club.createNewClub')}</Text>
           </Pressable>
         )}
@@ -1140,7 +1701,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             end={{ x: 1, y: 1 }}
             style={styles.clubPuzzleBtn}
           >
-            <IconMedallion glyph={'🧩'} size={44} accent={COLORS.accent} />
+            <GlyphMedallion size={44} accent={COLORS.accent}>
+              <TileGridGlyph size={20} accent={COLORS.accent} />
+            </GlyphMedallion>
             <View style={styles.clubPuzzleInfo}>
               <Text style={styles.clubPuzzleTitle}>{t('club.clubPuzzle')}</Text>
               <Text style={styles.clubPuzzleDesc}>
@@ -1312,7 +1875,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                   </View>
                 ) : visibleChatMessages.length === 0 ? (
                   <View style={styles.chatPlaceholder}>
-                    <IconMedallion glyph={'💬'} size={44} accent={COLORS.cyan} muted />
+                    <GlyphMedallion size={44} accent={COLORS.cyan} muted>
+                      <ChatBubbleGlyph size={20} accent={COLORS.cyan} />
+                    </GlyphMedallion>
                     <Text style={[styles.chatPlaceholderText, styles.chatPlaceholderGap]}>
                       No messages yet. Say hello!
                     </Text>
@@ -1383,7 +1948,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             </>
           ) : (
             <View style={styles.chatPlaceholder}>
-              <IconMedallion glyph={'🔒'} size={44} accent={COLORS.purple} muted />
+              <GlyphMedallion size={44} accent={COLORS.purple} muted>
+                <LockGlyph size={20} accent={COLORS.purpleLight} />
+              </GlyphMedallion>
               <Text style={[styles.chatPlaceholderText, styles.chatPlaceholderGap]}>
                 Club chat requires Firebase
               </Text>
@@ -1420,7 +1987,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           end={{ x: 0, y: 1 }}
           style={StyleSheet.absoluteFillObject}
         />
-        <IconMedallion glyph={'🛡️'} size={52} accent={COLORS.accent} muted={clubFetchFailed} />
+        <ShieldCrest size={52} muted={clubFetchFailed} />
         <Text style={styles.clubLoadingText}>
           {clubFetchFailed ? 'Could not load your club.' : 'Loading your club…'}
         </Text>
@@ -1695,6 +2262,15 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.accentGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
+  },
+  plusGlyph: {
+    fontSize: 20,
+    lineHeight: 24,
+    fontFamily: FONTS.display,
+    color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   createForm: {
     ...bentoPanel('gold', { padding: 16 }),

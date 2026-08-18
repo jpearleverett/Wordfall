@@ -19,7 +19,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
-import IconMedallion from '../components/common/IconMedallion';
 import { bentoPanel, bentoDividerColor } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
@@ -57,6 +56,195 @@ const CheckBadge: React.FC<{ color?: string }> = ({ color = COLORS.accent }) => 
     <Text style={styles.checkBadgeText}>{'✓'}</Text>
   </View>
 );
+
+/**
+ * GlyphMedallion — IconMedallion's layered-gem body, but hosting drawn
+ * View-based glyphs instead of raw emoji (the art review's residual flag).
+ */
+function GlyphMedallion({
+  size = 34,
+  accent = COLORS.purple,
+  muted = false,
+  style,
+  children,
+}: {
+  size?: number;
+  accent?: string;
+  muted?: boolean;
+  style?: object;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : accent + '73',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={[
+          muted ? 'rgba(255,255,255,0.05)' : accent + '3D',
+          'rgba(8, 2, 22, 0.92)',
+        ]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.14)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/** Drawn mini padlock — ring shackle + gradient rounded-rect body + keyhole. */
+function LockGlyph({ size = 18, accent = COLORS.gold }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.5,
+          height: size * 0.4,
+          borderTopLeftRadius: size * 0.25,
+          borderTopRightRadius: size * 0.25,
+          borderWidth: size * 0.11,
+          borderBottomWidth: 0,
+          borderColor: accent + 'D9',
+          marginBottom: -size * 0.05,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.82,
+          height: size * 0.56,
+          borderRadius: size * 0.14,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '8C']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          style={{
+            width: size * 0.16,
+            height: size * 0.22,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(8,2,22,0.7)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn faceted gem — rotated gradient diamond with a light facet. */
+function GemGlyph({ size = 10 }: { size?: number }) {
+  const sq = size * 0.74;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: sq,
+          height: sq,
+          borderRadius: sq * 0.2,
+          overflow: 'hidden',
+          transform: [{ rotate: '45deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={['#d9fbff', COLORS.cyan, '#0077a8']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: sq * 0.1,
+            left: sq * 0.1,
+            width: sq * 0.36,
+            height: sq * 0.36,
+            borderRadius: sq * 0.12,
+            backgroundColor: 'rgba(255,255,255,0.45)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn coin — gold gradient disc with inner ring + glint. */
+function CoinGlyph({ size = 10 }: { size?: number }) {
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <LinearGradient
+        colors={[COLORS.goldLight, COLORS.gold, '#a86f00']}
+        start={{ x: 0.3, y: 0 }}
+        end={{ x: 0.7, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View
+        style={{
+          width: size * 0.62,
+          height: size * 0.62,
+          borderRadius: size * 0.31,
+          borderWidth: 1,
+          borderColor: 'rgba(122,71,21,0.65)',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.12,
+          left: size * 0.18,
+          width: size * 0.24,
+          height: size * 0.16,
+          borderRadius: size * 0.1,
+          backgroundColor: 'rgba(255,255,255,0.5)',
+        }}
+      />
+    </View>
+  );
+}
 
 interface EditProfileScreenProps {
   navigation?: any;
@@ -251,11 +439,27 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
                 />
-                <Text style={styles.framePreviewLetter}>{initial}</Text>
+                <LinearGradient
+                  colors={[rarityColor + '40', 'rgba(8,2,22,0)']}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 0.85 }}
+                />
+                <View style={styles.framePreviewShine} />
+                <Text
+                  style={[
+                    styles.framePreviewLetter,
+                    { textShadowColor: rarityColor + 'B3' },
+                  ]}
+                >
+                  {initial}
+                </Text>
               </View>
             </View>
           ) : (
-            <IconMedallion glyph={'\u{1F512}'} size={50} accent={rarityColor} muted />
+            <GlyphMedallion size={50} accent={rarityColor} muted>
+              <LockGlyph size={22} accent={rarityColor} />
+            </GlyphMedallion>
           )}
           <Text style={[styles.frameName, !owned && styles.lockedText]} numberOfLines={1}>
             {frame.name}
@@ -326,18 +530,21 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                     { backgroundColor: color },
                     !owned && { opacity: 0.4 },
                   ]}
-                />
+                >
+                  <View style={styles.swatchShine} />
+                </View>
               ),
             )}
           </View>
           {!owned && (
-            <IconMedallion
-              glyph={'\u{1F512}'}
+            <GlyphMedallion
               size={24}
               accent={theme.colors.accent}
               muted
               style={styles.themeLockBadge}
-            />
+            >
+              <LockGlyph size={11} accent={theme.colors.accent} />
+            </GlyphMedallion>
           )}
           <Text style={[styles.themeName, !owned && styles.lockedText]} numberOfLines={1}>
             {theme.name}
@@ -349,11 +556,16 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           )}
           {!owned && theme.cost && (
             <View style={styles.costRow}>
-              <IconMedallion
-                glyph={theme.cost.currency === 'gems' ? '\u{1F48E}' : '\u{1FA99}'}
+              <GlyphMedallion
                 size={18}
                 accent={theme.cost.currency === 'gems' ? COLORS.cyan : COLORS.gold}
-              />
+              >
+                {theme.cost.currency === 'gems' ? (
+                  <GemGlyph size={10} />
+                ) : (
+                  <CoinGlyph size={10} />
+                )}
+              </GlyphMedallion>
               <Text style={styles.costText}>{theme.cost.amount}</Text>
             </View>
           )}
@@ -405,6 +617,14 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
               />
+              {/* Rarity-tinted radial-ish wash + glass highlight */}
+              <LinearGradient
+                colors={[frameRarityColor + '2E', 'rgba(8,2,22,0)']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 0.7 }}
+              />
+              <View style={styles.avatarShine} />
               <Text style={[styles.avatarLetter, { color: equippedThemeData.colors.accent }]}>{initial}</Text>
             </View>
           </Animated.View>
@@ -492,13 +712,14 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
               >
                 <View style={styles.titleRowLeft}>
                   {!owned && (
-                    <IconMedallion
-                      glyph={'\u{1F512}'}
+                    <GlyphMedallion
                       size={26}
                       accent={COLORS.purple}
                       muted
                       style={styles.titleLockBadge}
-                    />
+                    >
+                      <LockGlyph size={12} accent={COLORS.purpleLight} />
+                    </GlyphMedallion>
                   )}
                   <Text
                     style={[
@@ -588,6 +809,16 @@ const styles = StyleSheet.create({
     textShadowColor: COLORS.accentGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
+  },
+  avatarShine: {
+    position: 'absolute',
+    top: 8,
+    left: 20,
+    right: 20,
+    height: 16,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    transform: [{ scaleY: 0.8 }],
   },
   levelBadge: {
     marginTop: -12,
@@ -684,7 +915,18 @@ const styles = StyleSheet.create({
   framePreviewLetter: {
     fontSize: 20,
     fontFamily: FONTS.display,
-    color: COLORS.accent,
+    color: COLORS.textPrimary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+  framePreviewShine: {
+    position: 'absolute',
+    top: 4,
+    left: 9,
+    right: 9,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   frameName: {
     fontSize: 11,
@@ -777,7 +1019,17 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.25)',
+    overflow: 'hidden',
+  },
+  swatchShine: {
+    position: 'absolute',
+    top: 2,
+    left: 4,
+    right: 4,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   themeLockBadge: {
     position: 'absolute',
