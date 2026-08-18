@@ -565,7 +565,7 @@ export function HomeScreen({
           <View style={styles.statsRow}>
             {([
               { icon: 'star' as GameIconName, value: `${totalStars}`, label: 'Stars' },
-              { icon: undefined, value: `${progress.puzzlesSolved}`, label: 'Solved' },
+              { icon: 'bookOpen' as GameIconName, value: `${progress.puzzlesSolved}`, label: 'Solved' },
               { icon: 'flame' as GameIconName, value: `${progress.currentStreak}`, label: 'Streak' },
             ] as Array<{ icon?: GameIconName; value: string; label: string }>).map((stat) => (
               <View key={stat.label} style={styles.statCardWrapper}>

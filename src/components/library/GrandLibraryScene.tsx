@@ -374,7 +374,7 @@ function WingThemeArt({ x, y, accent, wingId, ghost = false }: { x: number; y: n
   return (
     <G
       transform={`translate(${x * (1 - ART_SX)} ${y * (1 - ART_SY)}) scale(${ART_SX} ${ART_SY})`}
-      opacity={ghost ? 0.45 : 1}
+      opacity={ghost ? 0.62 : 1}
     >
       {art}
     </G>
@@ -457,7 +457,7 @@ function RuinedAlcove({ x, y, accent, index, wingId }: { x: number; y: number; a
         </RadialGradient>
       </Defs>
       {/* lifted base stone so the silhouette separates from the hall */}
-      <Path d={archPath(x, y)} fill="#2e2048" stroke="#5c4584" strokeWidth={2} />
+      <Path d={archPath(x, y)} fill="#362754" stroke="#6a5296" strokeWidth={2} />
       {/* low-saturation wash of this wing's own accent — a ghosted color preview */}
       <Path d={archPath(x, y)} fill={`url(#${tid})`} />
       {/* faint warm rim light on the arch frame */}
@@ -791,8 +791,8 @@ const styles = StyleSheet.create({
   },
   badgeSlot: {
     position: 'absolute',
-    top: 24,
-    right: ALCOVE_W / 2 - 34,
+    top: 34,
+    right: ALCOVE_W / 2 - 42,
   },
   stateBadge: {
     minWidth: 20,

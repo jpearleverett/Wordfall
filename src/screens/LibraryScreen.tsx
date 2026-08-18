@@ -900,8 +900,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               />
-              <Text style={styles.loreQuoteText} numberOfLines={2} ellipsizeMode="tail">
-                {selectedWingData.def.lore}
+              {/* First sentence only — a clamped paragraph ellipsizes
+                  mid-word ("…insist on bein...") which reads as a layout
+                  bug; one complete sentence reads as intentional flavor. */}
+              <Text style={styles.loreQuoteText}>
+                {selectedWingData.def.lore.split('. ')[0].replace(/\.?$/, '.')}
               </Text>
             </View>
 

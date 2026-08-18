@@ -81,7 +81,7 @@ export const WINGS: WingDef[] = [
     icon: 'wave',
     accent: '#42a5dd',
     aura: 'rgba(66, 165, 221, 0.16)',
-    tagline: 'Deep words, deep water.',
+    tagline: 'Words run deep.',
     lore:
       'The only wing with a tide. Charts, shanties, and bottled letters line coral shelves, and the reading pools go down further than anyone has followed. Something large returns the books it borrows, always on time.',
     restorationLine:
