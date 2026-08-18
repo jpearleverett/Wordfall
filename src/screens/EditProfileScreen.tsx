@@ -1,17 +1,27 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  TouchableOpacity,
   StyleSheet,
-  Dimensions,
   FlatList,
   Pressable,
 } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import SectionHeader from '../components/common/SectionHeader';
+import IconMedallion from '../components/common/IconMedallion';
+import { bentoPanel, bentoDividerColor } from '../styles/bentoPanel';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
   usePlayerStore,
   usePlayerActions,
@@ -30,14 +40,23 @@ import {
 } from '../data/cosmetics';
 import { ProfileFrame, ProfileTitle, CosmeticTheme } from '../types';
 
-const { width } = Dimensions.get('window');
-
 const RARITY_COLORS: Record<string, string> = {
   common: COLORS.rarityCommon,
   rare: COLORS.rarityRare,
   epic: COLORS.rarityEpic,
   legendary: COLORS.rarityLegendary,
 };
+
+const FRAME_CARD_SIZE = 104;
+const THEME_CARD_SIZE = 112;
+const LIST_GAP = 12;
+
+/** Small accent check bubble marking the equipped cosmetic. */
+const CheckBadge: React.FC<{ color?: string }> = ({ color = COLORS.accent }) => (
+  <View style={[styles.checkBadge, { backgroundColor: color, shadowColor: color }]}>
+    <Text style={styles.checkBadgeText}>{'✓'}</Text>
+  </View>
+);
 
 interface EditProfileScreenProps {
   navigation?: any;
@@ -123,6 +142,40 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
   const frameRarityColor = RARITY_COLORS[equippedFrameData.rarity] ?? COLORS.rarityCommon;
   const initial = playerName.charAt(0).toUpperCase();
 
+  // Hero avatar glow pulse — mirrors ProfileScreen's legendary ring treatment.
+  // Legendary frames get the full breathing pulse; everything else keeps a
+  // static neon ring. Respects reduce-motion and pauses when unfocused
+  // (this screen stays mounted beneath pushed screens).
+  const reduceMotion = useReduceMotion();
+  const isFocused = useIsFocused();
+  const isLegendary = equippedFrameData.rarity === 'legendary';
+  const glowPulse = useSharedValue(0);
+  useEffect(() => {
+    if (!isLegendary || reduceMotion || !isFocused) {
+      cancelAnimation(glowPulse);
+      glowPulse.value = 0;
+      return;
+    }
+    glowPulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 700 }),
+        withTiming(0, { duration: 700 }),
+      ),
+      -1,
+      false,
+    );
+    return () => cancelAnimation(glowPulse);
+  }, [isLegendary, reduceMotion, isFocused, glowPulse]);
+
+  const animatedRingStyle = useAnimatedStyle(() => {
+    if (!isLegendary || reduceMotion) {
+      return { transform: [{ scale: 1 }], shadowOpacity: 0.7 };
+    }
+    const scale = 1 + glowPulse.value * 0.04;
+    const shadowOpacity = 0.6 + glowPulse.value * 0.4;
+    return { transform: [{ scale }], shadowOpacity };
+  });
+
   const handleEquipFrame = useCallback(
     (frame: ProfileFrame) => {
       if (isOwned(frame.id)) equipCosmetic('frame', frame.id);
@@ -153,11 +206,17 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
       return (
         <Pressable
           onPress={() => handleEquipFrame(frame)}
+          accessibilityRole="button"
+          accessibilityLabel={`${frame.name} frame, ${frame.rarity}${equipped ? ', equipped' : owned ? '' : ', locked'}`}
+          accessibilityState={{ selected: equipped, disabled: !owned }}
           style={({ pressed }) => [
             styles.frameCard,
-            equipped && { borderColor: frameRarityColor + '80' },
-            !owned && styles.lockedItem,
-            pressed && owned && { opacity: 0.8, transform: [{ scale: 0.95 }] },
+            { borderColor: owned ? rarityColor + '55' : COLORS.borderDisabled },
+            equipped && {
+              borderColor: rarityColor,
+              ...SHADOWS.glow(rarityColor),
+            },
+            pressed && owned && styles.cardPressed,
           ]}
         >
           <LinearGradient
@@ -166,27 +225,38 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
           />
-          {/* Mini avatar with frame rarity ring */}
-          <View
-            style={[
-              styles.framePreviewRing,
-              { borderColor: owned ? rarityColor : 'rgba(255,255,255,0.15)' },
-            ]}
-          >
-            <View style={styles.framePreviewCircle}>
-              <LinearGradient
-                colors={[...GRADIENTS.surfaceCard]}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-              />
-              {owned ? (
+          {/* Rarity glow wash behind the preview ring */}
+          {owned && (
+            <LinearGradient
+              colors={[rarityColor + '2E', 'transparent']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 0.8 }}
+            />
+          )}
+          {owned ? (
+            <View
+              style={[
+                styles.framePreviewRing,
+                {
+                  borderColor: rarityColor,
+                  shadowColor: rarityColor,
+                },
+              ]}
+            >
+              <View style={styles.framePreviewCircle}>
+                <LinearGradient
+                  colors={[...GRADIENTS.surfaceCard]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                />
                 <Text style={styles.framePreviewLetter}>{initial}</Text>
-              ) : (
-                <Text style={styles.lockIcon}>{'\u{1F512}'}</Text>
-              )}
+              </View>
             </View>
-          </View>
+          ) : (
+            <IconMedallion glyph={'\u{1F512}'} size={50} accent={rarityColor} muted />
+          )}
           <Text style={[styles.frameName, !owned && styles.lockedText]} numberOfLines={1}>
             {frame.name}
           </Text>
@@ -194,7 +264,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
             {frame.rarity.charAt(0).toUpperCase() + frame.rarity.slice(1)}
           </Text>
           {equipped && (
-            <View style={styles.equippedBadge}>
+            <View style={[styles.equippedBadge, SHADOWS.glow(COLORS.accent)]}>
               <Text style={styles.equippedBadgeText}>EQUIPPED</Text>
             </View>
           )}
@@ -203,10 +273,11 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
               {frame.source}
             </Text>
           )}
+          {equipped && <CheckBadge color={rarityColor} />}
         </Pressable>
       );
     },
-    [isOwned, equippedFrame, handleEquipFrame],
+    [isOwned, equippedFrame, handleEquipFrame, initial],
   );
 
   const renderThemeItem = useCallback(
@@ -217,11 +288,17 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
       return (
         <Pressable
           onPress={() => handleEquipTheme(theme)}
+          accessibilityRole="button"
+          accessibilityLabel={`${theme.name} theme${equipped ? ', equipped' : owned ? '' : ', locked'}`}
+          accessibilityState={{ selected: equipped, disabled: !owned }}
           style={({ pressed }) => [
             styles.themeCard,
-            equipped && { borderColor: theme.colors.accent + '80' },
-            !owned && styles.lockedItem,
-            pressed && owned && { opacity: 0.8, transform: [{ scale: 0.95 }] },
+            { borderColor: owned ? theme.colors.accent + '55' : COLORS.borderDisabled },
+            equipped && {
+              borderColor: theme.colors.accent,
+              ...SHADOWS.glow(theme.colors.accent),
+            },
+            pressed && owned && styles.cardPressed,
           ]}
         >
           <LinearGradient
@@ -230,6 +307,14 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
           />
+          {owned && (
+            <LinearGradient
+              colors={[theme.colors.accent + '24', 'transparent']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 0.8 }}
+            />
+          )}
           {/* Color swatches */}
           <View style={styles.swatchRow}>
             {[theme.colors.bg, theme.colors.surface, theme.colors.accent, theme.colors.cellSelected].map(
@@ -245,20 +330,34 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
               ),
             )}
           </View>
-          {!owned && <Text style={styles.themeLockIcon}>{'\u{1F512}'}</Text>}
+          {!owned && (
+            <IconMedallion
+              glyph={'\u{1F512}'}
+              size={24}
+              accent={theme.colors.accent}
+              muted
+              style={styles.themeLockBadge}
+            />
+          )}
           <Text style={[styles.themeName, !owned && styles.lockedText]} numberOfLines={1}>
             {theme.name}
           </Text>
           {equipped && (
-            <View style={styles.equippedBadge}>
+            <View style={[styles.equippedBadge, SHADOWS.glow(COLORS.accent)]}>
               <Text style={styles.equippedBadgeText}>EQUIPPED</Text>
             </View>
           )}
           {!owned && theme.cost && (
-            <Text style={styles.costText}>
-              {theme.cost.currency === 'gems' ? '\u{1F48E}' : '\u{1FA99}'} {theme.cost.amount}
-            </Text>
+            <View style={styles.costRow}>
+              <IconMedallion
+                glyph={theme.cost.currency === 'gems' ? '\u{1F48E}' : '\u{1FA99}'}
+                size={18}
+                accent={theme.cost.currency === 'gems' ? COLORS.cyan : COLORS.gold}
+              />
+              <Text style={styles.costText}>{theme.cost.amount}</Text>
+            </View>
           )}
+          {equipped && <CheckBadge color={theme.colors.accent} />}
         </Pressable>
       );
     },
@@ -266,34 +365,29 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
   );
 
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="profile" />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation?.goBack()}
-          >
-            <Text style={styles.backIcon}>{'\u2190'}</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>EDIT PROFILE</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        {/* Live Preview */}
-        <View style={styles.previewCard}>
-          <LinearGradient
-            colors={previewGradients}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          <View
+    <ScreenScaffold
+      title="EDIT PROFILE"
+      accent={COLORS.accent}
+      backdrop="profile"
+      onBack={() => navigation?.goBack()}
+    >
+      {/* Live Preview — hero card */}
+      <View style={[bentoPanel('pink', { padding: 0 }), styles.previewClip]}>
+        <LinearGradient
+          colors={previewGradients}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+        {/* Soft rarity aura behind the avatar */}
+        <LinearGradient
+          colors={[frameRarityColor + '30', 'transparent']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 0.65 }}
+        />
+        <View style={styles.previewBody}>
+          <Animated.View
             style={[
               styles.avatarRing,
               {
@@ -301,6 +395,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                 shadowColor: frameRarityColor,
                 backgroundColor: equippedThemeData.colors.bg,
               },
+              animatedRingStyle,
             ]}
           >
             <View style={styles.avatarCircle}>
@@ -312,7 +407,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
               />
               <Text style={[styles.avatarLetter, { color: equippedThemeData.colors.accent }]}>{initial}</Text>
             </View>
-          </View>
+          </Animated.View>
           <View style={styles.levelBadge}>
             <LinearGradient
               colors={[
@@ -343,179 +438,151 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
             {equippedFrameData.name} Frame
           </Text>
         </View>
+      </View>
 
-        {/* Profile Frames */}
-        <Text style={styles.sectionTitle}>Profile Frames</Text>
-        <FlatList
-          data={sortedFrames}
-          renderItem={renderFrameItem}
-          keyExtractor={(item) => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.horizontalList}
-          scrollEnabled
-          removeClippedSubviews={true}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={5}
+      {/* Profile Frames */}
+      <SectionHeader label="PROFILE FRAMES" accent={COLORS.pink} />
+      <FlatList
+        data={sortedFrames}
+        renderItem={renderFrameItem}
+        keyExtractor={(item) => item.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.horizontalList}
+        snapToInterval={FRAME_CARD_SIZE + LIST_GAP}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        scrollEnabled
+        removeClippedSubviews={true}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+      />
+
+      {/* Profile Titles */}
+      <SectionHeader label="PROFILE TITLES" accent={COLORS.purple} />
+      <View style={[bentoPanel('purple', { padding: 0 }), styles.titlesClip]}>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
         />
+        {sortedTitles.map((title, index) => {
+          const owned = isOwned(title.id);
+          const equipped = title.id === equippedTitle;
 
-        {/* Profile Titles */}
-        <Text style={styles.sectionTitle}>Profile Titles</Text>
-        <View style={styles.titlesContainer}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          {sortedTitles.map((title, index) => {
-            const owned = isOwned(title.id);
-            const equipped = title.id === equippedTitle;
-
-            return (
-              <React.Fragment key={title.id}>
-                {index > 0 && <View style={styles.titleDivider} />}
-                <Pressable
-                  onPress={() => handleEquipTitle(title)}
-                  style={({ pressed }) => [
-                    styles.titleRow,
-                    !owned && styles.lockedItem,
-                    pressed && owned && { opacity: 0.7 },
-                  ]}
-                >
-                  <View style={styles.titleRowLeft}>
-                    {!owned && (
-                      <Text style={styles.titleLockIcon}>{'\u{1F512}'}</Text>
-                    )}
-                    <Text
-                      style={[
-                        styles.titleName,
-                        equipped && { color: equippedThemeData.colors.accent },
-                        !owned && styles.lockedText,
-                      ]}
-                    >
-                      {title.title}
+          return (
+            <React.Fragment key={title.id}>
+              {index > 0 && (
+                <View
+                  style={[styles.titleDivider, { backgroundColor: bentoDividerColor('purple') }]}
+                />
+              )}
+              <Pressable
+                onPress={() => handleEquipTitle(title)}
+                accessibilityRole="button"
+                accessibilityLabel={`${title.title} title${equipped ? ', equipped' : owned ? '' : ', locked'}`}
+                accessibilityState={{ selected: equipped, disabled: !owned }}
+                style={({ pressed }) => [
+                  styles.titleRow,
+                  equipped && { backgroundColor: COLORS.purple + '14' },
+                  pressed && owned && styles.rowPressed,
+                ]}
+              >
+                <View style={styles.titleRowLeft}>
+                  {!owned && (
+                    <IconMedallion
+                      glyph={'\u{1F512}'}
+                      size={26}
+                      accent={COLORS.purple}
+                      muted
+                      style={styles.titleLockBadge}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.titleName,
+                      equipped && { color: equippedThemeData.colors.accent },
+                      !owned && styles.lockedText,
+                    ]}
+                  >
+                    {title.title}
+                  </Text>
+                </View>
+                <View style={styles.titleRowRight}>
+                  {equipped ? (
+                    <View style={[styles.equippedPill, SHADOWS.glow(COLORS.accent)]}>
+                      <Text style={styles.equippedPillText}>EQUIPPED</Text>
+                    </View>
+                  ) : owned ? (
+                    <Text style={styles.tapToEquipText}>Tap to equip</Text>
+                  ) : (
+                    <Text style={styles.titleSourceText} numberOfLines={1}>
+                      {title.source}
                     </Text>
-                  </View>
-                  <View style={styles.titleRowRight}>
-                    {equipped ? (
-                      <View style={styles.equippedPill}>
-                        <Text style={styles.equippedPillText}>EQUIPPED</Text>
-                      </View>
-                    ) : owned ? (
-                      <Text style={styles.tapToEquipText}>Tap to equip</Text>
-                    ) : (
-                      <Text style={styles.titleSourceText} numberOfLines={1}>
-                        {title.source}
-                      </Text>
-                    )}
-                  </View>
-                </Pressable>
-              </React.Fragment>
-            );
-          })}
-        </View>
+                  )}
+                </View>
+              </Pressable>
+            </React.Fragment>
+          );
+        })}
+      </View>
 
-        {/* Color Themes */}
-        <Text style={styles.sectionTitle}>Color Themes</Text>
-        <FlatList
-          data={sortedThemes}
-          renderItem={renderThemeItem}
-          keyExtractor={(item) => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.horizontalList}
-          scrollEnabled
-          removeClippedSubviews={true}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={5}
-        />
-
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-    </View>
+      {/* Color Themes */}
+      <SectionHeader label="COLOR THEMES" accent={COLORS.cyan} />
+      <FlatList
+        data={sortedThemes}
+        renderItem={renderThemeItem}
+        keyExtractor={(item) => item.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.horizontalList}
+        snapToInterval={THEME_CARD_SIZE + LIST_GAP}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        scrollEnabled
+        removeClippedSubviews={true}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+      />
+    </ScreenScaffold>
   );
 };
 
-const FRAME_CARD_SIZE = 100;
-const THEME_CARD_SIZE = 110;
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 60,
-    paddingBottom: 8,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backIcon: {
-    fontSize: 24,
-    color: COLORS.textPrimary,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    letterSpacing: 4,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-  headerSpacer: {
-    width: 40,
-  },
-
   // Preview card
-  previewCard: {
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+  previewClip: {
     overflow: 'hidden',
+    marginTop: 4,
+  },
+  previewBody: {
     alignItems: 'center',
-    marginTop: 8,
-    ...SHADOWS.medium,
+    padding: 24,
   },
   avatarRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 108,
+    height: 108,
+    borderRadius: 54,
     borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.7,
-    shadowRadius: 20,
+    shadowRadius: 22,
     elevation: 12,
   },
   avatarCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 94,
+    height: 94,
+    borderRadius: 47,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarLetter: {
-    fontSize: 40,
+    fontSize: 42,
     fontFamily: FONTS.display,
     color: COLORS.accent,
     textShadowColor: COLORS.accentGlow,
@@ -524,7 +591,7 @@ const styles = StyleSheet.create({
   },
   levelBadge: {
     marginTop: -12,
-    borderRadius: 10,
+    borderRadius: RADIUS.md,
     paddingHorizontal: 12,
     paddingVertical: 3,
     zIndex: 1,
@@ -545,13 +612,14 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     marginTop: 12,
+    letterSpacing: 1,
     textShadowColor: 'rgba(255,255,255,0.15)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
   },
   titleBadge: {
     marginTop: 6,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
     paddingHorizontal: 14,
     paddingVertical: 4,
     borderWidth: 1,
@@ -560,7 +628,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.gold,
-    textShadowColor: 'rgba(255,215,0,0.3)',
+    textShadowColor: COLORS.goldGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 6,
   },
@@ -569,32 +637,27 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyMedium,
     color: COLORS.textSecondary,
     marginTop: 8,
+    letterSpacing: 0.5,
   },
 
-  // Sections
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textPrimary,
-    marginTop: 24,
-    marginBottom: 12,
-    textShadowColor: 'rgba(255,255,255,0.1)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
-  },
+  // Horizontal lists
   horizontalList: {
     paddingRight: 16,
-    gap: 12,
+    paddingVertical: 6,
+    gap: LIST_GAP,
+  },
+  cardPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.95 }],
   },
 
   // Frame cards
   frameCard: {
     width: FRAME_CARD_SIZE,
-    borderRadius: 14,
+    borderRadius: RADIUS.xl,
     padding: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1.5,
     overflow: 'hidden',
     ...SHADOWS.soft,
   },
@@ -605,6 +668,10 @@ const styles = StyleSheet.create({
     borderWidth: 2.5,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 5,
   },
   framePreviewCircle: {
     width: 42,
@@ -618,9 +685,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: FONTS.display,
     color: COLORS.accent,
-  },
-  lockIcon: {
-    fontSize: 16,
   },
   frameName: {
     fontSize: 11,
@@ -645,12 +709,8 @@ const styles = StyleSheet.create({
   },
 
   // Title rows
-  titlesContainer: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+  titlesClip: {
     overflow: 'hidden',
-    ...SHADOWS.medium,
   },
   titleRow: {
     flexDirection: 'row',
@@ -659,9 +719,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
+  rowPressed: {
+    opacity: 0.7,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
   titleDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
     marginHorizontal: 16,
   },
   titleRowLeft: {
@@ -673,9 +736,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginLeft: 8,
   },
-  titleLockIcon: {
-    fontSize: 14,
-    marginRight: 8,
+  titleLockBadge: {
+    marginRight: 10,
   },
   titleName: {
     fontSize: 14,
@@ -697,11 +759,10 @@ const styles = StyleSheet.create({
   // Theme cards
   themeCard: {
     width: THEME_CARD_SIZE,
-    borderRadius: 14,
+    borderRadius: RADIUS.xl,
     padding: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1.5,
     overflow: 'hidden',
     ...SHADOWS.soft,
   },
@@ -709,6 +770,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     marginBottom: 8,
+    marginTop: 2,
   },
   swatch: {
     width: 18,
@@ -717,11 +779,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
   },
-  themeLockIcon: {
-    fontSize: 14,
+  themeLockBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 6,
+    right: 6,
   },
   themeName: {
     fontSize: 11,
@@ -729,17 +790,22 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     textAlign: 'center',
   },
+  costRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 5,
+  },
   costText: {
     fontSize: 10,
-    fontFamily: FONTS.bodyMedium,
-    color: COLORS.textMuted,
-    marginTop: 4,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textSecondary,
   },
 
   // Shared
   equippedBadge: {
     backgroundColor: COLORS.accent,
-    borderRadius: 6,
+    borderRadius: RADIUS.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
     marginTop: 6,
@@ -752,7 +818,7 @@ const styles = StyleSheet.create({
   },
   equippedPill: {
     backgroundColor: COLORS.accent,
-    borderRadius: 6,
+    borderRadius: RADIUS.sm,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
@@ -762,15 +828,30 @@ const styles = StyleSheet.create({
     color: COLORS.bg,
     letterSpacing: 0.5,
   },
-  lockedItem: {
-    opacity: 0.5,
+  checkBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  checkBadgeText: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.bg,
   },
   lockedText: {
     color: COLORS.textMuted,
-  },
-
-  bottomSpacer: {
-    height: 100,
   },
 });
 

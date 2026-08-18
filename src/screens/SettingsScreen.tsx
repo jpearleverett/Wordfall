@@ -3,17 +3,22 @@ import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
-  ScrollView,
-  TouchableOpacity,
   StyleSheet,
   Alert,
   Linking,
   ActivityIndicator,
   Platform,
+  Pressable,
+  ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import SectionHeader from '../components/common/SectionHeader';
+import IconMedallion from '../components/common/IconMedallion';
+import PrimaryButton from '../components/common/PrimaryButton';
+import NeonProgressBar from '../components/common/NeonProgressBar';
+import { bentoPanel, bentoDividerColor, type BentoAccent } from '../styles/bentoPanel';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useCommerce } from '../hooks/useCommerce';
@@ -67,11 +72,78 @@ async function openUrlSafe(url: string, fallbackTitle: string) {
   Alert.alert(fallbackTitle, url);
 }
 
+/** #rrggbb + alpha suffix; non-hex colors pass through unchanged. */
+function withAlpha(color: string, alphaHex: string): string {
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color + alphaHex : color;
+}
+
+/**
+ * Volumes are stored as 0–1 fractions (see SettingsContext DEFAULT_SETTINGS:
+ * sfxVolume 0.8). The old UI printed the raw fraction with a "%" suffix
+ * ("0.8%") and stepped it ±10 in 0–100 space, corrupting the stored value.
+ * Display + stepping now happen in percent; storage keeps fraction semantics.
+ * Legacy corrupted values > 1 are read as percent so they self-heal on the
+ * next write.
+ */
+const toPercent = (raw: number): number =>
+  Math.round(Math.max(0, Math.min(100, raw <= 1 ? raw * 100 : raw)));
+
+/** Glass bento card shell with accent-tinted border, glow, and surface gradient. */
+const Panel: React.FC<{ accent: BentoAccent; style?: ViewStyle; children: React.ReactNode }> = ({
+  accent,
+  style,
+  children,
+}) => (
+  <View style={[bentoPanel(accent, { padding: 0 }), styles.panelClip, style]}>
+    <LinearGradient
+      colors={[...GRADIENTS.surfaceCard]}
+      style={StyleSheet.absoluteFill}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+    />
+    {children}
+  </View>
+);
+
+const Divider: React.FC<{ accent: BentoAccent }> = ({ accent }) => (
+  <View style={[styles.divider, { backgroundColor: bentoDividerColor(accent) }]} />
+);
+
+/** Circular glass +/- button with an accent glow ring. */
+const StepButton: React.FC<{
+  glyph: string;
+  accent: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+}> = ({ glyph, accent, onPress, accessibilityLabel }) => (
+  <Pressable
+    onPress={onPress}
+    accessibilityRole="button"
+    accessibilityLabel={accessibilityLabel}
+    hitSlop={6}
+    style={({ pressed }) => [
+      styles.stepBtn,
+      { borderColor: withAlpha(accent, '66'), shadowColor: accent },
+      pressed && styles.stepBtnPressed,
+    ]}
+  >
+    <LinearGradient
+      colors={['rgba(255,255,255,0.14)', 'rgba(255,255,255,0.03)']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={StyleSheet.absoluteFillObject}
+    />
+    <Text style={styles.stepBtnText}>{glyph}</Text>
+  </Pressable>
+);
+
 interface SettingsScreenProps {
   settings?: any;
   onUpdateSetting?: (key: string, value: any) => void;
   onResetProgress?: () => void;
   onSignOut?: () => void;
+  /** Injected by React Navigation (both stacks mount this screen directly). */
+  navigation?: any;
 }
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -79,6 +151,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onUpdateSetting: onUpdateSettingProp,
   onResetProgress: onResetProgressProp,
   onSignOut: onSignOutProp,
+  navigation,
 }) => {
   const { t } = useTranslation();
   const contextSettings = useSettings();
@@ -181,9 +254,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
-  const sfxVolume = settings?.sfxVolume ?? 80;
-  const musicVolume = settings?.musicVolume ?? 60;
-  const ceremonyVolume = settings?.ceremonyVolume ?? 80;
+  const sfxVolume = settings?.sfxVolume ?? 0.8;
+  const musicVolume = settings?.musicVolume ?? 0.5;
+  const ceremonyVolume = settings?.ceremonyVolume ?? 0.8;
   const hapticsEnabled = settings?.hapticsEnabled ?? settings?.haptics ?? true;
   const notificationsEnabled = settings?.notificationsEnabled ?? settings?.notifications ?? true;
   const selectedTheme = settings?.theme ?? 'dark';
@@ -193,9 +266,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const premiumPass = isPremiumPassFlag ?? false;
   const appVersion = settings?.version ?? '1.0.0';
 
-  const handleVolumeChange = (key: string, currentValue: number, delta: number) => {
-    const newValue = Math.max(0, Math.min(100, currentValue + delta));
-    onUpdateSetting(key, newValue);
+  // Steps in whole percent, stores the context's native 0–1 fraction.
+  const handleVolumeChange = (key: string, rawValue: number, deltaPct: number) => {
+    const pct = Math.max(0, Math.min(100, toPercent(rawValue) + deltaPct));
+    onUpdateSetting(key, pct / 100);
   };
 
   const performAccountDeletion = async () => {
@@ -279,662 +353,643 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     );
   };
 
-  const renderVolumeControl = (label: string, settingKey: string, value: number) => (
-    <View style={styles.settingRow} accessibilityRole="adjustable" accessibilityLabel={`${label}: ${value} percent`} accessibilityValue={{ min: 0, max: 100, now: value }}>
-      <Text style={styles.settingLabel}>{label}</Text>
-      <View style={styles.volumeControl}>
-        <TouchableOpacity
-          style={styles.volumeBtn}
-          onPress={() => handleVolumeChange(settingKey, value, -10)}
-          accessibilityRole="button"
-          accessibilityLabel={`Decrease ${label}`}
-        >
-          <Text style={styles.volumeBtnText}>-</Text>
-        </TouchableOpacity>
-        <View style={styles.volumeBarContainer}>
-          <View style={styles.volumeBarBg}>
-            <View
-              style={[styles.volumeBarFill, { width: `${value}%` }]}
-            />
+  const renderVolumeControl = (label: string, settingKey: string, rawValue: number, glyph: string) => {
+    const pct = toPercent(rawValue);
+    return (
+      <View
+        style={styles.volumeBlock}
+        accessibilityRole="adjustable"
+        accessibilityLabel={`${label}: ${pct} percent`}
+        accessibilityValue={{ min: 0, max: 100, now: pct }}
+      >
+        <View style={styles.volumeHeaderRow}>
+          <View style={styles.rowLeft}>
+            <IconMedallion glyph={glyph} size={34} accent={COLORS.cyan} />
+            <Text style={styles.settingLabel}>{label}</Text>
           </View>
-          <Text style={styles.volumeValue}>{value}%</Text>
+          <Text style={styles.volumePct}>{pct}%</Text>
         </View>
-        <TouchableOpacity
-          style={styles.volumeBtn}
-          onPress={() => handleVolumeChange(settingKey, value, 10)}
-          accessibilityRole="button"
-          accessibilityLabel={`Increase ${label}`}
-        >
-          <Text style={styles.volumeBtnText}>+</Text>
-        </TouchableOpacity>
+        <View style={styles.volumeControls}>
+          <StepButton
+            glyph={'−'}
+            accent={COLORS.cyan}
+            onPress={() => handleVolumeChange(settingKey, rawValue, -10)}
+            accessibilityLabel={`Decrease ${label}`}
+          />
+          <View style={styles.volumeTrack}>
+            <NeonProgressBar progress={pct / 100} color={COLORS.cyan} height={10} />
+          </View>
+          <StepButton
+            glyph="+"
+            accent={COLORS.cyan}
+            onPress={() => handleVolumeChange(settingKey, rawValue, 10)}
+            accessibilityLabel={`Increase ${label}`}
+          />
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
-  const renderToggle = (label: string, value: boolean, settingKey: string) => (
+  const renderToggle = (
+    label: string,
+    value: boolean,
+    settingKey: string,
+    glyph: string,
+    accent: string,
+  ) => (
     <View style={styles.settingRow}>
-      <Text style={styles.settingLabel}>{label}</Text>
-      <TouchableOpacity
-        style={[styles.toggle, value && styles.toggleOn]}
+      <View style={styles.rowLeft}>
+        <IconMedallion glyph={glyph} size={34} accent={accent} />
+        <Text style={styles.settingLabel}>{label}</Text>
+      </View>
+      <Pressable
         onPress={() => onUpdateSetting(settingKey, !value)}
         accessibilityRole="switch"
         accessibilityLabel={label}
         accessibilityState={{ checked: value }}
+        hitSlop={8}
+        style={({ pressed }) => [
+          styles.toggle,
+          value && styles.toggleOn,
+          pressed && styles.togglePressed,
+        ]}
       >
         <View style={[styles.toggleThumb, value && styles.toggleThumbOn]} />
-      </TouchableOpacity>
+      </Pressable>
     </View>
   );
 
+  const renderChip = (opts: {
+    key: string;
+    label: string;
+    selected: boolean;
+    onPress: () => void;
+    accent: string;
+    a11yLabel: string;
+    swatch?: string;
+  }) => (
+    <Pressable
+      key={opts.key}
+      onPress={opts.onPress}
+      accessibilityRole="radio"
+      accessibilityLabel={opts.a11yLabel}
+      accessibilityState={{ selected: opts.selected }}
+      style={({ pressed }) => [
+        styles.chip,
+        opts.selected && {
+          borderColor: opts.accent,
+          backgroundColor: withAlpha(opts.accent, '26'),
+          ...SHADOWS.glow(opts.accent),
+        },
+        pressed && styles.chipPressed,
+      ]}
+    >
+      {opts.swatch != null && (
+        <View style={[styles.chipSwatch, { backgroundColor: opts.swatch }]} />
+      )}
+      <Text style={[styles.chipText, opts.selected && styles.chipTextSelected]}>
+        {opts.label}
+      </Text>
+      {opts.selected && (
+        <Text style={[styles.chipCheck, { color: opts.accent }]}>{'✓'}</Text>
+      )}
+    </Pressable>
+  );
+
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="settings" />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>SETTINGS</Text>
-      </View>
+    <ScreenScaffold
+      title={t('settings.title').toUpperCase()}
+      accent={COLORS.accent}
+      backdrop="settings"
+      onBack={navigation ? () => navigation.goBack() : undefined}
+    >
+      {/* Sound */}
+      <SectionHeader label="SOUND" accent={COLORS.cyan} />
+      <Panel accent="cyan">
+        {renderVolumeControl('SFX Volume', 'sfxVolume', sfxVolume, '\u{1F50A}')}
+        <Divider accent="cyan" />
+        {renderVolumeControl('Music Volume', 'musicVolume', musicVolume, '\u{1F3B5}')}
+        <Divider accent="cyan" />
+        {renderVolumeControl('Ceremony Volume', 'ceremonyVolume', ceremonyVolume, '\u{1F389}')}
+      </Panel>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Sound Section */}
-        <Text style={styles.sectionTitle}>Sound</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          {renderVolumeControl('SFX Volume', 'sfxVolume', sfxVolume)}
-          <View style={styles.divider} />
-          {renderVolumeControl('Music Volume', 'musicVolume', musicVolume)}
-          <View style={styles.divider} />
-          {renderVolumeControl('Ceremony Volume', 'ceremonyVolume', ceremonyVolume)}
-        </View>
+      {/* Gameplay */}
+      <SectionHeader label="GAMEPLAY" accent={COLORS.pink} />
+      <Panel accent="pink">
+        {renderToggle('Haptics', hapticsEnabled, 'hapticsEnabled', '\u{1F4F3}', COLORS.pink)}
+        <Divider accent="pink" />
+        {renderToggle('Notifications', notificationsEnabled, 'notificationsEnabled', '\u{1F514}', COLORS.pink)}
+      </Panel>
 
-        {/* Gameplay Section */}
-        <Text style={styles.sectionTitle}>Gameplay</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          {renderToggle('Haptics', hapticsEnabled, 'haptics')}
-          <View style={styles.divider} />
-          {renderToggle('Notifications', notificationsEnabled, 'notifications')}
-        </View>
-
-        {/* Accessibility Section */}
-        <Text style={styles.sectionTitle}>{t('settings.accessibility')}</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
-            <Text style={[styles.settingLabel, { marginBottom: 4 }]}>Colorblind Mode</Text>
-            <Text style={[styles.dangerSubtext, { textAlign: 'left', marginBottom: 12 }]}>
-              Swaps letter-cell, selection, and valid-word colors so they remain distinct.
-            </Text>
+      {/* Accessibility */}
+      <SectionHeader label={t('settings.accessibility').toUpperCase()} accent={COLORS.purple} />
+      <Panel accent="purple">
+        <View style={styles.panelIntro}>
+          <View style={styles.rowLeft}>
+            <IconMedallion glyph={'\u{1F441}'} size={34} accent={COLORS.purple} />
+            <Text style={styles.settingLabel}>Colorblind Mode</Text>
           </View>
-          {COLORBLIND_MODES.map((mode, idx) => (
-            <React.Fragment key={mode}>
-              {idx > 0 && <View style={styles.divider} />}
-              <TouchableOpacity
-                style={styles.themeRow}
-                onPress={() => onUpdateSetting('colorblindMode', mode)}
-                accessibilityRole="radio"
-                accessibilityLabel={`Colorblind mode: ${COLORBLIND_MODE_LABELS[mode]}`}
-                accessibilityState={{ selected: colorblindMode === mode }}
-              >
-                <Text style={styles.settingLabel}>{COLORBLIND_MODE_LABELS[mode]}</Text>
-                <View style={styles.radioOuter}>
-                  {colorblindMode === mode && <View style={styles.radioInner} />}
-                </View>
-              </TouchableOpacity>
-            </React.Fragment>
-          ))}
+          <Text style={styles.panelIntroText}>
+            Swaps letter-cell, selection, and valid-word colors so they remain distinct.
+          </Text>
         </View>
-
-        {/* Language Section */}
-        <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          <View style={[styles.settingRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
-            <Text style={[styles.dangerSubtext, { textAlign: 'left', marginBottom: 12 }]}>
-              UI language. Puzzles remain English.
-            </Text>
-          </View>
-          {SUPPORTED_LOCALES.map((loc, idx) => (
-            <React.Fragment key={loc}>
-              {idx > 0 && <View style={styles.divider} />}
-              <TouchableOpacity
-                style={styles.themeRow}
-                onPress={() => {
-                  onUpdateSetting('language', loc);
-                  void i18n.changeLanguage(loc);
-                }}
-                accessibilityRole="radio"
-                accessibilityLabel={`Language: ${LOCALE_LABELS[loc as SupportedLocale]}`}
-                accessibilityState={{ selected: (settings?.language ?? 'en') === loc }}
-              >
-                <Text style={styles.settingLabel}>{LOCALE_LABELS[loc as SupportedLocale]}</Text>
-                <View style={styles.radioOuter}>
-                  {(settings?.language ?? 'en') === loc && <View style={styles.radioInner} />}
-                </View>
-              </TouchableOpacity>
-            </React.Fragment>
-          ))}
-        </View>
-
-        {/* Theme Section */}
-        <Text style={styles.sectionTitle}>Theme</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          {THEMES.map((theme, index) => (
-            <React.Fragment key={theme.id}>
-              {index > 0 && <View style={styles.divider} />}
-              <TouchableOpacity
-                style={styles.themeRow}
-                onPress={() => onUpdateSetting('theme', theme.id)}
-                accessibilityRole="radio"
-                accessibilityLabel={`${theme.name} theme`}
-                accessibilityState={{ selected: selectedTheme === theme.id }}
-              >
-                <View
-                  style={[styles.themePreview, { backgroundColor: theme.color }]}
-                />
-                <Text style={styles.settingLabel}>{theme.name}</Text>
-                <View style={styles.radioOuter}>
-                  {selectedTheme === theme.id && (
-                    <View style={styles.radioInner} />
-                  )}
-                </View>
-              </TouchableOpacity>
-            </React.Fragment>
-          ))}
-        </View>
-
-        {/* Account Section */}
-        <Text style={styles.sectionTitle}>{t('settings.account')}</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          {isSignedIn ? (
-            <>
-              <View
-                style={styles.actionRow}
-                accessibilityRole="text"
-                accessibilityLabel={
-                  linkedEmail
-                    ? `Signed in as ${linkedEmail}`
-                    : isAnonymous
-                      ? 'Guest account — progress is stored on this device only'
-                      : 'Signed in'
-                }
-              >
-                <Text style={styles.settingLabel}>
-                  {linkedEmail ? 'Google Account' : 'Account'}
-                </Text>
-                <Text
-                  style={[styles.settingLabel, { color: COLORS.textMuted, fontSize: 14 }]}
-                  numberOfLines={1}
-                >
-                  {linkedEmail
-                    ? linkedEmail
-                    : isAnonymous
-                      ? 'Guest (not backed up)'
-                      : 'Signed in'}
-                </Text>
-              </View>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                style={styles.actionRow}
-                onPress={() => {
-                  // Defer the confirmation prompt then run the async handler
-                  Alert.alert(
-                    'Sign Out',
-                    'Are you sure you want to sign out?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Sign Out', onPress: () => void handleSignOut() },
-                    ],
-                  );
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Sign out"
-                accessibilityState={{ busy: signingOut }}
-                disabled={signingOut}
-              >
-                <Text style={[styles.settingLabel, { color: COLORS.coral }]}>
-                  Sign Out
-                </Text>
-                {signingOut ? (
-                  <ActivityIndicator size="small" color={COLORS.coral} />
-                ) : (
-                  <Text style={[styles.chevron, { color: COLORS.coral }]}>{'\u203A'}</Text>
-                )}
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={styles.actionRow}
-              onPress={() => void handleSignIn()}
-              accessibilityRole="button"
-              accessibilityLabel="Sign in"
-              accessibilityState={{ busy: signingIn }}
-              disabled={signingIn}
-            >
-              <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
-                {signingIn ? 'Signing in…' : 'Sign In with Google'}
-              </Text>
-              {signingIn ? (
-                <ActivityIndicator size="small" color={COLORS.accent} />
-              ) : (
-                <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
-              )}
-            </TouchableOpacity>
+        <View style={styles.chipWrap}>
+          {COLORBLIND_MODES.map((mode) =>
+            renderChip({
+              key: mode,
+              label: COLORBLIND_MODE_LABELS[mode],
+              selected: colorblindMode === mode,
+              onPress: () => onUpdateSetting('colorblindMode', mode),
+              accent: COLORS.purple,
+              a11yLabel: `Colorblind mode: ${COLORBLIND_MODE_LABELS[mode]}`,
+            }),
           )}
+        </View>
+      </Panel>
 
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => void handleRestorePurchases()}
+      {/* Language */}
+      <SectionHeader label={t('settings.language').toUpperCase()} accent={COLORS.cyan} />
+      <Panel accent="cyan">
+        <View style={styles.panelIntro}>
+          <View style={styles.rowLeft}>
+            <IconMedallion glyph={'\u{1F310}'} size={34} accent={COLORS.cyan} />
+            <Text style={styles.panelIntroText}>UI language. Puzzles remain English.</Text>
+          </View>
+        </View>
+        <View style={styles.chipWrap}>
+          {SUPPORTED_LOCALES.map((loc) =>
+            renderChip({
+              key: loc,
+              label: LOCALE_LABELS[loc as SupportedLocale],
+              selected: (settings?.language ?? 'en') === loc,
+              onPress: () => {
+                onUpdateSetting('language', loc);
+                void i18n.changeLanguage(loc);
+              },
+              accent: COLORS.cyan,
+              a11yLabel: `Language: ${LOCALE_LABELS[loc as SupportedLocale]}`,
+            }),
+          )}
+        </View>
+      </Panel>
+
+      {/* Theme */}
+      <SectionHeader label="THEME" accent={COLORS.purple} />
+      <Panel accent="purple">
+        <View style={styles.chipWrap}>
+          {THEMES.map((theme) =>
+            renderChip({
+              key: theme.id,
+              label: theme.name,
+              selected: selectedTheme === theme.id,
+              onPress: () => onUpdateSetting('theme', theme.id),
+              accent: COLORS.purple,
+              a11yLabel: `${theme.name} theme`,
+              swatch: theme.color,
+            }),
+          )}
+        </View>
+      </Panel>
+
+      {/* Account */}
+      <SectionHeader label={t('settings.account').toUpperCase()} accent={COLORS.gold} />
+      <Panel accent="gold">
+        {isSignedIn ? (
+          <>
+            <View
+              style={styles.actionRow}
+              accessibilityRole="text"
+              accessibilityLabel={
+                linkedEmail
+                  ? `Signed in as ${linkedEmail}`
+                  : isAnonymous
+                    ? 'Guest account — progress is stored on this device only'
+                    : 'Signed in'
+              }
+            >
+              <IconMedallion glyph={'\u{1F464}'} size={34} accent={COLORS.gold} />
+              <Text style={styles.settingLabel}>
+                {linkedEmail ? 'Google Account' : 'Account'}
+              </Text>
+              <Text
+                style={[styles.rowValueText, { flex: 1, textAlign: 'right' }]}
+                numberOfLines={1}
+              >
+                {linkedEmail
+                  ? linkedEmail
+                  : isAnonymous
+                    ? 'Guest (not backed up)'
+                    : 'Signed in'}
+              </Text>
+            </View>
+            <Divider accent="gold" />
+            <Pressable
+              style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
+              onPress={() => {
+                // Defer the confirmation prompt then run the async handler
+                Alert.alert(
+                  'Sign Out',
+                  'Are you sure you want to sign out?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Sign Out', onPress: () => void handleSignOut() },
+                  ],
+                );
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+              accessibilityState={{ busy: signingOut }}
+              disabled={signingOut}
+            >
+              <IconMedallion glyph={'\u{1F6AA}'} size={34} accent={COLORS.coral} />
+              <Text style={[styles.settingLabel, { color: COLORS.coral, flex: 1 }]}>
+                Sign Out
+              </Text>
+              {signingOut ? (
+                <ActivityIndicator size="small" color={COLORS.coral} />
+              ) : (
+                <Text style={[styles.chevron, { color: COLORS.coral }]}>{'›'}</Text>
+              )}
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
+            onPress={() => void handleSignIn()}
             accessibilityRole="button"
-            accessibilityLabel="Restore previous purchases"
-            accessibilityHint="Re-applies purchases made on this account. Use this after reinstalling or switching devices."
-            accessibilityState={{ busy: restoring }}
-            disabled={restoring}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Sign in"
+            accessibilityState={{ busy: signingIn }}
+            disabled={signingIn}
           >
-            <Text style={[styles.settingLabel, { color: COLORS.accent }]}>
-              {restoring ? `${t('common.loading')}` : t('settings.restorePurchases')}
+            <IconMedallion glyph={'\u{1F464}'} size={34} accent={COLORS.accent} />
+            <Text style={[styles.settingLabel, { color: COLORS.accent, flex: 1 }]}>
+              {signingIn ? 'Signing in…' : 'Sign In with Google'}
             </Text>
-            {restoring ? (
+            {signingIn ? (
               <ActivityIndicator size="small" color={COLORS.accent} />
             ) : (
-              <Text style={[styles.chevron, { color: COLORS.accent }]}>{'\u203A'}</Text>
+              <Text style={[styles.chevron, { color: COLORS.accent }]}>{'›'}</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
+        )}
 
-          {Platform.OS === 'android' ? (
-            <>
-              <View style={styles.divider} />
-              <TouchableOpacity
-                style={styles.actionRow}
-                onPress={() => void handleManageSubscription()}
-                accessibilityRole="button"
-                accessibilityLabel="Manage subscription"
-                accessibilityHint="Opens the Google Play subscription management page."
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.settingLabel}>Manage Subscription</Text>
-                <Text style={styles.chevron}>{'\u203A'}</Text>
-              </TouchableOpacity>
-            </>
-          ) : null}
+        <Divider accent="gold" />
+        <Pressable
+          style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
+          onPress={() => void handleRestorePurchases()}
+          accessibilityRole="button"
+          accessibilityLabel="Restore previous purchases"
+          accessibilityHint="Re-applies purchases made on this account. Use this after reinstalling or switching devices."
+          accessibilityState={{ busy: restoring }}
+          disabled={restoring}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <IconMedallion glyph={'\u{1F9FE}'} size={34} accent={COLORS.gold} />
+          <Text style={[styles.settingLabel, { color: COLORS.accent, flex: 1 }]}>
+            {restoring ? `${t('common.loading')}` : t('settings.restorePurchases')}
+          </Text>
+          {restoring ? (
+            <ActivityIndicator size="small" color={COLORS.accent} />
+          ) : (
+            <Text style={[styles.chevron, { color: COLORS.accent }]}>{'›'}</Text>
+          )}
+        </Pressable>
 
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.actionRow}
+        {Platform.OS === 'android' ? (
+          <>
+            <Divider accent="gold" />
+            <Pressable
+              style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
+              onPress={() => void handleManageSubscription()}
+              accessibilityRole="button"
+              accessibilityLabel="Manage subscription"
+              accessibilityHint="Opens the Google Play subscription management page."
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <IconMedallion glyph={'\u{1F4B3}'} size={34} accent={COLORS.gold} />
+              <Text style={[styles.settingLabel, { flex: 1 }]}>Manage Subscription</Text>
+              <Text style={styles.chevron}>{'›'}</Text>
+            </Pressable>
+          </>
+        ) : null}
+
+        <Divider accent="gold" />
+        <View style={styles.panelFooter}>
+          <PrimaryButton
+            label={deleting ? `${t('common.loading')}` : t('settings.deleteAccount')}
             onPress={confirmDeleteAccount}
-            accessibilityRole="button"
-            accessibilityLabel="Delete account and data. Permanently erases your cloud profile"
-            accessibilityState={{ busy: deleting, disabled: deleting }}
+            variant="danger"
+            size="medium"
+            fullWidth
             disabled={deleting}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={[styles.settingLabel, { color: COLORS.coral }]}>
-              {deleting ? `${t('common.loading')}` : t('settings.deleteAccount')}
-            </Text>
-            {deleting ? (
-              <ActivityIndicator size="small" color={COLORS.coral} />
-            ) : (
-              <Text style={[styles.chevron, { color: COLORS.coral }]}>{'\u203A'}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Purchases Section */}
-        <Text style={styles.sectionTitle}>Purchases</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
+            accessibilityLabel="Delete account and data. Permanently erases your cloud profile"
           />
-          <View style={styles.settingRow}>
+        </View>
+      </Panel>
+      {/* Purchases */}
+      <SectionHeader label="PURCHASES" accent={COLORS.gold} />
+      <Panel accent="gold">
+        <View style={styles.settingRow}>
+          <View style={styles.rowLeft}>
+            <IconMedallion glyph={'\u{1F6E1}'} size={34} accent={COLORS.gold} />
             <Text style={styles.settingLabel}>Ad Removal</Text>
-            <View
+          </View>
+          <View
+            style={[
+              styles.statusBadge,
+              adsRemoved ? styles.statusActive : styles.statusInactive,
+            ]}
+          >
+            <Text
               style={[
-                styles.statusBadge,
-                adsRemoved ? styles.statusActive : styles.statusInactive,
+                styles.statusText,
+                adsRemoved ? styles.statusTextActive : styles.statusTextInactive,
               ]}
             >
-              <Text
-                style={[
-                  styles.statusText,
-                  adsRemoved ? styles.statusTextActive : styles.statusTextInactive,
-                ]}
-              >
-                {adsRemoved ? 'Active' : 'Not Purchased'}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Premium Pass</Text>
-            <View
-              style={[
-                styles.statusBadge,
-                premiumPass ? styles.statusActive : styles.statusInactive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  premiumPass ? styles.statusTextActive : styles.statusTextInactive,
-                ]}
-              >
-                {premiumPass ? 'Active' : 'Not Purchased'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Parental Controls */}
-        <Text style={styles.sectionTitle}>Parental Controls</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          {renderToggle('Spending Limit', settings?.spendingLimitEnabled ?? false, 'spendingLimitEnabled')}
-          <View style={styles.divider} />
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Monthly Limit</Text>
-            <View style={styles.volumeControl}>
-              <TouchableOpacity
-                style={styles.volumeBtn}
-                onPress={() => onUpdateSetting('monthlySpendingLimit', Math.max(0, (settings?.monthlySpendingLimit ?? 25) - 5))}
-                accessibilityRole="button"
-                accessibilityLabel="Decrease monthly spending limit"
-              >
-                <Text style={styles.volumeBtnText}>-</Text>
-              </TouchableOpacity>
-              <Text style={[styles.settingValue, { minWidth: 50, textAlign: 'center' }]}>
-                ${settings?.monthlySpendingLimit ?? 25}
-              </Text>
-              <TouchableOpacity
-                style={styles.volumeBtn}
-                onPress={() => onUpdateSetting('monthlySpendingLimit', Math.min(500, (settings?.monthlySpendingLimit ?? 25) + 5))}
-                accessibilityRole="button"
-                accessibilityLabel="Increase monthly spending limit"
-              >
-                <Text style={styles.volumeBtnText}>+</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          <View style={styles.divider} />
-          {renderToggle('Require PIN for Purchases', settings?.requirePurchasePin ?? false, 'requirePurchasePin')}
-        </View>
-
-        {/* Privacy Section */}
-        <Text style={styles.sectionTitle}>Privacy</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          {renderToggle(
-            'Analytics',
-            settings?.analyticsEnabled ?? true,
-            'analyticsEnabled',
-          )}
-          <View style={styles.divider} />
-          {renderToggle(
-            'Personalized Ads',
-            settings?.personalizedAdsEnabled ?? true,
-            'personalizedAdsEnabled',
-          )}
-        </View>
-
-        {/* About Section */}
-        <Text style={styles.sectionTitle}>About</Text>
-        <View style={styles.card}>
-          <LinearGradient
-            colors={[...GRADIENTS.surfaceCard]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Version</Text>
-            <Text style={styles.settingValue}>{appVersion}</Text>
-          </View>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.actionRow}
-            accessibilityRole="button"
-            accessibilityLabel="Privacy Policy"
-            onPress={() => openUrlSafe(PRIVACY_POLICY_URL, 'Privacy Policy')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.settingLabel}>Privacy Policy</Text>
-            <Text style={styles.chevron}>{'\u203A'}</Text>
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.actionRow}
-            accessibilityRole="button"
-            accessibilityLabel="Terms of Service"
-            onPress={() => openUrlSafe(TERMS_OF_SERVICE_URL, 'Terms of Service')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.settingLabel}>Terms of Service</Text>
-            <Text style={styles.chevron}>{'\u203A'}</Text>
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.actionRow}
-            accessibilityRole="button"
-            accessibilityLabel="Contact Support"
-            onPress={() =>
-              openUrlSafe(
-                `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Wordfall Support')}`,
-                'Contact Support',
-              )
-            }
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.settingLabel}>Contact Support</Text>
-            <Text style={styles.chevron}>{'\u203A'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Danger Zone */}
-        <Text style={[styles.sectionTitle, { color: COLORS.coral }]}>
-          {t('settings.dangerZone')}
-        </Text>
-        <View style={[styles.card, styles.dangerCard]}>
-          <LinearGradient
-            colors={['#2a1520', '#1e1218']}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          />
-          <TouchableOpacity
-            style={styles.dangerButton}
-            onPress={confirmResetProgress}
-            accessibilityRole="button"
-            accessibilityLabel="Reset local data. Clears on-device progress only"
-          >
-            <Text style={styles.dangerButtonText}>{t('settings.resetLocalData')}</Text>
-            <Text style={styles.dangerSubtext}>
-              Clears on-device progress only. Account and purchases are kept.
-              Use "Delete Account" above for full erasure.
+              {adsRemoved ? 'Active' : 'Not Purchased'}
             </Text>
-          </TouchableOpacity>
+          </View>
         </View>
+        <Divider accent="gold" />
+        <View style={styles.settingRow}>
+          <View style={styles.rowLeft}>
+            <IconMedallion glyph={'\u{1F451}'} size={34} accent={COLORS.gold} />
+            <Text style={styles.settingLabel}>Premium Pass</Text>
+          </View>
+          <View
+            style={[
+              styles.statusBadge,
+              premiumPass ? styles.statusActive : styles.statusInactive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.statusText,
+                premiumPass ? styles.statusTextActive : styles.statusTextInactive,
+              ]}
+            >
+              {premiumPass ? 'Active' : 'Not Purchased'}
+            </Text>
+          </View>
+        </View>
+      </Panel>
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-    </View>
+      {/* Parental Controls */}
+      <SectionHeader label="PARENTAL CONTROLS" accent={COLORS.purple} />
+      <Panel accent="purple">
+        {renderToggle('Spending Limit', settings?.spendingLimitEnabled ?? false, 'spendingLimitEnabled', '\u{1F6E1}', COLORS.purple)}
+        <Divider accent="purple" />
+        <View style={styles.settingRow}>
+          <View style={styles.rowLeft}>
+            <IconMedallion glyph={'\u{1F4B0}'} size={34} accent={COLORS.purple} />
+            <Text style={styles.settingLabel}>Monthly Limit</Text>
+          </View>
+          <View style={styles.stepperGroup}>
+            <StepButton
+              glyph={'−'}
+              accent={COLORS.purple}
+              onPress={() => onUpdateSetting('monthlySpendingLimit', Math.max(0, (settings?.monthlySpendingLimit ?? 25) - 5))}
+              accessibilityLabel="Decrease monthly spending limit"
+            />
+            <Text style={styles.stepperValue}>
+              ${settings?.monthlySpendingLimit ?? 25}
+            </Text>
+            <StepButton
+              glyph="+"
+              accent={COLORS.purple}
+              onPress={() => onUpdateSetting('monthlySpendingLimit', Math.min(500, (settings?.monthlySpendingLimit ?? 25) + 5))}
+              accessibilityLabel="Increase monthly spending limit"
+            />
+          </View>
+        </View>
+        <Divider accent="purple" />
+        {renderToggle('Require PIN for Purchases', settings?.requirePurchasePin ?? false, 'requirePurchasePin', '\u{1F510}', COLORS.purple)}
+      </Panel>
+
+      {/* Privacy */}
+      <SectionHeader label="PRIVACY" accent={COLORS.cyan} />
+      <Panel accent="cyan">
+        {renderToggle(
+          'Analytics',
+          settings?.analyticsEnabled ?? true,
+          'analyticsEnabled',
+          '\u{1F4CA}',
+          COLORS.cyan,
+        )}
+        <Divider accent="cyan" />
+        {renderToggle(
+          'Personalized Ads',
+          settings?.personalizedAdsEnabled ?? true,
+          'personalizedAdsEnabled',
+          '\u{1F3AF}',
+          COLORS.cyan,
+        )}
+      </Panel>
+
+      {/* About */}
+      <SectionHeader label="ABOUT" accent={COLORS.purple} />
+      <Panel accent="purple">
+        <View style={styles.settingRow}>
+          <View style={styles.rowLeft}>
+            <IconMedallion glyph={'ℹ️'} size={34} accent={COLORS.purple} />
+            <Text style={styles.settingLabel}>Version</Text>
+          </View>
+          <Text style={styles.rowValueText}>{appVersion}</Text>
+        </View>
+        <Divider accent="purple" />
+        <Pressable
+          style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Privacy Policy"
+          onPress={() => openUrlSafe(PRIVACY_POLICY_URL, 'Privacy Policy')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <IconMedallion glyph={'\u{1F4C4}'} size={34} accent={COLORS.purple} />
+          <Text style={[styles.settingLabel, { flex: 1 }]}>Privacy Policy</Text>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </Pressable>
+        <Divider accent="purple" />
+        <Pressable
+          style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Terms of Service"
+          onPress={() => openUrlSafe(TERMS_OF_SERVICE_URL, 'Terms of Service')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <IconMedallion glyph={'\u{1F4DC}'} size={34} accent={COLORS.purple} />
+          <Text style={[styles.settingLabel, { flex: 1 }]}>Terms of Service</Text>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </Pressable>
+        <Divider accent="purple" />
+        <Pressable
+          style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Contact Support"
+          onPress={() =>
+            openUrlSafe(
+              `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Wordfall Support')}`,
+              'Contact Support',
+            )
+          }
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <IconMedallion glyph={'✉️'} size={34} accent={COLORS.purple} />
+          <Text style={[styles.settingLabel, { flex: 1 }]}>Contact Support</Text>
+          <Text style={styles.chevron}>{'›'}</Text>
+        </Pressable>
+      </Panel>
+
+      {/* Danger Zone */}
+      <SectionHeader label={t('settings.dangerZone').toUpperCase()} accent={COLORS.coral} />
+      <View style={styles.dangerPanel}>
+        <LinearGradient
+          colors={['#2a1520', '#1e1218']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+        <View style={styles.dangerBody}>
+          <PrimaryButton
+            label={t('settings.resetLocalData')}
+            onPress={confirmResetProgress}
+            variant="danger"
+            size="medium"
+            fullWidth
+            accessibilityLabel="Reset local data. Clears on-device progress only"
+          />
+          <Text style={styles.dangerSubtext}>
+            Clears on-device progress only. Account and purchases are kept.
+            Use "Delete Account" above for full erasure.
+          </Text>
+        </View>
+      </View>
+    </ScreenScaffold>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 16,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.04)',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    letterSpacing: 4,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textSecondary,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginTop: 24,
-    marginBottom: 8,
-    marginLeft: 4,
-    textShadowColor: 'rgba(255,255,255,0.08)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
-  },
-  card: {
-    borderRadius: 18,
+  panelClip: {
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    ...SHADOWS.medium,
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    marginHorizontal: 16,
+    marginHorizontal: 14,
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flexShrink: 1,
   },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 12,
   },
   settingLabel: {
     fontSize: 15,
     color: COLORS.textPrimary,
+    fontFamily: FONTS.bodySemiBold,
+    letterSpacing: 0.2,
+  },
+  rowValueText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
     fontFamily: FONTS.bodyMedium,
+    flexShrink: 1,
   },
-  settingValue: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
+
+  // Volume control
+  volumeBlock: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
   },
-  volumeControl: {
+  volumeHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  volumeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  volumePct: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    color: COLORS.cyan,
+    letterSpacing: 1,
+    textShadowColor: COLORS.cyanGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  volumeControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  volumeTrack: {
+    flex: 1,
+  },
+  stepBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(20, 8, 40, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  volumeBtnText: {
-    fontSize: 18,
-    fontFamily: FONTS.bodyBold,
+  stepBtnPressed: {
+    transform: [{ scale: 0.9 }],
+    opacity: 0.85,
+  },
+  stepBtnText: {
+    fontSize: 20,
+    lineHeight: 24,
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
   },
-  volumeBarContainer: {
+  stepperGroup: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: 100,
+    gap: 10,
   },
-  volumeBarBg: {
-    width: '100%',
-    height: 6,
-    backgroundColor: COLORS.cellDefault,
-    borderRadius: 3,
-    overflow: 'hidden',
+  stepperValue: {
+    minWidth: 52,
+    textAlign: 'center',
+    fontSize: 15,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 0.5,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
-  volumeBarFill: {
-    height: '100%',
-    backgroundColor: COLORS.accent,
-    borderRadius: 3,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
-  },
-  volumeValue: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 3,
-  },
+
+  // Toggle
   toggle: {
     width: 52,
     height: 30,
-    borderRadius: 15,
+    borderRadius: RADIUS.full,
     backgroundColor: COLORS.cellDefault,
     padding: 2,
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: COLORS.borderSubtle,
   },
   toggleOn: {
     backgroundColor: COLORS.accent,
-    borderColor: 'rgba(255,45,149,0.3)',
+    borderColor: COLORS.borderAccent,
     ...SHADOWS.glow(COLORS.accent),
+  },
+  togglePressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.95 }],
   },
   toggleThumb: {
     width: 26,
@@ -947,68 +1002,98 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.textPrimary,
     ...SHADOWS.soft,
   },
-  themeRow: {
+
+  // Selectable chips (colorblind / language / theme)
+  panelIntro: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    gap: 8,
+  },
+  panelIntroText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontFamily: FONTS.bodyMedium,
+    flexShrink: 1,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    padding: 14,
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  themePreview: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
+  chipPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.96 }],
+  },
+  chipSwatch: {
+    width: 18,
+    height: 18,
+    borderRadius: RADIUS.full,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.18)',
-    ...SHADOWS.medium,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: COLORS.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 'auto',
+  chipText: {
+    fontSize: 13,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.3,
   },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: COLORS.accent,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
-    elevation: 2,
+  chipTextSelected: {
+    color: COLORS.textPrimary,
   },
+  chipCheck: {
+    fontSize: 13,
+    fontFamily: FONTS.bodyBold,
+  },
+
+  // Action rows (account / about)
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  rowPressed: {
+    opacity: 0.75,
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   chevron: {
     fontSize: 22,
     color: COLORS.textMuted,
+    fontFamily: FONTS.display,
   },
+  panelFooter: {
+    padding: 14,
+  },
+
+  // Purchases status
   statusBadge: {
-    borderRadius: 12,
+    borderRadius: RADIUS.lg,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: COLORS.borderSubtle,
   },
   statusActive: {
-    backgroundColor: COLORS.green + '25',
-    borderColor: COLORS.green + '40',
+    backgroundColor: withAlpha(COLORS.green, '25'),
+    borderColor: withAlpha(COLORS.green, '40'),
     ...SHADOWS.glow(COLORS.green),
   },
   statusInactive: {
-    backgroundColor: 'rgba(42, 48, 96, 0.5)',
-    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: COLORS.borderDisabled,
   },
   statusText: {
     fontSize: 12,
@@ -1016,40 +1101,32 @@ const styles = StyleSheet.create({
   },
   statusTextActive: {
     color: COLORS.green,
-    textShadowColor: 'rgba(76,175,80,0.3)',
+    textShadowColor: COLORS.greenGlow,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 4,
   },
   statusTextInactive: {
     color: COLORS.textMuted,
   },
-  dangerCard: {
-    borderColor: COLORS.coral + '40',
+
+  // Danger zone
+  dangerPanel: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: withAlpha(COLORS.coral, '40'),
+    overflow: 'hidden',
+    marginBottom: 14,
     ...SHADOWS.glow(COLORS.coral),
   },
-  dangerButton: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  dangerButtonText: {
-    fontSize: 16,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.coral,
-    marginBottom: 4,
-    textShadowColor: 'rgba(255,107,107,0.6)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 14,
+  dangerBody: {
+    padding: 18,
+    gap: 12,
   },
   dangerSubtext: {
     fontSize: 12,
     color: COLORS.textMuted,
+    fontFamily: FONTS.bodyMedium,
     textAlign: 'center',
-  },
-  dangerSpinner: {
-    marginTop: 8,
-  },
-  bottomSpacer: {
-    height: 40,
   },
 });
 
