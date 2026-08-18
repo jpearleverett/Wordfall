@@ -208,77 +208,46 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
   onSpotlight,
   onSmartShuffle,
 }: BoosterBarMemoProps) {
+  // Per-booster accent identity ("boosters feel flat" — Aug 2026 blind
+  // design review). Each booster owns a color: gold wildcard, teal
+  // spotlight, coral shuffle — border tint, icon plate ring, glow, and
+  // count badge all follow it.
+  const boosters = [
+    { key: 'wildcard', label: 'Wildcard', glyph: '★', accent: COLORS.gold, count: wildcardCount, active: wildcardMode, onPress: onWildcard },
+    { key: 'spotlight', label: 'Spotlight', glyph: '💡', accent: COLORS.teal, count: spotlightCount, active: spotlightActive, onPress: onSpotlight },
+    { key: 'shuffle', label: 'Shuffle', glyph: '🔀', accent: COLORS.coral, count: shuffleCount, active: false, onPress: onSmartShuffle },
+  ];
   return (
     <View style={[
       styles.boosterBar,
       !(hasAnyBoosters && isPlaying) && styles.boosterBarHidden,
     ]}>
       <View style={styles.boosterShelf}>
-        {wildcardCount > 0 && (
+        {boosters.map(b => b.count > 0 && (
           <Pressable
+            key={b.key}
             style={({ pressed }) => [
               styles.boosterButton,
-              wildcardMode && styles.boosterActive,
+              { borderColor: b.accent + '66', shadowColor: b.accent },
+              b.active && [styles.boosterActive, { borderColor: b.accent }],
               pressed && styles.boosterPressed,
             ]}
-            onPress={onWildcard}
+            onPress={b.onPress}
           >
             <LinearGradient
               colors={BOOSTER_BODY_GRADIENT}
               style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
             />
             <View style={styles.boosterGlassEdge} />
-            <View style={styles.boosterIconWrap}>
-              <Text style={styles.boosterEmoji}>★</Text>
+            <View style={[styles.boosterIconPlate, { borderColor: b.accent + '73', shadowColor: b.accent }]}>
+              <Text style={styles.boosterEmoji}>{b.glyph}</Text>
             </View>
-            <Text style={styles.boosterLabel}>Wildcard</Text>
-            <View style={styles.boosterCount}>
-              <Text style={styles.boosterCountText}>{wildcardCount}</Text>
-            </View>
-          </Pressable>
-        )}
-        {spotlightCount > 0 && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.boosterButton,
-              spotlightActive && styles.boosterActive,
-              pressed && styles.boosterPressed,
-            ]}
-            onPress={onSpotlight}
-          >
-            <LinearGradient
-              colors={BOOSTER_BODY_GRADIENT}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-            />
-            <View style={styles.boosterGlassEdge} />
-            <View style={styles.boosterIconWrap}>
-              <Text style={styles.boosterEmoji}>💡</Text>
-            </View>
-            <Text style={styles.boosterLabel}>Spotlight</Text>
-            <View style={styles.boosterCount}>
-              <Text style={styles.boosterCountText}>{spotlightCount}</Text>
+            <Text style={styles.boosterLabel}>{b.label}</Text>
+            <View style={[styles.boosterCount, { backgroundColor: b.accent, shadowColor: b.accent }]}>
+              <Text style={styles.boosterCountText}>{b.count}</Text>
             </View>
           </Pressable>
-        )}
-        {shuffleCount > 0 && (
-          <Pressable
-            style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
-            onPress={onSmartShuffle}
-          >
-            <LinearGradient
-              colors={BOOSTER_BODY_GRADIENT}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-            />
-            <View style={styles.boosterGlassEdge} />
-            <View style={styles.boosterIconWrap}>
-              <Text style={styles.boosterEmoji}>🔀</Text>
-            </View>
-            <Text style={styles.boosterLabel}>Shuffle</Text>
-            <View style={styles.boosterCount}>
-              <Text style={styles.boosterCountText}>{shuffleCount}</Text>
-            </View>
-          </Pressable>
-        )}
+        ))}
       </View>
     </View>
   );
@@ -2419,6 +2388,7 @@ function GameScreenImpl({
           showValidFlash={showValidFlash}
           spotlightDimmedSet={spotlightDimmedSet}
           onGravitySettled={handleGravitySettled}
+          frameAccent={chapterTileRamp?.[0]}
           bonusCellId={bonusTile?.cellId ?? null}
         />
         </TilePaletteContext.Provider>
@@ -3143,21 +3113,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 13,
-    borderWidth: 1,
-    borderColor: 'rgba(200, 77, 255, 0.35)',
-    minWidth: 76,
+    borderWidth: 1.5,
+    minWidth: 82,
     overflow: 'visible',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 9,
     elevation: 5,
   },
   boosterActive: {
-    borderColor: COLORS.accent,
-    shadowColor: COLORS.accent,
-    shadowOpacity: 0.7,
-    shadowRadius: 12,
+    shadowOpacity: 0.75,
+    shadowRadius: 14,
   },
   boosterPressed: {
     transform: [{ scale: 0.94 }],
@@ -3175,12 +3141,19 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  boosterIconWrap: {
+  boosterIconPlate: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8, 2, 22, 0.7)',
     marginBottom: 3,
-  },
-  boosterIconImage: {
-    width: 26,
-    height: 26,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 4,
   },
   boosterLabel: {
     fontFamily: FONTS.bodySemiBold,
@@ -3189,7 +3162,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   boosterEmoji: {
-    fontSize: 22,
+    fontSize: 17,
   },
   boosterCount: {
     position: 'absolute',

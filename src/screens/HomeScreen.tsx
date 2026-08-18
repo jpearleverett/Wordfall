@@ -672,10 +672,12 @@ export function HomeScreen({
           }}
         >
           <LinearGradient
-            colors={['rgba(255,215,0,0.20)', 'rgba(255,159,67,0.10)'] as [string, string]}
+            colors={['rgba(200,77,255,0.16)', 'rgba(255,45,149,0.07)'] as [string, string]}
             style={styles.milestoneBanner}
           >
-            <Text style={styles.milestoneBannerIcon}>{nextGuidedMilestone.icon}</Text>
+            <View style={styles.milestoneBannerIconWrap}>
+              <Text style={styles.milestoneBannerIcon}>{nextGuidedMilestone.icon}</Text>
+            </View>
             <View style={styles.milestoneBannerContent}>
               <Text style={styles.milestoneBannerText}>{nextGuidedMilestone.message}</Text>
               <Text style={styles.milestoneBannerCta}>{nextGuidedMilestone.ctaLabel} →</Text>
@@ -2156,15 +2158,33 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   // Onboarding milestone banner — Bento gold
+  // Purple-family wash (was a mustard-gold gradient the Aug 2026 blind
+  // design review called "off-brand") — gold now appears only as the icon
+  // ring + CTA accent, matching how the rest of Home uses it.
   milestoneBanner: {
-    ...bentoPanel('gold'),
+    ...bentoPanel('purple'),
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
   },
-  milestoneBannerIcon: {
-    fontSize: 32,
+  milestoneBannerIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     marginRight: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8, 2, 22, 0.75)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,184,0,0.45)',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  milestoneBannerIcon: {
+    fontSize: 24,
   },
   milestoneBannerContent: {
     flex: 1,

@@ -1091,6 +1091,10 @@ const styles = StyleSheet.create({
   cardContent: {
     padding: 18,
   },
+  // RN cannot blur a View, so a high-alpha colored circle renders as a
+  // hard-edged disc — the blind design review called the old accentGlow
+  // circle "a stray magenta blob breaking the framing". Very low alpha
+  // reads as ambient color wash instead of a shape.
   heroGlow: {
     position: 'absolute',
     width: 280,
@@ -1099,7 +1103,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentGlow,
     top: -110,
     right: -70,
-    opacity: 0.8,
+    opacity: 0.16,
   },
   heroGlowSecondary: {
     position: 'absolute',
@@ -1109,7 +1113,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.purpleGlow,
     bottom: -100,
     left: -50,
-    opacity: 0.7,
+    opacity: 0.14,
   },
   ribbon: {
     alignSelf: 'center',

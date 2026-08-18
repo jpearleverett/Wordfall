@@ -23,6 +23,14 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
 
 // Extracted constants to avoid creating new objects on every render
 const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]];
+
+/** #rrggbb → rgba() string; passes anything else through at full alpha. */
+function hexToRgba(color: string, alpha: number): string {
+  const m = color.match(/^#([0-9a-fA-F]{6})$/);
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 0xff},${(n >> 8) & 0xff},${n & 0xff},${alpha})`;
+}
 const GRADIENT_START = { x: 0, y: 0 };
 const GRADIENT_END = { x: 1, y: 1 };
 const EMPTY_FLEX = { flex: 1 } as const;
@@ -62,6 +70,13 @@ interface GridProps {
    * runs (a second word found mid-fall) — the successor run fires instead.
    */
   onGravitySettled?: () => void;
+  /**
+   * Chapter accent color (#rrggbb). Tints the neon frame + outer glow so
+   * the board chrome harmonizes with the chapter's tile ramp instead of
+   * always being pink — the blind design review flagged green nature tiles
+   * clashing inside the fixed magenta frame.
+   */
+  frameAccent?: string;
   /** When true, all grid positions become tappable (for wildcard placement on empty cells) */
   wildcardMode?: boolean;
   /**
@@ -215,6 +230,7 @@ function GameGridImpl({
   maxHeight,
   noGravityLayout = false,
   onGravitySettled,
+  frameAccent,
   wildcardMode = false,
   bonusCellId = null,
 }: GridProps) {
@@ -785,7 +801,18 @@ function GameGridImpl({
   const outerGlowStyle = useMemo(() => [
     styles.outerGlow,
     { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28, opacity: outerGlowOpacity },
-  ], [outerWidth, outerHeight, outerGlowOpacity]);
+    frameAccent
+      ? { backgroundColor: hexToRgba(frameAccent, 0.08), shadowColor: frameAccent }
+      : null,
+  ], [outerWidth, outerHeight, outerGlowOpacity, frameAccent]);
+
+  const frameColors = useMemo<[string, string, ...string[]]>(
+    () =>
+      frameAccent
+        ? [hexToRgba(frameAccent, 0.38), hexToRgba(frameAccent, 0.22), 'rgba(0,229,255,0.16)']
+        : NEON_FRAME_COLORS,
+    [frameAccent],
+  );
 
   const neonFrameWrapStyle = useMemo(() => [
     styles.neonFrameWrap, { width: outerWidth + 16, height: outerHeight + 16, borderRadius: 28 }
@@ -827,13 +854,18 @@ function GameGridImpl({
       <View style={neonFrameWrapStyle}>
         <Image
           source={LOCAL_IMAGES.neonFrame}
-          style={styles.neonFrameImage}
+          style={[
+            styles.neonFrameImage,
+            // The baked frame art is magenta; when a chapter accent tints
+            // the chrome, fade it back so the accent gradient dominates.
+            frameAccent ? { opacity: 0.18 } : null,
+          ]}
           resizeMode="stretch"
         />
       </View>
 
       <LinearGradient
-        colors={NEON_FRAME_COLORS}
+        colors={frameColors}
         start={GRADIENT_START}
         end={GRADIENT_END}
         style={neonFrameStyle}

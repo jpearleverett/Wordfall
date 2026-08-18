@@ -41,6 +41,8 @@ interface PlayFieldProps {
   spotlightDimmedSet: Set<string>;
   /** Fired when a gravity fall fully settles (GameScreen plays the landing haptic) */
   onGravitySettled?: () => void;
+  /** Chapter accent color tinting the grid's neon frame (see Grid.frameAccent) */
+  frameAccent?: string;
   /** Bonus coin tile (variable reward) — cell ID, travels with gravity */
   bonusCellId?: string | null;
 }
@@ -78,6 +80,7 @@ function PlayFieldImpl({
   showValidFlash,
   spotlightDimmedSet,
   onGravitySettled,
+  frameAccent,
   bonusCellId = null,
 }: PlayFieldProps) {
   const dispatch = useGameDispatch();
@@ -247,6 +250,7 @@ function PlayFieldImpl({
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
             noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
             onGravitySettled={onGravitySettled}
+            frameAccent={frameAccent}
             wildcardMode={wildcardMode}
           />
         </React.Profiler>
