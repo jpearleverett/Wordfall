@@ -11,7 +11,7 @@
  * remounts and re-animates.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -45,10 +45,19 @@ const BoosterComboBanner: React.FC<BoosterComboBannerProps> = ({
   const translateY = useSharedValue(-40);
   const scale = useSharedValue(0.9);
   const reduceMotion = useReduceMotion();
+  // The animation effect deliberately depends only on comboType (re-running
+  // on other changes would restart the dismiss timer), but that meant it
+  // captured reduceMotion's initial `false` — the setting resolves async, so
+  // the reduce-motion branch could never run. A latest-value ref lets each
+  // combo activation read the live setting without widening the deps.
+  const reduceMotionRef = useRef(reduceMotion);
+  useEffect(() => {
+    reduceMotionRef.current = reduceMotion;
+  }, [reduceMotion]);
 
   useEffect(() => {
     if (!comboType) return;
-    if (reduceMotion) {
+    if (reduceMotionRef.current) {
       // Skip spring/scale pop; just fade the banner in and out so
       // vestibular-sensitive players still see the combo name +
       // multiplier without a bouncing pulse.

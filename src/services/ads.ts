@@ -11,6 +11,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AD_CONFIG } from '../constants';
+import { getRemoteNumberClamped } from './remoteConfig';
 import { logger } from '../utils/logger';
 import { analytics } from './analytics';
 import { crashReporter } from './crashReporting';
@@ -82,6 +83,41 @@ async function saveTracking(tracking: AdTracking): Promise<void> {
 }
 
 // ── AdManager singleton ────────────────────────────────────────────────────────
+
+
+/**
+ * Ad frequency caps, resolved from Remote Config with the compile-time
+ * AD_CONFIG value as the fallback.
+ *
+ * `maxAdsPerDay`, `maxInterstitialsPerDay` and `interstitialIntervalMs` were
+ * declared as Remote Config keys and then never read — the caps were pure
+ * constants. Ad pacing is the single riskiest dial in the game for store
+ * rating (too many ads is the most common one-star complaint in the genre)
+ * and it was the one thing that could not be corrected without shipping a
+ * release. The RC defaults deliberately equal the constants, so this changes
+ * nothing until someone chooses to move it.
+ *
+ * A non-positive or non-finite remote value falls back rather than being
+ * honoured: a cap of 0 would silently disable rewarded ads entirely (players
+ * lose a free-currency path with no explanation), and NaN compares false
+ * against everything, which would remove the cap altogether.
+ */
+function adCap(
+  key: 'maxAdsPerDay' | 'maxInterstitialsPerDay' | 'interstitialIntervalMs',
+  fallback: number,
+): number {
+  // Upper bounds are as important as lower ones here: an accidental 1000
+  // ads/day is not a cap at all, and a multi-hour interstitial interval
+  // silently removes the format's revenue. Ranges are wide enough for any
+  // real tuning decision and narrow enough to catch a slipped digit.
+  const bounds = {
+    maxAdsPerDay: [1, 50],
+    maxInterstitialsPerDay: [1, 30],
+    interstitialIntervalMs: [10_000, 1_800_000],
+  } as const;
+  const [min, max] = bounds[key];
+  return getRemoteNumberClamped(key, fallback, min, max);
+}
 
 class AdManager {
   private static instance: AdManager;
@@ -294,7 +330,7 @@ class AdManager {
     }
 
     // Daily cap check
-    if (this.tracking.viewCount >= AD_CONFIG.MAX_ADS_PER_DAY) {
+    if (this.tracking.viewCount >= adCap('maxAdsPerDay', AD_CONFIG.MAX_ADS_PER_DAY)) {
       logger.log('[Ads] Daily ad cap reached');
       return { rewarded: false, rewardType };
     }
@@ -374,8 +410,9 @@ class AdManager {
 
   /** How many total ads remain today */
   adsRemaining(): number {
-    if (this.tracking.date !== todayKey()) return AD_CONFIG.MAX_ADS_PER_DAY;
-    return Math.max(0, AD_CONFIG.MAX_ADS_PER_DAY - this.tracking.viewCount);
+    const cap = adCap('maxAdsPerDay', AD_CONFIG.MAX_ADS_PER_DAY);
+    if (this.tracking.date !== todayKey()) return cap;
+    return Math.max(0, cap - this.tracking.viewCount);
   }
 
   /** Whether cooldown has elapsed since last ad */
@@ -388,7 +425,7 @@ class AdManager {
     if (this.adsRemoved) return false;
     if (!this.rewardedAdReady) return false;
     if (!this.isCooldownElapsed()) return false;
-    if (this.tracking.date === todayKey() && this.tracking.viewCount >= AD_CONFIG.MAX_ADS_PER_DAY) return false;
+    if (this.tracking.date === todayKey() && this.tracking.viewCount >= adCap('maxAdsPerDay', AD_CONFIG.MAX_ADS_PER_DAY)) return false;
     if (rewardType === 'coins_reward' && !this.canWatchCoinAd()) return false;
     return true;
   }
@@ -405,10 +442,10 @@ class AdManager {
     // Refresh tracking if day rolled over
     if (this.tracking.date !== todayKey()) return true; // new day, all caps reset
 
-    if (this.tracking.interstitialCount >= AD_CONFIG.MAX_INTERSTITIALS_PER_DAY) return false;
+    if (this.tracking.interstitialCount >= adCap('maxInterstitialsPerDay', AD_CONFIG.MAX_INTERSTITIALS_PER_DAY)) return false;
 
     const now = Date.now();
-    if (now - this.tracking.lastInterstitialTime < AD_CONFIG.INTERSTITIAL_INTERVAL_MS) return false;
+    if (now - this.tracking.lastInterstitialTime < adCap('interstitialIntervalMs', AD_CONFIG.INTERSTITIAL_INTERVAL_MS)) return false;
 
     return true;
   }
@@ -428,14 +465,14 @@ class AdManager {
     }
 
     // Daily cap check
-    if (this.tracking.interstitialCount >= AD_CONFIG.MAX_INTERSTITIALS_PER_DAY) {
+    if (this.tracking.interstitialCount >= adCap('maxInterstitialsPerDay', AD_CONFIG.MAX_INTERSTITIALS_PER_DAY)) {
       logger.log('[Ads] Daily interstitial cap reached');
       return false;
     }
 
     // Minimum interval check
     const now = Date.now();
-    if (now - this.tracking.lastInterstitialTime < AD_CONFIG.INTERSTITIAL_INTERVAL_MS) {
+    if (now - this.tracking.lastInterstitialTime < adCap('interstitialIntervalMs', AD_CONFIG.INTERSTITIAL_INTERVAL_MS)) {
       logger.log('[Ads] Interstitial interval not elapsed');
       return false;
     }
@@ -462,8 +499,8 @@ class AdManager {
 
   /** How many interstitial ads remain today */
   interstitialsRemaining(): number {
-    if (this.tracking.date !== todayKey()) return AD_CONFIG.MAX_INTERSTITIALS_PER_DAY;
-    return Math.max(0, AD_CONFIG.MAX_INTERSTITIALS_PER_DAY - this.tracking.interstitialCount);
+    if (this.tracking.date !== todayKey()) return adCap('maxInterstitialsPerDay', AD_CONFIG.MAX_INTERSTITIALS_PER_DAY);
+    return Math.max(0, adCap('maxInterstitialsPerDay', AD_CONFIG.MAX_INTERSTITIALS_PER_DAY) - this.tracking.interstitialCount);
   }
 
   // ── Native interstitial implementation ─────────────────────────────────

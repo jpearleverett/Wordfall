@@ -166,8 +166,10 @@ interface ShimmerProps {
 
 export function ShimmerEffect({ width, height, color = 'rgba(255,255,255,0.08)', duration = 3000, delay = 0 }: ShimmerProps) {
   const anim = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
+    if (reduceMotion) return;
     const animation = Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
@@ -179,7 +181,9 @@ export function ShimmerEffect({ width, height, color = 'rgba(255,255,255,0.08)',
     return () => {
       animation.stop();
     };
-  }, [anim, delay, duration]);
+  }, [anim, delay, duration, reduceMotion]);
+
+  if (reduceMotion) return null;
 
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
@@ -284,6 +288,7 @@ export function SparkleField({
   colors = SPARKLE_COLORS,
   intensity = 'subtle',
 }: SparkleFieldProps) {
+  const reduceMotion = useReduceMotion();
   count = Math.min(count, MAX_SPARKLES);
   const sizeRange = intensity === 'intense' ? [4, 12] : intensity === 'medium' ? [3, 8] : [2, 6];
 
@@ -316,6 +321,10 @@ export function SparkleField({
         : [],
     [count, intensity, sizeRange],
   );
+
+  // Sparkles are pure decoration — under reduce motion the field simply
+  // doesn't render, matching CelebrationBurst / PulsingGlowRing below.
+  if (reduceMotion) return null;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>

@@ -99,16 +99,15 @@ export const COIN_SHOP_ITEMS: CoinShopItem[] = [
   },
 
   // ─── Advanced Consumables ────────────────────────────────────────────────────
-  {
-    id: 'coin_premium_hint',
-    name: 'Premium Hint',
-    description: 'Reveals the exact next word to find on the board.',
-    icon: '🔮',
-    costCoins: 250,
-    reward: { type: 'hint', amount: 1, effectId: 'premium_hint' },
-    category: 'consumables',
-    dailyLimit: 3,
-  },
+  // NOTE: there was a 'coin_premium_hint' here at 250 coins whose
+  // effectId 'premium_hint' was read by nothing — it granted the identical
+  // generic hint token the 100-coin item grants, at 2.5x the price, while
+  // its copy promised the premium reveal. The real premium hint is the
+  // gem-priced in-game close_finish_premium offer (USE_PREMIUM_HINT).
+  // Removed rather than wired: a second, cheaper storefront for the same
+  // effect would undercut that offer, and a mispriced duplicate of the
+  // basic hint is simply dishonest. Re-add only with a real premium-hint
+  // entitlement behind it.
   {
     id: 'coin_board_freeze',
     name: 'Board Freeze',

@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "notes": "Pre-staged seasonal drop: chapters 41-48 (wings 'seasons' + 'wonders'). Publish by pasting this file's minified JSON into the Remote Config key 'chapterOverrideJson'. Validated by src/__tests__/proceduralCurve.test.ts against src/utils/chapterSchema.ts. Overlay chapters append after the authored 40; levels they cover (601+) keep procedural board configs but take these names, themes, words, profiles, and palettes.",
+  "chapters": [
+    {
+      "id": 41,
+      "name": "Verdant Rise",
+      "theme": "Spring",
+      "description": "Shake off the frost — trace the season of first blooms.",
+      "puzzleCount": 15,
+      "requiredStars": 240,
+      "difficulty": "medium",
+      "themeWords": ["bloom", "sprout", "robin", "tulip", "thaw", "nest", "rain", "seed", "breeze", "petal", "dew", "hatch"],
+      "wingId": "seasons",
+      "icon": "🌸",
+      "profile": {
+        "minWordLength": 3,
+        "maxWordLength": 5,
+        "introducedMechanics": ["fourLetter"],
+        "emptyCellDensity": 0.12,
+        "dictionaryTier": "standard"
+      },
+      "palette": { "bg": "#0e2a1a", "surface": "#17402a", "accent": "#7be495" }
+    },
+    {
+      "id": 42,
+      "name": "Solstice Blaze",
+      "theme": "Summer",
+      "description": "Long days, bright boards — ride the summer heat.",
+      "puzzleCount": 15,
+      "requiredStars": 246,
+      "difficulty": "hard",
+      "themeWords": ["beach", "wave", "shine", "mango", "picnic", "swim", "sand", "tide", "melon", "blaze", "kite", "surf"],
+      "wingId": "seasons",
+      "icon": "☀️",
+      "profile": {
+        "minWordLength": 3,
+        "maxWordLength": 5,
+        "introducedMechanics": ["fourLetter"],
+        "emptyCellDensity": 0.09,
+        "dictionaryTier": "standard"
+      },
+      "palette": { "bg": "#2a1c0e", "surface": "#403017", "accent": "#ffd166" }
+    },
+    {
+      "id": 43,
+      "name": "Harvest Moon",
+      "theme": "Autumn",
+      "description": "Gather every word before the last leaf falls.",
+      "puzzleCount": 15,
+      "requiredStars": 252,
+      "difficulty": "hard",
+      "themeWords": ["maple", "acorn", "cider", "frost", "amber", "husk", "gourd", "ember", "bounty", "orchard", "crisp", "grain"],
+      "wingId": "seasons",
+      "icon": "🍂",
+      "profile": {
+        "minWordLength": 3,
+        "maxWordLength": 6,
+        "introducedMechanics": ["longWords"],
+        "emptyCellDensity": 0.06,
+        "dictionaryTier": "standard"
+      },
+      "palette": { "bg": "#2a140e", "surface": "#402317", "accent": "#ff9e64" }
+    },
+    {
+      "id": 44,
+      "name": "Frostbound",
+      "theme": "Winter",
+      "description": "The season finale: dense boards under a frozen sky.",
+      "puzzleCount": 15,
+      "requiredStars": 258,
+      "difficulty": "expert",
+      "themeWords": ["icicle", "tundra", "sleet", "drift", "polar", "hearth", "cocoa", "skate", "chill", "aurora", "mitten", "blizzard"],
+      "wingId": "seasons",
+      "icon": "❄️",
+      "profile": {
+        "minWordLength": 4,
+        "maxWordLength": 6,
+        "introducedMechanics": ["longWords", "denseBoard"],
+        "dictionaryTier": "expert"
+      },
+      "palette": { "bg": "#0e1c2a", "surface": "#172c40", "accent": "#9ad1ff" }
+    },
+    {
+      "id": 45,
+      "name": "Gilded Bazaar",
+      "theme": "Marketplace",
+      "description": "Haggle your way through stalls stacked with hidden words.",
+      "puzzleCount": 15,
+      "requiredStars": 264,
+      "difficulty": "medium",
+      "themeWords": ["spice", "silk", "lantern", "trade", "stall", "carpet", "jewel", "satchel", "barter", "aroma", "caravan", "bronze"],
+      "wingId": "wonders",
+      "icon": "🏮",
+      "profile": {
+        "minWordLength": 3,
+        "maxWordLength": 5,
+        "introducedMechanics": ["fourLetter"],
+        "emptyCellDensity": 0.11,
+        "dictionaryTier": "standard"
+      },
+      "palette": { "bg": "#260b20", "surface": "#3a1533", "accent": "#f472d0" }
+    },
+    {
+      "id": 46,
+      "name": "Clockwork Foundry",
+      "theme": "Invention",
+      "description": "Every cleared word turns another gear in the great machine.",
+      "puzzleCount": 15,
+      "requiredStars": 270,
+      "difficulty": "hard",
+      "themeWords": ["gear", "cog", "spring", "lever", "valve", "piston", "rivet", "brass", "spark", "dynamo", "crank", "gadget"],
+      "wingId": "wonders",
+      "icon": "⚙️",
+      "profile": {
+        "minWordLength": 3,
+        "maxWordLength": 6,
+        "introducedMechanics": ["longWords"],
+        "emptyCellDensity": 0.07,
+        "dictionaryTier": "standard"
+      },
+      "palette": { "bg": "#1c1408", "surface": "#2e2410", "accent": "#d4a373" }
+    },
+    {
+      "id": 47,
+      "name": "Aurora Veil",
+      "theme": "Polar Sky",
+      "description": "Chase shimmering words across the night's curtain of light.",
+      "puzzleCount": 15,
+      "requiredStars": 276,
+      "difficulty": "expert",
+      "themeWords": ["zenith", "comet", "halo", "orbit", "ozone", "prism", "streak", "shimmer", "twilight", "veil", "glow", "flare"],
+      "wingId": "wonders",
+      "icon": "🌌",
+      "profile": {
+        "minWordLength": 4,
+        "maxWordLength": 6,
+        "introducedMechanics": ["longWords"],
+        "emptyCellDensity": 0.04,
+        "dictionaryTier": "expert"
+      },
+      "palette": { "bg": "#0a1030", "surface": "#16204a", "accent": "#8be9fd" }
+    },
+    {
+      "id": 48,
+      "name": "Meridian Gate",
+      "theme": "Crowning Wonder",
+      "description": "The wonders finale — dense boards fit for a champion.",
+      "puzzleCount": 15,
+      "requiredStars": 282,
+      "difficulty": "expert",
+      "themeWords": ["triumph", "summit", "crown", "honor", "legend", "wonder", "glory", "pillar", "marble", "laurel", "victor", "epic"],
+      "wingId": "wonders",
+      "icon": "🏛️",
+      "profile": {
+        "minWordLength": 4,
+        "maxWordLength": 6,
+        "introducedMechanics": ["longWords", "denseBoard"],
+        "dictionaryTier": "expert"
+      },
+      "palette": { "bg": "#1a1030", "surface": "#2a1c4a", "accent": "#e6c25a" }
+    }
+  ]
+}

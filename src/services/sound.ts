@@ -1237,6 +1237,9 @@ class SoundManager {
     const samples = this.getSynthesizedSamples(name);
     const uri = createWavDataUri(samples, SAMPLE_RATE);
     this.soundUris.set(name, uri);
+    // The raw Int16Array is fully encoded into the URI now — dropping it
+    // saves ~8MB of session-lifetime JS heap across the SFX set.
+    this.synthesisCache.delete(name);
     return uri;
   }
 
@@ -1250,6 +1253,10 @@ class SoundManager {
     const samples = this.getMusicSynthesizedSamples(track);
     const uri = createWavDataUri(samples, SAMPLE_RATE);
     this.soundUris.set(cacheKey, uri);
+    // Raw samples are redundant once the URI exists. The URI itself must
+    // stay cached for music — buildMusicPlayer re-reads it on every
+    // playMusic because music players are disposed after crossfades.
+    this.synthesisCache.delete(cacheKey);
     return uri;
   }
 
@@ -1268,8 +1275,11 @@ class SoundManager {
     this.preWarmPromise = (async () => {
       try {
         const warmSound = async (name: SoundName) => {
-          if (!this.soundUris.has(name)) {
-            this.getSoundUri(name); // Populates both synthesisCache and soundUris
+          // Skip when a persistent player already exists too — its URI was
+          // deliberately evicted below, and re-synthesizing it would waste
+          // the work a previous (partially failed) prewarm pass finished.
+          if (!this.soundUris.has(name) && !this.sounds.has(name)) {
+            this.getSoundUri(name); // Populates soundUris (samples are evicted)
             await new Promise<void>(resolve => setTimeout(resolve, BACKGROUND_PREWARM_DELAY_MS));
           }
         };
@@ -1315,6 +1325,10 @@ class SoundManager {
                 const player = createAudioPlayerFn(uri);
                 player.volume = this.sfxVolume;
                 this.sounds.set(name, player);
+                // Persistent player holds the native buffer now — the ~100KB
+                // base64 URI string is dead weight (SFX players are never
+                // rebuilt; music URIs are kept because music players are).
+                this.soundUris.delete(name);
                 await new Promise<void>(resolve => setTimeout(resolve, BACKGROUND_PREWARM_DELAY_MS));
               }
             }
@@ -1405,6 +1419,10 @@ class SoundManager {
             player = createAudioPlayerFn(uri);
             player.volume = targetVol;
             this.sounds.set(name, player);
+            // Same as the prewarm path: the persistent player supersedes
+            // the URI string. On create failure we return above WITHOUT
+            // deleting, so the retry path still has the URI.
+            this.soundUris.delete(name);
           }
         } catch (e) {
           logger.warn(`Failed to create sound player "${name}":`, e);

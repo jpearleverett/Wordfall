@@ -16,18 +16,94 @@ service cloud.firestore {
       match /pushToken/{tokenId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // THE CLOUD SAVE. Rules v2 does NOT cascade a parent match to
+      // subcollections, so without these two blocks every save silently
+      // failed: PlayerContext writes users/{uid}/data/player and
+      // EconomyContext writes users/{uid}/economy/current, both swallow the
+      // permission error, and the player had NO cloud backup at all —
+      // reinstalling or switching device lost level, stars, coins, gems,
+      // entitlements, and the local purchase-dedup ledger.
+      match /data/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /economy/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Device push tokens (notifications.ts writes users/{uid}/tokens/push).
+      match /tokens/{tokenId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Challenges are written TO another player's subcollection by the
+      // sender, so the writer is deliberately not the owner. That makes this
+      // the only cross-user write path under users/{uid}, so the payload must
+      // be bound to the sender exactly like gifts and friendships are —
+      // otherwise any authenticated account (anonymous included) could list
+      // /users, harvest UIDs, and drop arbitrary documents carrying a forged
+      // challengerName into anyone's private namespace.
+      //
+      // Deliberately NOT requiring an accepted friendship: LeaderboardScreen
+      // sends challenges to arbitrary leaderboard entries, so a friendship
+      // predicate would break the shipped flow.
+      //
+      // Note the receive side is not wired yet (nothing reads this
+      // subcollection today), so treat challengerName as untrusted whenever
+      // it is: prefer resolving the display name from challengerId server-side
+      // over trusting the stored string.
+      match /challenges/{challengeId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null
+          && request.resource.data.challengerId == request.auth.uid
+          && userId != request.auth.uid
+          && request.resource.data.challengerName is string
+          && request.resource.data.challengerName.size() <= 40
+          && request.resource.data.challengerScore is number
+          && request.resource.data.challengerScore >= 0
+          && request.resource.data.challengerScore <= 1000000
+          && request.resource.data.status == 'pending';
+        allow update, delete: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Server-owned (Admin SDK): purchase records and gift quota must never
+      // be client-writable — they are the anti-double-grant ledgers.
+      match /purchases/{purchaseId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+      match /giftQuota/{quotaId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+      // Referral state — the "this account has already been referred" marker.
+      // MUST stay server-only: users/{uid} itself is owner-writable with no
+      // field constraints, so a marker kept on that document could just be
+      // deleted between claims, letting one account farm the referred-lane
+      // reward once per public referral code.
+      match /referralState/{docId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
     }
 
     // Daily scores: owner can write own entry, anyone can read
     // Score bounds: 0..1_000_000 (sanity ceiling to prevent trivial leaderboard cheats)
+    // The doc id MUST start with the caller's uid ("{uid}_{date}"). Without
+    // that binding an attacker could pre-create dailyScores/{victimUid}_{today}
+    // carrying their OWN userId field; the victim's later write then becomes
+    // an update whose owner check can never pass, silently locking that player
+    // off the leaderboard for the day. Squatting is cheap and targeted.
     match /dailyScores/{docId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
+        && docId.split('_')[0] == request.auth.uid
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.score is number
         && request.resource.data.score >= 0
         && request.resource.data.score <= 1000000;
       allow update: if request.auth != null
+        && docId.split('_')[0] == request.auth.uid
         && resource.data.userId == request.auth.uid
         && request.resource.data.score is number
         && request.resource.data.score >= 0
@@ -38,11 +114,13 @@ service cloud.firestore {
     match /weeklyScores/{docId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
+        && docId.split('_')[0] == request.auth.uid
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.score is number
         && request.resource.data.score >= 0
         && request.resource.data.score <= 1000000;
       allow update: if request.auth != null
+        && docId.split('_')[0] == request.auth.uid
         && resource.data.userId == request.auth.uid
         && request.resource.data.score is number
         && request.resource.data.score >= 0
@@ -87,11 +165,31 @@ service cloud.firestore {
     }
 
     // Gifts: sender can create, recipient can read/update (claim)
+    // The sendGift callable is the intended writer (it enforces a 5/day
+    // quota and an idempotency key); this direct path is only the offline
+    // fallback. It previously accepted ANY payload from the sender, so a
+    // player could loop self-addressed gifts and mint unlimited lives/hints
+    // (GiftInbox grants min(amount, 10) per doc). Constrained so the
+    // fallback still works but carries no exploit: no self-gifting, bounded
+    // amount, and it must arrive unclaimed.
     match /gifts/{giftId} {
-      allow create: if request.auth != null && request.resource.data.fromUserId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.fromUserId == request.auth.uid
+        && request.resource.data.toUserId is string
+        && request.resource.data.toUserId != request.auth.uid
+        && request.resource.data.amount is int
+        && request.resource.data.amount >= 1
+        && request.resource.data.amount <= 5
+        && request.resource.data.claimed == false;
       allow read: if request.auth != null &&
         (resource.data.toUserId == request.auth.uid || resource.data.fromUserId == request.auth.uid);
-      allow update: if request.auth != null && resource.data.toUserId == request.auth.uid;
+      // Recipient may only flip it to claimed — not rewrite the amount.
+      allow update: if request.auth != null
+        && resource.data.toUserId == request.auth.uid
+        && resource.data.claimed == false
+        && request.resource.data.claimed == true
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['claimed', 'claimedAt']);
     }
 
     // Clubs: members can read/write; create is tightly constrained so
@@ -115,7 +213,16 @@ service cloud.firestore {
         && request.resource.data.weeklyScore == 0
         && request.resource.data.totalScore == 0
         && request.resource.data.createdAt == request.time;
-      allow update: if request.auth != null && request.auth.uid in resource.data.memberIds;
+      // Members may only edit presentation fields. This was unrestricted,
+      // which made the careful create-time guards above pointless: any
+      // member could set weeklyScore to 999999999 (updateClubLeaderboard
+      // ranks that field directly, awarding the diamond tier), rewrite
+      // memberIds to expel everyone else, or make themselves ownerId.
+      // Scores and membership are mutated by Admin-SDK functions only.
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.memberIds
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name', 'description', 'lastActivityAt', 'recentEmojis', 'icon']);
 
       // Club messages
       // Must be a club member. Message size is capped server-side to prevent
@@ -189,8 +296,15 @@ service cloud.firestore {
     // else's code mapping.
     match /referralCodes/{code} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null
+      allow create: if request.auth != null
         && request.resource.data.uid == request.auth.uid;
+      // On UPDATE the check must read the EXISTING doc. Checking
+      // request.resource (the attacker's own payload) was trivially
+      // satisfiable, so anyone could repoint a public 6-char referral code
+      // at their own uid and harvest every reward the real owner earned.
+      allow update: if request.auth != null
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid;
       allow delete: if false;
     }
 
@@ -207,7 +321,17 @@ service cloud.firestore {
     // rewards the server has already written.
     match /users/{userId}/rewards/{rewardId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      // Acknowledge-only. An unconstrained update let a client rewrite the
+      // granted amounts (gems: 1000000) and flip `claimed` back to false to
+      // re-claim indefinitely, since the client grants straight from these
+      // fields. The only legal transition is unclaimed -> claimed, touching
+      // nothing else.
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && resource.data.claimed == false
+        && request.resource.data.claimed == true
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['claimed', 'claimedAt']);
       allow create, delete: if false;
     }
   }

@@ -7,6 +7,8 @@ import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { bentoDividerColor } from '../styles/bentoPanel';
 import { SparkleField } from './effects/ParticleSystem';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { getRemoteBoolean } from '../services/remoteConfig';
+import { getActiveWheel } from '../data/seasonalWheels';
 import {
   MysteryWheelState,
   WHEEL_SEGMENTS,
@@ -28,10 +30,29 @@ interface MysteryWheelProps {
   onDismiss: () => void;
 }
 
-const SEGMENT_COUNT = WHEEL_SEGMENTS.length;
-const SEGMENT_ANGLE = 360 / SEGMENT_COUNT;
 const WHEEL_RADIUS = 130; // Must match styles.wheel width/height/2.
-const SLICE_BASE_HALF = WHEEL_RADIUS * Math.tan((SEGMENT_ANGLE / 2) * (Math.PI / 180));
+
+/**
+ * Wedge geometry is derived per-wheel rather than from a module constant.
+ * The standard wheel has 11 segments and the seasonal wheels have 10, so a
+ * fixed SEGMENT_COUNT would draw eleven wedges over a ten-prize wheel and the
+ * pointer would stop between prizes.
+ */
+/** Display names for the seasonal wheel variants. */
+const SEASON_LABELS: Record<string, string> = {
+  spring_wheel: 'SPRING WHEEL',
+  summer_wheel: 'SUMMER WHEEL',
+  autumn_wheel: 'AUTUMN WHEEL',
+  winter_wheel: 'WINTER WHEEL',
+};
+
+function wheelGeometry(segmentCount: number) {
+  const segmentAngle = 360 / segmentCount;
+  return {
+    segmentAngle,
+    sliceBaseHalf: WHEEL_RADIUS * Math.tan((segmentAngle / 2) * (Math.PI / 180)),
+  };
+}
 
 export function MysteryWheel({
   wheelState,
@@ -51,14 +72,34 @@ export function MysteryWheel({
   const currentRotation = useRef(0);
   const reduceMotion = useReduceMotion();
 
-  // Pre-compute each segment's probability from its weight for public disclosure.
+  // The wheel actually on screen. Seasonal variants (spring/summer/autumn/
+  // winter) swap in themed segments with their own exclusive cosmetics; the
+  // registry existed but nothing imported it, so every player has been
+  // spinning the standard wheel all year. RC-gated so it can be turned off
+  // without a release.
+  const { segments: activeSegments, seasonId } = useMemo(() => {
+    if (!getRemoteBoolean('seasonalWheelEnabled')) {
+      return { segments: WHEEL_SEGMENTS, seasonId: null as string | null };
+    }
+    return getActiveWheel();
+  }, []);
+  const { segmentAngle: SEGMENT_ANGLE, sliceBaseHalf: SLICE_BASE_HALF } = useMemo(
+    () => wheelGeometry(activeSegments.length),
+    [activeSegments.length],
+  );
+
+  // Pre-compute each segment's probability from its weight for public
+  // disclosure. Must read the ACTIVE wheel: publishing the standard wheel's
+  // odds while spinning seasonal segments would be a false odds disclosure,
+  // which is the one part of this screen that is a compliance surface rather
+  // than a design choice.
   const wheelOdds = useMemo(() => {
-    const totalWeight = WHEEL_SEGMENTS.reduce((sum, s) => sum + s.weight, 0);
-    return WHEEL_SEGMENTS.map((s) => ({
+    const totalWeight = activeSegments.reduce((sum, s) => sum + s.weight, 0);
+    return activeSegments.map((s) => ({
       segment: s,
       percent: (s.weight / totalWeight) * 100,
     }));
-  }, []);
+  }, [activeSegments]);
 
   const mysteryBoxOdds = useMemo(() => {
     const totalWeight = MYSTERY_BOX_REWARDS.reduce((sum, r) => sum + r.weight, 0);
@@ -87,7 +128,7 @@ export function MysteryWheel({
     const stateForSpin = wheelState.spinsAvailable <= 0
       ? { ...wheelState, spinsAvailable: 1 }
       : wheelState;
-    const { segment, segmentIndex, updatedState: rawUpdatedState } = spinWheel(stateForSpin);
+    const { segment, segmentIndex, updatedState: rawUpdatedState } = spinWheel(stateForSpin, activeSegments);
 
     // If this was a daily free spin, mark the date consumed
     const updatedState = wheelState.spinsAvailable <= 0
@@ -166,7 +207,9 @@ export function MysteryWheel({
         <SparkleField count={12} intensity="medium" />
 
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>MYSTERY WHEEL</Text>
+          <Text style={styles.sheetTitle}>
+            {seasonId ? SEASON_LABELS[seasonId] ?? 'MYSTERY WHEEL' : 'MYSTERY WHEEL'}
+          </Text>
           <Pressable
             style={styles.closeX}
             onPress={onDismiss}
@@ -182,6 +225,15 @@ export function MysteryWheel({
           contentContainerStyle={styles.sheetBody}
           showsVerticalScrollIndicator={false}
         >
+          {/* Naming the season is the point of a seasonal wheel: the
+              exclusives are only winnable while it is up, and a player who
+              can't tell it apart from the standard wheel has no reason to
+              spin now rather than later. */}
+          {seasonId && (
+            <Text style={styles.seasonTag}>
+              {'\u2726'} LIMITED — EXCLUSIVE REWARDS THIS SEASON
+            </Text>
+          )}
           <Text style={styles.spinsLeft}>
             {t('common.spinsAvailable', { count: wheelState.spinsAvailable })}
           </Text>
@@ -196,13 +248,19 @@ export function MysteryWheel({
             <Animated.View style={[styles.wheel, wheelStyle]}>
               {/* 11 colored pie slices (border-triangle trick). Each slice owns
                   its segment's color so the pointer landing is unambiguous. */}
-              {WHEEL_SEGMENTS.map((seg, i) => (
+              {activeSegments.map((seg, i) => (
                 <View
                   key={`slice_${seg.id}`}
                   pointerEvents="none"
                   style={[
                     styles.slice,
                     {
+                      // Wedge width depends on how many segments this wheel
+                      // has, so it can't live in the StyleSheet — the
+                      // standard wheel has 11 and the seasonal ones 10.
+                      left: WHEEL_RADIUS - SLICE_BASE_HALF,
+                      borderLeftWidth: SLICE_BASE_HALF,
+                      borderRightWidth: SLICE_BASE_HALF,
                       borderTopColor: seg.color,
                       transform: [{ rotate: `${(i + 0.5) * SEGMENT_ANGLE}deg` }],
                     },
@@ -220,7 +278,7 @@ export function MysteryWheel({
               />
 
               {/* Dark spoke dividers — one per boundary, from rim to center */}
-              {WHEEL_SEGMENTS.map((seg, i) => (
+              {activeSegments.map((seg, i) => (
                 <View
                   key={`div_${seg.id}`}
                   style={[
@@ -235,7 +293,7 @@ export function MysteryWheel({
 
               {/* Icon disc — small neutral puck so icons read over any slice
                   color without overlapping adjacent sectors. */}
-              {WHEEL_SEGMENTS.map((seg, i) => {
+              {activeSegments.map((seg, i) => {
                 const angle = i * SEGMENT_ANGLE + SEGMENT_ANGLE / 2;
                 return (
                   <View
@@ -493,6 +551,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingBottom: 28,
   },
+  seasonTag: {
+    color: COLORS.gold,
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    letterSpacing: 1.1,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
   spinsLeft: {
     color: COLORS.textSecondary,
     fontSize: 12,
@@ -542,14 +608,13 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   slice: {
+    // left / borderLeftWidth / borderRightWidth are supplied inline at the
+    // render site: they depend on the active wheel's segment count.
     position: 'absolute',
     top: 0,
-    left: WHEEL_RADIUS - SLICE_BASE_HALF,
     width: 0,
     height: 0,
     borderStyle: 'solid',
-    borderLeftWidth: SLICE_BASE_HALF,
-    borderRightWidth: SLICE_BASE_HALF,
     borderTopWidth: WHEEL_RADIUS,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',

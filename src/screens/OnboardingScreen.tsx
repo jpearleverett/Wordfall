@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { VideoBackground } from '../components/common/VideoBackground';
-import { generateTutorialBoardA, generateTutorialBoardB, generateTutorialBoardC, TUTORIAL_STEPS } from '../data/tutorialBoards';
+import { generateTutorialBoardA, generateTutorialBoardB, generateTutorialBoardC, generateTutorialBoardD, TUTORIAL_STEPS } from '../data/tutorialBoards';
 import { GameGrid } from '../components/Grid';
 import { CellPosition } from '../types';
 import { TutorialOverlay } from '../components/TutorialOverlay';
@@ -50,7 +50,12 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
     const prevStep = tutorialStep > 0 ? TUTORIAL_STEPS[tutorialStep - 1] : null;
     if (prevStep && prevStep.board === step.board) return;
 
-    const generators = { A: generateTutorialBoardA, B: generateTutorialBoardB, C: generateTutorialBoardC };
+    const generators = {
+      A: generateTutorialBoardA,
+      B: generateTutorialBoardB,
+      C: generateTutorialBoardC,
+      D: generateTutorialBoardD,
+    };
     setTutorialBoard(generators[step.board]());
     setSelectedCells([]);
   }, [tutorialStep]);
@@ -100,6 +105,19 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
     });
   }, [fadeAnim]);
 
+  // Find-list chips for the current tutorial board: every word the steps
+  // will ask for on this board, checked off as the player finds them.
+  const tutorialChips = useMemo(() => {
+    const boardId = TUTORIAL_STEPS[tutorialStep]?.board;
+    if (!boardId) return [];
+    return TUTORIAL_STEPS.map((s, i) => ({ s, i }))
+      .filter(({ s }) => s.board === boardId && s.highlightWord)
+      .map(({ s, i }) => ({
+        word: s.highlightWord as string,
+        found: i < tutorialStep,
+      }));
+  }, [tutorialStep]);
+
   // Tutorial: handle cell press
   const handleTutorialCellPress = useCallback((position: CellPosition) => {
     const step = TUTORIAL_STEPS[tutorialStep];
@@ -144,8 +162,17 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
   const advanceTutorialStep = useCallback(() => {
     if (tutorialStep < TUTORIAL_STEPS.length - 1) {
       setTutorialStep(prev => prev + 1);
+      return;
     }
-  }, [tutorialStep]);
+    // Finishing on a dismiss step has to end the tutorial. This branch was
+    // previously a no-op, which was harmless only because the last step
+    // happened to be a word_submitted one — the completion path lived solely
+    // in handleTutorialCellPress. Ending on a dismiss step (as the
+    // order-matters demonstration does) would otherwise leave the player
+    // tapping "continue" on a screen with no way forward, on their first
+    // minute in the app.
+    transitionTo('celebrate');
+  }, [tutorialStep, transitionTo]);
 
   // Render phases
   if (phase === 'welcome') {
@@ -211,11 +238,37 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
             })}
           </Text>
 
+          {/* The find-list, visible from the very first step — the real game
+              is read-the-list → scan → trace, and the tutorial previously
+              never showed a word list at all, so the first board of the real
+              game was also the first time the player saw one. */}
+          <View style={styles.tutorialWordRow}>
+            {tutorialChips.map((chip) => (
+              <View
+                key={chip.word}
+                style={[styles.tutorialChip, chip.found && styles.tutorialChipFound]}
+              >
+                <Text
+                  style={[
+                    styles.tutorialChipText,
+                    chip.found && styles.tutorialChipTextFound,
+                  ]}
+                >
+                  {chip.found ? `✓ ${chip.word}` : chip.word}
+                </Text>
+              </View>
+            ))}
+          </View>
+
           <View style={styles.gridContainer}>
             <GameGrid
               grid={tutorialBoard.grid}
               selectedCells={selectedCells}
-              hintedCells={currentStep?.highlightPositions || []}
+              hintedCells={
+                currentStep?.hideHighlight
+                  ? []
+                  : currentStep?.highlightPositions || []
+              }
               onCellPress={handleTutorialCellPress}
             />
           </View>
@@ -476,6 +529,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.bodySemiBold,
     marginBottom: 24,
+  },
+  tutorialWordRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  tutorialChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.surface,
+  },
+  tutorialChipFound: {
+    borderColor: COLORS.green,
+    backgroundColor: COLORS.cellFound,
+  },
+  tutorialChipText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    letterSpacing: 1.5,
+  },
+  tutorialChipTextFound: {
+    color: COLORS.green,
   },
   gridContainer: {
     width: '100%',

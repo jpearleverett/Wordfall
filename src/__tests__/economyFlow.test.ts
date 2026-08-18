@@ -168,7 +168,9 @@ describe('Economy Flow Integration', () => {
       expect(temporary.length).toBeGreaterThan(0);
 
       // The 3 core categories should cover most items
-      expect(boosters.length + consumables.length + temporary.length).toBeGreaterThanOrEqual(13);
+      // 12 after coin_premium_hint's removal (a mispriced duplicate of the
+      // basic hint — see purchaseDelivery.test.ts).
+      expect(boosters.length + consumables.length + temporary.length).toBeGreaterThanOrEqual(12);
       // Every item must have a non-empty category
       for (const item of COIN_SHOP_ITEMS) {
         expect(item.category).toBeTruthy();

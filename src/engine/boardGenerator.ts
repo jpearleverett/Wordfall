@@ -1,7 +1,10 @@
-import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition, GameMode, GenerationProfile } from '../types';
+import { Grid, Cell, BoardConfig, Board, WordPlacement, CellPosition, GameMode, GenerationProfile, Difficulty } from '../types';
 import { applyGravity } from './gravity';
-import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating, isSolvableShrinkingBoard } from './solver';
+import { isSolvable, trySolveWithOrder, countSolutions, isSolvableGravityFlip, areAllWordsIndependentlyFindable, trySolveWithOrderRotating, isSolvableShrinkingBoard, estimateForgiveness } from './solver';
 import { getWordsByLength } from '../words';
+import { weekIdSeed } from '../utils/weekId';
+import { getDailyTheme, getWeeklyTheme } from '../data/sharedBoardThemes';
+import { DIFFICULTY_CONFIGS } from '../constants';
 
 // Simple seeded PRNG (mulberry32)
 function createRng(seed: number) {
@@ -408,7 +411,8 @@ function checkSolvability(
   words: string[],
   wordPositions: Map<string, CellPosition[]>,
   rng: () => number,
-  mode?: GameMode
+  mode?: GameMode,
+  difficulty?: Difficulty
 ): boolean {
   // noGravity: just check all words are independently findable
   if (mode === 'noGravity') {
@@ -430,19 +434,40 @@ function checkSolvability(
   // shrinkingBoard: simulate the full shrink sequence to verify solvability
   // Words must survive outer ring removals that happen every 2 words cleared
   if (mode === 'shrinkingBoard') {
-    return isSolvableShrinkingBoard(grid, words, 2);
+    return isSolvableShrinkingBoard(grid, words, 2, GEN_SOLVE_BUDGET_MS);
   }
 
   // classic / timePressure / perfectSolve / etc: standard solvability with gravity
   const orderings = getOrderingHeuristics(words, wordPositions, rng);
+  let solvable = false;
   for (const ordering of orderings) {
     if (trySolveWithOrder(grid, ordering) !== null) {
-      return true;
+      solvable = true;
+      break;
     }
   }
 
   // Fall back to budgeted full backtracking solver
-  return isSolvable(grid, words, wordPositions);
+  if (!solvable) {
+    solvable = isSolvable(grid, words, wordPositions, GEN_SOLVE_BUDGET_MS);
+  }
+  if (!solvable) return false;
+
+  // Solvable is not the same as FAIR. "Stuck" is a real fail state, and
+  // nothing on screen tells the player which word must be cleared first, so
+  // a board with exactly one winning order plays as a guessing game whose
+  // punishment is a dead board. Measured before this gate, a player tracing
+  // words in a natural order got stuck 53% of the time in levels 1-30 and
+  // 80% in 31-120, with many levels effectively unwinnable without knowing
+  // the answer in advance.
+  //
+  // Require a minimum share of natural playthroughs to succeed, scaled by
+  // difficulty so late game keeps its planning demands while the early game
+  // is genuinely forgiving.
+  const minForgiveness = difficulty ? MIN_FORGIVENESS_BY_DIFFICULTY[difficulty] : 0;
+  if (minForgiveness <= 0) return true;
+  const forgiveness = estimateForgiveness(grid, words, FORGIVENESS_SAMPLES, rng, minForgiveness);
+  return forgiveness >= minForgiveness;
 }
 
 /**
@@ -455,6 +480,7 @@ function attemptGenerate(
   mode?: GameMode,
   profile?: GenerationProfile,
   themeWords?: string[],
+  requireForgiving: boolean = true,
 ): Board | null {
   const words = selectWords(config, rng, mode, profile, themeWords);
   if (words.length < config.wordCount) return null;
@@ -477,8 +503,27 @@ function attemptGenerate(
   const colMin = isShrinking ? 1 : 0;
   const colMax = isShrinking ? config.cols - 2 : config.cols - 1;
 
-  for (const word of sortedWords) {
+  // Easy boards actively SHOW gravity. stackingPenalty below steers every
+  // word toward column-disjoint placement — correct for fairness, but on
+  // 2-3 word easy boards it routinely produces layouts where NO clear order
+  // moves a single letter of another word, so the game's one differentiating
+  // mechanic (clearing order reshapes the board) is invisible for the first
+  // ~10 levels and the tutorial's buried-word lesson is never reinforced.
+  // For the LAST word placed on an easy gravity board, prefer a small
+  // shared-column overlap (penalty 1-4) over a fully disjoint spot: some
+  // order now visibly drops letters, while the 0.95 forgiveness gate in
+  // checkSolvability still guarantees nearly every order wins. Not applied
+  // to noGravity (no falls) or shrinkingBoard (its own geometry).
+  const wantVisibleGravity =
+    config.difficulty === 'easy' &&
+    mode !== 'noGravity' &&
+    mode !== 'shrinkingBoard';
+
+  for (let wi = 0; wi < sortedWords.length; wi++) {
+    const word = sortedWords[wi];
     let placed = false;
+    const preferStacked =
+      wantVisibleGravity && wi === sortedWords.length - 1 && wi > 0;
 
     // Try random starting positions within the allowed region
     const startPositions: [number, number][] = [];
@@ -489,24 +534,65 @@ function attemptGenerate(
       ]);
     }
 
+    // Collect a few valid placements and keep the one that stacks least on
+    // top of already-placed words, instead of taking the first that fits.
+    //
+    // This is the root cause of the "stuck" fail state: clearing a word lets
+    // everything above it fall, which shifts any word overhead and can break
+    // its adjacency path. Words placed side by side stay independent, so most
+    // clear orders keep working. Filtering finished boards can only pick from
+    // what placement produces — this makes fair boards common at the source.
+    let best: CellPosition[] | null = null;
+    let bestPenalty = Infinity;
+    // Best small-overlap candidate for the easy-board visible-gravity
+    // preference (see wantVisibleGravity above).
+    let bestStacked: CellPosition[] | null = null;
+    let bestStackedPenalty = Infinity;
+    let considered = 0;
+
     for (const [startRow, startCol] of startPositions) {
       const positions = tryPlace(grid, word, startRow, startCol, rng);
+      if (!positions) continue;
       // For shrinkingBoard, verify all positions are within the interior
-      if (positions && isShrinking && positions.some(p => p.row < rowMin || p.row > rowMax || p.col < colMin || p.col > colMax)) {
+      if (isShrinking && positions.some(p => p.row < rowMin || p.row > rowMax || p.col < colMin || p.col > colMax)) {
         continue; // Word path wandered into outer ring — reject
       }
-      if (positions) {
-        placeWord(grid, word, positions);
-        placements.push({
-          word,
-          positions,
-          direction: 'horizontal', // Legacy field, paths are now freeform
-          found: false,
-        });
-        wordPositions.set(word, positions);
-        placed = true;
-        break;
+
+      const penalty = stackingPenalty(positions, placements);
+      if (penalty < bestPenalty) {
+        bestPenalty = penalty;
+        best = positions;
       }
+      if (
+        preferStacked &&
+        penalty >= 1 &&
+        penalty <= 4 &&
+        penalty < bestStackedPenalty
+      ) {
+        bestStackedPenalty = penalty;
+        bestStacked = positions;
+      }
+      considered++;
+      // Stop as soon as the ideal candidate for this word exists: a small
+      // overlap when we're showing gravity, a zero-penalty spot otherwise.
+      const idealFound = preferStacked
+        ? bestStackedPenalty === 1
+        : bestPenalty === 0;
+      if (idealFound || considered >= PLACEMENT_CANDIDATES) break;
+    }
+
+    const chosen = preferStacked && bestStacked ? bestStacked : best;
+    if (chosen) {
+      best = chosen;
+      placeWord(grid, word, best);
+      placements.push({
+        word,
+        positions: best,
+        direction: 'horizontal', // Legacy field, paths are now freeform
+        found: false,
+      });
+      wordPositions.set(word, best);
+      placed = true;
     }
 
     if (!placed) return null;
@@ -526,7 +612,18 @@ function attemptGenerate(
 
   // Verify solvability using fast heuristics + budgeted fallback
   const wordStrings = placements.map(p => p.word);
-  if (!checkSolvability(grid, wordStrings, wordPositions, rng, mode)) return null;
+  if (
+    !checkSolvability(
+      grid,
+      wordStrings,
+      wordPositions,
+      rng,
+      mode,
+      requireForgiving ? config.difficulty : undefined,
+    )
+  ) {
+    return null;
+  }
 
   return { grid, words: placements, config };
 }
@@ -539,6 +636,85 @@ function attemptGenerate(
  */
 /** Absolute time limit for board generation to prevent UI hangs */
 const GENERATION_TIMEOUT_MS = 5000;
+
+/**
+ * Smallest board side the shrink schedule must leave intact for the final
+ * word. Drives the shrinkingBoard word-count cap — see generateBoard.
+ */
+const MIN_SHRINK_CORE = 5;
+
+/**
+ * Per-candidate solvability budget while GENERATING (ms). Deliberately far
+ * tighter than the in-game dead-end budget: during generation a rejected
+ * candidate costs nothing but another seed, so it is much cheaper to test
+ * many candidates briefly than to prove one candidate unsolvable slowly.
+ * At the old 500ms, ten failed candidates consumed the entire 5s budget.
+ */
+const GEN_SOLVE_BUDGET_MS = 60;
+
+/**
+ * Random playthroughs sampled per candidate board when measuring how
+ * forgiving it is. Small on purpose — this runs on every candidate.
+ */
+const FORGIVENESS_SAMPLES = 12;
+
+/**
+ * How many of the primary generation attempts insist on a forgiving board
+ * before we accept any solvable one. Bounds the worst-case level-load cost.
+ */
+const FORGIVENESS_ATTEMPT_BUDGET = 12;
+
+/**
+ * How many valid placements to compare per word before choosing the one
+ * that stacks least over already-placed words. Small — each extra candidate
+ * costs a tryPlace DFS, and the first zero-penalty hit short-circuits.
+ */
+const PLACEMENT_CANDIDATES = 6;
+
+/**
+ * How much a candidate placement will INTERFERE with already-placed words.
+ *
+ * Gravity acts strictly per column, so two words occupying disjoint column
+ * sets can never disturb each other no matter what order they are cleared
+ * in — either one can go first and both stay traceable. Every shared column
+ * is a chance that clearing one word shifts the other and breaks its
+ * adjacency path, which is precisely the mechanism behind the "stuck" fail
+ * state.
+ *
+ * Counting shared-column cells is symmetric (unlike "cells above me", which
+ * merely pushes words upward and leaves them to be displaced by everything
+ * underneath) and cheap enough to evaluate per candidate placement.
+ */
+function stackingPenalty(
+  candidate: CellPosition[],
+  placements: WordPlacement[],
+): number {
+  if (placements.length === 0) return 0;
+
+  const candidateCols = new Set<number>();
+  for (const p of candidate) candidateCols.add(p.col);
+
+  let penalty = 0;
+  for (const placement of placements) {
+    for (const q of placement.positions) {
+      if (candidateCols.has(q.col)) penalty++;
+    }
+  }
+  return penalty;
+}
+
+/**
+ * Minimum share of "play it naturally" attempts that must succeed, by
+ * difficulty tier. Easy boards should almost never punish a player for an
+ * order they had no way to evaluate; expert boards are allowed to demand
+ * real planning, which is the intended skill of the game.
+ */
+const MIN_FORGIVENESS_BY_DIFFICULTY: Record<Difficulty, number> = {
+  easy: 0.95,
+  medium: 0.85,
+  hard: 0.5,
+  expert: 0.25,
+};
 
 export function generateBoard(
   config: BoardConfig,
@@ -574,21 +750,47 @@ export function generateBoard(
   // Minimum 3 words so the player sees the shrink mechanic (2 cleared → shrink → solve remaining).
   let effectiveConfig: BoardConfig;
   if (mode === 'shrinkingBoard') {
+    const shrinkRows = Math.max(clampedConfig.rows, 5) + 2;
+    const shrinkCols = Math.max(clampedConfig.cols, 5) + 2;
+    // The board loses its whole perimeter every 2 words, so the Nth word
+    // cleared must still fit inside a region inset by floor((N-1)/2) rings.
+    // Asking for more words than that geometry supports makes almost every
+    // candidate board unsolvable: generation then burns its entire 5s budget
+    // proving candidates wrong and falls back to an emergency 2-word board.
+    // Measured before this cap: levels 39+ took 2.6-5s (frequently hitting
+    // the timeout) on hardware faster than the low-end Android target.
+    const smallestSide = Math.min(shrinkRows, shrinkCols);
+    const maxShrinks = Math.max(0, Math.floor((smallestSide - MIN_SHRINK_CORE) / 2));
+    const maxShrinkWords = 2 * maxShrinks + 2;
     effectiveConfig = {
       ...clampedConfig,
-      rows: Math.max(clampedConfig.rows, 5) + 2,
-      cols: Math.max(clampedConfig.cols, 5) + 2,
-      wordCount: Math.max(clampedConfig.wordCount, 3),
+      rows: shrinkRows,
+      cols: shrinkCols,
+      wordCount: Math.min(Math.max(clampedConfig.wordCount, 3), maxShrinkWords),
     };
   } else {
     effectiveConfig = clampedConfig;
   }
 
-  // Primary attempts with full config
+  // Primary attempts with full config.
+  //
+  // Forgiveness is a PREFERENCE, not a hard requirement. Boards where most
+  // natural clear orders succeed are structurally rare once a level asks for
+  // 6-8 words, so demanding one unconditionally made the generator hunt until
+  // it blew its whole time budget. Instead: spend the first tranche of
+  // attempts insisting on a fair board, then fall back to any solvable board
+  // rather than stalling the level load. Bounded cost, most of the benefit.
   for (let attempt = 0; attempt < 80; attempt++) {
     checkTimeout();
     const rng = createRng(baseSeed + attempt * 7919);
-    const board = attemptGenerate(effectiveConfig, rng, mode, profile, themeWords);
+    const board = attemptGenerate(
+      effectiveConfig,
+      rng,
+      mode,
+      profile,
+      themeWords,
+      attempt < FORGIVENESS_ATTEMPT_BUDGET,
+    );
     if (board) return board;
   }
 
@@ -702,13 +904,113 @@ export function getDailyVariant(dateString: string): { name: string; config: Boa
   return DAILY_VARIANTS[new Date(ms).getUTCDay()];
 }
 
+/**
+ * How many candidate boards the daily may shop through, and the fairness
+ * score good enough to stop early. The daily is generated once per day and
+ * cached, so it can afford effort a per-level load cannot.
+ */
+const DAILY_FAIRNESS_ATTEMPTS = 16;
+const DAILY_FAIRNESS_TARGET = 0.6;
+const DAILY_FAIRNESS_SAMPLES = 12;
+/**
+ * Wall-clock ceiling on the search. Shopping runs on the JS thread the moment
+ * the player taps the mode, so an attempt count alone is not a bound: an
+ * unlucky config made the weekly's 64-attempt search take 3.5s in the worst
+ * case, which is a frozen app, not a slow one. The budget is what actually
+ * caps the freeze; attempts and target just stop it early when they can.
+ */
+const DAILY_FAIRNESS_BUDGET_MS = 400;
+
+interface FairnessBudget {
+  attempts: number;
+  target: number;
+  samples: number;
+  budgetMs: number;
+  /**
+   * When true, the wall-clock deadline is IGNORED and the search is bounded
+   * by `attempts` alone, making the result a pure function of the seed.
+   * Required for the weekly: its scores rank on a shared leaderboard, and a
+   * time-cut search returns "best of however many candidates fit in the
+   * budget" — which varied not just across devices but across runs on the
+   * SAME device once theme words made candidates slower (cache eviction +
+   * regeneration produced a different board; caught by sharedBoards.test).
+   */
+  deterministic?: boolean;
+}
+
+const DAILY_FAIRNESS: FairnessBudget = {
+  attempts: DAILY_FAIRNESS_ATTEMPTS,
+  target: DAILY_FAIRNESS_TARGET,
+  samples: DAILY_FAIRNESS_SAMPLES,
+  budgetMs: DAILY_FAIRNESS_BUDGET_MS,
+};
+
+/**
+ * Generate the FAIREST of several candidate boards rather than the first one.
+ *
+ * Used by the shared-board modes (daily, weekly). Everyone plays the same
+ * board there, so an unfair one is felt by the entire playerbase at once, on
+ * exactly the modes that exist to bring people back — and there is no "just
+ * play a different level" escape valve. Measured on the daily before this:
+ * 34% of natural playthroughs dead-ended across a sampled year, with
+ * individual days at 100% (unfinishable without foreknowledge).
+ *
+ * Candidate seeds derive from `baseSeed` plus the attempt index, so the "same
+ * puzzle for everyone" guarantee holds for any player who runs the same
+ * number of attempts. The time budget can cut the search short on a slow
+ * device, which is a deliberate trade: a device-dependent board is a far
+ * smaller problem than a multi-second freeze, and both boards came out of the
+ * same fairness-ranked sequence.
+ */
+function shopFairestBoard(
+  config: BoardConfig,
+  baseSeed: number,
+  budget: FairnessBudget = DAILY_FAIRNESS,
+  themeWords?: string[],
+): Board {
+  const deadline = Date.now() + budget.budgetMs;
+
+  let board = generateBoard(config, baseSeed, undefined, undefined, themeWords);
+  let bestScore = estimateForgiveness(
+    board.grid,
+    board.words.map((w) => w.word),
+    budget.samples,
+    createRng(baseSeed),
+  );
+
+  for (let attempt = 1; attempt < budget.attempts && bestScore < budget.target; attempt++) {
+    if (!budget.deterministic && Date.now() >= deadline) break;
+    const seed = baseSeed + attempt * 7919;
+    const candidate = generateBoard(config, seed, undefined, undefined, themeWords);
+    const score = estimateForgiveness(
+      candidate.grid,
+      candidate.words.map((w) => w.word),
+      budget.samples,
+      createRng(seed),
+    );
+    if (score > bestScore) {
+      bestScore = score;
+      board = candidate;
+    }
+  }
+
+  return board;
+}
+
 export function generateDailyBoard(dateString: string): Board {
   const cached = dailyBoardCache.get(dateString);
   if (cached) return cached;
 
   const { config } = getDailyVariant(dateString);
+  // Hand-authored theme words (sharedBoardThemes.ts) give the shared daily
+  // its curated feel: up to half the find-list comes from the day's theme.
+  const board = shopFairestBoard(
+    config,
+    dailyBoardSeed(dateString),
+    DAILY_FAIRNESS,
+    getDailyTheme(dateString).words,
+  );
 
-  const board = generateBoard(config, dailyBoardSeed(dateString));
   dailyBoardCache.set(dateString, board);
 
   // Bound the cache so rollover doesn't leak memory over a long-lived
@@ -718,6 +1020,69 @@ export function generateDailyBoard(dateString: string): Board {
     if (firstKey !== undefined) dailyBoardCache.delete(firstKey);
   }
 
+  return board;
+}
+
+// ── Weekly challenge ────────────────────────────────────────────────────────
+
+const weeklyBoardCache = new Map<string, Board>();
+
+/**
+ * The weekly gets a far larger search budget than the daily: it is generated
+ * once every SEVEN days rather than once a day, and the player is stuck with
+ * the result for that whole week with no second board to move to. At the
+ * daily's budget the weekly measured 27% stuck with individual weeks at 63%,
+ * because the weekly runs the `hard` config — denser boards, less room for
+ * the column-disjoint placement that keeps a board forgiving.
+ */
+const WEEKLY_FAIRNESS: FairnessBudget = {
+  // 64 → 24 alongside the deterministic flag: without a wall-clock cut the
+  // attempt count IS the time bound, and a full 64-attempt search with
+  // theme words measured up to ~2.5s on a fast machine. 24 attempts caps
+  // the once-a-week worst case near ~1s while most weeks still early-stop
+  // on the 0.85 target within a handful of candidates.
+  attempts: 24,
+  target: 0.85,
+  // More samples per candidate than the daily. With 12 samples the estimator
+  // is noisy enough to crown a board that a play simulation then finds
+  // dead-ends 88% of the time; the extra samples cost attempts but buy a
+  // measurement worth acting on.
+  samples: 24,
+  budgetMs: 700,
+  deterministic: true,
+};
+
+/**
+ * The weekly challenge board for a given week id.
+ *
+ * Like the daily, this MUST be identical for every player: weekly scores go
+ * to a shared leaderboard (`submitWeeklyScore`), so a per-player board means
+ * players are ranked against each other on different puzzles. It was
+ * previously generated with `generateBoard(DIFFICULTY_CONFIGS.hard,
+ * Date.now())` — a fresh board per player AND per entry, so re-entering the
+ * weekly rerolled the puzzle until you got an easy one, which is a
+ * leaderboard exploit as much as a fairness problem.
+ *
+ * Deterministic from the week id, cached, and shops for the fairest of
+ * several candidates for the same reason the daily does: everyone is stuck
+ * with this one board for a whole week.
+ */
+export function generateWeeklyBoard(weekId: string): Board {
+  const cached = weeklyBoardCache.get(weekId);
+  if (cached) return cached;
+
+  const board = shopFairestBoard(
+    DIFFICULTY_CONFIGS.hard,
+    weekIdSeed(weekId),
+    WEEKLY_FAIRNESS,
+    getWeeklyTheme(weekId).words,
+  );
+
+  weeklyBoardCache.set(weekId, board);
+  if (weeklyBoardCache.size > 4) {
+    const firstKey = weeklyBoardCache.keys().next().value;
+    if (firstKey !== undefined) weeklyBoardCache.delete(firstKey);
+  }
   return board;
 }
 

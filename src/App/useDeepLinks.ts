@@ -13,10 +13,9 @@ interface DeepLinksPlayer {
 interface UseDeepLinksArgs {
   player: DeepLinksPlayer;
   navigationRef: MutableRefObject<NavigationContainerRef<any> | null>;
-  pendingChallengeRef: MutableRefObject<string | null>;
 }
 
-export function useDeepLinks({ player, navigationRef, pendingChallengeRef }: UseDeepLinksArgs) {
+export function useDeepLinks({ player, navigationRef }: UseDeepLinksArgs) {
   useEffect(() => {
     if (!player.loaded) return;
 
@@ -34,19 +33,17 @@ export function useDeepLinks({ player, navigationRef, pendingChallengeRef }: Use
             }
             break;
           case 'challenge':
-            if (data.challengeId) {
-              const cid = data.challengeId;
-              const isValid =
-                typeof cid === 'string' &&
-                cid.length > 0 &&
-                cid.length <= 64 &&
-                /^[A-Za-z0-9_-]+$/.test(cid);
-              if (!isValid) {
-                Alert.alert('Invalid challenge link', 'That challenge link is malformed.');
-                break;
-              }
-              pendingChallengeRef.current = cid;
-              logger.log('[DeepLink] Challenge received:', cid);
+            // There is no challenge-accept flow yet: the id used to be
+            // written to a ref that nothing read, which LOOKED like handling
+            // and did nothing. Until an accept flow exists, take the player
+            // somewhere sensible (the Play tab, where the challenge's mode
+            // lives) instead of pretending. The analytics event below still
+            // records demand for the feature.
+            logger.log('[DeepLink] Challenge link opened (no accept flow yet):', data.challengeId);
+            try {
+              (navigationRef.current as any)?.navigate('Play');
+            } catch {
+              // Navigation may not be ready yet — silently ignore
             }
             break;
           case 'daily':
@@ -72,7 +69,11 @@ export function useDeepLinks({ player, navigationRef, pendingChallengeRef }: Use
                 break;
               }
               try {
-                (navigationRef.current as any)?.navigate('Home', {
+                // Club is registered in the PROFILE stack; the old target
+                // ('Home' > 'Club') does not exist, so every invite link
+                // opened the app onto the home screen and dropped the
+                // invite. ClubScreen reads joinClubId from route params.
+                (navigationRef.current as any)?.navigate('Profile', {
                   screen: 'Club',
                   params: { joinClubId: cidRaw },
                 });

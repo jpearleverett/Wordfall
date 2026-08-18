@@ -11,6 +11,7 @@ import SeasonPassCompleteCeremony from '../components/SeasonPassCompleteCeremony
 import { FirstPurchaseOfferModal } from '../components/FirstPurchaseOfferModal';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { CeremonyItem } from '../types';
+import { ceremonyEconomyGrant, ceremonyGrantLabel } from '../utils/ceremonyGrants';
 import { COLORS } from '../constants';
 
 interface CeremonyEconomy {
@@ -91,6 +92,12 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           icon={'\u{1F525}'}
           title={activeCeremony.data.label || `${activeCeremony.data.streak} Wins!`}
           description={`You won ${activeCeremony.data.streak} puzzles in a row!`}
+          rewardLabel={(() => {
+            // Same source the pop-time grant used, so what is shown is
+            // exactly what was credited.
+            const grant = ceremonyEconomyGrant(activeCeremony);
+            return grant ? ceremonyGrantLabel(grant) : undefined;
+          })()}
           accentColor={COLORS.orange}
           onDismiss={onDismiss}
         />
@@ -101,6 +108,12 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           icon={'\u{1F31F}'}
           title={activeCeremony.data.label || `${activeCeremony.data.streak} Flawless!`}
           description={`You solved ${activeCeremony.data.streak} puzzles in a row without hints, undos, or shuffle.`}
+          rewardLabel={(() => {
+            // Same source the pop-time grant uses, so what is shown is
+            // exactly what was credited.
+            const grant = ceremonyEconomyGrant(activeCeremony);
+            return grant ? ceremonyGrantLabel(grant) : undefined;
+          })()}
           accentColor={COLORS.gold}
           buttonText="INCREDIBLE"
           onDismiss={onDismiss}
@@ -134,6 +147,10 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           icon={'\u{1F4DA}'}
           title={`${activeCeremony.data.wingName} Complete!`}
           description="Another wing of the library has been fully restored!"
+          rewardLabel={(() => {
+            const grant = ceremonyEconomyGrant(activeCeremony);
+            return grant ? ceremonyGrantLabel(grant) : undefined;
+          })()}
           accentColor={COLORS.teal}
           onDismiss={onDismiss}
         />
@@ -212,6 +229,7 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           title="You Did It!"
           description={`Your first puzzle is complete! +${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems, and a free Mystery Wheel spin!`}
           accentColor={COLORS.gold}
+          tips={activeCeremony.data.tips}
           rewardLabel={`+${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems`}
           buttonText="AMAZING!"
           onDismiss={onDismiss}
@@ -237,6 +255,30 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           tier={activeCeremony.data?.tier}
           rewardLabels={activeCeremony.data?.rewardLabels}
           cosmeticSetId={activeCeremony.data?.cosmeticSetId}
+          onDismiss={onDismiss}
+        />
+      )}
+      {activeCeremony?.type === 'inbox_reward' && (
+        <MilestoneCeremony
+          ribbon={
+            activeCeremony.data?.rewardType === 'weekly_leaderboard'
+              ? 'WEEKLY REWARDS!'
+              : activeCeremony.data?.rewardType === 'club_goal_complete'
+                ? 'CLUB GOAL COMPLETE!'
+                : 'REWARDS DELIVERED!'
+          }
+          icon={activeCeremony.data?.icon || '\u{1F4E5}'}
+          title={activeCeremony.data?.title || 'Rewards Delivered!'}
+          description={
+            activeCeremony.data?.description ||
+            'Rewards you earned while you were away have been added to your stash.'
+          }
+          // Display-only: the amounts were already credited by
+          // useRewardInboxClaim (rules-enforced exactly-once claim), so this
+          // type is deliberately absent from ceremonyEconomyGrant.
+          rewardLabel={activeCeremony.data?.rewardLabel}
+          accentColor={COLORS.gold}
+          buttonText="COLLECT"
           onDismiss={onDismiss}
         />
       )}

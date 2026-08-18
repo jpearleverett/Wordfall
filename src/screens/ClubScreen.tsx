@@ -17,6 +17,7 @@ import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import PrimaryButton from '../components/common/PrimaryButton';
 import {
   usePlayerStore,
+  usePlayerActions,
   selectClubId,
   selectEquippedTitle,
   selectPuzzlesSolved,
@@ -24,6 +25,8 @@ import {
 } from '../stores/playerStore';
 import { useAuth } from '../contexts/AuthContext';
 import { firestoreService, ClubMessage } from '../services/firestore';
+import { joinClubSecure, leaveClubSecure } from '../services/clubMembership';
+import { analytics } from '../services/analytics';
 import { getTitleLabel } from '../data/cosmetics';
 import ClubGoalCard from '../components/ClubGoalCard';
 import ClubLeaderboard from '../components/ClubLeaderboard';
@@ -62,20 +65,26 @@ interface ClubData {
 interface ClubScreenProps {
   clubId?: string | null;
   clubData?: any;
+  // Optional overrides (tests). When omitted the screen uses the real
+  // membership flow: joinClub/leaveClub callables + createClub direct write.
   onCreateClub?: (name: string) => void;
   onJoinClub?: (id: string) => void;
   onLeaveClub?: () => void;
+  /** Injected by React Navigation; club_invite deep links set joinClubId. */
+  route?: { params?: { joinClubId?: string } };
 }
 
 const ClubScreen: React.FC<ClubScreenProps> = ({
   clubId: clubIdProp,
-  clubData = null,
-  onCreateClub = () => {},
-  onJoinClub = () => {},
-  onLeaveClub = () => {},
+  clubData: clubDataProp = null,
+  onCreateClub,
+  onJoinClub,
+  onLeaveClub,
+  route,
 }) => {
   const { t } = useTranslation();
   const clubIdFromStore = usePlayerStore(selectClubId);
+  const { setClubId } = usePlayerActions();
   const equippedTitle = usePlayerStore(selectEquippedTitle);
   const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
   const starsByLevel = usePlayerStore(selectStarsByLevel);
@@ -101,6 +110,148 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+
+  // ── Real membership wiring ────────────────────────────────────────────────
+  // clubId is only a locally cached pointer; the club document itself is
+  // fetched here. Join/leave go through the Cloud Function callables because
+  // firestore.rules reserve memberIds/memberCount for the Admin SDK.
+  const [fetchedClub, setFetchedClub] = useState<any | null>(null);
+  const [memberProfiles, setMemberProfiles] = useState<
+    Array<{ id: string; displayName: string }>
+  >([]);
+  const [membershipBusy, setMembershipBusy] = useState(false);
+  const [clubFetchFailed, setClubFetchFailed] = useState(false);
+
+  const refreshClub = useCallback(async () => {
+    if (!clubId || !firestoreService.isAvailable()) return;
+    setClubFetchFailed(false);
+    const club = await firestoreService.getClub(clubId);
+    if (!club) {
+      // Missing OR unreachable — getClub can't tell the two apart, so never
+      // clear the cached clubId here (PlayerContext's discovery effect
+      // reconciles authoritative membership on app open). Just surface retry.
+      setClubFetchFailed(true);
+      return;
+    }
+    setFetchedClub(club);
+    const ids: string[] = Array.isArray(club.memberIds) ? club.memberIds : [];
+    const profiles = await firestoreService.getClubMemberProfiles(ids);
+    setMemberProfiles(profiles);
+  }, [clubId]);
+
+  useEffect(() => {
+    if (!clubId || clubDataProp) return;
+    void refreshClub();
+  }, [clubId, clubDataProp, refreshClub]);
+
+  const handleJoinClub = useCallback(
+    async (id: string) => {
+      const target = id.trim();
+      if (!target || membershipBusy) return;
+      if (!firestoreService.isAvailable()) {
+        Alert.alert('Offline', 'Clubs need an internet connection.');
+        return;
+      }
+      setMembershipBusy(true);
+      try {
+        const res = await joinClubSecure(target);
+        setClubId(res.clubId);
+        setSearchText('');
+        void analytics.logEvent('club_joined', { club_id: res.clubId });
+      } catch (e: any) {
+        const code = String(e?.code ?? '');
+        let message = 'Could not join the club. Please try again.';
+        if (code.endsWith('not-found')) {
+          message = 'No club found with that code.';
+        } else if (code.endsWith('failed-precondition')) {
+          message = 'You are already in a club — leave it before joining another.';
+        } else if (code.endsWith('resource-exhausted')) {
+          message = 'That club is full (or you have switched clubs too often — try again later).';
+        }
+        Alert.alert('Could not join', message);
+      } finally {
+        setMembershipBusy(false);
+      }
+    },
+    [membershipBusy, setClubId],
+  );
+
+  const handleCreateClub = useCallback(
+    async (name: string) => {
+      if (membershipBusy) return;
+      if (!user || !firestoreService.isAvailable()) {
+        Alert.alert('Offline', 'Clubs need an internet connection.');
+        return;
+      }
+      setMembershipBusy(true);
+      try {
+        const newClubId = await firestoreService.createClub(user.uid, name, '');
+        if (!newClubId) {
+          Alert.alert('Could not create club', 'Please try again later.');
+          return;
+        }
+        setClubId(newClubId);
+        setShowCreate(false);
+        setCreateName('');
+        void analytics.logEvent('club_created', { club_id: newClubId });
+      } finally {
+        setMembershipBusy(false);
+      }
+    },
+    [membershipBusy, user, setClubId],
+  );
+
+  const handleLeaveClub = useCallback(() => {
+    if (!clubId || membershipBusy) return;
+    Alert.alert('Leave club?', 'You can rejoin later if there is space.', [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('club.leave'),
+        style: 'destructive',
+        onPress: async () => {
+          setMembershipBusy(true);
+          try {
+            await leaveClubSecure(clubId);
+            setClubId(null);
+            setFetchedClub(null);
+            setMemberProfiles([]);
+            void analytics.logEvent('club_left', { club_id: clubId });
+          } catch {
+            Alert.alert('Could not leave club', 'Please try again later.');
+          } finally {
+            setMembershipBusy(false);
+          }
+        },
+      },
+    ]);
+  }, [clubId, membershipBusy, setClubId, t]);
+
+  // club_invite deep link → Profile > Club with { joinClubId }. Confirm
+  // before joining so a tapped link never silently changes membership.
+  const invitePromptedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const inviteId = route?.params?.joinClubId;
+    if (!inviteId || invitePromptedFor.current === inviteId) return;
+    invitePromptedFor.current = inviteId;
+    if (clubId === inviteId) return; // already a member of this club
+    (async () => {
+      const club = await firestoreService.getClub(inviteId);
+      if (!club) {
+        Alert.alert('Club not found', 'That club invite is no longer valid.');
+        return;
+      }
+      const name = typeof club.name === 'string' ? club.name : 'this club';
+      Alert.alert(`Join ${name}?`, 'You were invited to join this club.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Join', onPress: () => void handleJoinClub(inviteId) },
+      ]);
+    })();
+  }, [route?.params?.joinClubId, clubId, handleJoinClub]);
+
+  // Prop overrides win (tests); otherwise the real flow above.
+  const joinClub = onJoinClub ?? handleJoinClub;
+  const createClub = onCreateClub ?? handleCreateClub;
+  const leaveClub = onLeaveClub ?? handleLeaveClub;
 
   // Load chat messages on mount when club is available
   useEffect(() => {
@@ -315,17 +466,36 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 
   const REACTION_EMOJIS = ['👍', '🎉', '🔥', '💪', '⭐', '❤️', '😎', '🏆'];
 
-  const data: ClubData | null = clubData
+  // Members derived from the fetched club doc: display names from
+  // users/{uid} profiles, weekly scores from the club's memberContributions
+  // map (written server-side by onPuzzleComplete), crown on the ownerId.
+  const derivedMembers = useMemo<ClubMember[]>(() => {
+    if (!fetchedClub) return [];
+    const contributions: Record<string, unknown> =
+      fetchedClub.memberContributions ?? {};
+    return memberProfiles
+      .map((p) => ({
+        id: p.id,
+        name: p.displayName,
+        score: Number(contributions[p.id] ?? 0) || 0,
+        isLeader: p.id === fetchedClub.ownerId,
+        isOnline: false,
+      }))
+      .sort((a, b) => b.score - a.score);
+  }, [fetchedClub, memberProfiles]);
+
+  const effectiveClubData = clubDataProp ?? fetchedClub;
+  const data: ClubData | null = effectiveClubData
     ? {
-        name: clubData.name ?? 'My Club',
-        memberCount: clubData.memberCount ?? 0,
-        maxMembers: clubData.maxMembers ?? 30,
-        weeklyScore: clubData.weeklyScore ?? 0,
-        tier: clubData.tier ?? 'bronze',
-        members: clubData.members ?? [],
-        recentEmojis: clubData.recentEmojis ?? [],
-        activeGoal: clubData.activeGoal ?? null,
-        leaderboardEntries: clubData.leaderboardEntries ?? [],
+        name: effectiveClubData.name ?? 'My Club',
+        memberCount: effectiveClubData.memberCount ?? derivedMembers.length,
+        maxMembers: effectiveClubData.maxMembers ?? 30,
+        weeklyScore: effectiveClubData.weeklyScore ?? 0,
+        tier: effectiveClubData.tier ?? 'bronze',
+        members: effectiveClubData.members ?? derivedMembers,
+        recentEmojis: effectiveClubData.recentEmojis ?? [],
+        activeGoal: effectiveClubData.activeGoal ?? null,
+        leaderboardEntries: effectiveClubData.leaderboardEntries ?? [],
       }
     : null;
 
@@ -412,7 +582,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         {searchText.length > 0 && (
           <PrimaryButton
             label={t('club.searchAndJoin')}
-            onPress={() => onJoinClub(searchText)}
+            onPress={() => joinClub(searchText)}
             fullWidth
             accessibilityLabel="Search and join club"
             style={{ marginTop: 10 }}
@@ -446,7 +616,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             <TouchableOpacity
               key={c.id}
               style={styles.browseCard}
-              onPress={() => onJoinClub(c.id)}
+              onPress={() => joinClub(c.id)}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={`Join ${c.name} — ${c.memberCount} of ${c.maxMembers} members`}
@@ -502,7 +672,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                 ]}
                 onPress={() => {
                   if (createName.trim()) {
-                    onCreateClub(createName.trim());
+                    createClub(createName.trim());
                   }
                 }}
                 accessibilityRole="button"
@@ -750,6 +920,11 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                     initialNumToRender={10}
                     maxToRenderPerBatch={10}
                     windowSize={5}
+                    // This list lives inside the screen's vertical ScrollView.
+                    // Android disables nested same-orientation scrolling by
+                    // default, which left the 240px chat pane unscrollable —
+                    // players could only ever read the newest few messages.
+                    nestedScrollEnabled
                     renderItem={({ item }) => (
                       <TouchableOpacity
                         onLongPress={() => handleMessageLongPress(item)}
@@ -810,7 +985,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </LinearGradient>
 
         {/* Leave Club */}
-        <TouchableOpacity style={styles.leaveButton} onPress={onLeaveClub}>
+        <TouchableOpacity style={styles.leaveButton} onPress={leaveClub}>
           <Text style={styles.leaveButtonText}>{t('club.leave')}</Text>
         </TouchableOpacity>
 
@@ -819,13 +994,33 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
     );
   };
 
+  // clubId set but the doc hasn't arrived yet (or the fetch failed): show a
+  // loading/retry pane instead of the misleading no-club browse view.
+  const renderClubLoading = () => (
+    <View style={styles.clubLoading}>
+      <Text style={styles.clubLoadingText}>
+        {clubFetchFailed ? 'Could not load your club.' : 'Loading your club…'}
+      </Text>
+      {clubFetchFailed && (
+        <TouchableOpacity
+          style={styles.clubRetryBtn}
+          onPress={() => void refreshClub()}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading club"
+        >
+          <Text style={styles.clubRetryText}>Retry</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <AmbientBackdrop variant="club" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('club.header')}</Text>
       </View>
-      {clubId && data ? renderClub() : renderNoClub()}
+      {clubId ? (data ? renderClub() : renderClubLoading()) : renderNoClub()}
     </View>
   );
 };
@@ -851,6 +1046,28 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  clubLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  clubLoadingText: {
+    fontSize: 15,
+    color: COLORS.textMuted,
+  },
+  clubRetryBtn: {
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+  clubRetryText: {
+    fontSize: 14,
+    color: COLORS.accent,
+    fontWeight: '700',
   },
   noClubContent: {
     paddingHorizontal: 16,

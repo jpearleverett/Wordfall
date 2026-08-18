@@ -4,6 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { WordPlacement } from '../types';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { useColors } from '../hooks/useColors';
+import { useSettings } from '../contexts/SettingsContext';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface WordChipProps {
   wordPlacement: WordPlacement;
@@ -35,7 +38,6 @@ interface WordChipProps {
 const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValidWord, isLastRemaining, tensionActive, index }: WordChipProps) {
   const foundAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
   const lastRemainingAnim = useRef(new Animated.Value(1)).current;
   // Tier 6 B7 — tension pulse is scale-only (native-driver safe). The
   // earlier glow-on-shadowOpacity channel was dropped because mixing a
@@ -49,6 +51,10 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   const wasFound = useRef(false);
   const lastRemainingLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const tensionFiredRef = useRef(false);
+  // The last-word pulse loops indefinitely until the puzzle resolves — the
+  // textbook case reduce-motion exists for. The static gold border that
+  // isLastRemaining already applies carries the meaning without motion.
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     if (wordPlacement.found && !wasFound.current) {
@@ -103,13 +109,14 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
     }
     if (!isLastRemaining || wordPlacement.found) return;
     if (tensionFiredRef.current) return;
+    if (reduceMotion) return;
     if (!getRemoteBoolean('lastWordTensionPulseEnabled')) return;
     tensionFiredRef.current = true;
     Animated.sequence([
       Animated.timing(tensionScaleAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
       Animated.spring(tensionScaleAnim, { toValue: 0.35, friction: 5, tension: 160, useNativeDriver: true }),
     ]).start();
-  }, [tensionActive, isLastRemaining, wordPlacement.found]);
+  }, [tensionActive, isLastRemaining, wordPlacement.found, reduceMotion]);
 
   useEffect(() => {
     // Last-remaining-word pulse: loop scale 1.0 → 1.08 → 1.0 while this is the
@@ -118,7 +125,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
       lastRemainingLoopRef.current.stop();
       lastRemainingLoopRef.current = null;
     }
-    if (isLastRemaining && !wordPlacement.found) {
+    if (isLastRemaining && !wordPlacement.found && !reduceMotion) {
       lastRemainingAnim.setValue(1);
       const loop = Animated.loop(
         Animated.sequence([
@@ -145,35 +152,44 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         lastRemainingLoopRef.current = null;
       }
     };
-  }, [isLastRemaining, wordPlacement.found]);
+  }, [isLastRemaining, wordPlacement.found, reduceMotion]);
 
-  useEffect(() => {
-    // Stop any running animation before starting a new one
-    glowAnim.stopAnimation();
+  // NOTE: the old glow layer's Animated.Value was removed along with its
+  // driver effect — it fired a ~1.85s native sequence at every word-match
+  // moment while nothing in the render output referenced it. The active/valid
+  // visual comes entirely from wordChipActive / wordChipValid styles.
 
-    if (isActive && isValidWord) {
-      // Finite pulse (3 cycles) instead of infinite Animated.loop
-      // to avoid continuous animation overhead on the native thread
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.5, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.5, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.8, duration: 250, useNativeDriver: true }),
-      ]).start();
-    } else if (isActive) {
-      Animated.timing(glowAnim, { toValue: 0.7, duration: 150, useNativeDriver: true }).start();
-    } else {
-      Animated.timing(glowAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start();
-    }
-  }, [isActive, isValidWord]);
+  // CVD-aware semantic colors. The static chip styles bake in the designer
+  // palette; when a colorblind mode is on, inline overrides re-point the
+  // state colors (found=green axis, active=accent axis, last=gold axis) at
+  // the remapped palette. Gated on the mode so the default look is
+  // bit-for-bit unchanged when it's off.
+  const palette = useColors();
+  const { colorblindMode } = useSettings();
+  const cvdActive = colorblindMode !== 'off';
 
   const getChipStyle = () => {
     if (wordPlacement.found) return styles.wordChipFound;
     if (isActive && isValidWord) return styles.wordChipValid;
     if (isActive) return styles.wordChipActive;
     return null;
+  };
+
+  const getChipCvdOverride = () => {
+    if (!cvdActive) return null;
+    if (wordPlacement.found || (isActive && isValidWord)) {
+      return { borderColor: palette.green, shadowColor: palette.green };
+    }
+    if (isActive) return { borderColor: palette.accent, shadowColor: palette.accent };
+    return null;
+  };
+
+  const getTextCvdOverride = () => {
+    if (!cvdActive) return null;
+    if (wordPlacement.found) return { color: palette.wordFound, textShadowColor: palette.greenGlow };
+    if (isActive && isValidWord) return { color: palette.green, textShadowColor: palette.greenGlow };
+    if (isActive) return { color: palette.wordActive, textShadowColor: palette.accentGlow };
+    return { color: palette.wordPending };
   };
 
   // Tier 6 B7 — tension pulse maps tensionScaleAnim to a scale overshoot.
@@ -190,6 +206,10 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         styles.wordChip,
         getChipStyle(),
         isLastRemaining && !wordPlacement.found && styles.wordChipLastRemaining,
+        getChipCvdOverride(),
+        isLastRemaining && !wordPlacement.found && cvdActive
+          ? { borderColor: palette.gold, shadowColor: palette.gold }
+          : null,
         {
           transform: [
             { scale: Animated.multiply(Animated.multiply(scaleAnim, lastRemainingAnim), tensionScale) },
@@ -224,6 +244,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
           wordPlacement.found && styles.wordTextFound,
           isActive && !isValidWord && styles.wordTextActive,
           isActive && isValidWord && styles.wordTextValid,
+          getTextCvdOverride(),
         ]}
       >
         {wordPlacement.word}
@@ -232,7 +253,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
       {wordPlacement.found && (
         <Animated.View style={[styles.checkContainer, { opacity: foundAnim }]}>
           <LinearGradient
-            colors={[COLORS.green, COLORS.teal] as [string, string]}
+            colors={[palette.green, COLORS.teal] as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}

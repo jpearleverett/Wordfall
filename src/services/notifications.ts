@@ -185,6 +185,29 @@ function resolveMaxPerDay(): number {
   return DEFAULT_MAX_NOTIFICATIONS_PER_DAY;
 }
 
+/**
+ * Per-segment reminder hours. Authored in getPersonalizedNotifications
+ * (at-risk players ping at 19:00, hardcore at 21:00, …) but read by nothing
+ * until Aug 2026 — notificationTriggers hardcoded 20:00/09:00, so all the
+ * per-cohort tuning was inert. Null when no segments are known; callers
+ * fall back to their defaults.
+ */
+export function resolveReminderHours(): {
+  streakReminderHour: number | null;
+  dailyChallengeHour: number | null;
+} {
+  if (currentSegments) {
+    const p = getPersonalizedNotifications(currentSegments);
+    return {
+      streakReminderHour:
+        typeof p.streakReminderHour === 'number' ? p.streakReminderHour : null,
+      dailyChallengeHour:
+        typeof p.dailyChallengeHour === 'number' ? p.dailyChallengeHour : null,
+    };
+  }
+  return { streakReminderHour: null, dailyChallengeHour: null };
+}
+
 function isCategoryAllowedForSegment(category: NotificationCategory): boolean {
   if (!currentSegments) return true;
   const personalized = getPersonalizedNotifications(currentSegments);
@@ -329,7 +352,18 @@ class NotificationManager {
 
     // Frequency cap: segment maxPerDay > RC maxNotificationsPerDay > default 3.
     // (Skip for daily recurring triggers — those have their own day-of-week logic.)
-    if (trigger.type === 'timeInterval') {
+    //
+    // The cap counts NEW categories per day, not schedule() calls. Every
+    // schedule for a category REPLACES its pending notification (see the
+    // cancel below), so a reschedule delivers nothing extra — but it used to
+    // burn a cap slot anyway: one app open (streak + daily-challenge +
+    // event) consumed the whole default budget, and the SECOND open's
+    // streak-reminder reschedule was silently dropped. Worse than wasteful:
+    // a cap-blocked reschedule leaves the STALE notification live (e.g.
+    // "your streak expires tonight!" scheduled before the player played).
+    // Replacements are exempt; the cap still bounds distinct categories/day.
+    const isReplacement = this.scheduledIds.has(category);
+    if (trigger.type === 'timeInterval' && !isReplacement) {
       try {
         const today = new Date().toISOString().split('T')[0];
         const stored = await AsyncStorage.getItem(FREQ_CAP_STORAGE_KEY);
@@ -465,12 +499,12 @@ class NotificationManager {
 
   // ─── Convenience Schedulers ───────────────────────────────────────────────
 
-  /** Schedule streak expiry warning at 8 PM local time */
-  async scheduleStreakReminder(currentStreak: number): Promise<void> {
-    await this.schedule('streak_reminder', { type: 'daily', hour: 20, minute: 0 }, {
-      streak: currentStreak,
-    });
-  }
+  // NOTE: there is deliberately no scheduleStreakReminder here. It used to
+  // schedule a REPEATING daily 8 PM trigger, which fired on days the player
+  // had already played and told them a streak that was safe would "expire
+  // tonight". triggerStreakReminder in notificationTriggers.ts now computes
+  // the next evening the streak is genuinely at risk and schedules a one-shot
+  // for it — put the repeating version back and the lie comes back with it.
 
   /** Schedule energy-full notification after refill time */
   async scheduleEnergyFull(secondsUntilFull: number): Promise<void> {
@@ -478,10 +512,10 @@ class NotificationManager {
     await this.schedule('energy_full', { type: 'timeInterval', seconds: secondsUntilFull });
   }
 
-  /** Schedule daily challenge reminder at 9 AM */
-  async scheduleDailyChallenge(): Promise<void> {
-    await this.schedule('daily_challenge', { type: 'daily', hour: 9, minute: 0 });
-  }
+  // No scheduleDailyChallenge either, and for the same reason as the streak
+  // reminder above: a repeating 9 AM trigger announced "Daily puzzle is
+  // ready!" to players who had already finished it. triggerDailyChallengeReminder
+  // schedules a one-shot for the next morning the daily is genuinely unplayed.
 
   /** Schedule event ending warning */
   async scheduleEventEnding(eventName: string, hoursLeft: number): Promise<void> {
@@ -497,9 +531,16 @@ class NotificationManager {
     await this.schedule('mystery_wheel', { type: 'timeInterval', seconds: 3600 }); // 1 hour later
   }
 
-  /** Schedule comeback notification for inactive players (3 days) */
-  async scheduleComebackReminder(): Promise<void> {
-    await this.schedule('comeback', { type: 'timeInterval', seconds: 3 * 24 * 3600 });
+  /**
+   * Schedule the comeback notification. 3 days for established players; a
+   * brand-new player (fewer than 10 puzzles) gets a 20-hour ping instead —
+   * D1 is where a new install is won or lost, and the only return hook they
+   * previously had was this ping arriving on day 3, after the habit window
+   * had already closed.
+   */
+  async scheduleComebackReminder(puzzlesSolved: number = Infinity): Promise<void> {
+    const seconds = puzzlesSolved < 10 ? 20 * 3600 : 3 * 24 * 3600;
+    await this.schedule('comeback', { type: 'timeInterval', seconds });
   }
 
   /**

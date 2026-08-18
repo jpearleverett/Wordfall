@@ -8,7 +8,7 @@
 
 import {
   getActiveEventLayers,
-  getMiniEventForDate,
+  getActiveMiniEvent,
   isWeekendBlitz as checkWeekendBlitz,
   MiniEvent,
   WinStreakState,
@@ -142,6 +142,25 @@ class EventManager {
       this.eventProgress = { ...savedProgress };
     }
     this.refreshLayers();
+    this.pruneStale();
+  }
+
+  /**
+   * Drop progress entries for long-dead events. Date-keyed ids (daily
+   * streaks, weekend blitzes, weekly events) otherwise accumulate forever
+   * and get JSON.stringify'd into every debounced player-data persist —
+   * a steadily growing cost on the post-win hot path. Active events are
+   * always exempt (a Remote-Config override event may run longer than any
+   * built-in), and 14 days comfortably outlives every built-in lifetime.
+   */
+  private pruneStale(): void {
+    const activeIds = new Set(this.getActiveEvents().map(e => e.id));
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    for (const id of Object.keys(this.eventProgress)) {
+      if (!activeIds.has(id) && this.eventProgress[id].startedAt < cutoff) {
+        delete this.eventProgress[id];
+      }
+    }
   }
 
   /**
@@ -174,7 +193,11 @@ class EventManager {
     // 1. Main weekly event
     const mainEvent = getCurrentEvent();
     if (mainEvent) {
-      const endDate = new Date(mainEvent.endDate + 'T23:59:59');
+      // endDate is a UTC date string (toISOString in events.ts) and the
+      // weekly rotation advances on UTC 7-day boundaries — parsing the end
+      // as LOCAL time made the event vanish from the screen hours before
+      // the rotation actually advanced for anyone east of Greenwich.
+      const endDate = new Date(mainEvent.endDate + 'T23:59:59.999Z');
       const endTime = endDate.getTime();
       if (endTime > now) {
         const eventId = mainEvent.id;
@@ -194,12 +217,17 @@ class EventManager {
     }
 
     // 2. Mini event
-    const miniEvent = getMiniEventForDate(today);
-    if (miniEvent) {
-      const todayDate = new Date(today);
-      const endTime = todayDate.getTime() + miniEvent.durationHours * 60 * 60 * 1000;
+    const activeMini = getActiveMiniEvent(today);
+    if (activeMini) {
+      const miniEvent = activeMini.event;
+      // End time and event id are anchored to the event's START date. On day
+      // two of a 48-hour event, anchoring to "today" would both extend the
+      // window by a day and mint a fresh id — wiping tier progress exactly
+      // like the Weekend Blitz Sunday bug below.
+      const startDate = new Date(activeMini.startDateStr);
+      const endTime = startDate.getTime() + miniEvent.durationHours * 60 * 60 * 1000;
       if (endTime > now) {
-        const eventId = `mini_${miniEvent.id}_${today}`;
+        const eventId = `mini_${miniEvent.id}_${activeMini.startDateStr}`;
         const progress = this.getProgress(eventId);
         events.push({
           id: eventId,
@@ -224,14 +252,26 @@ class EventManager {
     // 3. Weekend Blitz
     if (checkWeekendBlitz()) {
       const now2 = new Date();
-      // End of Sunday 23:59:59
-      const dayOfWeek = now2.getDay();
+      // End of Sunday 23:59:59 IN UTC — checkWeekendBlitz decides
+      // weekend-ness with getUTCDay, so the countdown must use the same
+      // clock. Computing it with local getDay() meant a player east of UTC
+      // on UTC-Sunday/local-Monday saw "6 days 23h left" on a blitz that
+      // ends within hours.
+      const dayOfWeek = now2.getUTCDay();
       const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
       const endOfBlitz = new Date(now2);
-      endOfBlitz.setDate(endOfBlitz.getDate() + daysUntilSunday);
-      endOfBlitz.setHours(23, 59, 59, 999);
+      endOfBlitz.setUTCDate(endOfBlitz.getUTCDate() + daysUntilSunday);
+      endOfBlitz.setUTCHours(23, 59, 59, 999);
 
-      const blitzId = `weekend_blitz_${today}`;
+      // Key the blitz to the weekend's SATURDAY (UTC, matching
+      // isWeekendBlitz's getUTCDay) — a plain `today` key minted a fresh id
+      // on Sunday, resetting progress mid-weekend and letting every tier be
+      // claimed twice per weekend.
+      const blitzAnchor = new Date();
+      if (blitzAnchor.getUTCDay() === 0) {
+        blitzAnchor.setUTCDate(blitzAnchor.getUTCDate() - 1);
+      }
+      const blitzId = `weekend_blitz_${blitzAnchor.toISOString().split('T')[0]}`;
       events.push({
         id: blitzId,
         type: 'weekend_blitz',

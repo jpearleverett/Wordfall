@@ -1,7 +1,45 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS, FONTS } from '../../constants';
 import { GameMode, GameStatus, GravityDirection } from '../../types';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
+
+/**
+ * Spring-in wrapper for the dead-end banners. The stuck/retry strip used to
+ * hard-mount into the layout in the same frame the solver flagged the board
+ * — the core fail state arriving as a pop-in. A 220ms slide+fade matches
+ * the audio/haptic beat GameScreen fires on the same rising edge. Under
+ * reduce-motion the banner appears instantly (today's behavior).
+ */
+function BannerEntrance({ children }: { children: React.ReactNode }) {
+  const reduceMotion = useReduceMotion();
+  const anim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) {
+      anim.setValue(1);
+      return;
+    }
+    Animated.spring(anim, {
+      toValue: 1,
+      stiffness: 220,
+      damping: 22,
+      mass: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [anim, reduceMotion]);
+  return (
+    <Animated.View
+      style={{
+        opacity: anim,
+        transform: [
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+        ],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
 
 /**
  * GameBanners — the collection of conditional banner strips that float
@@ -24,6 +62,29 @@ interface GameBannersProps {
   canShowAdHint: boolean;
   isStuck: boolean;
   undosLeft: number;
+  /**
+   * The remaining words that can no longer be traced at all — NOT simply the
+   * remaining words. A board is "stuck" when no clearing order finishes it,
+   * which does not imply every word is unreachable: some may still be
+   * traceable and just lead nowhere. Naming one of those as "cut off" would
+   * be a visibly false claim on the screen where the player is already
+   * suspicious the game is broken, so the caller filters first.
+   */
+  strandedWords?: string[];
+  /**
+   * True until the player has been stuck once. The first dead end gets the
+   * long explanation; after that the short form is enough and the long one
+   * would just be in the way.
+   */
+  isFirstStuck?: boolean;
+  /**
+   * True when this attempt's undo was handed over by the free stuck rescue
+   * rather than owned or bought. Worth saying out loud: the rescue silently
+   * flips this banner from "tap to retry" to "tap to step back", so without
+   * a label the player reads it as having had an undo all along and the
+   * goodwill is spent on nothing.
+   */
+  freeUndoGranted?: boolean;
   /**
    * True when the current puzzle is a "challenge spike" level — the
    * designed-harder-than-surrounding-ramp kind. Shows a persistent
@@ -49,6 +110,9 @@ function GameBannersImpl({
   canShowAdHint,
   isStuck,
   undosLeft,
+  strandedWords,
+  isFirstStuck = false,
+  freeUndoGranted = false,
   isSpike = false,
   onIdleHintTap,
   onAdHintTap,
@@ -61,6 +125,24 @@ function GameBannersImpl({
   const showWildcardBanner = wildcardMode;
   const showUndoBanner = isStuck && isPlaying && undosLeft > 0;
   const showRetryBanner = isStuck && isPlaying && undosLeft <= 0;
+
+  // Name what actually went wrong. "Stuck?" asked a question the player
+  // could already answer and taught nothing. When gravity has genuinely
+  // buried a word, saying so gives them something concrete to look for and
+  // makes the rule click; the shortest one is the easiest to scan the grid
+  // for. When nothing is buried but no order finishes, say THAT instead —
+  // claiming a still-traceable word is "cut off" reads as a bug.
+  const stranded = strandedWords ?? [];
+  const shortestStranded = stranded.reduce<string | null>(
+    (best, w) => (best === null || w.length < best.length ? w : best),
+    null,
+  );
+  const strandedHeadline =
+    shortestStranded === null
+      ? 'No order finishes this board'
+      : stranded.length === 1
+        ? `${shortestStranded} is cut off`
+        : `${shortestStranded} and ${stranded.length - 1} more are cut off`;
   const showIdleHelpBanner =
     showIdleHint &&
     !showUndoBanner &&
@@ -123,18 +205,28 @@ function GameBannersImpl({
         </Pressable>
       )}
       {showUndoBanner && (
-        <Pressable style={styles.stuckBanner} onPress={onUndoTap}>
-          <Text style={styles.stuckText}>
-            Stuck? Tap here to undo your last move
-          </Text>
-        </Pressable>
+        <BannerEntrance>
+          <Pressable style={styles.stuckBanner} onPress={onUndoTap}>
+            {freeUndoGranted && (
+              <Text style={styles.freeUndoTag}>FREE UNDO — ON US</Text>
+            )}
+            <Text style={styles.stuckText}>{strandedHeadline} — tap to step back a move</Text>
+            {isFirstStuck && (
+              <Text style={styles.stuckSubtext}>
+                {shortestStranded === null
+                  ? 'The words are all still there, just not in an order that finishes. Step back and clear a different one first.'
+                  : 'Clearing a word drops the letters above it. Clear that one earlier next time.'}
+              </Text>
+            )}
+          </Pressable>
+        </BannerEntrance>
       )}
       {showRetryBanner && (
-        <Pressable style={[styles.stuckBanner, styles.stuckBannerRetry]} onPress={onRetryTap}>
-          <Text style={styles.stuckText}>
-            No moves left — tap to retry this puzzle
-          </Text>
-        </Pressable>
+        <BannerEntrance>
+          <Pressable style={[styles.stuckBanner, styles.stuckBannerRetry]} onPress={onRetryTap}>
+            <Text style={styles.stuckText}>{strandedHeadline} — tap to retry this puzzle</Text>
+          </Pressable>
+        </BannerEntrance>
       )}
     </>
   );
@@ -238,5 +330,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  freeUndoTag: {
+    color: COLORS.gold,
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textAlign: 'center',
+    marginBottom: 3,
+  },
+  stuckSubtext: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    fontFamily: FONTS.bodyRegular,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
   },
 });

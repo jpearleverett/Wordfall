@@ -357,7 +357,7 @@ never connected the wires.
 - **Work:** add a `cardStyleInterpolator` that uses a spring for Home
   ↔ Game and slide-from-right for Profile. Respect `useReduceMotion`.
   ~30 lines.
-- **Status:** ✅ SHIPPED. New `cardSpringFadeInterpolator` in
+- **Status:** ❌ NEVER RAN — the interpolator lived in `src/navigation/MainNavigator.tsx`, which no module imported (the live navigators are in App.tsx). File deleted Aug 2026; re-implement against App.tsx's `screenOptions` to actually ship. Original claim: New `cardSpringFadeInterpolator` in
   `MainNavigator.tsx` plus open/close `TransitionSpec` (spring stiffness
   180 damping 22 for push, 220ms cubic-out for pop). React Navigation
   honors OS reduce-motion automatically.
@@ -442,14 +442,16 @@ Fix: `WordChip` gains a `tensionActive` prop; on rising edge it fires a one-shot
 - **Work:** paste the fingerprint from Play Console → Setup → App
   Signing. Redeploy the Cloudflare Pages site.
 
-### U2. Translate 5 non-EN locales
+### U2. Translate 5 non-EN locales — ✅ SHIPPED (2026-08-15)
 
 - **Files:** `src/locales/{de,es-419,fr,ja,pt-BR}.json`.
-- **Current:** all 6 locale files are at structural parity (325 keys,
-  346 lines) but the non-EN files are English placeholder strings.
-  i18n plumbing is fully wired; only the translations are missing.
-- **Work:** commission translations (325 keys × 5 locales). EN-only is
-  fine for PH/CA soft launch. Do this before WW.
+- **Shipped:** all 5 non-EN files now carry native-quality translations
+  (informal register per market: du / tú / tu / です・ます / você;
+  F2P-standard terminology; brand "Wordfall" untranslated). Structural
+  parity + `{{token}}` preservation enforced by `locales.test.ts`. A dead
+  duplicate `result.stars` key inherited from en.json was removed across
+  all 6 files. Branch: `claude/game-completion-optimization-orl091`.
+- **Remaining (optional):** native-speaker review pass before WW launch.
 
 ### U3. Hand-curated chapter metadata for the post-600 tail
 
@@ -470,17 +472,27 @@ Fix: `WordChip` gains a `tensionActive` prop; on rising edge it fires a one-shot
   Mastery"), a cycling theme rotation, and a simpler scaling difficulty
   curve (`getLevelConfigExtended`) that loses the hand-tuned
   spike/breather cadence of levels 1–40.
-- **Work (all deferrable to v1.1 post-launch):**
-  1. Pre-stage 4–8 authored chapter metadata entries (IDs 41–48) in a
-     `chapterOverrideJson` payload — ready to flip via RC for a
-     seasonal drop.
-  2. Tighten `getLevelConfigExtended` so the post-600 difficulty curve
-     preserves the spike/breather cadence rather than flattening.
-  3. Expand the procedural adjective/noun tables and `PROCEDURAL_THEMES`
-     variety so chapters 41+ don't feel xeroxed across a long tail.
-  4. Optional: commission hand-authored boards for Daily / Weekly
-     challenges only — those are the surfaces where curated-feel is
-     most visible to players.
+- **Shipped (2026-08-15, branch `claude/game-completion-optimization-orl091`):**
+  1. ✅ Chapters 41–48 authored payload staged at
+     `remote-config/chapter-overrides-41-48.json` (wings `seasons` +
+     `wonders`, per-chapter profiles + palettes), validated in CI by
+     `proceduralCurve.test.ts` against the real `parseRemoteChapters`.
+  2. ✅ `getLevelConfigExtended` was actually DEAD CODE — App.tsx called
+     `getLevelConfig` everywhere, so levels 601+ fell through to the
+     endgame texture cycle. It is now wired live at all six board-config
+     sites (plus a new `getBreatherConfigExtended` for the needsBreather
+     path) and carries the full per-level cadence past 600: every-5th
+     breathers one tier down, spikes on multiples of 13 (RC-gated,
+     breathers win, +1 word capped at 10), and a 4-way per-chapter
+     silhouette rotation.
+  3. ✅ Name tables expanded 20×20 → 40×40; theme labels rotate per
+     category cycle (Mastery/Expedition/Trials/…); theme-word windows
+     re-shuffle per visit; every procedural chapter now ships a
+     `GenerationProfile` (density bands, dense finales, expert
+     dictionary tier) mirroring the curated sawtooth.
+- **Remaining (v1.1, optional):** commission hand-authored boards for
+  Daily / Weekly challenges only — those are the surfaces where
+  curated-feel is most visible to players.
 
 ### U4. Play Console / Firebase / AdMob chores
 
@@ -500,8 +512,11 @@ completeness.)
 - Author UMP consent message inside AdMob → Privacy & messaging → GDPR.
 - Run `firebase deploy --only firestore:rules,firestore:indexes,functions`.
 - Fill Play Console Data Safety form (draft in `agent_docs/data_safety.md`).
-- Upload store listing assets (icon, feature graphic, screenshots —
-  copy in `agent_docs/store_listing.md`).
+- Upload store listing assets — the 1024×1024 listing icon, 1024×500
+  feature graphic, and 8 caption-pill overlays are now generated and
+  upload-ready in `store-assets/` (regenerate via
+  `scripts/gen_store_assets.py`); only real device screenshots remain
+  to capture + composite (copy in `agent_docs/store_listing.md`).
 - Commission real audio per `agent_docs/audio_brief.md` (synth fallback
   already fully wired at 72 SFX + 10 BGM slots — drop in progressively).
 - **Google Sign-In activation:** `npm install --legacy-peer-deps
@@ -523,7 +538,8 @@ All 18 Tier 1–4 code gaps landed on branch `claude/assess-wordfall-launch-read
 | Tier 2 (monetization) | M1 M2 M3 | ✅ all shipped |
 | Tier 3 (social + ceremony) | S1 S2 MG1 MG2 MG3 | ✅ all shipped |
 | Tier 4 (feel polish) | C1 C2 P1 P2 | ✅ all shipped |
-| Tier 5 (user-side / content) | U1 U2 U3 U4 | ⏳ outside engineering |
+| Tier 5 (user-side / content) | U2 U3 | ✅ shipped 2026-08-15 (`claude/game-completion-optimization-orl091`) |
+| Tier 5 (user-side / content) | U1 U4 | ⏳ outside engineering |
 | Tier 6 (top-grosser parity) | B1 B2 B3 B4 B6 B7 | ✅ all shipped |
 | Tier 6 (top-grosser parity) | B5 | ⏸️ analyzed + deferred |
 
@@ -532,6 +548,167 @@ retention pipeline (streak break + restore), the club browser, the
 tier-50 season pass ceremony, and the event leaderboard. Typechecking
 is unaffected (no new TS errors introduced). Run `npm test` to confirm
 the full suite still passes.
+
+---
+
+## Game-feel work (2026-08-16) — measured, not guessed
+
+Four things were found by measuring rather than reading, each with a
+benchmark left behind as a regression guard. Numbers are from a dev
+container, which is FASTER than the low-end Android soft-launch target.
+
+**1. Shrinking Board was effectively broken.** Past level ~39 generation
+took 2.6-5s and frequently hit its internal timeout, falling back to a
+degenerate 2-word board. Cause: the board loses its whole perimeter every
+2 words, so the 8th word had to fit inside a region inset by 3 rings —
+near-impossible geometry, so nearly every candidate failed an expensive
+solvability proof. Now capped to what the shrink schedule supports: **268ms
+max**.
+
+**2. Boards punished players for guessing.** Generation only ever required
+that ONE solving order exist, so a board could be technically solvable
+while being a coin flip. Natural play (trace whatever findable word you
+spot) dead-ended **53% of the time in levels 1-30 and 80% in 31-120, with
+several levels at 100%** — unfinishable without already knowing the answer,
+which contradicts the store promise of "no impossible boards". Two fixes:
+placement now prefers words in disjoint COLUMNS (gravity acts per column,
+so column-disjoint words never disturb each other), and generation prefers
+candidates that survive random play. Now **12% / 57%**.
+
+**3. The first three levels were the same puzzle.** L1-L3 were identical
+5x4 two-word boards, and level 5's "breather" replayed the level 1 board
+verbatim. With 2x3 letters clearing from 20 cells, gravity barely moved —
+under-selling the one mechanic that makes Wordfall not a plain word search,
+during the minutes that decide D1. Bands re-cut so every one changes
+something visible; breathers now start at level 12.
+
+**4. The reward schedule fell off a cliff at level 15.** Feature unlocks
+stop at L10, mode unlocks at L22; past that the only scheduled reward in
+the whole game was a chapter completion every 15 levels, leaving L23-29 and
+L31-44 completely empty. Extended to every 5 levels through 60, then every
+10 through 150.
+
+Also: a dead board used to offer only "spend an undo token" or "restart the
+level", while firing two purchase offers — the most frustrating moment in
+the game was monetised. Now one free undo per level on a genuine dead end
+(`freeStuckRescueEnabled`, default on). And streak grace now accrues with
+commitment (one, plus one per 14 unbroken days, capped at 4) instead of
+being a single lifetime allowance that a 200-day-streak player had spent on
+day 5.
+
+**Open design question for on-device play:** mid/late game still dead-ends
+57% of the time under random play. That is partly intended — clearing order
+is the game's core skill — but the levels measuring 100% are not. Filtering
+has hit its ceiling: an expert board wants 7-8 words on a grid 7-8 columns
+wide, so column overlap is forced. Remaining levers are design ones (fewer
+words on wider expert boards) rather than generator ones.
+
+---
+
+## ⚠️ Play policy risk: `SCHEDULE_EXACT_ALARM` (decide before submitting)
+
+`app.json` declares `SCHEDULE_EXACT_ALARM` (line ~76). Google treats exact
+alarms as a **restricted permission**: an app is expected to have a core
+feature that genuinely needs exact timing (alarm clock, calendar, timer).
+A word puzzle almost certainly does not qualify, and declaring it can draw
+a policy review or rejection.
+
+**The evidence says we don't need it.** `src/services/notifications.ts`
+only ever builds `TIME_INTERVAL`, `DAILY`, and `WEEKLY` triggers (see the
+`expoTrigger` construction) — streak nudges and daily-challenge reminders,
+where a few minutes of drift is harmless and better for battery.
+
+**Why it was not simply removed here:** if expo-notifications' Android
+code calls `setExactAndAllowWhileIdle` without first checking
+`canScheduleExactAlarms()`, dropping the permission throws a
+SecurityException and **silently kills all scheduled notifications** —
+which would cost far more retention than the policy risk. That can only be
+confirmed on a device.
+
+**Do this before submitting:**
+1. Remove `"SCHEDULE_EXACT_ALARM"` from `android.permissions` in `app.json`.
+2. Rebuild the dev client and schedule a notification (a streak reminder or
+   a short `timeInterval` test trigger).
+3. Confirm it still fires. If it does — ship without the permission.
+4. If notifications break, restore the permission and be ready to justify
+   the use case in the Play Console exact-alarm declaration.
+
+Permission hygiene is otherwise good: the declared set is minimal, and
+`blockedPermissions` already strips `RECORD_AUDIO` / `MODIFY_AUDIO_SETTINGS`
+that expo-audio would otherwise pull in.
+
+---
+
+## ⚠️ Production bundle was broken (fixed 2026-08-15)
+
+`npx expo export --platform android` — the bundling step every production
+AAB runs — **failed outright** on `main`, so no release build was
+possible:
+
+```
+error: Invalid expression encountered
+  var iap = yield import(/* webpackIgnore: true */rniapModuleName)...
+Android Bundling failed 49369ms index.js (2274 modules)
+```
+
+Metro only rewrites `import()` into a lazy require when the specifier is
+a **string literal**; the computed specifier in `src/services/iap.ts`
+survived into the bundle and Hermes could not compile it. Dev builds skip
+bytecode compilation, which is exactly why the dev-client smoke test
+always looked clean.
+
+**Standing rule: never use a computed specifier in `import()`.** Every
+other dynamic import in `src/` already uses a literal.
+
+**Add `npx expo export --platform android` to the pre-release checklist.**
+Typecheck and `npm test` both passed the entire time this was broken —
+neither exercises Hermes bytecode compilation.
+
+---
+
+## Commerce hardening (2026-08-15, `claude/game-completion-optimization-orl091`)
+
+Two **real-money loss paths** were found by an adversarial review and are
+now closed. Both are worth re-testing by hand on a device with a real
+sandbox purchase before the first paid release.
+
+1. **Orphaned purchases were charged but never granted.** Fulfilment ran
+   only through the awaited `iapManager.purchase()` result. Purchases
+   completing any other way — `processPendingPurchases()` recovery after
+   the app was killed mid-purchase, a Play Billing redelivery, or a
+   success landing after the 120s timeout — went out through
+   `notifyListeners`, which had **no subscriber anywhere in the repo**.
+   The purchase had already been acknowledged *and consumed*, so Restore
+   could not recover it either. `useCommerce` now subscribes (before
+   `init()`, since recovery runs inside it) and fulfils orphans, with the
+   `transactionId` dedup keeping it idempotent.
+   - **Device test:** start a purchase, force-stop the app before the
+     grant lands, relaunch, open the Shop → the currency must appear.
+
+2. **A failed acknowledge could never be retried → Google auto-refund.**
+   If `acknowledgePurchaseAndroid` / `consumePurchaseAndroid` threw, the
+   replay guards rejected every redelivery *before* the ack code could
+   run. Google auto-refunds anything unacknowledged for 3 days, so each
+   transient ack failure was guaranteed revenue loss. A local
+   receipt-hash hit now reports `alreadyValidated` (a local hash is only
+   ever written after a successful validation on that device, so it means
+   redelivery, not attack), the SKU stays pending until the ack settles,
+   and the server answers same-user+same-product replays idempotently
+   while still rejecting cross-user reuse.
+   - **Server redeploy required:** `firebase deploy --only functions`
+     (the `validateReceipt` replay branch changed).
+
+Anti-double-grant now rests on the fulfilment ledger's `transactionId`
+dedup rather than the client hash store; that property is pinned by a
+test in `src/services/__tests__/iapCommerce.integration.test.ts`.
+
+Also fixed in the same pass: blind last-write-wins economy cloud sync
+(stale snapshots reverted currency, entitlements, and purchase history),
+multi-item restore silently dropping cosmetic grants, VIP daily claims
+reporting failure while granting, mastery tier-ups firing a puzzle late,
+Weekend Blitz progress resetting on Sunday with double-claimable tiers,
+unbounded `eventProgress` growth on the post-win persist path, and ~14MB
+of redundant audio-cache retention.
 
 ## What this list deliberately leaves out
 

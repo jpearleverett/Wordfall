@@ -456,14 +456,25 @@ export function getPersonalizedNotifications(
 ): NotificationConfig {
   const { engagement, spending } = segments;
 
-  // Hardcore players: minimal notifications
+  // Hardcore players: minimal notifications — but never at the cost of the
+  // streak safety net. This cohort (6+ sessions/wk) has the longest streak
+  // and the most to lose, and segments only recompute on app open, so the
+  // at-risk reclassification that would re-enable the reminder can only
+  // happen AFTER they already came back. Without streak_reminder here, the
+  // best players slip silently. streakReminderDelaySeconds already
+  // guarantees it never fires on a day they played.
   if (engagement === 'hardcore') {
     return {
-      enabledCategories: ['event_starting', 'event_ending', 'friend_activity'],
+      enabledCategories: [
+        'streak_reminder',
+        'event_starting',
+        'event_ending',
+        'friend_activity',
+      ],
       streakReminderHour: 21, // later, they'll probably play anyway
       dailyChallengeHour: 9,
       comebackDelayDays: 7,
-      maxPerDay: 1,
+      maxPerDay: 2,
     };
   }
 

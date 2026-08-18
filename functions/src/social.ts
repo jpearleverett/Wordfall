@@ -64,6 +64,27 @@ const CLUB_GOAL_TEMPLATES: ClubGoalTemplate[] = [
  * Triggered when a user completes a puzzle.
  * Updates their club's cooperative goal progress.
  */
+/**
+ * Ceiling for a single puzzle's contribution to a club's weekly score.
+ * Mirrors the per-puzzle plausibility ceiling submitValidatedScore uses.
+ */
+const MAX_CLUB_SCORE_CONTRIBUTION = 250_000;
+
+/** Ceiling for any single goal increment (words/stars from one puzzle). */
+const MAX_GOAL_INCREMENT = 1_000;
+
+/** Coerce a client-supplied numeric field into a sane, non-negative bound. */
+function clampCount(value: unknown, max: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(Math.floor(n), max);
+}
+
+/**
+ * Every field of `result` comes from a CLIENT-WRITTEN document, so each is
+ * clamped. Unclamped, a single forged result could complete and permanently
+ * burn a shared club goal (`wordsFound: 999999`) or swing the club's score.
+ */
 function computeGoalIncrement(
   trackingKey: string,
   result: admin.firestore.DocumentData,
@@ -72,19 +93,19 @@ function computeGoalIncrement(
     case 'puzzlesSolved':
       return 1;
     case 'wordsFound':
-      return result.wordsFound ?? 0;
+      return clampCount(result.wordsFound, MAX_GOAL_INCREMENT);
     case 'starsEarned':
-      return result.stars ?? 0;
+      return clampCount(result.stars, 3);
     case 'perfectSolves':
       return result.isPerfect ? 1 : 0;
     case 'totalScore':
-      return result.score ?? 0;
+      return clampCount(result.score, MAX_CLUB_SCORE_CONTRIBUTION);
     case 'chainsTriggered':
-      return result.chainCount ?? 0;
+      return clampCount(result.chainCount, MAX_GOAL_INCREMENT);
     case 'noHintClears':
       return result.hintsUsed === 0 ? 1 : 0;
     case 'combosTriggered':
-      return (result.maxCombo ?? 0) > 1 ? 1 : 0;
+      return (Number(result.maxCombo) || 0) > 1 ? 1 : 0;
     default:
       return 0;
   }
@@ -102,6 +123,14 @@ export const onPuzzleComplete = functions.firestore
     if (!userData?.clubId) return;
 
     const clubId = userData.clubId;
+
+    // Both the trigger document AND users/{uid}.clubId are client-writable,
+    // so neither can be trusted. Verify the caller is actually a member of
+    // the club they claim, or an attacker could point `clubId` at a rival
+    // club and mutate its goals and weekly score.
+    const clubDoc = await db.doc(`clubs/${clubId}`).get();
+    const clubMemberIds = (clubDoc.data()?.memberIds as string[]) ?? [];
+    if (!clubMemberIds.includes(userId)) return;
 
     // Personal (per-member) goals and shared (cluster-level) goals live in
     // two separate subcollections — fetch both concurrently.
@@ -138,9 +167,18 @@ export const onPuzzleComplete = functions.firestore
       }
     }
 
-    // Update club weekly score
+    // Update club weekly score. Clamped: the score comes from a
+    // client-written document, and an unsigned/unbounded increment let a
+    // single forged result carry a huge negative value and wipe out a
+    // club's whole weekly total (or an absurd positive one to top the
+    // leaderboard). MAX_CLUB_SCORE_CONTRIBUTION mirrors the per-puzzle
+    // ceiling submitValidatedScore enforces.
+    const rawScore = Number(result.score);
+    const clampedScore = Number.isFinite(rawScore)
+      ? Math.max(0, Math.min(rawScore, MAX_CLUB_SCORE_CONTRIBUTION))
+      : 0;
     batch.update(db.doc(`clubs/${clubId}`), {
-      weeklyScore: admin.firestore.FieldValue.increment(result.score ?? 0),
+      weeklyScore: admin.firestore.FieldValue.increment(clampedScore),
     });
 
     await batch.commit();
@@ -153,15 +191,18 @@ export const onPuzzleComplete = functions.firestore
       const inc = computeGoalIncrement(goal.trackingKey, result);
       const currentProgress = (goal.progress ?? 0) + inc;
       if (currentProgress >= goal.target && !goal.completed) {
-        await goalDoc.ref.update({
-          completed: true,
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        // Membership lives in the club document's `memberIds` array — there
+        // is no `clubs/{id}/members` subcollection anywhere in the project.
+        // Reading one returned an empty snapshot, so the reward batch was
+        // always empty while `completed: true` had ALREADY been written:
+        // every personal club goal silently paid nobody and could never pay
+        // out on a later run. Mirrors the shared-goal branch below.
+        const clubSnap = await db.doc(`clubs/${clubId}`).get();
+        const memberIds = (clubSnap.data()?.memberIds as string[]) ?? [];
 
-        const membersSnap = await db.collection(`clubs/${clubId}/members`).get();
         const rewardBatch = db.batch();
-        for (const memberDoc of membersSnap.docs) {
-          rewardBatch.set(db.doc(`users/${memberDoc.id}/rewards/${goalDoc.id}`), {
+        for (const memberId of memberIds) {
+          rewardBatch.set(db.doc(`users/${memberId}/rewards/${goalDoc.id}`), {
             type: 'club_goal_complete',
             goalLabel: goal.label,
             coins: goal.rewardCoins ?? 600,
@@ -170,6 +211,12 @@ export const onPuzzleComplete = functions.firestore
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
         }
+        // Flip `completed` in the SAME batch as the grants, so the goal can
+        // never be burned without its rewards landing.
+        rewardBatch.update(goalDoc.ref, {
+          completed: true,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         await rewardBatch.commit();
       }
     }
@@ -235,6 +282,13 @@ export const updateClubLeaderboard = functions.pubsub
 
     const entries: Array<{ clubId: string; name: string; score: number; rank: number; tier: string }> = [];
 
+    // Tier writes go in a batch. They were previously fire-and-forget
+    // `doc.ref.update(...)` inside forEach: never awaited, so they could be
+    // dropped when the function's promise settled first, and any rejection
+    // became an unhandled rejection that kills the instance. At most 100
+    // docs here, well inside the 500-op batch limit.
+    const tierBatch = db.batch();
+
     clubsSnap.docs.forEach((doc, index) => {
       const data = doc.data();
       const rank = index + 1;
@@ -251,9 +305,10 @@ export const updateClubLeaderboard = functions.pubsub
         tier,
       });
 
-      // Update club tier
-      doc.ref.update({ tier, leaderboardRank: rank });
+      tierBatch.update(doc.ref, { tier, leaderboardRank: rank });
     });
+
+    await tierBatch.commit();
 
     // Write leaderboard snapshot
     await db.doc('leaderboards/clubs_weekly').set({
@@ -499,7 +554,11 @@ export const sendPushNotification = functions.https.onCall(
  */
 const STREAK_REMINDER_BATCH_SIZE = 500;
 const STREAK_REMINDER_BATCH_SLEEP_MS = 1000;
-const STREAK_REMINDER_TIME_BUDGET_MS = 9 * 60 * 1000; // leave ~60s headroom
+// 8 minutes against a 540s (9 min) timeout — genuinely leaves ~60s of
+// headroom. This was 9*60*1000, exactly equal to the timeout, so a batch
+// that started near the deadline was killed by the platform mid-send with
+// no summary log and no cursor progress.
+const STREAK_REMINDER_TIME_BUDGET_MS = 8 * 60 * 1000;
 /** The local hour we target for streak reminders (player's timezone). */
 const STREAK_REMINDER_TARGET_LOCAL_HOUR = 20; // 8 PM local
 
@@ -596,7 +655,11 @@ export const processStreakReminders = functions
 
 const REENG_BATCH_SIZE = 500;
 const REENG_BATCH_SLEEP_MS = 1000;
-const REENG_TIME_BUDGET_MS = 9 * 60 * 1000;
+// 8 minutes against the 540s (9 min) timeout below, leaving ~60s of real
+// headroom. Same trap as the streak-reminder pass: a budget exactly equal to
+// the platform timeout means a batch started near the deadline is killed
+// mid-send, with no summary log and no record of how far it got.
+const REENG_TIME_BUDGET_MS = 8 * 60 * 1000;
 const REENG_TARGET_LOCAL_HOUR = 19; // 7 PM local — bucket for both D2 + D7
 
 function dateDaysAgo(nowMs: number, days: number): string {
@@ -703,7 +766,14 @@ export const processDay7Reengagement = functions
 /**
  * Runs weekly on Monday at midnight UTC to rotate club goals.
  */
-export const rotateClubGoals = functions.pubsub
+// Two queries + a batch commit PER CLUB, sequentially, always starting from
+// the beginning of the collection. On the v1 default 60s timeout the tail
+// clubs would never rotate: they keep last week's goals forever and never
+// get weeklyScore reset, which also pins them permanently at the top of
+// updateClubLeaderboard.
+export const rotateClubGoals = functions
+  .runWith({ timeoutSeconds: 540, memory: '512MB' })
+  .pubsub
   .schedule('0 0 * * 1')
   .timeZone('UTC')
   .onRun(async () => {
@@ -1188,13 +1258,42 @@ export const onReferralSuccess = functions.https.onCall(
       .collection('rewards')
       .doc(`referral_${timestamp}`);
 
+    const referredStateRef = db
+      .collection('users')
+      .doc(referredUid)
+      .collection('referralState')
+      .doc('current');
+
     const result = await db.runTransaction(async (tx) => {
       const existing = await tx.get(dedupRef);
       if (existing.exists) {
         return { alreadyGranted: true as const };
       }
 
+      // One referral per referred ACCOUNT, forever. The dedup doc above is
+      // keyed (referredUid, code), so without this a single account could
+      // collect any number of public codes and claim the referred-lane
+      // reward once per code — while each code owner also got paid, which
+      // is trivially self-dealt with throwaway alts since the spam cap is
+      // per-referrer.
+      //
+      // The marker lives in a SERVER-ONLY subcollection, not on the user
+      // document. users/{uid} is owner-writable with no field constraints,
+      // so a marker stored there could simply be deleted by the client
+      // between claims — one updateDoc and the whole guard is bypassed.
+      // referralState is `allow write: if false` in firestore.rules, the
+      // same pattern as the purchases and giftQuota ledgers.
+      const referredStateSnap = await tx.get(referredStateRef);
+      if (referredStateSnap.exists && referredStateSnap.data()?.referredByCode) {
+        return { alreadyGranted: true as const };
+      }
+
       const now = admin.firestore.FieldValue.serverTimestamp();
+      tx.set(
+        referredStateRef,
+        { referredByCode: referralCode.toUpperCase(), referredAt: now },
+        { merge: true },
+      );
       tx.set(dedupRef, {
         referrerUid,
         referredUid,
@@ -1321,7 +1420,12 @@ export const distributeWeeklyRewards = functions
   .pubsub.schedule('0 23 * * 0') // Sunday 23:00 UTC
   .timeZone('UTC')
   .onRun(async () => {
-    const weekId = getClosingWeekId();
+    // Look back 24h. This cron fires Sunday 23:00 UTC, but the week number
+    // rolls over at Sunday 00:00, so `getClosingWeekId()` at call time names
+    // the week that began 23 hours ago — meaning prizes were decided by a
+    // single Sunday's scores while the week that actually just finished was
+    // never rewarded at all.
+    const weekId = getClosingWeekId(new Date(Date.now() - 86_400_000));
     const startedAt = Date.now();
 
     // Pull the entire leaderboard for the closing week, ordered by
@@ -1417,11 +1521,21 @@ interface SubmitValidatedScorePayload {
 
 /** Conservative per-level max score ceiling. Any submission above this is
  *  almost certainly manipulated. Tunable via Remote Config in a follow-up. */
-function maxPlausibleScore(mode: string, level: number): number {
+function maxPlausibleScore(mode: string, level: number, scope?: string): number {
   // Base ceiling: 1000 * (level+1), inflated for score-multiplier modes.
   const base = 1000 * (level + 1);
   const multiplier =
     mode === 'expert' ? 3 : mode === 'timePressure' ? 2 : mode === 'perfectSolve' ? 2 : 1;
+  // Weekly and event submissions are CUMULATIVE standings fed by puzzles the
+  // server can't see individually (the weekly board plays at level 0, events
+  // aggregate whatever the player runs). A per-level ceiling there rejected
+  // essentially every legitimate score once clients started omitting level —
+  // and even a correct level under-caps a cumulative total. Keep daily tight
+  // (one known board); give the cumulative scopes a flat generous ceiling
+  // that still blocks the absurd numbers manipulation produces.
+  if (scope === 'weekly' || scope === 'event') {
+    return Math.max(Math.min(base * multiplier, 250_000), 50_000);
+  }
   return Math.min(base * multiplier, 250_000);
 }
 
@@ -1460,7 +1574,7 @@ export const submitValidatedScore = functions.https.onCall(
     }
 
     // Score ceiling (mode × level)
-    const ceiling = maxPlausibleScore(mode, level);
+    const ceiling = maxPlausibleScore(mode, level, scope);
     if (score > ceiling) {
       functions.logger.warn('[submitValidatedScore] score above ceiling', {
         uid: uid.slice(0, 6),
@@ -1579,11 +1693,235 @@ export const submitValidatedScore = functions.https.onCall(
 
 /** ISO week-number helper — mirrors src/utils/weekIdentifier.ts so the
  *  server doesn't need to import from client code. */
+/**
+ * Week bucket for leaderboard writes. MUST stay byte-identical to
+ * `getClosingWeekId` here and `getCurrentWeekId` on the client — this
+ * previously emitted ISO weeks as `2026-W33` (dash) while both readers
+ * queried `2026_W33` (underscore), so with `leaderboardValidationEnabled`
+ * on by default the weekly leaderboard was permanently empty and
+ * distributeWeeklyRewards never paid anyone.
+ */
 function weekIdFor(d: Date): string {
-  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dayNum = target.getUTCDay() || 7;
-  target.setUTCDate(target.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
-  const weekNum = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  return `${target.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+  const year = d.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  const days = Math.floor((d.getTime() - startOfYear.getTime()) / 86_400_000);
+  const weekNumber = Math.ceil((days + startOfYear.getUTCDay() + 1) / 7);
+  return `${year}_W${String(weekNumber).padStart(2, '0')}`;
 }
+
+// ─── Club Membership (joinClub / leaveClub) ──────────────────────────────────
+//
+// firestore.rules deliberately restrict client updates on clubs/{clubId} to
+// presentation fields — memberIds / memberCount are Admin-SDK only, so join
+// and leave MUST go through these callables. Both are idempotent (safe to
+// retry on flaky networks) and repair memberCount drift by recomputing it
+// from the authoritative memberIds array on every write.
+
+const CLUB_DEFAULT_MAX_MEMBERS = 30;
+const CLUB_MEMBERSHIP_RATE_LIMIT = 10; // joins+leaves per hour per UID
+const CLUB_MEMBERSHIP_RATE_WINDOW_SECONDS = 3600;
+
+function validateClubIdArg(clubId: unknown): string {
+  if (
+    typeof clubId !== 'string' ||
+    clubId.length === 0 ||
+    clubId.length > 128
+  ) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid clubId');
+  }
+  return clubId;
+}
+
+/**
+ * joinClub — HTTPS Callable
+ *
+ * Adds the caller to clubs/{clubId}.memberIds inside a transaction:
+ *   - not-found if the club doesn't exist
+ *   - idempotent success if the caller is already a member
+ *   - failed-precondition if the caller already belongs to a DIFFERENT club
+ *     (the client leaves first — one club per player)
+ *   - resource-exhausted if the club is at maxMembers capacity
+ *
+ * The membership query runs inside the transaction (Admin SDK supports
+ * tx.get(query)) so two concurrent joins can't land the caller in two clubs.
+ */
+export const joinClub = functions.https.onCall(
+  async (data: { clubId: string }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Authentication required',
+      );
+    }
+    const uid = context.auth.uid;
+    const clubId = validateClubIdArg(data?.clubId);
+
+    const withinBudget = await checkFirestoreRateLimit(
+      uid,
+      'joinClub',
+      CLUB_MEMBERSHIP_RATE_LIMIT,
+      CLUB_MEMBERSHIP_RATE_WINDOW_SECONDS,
+    );
+    if (!withinBudget) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Too many club membership changes. Try again later.',
+      );
+    }
+
+    const clubRef = db.collection('clubs').doc(clubId);
+    const membershipQuery = db
+      .collection('clubs')
+      .where('memberIds', 'array-contains', uid)
+      .limit(1);
+
+    return db.runTransaction(async (tx) => {
+      const [clubSnap, membershipSnap] = await Promise.all([
+        tx.get(clubRef),
+        tx.get(membershipQuery),
+      ]);
+
+      if (!clubSnap.exists) {
+        throw new functions.https.HttpsError('not-found', 'Club not found');
+      }
+
+      const club = clubSnap.data() ?? {};
+      const memberIds = Array.isArray(club.memberIds)
+        ? (club.memberIds as string[])
+        : [];
+
+      if (memberIds.includes(uid)) {
+        // Idempotent replay — already in this club.
+        return {
+          success: true,
+          clubId,
+          memberCount: memberIds.length,
+          alreadyMember: true,
+        };
+      }
+
+      if (!membershipSnap.empty) {
+        const existingClubId = membershipSnap.docs[0].id;
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          `Already a member of club ${existingClubId} — leave it first`,
+        );
+      }
+
+      const maxMembers =
+        Number(club.maxMembers) > 0
+          ? Number(club.maxMembers)
+          : CLUB_DEFAULT_MAX_MEMBERS;
+      if (memberIds.length >= maxMembers) {
+        throw new functions.https.HttpsError(
+          'resource-exhausted',
+          'Club is full',
+        );
+      }
+
+      const newMemberIds = [...memberIds, uid];
+      tx.update(clubRef, {
+        memberIds: newMemberIds,
+        memberCount: newMemberIds.length,
+        [`memberLastActive.${uid}`]:
+          admin.firestore.FieldValue.serverTimestamp(),
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return {
+        success: true,
+        clubId,
+        memberCount: newMemberIds.length,
+        alreadyMember: false,
+      };
+    });
+  },
+);
+
+/**
+ * leaveClub — HTTPS Callable
+ *
+ * Removes the caller from clubs/{clubId}.memberIds inside a transaction:
+ *   - idempotent success if the club is gone or the caller isn't a member
+ *   - ownership transfers to the longest-standing remaining member when the
+ *     owner leaves
+ *   - the club document is deleted when the last member leaves (subcollection
+ *     docs are orphaned, but every read rule on them requires membership via
+ *     the parent doc, so they become unreachable; autoKick-style cleanup can
+ *     reap them later)
+ */
+export const leaveClub = functions.https.onCall(
+  async (data: { clubId: string }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Authentication required',
+      );
+    }
+    const uid = context.auth.uid;
+    const clubId = validateClubIdArg(data?.clubId);
+
+    const withinBudget = await checkFirestoreRateLimit(
+      uid,
+      'leaveClub',
+      CLUB_MEMBERSHIP_RATE_LIMIT,
+      CLUB_MEMBERSHIP_RATE_WINDOW_SECONDS,
+    );
+    if (!withinBudget) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'Too many club membership changes. Try again later.',
+      );
+    }
+
+    const clubRef = db.collection('clubs').doc(clubId);
+
+    return db.runTransaction(async (tx) => {
+      const clubSnap = await tx.get(clubRef);
+
+      if (!clubSnap.exists) {
+        // Idempotent — the club is already gone.
+        return { success: true, clubId, alreadyLeft: true, clubDeleted: false };
+      }
+
+      const club = clubSnap.data() ?? {};
+      const memberIds = Array.isArray(club.memberIds)
+        ? (club.memberIds as string[])
+        : [];
+
+      if (!memberIds.includes(uid)) {
+        return { success: true, clubId, alreadyLeft: true, clubDeleted: false };
+      }
+
+      const newMemberIds = memberIds.filter((id) => id !== uid);
+
+      if (newMemberIds.length === 0) {
+        tx.delete(clubRef);
+        return { success: true, clubId, alreadyLeft: false, clubDeleted: true };
+      }
+
+      const update: Record<string, unknown> = {
+        memberIds: newMemberIds,
+        memberCount: newMemberIds.length,
+        [`memberLastActive.${uid}`]: admin.firestore.FieldValue.delete(),
+        [`memberContributions.${uid}`]: admin.firestore.FieldValue.delete(),
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (club.ownerId === uid) {
+        // memberIds preserves join order (arrayUnion appends), so index 0 is
+        // the longest-standing remaining member.
+        update.ownerId = newMemberIds[0];
+      }
+      tx.update(clubRef, update);
+
+      return {
+        success: true,
+        clubId,
+        alreadyLeft: false,
+        clubDeleted: false,
+        memberCount: newMemberIds.length,
+        newOwnerId: club.ownerId === uid ? newMemberIds[0] : undefined,
+      };
+    });
+  },
+);

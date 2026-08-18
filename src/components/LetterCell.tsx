@@ -22,6 +22,7 @@ import { useColors } from '../hooks/useColors';
 import { useRoundedFontReady } from '../services/fontReady';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { useSettings } from '../contexts/SettingsContext';
+import { getColorblindTileRamps } from '../services/colorblind';
 
 // ── Pre-computed style constants (module scope so tuples share a single reference) ─
 const BODY_COLORS_VALID: [string, string, string, string, string] = ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
@@ -222,10 +223,14 @@ export const LetterCell = React.memo(function LetterCell({
     borderColor,
     shadowColor,
   } = useMemo(() => {
+    // Under a CVD mode the face color of selected/valid/hint tiles is
+    // remapped too — the border override alone left a deutan player staring
+    // at the exact magenta-vs-green face pair the palette exists to remove.
+    const faceRamps = getColorblindTileRamps(colorblindMode);
     let body: [string, string, ...string[]];
-    if (isValidWord) body = BODY_COLORS_VALID;
-    else if (isSelected && isHinted) body = BODY_COLORS_SELECTED_HINT;
-    else if (isSelected) body = BODY_COLORS_SELECTED;
+    if (isValidWord) body = faceRamps?.valid ?? BODY_COLORS_VALID;
+    else if (isSelected && isHinted) body = faceRamps?.selectedHint ?? BODY_COLORS_SELECTED_HINT;
+    else if (isSelected) body = faceRamps?.selected ?? BODY_COLORS_SELECTED;
     else if (isWildcard) body = BODY_COLORS_WILDCARD;
     else body = chapterTileRamp ?? BODY_COLORS_DEFAULT;
 
@@ -254,7 +259,7 @@ export const LetterCell = React.memo(function LetterCell({
       borderColor: border,
       shadowColor: shadow,
     };
-  }, [isValidWord, isSelected, isHinted, isWildcard, palette, chapterTileRamp]);
+  }, [isValidWord, isSelected, isHinted, isWildcard, palette, chapterTileRamp, colorblindMode]);
 
   // CRITICAL: always use Animated.View, never swap between View and Animated.View
   // based on props. A component-type swap forces React to unmount the entire

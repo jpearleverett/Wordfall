@@ -4,6 +4,7 @@ import {
   Alert,
   AppState,
   Animated,
+  Easing,
   InteractionManager,
   Pressable,
   SafeAreaView,
@@ -15,7 +16,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer, NavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import {
+  createStackNavigator,
+  StackCardInterpolationProps,
+  StackNavigationOptions,
+} from '@react-navigation/stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts, loadAsync as loadFontAsync } from 'expo-font';
 import { markRoundedFontReady } from './src/services/fontReady';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,11 +47,13 @@ import MasteryScreen from './src/screens/MasteryScreen';
 import SeasonPassScreen from './src/screens/SeasonPassScreen';
 import { ConsentGate } from './src/components/ConsentGate';
 import { hasAcceptedTos } from './src/services/consent';
-import { generateBoard, generateDailyBoard } from './src/engine/boardGenerator';
+import { generateBoard, generateDailyBoard, generateWeeklyBoard } from './src/engine/boardGenerator';
+import { getWeekId } from './src/utils/weekId';
 import { getChapterForLevel } from './src/data/chapters';
+import { getCurrentEvent, getEventPlayConfig } from './src/data/events';
+import { DAILY_REWARD_TIMERS, canClaimTimer, rollBonusChestReward } from './src/data/dailyRewardTimers';
 import { Board, CeremonyItem, Difficulty, GameMode, PlayerProgress } from './src/types';
-import { getLevelConfig, COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
-import { getBreatherConfig } from './src/constants';
+import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADOWS } from './src/constants';
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
 import { useAuth } from './src/contexts/AuthContext';
 import { useEconomy } from './src/contexts/EconomyContext';
@@ -89,8 +97,8 @@ import {
   triggerWinStreakMilestoneNotification,
 } from './src/services/notificationTriggers';
 import { eventManager } from './src/services/eventManager';
-import { getRemoteBoolean } from './src/services/remoteConfig';
-import { getChapterExtended, getLevelConfigExtended } from './src/engine/puzzleGenerator';
+import { getRemoteBoolean, initRemoteConfig } from './src/services/remoteConfig';
+import { getLevelConfigExtended, getBreatherConfigExtended } from './src/engine/puzzleGenerator';
 import {
   getPersonalizedHomeContent,
   getPersonalizedNotifications,
@@ -103,25 +111,102 @@ import { firestoreService, FirestoreGift } from './src/services/firestore';
 // Extracted modules for decomposition
 import { useRewardWiring, playerStageFromPuzzles } from './src/hooks/useRewardWiring';
 import { useCeremonyQueue } from './src/hooks/useCeremonyQueue';
+import { useRewardInboxClaim } from './src/hooks/useRewardInbox';
+import { ceremonyEconomyGrant } from './src/utils/ceremonyGrants';
 import { getLoginCalendarDay } from './src/data/loginCalendar';
 
 const Tab = createBottomTabNavigator();
-const HomeStack = createNativeStackNavigator();
-const PlayStack = createNativeStackNavigator();
-const CollectionsStack = createNativeStackNavigator();
-const LibraryStack = createNativeStackNavigator();
-const ProfileStack = createNativeStackNavigator();
-const RootStack = createNativeStackNavigator();
+const HomeStack = createStackNavigator();
+const PlayStack = createStackNavigator();
+const CollectionsStack = createStackNavigator();
+const LibraryStack = createStackNavigator();
+const ProfileStack = createStackNavigator();
+const RootStack = createStackNavigator();
 
-const screenOptions = {
+// P2 in launch_blockers.md (re-landed Aug 2026): the custom spring/fade
+// transition was originally authored in the dead src/navigation/
+// MainNavigator.tsx and never ran. These are the REAL navigators, on the JS
+// stack (@react-navigation/stack) because native-stack cannot run a custom
+// cardStyleInterpolator. The card transform/opacity animate on the native
+// driver, so the transition itself stays off the JS thread; freezeOnBlur
+// still keeps covered screens from burning frames.
+//
+// Push = spring (stiffness 180 / damping 22, clamped — no overshoot blur)
+// tuned to the in-game ceremony settle feel; pop = 220ms cubic-out so
+// back-nav feels snappier than forward-nav. React Navigation itself honors
+// the OS reduce-motion flag for stack transitions.
+type StackTransitionSpec = NonNullable<StackNavigationOptions['transitionSpec']>;
+
+const springOpenSpec: StackTransitionSpec['open'] = {
+  animation: 'spring',
+  config: {
+    stiffness: 180,
+    damping: 22,
+    mass: 1,
+    overshootClamping: true,
+    restDisplacementThreshold: 0.01,
+    restSpeedThreshold: 0.01,
+  },
+};
+
+const timingCloseSpec: StackTransitionSpec['close'] = {
+  animation: 'timing',
+  config: {
+    duration: 220,
+    easing: Easing.out(Easing.cubic),
+  },
+};
+
+// Incoming card: 6% slide-in + 0.96→1 scale + fade; outgoing card dims to
+// 92% behind a matching overlay so the push reads as depth, not a cover.
+function cardSpringFadeInterpolator({
+  current,
+  next,
+  layouts,
+}: StackCardInterpolationProps) {
+  const translateX = current.progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [layouts.screen.width * 0.06, 0],
+  });
+  const scale = current.progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.96, 1],
+  });
+  const opacity = current.progress.interpolate({
+    inputRange: [0, 0.3, 1],
+    outputRange: [0, 0.6, 1],
+  });
+  const nextOpacity = next
+    ? next.progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 0.92],
+      })
+    : 1;
+  return {
+    cardStyle: {
+      transform: [{ translateX }, { scale }],
+      opacity,
+    },
+    overlayStyle: {
+      opacity: Animated.subtract(1, nextOpacity),
+    },
+  };
+}
+
+const screenOptions: StackNavigationOptions = {
   headerShown: false,
-  // native-stack uses `contentStyle` for the screen background (JS stack
-  // used `cardStyle`). Same effect, different field name.
-  contentStyle: { backgroundColor: COLORS.bg },
+  // JS stack uses `cardStyle` for the screen background (native-stack used
+  // `contentStyle`). Same effect, different field name.
+  cardStyle: { backgroundColor: COLORS.bg },
   // Freeze screens that are pushed behind the current one. Without this, every
   // previous screen keeps running its backdrop animations, setIntervals, and
   // effects in the background — a 5-screen stack = 5x animation load.
   freezeOnBlur: true,
+  cardStyleInterpolator: cardSpringFadeInterpolator,
+  transitionSpec: {
+    open: springOpenSpec,
+    close: timingCloseSpec,
+  },
 };
 
 // Home Tab Stack
@@ -147,7 +232,12 @@ function EventScreenWrapperNav({ navigation }: any) {
   const economy = useEconomy();
 
   const handlePlayEventPuzzle = useCallback(() => {
-    const mode: GameMode = 'classic';
+    // Events run in the mode their rules describe (speedSolve → timer,
+    // perfectClear/expertGauntlet → perfect-solve, gravity championship →
+    // gravityFlip, theme week → themed word list). This used to hardcode
+    // classic and ignore rules entirely — see getEventPlayConfig.
+    const eventPlay = getEventPlayConfig(getCurrentEvent());
+    const mode: GameMode = eventPlay.mode;
 
     // Energy check (same pattern as ModesScreenWrapper)
     const isFreeMode = ENERGY.FREE_MODES.includes(mode);
@@ -181,13 +271,23 @@ function EventScreenWrapperNav({ navigation }: any) {
 
     try {
       const modeLevel = player.currentLevel;
-      let config = getLevelConfig(modeLevel);
+      let config = getLevelConfigExtended(modeLevel);
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
       config = adjusted.config;
+      if (eventPlay.difficulty) {
+        // Expert gauntlet: the event promises expert boards.
+        config = { ...config, difficulty: eventPlay.difficulty };
+      }
 
       const seed = Date.now() + modeLevel * 1337;
       const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
-      let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
+      let board = generateBoard(
+        config,
+        seed,
+        mode,
+        chapter?.profile,
+        eventPlay.themeWords ?? chapter?.themeWords,
+      );
       const modeConfig = MODE_CONFIGS[mode];
 
       navigation.navigate('Game', {
@@ -195,7 +295,7 @@ function EventScreenWrapperNav({ navigation }: any) {
         level: modeLevel,
         mode,
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
-        timeLimit: modeConfig.rules.timerSeconds || 0,
+        timeLimit: eventPlay.timeLimitSeconds ?? modeConfig.rules.timerSeconds ?? 0,
       });
     } catch (e: any) {
       if (e?.message?.includes('timed out')) {
@@ -274,6 +374,7 @@ function ProfileMainScreen({ navigation }: any) {
       onOpenSettings={() => navigation.navigate('Settings')}
       onEditProfile={() => navigation.navigate('EditProfile')}
       onOpenMastery={() => navigation.navigate('Mastery')}
+      onOpenClub={() => navigation.navigate('Club')}
     />
   );
 }
@@ -441,9 +542,28 @@ function MainTabs() {
 }
 
 // Modes screen wrapper - wires navigation to start game in selected mode
-function ModesScreenWrapper({ navigation }: any) {
+function ModesScreenWrapper({ navigation, route }: any) {
   const player = usePlayer();
   const economy = useEconomy();
+
+  // Warm the shared-board caches while the player is reading the mode list.
+  //
+  // Daily and weekly shop through many candidates for the fairest board, and
+  // that search is bounded in wall-clock rather than being free — the weekly's
+  // is up to ~700ms. Paying it here, after interactions have settled, means
+  // the tap itself is a cache hit. Best-effort: a failure just leaves the tap
+  // to generate synchronously as before.
+  useEffect(() => {
+    const handle = InteractionManager.runAfterInteractions(() => {
+      try {
+        generateDailyBoard(new Date().toISOString().split('T')[0]);
+        generateWeeklyBoard(getWeekId());
+      } catch {
+        // Warming is opportunistic; tap-time generation is the source of truth.
+      }
+    });
+    return () => handle.cancel();
+  }, []);
 
   const handleSelectMode = useCallback((modeId: string) => {
     const mode = modeId as GameMode;
@@ -497,7 +617,10 @@ function ModesScreenWrapper({ navigation }: any) {
       }
 
       if (mode === 'weekly') {
-        board = generateBoard(DIFFICULTY_CONFIGS.hard, Date.now());
+        // Deterministic from the week id — weekly scores go to a shared
+        // leaderboard, so a per-entry board meant players were ranked on
+        // different puzzles and could re-enter to reroll for an easy one.
+        board = generateWeeklyBoard(getWeekId());
         navigation.navigate('Game', { board, level: 0, mode: 'weekly' });
         return;
       }
@@ -508,7 +631,7 @@ function ModesScreenWrapper({ navigation }: any) {
         ? player.currentLevel
         : player.getModeLevel(mode);
 
-      let config = getLevelConfig(modeLevel);
+      let config = getLevelConfigExtended(modeLevel);
 
       // Apply adaptive difficulty adjustment
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
@@ -558,6 +681,18 @@ function ModesScreenWrapper({ navigation }: any) {
       }
     }
   }, [player.currentLevel, navigation, player, economy]);
+
+  // R8: Home's "Try X Mode" recommendation deep-links straight into the
+  // recommended mode instead of dropping the player on the grid to find it
+  // again. Param cleared before starting so back-nav can't re-trigger.
+  const autoStartHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    const autoStartMode = route?.params?.autoStartMode;
+    if (!autoStartMode || autoStartHandledRef.current === autoStartMode) return;
+    autoStartHandledRef.current = autoStartMode;
+    navigation.setParams({ autoStartMode: undefined });
+    handleSelectMode(autoStartMode);
+  }, [route?.params?.autoStartMode, handleSelectMode, navigation]);
 
   return <ModesScreen onSelectMode={handleSelectMode} onOpenLeaderboard={() => navigation.navigate('Leaderboard')} />;
 }
@@ -641,7 +776,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       ? (params.level || 0) + 1
       : player.getModeLevel(mode);
     const useBreather = player.needsBreather();
-    let config = useBreather ? getBreatherConfig(modeLevel) : getLevelConfig(modeLevel);
+    let config = useBreather ? getBreatherConfigExtended(modeLevel) : getLevelConfigExtended(modeLevel);
     if (!useBreather) {
       const adjusted = getAdjustedConfig(config, player.performanceMetrics);
       config = adjusted.config;
@@ -655,10 +790,11 @@ function GameScreenWrapper({ route, navigation }: any) {
     score: number,
     perfectRun: boolean = false,
     completionTimeSeconds: number = 0,
+    assists?: { hintsUsed: number; undosUsed: number },
   ) => {
     // Track spins before completion to detect if a new one is awarded
     spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
-    handleCompleteInner(stars, score, perfectRun, completionTimeSeconds);
+    handleCompleteInner(stars, score, perfectRun, completionTimeSeconds, assists);
 
     // Pre-generate the next board while the player is looking at the
     // victory screen. Best-effort: failures fall through to the sync
@@ -769,7 +905,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         ? currentLevel + 1
         : player.getModeLevel(mode);
 
-      const config = getLevelConfig(nextModeLevel);
+      const config = getLevelConfigExtended(nextModeLevel);
       const seed = nextModeLevel * 1337 + Date.now();
       const chapter = mode === 'classic' ? getChapterForLevel(nextModeLevel) : undefined;
       let board = generateBoard(config, seed, mode, chapter?.profile, chapter?.themeWords);
@@ -847,14 +983,17 @@ function GameScreenWrapper({ route, navigation }: any) {
     }
   }, [earnedNewSpin, navigation]);
 
+  // NEXT always gives the next puzzle. It used to divert through the spin
+  // prompt whenever a spin was earned (every 5th win, plus the first) —
+  // hijacking the most important button in the game at L1/L5/L10 and, on
+  // accept, chaining the player out of the play loop into wheel → Home →
+  // login calendar. The spin still surfaces via the prompt on the HOME path
+  // (a deliberate exit) and the wheel badge on Home; momentum wins here.
   const handleNextWithPrompt = useCallback(() => {
-    if (earnedNewSpin) {
-      setPendingNavAction('next');
-      setShowSpinPrompt(true);
-    } else {
-      handleNextLevel();
-    }
-  }, [earnedNewSpin, handleNextLevel]);
+    // earnedNewSpin deliberately NOT cleared — if the player later exits to
+    // Home, the prompt still fires there, where it belongs.
+    handleNextLevel();
+  }, [handleNextLevel]);
 
   const handleSpinPromptAccept = useCallback(() => {
     setShowSpinPrompt(false);
@@ -966,6 +1105,10 @@ function HomeMainScreen({ route, navigation }: any) {
   const { user } = useAuth();
   const player = usePlayer();
   const economy = useEconomy();
+  // Sweep the server-side reward inbox (weekly-leaderboard payouts,
+  // personal club-goal completions) once per app run — these types had no
+  // client reader, so the grants were invisible and unclaimable.
+  useRewardInboxClaim(user?.uid, economy, player);
   const [loading, setLoading] = useState(false);
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
   const [comebackCoins, setComebackCoins] = useState(0);
@@ -978,8 +1121,31 @@ function HomeMainScreen({ route, navigation }: any) {
   const [pendingGifts, setPendingGifts] = useState<FirestoreGift[]>([]);
   const [claimingGift, setClaimingGift] = useState(false);
 
-  // Session end reminder
+  // Session end reminder — a 4s self-dismissing toast, previously dead code
+  // (nothing ever set it true). Fires once per session, shortly after the
+  // 3rd solve of the session, when today's daily is still unplayed: the
+  // Daily is free, unlocked at level 1, and is what starts the streak — the
+  // best possible "one more thing before you go" for a player who is
+  // clearly engaged today but hasn't planted tomorrow's hook yet.
   const [showSessionReminder, setShowSessionReminder] = useState(false);
+  const sessionStartPuzzlesRef = useRef<number | null>(null);
+  const sessionReminderFiredRef = useRef(false);
+  useEffect(() => {
+    if (!player.loaded) return;
+    if (sessionStartPuzzlesRef.current === null) {
+      sessionStartPuzzlesRef.current = player.puzzlesSolved;
+      return;
+    }
+    if (sessionReminderFiredRef.current) return;
+    const solvedThisSession = player.puzzlesSolved - sessionStartPuzzlesRef.current;
+    const today = new Date().toISOString().split('T')[0];
+    if (solvedThisSession >= 3 && !player.dailyCompleted.includes(today)) {
+      sessionReminderFiredRef.current = true;
+      // Let the victory flow settle before the toast slides in.
+      const timer = setTimeout(() => setShowSessionReminder(true), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [player.loaded, player.puzzlesSolved, player.dailyCompleted]);
 
   // Mystery Wheel state
   const [showMysteryWheel, setShowMysteryWheel] = useState(false);
@@ -1072,13 +1238,26 @@ function HomeMainScreen({ route, navigation }: any) {
       // Initialize notifications with segment-personalized scheduling
       void notificationManager.init().then(() => {
         const notifConfig = getPersonalizedNotifications(player.segments);
-        // Streak reminder at 8 PM daily (if player has a streak)
+        // Streak reminder, aimed at the next evening the streak is actually
+        // at risk — passing lastPlayDate is what keeps it from firing on a
+        // day the player has already played.
         if (notifConfig.enabledCategories.includes('streak_reminder')) {
-          void triggerStreakReminder(player.streaks.currentStreak);
+          // updateStreak() ran above in this same effect, but `player.streaks`
+          // here is the pre-update render snapshot — lastPlayDate is still
+          // yesterday, which schedules a "your streak expires tonight!" ping
+          // for an evening the player already secured. Same stale-snapshot
+          // bug fixed at useRewardWiring.ts's call site: pass today
+          // explicitly (updateStreak unconditionally sets lastPlayDate to
+          // today). The streak count floors at 1 because post-update it is
+          // always ≥1 — a stale 0 would wrongly CANCEL tomorrow's reminder.
+          void triggerStreakReminder(
+            Math.max(1, player.streaks.currentStreak),
+            new Date().toISOString().split('T')[0],
+          );
         }
-        // Daily challenge reminder at 9 AM
+        // Daily challenge reminder, skipping mornings whose daily is done.
         if (notifConfig.enabledCategories.includes('daily_challenge')) {
-          void triggerDailyChallengeReminder();
+          void triggerDailyChallengeReminder(player.dailyCompleted);
         }
         // Event ending reminders for any active events
         void triggerEventNotifications();
@@ -1114,6 +1293,11 @@ function HomeMainScreen({ route, navigation }: any) {
     }
   }, [player.loaded]);
 
+  // Latest puzzle count for the background handler below — the listener is
+  // registered once, so it must read through a ref, not a stale closure.
+  const puzzlesSolvedRef = useRef(player.puzzlesSolved);
+  puzzlesSolvedRef.current = player.puzzlesSolved;
+
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -1122,8 +1306,9 @@ function HomeMainScreen({ route, navigation }: any) {
         void cancelComebackReminder();
       } else if (state === 'background') {
         void analytics.endSession('background');
-        // Player left — schedule comeback reminder for 3 days from now
-        void triggerComebackReminder();
+        // Player left — schedule the comeback reminder (20h for brand-new
+        // players with <10 puzzles, 3 days for everyone else).
+        void triggerComebackReminder(puzzlesSolvedRef.current);
       }
     });
     return () => {
@@ -1303,7 +1488,13 @@ function HomeMainScreen({ route, navigation }: any) {
           : player.segments.motivations.includes('achiever')
           ? 'Perfect for earning stars and achievements!'
           : 'You unlocked this mode — give it a go!',
-        action: () => navigation.navigate('Play'),
+        // Deep-link into the recommended mode (R8) — landing on the grid to
+        // hunt for the mode we just recommended made the card feel inert.
+        action: () =>
+          navigation.navigate('Play', {
+            screen: 'Modes',
+            params: { autoStartMode: segmentMode },
+          }),
       };
     }
 
@@ -1315,7 +1506,11 @@ function HomeMainScreen({ route, navigation }: any) {
         icon: config?.icon || '🎮',
         title: `Try ${config?.name || modeId} Mode`,
         subtitle: 'You unlocked this mode — give it a go!',
-        action: () => navigation.navigate('Play'),
+        action: () =>
+          navigation.navigate('Play', {
+            screen: 'Modes',
+            params: { autoStartMode: modeId },
+          }),
       };
     }
 
@@ -1389,9 +1584,9 @@ function HomeMainScreen({ route, navigation }: any) {
           if (difficulty) {
             config = DIFFICULTY_CONFIGS[difficulty];
           } else if (player.needsBreather()) {
-            config = getBreatherConfig(player.currentLevel);
+            config = getBreatherConfigExtended(player.currentLevel);
           } else {
-            config = getLevelConfig(player.currentLevel);
+            config = getLevelConfigExtended(player.currentLevel);
             // Apply adaptive difficulty adjustment (invisible to player)
             const adjusted = getAdjustedConfig(config, player.performanceMetrics);
             config = adjusted.config;
@@ -1447,6 +1642,38 @@ function HomeMainScreen({ route, navigation }: any) {
       }
     }, 50);
   }, [navigation, economy, player]);
+
+  // Daily reward timers (R9): DailyRewardTimers was fully built and
+  // rendered nowhere. Claim = validate the cooldown, credit the reward,
+  // stamp the claim time in the persisted player blob. Guarding with
+  // canClaimTimer here (not just in the UI) means a double-tap or stale
+  // render can't double-credit.
+  const handleClaimRewardTimer = useCallback(
+    (timerId: string) => {
+      const lastClaimed = player.rewardTimerClaims[timerId] ?? 0;
+      if (!canClaimTimer(timerId, lastClaimed)) return;
+      const timer = DAILY_REWARD_TIMERS.find((t) => t.id === timerId);
+      if (!timer) return;
+      const reward: { coins?: number; gems?: number; hints?: number; spins?: number } =
+        timer.reward.random ? rollBonusChestReward() : timer.reward;
+      if (reward.coins) economy.addCoins(reward.coins);
+      if (reward.gems) economy.addGems(reward.gems);
+      if (reward.hints) economy.addHintTokens(reward.hints);
+      if (reward.spins) player.awardFreeSpin();
+      player.updateProgress({
+        rewardTimerClaims: {
+          ...player.rewardTimerClaims,
+          [timerId]: Date.now(),
+        },
+      });
+      void analytics.logEvent('reward_timer_claimed', {
+        timer_id: timerId,
+        coins: reward.coins ?? 0,
+        gems: reward.gems ?? 0,
+      });
+    },
+    [player, economy],
+  );
 
   const handleReset = useCallback(() => {
     Alert.alert(
@@ -1541,6 +1768,8 @@ function HomeMainScreen({ route, navigation }: any) {
         onPlay={startGame}
         onDaily={startDaily}
         onResetProgress={handleReset}
+        rewardTimerStates={player.rewardTimerClaims}
+        onClaimRewardTimer={handleClaimRewardTimer}
         onOpenShop={() => navigation.navigate('Shop')}
         onOpenSettings={() => navigation.navigate('Settings')}
         onOpenSeasonPass={() => navigation.navigate('SeasonPass')}
@@ -1548,7 +1777,21 @@ function HomeMainScreen({ route, navigation }: any) {
         mysteryWheelSpins={player.mysteryWheel.spinsAvailable}
         dailyFreeSpinAvailable={checkDailyFreeSpin(player.mysteryWheel.lastDailySpinDate)}
         freeSpinToast={freeSpinToast}
-        onBuyDeal={(deal) => {
+        onBuyDeal={async (deal) => {
+          // One purchase per day. Without this, the daily deal could be
+          // re-bought on every tap — which for the Lucky Draw meant an
+          // unbounded gem drain, since its delivery branch was also missing.
+          const today = new Date().toISOString().slice(0, 10);
+          const dealGuardKey = '@wordfall_daily_deal_purchase';
+          try {
+            const prior = await AsyncStorage.getItem(dealGuardKey);
+            if (prior === `${deal.id}:${today}`) {
+              Alert.alert('Already Purchased', "Today's deal is one per day — come back tomorrow!");
+              return;
+            }
+          } catch {
+            // Guard read failed — allow the purchase rather than block it.
+          }
           const canAfford = economy.canAfford(deal.currency, deal.salePrice);
           if (!canAfford) {
             Alert.alert('Not Enough ' + (deal.currency === 'coins' ? 'Coins' : 'Gems'),
@@ -1562,6 +1805,18 @@ function HomeMainScreen({ route, navigation }: any) {
             if (deal.contents.coins) economy.addCoins(deal.contents.coins);
             if (deal.contents.gems) economy.addGems(deal.contents.gems);
             if (deal.contents.hintTokens) economy.addHintTokens(deal.contents.hintTokens);
+            // The Lucky Draw declares ONLY this content, and there was no
+            // branch for it: 25 gems bought an alert and nothing else, on 75
+            // days of the year. A rare tile is what its copy promises.
+            if (deal.contents.cosmetic === 'random_rare_tile') {
+              const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+              player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+            }
+            try {
+              await AsyncStorage.setItem(dealGuardKey, `${deal.id}:${today}`);
+            } catch {
+              // Non-fatal: worst case the guard doesn't persist this once.
+            }
             Alert.alert('Deal Purchased!', `${deal.name} has been delivered!`);
           }
         }}
@@ -1642,8 +1897,13 @@ function HomeMainScreen({ route, navigation }: any) {
         </View>
       )}
 
-      {/* Mystery Wheel Overlay */}
-      {showMysteryWheel && (
+      {/* Mystery Wheel Overlay.
+          Gated here as well as on the HomeScreen entry: the wheel has a
+          second entrance via the `openWheel` route param from the post-puzzle
+          spin prompt, and a kill switch that closes one of two doors is not a
+          kill switch. This render is the choke point every path passes
+          through. */}
+      {showMysteryWheel && getRemoteBoolean('mysteryWheelEnabled') && (
         <MysteryWheel
           wheelState={player.mysteryWheel}
           gems={economy.gems}
@@ -1724,8 +1984,31 @@ function AppContent() {
   }, []);
 
   // Ceremony queue — rendered at app level so modals overlay all screens
+  // Credit a ceremony's displayed reward the moment it is popped for
+  // showing. Pop removes it from the persisted queue, so the grant is
+  // exactly-once; granting anywhere later (dismiss, render) can re-fire if
+  // the app dies mid-ceremony. Streak milestones, Atlas completions and
+  // win-streak tiers all rendered coin/gem amounts that NO code path
+  // credited — a full-screen celebration of currency the player never got.
+  const popCeremonyWithGrant = useCallback((): CeremonyItem | null => {
+    const ceremony = player.popCeremony();
+    if (ceremony) {
+      const grant = ceremonyEconomyGrant(ceremony);
+      if (grant) {
+        if (grant.coins > 0) economy.addCoins(grant.coins);
+        if (grant.gems > 0) economy.addGems(grant.gems);
+        if (grant.hintTokens > 0) economy.addHintTokens(grant.hintTokens);
+        if (grant.rareTile) {
+          const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+          player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+        }
+      }
+    }
+    return ceremony;
+  }, [player.popCeremony, player.addRareTile, economy.addCoins, economy.addGems, economy.addHintTokens]);
+
   const { activeCeremony, handleDismissCeremony, resetBatchCounter } = useCeremonyQueue({
-    popCeremony: player.popCeremony,
+    popCeremony: popCeremonyWithGrant,
     pendingCeremonyCount: player.pendingCeremonies.length,
     loaded: player.loaded,
     isBlocked: showOnboarding,
@@ -1763,9 +2046,8 @@ function AppContent() {
   }, [player.loaded, player.tutorialComplete]);
 
   // ── Deep link handling ──────────────────────────────────────────────────
-  const pendingDeepLinkRef = useRef<string | null>(null);
 
-  useDeepLinks({ player, navigationRef, pendingChallengeRef: pendingDeepLinkRef });
+  useDeepLinks({ player, navigationRef });
 
   // Track screen views on navigation state changes
   const handleNavigationReady = useCallback(() => {
@@ -1843,17 +2125,25 @@ function AppContent() {
                   onComplete={() => {
                     player.updateProgress({ tutorialComplete: true });
 
-                    // Unlock features at current level and queue ceremonies
+                    // Unlock features at current level. Baseline level-1
+                    // unlocks (the Play tab, Classic/Daily modes) are NOT
+                    // celebrated — the first modals a player ever sees must
+                    // not congratulate them for having a Play button. State
+                    // still gets set; only the ceremony is skipped.
                     const level = player.currentLevel || 1;
                     const featureCeremonies = player.checkFeatureUnlocks(level);
                     for (const ceremony of featureCeremonies) {
+                      if ((ceremony.data?.unlockLevel ?? 0) <= 1) continue;
                       player.queueCeremony(ceremony);
                     }
 
-                    // Auto-unlock modes at or below current level (mirrors useRewardWiring)
+                    // Auto-unlock modes at or below current level (mirrors
+                    // useRewardWiring). Level-1 baselines unlock silently —
+                    // same reasoning as the feature ceremonies above.
                     for (const [modeId, config] of Object.entries(MODE_CONFIGS)) {
                       if (config.unlockLevel <= level && !player.unlockedModes.includes(modeId)) {
                         player.unlockMode(modeId);
+                        if (config.unlockLevel <= 1) continue;
                         player.queueCeremony({
                           type: 'mode_unlock',
                           data: {
@@ -1867,28 +2157,15 @@ function AppContent() {
                       }
                     }
 
-                    // Tier 6 B2 — Day-1 starter bundle in FTUE.
-                    // Queue the first-purchase offer ceremony on post-
-                    // onboarding HomeScreen arrival so it lands as a
-                    // dismissible modal rather than gating the flow.
-                    // Gated by:
-                    //   - RC flag `firstSessionStarterBundleEnabled`
-                    //   - zero lifetime purchases (economy side)
-                    //   - modal never-shown marker
-                    const rcStarterOn = getRemoteBoolean('firstSessionStarterBundleEnabled');
-                    const isNonPayer = (economy.purchaseHistory?.length ?? 0) === 0;
-                    const notYetShown = !player.firstPurchaseModalShownAt;
-                    if (rcStarterOn && isNonPayer && notYetShown) {
-                      setTimeout(() => {
-                        player.queueCeremony({
-                          type: 'first_purchase_offer',
-                          data: { source: 'ftue_day1' },
-                        });
-                        void analytics.logEvent('starter_bundle_offered_day1', {
-                          level,
-                        });
-                      }, 500);
-                    }
+                    // The Tier 6 B2 "Day-1 starter bundle" queue that lived
+                    // here is deliberately GONE (Aug 2026 fun audit): it
+                    // fired a paywall modal before the player had played a
+                    // single puzzle — the most reliable D0 churn trigger in
+                    // mobile puzzle — and by stamping firstPurchaseModalShownAt
+                    // it permanently cannibalized the well-timed L5-6 offer in
+                    // useRewardWiring (which respects the non-payer guard AND
+                    // offerPacing's min-level-6 rule this path bypassed). The
+                    // L5-6 path is now the only first-purchase surface.
 
                     setShowOnboarding(false);
                   }}
@@ -1929,6 +2206,20 @@ export default function App() {
     crashReporter.init();
     analytics.initFirebase();
     funnelTracker.trackStep('app_open');
+
+    // Remote Config had NO caller. Thirty-odd modules read values from it —
+    // every kill switch, every A/B variant, the offer pacing knobs, the
+    // chapter-override payload for chapters 41+ — and getRemoteValue returns
+    // the compile-time default whenever `initialized` is false, which it
+    // always was. The whole surface was inert: a feature that shipped broken
+    // could only be turned off by a store release.
+    //
+    // Fire-and-forget on purpose. It must never gate first paint: this runs
+    // before any screen mounts, and a device that is offline or on a bad
+    // network would otherwise hold the app on a spinner. Fetched values apply
+    // to reads that happen after activation (and, thanks to the 12h cache, to
+    // the next cold start) — the standard Firebase Remote Config contract.
+    void initRemoteConfig();
 
     // Post-mount rounded display font — not part of the hard-gated useFonts()
     // above, so a stalled fetch can't block the first render. Components

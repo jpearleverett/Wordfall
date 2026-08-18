@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import {
   Animated,
@@ -20,6 +21,7 @@ import { soundManager } from '../services/sound';
 import { VideoBackground } from '../components/common/VideoBackground';
 import { getDailyDeal, DailyDeal } from '../data/dailyDeals';
 import { getDailyVariant } from '../engine/boardGenerator';
+import { getDailyTheme } from '../data/sharedBoardThemes';
 import { useDeferredMount } from '../utils/perfInstrument';
 
 // Session-scoped guard so the login-calendar auto-present fires once per app
@@ -47,8 +49,12 @@ import {
   selectMysteryWheel,
   selectSeasonalQuest,
   selectFlawlessStreak,
+  selectStreaks,
+  selectPendingCeremonies,
 } from '../stores/playerStore';
 import { getNextMilestone } from '../data/onboardingMilestones';
+import DailyRewardTimers from '../components/DailyRewardTimers';
+import { getNextGoal } from '../data/nextGoal';
 
 interface DailyMissionDisplay {
   id: string;
@@ -105,6 +111,9 @@ interface HomeScreenProps {
   onOpenLibrary?: () => void;
   /** Navigate to season pass screen */
   onOpenSeasonPass?: () => void;
+  /** R9: staggered 4/6/8/12h claim timers — timerId → last-claim ms. */
+  rewardTimerStates?: Record<string, number>;
+  onClaimRewardTimer?: (timerId: string) => void;
   claimedLoginToday?: boolean;
   onClaimLoginReward?: () => void;
 }
@@ -131,6 +140,8 @@ export function HomeScreen({
   progress,
   onPlay,
   onDaily,
+  rewardTimerStates,
+  onClaimRewardTimer,
   onResetProgress,
   onOpenShop,
   onOpenSettings,
@@ -179,6 +190,7 @@ export function HomeScreen({
 
   // Pre-compute daily completion for streak offer check
   const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().split('T')[0];
   const dailyDone = progress.dailyCompleted.includes(today);
 
   // Below-the-fold cards mount a beat after first paint (see render).
@@ -189,10 +201,31 @@ export function HomeScreen({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const streakOfferDismissed = useRef(false);
 
+  const playerStreaks = usePlayerStore(selectStreaks);
+  const pendingCeremonies = usePlayerStore(selectPendingCeremonies);
+
+  // R6: single closest-to-completion meta goal for the YOUR JOURNEY band.
+  const nextGoal = useMemo(() => {
+    const totalStars = Object.values(progress.starsByLevel).reduce(
+      (a, b) => a + b,
+      0,
+    );
+    return getNextGoal(totalStars, progress.currentLevel, progress.starsByLevel);
+  }, [progress.starsByLevel, progress.currentLevel]);
+
   useEffect(() => {
     if (streakOfferDismissed.current || streakShieldActive) return;
     const streak = progress.currentStreak;
     if (streak <= 0) return;
+    // Never sell prevention on a comeback day: if the streak just BROKE
+    // (PostStreakBreakOffer's 24h restore window is live), an upsell for
+    // the shield that would have prevented it is the worst possible first
+    // impression — and the two paywalls were landing simultaneously.
+    const rb = playerStreaks.recentBreak;
+    if (rb && Date.now() - rb.brokenAtMs < 24 * 60 * 60 * 1000) return;
+    // One overlay at a time: the login calendar auto-opens at 900ms; wait
+    // until it's closed (this effect re-runs on calendarOpen change).
+    if (calendarOpen) return;
 
     const now = new Date();
     const currentHour = now.getHours();
@@ -208,7 +241,7 @@ export function HomeScreen({
       const timer = setTimeout(() => setShowStreakOffer(true), 1000);
       return () => clearTimeout(timer);
     }
-  }, [progress.currentStreak, streakGraceDaysUsed, streakShieldActive, dailyDone]);
+  }, [progress.currentStreak, streakGraceDaysUsed, streakShieldActive, dailyDone, playerStreaks, calendarOpen]);
 
   const handleStreakOfferAccept = useCallback(() => {
     // Navigate to shop for streak shield purchase
@@ -239,9 +272,16 @@ export function HomeScreen({
     ]).start();
   }, [contentAnim, titleAnim]);
 
+  // Focus gate for the decorative loops below. freezeOnBlur suspends React
+  // rendering but does NOT stop already-running native-driver animations, so
+  // without this the wheel loops keep burning UI-thread frames behind
+  // GameScreen for the whole session (AmbientBackdrop gates for the same
+  // reason).
+  const isFocused = useIsFocused();
+
   // Pulse animation for wheel button when spins available
   useEffect(() => {
-    if (mysteryWheelSpins > 0 || dailyFreeSpinAvailable) {
+    if (isFocused && (mysteryWheelSpins > 0 || dailyFreeSpinAvailable)) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(wheelPulse, {
@@ -261,21 +301,7 @@ export function HomeScreen({
       pulse.start();
       return () => pulse.stop();
     }
-  }, [mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
-
-  // Slow spin for the wheel disc icon (matches bento design — 8s per rotation)
-  useEffect(() => {
-    const spin = Animated.loop(
-      Animated.timing(wheelSpin, {
-        toValue: 1,
-        duration: 8000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
-    spin.start();
-    return () => spin.stop();
-  }, [wheelSpin]);
+  }, [isFocused, mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
 
   // Free spin toast animation
   useEffect(() => {
@@ -344,9 +370,33 @@ export function HomeScreen({
   const showMissions = legacyTaskCardsEnabled && (hasSegmentContent
     ? segmentHomeContent.includes('missions') && dailyMissions.length > 0
     : (playerStage === 'established' || playerStage === 'veteran') && dailyMissions.length > 0);
-  const showMysteryWheel = hasSegmentContent
+  // `mysteryWheelEnabled` was a declared Remote Config key that nothing read,
+  // so the gacha had no off switch — the one feature class most likely to
+  // need darkening at short notice (a mispriced segment, a cosmetic granted
+  // in error, a regional gambling-disclosure question). Defaults true, so
+  // this changes nothing until someone flips it.
+  const showMysteryWheel = getRemoteBoolean('mysteryWheelEnabled') && (hasSegmentContent
     ? segmentHomeContent.includes('mystery_wheel') && onOpenWheel
-    : (playerStage !== 'new' || (mysteryWheelSpins > 0)) && onOpenWheel;
+    : (playerStage !== 'new' || (mysteryWheelSpins > 0)) && onOpenWheel);
+  const mysteryWheelVisible = Boolean(showMysteryWheel);
+
+  // Slow spin for the wheel disc icon (matches bento design — 8s per rotation).
+  // Runs only while Home is focused AND the wheel card is actually rendered —
+  // previously this looped unconditionally for the entire session, including
+  // behind GameScreen.
+  useEffect(() => {
+    if (!isFocused || !mysteryWheelVisible) return;
+    const spin = Animated.loop(
+      Animated.timing(wheelSpin, {
+        toValue: 1,
+        duration: 8000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    spin.start();
+    return () => spin.stop();
+  }, [isFocused, mysteryWheelVisible, wheelSpin]);
 
   // Auto-present the login calendar once per app session when today's
   // reward is unclaimed — the Wordscapes/Royal Match daily-sheet ritual.
@@ -355,12 +405,17 @@ export function HomeScreen({
   // hero entry animation + the below-fold deferred mount.
   useEffect(() => {
     if (!showDailyRewards || claimedLoginToday || autoOpenedCalendarThisSession) return;
+    // Ceremonies first: on an unlock-heavy open (mode unlocks, milestones)
+    // the queue drains as full-screen modals — auto-opening the calendar
+    // underneath them stacked three overlays on the returning player's
+    // first two seconds. This effect re-runs when the queue empties.
+    if (pendingCeremonies.length > 0) return;
     const timer = setTimeout(() => {
       autoOpenedCalendarThisSession = true;
       setCalendarOpen(true);
     }, 900);
     return () => clearTimeout(timer);
-  }, [showDailyRewards, claimedLoginToday]);
+  }, [showDailyRewards, claimedLoginToday, pendingCeremonies.length]);
 
   // ── Seasonal Quest ──────────────────────────────────────────────────
   const seasonalQuest = getCurrentSeasonalQuest();
@@ -547,8 +602,12 @@ export function HomeScreen({
                   <Text style={styles.dailyTitle}>{dailyDone ? 'Daily completed' : "Today's challenge"}</Text>
                   <Text style={styles.dailySubtitle}>
                     {dailyDone
-                      ? 'Come back tomorrow!'
-                      : `${getDailyVariant(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
+                      ? // Name tomorrow's board instead of a generic farewell —
+                        // a concrete promise ("Tall Tower · Night Sky") is the
+                        // best return hook the daily has, and both resolvers
+                        // are pure functions of the date.
+                        `Tomorrow: ${getDailyVariant(tomorrow).name} · ${getDailyTheme(tomorrow).name}`
+                      : `${getDailyVariant(today).name} · ${getDailyTheme(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
                   </Text>
                 </View>
                 <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>
@@ -830,6 +889,16 @@ export function HomeScreen({
         )}
       </LiveRail>
 
+      {/* R9: staggered claim timers (4/6/8/12h) — the multi-session-per-day
+          driver that was fully built and rendered nowhere. Below the fold,
+          deferred with the other heavy cards. */}
+      {belowFoldMounted && rewardTimerStates && onClaimRewardTimer && (
+        <DailyRewardTimers
+          timerStates={rewardTimerStates}
+          onClaim={onClaimRewardTimer}
+        />
+      )}
+
 
       {/* Free Spin Toast */}
       {freeSpinToast && (
@@ -876,6 +945,36 @@ export function HomeScreen({
             onLevelPress={() => onPlay()}
           />
         </LinearGradient>
+        {/* R6: the ONE closest-to-completion meta goal, with a bar. The
+            long arcs (chapter gates, chapter mastery) were invisible from
+            Home — the only long goal shown was the monthly-resetting season
+            pass, so felt progression read as a treadmill. */}
+        {nextGoal && (
+          <Pressable
+            onPress={() => onPlay()}
+            accessibilityRole="button"
+            accessibilityLabel={`Next goal: ${nextGoal.title}. ${nextGoal.detail}. Play now.`}
+          >
+            <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.nextGoalCard}>
+              <Text style={styles.nextGoalIcon}>{nextGoal.icon}</Text>
+              <View style={styles.nextGoalBody}>
+                <Text style={styles.nextGoalTitle} numberOfLines={1}>
+                  {nextGoal.title}
+                </Text>
+                <View style={styles.nextGoalBarBg}>
+                  <View
+                    style={[
+                      styles.nextGoalBarFill,
+                      { width: `${Math.round(nextGoal.progress * 100)}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.nextGoalDetail}>{nextGoal.detail}</Text>
+              </View>
+              <Text style={styles.nextGoalChevron}>›</Text>
+            </LinearGradient>
+          </Pressable>
+        )}
         {/* Flawless Streak — consecutive clean solves. Active card shines gold;
             empty state teaches what earns the streak. */}
         <FlawlessStreakCard
@@ -1871,6 +1970,48 @@ const styles = StyleSheet.create({
   },
 
   // Neon Highway shell — Bento cyan
+  nextGoalCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+  },
+  nextGoalIcon: {
+    fontSize: 26,
+  },
+  nextGoalBody: {
+    flex: 1,
+    gap: 5,
+  },
+  nextGoalTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  nextGoalBarBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.surface2,
+    overflow: 'hidden',
+  },
+  nextGoalBarFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: COLORS.teal,
+  },
+  nextGoalDetail: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  nextGoalChevron: {
+    fontSize: 24,
+    color: COLORS.textMuted,
+  },
   highwayShell: {
     ...bentoPanel('cyan'),
     padding: 0, // children manage their own padding

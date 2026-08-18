@@ -193,14 +193,26 @@ export interface WeeklyGoalsState {
   allCompleteBonus: { coins: number; gems: number };
 }
 
+/**
+ * The Monday of the current week as a UTC date string.
+ *
+ * MUST be computed entirely in UTC. The old version found Monday with
+ * LOCAL getDay()/setDate() and then serialized with toISOString() (UTC):
+ * for any non-UTC player near the day boundary the two disagree, so the
+ * stored weekStart didn't match the recomputed one and isNewWeek() reset
+ * the player's weekly goals — wiping earned progress mid-week.
+ */
+function currentWeekStartUTC(now: Date = new Date()): string {
+  const dayOfWeek = now.getUTCDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(now);
+  monday.setUTCDate(now.getUTCDate() + mondayOffset);
+  return monday.toISOString().split('T')[0];
+}
+
 /** Generate 3 random weekly goals */
 export function generateWeeklyGoals(): WeeklyGoalsState {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + mondayOffset);
-  const weekStart = monday.toISOString().split('T')[0];
+  const weekStart = currentWeekStartUTC();
 
   // Shuffle and pick 3
   const shuffled = [...WEEKLY_GOAL_TEMPLATES].sort(() => Math.random() - 0.5);
@@ -223,11 +235,5 @@ export function generateWeeklyGoals(): WeeklyGoalsState {
 
 /** Check if it's a new week compared to stored weekStart */
 export function isNewWeek(weekStart: string): boolean {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + mondayOffset);
-  const currentWeekStart = monday.toISOString().split('T')[0];
-  return currentWeekStart !== weekStart;
+  return currentWeekStartUTC() !== weekStart;
 }

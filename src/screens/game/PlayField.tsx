@@ -159,12 +159,74 @@ function PlayFieldImpl({
       const now = Date.now();
       if (now - lastTapFeedbackAt.current > 40) {
         lastTapFeedbackAt.current = now;
+        // ONE haptic per batch (haptic spam is worse than audio spam), but
+        // the rising-pitch ladder plays per cell: a confident swipe across a
+        // 7-letter word used to collapse to a single tap sound — the moment
+        // of highest fluency went mute while hesitant tracing got the full
+        // ladder. Stagger one tap per crossed cell at 22ms with the rate
+        // stepping per index, capped at 4 so a pathological drag can't
+        // machine-gun.
         void tapHaptic();
-        void soundManager.playSound('tap', { rate: tapRateForTrace() });
+        const baseLen = selectionLenRef.current;
+        const count = Math.min(positions.length, 4);
+        for (let i = 0; i < count; i++) {
+          const rate = 1 + Math.min(8, baseLen + i) * 0.06;
+          if (i === 0) {
+            void soundManager.playSound('tap', { rate });
+          } else {
+            setTimeout(() => {
+              void soundManager.playSound('tap', { rate });
+            }, i * 22);
+          }
+        }
       }
       dispatch({ type: 'SELECT_CELLS', positions });
     },
-    [dispatch, onCellInteraction, tapRateForTrace],
+    [dispatch, onCellInteraction],
+  );
+
+  // ── Release a dead trace on finger lift ────────────────────────────────
+  // A drag that ends without matching a word used to leave the tiles lit
+  // indefinitely; the only ways out were a non-adjacent tap (which fired the
+  // invalid-word error treatment — a punishment for normal exploratory play)
+  // or an adjacent tap that silently APPENDED to the dead trace. Now a
+  // multi-cell drag releases ~180ms after lift: long enough that the 50ms
+  // auto-submit timer always wins on a valid word, short enough to read as a
+  // clean release. Single taps never release (didTraceMultiple=false) so
+  // tap-by-tap selection keeps working, and a new gesture cancels the timer
+  // so fast consecutive traces are never clipped.
+  const isValidWordRef = useRef(false);
+  useEffect(() => {
+    isValidWordRef.current = isValidWord;
+  }, [isValidWord]);
+  const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleDragStart = useCallback(() => {
+    if (releaseTimerRef.current) {
+      clearTimeout(releaseTimerRef.current);
+      releaseTimerRef.current = null;
+    }
+  }, []);
+  const handleDragEnd = useCallback(
+    (didTraceMultiple: boolean) => {
+      if (!didTraceMultiple) return;
+      if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
+      releaseTimerRef.current = setTimeout(() => {
+        releaseTimerRef.current = null;
+        // A valid word is mid-auto-submit — SUBMIT_WORD clears the selection.
+        if (isValidWordRef.current) return;
+        if (selectionLenRef.current === 0) return;
+        // Silent by design: releasing an exploratory trace is normal play,
+        // not an error (game_mechanics.md — invalid submissions don't exist).
+        dispatch({ type: 'CLEAR_SELECTION' });
+      }, 180);
+    },
+    [dispatch],
+  );
+  useEffect(
+    () => () => {
+      if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
+    },
+    [],
   );
 
   return (
@@ -178,6 +240,8 @@ function PlayFieldImpl({
             hintedCells={isValidWord ? selectedCells : EMPTY_CELL_ARRAY}
             onCellPress={handleCellPress}
             onCellsPress={handleCellsPress}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
             validWord={showValidFlash}
             movedCells={mode === 'noGravity' ? EMPTY_CELL_ARRAY : movedCells}
             maxHeight={gridAreaHeight}

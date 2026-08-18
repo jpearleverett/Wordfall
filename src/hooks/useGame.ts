@@ -16,7 +16,7 @@ import {
   SolveStep,
 } from '../types';
 import { removeCells, applyGravity, applyGravityInDirection, removeCellsAndApplyGravityInDirection, cloneGrid } from '../engine/gravity';
-import { findWordInGrid, isWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard } from '../engine/solver';
+import { findWordInGrid, isWordInGrid, isDeadEnd, isDeadEndGravityFlip, isDeadEndNoGravity, getHint, isSolvable, isSolvableGravityFlip, areAllWordsIndependentlyFindable, getHintShrinkingBoard, isDeadEndShrinkingBoard, getHintNoGravity, getHintGravityFlip } from '../engine/solver';
 import { INITIAL_HINTS, INITIAL_UNDOS, SCORE, MODE_CONFIGS } from '../constants';
 import { instrumentReducer } from '../utils/perfInstrument';
 import { createGameStore, GameStore } from '../stores/gameStore';
@@ -66,6 +66,35 @@ function getUndosForMode(mode: GameMode): number {
   }
 }
 
+/**
+ * Pick a hint using the clear rule the CURRENT MODE actually has.
+ *
+ * The generic `getHint` simulates downward gravity — the classic rule. In
+ * noGravity, cleared cells stay as permanent holes; in gravityFlip the
+ * direction rotates a quarter-turn after every clear. Planning either of
+ * those with downward gravity diverges from the real board immediately and
+ * can suggest a word whose removal strands another.
+ *
+ * Hints are bought (tokens for the normal one, gems for the premium one),
+ * which makes a wrong hint worse than no hint: the player pays to be walked
+ * into a dead end. Both dispatch sites share this so they cannot drift.
+ */
+function pickHintForMode(
+  state: GameState,
+  remainingWords: string[],
+): { word: string; positions: CellPosition[] } | null {
+  switch (state.mode) {
+    case 'shrinkingBoard':
+      return getHintShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink);
+    case 'noGravity':
+      return getHintNoGravity(state.board.grid, remainingWords);
+    case 'gravityFlip':
+      return getHintGravityFlip(state.board.grid, remainingWords, state.gravityDirection);
+    default:
+      return getHint(state.board.grid, remainingWords);
+  }
+}
+
 function createInitialState(
   board: Board,
   level: number,
@@ -87,6 +116,8 @@ function createInitialState(
     hintsLeft: getHintsForMode(mode),
     hintsUsed: 0,
     undosLeft: getUndosForMode(mode),
+    undosUsed: 0,
+    shufflesUsed: 0,
     history: [],
     status: 'playing',
     level,
@@ -334,6 +365,21 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
   };
 }
 
+/**
+ * Assist-tier stars (F7, Aug 2026): 3★ = clean solve (no hints, undos, or
+ * shuffles — the FLAWLESS definition), 2★ = exactly one assist, 1★ = more.
+ * Pure and exported for tests — the old formula's `moves <= totalWords`
+ * clause was always true on a win, silently reducing stars to "used a hint
+ * or not"; a guard on the real tiers keeps that from regressing.
+ */
+export function computeStars(
+  status: GameStatus,
+  assistsUsed: number,
+): 0 | 1 | 2 | 3 {
+  if (status !== 'won') return 0;
+  return assistsUsed === 0 ? 3 : assistsUsed === 1 ? 2 : 1;
+}
+
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'SELECT_CELL': {
@@ -402,6 +448,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         words: board.words.map(w => ({ ...w })),
         wordsUntilShrink: state.wordsUntilShrink,
         shrinkCount: state.shrinkCount,
+        score: state.score,
       };
 
       // Remove letters from grid
@@ -536,10 +583,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         .filter(w => !w.found)
         .map(w => w.word);
 
-      // shrinkingBoard: use shrink-aware hint that accounts for future outer ring removals
-      const hint = state.mode === 'shrinkingBoard'
-        ? getHintShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink)
-        : getHint(state.board.grid, remainingWords);
+      const hint = pickHintForMode(state, remainingWords);
       if (!hint) return state;
 
       return {
@@ -580,7 +624,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectedCells: [],
         selectionDirection: null,
         moves: state.moves - 1,
+        // Roll the score back with the board. Leaving it meant an undone
+        // word kept its points AND scored again on re-find — with purchased
+        // undos, an unbounded score pump straight into the daily/weekly
+        // leaderboards. Legacy snapshots without the field keep the current
+        // score (one puzzle, then the field exists).
+        score: lastHistory.score ?? state.score,
         undosLeft: state.undosLeft - 1,
+        undosUsed: state.undosUsed + 1,
         history: state.history.slice(0, -1),
         solveSequence: state.solveSequence.slice(0, -1),
         perfectRun: false,
@@ -617,6 +668,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // shouldn't survive the background -> foreground transition.
       return {
         ...action.state,
+        // Fields added after a snapshot version shipped arrive as undefined
+        // from an older payload, and the snapshot is trusted verbatim. A
+        // missing counter here is not benign: `state.undosUsed + 1` would
+        // evaluate to NaN and poison the completion telemetry for anyone
+        // who resumed a puzzle across the upgrade. Any future numeric field
+        // needs the same treatment or a version bump.
+        undosUsed: action.state.undosUsed ?? 0,
+        shufflesUsed: action.state.shufflesUsed ?? 0,
         selectedCells: [],
         selectionDirection: null,
         lastInvalidTap: null,
@@ -728,6 +787,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           spotlightActive: false,
           spotlightLetters: [],
           boostersUsedThisPuzzle: nextUsed,
+          // A shuffle is an assist: it counts toward the star tiers and —
+          // per game_mechanics.md's FLAWLESS definition ("no hints, no
+          // undos, no shuffle") — breaks the perfect run. perfectRun never
+          // actually flipped here before; the doc was right, the code wrong.
+          shufflesUsed: state.shufflesUsed + 1,
+          perfectRun: false,
         };
       };
 
@@ -790,10 +855,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         .filter(w => !w.found)
         .map(w => w.word);
 
-      // Premium hint: reveal the exact next word (same as USE_HINT but marked as premium)
-      const hint = state.mode === 'shrinkingBoard'
-        ? getHintShrinkingBoard(state.board.grid, remainingWords, state.wordsUntilShrink)
-        : getHint(state.board.grid, remainingWords);
+      // Premium hint: reveal the exact next word (same as USE_HINT but marked
+      // as premium). Mode-aware for the same reason USE_HINT is — and more
+      // so, since this one is bought with gems. A hint that plans against
+      // downward gravity on a board that has none is a paid wrong answer.
+      const hint = pickHintForMode(state, remainingWords);
       if (!hint) return state;
 
       return {
@@ -920,6 +986,8 @@ export function useGame(
   const moves = useStore(store, s => s.moves);
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const hintsUsed = useStore(store, s => s.hintsUsed);
+  const undosUsed = useStore(store, s => s.undosUsed);
+  const shufflesUsed = useStore(store, s => s.shufflesUsed);
   const shrinkCount = useStore(store, s => s.shrinkCount);
 
   // ── Derived (changes per word, not per tap) ──────────────────────────
@@ -964,15 +1032,18 @@ export function useGame(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shrinkCount]);
 
-  // ── Stars ────────────────────────────────────────────────────────────
-  const stars =
-    status === 'won'
-      ? hintsUsed === 0 && moves <= totalWords
-        ? 3
-        : hintsUsed <= 1 && moves <= totalWords + 1
-        ? 2
-        : 1
-      : 0;
+  // ── Stars (F7, Aug 2026) ─────────────────────────────────────────────
+  // Assist-tier stars: 3★ = clean solve (no hints, undos, or shuffles —
+  // aligned with the FLAWLESS/perfectRun definition), 2★ = exactly one
+  // assist, 1★ = more. The old formula's `moves <= totalWords` clause was
+  // ALWAYS true on a win (moves only increments on a successful find), so
+  // stars had silently reduced to "used a hint or not" — a hidden boolean
+  // wearing a three-tier costume, with 3★ and FLAWLESS firing together on
+  // every hint-free win. Now the third star is the flawless run and the
+  // second star is the near-miss. Note: this makes 3★ strictly harder for
+  // assist-using players, which slows star-gated chapter unlocks — an
+  // approved balance change (fun backlog F7).
+  const stars = computeStars(status, hintsUsed + undosUsed + shufflesUsed);
 
   // ── Timer for timed modes ────────────────────────────────────────────
   useEffect(() => {
@@ -1014,7 +1085,7 @@ export function useGame(
 
     if (mode === 'gravityFlip') {
       const timer = setTimeout(() => {
-        setIsStuck(isDeadEndGravityFlip(grid, remainingWords, gravityDirection, moves));
+        setIsStuck(isDeadEndGravityFlip(grid, remainingWords, gravityDirection));
       }, DEBOUNCE_MS);
       return () => clearTimeout(timer);
     }

@@ -21,6 +21,13 @@ interface MilestoneCeremonyProps {
   description: string;
   accentColor?: string;
   rewardLabel?: string;
+  /**
+   * Optional teaching rows rendered under the description. The first_win
+   * ceremony carries the gravity/order tips that two deleted onboarding
+   * phases were traded away for — without this prop that payload was
+   * silently dropped.
+   */
+  tips?: Array<{ icon: string; text: string }>;
   buttonText?: string;
   onDismiss: () => void;
 }
@@ -32,6 +39,7 @@ export function MilestoneCeremony({
   description,
   accentColor = COLORS.gold,
   rewardLabel,
+  tips,
   buttonText = 'AWESOME!',
   onDismiss,
 }: MilestoneCeremonyProps) {
@@ -75,6 +83,17 @@ export function MilestoneCeremony({
 
           <Text style={[styles.title, { color: accentColor }]}>{title}</Text>
           <Text style={styles.description}>{description}</Text>
+
+          {tips && tips.length > 0 && (
+            <View style={styles.tipsBox}>
+              {tips.map((tip) => (
+                <View key={tip.text} style={styles.tipRow}>
+                  <Text style={styles.tipIcon}>{tip.icon}</Text>
+                  <Text style={styles.tipText}>{tip.text}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {rewardLabel && (
             <View style={styles.rewardChip}>
@@ -152,6 +171,26 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 20,
     maxWidth: 260,
+  },
+  tipsBox: {
+    alignSelf: 'stretch',
+    gap: 8,
+    marginBottom: 16,
+    paddingHorizontal: 6,
+  },
+  tipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tipIcon: {
+    fontSize: 15,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
   },
   rewardChip: {
     backgroundColor: 'rgba(255,255,255,0.06)',

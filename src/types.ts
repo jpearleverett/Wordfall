@@ -57,7 +57,32 @@ export interface GameState {
   hintsLeft: number;
   hintsUsed: number;
   undosLeft: number;
-  history: { grid: Grid; words: WordPlacement[]; wordsUntilShrink?: number; shrinkCount?: number }[];
+  /**
+   * Monotonic count of undos actually spent this puzzle. Not derivable from
+   * `undosLeft`, which is also incremented by grants (the free stuck rescue),
+   * so the two would cancel out.
+   */
+  undosUsed: number;
+  /**
+   * Monotonic count of smart shuffles spent this puzzle. Counted toward the
+   * star tiers (F7): 3★ = zero assists, 2★ = one, 1★ = more. Also flips
+   * perfectRun — the mechanics doc has always defined FLAWLESS as
+   * "no hints, no undos, no shuffle", but shuffle never actually flipped it.
+   */
+  shufflesUsed: number;
+  history: {
+    grid: Grid;
+    words: WordPlacement[];
+    wordsUntilShrink?: number;
+    shrinkCount?: number;
+    /**
+     * Score BEFORE the clear this entry precedes. Undo must restore it:
+     * without this, undoing a word kept its points and re-finding it scored
+     * again — pay one undo token, duplicate a word's score, repeat. Optional
+     * because snapshots persisted before this field existed lack it.
+     */
+    score?: number;
+  }[];
   status: GameStatus;
   level: number;
   maxMoves: number;
@@ -513,7 +538,19 @@ export interface StreakData {
   currentStreak: number;
   bestStreak: number;
   lastPlayDate: string;
+  /**
+   * Telemetry only since Aug 2026 — grace eligibility is a cooldown now
+   * (see canUseGrace in PlayerProgressContext), not a budget. Kept because
+   * it is already persisted and is a useful "how forgiving has this player
+   * needed us to be" signal.
+   */
   graceDaysUsed: number;
+  /**
+   * UTC day the last grace day was spent. Absent means grace is available.
+   * Cleared when a streak genuinely breaks so the next streak doesn't
+   * inherit the previous one's cooldown.
+   */
+  lastGraceDate?: string;
   streakShieldAvailable: boolean;
   lastShieldDate?: string;
   /**
@@ -760,6 +797,20 @@ export interface WeeklyGoalsState {
 }
 
 // ============ CEREMONY QUEUE ============
+/**
+ * A full-screen ceremony. EVERY member of this union must have a render case
+ * in src/App/CeremonyRouter.tsx — a queued ceremony the router does not
+ * handle is a reward the player never sees, and nothing fails to say so.
+ * `ceremonyCoverage.test.ts` pins that both ways.
+ *
+ * This union previously also carried nine members that belong to
+ * VictorySummaryItem (level_up, star_milestone, early_bonus, …) — the inline
+ * rows on the victory screen, which are a different render surface entirely.
+ * They were unreachable as ceremonies but perfectly typecheckable, so
+ * `queueCeremony({ type: 'star_milestone', … })` compiled and would have
+ * silently dropped the reward. Narrowing the union makes that a compile
+ * error instead of a live bug waiting for an autocomplete.
+ */
 export interface CeremonyItem {
   type:
     | 'feature_unlock'
@@ -767,31 +818,23 @@ export interface CeremonyItem {
     | 'achievement'
     | 'streak_milestone'
     | 'collection_complete'
-    | 'level_up'
-    | 'difficulty_transition'
     | 'mystery_wheel_jackpot'
     | 'win_streak_milestone'
     | 'flawless_streak_milestone'
-    | 'star_milestone'
-    | 'perfect_milestone'
-    | 'decoration_unlock'
     | 'first_rare_tile'
     | 'first_booster'
     | 'wing_complete'
     | 'word_mastery_gold'
     | 'first_mode_clear'
     | 'wildcard_earned'
-    | 'mastery_tier_up'
     | 'quest_step_complete'
     | 'prestige'
     | 'first_win'
-    | 'early_bonus'
-    | 'library_teaser'
     | 'starter_pack_unlocked'
-    | 'tomorrow_preview'
     | 'daily_quest_claim'
     | 'first_purchase_offer'
-    | 'season_pass_complete';
+    | 'season_pass_complete'
+    | 'inbox_reward';
   data: Record<string, any>;
   /** If set, ceremony auto-dismisses after this many ms (Tier 2 behavior). */
   autoDismissMs?: number;

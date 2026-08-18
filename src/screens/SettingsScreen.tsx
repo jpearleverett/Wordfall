@@ -22,6 +22,7 @@ import {
   selectIsAdFreeComputed,
   selectIsPremiumPassFlag,
 } from '../stores/economyStore';
+import { usePlayerActions } from '../stores/playerStore';
 import {
   requestAccountDeletion,
   clearLocalUserData,
@@ -85,10 +86,29 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const isPremiumPassFlag = useEconomyStore(selectIsPremiumPassFlag);
   const { signOut, isAnonymous, linkedEmail, canLinkGoogle, linkGoogle } = useAuth();
   const { restorePurchases } = useCommerce();
+  const playerActions = usePlayerActions();
 
   const settings = settingsProp ?? contextSettings;
   const onUpdateSetting = onUpdateSettingProp ?? ((key: string, value: any) => contextSettings.updateSetting(key as any, value));
-  const onResetProgress = onResetProgressProp ?? (() => {});
+  // Default to a REAL reset. Both navigator registrations mount this screen
+  // with no props (`component={SettingsScreen}`), so the old `() => {}`
+  // default made "Reset Local Data" a confirmed no-op: the player read the
+  // warning, tapped the destructive button, and nothing happened. A reset
+  // control that silently does nothing is worse than none — it burns trust
+  // in every other control on the screen.
+  const onResetProgress =
+    onResetProgressProp ??
+    (() => {
+      playerActions.updateProgress({
+        currentLevel: 1,
+        highestLevel: 1,
+        totalScore: 0,
+        puzzlesSolved: 0,
+        perfectSolves: 0,
+        starsByLevel: {},
+        totalStars: 0,
+      });
+    });
   const onSignOut = onSignOutProp ?? signOut;
 
   const [signingIn, setSigningIn] = useState(false);

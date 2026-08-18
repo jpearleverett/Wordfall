@@ -33,6 +33,7 @@ import { createProgressMethods } from './PlayerProgressContext';
 import { createSocialMethods } from './PlayerSocialContext';
 import { generateReferralCode, REFERRAL_MILESTONES } from '../data/referralSystem';
 import { createPersistQueue } from '../utils/persistQueue';
+import { stripUndefinedDeep } from '../utils/firestoreSanitize';
 import { firestoreService } from '../services/firestore';
 import { recordReferralSuccessSecure } from '../services/referralRewards';
 import { analytics } from '../services/analytics';
@@ -201,6 +202,10 @@ export interface PlayerData {
   // once for this player. Any non-null value prevents re-trigger forever.
   firstPurchaseModalShownAt: number | null;
 
+  // Daily reward timers (4/6/8/12h staggered claims on Home's LIVE NOW
+  // rail) — timerId → last-claimed timestamp (ms). Missing key = claimable.
+  rewardTimerClaims: Record<string, number>;
+
   // Mystery Wheel
   mysteryWheel: {
     spinsAvailable: number;
@@ -352,6 +357,11 @@ export interface PlayerContextType extends PlayerData {
   // Gifting
   sendHintGift: (friendId: string) => boolean;
   sendTileGift: (friendId: string, tileLetter: string) => boolean;
+
+  // Clubs — clubId cache setter. Actual membership mutation happens via the
+  // joinClub/leaveClub Cloud Functions (src/services/clubMembership.ts);
+  // this only records the result locally (and syncs it via cloud save).
+  setClubId: (clubId: string | null) => void;
 
   // Mystery Wheel
   updateMysteryWheel: (updates: Partial<PlayerData['mysteryWheel']>) => void;
@@ -529,6 +539,9 @@ const DEFAULT_PLAYER_DATA: PlayerData = {
 
   firstPurchaseModalShownAt: null,
 
+  // Daily reward timers — empty = every timer claimable on first open.
+  rewardTimerClaims: {},
+
   // Mystery Wheel
   mysteryWheel: {
     spinsAvailable: 1, // Start with 1 free spin
@@ -645,6 +658,7 @@ const PlayerContext = createContext<PlayerContextType>({
   checkAchievements: () => [],
   sendHintGift: () => false,
   sendTileGift: () => false,
+  setClubId: () => {},
   updateMysteryWheel: () => {},
   awardFreeSpin: () => {},
   updateWinStreak: () => {},
@@ -759,7 +773,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // exponential backoff AND the sync-status bus lights up
         // NotSyncedBanner when writes keep failing. Permanent errors
         // (permission-denied etc.) short-circuit immediately.
-        await withRetry(() => setDoc(docRef, payload, { merge: true }), {
+        // stripUndefinedDeep: setDoc throws on any nested `undefined`, and a
+        // throw here is a silently dropped save. An optional field that
+        // hydrates as undefined for existing players (as streaks.lastGraceDate
+        // once did) would otherwise kill cloud sync for everyone at once.
+        await withRetry(() => setDoc(docRef, stripUndefinedDeep(payload), { merge: true }), {
           label: 'player-firestore',
         });
       } catch (e) {
@@ -1223,6 +1241,37 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ── Clubs ───────────────────────────────────────────────────────────────
+
+  // Local cache of the server-authoritative membership. Set after a
+  // successful joinClub/leaveClub callable, and reconciled on app open by
+  // the membership-discovery effect below.
+  const setClubId = useCallback((clubId: string | null) => {
+    setData((prev) => (prev.clubId === clubId ? prev : { ...prev, clubId }));
+  }, []);
+
+  // Cross-device membership discovery (runs once per app open, after auth).
+  // A fresh install has clubId: null even though the server still lists the
+  // uid in a club's memberIds; conversely a stale local clubId survives a
+  // leave performed on another device. The array-contains query is the
+  // source of truth; `undefined` means "couldn't check" (offline) and MUST
+  // NOT clear the local cache.
+  const clubDiscoveryDone = useRef(false);
+  useEffect(() => {
+    if (!loaded || !user || clubDiscoveryDone.current) return;
+    clubDiscoveryDone.current = true;
+    (async () => {
+      try {
+        const { firestoreService } = await import('../services/firestore');
+        const club = await firestoreService.findClubByMembership(user.uid);
+        if (club === undefined) return; // unknown — keep local cache
+        setClubId(club ? (club.id as string) : null);
+      } catch (e) {
+        logger.warn('[Player] club membership discovery failed:', e);
+      }
+    })();
+  }, [loaded, user, setClubId]);
+
   // ── Gifting (extracted to PlayerSocialContext) ──────────────────────────
 
   // ── Library ─────────────────────────────────────────────────────────────
@@ -1241,49 +1290,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  /**
-   * Check if a wing's chapters are all 3-starred and grant the wing completion bonus.
-   * Awards 1000 coins + 25 gems + queues wing_complete ceremony.
-   */
-  const checkWingCompletion = useCallback((wingId: string) => {
-    setData((prev) => {
-      if (prev.completedWingBonuses.includes(wingId)) return prev;
-
-      // Check if all chapters in this wing have 3 stars
-      const wingChapters = CHAPTERS.filter(ch => ch.wingId === wingId);
-      if (wingChapters.length === 0) return prev;
-
-      let cumulativeLevel = 0;
-      for (const ch of CHAPTERS) {
-        if (ch.wingId === wingId) {
-          // Check all puzzles in this chapter have 3 stars
-          for (let i = 1; i <= ch.puzzleCount; i++) {
-            const levelNum = cumulativeLevel + i;
-            if ((prev.starsByLevel[levelNum] ?? 0) < 3) return prev;
-          }
-        }
-        cumulativeLevel += ch.puzzleCount;
-      }
-
-      // All chapters in wing are 3-starred! Grant bonus.
-      return {
-        ...prev,
-        completedWingBonuses: [...prev.completedWingBonuses, wingId],
-        pendingCeremonies: [
-          ...prev.pendingCeremonies,
-          {
-            type: 'wing_complete' as const,
-            data: {
-              wingId,
-              wingName: wingId.charAt(0).toUpperCase() + wingId.slice(1),
-              bonusCoins: 1000,
-              bonusGems: 25,
-            },
-          },
-        ],
-      };
-    });
-  }, []);
+  // NOTE: a checkWingCompletion method used to live here — the 3-star wing
+  // "perfection bonus" (1000c/25g). Nothing ever called it, its ceremony
+  // embedded reward amounts that nothing granted, and it duplicated the
+  // reachable wing detection in PlayerProgressContext.recordPuzzleComplete,
+  // which now carries the bonus. completedWingBonuses stays in the persisted
+  // shape (removing persisted fields needs a migration and buys nothing).
 
   const placeDecoration = useCallback(
     (slotId: string, decorationId: string) => {
@@ -1470,6 +1482,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             ...prev.flawlessStreak,
             currentStreak: 0,
             lastFlawlessDate: null,
+            // Milestones are per-RUN, not per-lifetime. With a lifetime
+            // list, a player who hit 20 in week one had permanently
+            // exhausted every ceremony in the game's headline dopamine
+            // system — rebuilding a streak celebrated nothing forever.
+            // Reset-on-break makes each rebuilt run re-earn its ladder
+            // (that IS the anti-farm: you must lose a real streak to
+            // re-earn, and grants are tuned accordingly).
+            rewardsClaimed: [],
           },
         };
       }
@@ -1478,7 +1498,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const newStreak = prev.flawlessStreak.currentStreak + 1;
       const newBest = Math.max(newStreak, prev.flawlessStreak.bestStreak);
 
+      // Fixed ladder to 20, then a repeating milestone every 10 so the
+      // system never dead-ends at "Max milestone reached!". Rewards are
+      // granted at ceremony POP time via ceremonyEconomyGrant's
+      // flawless_streak_milestone case (single source for display+credit).
       const milestones = [3, 5, 7, 10, 15, 20];
+      if (newStreak > 20 && newStreak % 10 === 0) milestones.push(newStreak);
       let pendingCeremonies = prev.pendingCeremonies;
       let rewardsClaimed = prev.flawlessStreak.rewardsClaimed;
       for (const milestone of milestones) {
@@ -1492,6 +1517,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             {
               type: 'flawless_streak_milestone' as const,
               data: { streak: milestone, label: labels[milestone] || `${milestone} Flawless!` },
+              // Celebratory, not demanding: three of these can land inside
+              // one strong session — they self-dismiss instead of each
+              // requiring a tap.
+              autoDismissMs: 3500,
             },
           ];
           rewardsClaimed = [...rewardsClaimed, milestone];
@@ -1937,6 +1966,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       checkAchievements,
       sendHintGift,
       sendTileGift,
+      setClubId,
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
@@ -2005,6 +2035,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       checkAchievements,
       sendHintGift,
       sendTileGift,
+      setClubId,
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
@@ -2078,6 +2109,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       checkAchievements,
       sendHintGift,
       sendTileGift,
+      setClubId,
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,
@@ -2145,6 +2177,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       checkAchievements,
       sendHintGift,
       sendTileGift,
+      setClubId,
       updateMysteryWheel,
       awardFreeSpin,
       updateWinStreak,

@@ -22,6 +22,8 @@ import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import LocalErrorBoundary from '../components/LocalErrorBoundary';
 import { crashReporter } from '../services/crashReporting';
+import { findWordInGrid, choiceAvoidedDeadEnd, isProvablyCompletable } from '../engine/solver';
+import { resolveUndoSource } from '../utils/undoGate';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -29,9 +31,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic } from '../services/haptics';
+import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic, stuckHaptic } from '../services/haptics';
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
+import {
+  canShowOfferNow,
+  recordOfferShown,
+  offersShownThisSession,
+} from '../utils/offerPacing';
 import {
   usePlayerStore,
   usePlayerActions,
@@ -87,6 +94,13 @@ interface GameScreenProps {
     score: number,
     perfectRun: boolean,
     completionTimeSeconds: number,
+    /**
+     * Assist usage for this solve. Passed explicitly because the reward hook
+     * has no access to the game store — it was previously logging hardcoded
+     * zeros for these, which made every difficulty dashboard read as though
+     * nobody ever used a hint.
+     */
+    assists?: { hintsUsed: number; undosUsed: number },
   ) => void;
   onNextLevel: () => void;
   onHome: () => void;
@@ -277,6 +291,8 @@ interface TimerMovesBarsProps {
   hasTimer: boolean;
   hasMoveLimit: boolean;
   timeRemaining: number;
+  /** Full time budget for the puzzle — suppresses warnings that would fire at start. */
+  totalSeconds: number;
   moves: number;
   maxMoves: number;
 }
@@ -284,9 +300,40 @@ const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
   hasTimer,
   hasMoveLimit,
   timeRemaining,
+  totalSeconds,
   moves,
   maxMoves,
 }: TimerMovesBarsProps) {
+  // Tier 4 C2 — 30s/10s threshold warnings (haptic + SFX). These were
+  // authored in components/modes/TimerDisplay.tsx, which nothing ever
+  // mounted; that component also ran its own setInterval countdown, so
+  // mounting it would have raced the reducer's authoritative timer. The
+  // warnings live here instead, driven by the store's timeRemaining.
+  const warned30Ref = useRef(false);
+  const warned10Ref = useRef(false);
+  const prevTimeRef = useRef(timeRemaining);
+  useEffect(() => {
+    const prev = prevTimeRef.current;
+    prevTimeRef.current = timeRemaining;
+    if (!hasTimer) return;
+    if (timeRemaining > prev) {
+      // Timer refilled (new puzzle / time bonus) — re-arm the crossings.
+      if (timeRemaining > 30) warned30Ref.current = false;
+      if (timeRemaining > 10) warned10Ref.current = false;
+      return;
+    }
+    if (!warned30Ref.current && timeRemaining <= 30 && timeRemaining > 10 && totalSeconds > 30) {
+      warned30Ref.current = true;
+      void errorHaptic();
+      void soundManager.playSound('timerWarning30s');
+    }
+    if (!warned10Ref.current && timeRemaining <= 10 && timeRemaining > 0 && totalSeconds > 10) {
+      warned10Ref.current = true;
+      void errorHaptic();
+      void soundManager.playSound('timerWarning10s');
+    }
+  }, [timeRemaining, hasTimer, totalSeconds]);
+
   return (
     <>
       {hasTimer && (
@@ -322,6 +369,31 @@ const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
 
 // --- Word-Clear Particle Pop ---
 const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', '#ff9100'];
+
+/**
+ * Tooltip key for the "why did the board die" explainer. Lives in the same
+ * `tooltipsShown` ledger as the other tips so it persists across sessions.
+ *
+ * NOT once-per-lifetime any more: the explainer almost always burned in
+ * L1-30, where random-play dead-ends run ~12% and a stuck board is a
+ * curiosity — then the ~57% regime arrives at L31+ with only the short
+ * banner. One show per 15-level difficulty phase (4 lifetime max, keyed
+ * below), so the lesson re-lands right where the boards start demanding it.
+ * The legacy un-suffixed key doubles as phase 0 so existing players don't
+ * re-see the early-game show.
+ */
+const FIRST_STUCK_TOOLTIP = 'first_stuck_gravity';
+function stuckTooltipKeyForLevel(level: number): string {
+  const phase = Math.min(3, Math.floor(Math.max(0, level - 1) / 15));
+  return phase === 0 ? FIRST_STUCK_TOOLTIP : `${FIRST_STUCK_TOOLTIP}_p${phase}`;
+}
+
+// Last-word tension only fires on boards with at least this many words —
+// on 2-3 word early boards the "climax" landed seconds into the puzzle.
+const LAST_WORD_TENSION_MIN_WORDS = 4;
+
+/** Stable empty array so the stranded-words memo can't churn GameBanners. */
+const EMPTY_STRING_LIST: string[] = [];
 
 function WordClearParticle({ delay, startX, startY }: { delay: number; startX: number; startY: number }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -500,6 +572,8 @@ function GameScreenImpl({
     activateSmartShuffle,
     activateBoosterCombo,
     expireBoosterCombo,
+    activateScoreDoubler,
+    activateBoardFreeze,
     isStuck,
     stars,
     foundWords,
@@ -518,7 +592,6 @@ function GameScreenImpl({
   const undosLeft = useStore(store, s => s.undosLeft);
   const timeRemaining = useStore(store, s => s.timeRemaining);
   const grid = useStore(store, s => s.board.grid);
-  const words = useStore(store, useShallow((s: GameState) => s.board.words));
   const history = useStore(store, useShallow((s: GameState) => s.history));
   const wildcardMode = useStore(store, s => s.wildcardMode);
   const spotlightActive = useStore(store, s => s.spotlightActive);
@@ -526,11 +599,9 @@ function GameScreenImpl({
   const gravityDirection = useStore(store, s => s.gravityDirection);
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const perfectRun = useStore(store, s => s.perfectRun);
-  const lastInvalidTap = useStore(store, s => s.lastInvalidTap);
-  const lastSelectionResetTap = useStore(store, s => s.lastSelectionResetTap);
-  const boardFreezeActive = useStore(store, s => s.boardFreezeActive);
-  const scoreDoubler = useStore(store, s => s.scoreDoubler);
-  const boostersUsedThisPuzzle = useStore(store, useShallow((s: GameState) => s.boostersUsedThisPuzzle));
+  // NOTE: deliberately NOT subscribed to per-tap markers (lastInvalidTap /
+  // lastSelectionResetTap) — the invalid-tap feedback below watches the store
+  // transiently so trace restarts never re-render this 3000-line component.
   const activeComboType = useStore(store, s => s.activeComboType);
   const comboWordsRemaining = useStore(store, s => s.comboWordsRemaining);
   const comboMultiplierValue = useStore(store, s => s.comboMultiplier);
@@ -564,6 +635,9 @@ function GameScreenImpl({
   const [showInvalidFlash, setShowInvalidFlash] = useState(false);
   const scorePopupAnim = useRef(new Animated.Value(0)).current;
   const [scorePopup, setScorePopup] = useState<{ points: number; label: string } | null>(null);
+  // Pending reduce-motion popup teardown — cleared before scheduling the next
+  // so fast word chains don't have the old word's timer null the new popup.
+  const scorePopupTeardownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevScoreRef = useRef(score);
   const [showIdleHint, setShowIdleHint] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -630,6 +704,8 @@ function GameScreenImpl({
     spendCoins,
     spendGems,
     processAdReward,
+    hasTemporaryEntitlement,
+    consumeTemporaryEntitlement,
   } = useEconomyActions();
   const [activeOffer, setActiveOffer] = useState<OfferType | null>(null);
   const offerShownThisLevel = useRef(false);
@@ -740,7 +816,16 @@ function GameScreenImpl({
     const bypassGate = type === 'close_finish_premium';
     if (offerSuppressed) return false;
     if (!bypassGate && offerShownThisLevel.current) return false;
+    // Session-level pacing. The one-per-level gate above was previously the
+    // ONLY limit, so a level-2 player could be shown a purchase offer on
+    // every single level — the pattern players describe as "the game keeps
+    // asking me for money". Adds a grace period before the first offer, a
+    // per-session cap, and a cooldown between offers. All RC-tunable.
+    // close_finish_premium is an escalation of an offer the player is already
+    // looking at, so it bypasses pacing exactly as it bypasses the level gate.
+    if (!bypassGate && !canShowOfferNow(puzzlesSolved)) return false;
     offerShownThisLevel.current = true;
+    if (!bypassGate) recordOfferShown();
     trackTimeout(() => {
       setActiveOffer(type);
       void analytics.logEvent('offer_shown', {
@@ -748,10 +833,11 @@ function GameScreenImpl({
         level,
         mode,
         difficulty,
+        offersThisSession: offersShownThisSession(),
       });
     }, 750);
     return true;
-  }, [offerSuppressed, level, mode, difficulty, trackTimeout]);
+  }, [offerSuppressed, level, mode, difficulty, trackTimeout, puzzlesSolved]);
 
   // booster_pack: show on first entry to a hard/expert level
   useEffect(() => {
@@ -1135,7 +1221,11 @@ function GameScreenImpl({
         duration: 200,
         useNativeDriver: true,
       }),
-    ]).start(() => setShowInvalidFlash(false));
+    ]).start(({ finished }) => {
+      // A rapid second invalid tap restarts the sequence; the interrupted
+      // run's callback must not hide the flash the new run just showed.
+      if (finished) setShowInvalidFlash(false);
+    });
 
     if (!reduceMotion && getRemoteBoolean('invalidShakeEnabled')) {
       // ~120ms total, ±8px peak — reduced amplitude vs the 7+-letter shake
@@ -1151,16 +1241,25 @@ function GameScreenImpl({
     }
   }, [invalidFlashAnim, reduceMotion, shakeAnim]);
 
-  // Trigger invalid flash only for true invalid-tap errors.
-  useEffect(() => {
-    if (lastInvalidTap) {
-      showInvalidFlashAnim();
-    }
-  }, [lastInvalidTap, showInvalidFlashAnim]);
+  // NOTE (Aug 2026 feel audit): the "invalid tap" error treatment that used
+  // to fire here — error haptic + wordInvalid SFX + red flash + screen shake
+  // whenever a non-adjacent tap broke a 2+ cell trace — is deliberately GONE.
+  // game_mechanics.md is explicit that invalid-word rejection is not a moment
+  // this game has, and the gesture it punished (abandon a guess, start a new
+  // one) is the single most common transition in exploratory play. Dead
+  // traces now release silently on finger lift (see PlayField's
+  // handleDragEnd), and a restart tap is just normal play. The reducer still
+  // records lastSelectionResetTap; showInvalidFlashAnim stays for any future
+  // surface that needs a genuine error flash.
 
   // Hints/undos use persistent economy tokens (not per-level allocation)
-  // Relax mode still uses unlimited per-level allocation
-  const hintsAvailable = mode === 'relax' ? hintsLeft : hintTokens;
+  // Relax mode still uses unlimited per-level allocation.
+  // allowHints was only ever read by GameHeader (hiding the button), so
+  // expert/perfectSolve players with tokens still got a tappable idle-hint
+  // banner — and the ad-hint banner when they had none. Forcing availability
+  // to 0 here starves every downstream surface at once.
+  const hintsAllowed = modeConfig.rules.allowHints;
+  const hintsAvailable = !hintsAllowed ? 0 : mode === 'relax' ? hintsLeft : hintTokens;
   const undosAvailable = mode === 'relax' ? undosLeft : undoTokens;
 
   // Idle hint prompt — use refs to avoid recreating on every state change
@@ -1172,7 +1271,12 @@ function GameScreenImpl({
   const resetIdleTimer = useCallback(() => {
     setShowIdleHint(false);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    if (statusRef.current === 'playing' && hintsAvailableRef.current > 0) {
+    // No hintsAvailable gate here: the out-of-hints ad banner REQUIRES
+    // hintsAvailable === 0, so arming only when > 0 made it unreachable dead
+    // code — the player most in need of a nudge (stalled, no hints) got
+    // nothing at any idle duration. GameBanners decides which banner renders
+    // (and canShowAdHint already suppresses the ad path in no-hint modes).
+    if (statusRef.current === 'playing') {
       idleTimerRef.current = setTimeout(() => {
         setShowIdleHint(true);
       }, idleHintDelay);
@@ -1240,7 +1344,13 @@ function GameScreenImpl({
 
   // Track post-gravity moved cells + per-tile fall animation
   useEffect(() => {
-    if (foundWords > prevFoundWordsRef.current && status === 'playing') {
+    // Capture-then-update BEFORE branching: the word-found branch returns a
+    // cleanup function, so a trailing assignment would be unreachable and the
+    // stale ref would replay the gravity whoosh/haptic on every undo (which
+    // drops foundWords from N to N-1 — still above a never-updated 0).
+    const prevFound = prevFoundWordsRef.current;
+    prevFoundWordsRef.current = foundWords;
+    if (foundWords > prevFound && status === 'playing') {
       const previousGrid = history[history.length - 1]?.grid;
       const moved = previousGrid
         ? getMovedCellPositions(previousGrid, grid)
@@ -1270,10 +1380,21 @@ function GameScreenImpl({
         }
         const cellStride = cellSize + CELL_GAP;
 
-        // Stagger delay per column for wave effect
+        // Stagger delay per column, radiating OUT from the cleared word's
+        // centroid so the wave reads as caused by the clear. A plain
+        // left-to-right sweep (the old ascending-col sort) always started at
+        // the grid's left edge regardless of where the word was.
         const staggerDelay = ANIM.gravityStagger || 30;
         const movedCols = new Set(moved.map(c => c.col));
-        const colOrder = Array.from(movedCols).sort((a, b) => a - b);
+        const submitted = lastSubmittedCellsRef.current;
+        const centroidCol = submitted.length > 0
+          ? submitted.reduce((s, c) => s + c.col, 0) / submitted.length
+          : null;
+        const colOrder = Array.from(movedCols).sort((a, b) =>
+          centroidCol === null
+            ? a - b
+            : Math.abs(a - centroidCol) - Math.abs(b - centroidCol) || a - b,
+        );
         const colDelayMap = new Map<number, number>();
         colOrder.forEach((c, i) => colDelayMap.set(c, i * staggerDelay));
 
@@ -1307,7 +1428,12 @@ function GameScreenImpl({
           );
         }
         setMovedCells(moved);
-        Animated.parallel(animations).start(() => {
+        Animated.parallel(animations).start(({ finished }) => {
+          // Interrupted runs (the next word's setValue force-stops in-flight
+          // springs on shared columns) must not fire the landing haptic while
+          // tiles are mid-air — the completed successor run handles both the
+          // haptic and the pruning with fresh state.
+          if (!finished) return;
           // C1 in launch_blockers.md: fire the gravity-land haptic now that
           // the spring animation has settled. Previously this function was
           // defined in haptics.ts:51 but never called in production.
@@ -1322,13 +1448,23 @@ function GameScreenImpl({
           }
         });
       } else {
-        setMovedCells(moved);
+        // Words cleared along the bottom rows move nothing — keep the state's
+        // existing (often empty) array reference so PlayField/GameGrid skip
+        // two pointless grid-wide reconciliations during the clear window.
+        setMovedCells(prev => (prev.length === 0 && moved.length === 0 ? prev : moved));
+        // Reduce-motion suppresses the spring, not the settle confirmation —
+        // motion off must not mean feedback off. Tiles still moved; say so.
+        if (reduceMotion && moved.length > 0) {
+          void gravityLandHaptic();
+        }
       }
 
-      const timer = setTimeout(() => setMovedCells([]), 400);
+      const timer = setTimeout(
+        () => setMovedCells(prev => (prev.length === 0 ? prev : [])),
+        400,
+      );
       return () => clearTimeout(timer);
     }
-    prevFoundWordsRef.current = foundWords;
   }, [foundWords, status]);
 
   // Last-word tension hook (plan task 2). When `remainingWords` transitions to
@@ -1337,9 +1473,15 @@ function GameScreenImpl({
   // effect re-runs. `starEarn` is currently the synth fallback; swap to
   // `last_word_sting` when real audio lands.
   const lastWordTensionFiredRef = useRef(false);
+  // Below 4 words the "tension peak" fires seconds into the puzzle — on the
+  // 2-word L1 board it landed on the FIRST word a brand-new player ever
+  // found, before they even knew what the word bank was, training them to
+  // ignore the cue before it meant anything. Early levels stay quiet; the
+  // beat debuts around L8 where 4-word boards make it earned.
+  const tensionEligible = totalWords >= LAST_WORD_TENSION_MIN_WORDS;
   useEffect(() => {
     const remaining = totalWords - foundWords;
-    if (remaining !== 1 || status !== 'playing') {
+    if (remaining !== 1 || status !== 'playing' || !tensionEligible) {
       if (remaining !== 1) lastWordTensionFiredRef.current = false;
       return;
     }
@@ -1355,7 +1497,7 @@ function GameScreenImpl({
       mode,
       timeIntoPuzzleMs,
     });
-  }, [foundWords, totalWords, status, level, mode, store]);
+  }, [foundWords, totalWords, status, level, mode, store, tensionEligible]);
 
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && showFailed) {
@@ -1409,30 +1551,36 @@ function GameScreenImpl({
       });
       void wordFoundHaptic();
 
-      // Big word celebration variance (Task 2)
+      // Big word celebration (Task 2, re-tuned Aug 2026 feel audit).
+      // Calibrated for a calm word game: per game_mechanics.md a long word
+      // is "emotionally satisfying to trace, not mechanically harder" — a
+      // texture, not an achievement. The old treatment (random slot-machine
+      // adjective + ±14px camera shake + a haptic stacked on the one that
+      // just fired) was the register of a match-3 cascade. The length IS
+      // the flex, so the badge states it; the bloom carries the delight;
+      // wordFoundHaptic above already provides the tactile beat.
       if (wordLen >= 7) {
         void soundManager.playSound('combo');
-        void successHaptic();
-        // Show "AMAZING!" / "INCREDIBLE!" overlay
-        const labels = ['AMAZING!', 'INCREDIBLE!', 'PHENOMENAL!', 'SPECTACULAR!'];
-        setBigWordLabel(labels[Math.floor(Math.random() * labels.length)]);
+        setBigWordLabel(`${wordLen} LETTERS!`);
         bigWordAnim.setValue(0);
         if (!reduceMotion) {
-          // Extra screen shake for 7+ letter words
+          // Gentle grid nudge, not a camera shake.
           Animated.sequence([
-            Animated.timing(shakeAnim, { toValue: 14, duration: 35, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: -12, duration: 35, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 10, duration: 30, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: -7, duration: 30, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 4, duration: 25, useNativeDriver: true }),
-            Animated.timing(shakeAnim, { toValue: 0, duration: 25, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 6, duration: 35, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: -5, duration: 35, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 3, duration: 30, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 0, duration: 30, useNativeDriver: true }),
           ]).start();
 
           Animated.sequence([
             Animated.spring(bigWordAnim, { toValue: 1, friction: 4, tension: 200, useNativeDriver: true }),
             Animated.delay(800),
             Animated.timing(bigWordAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-          ]).start(() => setBigWordLabel(null));
+          ]).start(({ finished }) => {
+            // Consecutive 7+ letter words restart the sequence; an interrupted
+            // run must not null out the label the new run just set.
+            if (finished) setBigWordLabel(null);
+          });
 
           // Per-tile bloom burst for 7+ letter words (multi-tile waterfall).
           // Falls back to a center burst if no cleared cells were captured
@@ -1493,9 +1641,19 @@ function GameScreenImpl({
       lastSubmittedCellsRef.current = [];
 
       if (reduceMotion) {
-        // Skip score popup animation, just show briefly
+        // Skip score popup animation, just show briefly. Cancel the previous
+        // word's pending teardown so a fast follow-up popup isn't nulled 800ms
+        // after the OLD word instead of this one.
+        if (scorePopupTeardownRef.current !== null) {
+          clearTimeout(scorePopupTeardownRef.current);
+          pendingTimeoutsRef.current.delete(scorePopupTeardownRef.current);
+        }
         scorePopupAnim.setValue(1);
-        trackTimeout(() => { scorePopupAnim.setValue(0); setScorePopup(null); }, 800);
+        scorePopupTeardownRef.current = trackTimeout(() => {
+          scorePopupTeardownRef.current = null;
+          scorePopupAnim.setValue(0);
+          setScorePopup(null);
+        }, 800);
         return;
       }
 
@@ -1518,7 +1676,13 @@ function GameScreenImpl({
           duration: 300,
           useNativeDriver: true,
         }),
-      ]).start(() => setScorePopup(null));
+      ]).start(({ finished }) => {
+        // A back-to-back word find restarts this sequence via setValue(0),
+        // which fires the interrupted run's callback — without this guard it
+        // deletes the popup the new word just set, so fast chains lose their
+        // '+N' feedback entirely.
+        if (finished) setScorePopup(null);
+      });
     }
   }, [score]);
 
@@ -1605,11 +1769,13 @@ function GameScreenImpl({
         startedAt > 0 ? Math.max(0, Math.round((Date.now() - startedAt) / 1000)) : 0;
       const timer = setTimeout(() => {
         setShowComplete(true);
+        const finalState = store.getState();
         onCompleteRef.current(
           finalStars,
           finalScore,
           finalPerfectRun,
           completionTimeSeconds,
+          { hintsUsed: finalState.hintsUsed, undosUsed: finalState.undosUsed },
         );
       }, 300);
       return () => clearTimeout(timer);
@@ -1642,6 +1808,211 @@ function GameScreenImpl({
     }
   }, [isStuck, status, level, playerActions]);
 
+  // Free rescue on a genuinely dead board.
+  //
+  // Getting stuck is a real, intended fail state — the order you clear words
+  // in reshapes the board, and choosing badly is supposed to cost you. What
+  // was NOT intended is the response: with no undo tokens the only remaining
+  // option is restarting the level outright, and the dead board also triggers
+  // two purchase offers (close_finish, hint_rescue). That monetises the
+  // single most frustrating moment in the game.
+  //
+  // One free undo per level, only when the solver says the board is actually
+  // dead and the player has nothing left to spend. The wall still happens and
+  // the player still has to re-plan — they just aren't taxed to learn the
+  // mechanic. Cannot be farmed: it requires a genuine dead end, fires once per
+  // puzzle, and grants a single undo.
+  const freeRescueUsedRef = useRef(false);
+  const [freeUndoGranted, setFreeUndoGranted] = useState(false);
+  useEffect(() => {
+    freeRescueUsedRef.current = false;
+    setFreeUndoGranted(false);
+  }, [level, mode]);
+
+  // Purchased one-shot effects from the coin shop. The shop stores them as
+  // temporary entitlements (so an unused purchase survives an app restart);
+  // this is the point where they become real: activate in the game store,
+  // then consume so the effect cannot apply twice. Board Freeze is only
+  // meaningful where a shrink exists, so it is left banked in other modes
+  // rather than burned uselessly.
+  useEffect(() => {
+    if (hasTemporaryEntitlement('score_doubler')) {
+      activateScoreDoubler();
+      consumeTemporaryEntitlement('score_doubler');
+      void analytics.logEvent('temporary_effect_activated', { effect: 'score_doubler', level, mode });
+    }
+    if (mode === 'shrinkingBoard' && hasTemporaryEntitlement('board_freeze')) {
+      activateBoardFreeze();
+      consumeTemporaryEntitlement('board_freeze');
+      void analytics.logEvent('temporary_effect_activated', { effect: 'board_freeze', level, mode });
+    }
+    // Keyed per puzzle load — the entitlement check is cheap and the consume
+    // makes re-runs harmless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level, mode]);
+
+  // First dead end ever: explain the mechanic instead of just announcing the
+  // wall. A player who doesn't yet connect "I cleared the wrong word first"
+  // to "the board is now unsolvable" reads a dead end as the game being
+  // broken — the banner names the word gravity buried, and this adds the one
+  // sentence that turns the loss into a rule they can use. Latched into
+  // state so the text doesn't switch to the short form while they're reading
+  // it, and marked shown immediately so it can't reappear on the next level.
+  const [showFirstStuckHelp, setShowFirstStuckHelp] = useState(false);
+  const firstStuckHandledRef = useRef(false);
+  useEffect(() => {
+    firstStuckHandledRef.current = false;
+    setShowFirstStuckHelp(false);
+  }, [level, mode]);
+
+  // Which remaining words gravity has actually buried. `isStuck` means no
+  // clearing ORDER finishes the board, which does not imply every word is
+  // unreachable — some may still be traceable and simply lead nowhere. The
+  // banner names only the genuinely unreachable ones, so the filter happens
+  // here where the live grid is. Only computed on a dead board; on every
+  // other render this is an empty array and costs nothing.
+  const strandedWords = useMemo(() => {
+    if (!isStuck || status !== 'playing') return EMPTY_STRING_LIST;
+    return remainingWords.filter((w) => findWordInGrid(grid, w, 1).length === 0);
+  }, [isStuck, status, remainingWords, grid]);
+
+  // The board dying is the game's core fail state, and it used to happen in
+  // total silence: a static banner popped into the layout and nothing else —
+  // no sound (the `defeat` slot was authored, registered, synth-defined, and
+  // never played), no haptic, no screen-reader signal. The generous rescue
+  // logic underneath landed with zero presentation, so nobody registered the
+  // favour. One beat per dead end: sad-but-not-punishing chord over ducked
+  // BGM, a Warning (not Error) haptic, and an a11y announcement naming the
+  // buried word the way the visual banner does.
+  const stuckFeltRef = useRef(false);
+  const failFeltRef = useRef(false);
+  useEffect(() => {
+    stuckFeltRef.current = false;
+    failFeltRef.current = false;
+  }, [level, mode, board]);
+
+  // ── J11: "kept it open" acknowledgment ─────────────────────────────────
+  // Order-sensitivity is the game's stated skill, but the player only ever
+  // learned about ordering by LOSING. When their clear provably avoided a
+  // dead end an alternative would have caused, a small teal chip says so —
+  // once per puzzle at most, no points, no multiplier, no escalation (the
+  // constraints that keep this out of the deleted combo-system territory).
+  // Detection runs deferred (350ms, post-gravity) with a hard 80ms solver
+  // budget, and only fires on a CONFIRMED dead-ending alternative —
+  // inconclusive budget-exhausted checks stay silent (see solver.ts).
+  const [keptOpenVisible, setKeptOpenVisible] = useState(false);
+  const keptOpenFiredRef = useRef(false);
+  const keptOpenAnim = useRef(new Animated.Value(0)).current;
+  const prevFoundForKeptOpenRef = useRef(0);
+  useEffect(() => {
+    keptOpenFiredRef.current = false;
+    prevFoundForKeptOpenRef.current = 0;
+    setKeptOpenVisible(false);
+  }, [level, mode, board]);
+  useEffect(() => {
+    const prev = prevFoundForKeptOpenRef.current;
+    prevFoundForKeptOpenRef.current = foundWords;
+    if (foundWords <= prev || status !== 'playing') return;
+    if (keptOpenFiredRef.current) return;
+    if (!getRemoteBoolean('keptOpenBadgeEnabled')) return;
+    const timer = setTimeout(() => {
+      const s = store.getState();
+      if (s.status !== 'playing') return;
+      const lastStep = s.solveSequence[s.solveSequence.length - 1];
+      const found = lastStep?.wordFound;
+      const prevEntry = s.history[s.history.length - 1];
+      if (!found || !prevEntry) return;
+      const remainingBefore = prevEntry.words
+        .filter((w) => !w.found)
+        .map((w) => w.word);
+      if (remainingBefore.length < 2) return;
+      // The badge must never appear on a board that just died, and the
+      // authoritative isStuck check is debounced past this window — so
+      // require a cheap POSITIVE proof that the current board completes
+      // (unproven = stay silent). Also skip the final word: the victory
+      // screen owns that moment.
+      const remainingNow = s.board.words
+        .filter((w) => !w.found)
+        .map((w) => w.word);
+      if (remainingNow.length === 0) return;
+      if (!isProvablyCompletable(s.board.grid, remainingNow)) return;
+      if (choiceAvoidedDeadEnd(prevEntry.grid, found, remainingBefore, 80)) {
+        keptOpenFiredRef.current = true;
+        setKeptOpenVisible(true);
+        void analytics.logEvent('kept_open_shown', { level, mode });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [foundWords, status, store, level, mode]);
+  useEffect(() => {
+    if (!keptOpenVisible) return;
+    if (reduceMotion) {
+      keptOpenAnim.setValue(1);
+      const t = setTimeout(() => {
+        keptOpenAnim.setValue(0);
+        setKeptOpenVisible(false);
+      }, 1600);
+      return () => clearTimeout(t);
+    }
+    keptOpenAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(keptOpenAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.delay(1400),
+      Animated.timing(keptOpenAnim, { toValue: 0, duration: 260, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) setKeptOpenVisible(false);
+    });
+  }, [keptOpenVisible, reduceMotion, keptOpenAnim]);
+  useEffect(() => {
+    if (!isStuck || status !== 'playing') {
+      if (!isStuck) stuckFeltRef.current = false;
+      return;
+    }
+    if (stuckFeltRef.current) return;
+    stuckFeltRef.current = true;
+    soundManager.duckMusicFor(1800, 0.35);
+    void soundManager.playSound('puzzleFailStuck');
+    void stuckHaptic();
+    const headline =
+      strandedWords.length > 0
+        ? `${strandedWords[0]} is cut off by gravity.`
+        : 'No remaining order finishes this board.';
+    AccessibilityInfo.announceForAccessibility(
+      `Board is stuck. ${headline} Step back a move or retry the puzzle.`,
+    );
+  }, [isStuck, status, strandedWords]);
+
+  useEffect(() => {
+    if (!isStuck || status !== 'playing' || firstStuckHandledRef.current) return;
+    firstStuckHandledRef.current = true;
+    const tooltipKey = stuckTooltipKeyForLevel(level);
+    if (tooltipsShown.includes(tooltipKey)) return;
+    setShowFirstStuckHelp(true);
+    markTooltipShown(tooltipKey);
+    void analytics.logEvent('first_stuck_explainer_shown', { level, mode });
+  }, [isStuck, status, tooltipsShown, markTooltipShown, level, mode]);
+
+  useEffect(() => {
+    if (
+      isStuck &&
+      status === 'playing' &&
+      mode !== 'relax' &&
+      undosLeft <= 0 &&
+      undoTokens <= 0 &&
+      history.length > 0 &&
+      !freeRescueUsedRef.current &&
+      getRemoteBoolean('freeStuckRescueEnabled')
+    ) {
+      freeRescueUsedRef.current = true;
+      grantUndo();
+      // Say so. The rescue silently flipped the banner from "tap to retry"
+      // to "tap to step back", so the player read it as having had an undo
+      // all along — a moment of generosity nobody notices buys nothing.
+      setFreeUndoGranted(true);
+      void analytics.logEvent('free_stuck_rescue_granted', { level, mode });
+    }
+  }, [isStuck, status, mode, undosLeft, undoTokens, history.length, grantUndo, level]);
+
   // Show post-loss modal first (if applicable), then failed modal.
   // Tier 6 B1 — if the player qualifies for the fail-breather offer,
   // surface it ahead of PostLossModal on this loss. Rules:
@@ -1653,6 +2024,17 @@ function GameScreenImpl({
   //   • mode !== 'relax' (relax mode has no fail state)
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && !showFailed) {
+      // Hard fails (timeout, perfect-solve violation) get the same single
+      // sad-but-not-punishing beat as a stuck board — unless the stuck
+      // effect above already played it for this attempt.
+      if (!failFeltRef.current && !stuckFeltRef.current) {
+        failFeltRef.current = true;
+        soundManager.duckMusicFor(1800, 0.35);
+        void soundManager.playSound(
+          status === 'timeout' ? 'puzzleFailTime' : 'puzzleFailInstant',
+        );
+        void stuckHaptic();
+      }
       const breatherEligible =
         getRemoteBoolean('failBreatherEnabled') &&
         mode !== 'relax' &&
@@ -1698,6 +2080,10 @@ function GameScreenImpl({
   // relevant changes via onCellInteraction / onValidWordChange callbacks.
 
   const handleHint = useCallback(() => {
+    // Modes that forbid hints (expert, perfectSolve) must refuse here too,
+    // not just hide buttons — this is the single choke point every hint
+    // surface routes through.
+    if (!hintsAllowed) return;
     if (mode !== 'relax') {
       // Spend from persistent inventory and grant into game state
       if (hintTokens <= 0) return;
@@ -1707,13 +2093,19 @@ function GameScreenImpl({
     void soundManager.playSound('hintUsed');
     void analytics.logEvent('hint_used', { level, mode, hintsAvailable });
     useHint();
-  }, [useHint, grantHint, level, mode, hintsAvailable, hintTokens, spendHintToken]);
+  }, [useHint, grantHint, level, mode, hintsAvailable, hintTokens, spendHintToken, hintsAllowed]);
 
   const handleUndo = useCallback(() => {
     if (history.length === 0) return;
-    if (mode !== 'relax') {
-      // Spend from persistent inventory and grant into game state
-      if (undoTokens <= 0) return;
+    // Two undo pools: game-store `undosLeft` (granted into this puzzle — the
+    // free stuck rescue's grant lands there) and economy `undoTokens`. The
+    // old gate checked ONLY tokens, and the rescue fires precisely when
+    // tokens are 0 — so the "FREE UNDO — ON US" banner it shows was a
+    // labeled gift whose tap did nothing. resolveUndoSource consumes the
+    // granted pool first (it expires with the puzzle; tokens persist).
+    const source = resolveUndoSource(mode, undosLeft, undoTokens);
+    if (source === 'blocked') return;
+    if (source === 'token') {
       spendUndoToken();
       grantUndo();
     }
@@ -1728,7 +2120,10 @@ function GameScreenImpl({
         toValue: 1,
         duration: 150,
         useNativeDriver: true,
-      }).start(() => {
+      }).start(({ finished }) => {
+        // Double-tapping undo restarts the flash; the interrupted run's
+        // callback must not hide the flash the second tap just started.
+        if (!finished) return;
         setShowUndoFlash(false);
         undoFlashAnim.setValue(0);
       });
@@ -1751,7 +2146,7 @@ function GameScreenImpl({
 
     setShowFailed(false);
     setShowIdleHint(false);
-  }, [undoMove, grantUndo, level, mode, undosAvailable, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
+  }, [undoMove, grantUndo, level, mode, undosAvailable, undosLeft, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
 
   const handleRetry = useCallback(() => {
     LayoutAnimation.configureNext(
@@ -1764,6 +2159,14 @@ function GameScreenImpl({
     newGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
     setShowComplete(false);
     completionHandled.current = false;
+    // A retry is a fresh attempt and gets a fresh safety net. The guard is
+    // keyed on level+mode, neither of which changes on retry, so without
+    // this the player who dead-ends, retries, and dead-ends again gets no
+    // rescue on attempt two — taxing exactly the player who is actively
+    // trying to learn the ordering. It still can't be farmed: retrying
+    // throws away all board progress, which costs far more than one undo.
+    freeRescueUsedRef.current = false;
+    setFreeUndoGranted(false);
 
     setShowFailed(false);
   }, [board, level, mode, effectiveMaxMoves, effectiveTimeLimit, newGame]);
@@ -1976,7 +2379,7 @@ function GameScreenImpl({
 
       <GameplayMascot
         foundCount={foundWords}
-        tensionActive={totalWords - foundWords === 1}
+        tensionActive={tensionEligible && totalWords - foundWords === 1}
         flawlessStreak={flawlessStreakCurrent}
       />
 
@@ -2005,6 +2408,7 @@ function GameScreenImpl({
         hasTimer={modeConfig.rules.hasTimer ?? false}
         hasMoveLimit={modeConfig.rules.hasMoveLimit ?? false}
         timeRemaining={timeRemaining}
+        totalSeconds={effectiveTimeLimit}
         moves={moves}
         maxMoves={effectiveMaxMoves}
       />
@@ -2035,6 +2439,29 @@ function GameScreenImpl({
         scorePopupAnim={scorePopupAnim}
         bigWordAnim={bigWordAnim}
       />
+
+      {/* J11 — once-per-puzzle ordering acknowledgment. Display-only. */}
+      {keptOpenVisible && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.keptOpenChip,
+            {
+              opacity: keptOpenAnim,
+              transform: [
+                {
+                  translateY: keptOpenAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [8, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Text style={styles.keptOpenText}>NICE ORDER — KEPT IT OPEN</Text>
+        </Animated.View>
+      )}
 
 
       {/* Word bank — reads selection state from the zustand store directly.
@@ -2080,9 +2507,12 @@ function GameScreenImpl({
             status={status}
             showIdleHint={showIdleHint}
             hintsAvailable={hintsAvailable}
-            canShowAdHint={!isAdFree && adManager.canShowAd('hint_reward')}
+            canShowAdHint={hintsAllowed && !isAdFree && adManager.canShowAd('hint_reward')}
             isStuck={isStuck}
             undosLeft={undosLeft}
+            strandedWords={strandedWords}
+            isFirstStuck={showFirstStuckHelp}
+            freeUndoGranted={freeUndoGranted}
             isSpike={isSpike && !isDaily && mode !== 'weekly'}
             onIdleHintTap={stableHandleIdleHintBannerTap}
             onAdHintTap={stableHandleAdHintBannerTap}
@@ -2663,6 +3093,25 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyMedium,
     color: COLORS.textSecondary,
     fontSize: 12,
+  },
+  keptOpenChip: {
+    position: 'absolute',
+    top: '42%',
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: COLORS.teal,
+    backgroundColor: 'rgba(10, 30, 34, 0.88)',
+    zIndex: 240,
+    elevation: 24,
+  },
+  keptOpenText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.teal,
+    letterSpacing: 1.5,
   },
   scorePopup: {
     position: 'absolute',

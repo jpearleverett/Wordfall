@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -16,6 +17,7 @@ import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import LocalErrorBoundary from '../components/LocalErrorBoundary';
+import type { CommercialEffectId } from '../services/commercialEntitlements';
 import { useSettings } from '../contexts/SettingsContext';
 import {
   useEconomyStore,
@@ -145,6 +147,8 @@ const GEM_PACKS: ShopItem[] = [
 
 // ─── Coin Shop categories ────────────────────────────────────────────────────
 
+const COIN_SHOP_TRACKING_KEY = '@wordfall_coinshop_daily';
+
 const COIN_SHOP_CATEGORIES: { key: string; label: string }[] = [
   { key: 'consumables', label: 'Consumables' },
   { key: 'boosters', label: 'Boosters' },
@@ -255,11 +259,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     addHintTokens,
     addUndoTokens,
     addBoosterToken,
+    grantTemporaryEntitlement,
     processAdReward,
     claimVipDailyRewards,
     claimVipStreakBonus,
   } = useEconomyActions();
-  const { unlockCosmetic } = usePlayerActions();
+  const { unlockCosmetic, awardFreeSpin } = usePlayerActions();
   // Tier 6 B6 — read player segments + current level to compute the dynamic
   // "For You" row. When segments haven't been computed yet (first session),
   // the hook returns an empty offer list so the section simply doesn't render.
@@ -308,9 +313,41 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     resolver: (watched: boolean) => void;
   } | null>(null);
 
-  // Coin shop daily purchase tracking (resets each day)
+  // Coin shop daily purchase tracking (resets each day). PERSISTED: this was
+  // component-local state with no storage, so backing out of the Shop screen
+  // (native-stack pop unmounts it) reset every daily limit to zero —
+  // converting coins into hint/undo tokens without bound at prices that
+  // undercut the real-money packs, despite coinShop.ts's stated purpose of
+  // preventing exactly that. Same storage pattern as the ad-cap tracking in
+  // services/ads.ts.
   const [coinShopPurchasesToday, setCoinShopPurchasesToday] = useState<Record<string, number>>({});
   const [coinShopDate, setCoinShopDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(COIN_SHOP_TRACKING_KEY);
+        if (!stored || cancelled) return;
+        const parsed = JSON.parse(stored) as { date: string; counts: Record<string, number> };
+        if (parsed.date === new Date().toISOString().slice(0, 10)) {
+          setCoinShopPurchasesToday(parsed.counts ?? {});
+          setCoinShopDate(parsed.date);
+        }
+      } catch {
+        // Unreadable tracking is treated as a fresh day — fail open.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (Object.keys(coinShopPurchasesToday).length === 0) return;
+    void AsyncStorage.setItem(
+      COIN_SHOP_TRACKING_KEY,
+      JSON.stringify({ date: coinShopDate, counts: coinShopPurchasesToday }),
+    ).catch(() => {});
+  }, [coinShopPurchasesToday, coinShopDate]);
   const [coinShopConfirmation, setCoinShopConfirmation] = useState<string | null>(null);
   const coinShopConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -460,8 +497,10 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     try {
       const result = await adManager.showRewardedAd('spin_reward');
       if (result.rewarded) {
-        // Spins are tracked in PlayerContext — import and call if available,
-        // otherwise the caller can handle it. For now, grant via economy hook.
+        // The ad view has already been counted against the daily rewarded-ad
+        // cap by adManager, so failing to grant here didn't just do nothing —
+        // it burned one of the player's limited ad slots for nothing.
+        awardFreeSpin();
         Alert.alert('Reward Earned!', 'You received 1 free Mystery Wheel spin!');
       }
     } catch {
@@ -469,7 +508,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     } finally {
       setWatchingAd(false);
     }
-  }, [watchingAd]);
+  }, [watchingAd, awardFreeSpin]);
 
   // ── Restore purchases handler ───────────────────────────────────────────
 
@@ -567,8 +606,19 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           break;
         case 'temporary_effect':
         case 'cosmetic_rental':
-          // Temporary effects are granted — in a full implementation these would
-          // set a timed flag in PlayerContext. For now, confirm the purchase.
+          // This arm was empty: Board Freeze (300c) and Score Doubler (500c)
+          // debited coins, showed the "purchased!" banner, and delivered
+          // nothing. The entitlement store existed the whole time with zero
+          // callers. Timed effects use their declared duration; one-shot
+          // "next puzzle" items get a 24h window and are consumed by
+          // GameScreen the moment they activate — the window only exists so
+          // an unused purchase survives an app restart.
+          if (reward.effectId) {
+            grantTemporaryEntitlement(
+              reward.effectId as CommercialEffectId,
+              reward.durationMinutes ?? 24 * 60,
+            );
+          }
           break;
       }
 
@@ -592,6 +642,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
       addHintTokens,
       addUndoTokens,
       addBoosterToken,
+      grantTemporaryEntitlement,
       coinShopPurchasesToday,
       coinShopDate,
     ],

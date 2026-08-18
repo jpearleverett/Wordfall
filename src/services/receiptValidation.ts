@@ -10,6 +10,15 @@ import { Platform } from 'react-native';
 import { logger } from '../utils/logger';
 import { crashReporter } from './crashReporting';
 import { secureStorage } from './secureStorage';
+import { getProductById } from '../data/shopProducts';
+
+/**
+ * Subscriptions carry a real expiry that only the store knows, so they must
+ * never be served from a local shortcut that cannot supply `expiresAt`.
+ */
+function isSubscriptionProduct(productId: string): boolean {
+  return getProductById(productId)?.category === 'subscription';
+}
 
 const FIREBASE_FUNCTIONS_URL =
   (typeof process !== 'undefined' &&
@@ -72,6 +81,14 @@ export interface ReceiptValidationResult {
   isTrial?: boolean;
   /** Original transaction ID */
   transactionId?: string;
+  /**
+   * True when this exact receipt was already validated successfully on this
+   * device. Callers must NOT re-grant currency for it, but must still run
+   * the acknowledge/consume path — Google auto-refunds any purchase left
+   * unacknowledged for 3 days, so a transient ack failure has to stay
+   * retryable across launches.
+   */
+  alreadyValidated?: boolean;
 }
 
 export interface SubscriptionValidationResult {
@@ -203,11 +220,45 @@ async function serverValidate(
     return null;
   }
 
+  // The server derives the fulfilment UID ONLY from a verified Firebase ID
+  // token — it deliberately ignores the `userId` body field, and returns
+  // {valid:false, error:'Unauthenticated'} when the header is missing.
+  // Without this header EVERY production purchase failed validation: the
+  // player was charged, nothing was granted, the purchase was never
+  // acknowledged, and Google auto-refunded it three days later.
+  let idToken: string | null = null;
+  try {
+    // Lazy require so this module stays importable in tests/tools that
+    // never initialize Firebase.
+    const { auth } = require('../config/firebase') as {
+      auth?: { currentUser?: { getIdToken: (force?: boolean) => Promise<string> } | null };
+    };
+    idToken = (await auth?.currentUser?.getIdToken()) ?? null;
+  } catch (e) {
+    logger.warn('[ReceiptValidation] Could not obtain Firebase ID token:', e);
+  }
+
+  if (!idToken) {
+    // Fail loudly rather than posting a call the server will reject anyway.
+    // The caller treats a null return as "server not configured", which in
+    // production means the purchase is refused instead of silently lost.
+    logger.warn(
+      '[ReceiptValidation] No signed-in Firebase user — cannot validate receipt server-side',
+    );
+    return {
+      valid: false,
+      error: 'Not signed in — please restart the app and try again',
+    };
+  }
+
   const response = await fetchWithRetry(
     `${FIREBASE_FUNCTIONS_URL}/validateReceipt`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
       body: JSON.stringify({
         receipt,
         productId,
@@ -246,12 +297,25 @@ export async function validateReceipt(
   const hash = hashReceipt(receipt);
   const knownHashes = await loadReceiptHashes();
 
-  if (knownHashes.has(hash)) {
-    logger.warn(
-      '[ReceiptValidation] Duplicate receipt detected (possible replay attack):',
+  if (knownHashes.has(hash) && !isSubscriptionProduct(productId)) {
+    // A LOCAL hash hit is not an attack: hashes are only written after this
+    // device validated this receipt successfully. It means we are seeing a
+    // redelivery — most often because acknowledge/consume failed last time.
+    // Report it as already-validated so the caller can retry the ack (and
+    // skip re-granting) rather than being permanently blocked, which used to
+    // guarantee a Google auto-refund 3 days later.
+    //
+    // SUBSCRIPTIONS deliberately skip this shortcut. A redelivery is not
+    // necessarily an already-FULFILLED purchase — the app can die between
+    // validation and fulfilment — so the caller may still grant from this
+    // result. This branch has no `expiresAt`, and applyCatalogPurchase falls
+    // back to 7 days for VIP, which would hand an annual subscriber one week.
+    // Going to the server costs a round trip and returns the real expiry.
+    logger.log(
+      '[ReceiptValidation] Receipt already validated on this device — allowing acknowledge retry:',
       productId,
     );
-    return { valid: false, error: 'Duplicate receipt — possible replay attack' };
+    return { valid: true, alreadyValidated: true };
   }
 
   // Attempt server-side validation

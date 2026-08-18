@@ -834,6 +834,23 @@ export const CHAPTERS: Chapter[] = [
   },
 ];
 
+/**
+ * Display names for the eight library wings. Shared so ceremonies and
+ * screens agree — the wing_complete ceremony used to render the raw wingId
+ * ('nature Complete!') because the only name table lived inside
+ * LibraryScreen's private WING_META.
+ */
+export const WING_NAMES: Record<string, string> = {
+  nature: 'Nature',
+  science: 'Science',
+  mythology: 'Mythology',
+  ocean: 'Ocean',
+  arts: 'Arts',
+  space: 'Space',
+  history: 'History',
+  elements: 'Elements',
+};
+
 export function getChaptersByWing(wingId: string): Chapter[] {
   return CHAPTERS.filter((ch) => ch.wingId === wingId);
 }

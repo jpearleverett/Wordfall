@@ -2,7 +2,7 @@
 
 **Word search with gravity** (React Native + Expo). Each puzzle has a pre-authored list of words to find on a letter grid. The player traces letters with their finger — when the trace matches a list word it auto-resolves (no submit button), those cells clear, and remaining letters fall via gravity into the empty spaces. 10 modes, 40 hand-curated chapters covering levels 1–600 (names, themes, 12-word theme lists, star gates, per-chapter difficulty profile), then unbounded procedural chapters past level 600 via `generateProceduralChapter()`. Every board is procedurally generated from a seed — there are no hand-placed grids in the repo. Clubs, VIP, prestige.
 
-**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**66 suites**).
+**Stack:** Expo SDK 55 (New Architecture only — bridgeless), RN 0.83.4, React 19.2, TypeScript ~5.8, Reanimated 4.2.1 + worklets 0.7.2, **zustand** (game state store with selectors), **React Compiler** (auto-memoization via babel-preset-expo), Firebase (optional, has offline fallback), Jest (**97 suites / ~1374 tests**).
 
 For detailed architecture see `agent_docs/architecture.md` — it's a short **index** that routes you to per-domain slices (state, engine, screens, cloud) so you only read what the current question needs.
 
@@ -22,7 +22,9 @@ For detailed architecture see `agent_docs/architecture.md` — it's a short **in
 ```bash
 npx expo start --dev-client            # Metro bundler (Expo Go NOT supported)
 npm run typecheck                      # tsc --noEmit
-npm test                               # jest (66 suites)
+npm test                               # jest (97 suites)
+npx expo export --platform android     # REQUIRED before release — only local check that runs hermesc
+                                       # (typecheck + tests pass even when the prod bundle is broken)
 npm install --legacy-peer-deps         # .npmrc sets this by default
 EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  # Rebuild dev client APK (Termux requires the env var)
 ```
@@ -31,7 +33,7 @@ EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  
 
 | File | Role |
 |------|------|
-| `App.tsx` | Entry. ErrorBoundary, provider nesting, navigation, deep links. Ceremonies route through `src/App/CeremonyRouter.tsx` (20 render cases covering the 30-variant `CeremonyItem` union). |
+| `App.tsx` | Entry. ErrorBoundary, provider nesting, navigation, deep links. Ceremonies route through `src/App/CeremonyRouter.tsx` — **one render case per `CeremonyItem` variant, all 21, guarded by `__tests__/ceremonyCoverage`**. (This line used to read "20 cases covering 30 variants", which looks like ten dropped rewards but wasn't: nine of those thirty belonged to `VictorySummaryItem` — the inline victory-screen rows, a separate surface — and had been duplicated into the ceremony union where they could never render. They're gone from it now, so queueing one is a compile error rather than a silent no-op.) |
 | `src/hooks/useGame.ts` | Game store factory (zustand + redux middleware wrapping 22-action reducer). Returns store instance + stable action dispatchers. **No `state` return — consumers use selectors.** |
 | `src/stores/gameStore.ts` | Zustand store factory, `GameStoreContext`, `useGameStore` selector hook, `useGameDispatch`, 25+ pre-built selectors. |
 | `src/screens/game/PlayField.tsx` | Grid + selection rendering. Subscribes to per-tap state (`selectedCells`) via zustand selectors so GameScreen doesn't re-render on taps. |
@@ -39,6 +41,48 @@ EAS_SKIP_AUTO_FINGERPRINT=1 eas build --profile development --platform android  
 | `src/types.ts` | ALL type definitions — edit here when adding data structures |
 
 Extended list (grid gestures, game sub-components, contexts, engine, utility hooks): **`agent_docs/critical_files.md`**.
+
+## Game-feel invariants (measured, with regression guards)
+
+Seven benchmark suites pin properties that typecheck and unit tests cannot
+see. Run them before touching the generator, the difficulty curve, or the
+reward tables — all support a `*_VERBOSE=1` env var to print full profiles.
+
+| Suite | Guards | Current |
+|---|---|---|
+| `engine/__tests__/boardGen.perf` | Level load is synchronous on the JS thread, so slow generation is a frozen screen | p50 44ms, p95 <900ms, max <1.5s |
+| `engine/__tests__/stuckRate` | Dead-end rate for a player choosing **at random** — the floor, not the difficulty | 12% levels 1-30, 57% levels 31-120 |
+| `engine/__tests__/skilledPlay` | Same boards, **one-ply lookahead** — what a player who learned the rule sees | 0.0% early, 0.0% mid |
+| `engine/__tests__/hintPerf` | Hints run synchronously on tap, so a slow one is a frozen board | classic p95 33ms, noGravity p95 1ms, gravityFlip p95 49ms |
+| `engine/__tests__/modeSolvability` | Every generated board is solvable under **its own mode's** clear rule | 0 unsolvable across 8 modes |
+| `__tests__/rewardCadence` | No long stretch of levels without a scheduled payoff | ≤5 dry levels to L60, ≤9 to L150 |
+| `__tests__/curveProfile` + `spikeLevels` | Early levels never repeat a board or go backwards | monotonic through L14 |
+
+**Read those two stuck numbers together.** The 57% was treated for a while as
+the game's mid-game difficulty. It isn't — it is what a player who has not
+noticed that clearing order reshapes the board experiences. Run the identical
+boards with a single move of forethought and every one of them solves. The
+gap is skill, not unfairness, so the lever that moves it is **teaching**
+(tutorial board D, and the dead-end banner naming the buried word) rather than
+the generator. Keep `stuckRate` as a floor that must not get worse; do not
+try to close it by making boards easier.
+
+Key mechanics behind those numbers:
+
+- **Gravity acts per column.** Two words in disjoint columns can never
+  disturb each other, whatever order they are cleared in. Placement scores
+  candidates by shared-column overlap for this reason — see
+  `stackingPenalty`. (Penalising "letters above" instead is wrong and was
+  measurably worse: it just pushes words to the top of the grid where
+  everything underneath shears them.)
+- **Forgiveness is a preference, not a requirement.** `generateBoard`
+  insists on a fair board for its first 12 attempts, then accepts any
+  solvable one. Making it unconditional sent p50 level load from 22ms to
+  1.8s, because fair boards get rare at 7-8 words.
+- **Breathers and spikes both skip the learning phase** (`BREATHER_MIN_LEVEL`
+  / `SPIKE_MIN_LEVEL`). A breather replays the config from 4 levels earlier,
+  which is a gentle dip once bands are wide but replayed level 1 verbatim at
+  level 5 when they were not.
 
 ## Gotchas
 
@@ -106,7 +150,7 @@ Target: Google Play. iOS deferred (no Apple Developer enrollment yet, by design)
   - Commerce (`functions/src/index.ts`): `validateReceipt`, `onSubscriptionRenew`, `clubGoalProgress`, `autoKickInactiveMembers`, `requestAccountDeletion`.
   - Social (`functions/src/social.ts`, re-exported from `index.ts`): `onPuzzleComplete`, `updateClubLeaderboard`, `sendPushNotification`, `processStreakReminders`, `rotateClubGoals`, `moderateClubMessage`, `sendGift`, `claimGift`, `onReferralSuccess`, `distributeWeeklyRewards`.
   - `onPuzzleComplete` + `rotateClubGoals` both understand `mode: 'shared'` goals (Clash-style collective club challenges); `onReferralSuccess` closes the referral reward grant loop with 50/day/UID rate limit and double-claim guard.
-- **Gifting (secure path)**: `sendGift` + `claimGift` HTTPS callables in `functions/src/social.ts` — atomic txn, 5/day/sender cap (`users/{uid}/giftQuota`), idempotency-key replay guard. Client wrapper `src/services/gifts.ts` (`sendGiftSecure`/`claimGiftSecure`). `PlayerSocialContext.sendHintGift`/`sendTileGift` route through `sendGiftSecure` with a fallback to the legacy `firestoreService.sendGift` direct write (same `gifts/` schema). Inbox UI: `src/components/GiftInbox.tsx` mounted inside `ClubScreen`.
+- **Gifting (secure path)**: `sendGift` + `claimGift` HTTPS callables in `functions/src/social.ts` — atomic txn, 5/day/sender cap (`users/{uid}/giftQuota`), idempotency-key replay guard. Client wrapper `src/services/gifts.ts` (`sendGiftSecure`/`claimGiftSecure`). The LIVE send path is `src/components/social/SendGiftButton.tsx` → `sendGiftSecure`, no fallback (mounted on Leaderboard, Club, FriendLeaderboardCard). `PlayerSocialContext.sendHintGift`/`sendTileGift` (and their `deliverGift` direct-write fallback) have ZERO call sites — dead code; earlier notes describing that fallback as live are wrong. Inbox UI: `src/components/GiftInbox.tsx` mounted inside `ClubScreen` (currently unreachable — see Known issues).
 - **Push notifications client**: `src/services/notifications.ts` registers Expo + device push tokens, saves to Firestore at `users/{uid}/pushToken/current`. Server-side `sendPushNotification` callable exists in `functions/src/social.ts`.
 - **Receipt validation + replay protection**: `validateReceipt` in `functions/src/index.ts` with SHA256 hash dedup (`/receipts` collection) + per-UID rate limit (20/5min).
 - **Dynamic cohort offers**: `src/data/dynamicPricing.ts:103–250` — `getDynamicOffers(spending, engagement, playerLevel)` already branches on the segment matrix (lapsed → 70% off starter + "WELCOME BACK" 48h; at-risk/returned → 50% off, 24h; non-payer first-purchase at level 5–15 → 75% off special; minnow/dolphin/whale tiers). Don't re-implement.
@@ -135,15 +179,45 @@ The authoritative, verified list lives in **`agent_docs/launch_blockers.md`**. A
 - **Tier 1 Retention (R1–R7)** — `getPersonalizedNotifications()` wired into `notifications.ts` scheduler; per-timezone `processStreakReminders`; new `processDay2Reengagement` + `processDay7Reengagement` Cloud Functions; restorative `PostStreakBreakOffer` modal (50 gems, 24h window, tracks `streaks.recentBreak`); `segmentWelcomeMessage` rendered as a welcome-back banner on HomeScreen; `maxNotificationsPerDay` RC-overridable with segment-derived cap winning.
 - **Tier 2 Monetization (M1–M3)** — `first_purchase_special` raised to 500/50/10; `wildcard_pack_5` / `spotlight_pack_5` / `shuffle_pack_5` SKUs at $1.99 each added alongside `booster_crate`; `getAssignedVariant()` now evaluates `targetSegments` (via new `segmentsForTargeting` param auto-flattened by `useExperiment()`).
 - **Tier 3 Social + Metagame (S1, S2, MG1–MG3)** — `firestoreService.listPublicClubs()` + Browse-clubs section inside `ClubScreen.renderNoClub()`; `buildReferralLink()` emits `https://wordfallgame.app/r/{code}` + parser handles `/r/` path; new `season_pass_complete` ceremony type with dedicated `SeasonPassCompleteCeremony` fired at tier 50; new `EventLeaderboardCard` + `submitEventScore` / `getEventLeaderboard` per-event ranking mounted in `EventScreen`; animated legendary frame glow on `ProfileScreen` via Reanimated pulse.
-- **Tier 4 Feel polish (C1, C2, P1, P2)** — `gravityLandHaptic()` now fires in the fall-spring `.start()` callback at `GameScreen.tsx:1274` (updated from 1272 after Tier 6 drift check); `TimerDisplay` threshold crossings at 30s / 10s fire haptic + SFX slot + coral flash overlay; new `economy_primer` onboarding phase teaches coins / gems / clubs; `MainNavigator` uses a custom `cardSpringFadeInterpolator` with spring open + cubic-out close transitions.
+- **Tier 4 Feel polish (C1, C2, P1, P2)** — `gravityLandHaptic()` now fires in the fall-spring `.start()` callback at `GameScreen.tsx:1274` (updated from 1272 after Tier 6 drift check); 30s / 10s timer threshold warnings (haptic + SFX) live in GameScreen's `TimerMovesBarsMemo`, driven by the store's authoritative `timeRemaining` (they were originally authored in `components/modes/TimerDisplay.tsx`, which nothing mounted AND which ran its own competing setInterval clock — that file is deleted, Aug 2026); new `economy_primer` onboarding phase teaches coins / gems / clubs. (P2's `cardSpringFadeInterpolator` was authored in `src/navigation/MainNavigator.tsx`, which nothing imported — the live navigators are defined in App.tsx, so the custom transition never ran. The dead file is deleted; the interpolator would need re-implementing against App.tsx's `screenOptions` to actually ship.)
 
 **Remaining Tier 5 items (user-side, NOT code):**
 - `assetlinks.json` SHA256: replace the `REPLACE_WITH_YOUR_PLAY_APP_SIGNING_SHA256` placeholder in `wordfallgamesite/.well-known/assetlinks.json` with the Play App Signing fingerprint.
 - Register new SKUs in Play Console: `wordfall_wildcard_pack_5`, `wordfall_spotlight_pack_5`, `wordfall_shuffle_pack_5`.
-- Translate 5 non-EN locale files (`de / es-419 / fr / ja / pt-BR` — currently English structural stubs).
-- Hand-author puzzle overrides for levels 80–150 (`chapterOverrideJson` RC path exists).
+
+_(shipped 2026-08-15 on `claude/game-completion-optimization-orl091`)_ Locale translations for all 5 non-EN files (native quality, parity-guarded); post-600 procedural curve wired live in App.tsx (`getLevelConfigExtended` was dead code) with per-level breather/spike cadence + per-chapter silhouette rotation + 40×40 name tables + per-chapter `GenerationProfile`; chapters 41–48 seasonal payload staged at `remote-config/chapter-overrides-41-48.json`; Play listing assets generated in `store-assets/`; `/r/{code}` referral bounce added to the site. NOTE: the old "hand-author puzzle overrides for levels 80–150" idea was misframed — `chapterOverrideJson` validates ids 41+ only and can never override the authored chapters 1–40 (levels 1–600); curated-range tuning goes through `constants.ts` phase configs + the adaptive adjuster instead.
 
 _(resolved April 2026)_ GDPR account deletion UI + `requestAccountDeletion` Cloud Function (purges users + subcollections + club membership + consent ledger + push tokens, hashes receipts for audit trail); secure `sendGift`/`claimGift` callable path; Google Sign-In linking (`src/services/googleAuth.ts` with credential-already-in-use recovery fallback — final activation needs user-side OAuth setup).
+
+### Defect-sweep hardening (August 2026 — `claude/game-completion-optimization-orl091`)
+
+A 137-agent adversarial sweep over money, cloud, state, and UX surfaces produced 36 confirmed defects (verified with file:line evidence, adversarially re-checked); all but one are fixed on this branch (suites 92 → 97, ~1374 tests). One line per fixed class — search these files before re-implementing anything nearby:
+
+- **Cloud-save undefined guard**: Firestore `setDoc` rejects nested `undefined`, and both save paths are fire-and-forget — one `lastGraceDate: undefined` silently killed EVERY player cloud save. `stripUndefinedDeep()` (`src/utils/firestoreSanitize.ts`) now wraps the player + economy payloads, and `updateStreak` deletes the key instead of writing undefined.
+- **Purchase delivery guarantees**: five charge-and-deliver-nothing paths fixed — temporary effects + cosmetic rentals (new `grant/has/consumeTemporaryEntitlement` in EconomyContext, activated-and-consumed at puzzle start in GameScreen), decorations routed to `unlockDecoration`, ad free-spin credited, VIP daily drip reads the actual subscribed SKU's `dailyDrip`, coin-shop daily limits persisted across restarts. `coin_premium_hint` (uncreditable item type) removed from the catalog (now 17 items).
+- **Ceremonies pay what they display**: grants applied exactly-once at ceremony POP time via pure `ceremonyEconomyGrant` (`src/utils/ceremonyGrants.ts`) — streak milestones, atlas completions, win-streak tiers, wing restoration — with an explicit exclusion list for types whose own flows already grant (double-pay guard). Deferred ceremony batches resume via `resumeTick` in `useCeremonyQueue`.
+- **Undo score rollback**: history snapshots the pre-clear score and UNDO_MOVE restores it — re-finding an undone word no longer double-scores (with purchased undos this was an unbounded leaderboard score pump).
+- **Validated-score level/mode**: weekly/event submissions now pass level + mode to `submitValidatedScore` (omitted, the server assumed level 0 and rejected virtually every real weekly score); server `maxPlausibleScore` gained a weekly/event scope floor — that functions change RIDES THE PENDING `firebase deploy`.
+- **Time windows all-UTC**: weekly-goals week start, main-event end, Weekend Blitz countdown, and 48h mini-events now share UTC arithmetic; 48h events are served on their second day anchored to the ORIGINAL start date (previously they vanished after 24h and day-two lookups minted a fresh event id, wiping progress).
+- **Accessibility applied, not just computed**: reduce-motion now respected by `SparkleField`/`ShimmerEffect`, PuzzleComplete's celebration video + confetti, `FlawlessBadge` (prop existed, was never passed), and `BoosterComboBanner` (effect captured the hook's pre-resolution `false` forever — latest-value ref). Colorblind palette now reaches tile FACES (per-mode ramps in `colorblind.ts` → LetterCell body gradients) and WordBank chip states, not just cell borders.
+- **allowHints enforced at the choke point**: expert/perfectSolve could reach hints via the idle-hint and ad-hint banners (only GameHeader read the flag). GameScreen now derives `hintsAllowed`, zeroes `hintsAvailable`, gates the ad path, and refuses in `handleHint`. The 30s/10s timer warnings live in the real timer bar (see Tier 4 note above).
+- **Cloud client halves**: puzzle completions now write `users/{uid}/puzzleResults/*` — the `onPuzzleComplete` trigger's input; without it club goals and club `weeklyScore` were frozen at 0 forever. Weekly-leaderboard + club-goal inbox rewards are claimed on app open via `useRewardInboxClaim` (exactly-once via the rules-enforced unclaimed→claimed transition).
+- Also fixed: language restored on settings hydration; Settings "reset progress" actually resets; `club_invite` deep link targets the correct stack; wing-completion bonus paid + wing named; achievement catch-up tiers pay their rewards; streak-restore purchase restores the streak.
+
+### Clubs end-to-end + polish batch (August 2026, second pass — same branch)
+
+Cleared the top of the post-sweep ledger (suites 97 → 99, ~1495 tests):
+
+- **Clubs are real end to end.** `joinClub`/`leaveClub` HTTPS callables in `functions/src/social.ts` (transactional, idempotent, maxMembers enforced, memberCount recomputed from memberIds, 10 changes/hr/UID rate limit, owner transfer on leave, club doc deleted when last member leaves — inventory 19 → 21 functions, RIDES THE PENDING `firebase deploy`). Client wrapper `src/services/clubMembership.ts`; `firestoreService.findClubByMembership(uid)` (three-state: club / null=definitely-none / undefined=offline-unknown) drives once-per-open cross-device discovery in PlayerContext; `setClubId` is the new PlayerContext action caching the server-authoritative membership. ClubScreen wires JOIN (browse + code), CREATE (rules-permitted client `createClub`), LEAVE (confirm → callable), reads `route.params.joinClubId` from the `club_invite` deep link (confirm-before-join), fetches the club doc + member display names (`getClubMemberProfiles`), and shows a loading/retry pane instead of the browse view while the doc is in flight. GiftInbox + ClubSharedGoals are now reachable.
+- **Inbox rewards celebrate.** `useRewardInboxClaim` queues one `inbox_reward` ceremony per sweep (single reward shows its own label; several aggregate). Display-only — on the `ceremonyEconomyGrant` exclusion list because the sweep already credited at the rules-enforced unclaimed→claimed transition. Pure builder `buildInboxRewardCeremony` is unit-tested.
+- **Spring/fade nav transition actually runs.** App.tsx's six real stacks converted native-stack → `@react-navigation/stack` (native-stack can't run a custom `cardStyleInterpolator`); card transform/opacity animate on the native driver, `freezeOnBlur` retained. Clamped spring open (stiffness 180/damping 22), 220ms cubic-out close. Needs an on-device feel pass.
+- **Shared boards are hand-authored.** `src/data/sharedBoardThemes.ts`: 20 daily + 16 weekly themes, 12 dictionary-validated words each, deterministic UTC rotation; `shopFairestBoard` threads themeWords into daily/weekly generation and HomeScreen's daily card shows the theme name. `sharedBoardThemes.test.ts` pins the authoring contract end to end.
+- Verified already-shipped (don't redo): animated legendary frame glow (`ProfileScreen.tsx:245–279`, applied at 353).
+
+### Known issues (post-sweep ledger)
+
+- `lastFlawlessDate` is written but never read (vestigial). The flawless streak intentionally increments per flawless SOLVE (per `game_mechanics.md`), not per calendar day — a few stale comments say otherwise; the code is right, the comments are wrong.
+- Club member weekly scores render from `memberContributions` (written server-side by `onPuzzleComplete`); until the pending `firebase deploy` ships the new callables + trigger halves, live club data stays sparse.
 
 ### Real launch-blocking gaps (user-side, outside this repo)
 - Register `wordfall_*` IAP SKUs in Play Console (catalog: `src/data/shopProducts.ts`)
@@ -152,7 +226,7 @@ _(resolved April 2026)_ GDPR account deletion UI + `requestAccountDeletion` Clou
 - Set `EXPO_PUBLIC_SENTRY_DSN` as an EAS secret + `.env`
 - AdMob **app IDs** in `app.json` AND rewarded + interstitial **unit IDs** (via `EXPO_PUBLIC_ADMOB_REWARDED_ID*` / `..._INTERSTITIAL_ID*` env vars) are already real on the user's side. Only remaining AdMob step: confirm those env vars are populated in EAS secrets so production AABs don't fall through to the dev-only Google test unit fallback in `src/constants.ts`
 - Author the UMP consent message inside AdMob → Privacy & messaging → GDPR
-- Run `firebase deploy --only firestore:rules,firestore:indexes,functions` (one-time)
+- Run `firebase deploy --only firestore:rules,firestore:indexes,functions` (one-time) — the Aug 2026 branch's `maxPlausibleScore` weekly/event scope floor AND the new `joinClub`/`leaveClub` callables in `functions/src/social.ts` ride this same deploy; until it runs, weekly submissions above the old ceiling are still rejected server-side and club join/leave callables 404 (the client surfaces the error alert)
 - Fill Play Console Data Safety form (draft in `agent_docs/data_safety.md`)
 - Upload store listing assets (icon, feature graphic, screenshots — copy in `agent_docs/store_listing.md`)
 - Commission real audio (synth fallback works but sounds amateur)
@@ -168,7 +242,7 @@ _(resolved April 2026)_ GDPR account deletion UI + `requestAccountDeletion` Clou
 - iOS lane (Apple Developer enrollment, `GoogleService-Info.plist`, Universal Links, ATT verification).
 - Maestro CI wiring (flows 01–15 are authored in `.maestro/`; hosted CI runner with Android emulator is the remaining step).
 - GPU-accelerated VFX (Skia bloom / shader passes on tile clears) — premium polish, post-launch.
-- Hand-authored puzzle overrides for levels 80–150 — `chapterOverrideJson` RC path exists; current generation is procedural-deterministic.
+- Hand-authored boards for Daily / Weekly challenges (the one surface where curated-feel is most visible; the `chapterOverrideJson` RC path only extends chapters 41+, it cannot override the authored 1–40).
 
 ### Top-tier F2P parity (April 2026 — shipped work)
 The big monetization + social + feel-polish push landed across 13 branches. All 4 workstreams shipped except audio commissioning (D5 — blocked on external audio delivery) and the items now tracked in `agent_docs/launch_blockers.md`.

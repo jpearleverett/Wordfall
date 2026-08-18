@@ -61,6 +61,8 @@ export interface RemoteConfigValues {
   firstSessionStarterBundleEnabled: boolean;
   /** Tier 6 B7 — one-shot chip-pulse + gold glow on last-word tension edge. */
   lastWordTensionPulseEnabled: boolean;
+  /** J11 — once-per-puzzle "kept it open" ordering acknowledgment. */
+  keptOpenBadgeEnabled: boolean;
   /** Tier 6 B4 — route daily/weekly/event score writes through the
    *  `submitValidatedScore` Cloud Function (vs legacy direct client write).
    *  Flip to false to kill-switch back to direct writes if the callable
@@ -118,6 +120,23 @@ export interface RemoteConfigValues {
 
   // Feel polish — invalid-word shake + multi-tile bloom (Branch 11)
   invalidShakeEnabled: boolean;
+  /**
+   * Grants ONE free undo per level when the board is genuinely dead-ended
+   * and the player has no undo tokens. Preserves the stuck fail state (the
+   * player still hits the wall and must re-plan) while removing the toll —
+   * without it the only options are spending a token or restarting the
+   * level outright, and the game responds to a dead board by showing two
+   * purchase offers. Kill switch if it measurably softens the game too far.
+   */
+  freeStuckRescueEnabled: boolean;
+  /**
+   * In-game purchase-offer pacing. GameScreen gates offers to one per level,
+   * but without these a level-2 player could see an offer on every single
+   * level. 0 means "use the built-in default" (see utils/offerPacing.ts).
+   */
+  offerMinLevel: number;
+  offerMaxPerSession: number;
+  offerCooldownMinutes: number;
   tileBloomEnabled: boolean;
   tileBloomParticlesPerTile: number;
 
@@ -127,6 +146,15 @@ export interface RemoteConfigValues {
    * rare-find sting. Kill switch for the in-puzzle variable-ratio reward.
    */
   bonusTileEnabled: boolean;
+
+  /**
+   * Seasonal Mystery Wheel variants (spring / summer / autumn / winter), each
+   * with its own exclusive cosmetics. The registry shipped but nothing
+   * imported it, so every player span the standard wheel year-round. Kill
+   * switch in case a seasonal wheel's rewards need pulling mid-season —
+   * flipping this reverts to the standard wheel, odds disclosure included.
+   */
+  seasonalWheelEnabled: boolean;
 
   // First-purchase hard-modal offer — interrupts post-puzzle at level
   // [min, max] for non-payers exactly once per user. Set enabled=false to
@@ -265,10 +293,16 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // segmentation logic misfires on any tier post-launch.
   dynamicOffersEnabled: true,
   // Tier 6 B2 — queue first-purchase offer on first HomeScreen arrival.
-  firstSessionStarterBundleEnabled: true,
+  // OFF since the Aug 2026 fun audit: the App.tsx FTUE queue path was
+  // removed (paywall-before-first-puzzle, and it cannibalized the L5-6
+  // offer's one-shot guard). Flag retained so Ops can re-test a day-1
+  // bundle later — any new caller must gate on puzzlesSolved >= 3 and go
+  // through offerPacing, not onboarding completion.
+  firstSessionStarterBundleEnabled: false,
   // Tier 6 B7 — last-word tension chip pulse; kill-switch if reduce-motion
   // compliance flags any issue post-launch.
   lastWordTensionPulseEnabled: true,
+  keptOpenBadgeEnabled: true,
   // Tier 6 B4 — server-side score validation. Default ON; flip to false as
   // a soft kill-switch to revert to legacy direct-write path. Rules remain
   // backward-compatible (no tightening yet) so the fallback path keeps working.
@@ -320,11 +354,18 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
 
   // Feel polish — screen shake on invalid word + per-tile bloom particles
   invalidShakeEnabled: true,
+  freeStuckRescueEnabled: true,
+  offerMinLevel: 6,
+  offerMaxPerSession: 3,
+  offerCooldownMinutes: 8,
   tileBloomEnabled: true,
   tileBloomParticlesPerTile: 2,
 
   // In-puzzle variable-reward coin tile
   bonusTileEnabled: true,
+
+  // Seasonal Mystery Wheel rotation
+  seasonalWheelEnabled: true,
 
   // First-purchase hard-modal offer — interrupt fires post-puzzle at
   // levels 5–6 for non-payers exactly once per user (guarded by
@@ -480,7 +521,18 @@ export async function initRemoteConfig(): Promise<void> {
     await rc.setDefaults(REMOTE_CONFIG_DEFAULTS as Record<string, any>);
     await rc.fetchAndActivate();
 
+    // Must be set BEFORE notifying: getRemoteValue short-circuits to the
+    // compile-time defaults while `initialized` is false, so listeners would
+    // otherwise be handed the values they already had.
     initialized = true;
+
+    // Publish the freshly activated values. Without this the normal startup
+    // path activated a config nobody was told about — most visibly the
+    // seasonal chapter overlay (`chapterOverrideJson`), which is ingested
+    // inside notifyListeners and so never loaded at all. Only the real-time
+    // onConfigUpdated hook and the manual refresh called this, and neither
+    // runs on a cold start.
+    notifyListeners();
   } catch {
     // Fetch failed (e.g. offline) — defaults are still in place, which is fine.
     initialized = true;
@@ -532,6 +584,34 @@ export function getRemoteNumber(key: RemoteConfigKey): number {
   } catch {
     return REMOTE_CONFIG_DEFAULTS[key] as number;
   }
+}
+
+/**
+ * A remote number that must land inside a sane range, or the caller's
+ * fallback is used instead.
+ *
+ * Every numeric knob that reaches gameplay or the economy goes through this
+ * rather than `getRemoteNumber` directly. Remote Config values are typed by
+ * a human in a web console, so the realistic failure is not a malicious
+ * value but a slip — an extra zero, an empty field parsed as 0, a unit
+ * confusion (seconds where milliseconds were meant). Those land as silent
+ * balance changes on every device at once, with no build to roll back.
+ *
+ * The NaN case matters as much as the range: `rc.getValue(key).asNumber()`
+ * returns NaN for an unparseable string, and NaN fails every comparison, so
+ * an un-guarded `count >= cap` would pass forever. Guarding here means each
+ * call site does not have to remember.
+ */
+export function getRemoteNumberClamped(
+  key: RemoteConfigKey,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const value = getRemoteNumber(key);
+  if (!Number.isFinite(value)) return fallback;
+  if (value < min || value > max) return fallback;
+  return value;
 }
 
 /**

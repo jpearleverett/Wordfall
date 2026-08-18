@@ -265,9 +265,22 @@ export const DIFFICULTY_CONFIGS: Record<Difficulty, BoardConfig> = {
 const BREATHER_INTERVAL = 5;
 const SPIKE_INTERVAL = 13;
 const SPIKE_MIN_LEVEL = 13; // no spikes during early-game learning phase
+/**
+ * No breathers during the learning phase either — symmetric with
+ * SPIKE_MIN_LEVEL and for the same reason.
+ *
+ * A breather plays the phase config from 4 levels earlier. Once the bands
+ * are wide (level 20+) that lands in the same or an adjacent band, so it
+ * reads as a gentle dip — exactly the intended relief valve. But the early
+ * bands are only 2-3 levels wide, so level 5 replayed the LEVEL 1 board
+ * verbatim and level 10 replayed level 6. A player four puzzles in is not
+ * fatigued; handing them a visibly smaller board reads as losing progress
+ * at precisely the moment they are deciding whether the game has depth.
+ */
+const BREATHER_MIN_LEVEL = 12;
 
 export function isBreatherLevel(level: number): boolean {
-  return level > 1 && level % BREATHER_INTERVAL === 0;
+  return level >= BREATHER_MIN_LEVEL && level % BREATHER_INTERVAL === 0;
 }
 
 /**
@@ -303,18 +316,43 @@ function applySpike(base: BoardConfig): BoardConfig {
 
 /** Base phase-driven board config for the given level, ignoring spike/breather. */
 function getPhaseConfig(effectiveLevel: number): BoardConfig {
-  // Phase 1: Tutorial / Easy (levels 1-5) — gentle ramp from 2 to 3 words
-  if (effectiveLevel <= 3) {
+  // Phase 1: Tutorial / Easy (levels 1-7) — every band changes something
+  // visible. This used to be three IDENTICAL 5x4 two-word boards at L1-L3,
+  // so a new player's first three puzzles looked the same; and with only
+  // 2x3 letters clearing out of 20 cells, gravity barely moved anything —
+  // under-selling the one mechanic that separates Wordfall from every other
+  // word search, during the exact minutes that decide D1 retention.
+  if (effectiveLevel <= 2) {
+    // Learn the trace gesture on the smallest possible board.
     return { rows: 5, cols: 4, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' };
   }
-  if (effectiveLevel <= 5) {
+  if (effectiveLevel <= 4) {
+    // Third word + a taller board: now ~9 of 25 cells clear, so the fall is
+    // unmistakable. This is the "oh, the board CHANGES" moment.
     return { rows: 5, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
   }
-  // Phase 2: Early game (levels 6-10) — introduce bigger grids gradually
-  if (effectiveLevel <= 7) {
+  // L5-L10 used to be the SAME 6x5 grid six levels running (the only
+  // visible change was one extra word chip at L8) — the identical-boards
+  // churn problem the L1-L3 comment above describes, reintroduced in the
+  // exact window where a first session's "is this going anywhere?" read is
+  // formed. Now the grid shape changes at least every two levels, and L7
+  // introduces the first 5-letter word (an emotional highlight per the
+  // mechanics doc — long words are satisfying to trace, not harder).
+  if (effectiveLevel <= 6) {
     return { rows: 6, cols: 5, wordCount: 3, minWordLength: 3, maxWordLength: 4, difficulty: 'easy' };
   }
+  if (effectiveLevel <= 7) {
+    // First 5-letter word on a wider board.
+    return { rows: 6, cols: 6, wordCount: 3, minWordLength: 3, maxWordLength: 5, difficulty: 'easy' };
+  }
+  if (effectiveLevel <= 9) {
+    // Bigger canvas — a two-level preview of the phase-3 board size.
+    return { rows: 7, cols: 6, wordCount: 4, minWordLength: 3, maxWordLength: 4, difficulty: 'medium' };
+  }
   if (effectiveLevel <= 10) {
+    // Back to the compact grid: L10 is a breather slot (every 5th level
+    // must dip — difficultyCurve pins it), and the shape change itself
+    // keeps the variety cadence.
     return { rows: 6, cols: 5, wordCount: 4, minWordLength: 3, maxWordLength: 4, difficulty: 'medium' };
   }
   // Phase 3: Building confidence (levels 11-15) — 4-5 words, longer words creep in
@@ -589,6 +627,40 @@ export const EARLY_GAME_BONUSES: {
   { level: 10, coins: 200 },                                // End of early game milestone
   { level: 12, gems: 5, coins: 100 },                       // Time Pressure unlock
   { level: 15, coins: 150, gems: 5 },                       // Mid-game milestone
+
+  // ── Sustained milestone cadence (levels 20+) ──────────────────────────
+  //
+  // Everything above fires in the first 15 levels, and the other scheduled
+  // payoffs run out just as fast: feature unlocks stop at level 10, mode
+  // unlocks at level 22. Past that the only scheduled reward in the entire
+  // game was a chapter completion every 15 levels — so a player who got
+  // through the onboarding arc hit a content cliff at exactly the point
+  // where the D1-to-D7 habit is still forming, and stretches like 23-29 and
+  // 31-44 handed out nothing at all.
+  //
+  // Every 5 levels to 60, then every 10 to 150. Values stay in line with the
+  // existing milestones (~150-300 coins, 3-8 gems) rather than escalating —
+  // this is a steady drumbeat of "the game noticed", not an economy faucet.
+  // A hint refill is 50 coins and a booster 200, so each gift is worth a
+  // couple of concrete things the player can immediately spend.
+  { level: 20, coins: 200, gems: 5 },
+  { level: 25, coins: 200, hints: 2 },
+  { level: 30, coins: 250, gems: 8 },                       // Chapter 2 complete
+  { level: 35, coins: 200, gems: 5 },
+  { level: 40, coins: 250, hints: 2, wheelSpins: 1 },
+  { level: 45, coins: 250, gems: 8 },                       // Chapter 3 complete
+  { level: 50, coins: 300, gems: 10, wheelSpins: 1 },       // Half-century marker
+  { level: 55, coins: 250, hints: 2 },
+  { level: 60, coins: 300, gems: 8 },                       // Chapter 4 complete
+  { level: 70, coins: 300, gems: 8 },
+  { level: 80, coins: 300, hints: 3, wheelSpins: 1 },
+  { level: 90, coins: 350, gems: 10 },
+  { level: 100, coins: 500, gems: 15, wheelSpins: 1 },      // Century marker
+  { level: 110, coins: 350, gems: 8 },
+  { level: 120, coins: 350, hints: 3 },
+  { level: 130, coins: 400, gems: 10 },
+  { level: 140, coins: 400, hints: 3, wheelSpins: 1 },
+  { level: 150, coins: 600, gems: 20, wheelSpins: 1 },      // Sesquicentennial
 ];
 
 // Starter pack activation delay — don't start the 72hr timer until player
@@ -728,11 +800,22 @@ export const ENERGY = {
 export const STREAK = {
   graceDays: 1,
   shieldCooldownDays: 30,
-  milestones: [7, 14, 30, 60, 100],
+  // D2-D6 is where daily habits form, and the old ladder ([7,14,30,60,100])
+  // paid NOTHING before day 7 — while the flawless streak celebrated at
+  // 3 and 5. New tiers fill the front (3, 5, 10) and the old 16-day
+  // 14→30 hole (21) plus 30→60 (45). updateStreak iterates this array
+  // generically and ceremonyEconomyGrant pays from the reward objects, so
+  // this is a pure data change.
+  milestones: [3, 5, 7, 10, 14, 21, 30, 45, 60, 100],
   milestoneRewards: {
+    3: { coins: 150, gems: 0 },
+    5: { coins: 250, gems: 5 },
     7: { coins: 500, gems: 10 },
+    10: { coins: 600, gems: 15 },
     14: { coins: 1000, gems: 25 },
+    21: { coins: 1500, gems: 35 },
     30: { coins: 2500, gems: 50, cosmetic: 'streak_30_frame' },
+    45: { coins: 3500, gems: 75 },
     60: { coins: 5000, gems: 100, cosmetic: 'streak_60_title' },
     100: { coins: 10000, gems: 200, cosmetic: 'streak_100_badge' },
   },

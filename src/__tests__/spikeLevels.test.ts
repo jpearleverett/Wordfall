@@ -56,9 +56,22 @@ describe('isSpikeLevel', () => {
 });
 
 describe('isBreatherLevel', () => {
-  it('returns true for every 5th level from 5 upward', () => {
-    for (const level of [5, 10, 15, 20, 65]) {
+  it('returns true for every 5th level from 15 upward', () => {
+    for (const level of [15, 20, 25, 65]) {
       expect(isBreatherLevel(level)).toBe(true);
+    }
+  });
+
+  // Breathers are relief valves for accumulated fatigue, so they are
+  // suppressed during the learning phase (symmetric with SPIKE_MIN_LEVEL).
+  // A breather replays the phase config from 4 levels earlier; the early
+  // bands are only 2-3 levels wide, so level 5 used to replay the LEVEL 1
+  // board verbatim and level 10 replayed level 6 — a visible downgrade
+  // four puzzles in, when the player has no fatigue to relieve and is
+  // still deciding whether the game has depth.
+  it('returns false during the early-game learning phase', () => {
+    for (const level of [5, 10]) {
+      expect(isBreatherLevel(level)).toBe(false);
     }
   });
 
@@ -117,15 +130,42 @@ describe('getLevelConfig — spike transformation', () => {
 });
 
 describe('getLevelConfig — breather still behaves', () => {
-  it('level 5 is a breather (drops to level 1 config)', () => {
-    const breather = getLevelConfig(5);
-    const level1 = getLevelConfig(1);
-    expect(breather).toEqual(level1);
+  it('level 15 is a breather (drops to level 11 config)', () => {
+    const breather = getLevelConfig(15);
+    const level11 = getLevelConfig(11);
+    expect(breather).toEqual(level11);
   });
 
-  it('level 10 is a breather (drops to level 6 config)', () => {
-    const breather = getLevelConfig(10);
-    const level6 = getLevelConfig(6);
-    expect(breather).toEqual(level6);
+  it('level 20 is a breather (drops to level 16 config)', () => {
+    const breather = getLevelConfig(20);
+    const level16 = getLevelConfig(16);
+    expect(breather).toEqual(level16);
+  });
+
+  // The early game must never hand back a board the player already beat.
+  it('no level in 1-14 replays an earlier level\'s exact board', () => {
+    const seen = new Map<string, number>();
+    for (let level = 1; level <= 14; level++) {
+      const c = getLevelConfig(level);
+      const key = `${c.rows}x${c.cols}w${c.wordCount}len${c.minWordLength}-${c.maxWordLength}`;
+      const firstSeenAt = seen.get(key);
+      if (firstSeenAt !== undefined) {
+        // Consecutive levels may share a band; a NON-adjacent repeat is the
+        // regression we care about (e.g. old L5 replaying L1).
+        expect(level - firstSeenAt).toBeLessThanOrEqual(3);
+      } else {
+        seen.set(key, level);
+      }
+    }
+  });
+
+  it('difficulty never decreases across the first 14 levels', () => {
+    const order = { easy: 0, medium: 1, hard: 2, expert: 3 } as const;
+    let prev = 0;
+    for (let level = 1; level <= 14; level++) {
+      const tier = order[getLevelConfig(level).difficulty];
+      expect(tier).toBeGreaterThanOrEqual(prev);
+      prev = tier;
+    }
   });
 });

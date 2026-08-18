@@ -10,7 +10,7 @@
  */
 import { useCallback } from 'react';
 import { CeremonyItem, WeeklyGoalsState } from '../types';
-import { CHAPTERS, getChapterForLevel, getLastLevelOfChapter } from '../data/chapters';
+import { CHAPTERS, WING_NAMES, getChapterForLevel, getLastLevelOfChapter } from '../data/chapters';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
@@ -20,6 +20,37 @@ import { updatePlayerMetrics } from '../engine/difficultyAdjuster';
 import { PlayerMetrics } from '../types';
 
 const getToday = (): string => new Date().toISOString().split('T')[0];
+
+/** Minimum days between two grace days — one skip per fortnight of play. */
+const GRACE_COOLDOWN_DAYS = 14;
+
+/**
+ * Whether a missed day may be forgiven right now.
+ *
+ * Losing a long streak to a single missed day is one of the most reliable
+ * churn moments in a daily game, and long-streak players are the most
+ * valuable ones to protect — so forgiveness has to keep existing for as long
+ * as the streak does.
+ *
+ * This was a counter: `graceDaysUsed` against an allowance that grew with
+ * streak length and capped at 4. The counter only reset when the streak
+ * BROKE, so the cap was a lifetime budget rather than a rate. Someone on a
+ * 365-day streak who had used their four graces by day 60 then went 300 days
+ * with no forgiveness at all — the exact opposite of the intent, applied to
+ * the exact player it was meant to protect.
+ *
+ * A cooldown expresses the intended policy directly and uniformly: one
+ * missed day forgiven per fortnight, at any streak length, forever. It is no
+ * more generous than the counter was early on (the first grace is still
+ * free) and strictly more generous where the counter failed.
+ */
+function canUseGrace(lastGraceDate: string | undefined, todayDate: Date): boolean {
+  if (!lastGraceDate) return true;
+  const lastMs = new Date(lastGraceDate).getTime();
+  if (Number.isNaN(lastMs)) return true;
+  const daysSince = Math.floor((todayDate.getTime() - lastMs) / (1000 * 60 * 60 * 24));
+  return daysSince >= GRACE_COOLDOWN_DAYS;
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +77,7 @@ export interface PlayerProgressData {
     bestStreak: number;
     lastPlayDate: string;
     graceDaysUsed: number;
+    lastGraceDate?: string;
     streakShieldAvailable: boolean;
     lastShieldDate: string;
     /**
@@ -204,9 +236,17 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       const newlyRestoredWings = completedWingIds.filter(
         (wingId) => !prev.restoredWings.includes(wingId),
       );
+      // wingName was the raw id ('nature Complete!'); the reward rides in
+      // data so the pop-time grant (ceremonyEconomyGrant) pays it — restoring
+      // a wing is 5 chapters / 75 levels, and the 1000c/25g bonus for it
+      // previously lived only in an unreachable duplicate method.
       const wingCeremonies: CeremonyItem[] = newlyRestoredWings.map((wingId) => ({
         type: 'wing_complete' as const,
-        data: { wingId, wingName: wingId },
+        data: {
+          wingId,
+          wingName: WING_NAMES[wingId] ?? wingId,
+          reward: { coins: 1000, gems: 25 },
+        },
       }));
 
       return {
@@ -266,11 +306,21 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       // "50 gems to save your streak" offer on next open. Small breaks
       // (1–2 day streaks) are not worth an offer.
       let didBreakStreak = false;
-      if (diffDays === 1) {
+      if (!lastDate) {
+        // First play ever. This case used to fall into the diffDays === 0
+        // branch below (diffDays is hardcoded 0 when there is no prior
+        // date), which PRESERVES the current streak — i.e. left it at 0. The
+        // player's streak then read one day behind for its entire life:
+        // day one showed 0, day two showed 1, and every milestone arrived a
+        // day late.
+        newStreak = 1;
+      } else if (diffDays === 1) {
         newStreak = streaks.currentStreak + 1;
       } else if (diffDays === 0) {
+        // Same-day replay is normally caught by the early return above;
+        // this remains only as a guard against day-granularity edge cases.
         newStreak = streaks.currentStreak;
-      } else if (diffDays === 2 && streaks.graceDaysUsed < 1) {
+      } else if (diffDays === 2 && canUseGrace(streaks.lastGraceDate, todayDate)) {
         newStreak = streaks.currentStreak + 1;
         graceUsed = true;
       } else if (diffDays >= 2 && shieldFresh) {
@@ -285,9 +335,23 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         }
       }
 
+      // graceDaysUsed is now telemetry only — the cooldown decides
+      // eligibility. A real break clears both, so a fresh streak starts with
+      // forgiveness available rather than inheriting the old one's cooldown.
+      const streakBroke = diffDays >= 3 && !shieldConsumed;
       const newGraceDaysUsed = graceUsed
         ? streaks.graceDaysUsed + 1
-        : diffDays >= 3 ? 0 : streaks.graceDaysUsed;
+        : streakBroke ? 0 : streaks.graceDaysUsed;
+      // NEVER let this become an `undefined` VALUE on the object. Firestore's
+      // setDoc rejects nested undefined outright (the app does not enable
+      // ignoreUndefinedProperties), and this object rides inside the full
+      // player payload — one undefined here made every cloud save throw and
+      // be silently dropped for any player who had never used a grace day.
+      // "Cleared" is expressed by deleting the key below, not by storing
+      // undefined under it.
+      const newLastGraceDate = graceUsed
+        ? today
+        : streakBroke ? undefined : streaks.lastGraceDate;
 
       const newLoginDates = prev.dailyLoginDates.includes(today)
         ? prev.dailyLoginDates
@@ -326,17 +390,29 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         loginCycleDay,
         unlockedCosmetics,
         pendingCeremonies,
-        streaks: {
-          ...streaks,
-          currentStreak: newStreak,
-          bestStreak: Math.max(streaks.bestStreak, newStreak),
-          lastPlayDate: today,
-          graceDaysUsed: shieldConsumed ? streaks.graceDaysUsed : newGraceDaysUsed,
-          streakShieldAvailable: shieldConsumed ? false : streaks.streakShieldAvailable,
-          recentBreak: didBreakStreak
-            ? { prevStreak: streaks.currentStreak, brokenAtMs: Date.now() }
-            : streaks.recentBreak,
-        },
+        streaks: (() => {
+          const nextStreaks = {
+            ...streaks,
+            currentStreak: newStreak,
+            bestStreak: Math.max(streaks.bestStreak, newStreak),
+            lastPlayDate: today,
+            graceDaysUsed: shieldConsumed ? streaks.graceDaysUsed : newGraceDaysUsed,
+            streakShieldAvailable: shieldConsumed ? false : streaks.streakShieldAvailable,
+            recentBreak: didBreakStreak
+              ? { prevStreak: streaks.currentStreak, brokenAtMs: Date.now() }
+              : streaks.recentBreak,
+          };
+          const finalLastGraceDate = shieldConsumed
+            ? streaks.lastGraceDate
+            : newLastGraceDate;
+          // Key present with a string, or absent — never present-but-undefined.
+          if (finalLastGraceDate === undefined) {
+            delete nextStreaks.lastGraceDate;
+          } else {
+            nextStreaks.lastGraceDate = finalLastGraceDate;
+          }
+          return nextStreaks;
+        })(),
         lastActiveDate: today,
       };
     });
@@ -346,14 +422,16 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     let success = false;
     setData((prev) => {
       const { streaks } = prev;
-      if (streaks.graceDaysUsed >= 1) return prev;
+      const today = getToday();
+      if (!canUseGrace(streaks.lastGraceDate, new Date(today))) return prev;
       success = true;
       return {
         ...prev,
         streaks: {
           ...streaks,
           graceDaysUsed: streaks.graceDaysUsed + 1,
-          lastPlayDate: getToday(),
+          lastGraceDate: today,
+          lastPlayDate: today,
         },
       };
     });
@@ -400,16 +478,22 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     setData((prev) => {
       const br = prev.streaks.recentBreak;
       if (!br) return prev;
-      restoredCount = br.prevStreak;
+      // The break was detected DURING a play: updateStreak had just set
+      // lastPlayDate to that day and reset currentStreak to 1 before writing
+      // recentBreak. So the day they broke, they played — restoring means
+      // prevStreak plus that day's play. The old code set the streak to
+      // prevStreak and backdated lastPlayDate to YESTERDAY, so the next
+      // play computed a 2-day gap and needed grace or a shield to survive —
+      // re-breaking the streak the player had just paid 50 gems to save,
+      // while the comment claimed the opposite. lastPlayDate is left alone:
+      // it already records the last day they actually played.
+      restoredCount = br.prevStreak + 1;
       return {
         ...prev,
         streaks: {
           ...prev.streaks,
-          currentStreak: br.prevStreak,
-          // Backdate lastPlayDate to yesterday so the next play continues the streak.
-          lastPlayDate: new Date(Date.now() - 24 * 60 * 60 * 1000)
-            .toISOString()
-            .slice(0, 10),
+          currentStreak: br.prevStreak + 1,
+          bestStreak: Math.max(prev.streaks.bestStreak, br.prevStreak + 1),
           recentBreak: null,
         },
       };
@@ -642,6 +726,21 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         const ltId = getAchievementTierId(achievement.id, lt.level);
         if (!data.achievementIds.includes(ltId) && !newAchievementIds.includes(ltId)) {
           newAchievementIds.push(ltId);
+          // A player who jumps straight past a tier (e.g. a big score in one
+          // puzzle) still EARNED it. These used to be recorded as owned
+          // without being returned, so their rewards silently skipped —
+          // return them like any other earn so the caller grants them.
+          ceremonies.push({
+            type: 'achievement',
+            data: {
+              id: ltId,
+              icon: achievement.icon,
+              name: achievement.name,
+              description: achievement.description,
+              tier: lt.level,
+              reward: lt.reward,
+            },
+          });
         }
       }
 

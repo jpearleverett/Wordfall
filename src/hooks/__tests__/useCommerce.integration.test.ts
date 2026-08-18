@@ -46,27 +46,36 @@ describe('useCommerce integration (iapManager mock-mode)', () => {
     expect(result.receipt).toMatch(/^mock_receipt_mock_/);
   });
 
-  it('duplicate receipt — re-validating the same receipt is rejected (replay guard)', async () => {
+  it('duplicate receipt — re-validating the same receipt reports a redelivery', async () => {
     // Use validateReceipt directly to simulate the hash collision a
     // second purchase would create. mockPurchase generates a unique
     // timestamped receipt each call, so we probe the validation layer
-    // directly for deterministic replay semantics.
+    // directly for deterministic semantics.
+    //
+    // Contract (changed Aug 2026): a local hash hit means THIS device
+    // already validated this receipt, i.e. Play redelivered a purchase we
+    // failed to acknowledge. It must stay `valid` so the acknowledge can be
+    // retried — Google auto-refunds unacknowledged purchases after 3 days.
+    // Double-grant protection lives in the fulfilment ledger's transactionId
+    // dedup (pinned in services/__tests__/iapCommerce.integration.test.ts).
     const first = await validateReceipt('mock_receipt_A', 'coins_pack_small', 'uid1');
     expect(first.valid).toBe(true);
+    expect(first.alreadyValidated).toBeFalsy();
+
     const replay = await validateReceipt('mock_receipt_A', 'coins_pack_small', 'uid1');
-    expect(replay.valid).toBe(false);
-    expect(replay.error).toMatch(/duplicate/i);
+    expect(replay.valid).toBe(true);
+    expect(replay.alreadyValidated).toBe(true);
   });
 
-  it('validation failure — pre-recorded receipt hash blocks a follow-up purchase', async () => {
+  it('pre-recorded receipt hash marks a follow-up validation as already-validated', async () => {
     // Seed the hash store as if this receipt had already been
     // validated. Any later validation with the same receipt string
-    // will short-circuit to duplicate.
+    // short-circuits to the redelivery branch without re-hitting the server.
     const receiptText = 'mock_receipt_mock_coins_pack_small_preseeded';
     await validateReceipt(receiptText, 'coins_pack_small', 'uid1'); // primes hash
     const retry = await validateReceipt(receiptText, 'coins_pack_small', 'uid1');
-    expect(retry.valid).toBe(false);
-    expect(retry.error).toMatch(/duplicate/i);
+    expect(retry.valid).toBe(true);
+    expect(retry.alreadyValidated).toBe(true);
   });
 
   it('restorePurchases — previously-stored non-consumables return on restore', async () => {

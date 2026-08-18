@@ -30,6 +30,12 @@ interface ValidateReceiptResponse {
   productId?: string;
   isTrial?: boolean;
   transactionId?: string;
+  /**
+   * Set when this receipt was already validated for this same user+product.
+   * The response is valid so the client can finish acknowledging the
+   * purchase with the store, but no new purchases row was written.
+   */
+  alreadyProcessed?: boolean;
 }
 
 interface AppleVerifyReceiptResponse {
@@ -147,11 +153,14 @@ async function checkFirestoreRateLimit(
 }
 
 /**
- * Check Firestore for receipt replay. Returns true if receipt was already used.
+ * Look up a previously validated receipt. Returns null when unseen.
  */
-async function isReceiptReplay(hash: string): Promise<boolean> {
+async function findStoredReceipt(
+  hash: string
+): Promise<{ productId?: string; userId?: string | null } | null> {
   const doc = await db.collection("receipts").doc(hash).get();
-  return doc.exists;
+  if (!doc.exists) return null;
+  return (doc.data() ?? {}) as { productId?: string; userId?: string | null };
 }
 
 /**
@@ -367,7 +376,49 @@ async function validateReceiptCore(
   }
 
   const hash = hashReceipt(receipt);
-  if (await isReceiptReplay(hash)) {
+  const priorReceipt = await findStoredReceipt(hash);
+  if (priorReceipt) {
+    // Same user, same product — this is a redelivery, not an attack. Play
+    // Billing resends purchases the client never managed to acknowledge, and
+    // a hard rejection here left them unacknowledgeable forever, which makes
+    // Google auto-refund them after 3 days. Answer idempotently instead: no
+    // new purchases row is written, and the client's own transactionId dedup
+    // stops any double-grant.
+    const sameOwner =
+      (priorReceipt.userId ?? null) === authenticatedUserId &&
+      priorReceipt.productId === productId;
+    if (sameOwner) {
+      functions.logger.info("Receipt redelivery for same user — idempotent OK", {
+        productId,
+        uid: authenticatedUserId.slice(0, 6),
+      });
+      // Re-validate against the store rather than returning a bare OK. A
+      // redelivery is not necessarily an already-FULFILLED purchase — the app
+      // can die between validation and fulfilment — so the client may still
+      // grant from this response. Without a real `expiresAt` a subscription
+      // granted on that path falls back to a 7-day default
+      // (commercialEntitlements applyCatalogPurchase), which would hand an
+      // annual VIP buyer one week. Skipping only the purchases-row write
+      // keeps the accounting idempotent while the entitlement data stays
+      // truthful.
+      try {
+        const revalidated =
+          platform === "ios"
+            ? await validateAppleReceipt(receipt, productId)
+            : await validateGoogleReceipt(receipt, productId);
+        if (revalidated.valid) {
+          return { ...revalidated, alreadyProcessed: true };
+        }
+      } catch (error) {
+        functions.logger.warn("Redelivery re-validation failed; returning bare OK", {
+          productId,
+          error,
+        });
+      }
+      return { valid: true, alreadyProcessed: true, productId };
+    }
+
+    // Different UID or different product for the same receipt: a real replay.
     functions.logger.warn("Duplicate receipt detected", {
       productId,
       uid: authenticatedUserId.slice(0, 6),
@@ -776,7 +827,12 @@ export const clubGoalProgress = functions.https.onCall(
  *
  * Removes club members who have been inactive for more than 14 days.
  */
-export const autoKickInactiveMembers = functions.pubsub
+// Scans every club sequentially. On the v1 default 60s timeout this was
+// killed mid-scan once the club count grew, and since it always restarts
+// from the beginning, the tail of the collection would never be processed.
+export const autoKickInactiveMembers = functions
+  .runWith({ timeoutSeconds: 540, memory: "512MB" })
+  .pubsub
   .schedule("every day 03:00")
   .timeZone("UTC")
   .onRun(async () => {
@@ -804,8 +860,13 @@ export const autoKickInactiveMembers = functions.pubsub
         // Never kick the club owner
         if (memberId === ownerId) continue;
 
+        // Only kick on POSITIVE evidence of inactivity. `memberLastActive`
+        // is written solely by clubGoalProgress, which nothing currently
+        // calls, so treating a missing entry as "idle" (the old `!lastActive
+        // ||` branch) would have stripped every club down to its owner on
+        // the first nightly run — including members who joined minutes ago.
         const lastActive = memberLastActive[memberId];
-        if (!lastActive || lastActive.toMillis() < cutoffTimestamp.toMillis()) {
+        if (lastActive && lastActive.toMillis() < cutoffTimestamp.toMillis()) {
           inactiveMembers.push(memberId);
         }
       }
@@ -941,11 +1002,67 @@ export const requestAccountDeletion = functions.https.onRequest(
 
     try {
       const userRef = db.collection("users").doc(uid);
-      for (const subName of ["consent", "blockedUsers", "pushTokens", "inventory", "notifications"]) {
-        stats.userSubcollections += await deleteCollection(userRef.collection(subName));
+      // Enumerate subcollections instead of guessing names. The old
+      // hardcoded list ("consent","blockedUsers","pushTokens","inventory",
+      // "notifications") missed almost everything the app actually writes —
+      // data/ (the save), economy/ (currency + purchase history), rewards/,
+      // purchases/, tokens/, puzzleResults/, giftQuota/, challenges/ — and
+      // two of the listed names don't exist at all. Deleting the parent doc
+      // does NOT remove subcollections in Firestore, so all of that survived
+      // while the response reported a successful purge.
+      const userSubcollections = await userRef.listCollections();
+      for (const sub of userSubcollections) {
+        stats.userSubcollections += await deleteCollection(sub);
       }
 
       await userRef.delete().catch(() => undefined);
+
+      // Sweep the top-level collections that carry this UID (doc ids are
+      // "{uid}_{date}" / "{uid}_{weekId}", so query by the userId field).
+      for (const scoreCollection of ["dailyScores", "weeklyScores"]) {
+        const scoreDocs = await db
+          .collection(scoreCollection)
+          .where("userId", "==", uid)
+          .get();
+        if (!scoreDocs.empty) {
+          const batch = db.batch();
+          scoreDocs.docs.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          stats.userSubcollections += scoreDocs.size;
+        }
+      }
+
+      for (const giftField of ["fromUserId", "toUserId"]) {
+        const giftDocs = await db.collection("gifts").where(giftField, "==", uid).get();
+        if (!giftDocs.empty) {
+          const batch = db.batch();
+          giftDocs.docs.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          stats.userSubcollections += giftDocs.size;
+        }
+      }
+
+      const friendships = await db
+        .collection("friendships")
+        .where("users", "array-contains", uid)
+        .get();
+      if (!friendships.empty) {
+        const batch = db.batch();
+        friendships.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        stats.userSubcollections += friendships.size;
+      }
+
+      const referralCodes = await db
+        .collection("referralCodes")
+        .where("uid", "==", uid)
+        .get();
+      if (!referralCodes.empty) {
+        const batch = db.batch();
+        referralCodes.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+        stats.userSubcollections += referralCodes.size;
+      }
 
       const playerRef = db.collection("players").doc(uid);
       const playerSnap = await playerRef.get();

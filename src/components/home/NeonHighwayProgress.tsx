@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
   Animated,
   Pressable,
@@ -69,8 +70,13 @@ const NeonHighwayProgress: React.FC<NeonHighwayProgressProps> = ({
 }) => {
   const pulseScale = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.5)).current;
+  // Home stays mounted (and frozen) beneath pushed screens, but freezeOnBlur
+  // doesn't stop running native-driver loops — gate them on focus so the
+  // current-node pulse isn't burning frames behind gameplay all session.
+  const isFocused = useIsFocused();
 
   useEffect(() => {
+    if (!isFocused) return;
     const scaleAnim = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseScale, {
@@ -108,7 +114,7 @@ const NeonHighwayProgress: React.FC<NeonHighwayProgressProps> = ({
       scaleAnim.stop();
       opacityAnim.stop();
     };
-  }, [pulseScale, pulseOpacity]);
+  }, [isFocused, pulseScale, pulseOpacity]);
 
   // Build array of 5 levels centered on currentLevel
   const levels = Array.from({ length: 5 }, (_, i) => currentLevel - 2 + i);

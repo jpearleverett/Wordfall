@@ -11,7 +11,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
@@ -39,6 +39,10 @@ import { usePlayerActions } from '../stores/playerStore';
 interface SeasonPassScreenProps {
   onBack?: () => void;
 }
+
+// Stable data/footer identities for the virtualized tier ladder.
+const TIER_NUMBERS = Array.from({ length: MAX_SEASON_TIER }, (_, i) => i + 1);
+const LADDER_FOOTER = <View style={{ height: 40 }} />;
 
 const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
   const pass = useEconomyStore(selectSeasonPass);
@@ -123,6 +127,8 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
       </Text>
     </View>
   );
+
+  const keyExtractorTier = useCallback((tier: number) => String(tier), []);
 
   const renderTier = (tier: number) => {
     const def = SEASON_PASS_TIERS[tier - 1];
@@ -267,14 +273,21 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
         <Text style={[styles.laneHeaderText, styles.laneHeaderCenter]}>PREMIUM</Text>
       </View>
 
-      <ScrollView
+      {/* Virtualized ladder: only ~8 of the 50 tier rows (~14 views each)
+          mount at open instead of all ~700, and claims re-render windows,
+          not the whole ladder. */}
+      <FlatList
+        data={TIER_NUMBERS}
+        keyExtractor={keyExtractorTier}
+        renderItem={({ item }) => renderTier(item)}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-      >
-        {Array.from({ length: MAX_SEASON_TIER }, (_, i) => renderTier(i + 1))}
-        <View style={{ height: 40 }} />
-      </ScrollView>
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        ListFooterComponent={LADDER_FOOTER}
+      />
     </View>
   );
 };

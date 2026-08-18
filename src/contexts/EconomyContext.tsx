@@ -40,6 +40,7 @@ import {
 } from '../stores/economyStore';
 import { computeRefilledLives } from '../utils/lives';
 import { createPersistQueue } from '../utils/persistQueue';
+import { stripUndefinedDeep } from '../utils/firestoreSanitize';
 
 interface Economy {
   coins: number;
@@ -109,6 +110,13 @@ export interface EconomyState extends Economy, IAPState {
   totalEarned: TotalEarned;
   purchaseHistory: PurchaseRecord[];
   lives: LivesData;
+  /**
+   * Stamped by the persist writer on every save. The Firestore sync-in
+   * compares it against the cloud doc so a stale cloud snapshot can never
+   * clobber fresher local currency/entitlements (same convention as
+   * PlayerContext). Optional: legacy blobs without it compare as 0.
+   */
+  lastModified?: number;
 }
 
 export interface EconomyContextType extends Economy {
@@ -190,6 +198,8 @@ export interface EconomyContextType extends Economy {
   hasTemporaryEntitlement: (effectId: CommercialEffectId) => boolean;
   getTemporaryEntitlementExpiry: (effectId: CommercialEffectId) => number;
   grantTemporaryEntitlement: (effectId: CommercialEffectId, durationMinutes: number) => void;
+  /** Clear a temporary entitlement after its one-shot effect has been applied in-game. */
+  consumeTemporaryEntitlement: (effectId: CommercialEffectId) => void;
 }
 
 const STORAGE_KEY = '@wordfall_economy';
@@ -289,6 +299,7 @@ const EconomyContext = createContext<EconomyContextType>({
   hasTemporaryEntitlement: () => false,
   getTemporaryEntitlementExpiry: () => 0,
   grantTemporaryEntitlement: () => {},
+  consumeTemporaryEntitlement: () => {},
 });
 
 export function EconomyProvider({ children }: { children: ReactNode }) {
@@ -342,9 +353,13 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [loaded]);
 
-  // Sync with Firestore when user is available
+  // Sync with Firestore when user is available. Runs at most once per app
+  // session — re-triggers (e.g. a Google account link swapping `user`)
+  // previously re-applied a snapshot from before the session's earnings.
+  const initialEconomySyncDone = useRef(false);
   useEffect(() => {
-    if (!user || !loaded) return;
+    if (!user || !loaded || initialEconomySyncDone.current) return;
+    initialEconomySyncDone.current = true;
 
     const syncFromFirestore = async () => {
       try {
@@ -352,7 +367,24 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
         const snapshot = await getDoc(docRef);
         if (snapshot.exists()) {
           const firestoreData = snapshot.data() as Partial<EconomyState>;
-          setState((prev) => ({ ...prev, ...firestoreData }));
+          // Use whichever data is more recent (PlayerContext convention).
+          // The old blind spread let a stale cloud snapshot (written before
+          // the previous session's last local save) silently revert coins,
+          // gems, entitlement flags, and purchaseHistory. `>=` keeps the
+          // unstamped-vs-unstamped migration case and the reinstall case
+          // (local unstamped, cloud stamped) behaving like before: cloud wins.
+          setState((prev) => {
+            const localModified = prev.lastModified || 0;
+            const cloudModified = firestoreData.lastModified || 0;
+            if (cloudModified >= localModified) {
+              const next = { ...prev, ...firestoreData };
+              // Never adopt a stale cloud lives block verbatim — recompute
+              // refills for the time elapsed since it was written.
+              if (next.lives) next.lives = computeRefilledLives(next.lives);
+              return next;
+            }
+            return prev;
+          });
         }
       } catch (e) {
         logger.warn('Firestore economy sync failed, using local data:', e);
@@ -399,8 +431,11 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   userRef.current = user;
   const persistQueueRef = useRef(
     createPersistQueue<EconomyState>(async (payload) => {
+      // Stamp once here so both the debounced path and the AppState flush
+      // carry the recency marker the Firestore sync-in compares against.
+      const stamped = { ...payload, lastModified: Date.now() };
       try {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stamped));
       } catch (e) {
         logger.warn('Failed to save economy to AsyncStorage:', e);
       }
@@ -411,7 +446,11 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
           // Route through withRetry so transient network errors are
           // retried with exponential backoff AND the sync-status bus
           // lights up NotSyncedBanner when writes keep failing.
-          await withRetry(() => setDoc(docRef, payload, { merge: true }), {
+          // Same guard as the player payload: setDoc throws on nested
+          // undefined and the throw lands in a fire-and-forget queue, so an
+          // optional field hydrating as undefined would silently stop every
+          // economy save.
+          await withRetry(() => setDoc(docRef, stripUndefinedDeep(stamped), { merge: true }), {
             label: 'economy-firestore',
           });
         } catch (e) {
@@ -877,27 +916,50 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     productId: string,
     options: PurchaseFulfillmentOptions = {},
   ): { grants: PlayerGrantSummary; applied: boolean } => {
-    let grants: PlayerGrantSummary = { cosmetics: [], decorations: [] };
-    let applied = false;
+    // Pin the timestamp so the eager computation (return value) and the
+    // queued updater (authoritative state) agree exactly.
+    const opts = { ...options, now: options.now ?? Date.now() };
+
+    // Compute the outcome eagerly from the latest known state. The old
+    // version derived the return value from variables mutated inside the
+    // setState updater, which React only runs eagerly on an empty queue —
+    // every call after the first in one batch (the multi-item restore
+    // loop) returned applied:false with empty grants, silently dropping
+    // cosmetic/decoration/streak-shield content for those purchases.
+    const eager = applyCatalogPurchase(latestStateRef.current, productId, opts);
+
+    if (eager.applied) {
+      let eagerNext = eager.nextState;
+      // Season pass premium — unlock the premium lane for the current season.
+      if (productId === 'season_pass_premium') {
+        const pass = eagerNext.seasonPass ?? DEFAULT_SEASON_PASS_STATE;
+        eagerNext = { ...eagerNext, seasonPass: { ...pass, isPremium: true } };
+      }
+      // Advance the ref synchronously so back-to-back calls in the same
+      // batch chain their eager computations — this is what makes the
+      // in-batch transactionId dedup see earlier items of the batch.
+      latestStateRef.current = eagerNext;
+    }
 
     setState((prev) => {
-      const result = applyCatalogPurchase(prev, productId, options);
-      grants = result.grants;
-      applied = result.applied;
+      // Recompute against the authoritative prev with the same pinned
+      // opts; transactionId dedup makes replays no-ops, so state can
+      // never double-apply even if eager and queued disagree.
+      const result = applyCatalogPurchase(prev, productId, opts);
+      if (!result.applied) return prev;
       let next = result.nextState;
-      // Season pass premium — unlock the premium lane for the current season.
-      if (applied && productId === 'season_pass_premium') {
+      if (productId === 'season_pass_premium') {
         const pass = next.seasonPass ?? DEFAULT_SEASON_PASS_STATE;
         next = { ...next, seasonPass: { ...pass, isPremium: true } };
       }
       return next;
     });
 
-    if (applied && productId === 'season_pass_premium') {
+    if (eager.applied && productId === 'season_pass_premium') {
       void analytics.logEvent('season_pass_premium_purchased', {});
     }
 
-    return { grants, applied };
+    return { grants: eager.grants, applied: eager.applied };
   }, []);
 
   const processPurchase = useCallback((productId: string) => {
@@ -909,6 +971,20 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     durationMinutes: number,
   ): void => {
     setState((prev) => activateTemporaryEntitlement(prev, effectId, durationMinutes));
+  }, []);
+
+  /**
+   * One-shot effects (board freeze, score doubler) are stored as expiry
+   * timestamps but semantically are "next puzzle" items. GameScreen calls
+   * this after dispatching the in-game activation, so the entitlement can't
+   * apply twice — the expiry window only exists so an unused purchase
+   * survives an app restart.
+   */
+  const consumeTemporaryEntitlement = useCallback((effectId: CommercialEffectId): void => {
+    setState((prev) => ({
+      ...prev,
+      temporaryEntitlements: { ...prev.temporaryEntitlements, [effectId]: 0 },
+    }));
   }, []);
 
   const hasTemporaryEntitlement = useCallback((effectId: CommercialEffectId): boolean => {
@@ -1037,28 +1113,65 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     checkVipStreak();
 
     const today = new Date().toISOString().slice(0, 10);
-    let claimed = false;
+
+    // Decide claimability synchronously from the latest committed state
+    // (the file's latestStateRef pattern, same as canAfford). The previous
+    // version derived the return value from a flag mutated inside the
+    // setState updater — React only runs updaters eagerly when the queue is
+    // empty, and checkVipStreak() just queued one, so on every
+    // streak-increment day the claim GRANTED but returned false and the
+    // shop showed "Already Claimed" to a paying subscriber. None of the
+    // fields read here are touched by checkVipStreak's queued update.
+    const cur = latestStateRef.current;
+    const claimable =
+      cur.isVipSubscriber &&
+      cur.vipExpiresAt > Date.now() &&
+      cur.vipDailyLastClaim !== today;
+    if (!claimable) return false;
 
     setState((prev) => {
-      // Not active or expired or already claimed today
+      // Double-grant safety net if state moved between check and commit
       if (!prev.isVipSubscriber || prev.vipExpiresAt <= Date.now()) return prev;
       if (prev.vipDailyLastClaim === today) return prev;
 
-      claimed = true;
+      // Pay the TIER the player bought. This was hardcoded to the weekly
+      // tier's 50 gems / 3 hints, so monthly subscribers were shorted 25
+      // gems and 2 hints a day and annual subscribers 50 gems and 5 hints —
+      // every day of a subscription whose store listing promises the larger
+      // number. The tier is recovered from the most recent vip_* purchase
+      // record; its declared rewards.dailyDrip is the same source the shop
+      // copy renders from, so the promise and the payout cannot diverge.
+      const drip = (() => {
+        for (let i = prev.purchaseHistory.length - 1; i >= 0; i--) {
+          const record = prev.purchaseHistory[i];
+          if (typeof record?.item === 'string' && record.item.startsWith('vip_')) {
+            const product = getProductById(record.item);
+            const declared = product?.rewards?.dailyDrip;
+            if (declared) {
+              return { gems: declared.gems ?? 0, hintTokens: declared.hintTokens ?? 0 };
+            }
+            break;
+          }
+        }
+        // No purchase record (e.g. server-side renewal restored the flag
+        // without a local record): the weekly tier is the conservative floor.
+        return { gems: 50, hintTokens: 3 };
+      })();
+
       return {
         ...prev,
         vipDailyLastClaim: today,
-        gems: prev.gems + 50,
-        hintTokens: prev.hintTokens + 3,
+        gems: prev.gems + drip.gems,
+        hintTokens: prev.hintTokens + drip.hintTokens,
         totalEarned: {
           ...prev.totalEarned,
-          gems: prev.totalEarned.gems + 50,
-          hintTokens: prev.totalEarned.hintTokens + 3,
+          gems: prev.totalEarned.gems + drip.gems,
+          hintTokens: prev.totalEarned.hintTokens + drip.hintTokens,
         },
       };
     });
 
-    return claimed;
+    return true;
   }, [checkVipStreak]);
 
   const activateStarterPack = useCallback((): void => {
@@ -1145,6 +1258,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
       grantTemporaryEntitlement,
+      consumeTemporaryEntitlement,
     }),
     [
       state,
@@ -1187,6 +1301,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
       grantTemporaryEntitlement,
+      consumeTemporaryEntitlement,
     ],
   );
 
@@ -1233,6 +1348,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
       grantTemporaryEntitlement,
+      consumeTemporaryEntitlement,
     }),
     [
       loaded,
@@ -1270,6 +1386,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       hasTemporaryEntitlement,
       getTemporaryEntitlementExpiry,
       grantTemporaryEntitlement,
+      consumeTemporaryEntitlement,
     ],
   );
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
+import i18n from '../i18n';
 import { notificationManager } from '../services/notifications';
 import { auth as firebaseAuth } from '../config/firebase';
 
@@ -90,6 +91,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (stored) {
           const parsed = JSON.parse(stored) as Partial<Settings>;
           setSettings((prev) => ({ ...prev, ...parsed }));
+          // Re-apply the persisted language choice. SettingsScreen calls
+          // i18n.changeLanguage live when the player picks one, but App.tsx
+          // boots i18n from the DEVICE locale — so without this, an explicit
+          // choice lasted exactly one session and every relaunch silently
+          // reverted. The player set it once; keep honoring it.
+          if (parsed.language && parsed.language !== i18n.language) {
+            void i18n.changeLanguage(parsed.language).catch(() => {
+              // Unknown/stale locale code — fall back to whatever i18n
+              // resolved at boot rather than crashing settings hydration.
+            });
+          }
         }
       } catch (e) {
         logger.warn('Failed to load settings from AsyncStorage:', e);

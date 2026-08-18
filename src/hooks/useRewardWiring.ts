@@ -3,7 +3,6 @@ import { Board, CeremonyItem, Difficulty, GameMode, VictorySummaryItem } from '.
 import { SeasonalQuestState, getCurrentSeasonalQuest } from '../data/seasonalQuests';
 import {
   COLORS,
-  getLevelConfig,
   ECONOMY,
   COLLECTION,
   MODE_CONFIGS,
@@ -21,8 +20,10 @@ import { eventManager } from '../services/eventManager';
 import { DailyQuestEvent } from '../data/dailyQuests';
 import { analytics } from '../services/analytics';
 import { funnelTracker } from '../services/funnelTracker';
+import { trackDifficultyPerception } from '../services/softLaunchAnalytics';
 import {
   triggerStreakReminder,
+  triggerDailyChallengeReminder,
   triggerFriendBeatScoreNotification,
 } from '../services/notificationTriggers';
 import { firestoreService } from '../services/firestore';
@@ -34,6 +35,7 @@ import {
   getPrestigeXpMultiplier,
 } from '../data/prestigeSystem';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
+import { puzzleCoinPayout, perfectClearGems } from '../data/economyTuning';
 
 /** Tier 6 B3 — defensive ceiling on the composed (cosmetic × prestige) bonus
  *  factor so a level-5 whale with a legendary frame doesn't accidentally
@@ -123,6 +125,8 @@ interface PlayerContextLike {
   updateSeasonalQuest: (updates: Partial<SeasonalQuestState>) => void;
   updateStreak: () => void;
   recordDailyComplete: (dateString: string) => void;
+  /** UTC day strings for dailies already finished, used to skip a redundant reminder. */
+  dailyCompleted: string[];
   queueCeremony: (ceremony: CeremonyItem) => void;
   checkFeatureUnlocks: (level: number) => CeremonyItem[];
   checkAchievements: (extraData?: Record<string, unknown>) => CeremonyItem[];
@@ -211,6 +215,7 @@ export function useRewardWiring({
     score: number,
     perfectRun: boolean = false,
     completionTimeSeconds: number = 0,
+    assists: { hintsUsed: number; undosUsed: number } = { hintsUsed: 0, undosUsed: 0 },
   ) => {
     try {
     const level = params.level || 0;
@@ -229,20 +234,23 @@ export function useRewardWiring({
     const isPerfect = perfectRun;
     const boardData = params.board as Board | undefined;
     const wordsFound = boardData ? boardData.words.length : 0;
+    // These three were hardcoded to 0 while completionTimeSeconds sat in
+    // scope and assists had simply never been plumbed through — so the
+    // primary completion event reported every puzzle as instant, hint-free
+    // and undo-free. Any difficulty read built on it was measuring nothing.
     void analytics.trackPuzzleComplete({
       level,
       mode,
       stars,
-      duration_seconds: 0,
-      hints_used: 0,
-      undos_used: 0,
+      duration_seconds: completionTimeSeconds,
+      hints_used: assists.hintsUsed,
+      undos_used: assists.undosUsed,
       words_found: wordsFound,
       score,
       flawless: perfectRun,
     });
-    // Phase 3.5: seed difficulty-tuning dataset. Reads what the reward hook
-    // has on hand — richer timing/hint data is still captured on the fail
-    // path in GameScreen. Pair with BigQuery later to retune thresholds.
+    // Phase 3.5: seed difficulty-tuning dataset. Pair with BigQuery later to
+    // retune thresholds.
     void analytics.trackDifficultyTelemetry({
       mode,
       level,
@@ -250,6 +258,22 @@ export function useRewardWiring({
       stars,
       words_found: wordsFound,
       words_total: wordsFound,
+    });
+    // Soft-launch difficulty signal. The whole point of a PH/CA soft launch
+    // is to find out whether the curve is right before global, and this
+    // module's nine track functions had no callers at all — the measurement
+    // plan produced zero data. Attempts comes from the adaptive adjuster's
+    // own per-level record, which is the same number it uses to decide
+    // whether to ease off.
+    void trackDifficultyPerception({
+      level,
+      mode,
+      attempts: player.performanceMetrics?.levelAttempts?.[level] ?? 1,
+      timeToComplete: completionTimeSeconds,
+      hintsUsed: assists.hintsUsed,
+      undosUsed: assists.undosUsed,
+      deadEndsHit: 0,
+      stars,
     });
     void analytics.updateUserProperties({
       player_level: Math.max(level + 1, player.currentLevel),
@@ -323,7 +347,16 @@ export function useRewardWiring({
       (1 + (cosmeticBonuses.xpMultiplier ?? 0)) * prestigeXp,
       MAX_BONUS_FACTOR,
     );
-    const baseCoinReward = ECONOMY.puzzleCompleteCoins[difficulty] + (stars * ECONOMY.starBonus);
+    // Per-difficulty coin payout, remotely tunable. These four keys and
+    // gemsPerPerfectClear were declared as Remote Config and read by nothing,
+    // so the economy — the thing a soft launch exists to calibrate — could
+    // only be retuned by shipping a release. Clamped: the realistic failure
+    // is a slipped digit in a web console, and an extra zero here lands as a
+    // silent economy change on every device at once with no build to roll
+    // back. Defaults equal the constants, so nothing moves until someone
+    // moves it.
+    const baseCoinReward =
+      puzzleCoinPayout(difficulty) + (stars * ECONOMY.starBonus);
     const coinReward = Math.round(baseCoinReward * eventMultipliers.coins * coinBonusFactor);
     economy.addCoins(coinReward);
 
@@ -333,7 +366,7 @@ export function useRewardWiring({
 
     // Award gems for perfect clears (cosmetic gem multiplier applies)
     if (isPerfect) {
-      const perfectGems = Math.round(ECONOMY.perfectClearGems * gemBonusFactor);
+      const perfectGems = Math.round(perfectClearGems() * gemBonusFactor);
       economy.addGems(perfectGems);
       totalGemsAwarded += perfectGems;
     }
@@ -385,7 +418,19 @@ export function useRewardWiring({
       totalCoinsAwarded += dailyCoins;
       totalGemsAwarded += dailyGems;
       player.updateStreak();
-      void triggerStreakReminder(player.streaks.currentStreak + 1);
+      // updateStreak has just set lastPlayDate to today, so pass today
+      // explicitly rather than the pre-update value — otherwise the reminder
+      // is scheduled for tonight and tells a player who just played that
+      // their streak expires in a few hours.
+      void triggerStreakReminder(
+        player.streaks.currentStreak + 1,
+        new Date().toISOString().split('T')[0],
+      );
+      // Same reason: recordDailyComplete has just added today, but this
+      // closure holds the pre-update array. Push today's date in explicitly
+      // so tomorrow's 9 AM ping is scheduled instead of one for a couple of
+      // hours from now announcing a puzzle they just finished.
+      void triggerDailyChallengeReminder([...player.dailyCompleted, today]);
       void analytics.trackDailyChallengeComplete(player.streaks.currentStreak + 1);
       void analytics.logEvent('daily_login', {
         date: today,
@@ -413,7 +458,10 @@ export function useRewardWiring({
             { icon: '\uD83D\uDCA1', text: 'Use hints when you get stuck' },
           ],
         },
-        autoDismissMs: 4000,  // Tier 2: auto-dismiss, slightly longer for first win
+        // Long enough to actually read the three teaching tips — this
+        // ceremony is the carrier for content two onboarding phases were
+        // deleted in favour of.
+        autoDismissMs: 6000,
       });
     }
 
@@ -660,7 +708,14 @@ export function useRewardWiring({
     // The reward/unlock still happens in checkAchievements, we just don't queue modals.
     const achievementCeremonies = player.checkAchievements();
     for (const ceremony of achievementCeremonies) {
-      // Track analytics but don't show a modal — player discovers via Profile/badges
+      // Tier 3: no modal — but the REWARD is not optional. The comment above
+      // this loop used to claim "the reward/unlock still happens" while the
+      // loop only logged analytics; every achievement tier's declared
+      // coins/gems went ungranted. The achievement screen shows the amounts,
+      // so pay them.
+      const reward = ceremony.data?.reward as { coins?: number; gems?: number } | undefined;
+      if (reward?.coins) economy.addCoins(reward.coins);
+      if (reward?.gems) economy.addGems(reward.gems);
       if (ceremony.data?.achievementId && ceremony.data?.tier) {
         void analytics.trackAchievementEarned(ceremony.data.achievementId, ceremony.data.tier);
       }
@@ -765,9 +820,14 @@ export function useRewardWiring({
       void analytics.logEvent('first_mode_clear', { mode });
     }
 
-    // Mastery tier-up detection (XP proxy: puzzlesSolved * 100)
-    const prevMasteryXP = (player.puzzlesSolved - 1) * 100;
-    const newMasteryXP = player.puzzlesSolved * 100;
+    // Mastery tier-up detection (XP proxy: puzzlesSolved * 100).
+    // player.puzzlesSolved is the PRE-completion count here (the progress
+    // update is queued, not yet applied), so "after" is count + 1 — the same
+    // post-completion convention the rest of this callback and
+    // MasteryScreen use. The old (count-1)/count pair fired every tier-up
+    // one puzzle late (or never, if the player churned first).
+    const prevMasteryXP = player.puzzlesSolved * 100;
+    const newMasteryXP = (player.puzzlesSolved + 1) * 100;
     const prevMasteryTier = getMasteryTierForXP(prevMasteryXP);
     const newMasteryTier = getMasteryTierForXP(newMasteryXP);
     if (newMasteryTier > prevMasteryTier) {
@@ -863,7 +923,14 @@ export function useRewardWiring({
     }
 
     if (userId) {
-      void firestoreService.submitWeeklyScore(userId, score, displayName);
+      // level + mode ride along for the server's plausibility ceiling —
+      // omitted, the callable assumed level 0 and rejected any score over
+      // 1000, which was essentially every real weekly submission. The weekly
+      // PUZZLE itself plays at level 0 (it has no level), so send the
+      // player's progression level for that case — it is what the ceiling is
+      // actually trying to scale by.
+      const ceilingLevel = level > 0 ? level : player.currentLevel;
+      void firestoreService.submitWeeklyScore(userId, score, displayName, ceilingLevel, mode);
     }
 
     // MG2: per-event cumulative score. eventManager keeps a list of
@@ -876,8 +943,29 @@ export function useRewardWiring({
           userId,
           score,
           displayName,
+          level,
+          mode,
         );
       }
+    }
+
+    if (userId) {
+      // The onPuzzleComplete Cloud Function (club goal progress + club
+      // weekly score) triggers on this document's CREATION — it listened
+      // on a path no client ever wrote, so club goals and weekly club
+      // scores were frozen at zero. handleComplete runs once per
+      // completion (GameScreen guards double-fires) and this write is not
+      // retried, so a fresh id per call cannot double-fire the trigger.
+      const resultId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      void firestoreService.recordPuzzleResult(userId, resultId, {
+        score,
+        stars,
+        wordsFound,
+        isPerfect,
+        hintsUsed: assists.hintsUsed,
+        level,
+        mode,
+      });
     }
 
     if (userId) {

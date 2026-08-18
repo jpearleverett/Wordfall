@@ -141,6 +141,66 @@ export function generateTutorialBoardC(): Board {
   };
 }
 
+/**
+ * Tutorial D: 5x5 grid, 2 words (ICE, TAP). Teaches that ORDER matters —
+ * the rule behind the game's only invisible fail state.
+ *
+ * Boards B and C teach that letters fall and that a fall can REVEAL a word.
+ * Neither teaches the consequence that actually ends runs: a fall can also
+ * BURY one. A player who has never been shown this reads their first dead
+ * board as the game being broken rather than as a move they could have made
+ * differently, and that is a churn event rather than a difficulty curve.
+ *
+ * Grid layout:
+ *   I  C  E  K  P
+ *   R  W  D  N  H
+ *   M  T  Q  F  G
+ *   B  A  J  L  S
+ *   X  P  V  I  O
+ *
+ * ICE sits along the top row; TAP runs down column 1 underneath its C.
+ *
+ * Take TAP first and column 1 collapses by three, dragging the C down to the
+ * bottom while I and E stay put — ICE is broken apart and unreachable, with
+ * every letter still visible on the board. That is exactly what a real dead
+ * end looks like, which is why it is worth showing once under supervision.
+ *
+ * Take ICE first and nothing moves: the gap is at the top row, so there are
+ * no letters above it to fall. TAP is untouched and the board finishes.
+ *
+ * The asymmetry is the whole lesson, and `tutorialOrderTrap.test.ts` pins it
+ * against the real gravity and solver rather than against this comment.
+ */
+export function generateTutorialBoardD(): Board {
+  tutorialCellId = 13000;
+  const grid: Grid = [
+    [tCell('I'), tCell('C'), tCell('E'), tCell('K'), tCell('P')],
+    [tCell('R'), tCell('W'), tCell('D'), tCell('N'), tCell('H')],
+    [tCell('M'), tCell('T'), tCell('Q'), tCell('F'), tCell('G')],
+    [tCell('B'), tCell('A'), tCell('J'), tCell('L'), tCell('S')],
+    [tCell('X'), tCell('P'), tCell('V'), tCell('I'), tCell('O')],
+  ];
+  const words: WordPlacement[] = [
+    {
+      word: 'ICE',
+      positions: [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }],
+      direction: 'horizontal',
+      found: false,
+    },
+    {
+      word: 'TAP',
+      positions: [{ row: 2, col: 1 }, { row: 3, col: 1 }, { row: 4, col: 1 }],
+      direction: 'vertical',
+      found: false,
+    },
+  ];
+  return {
+    grid,
+    words,
+    config: { rows: 5, cols: 5, wordCount: 2, minWordLength: 3, maxWordLength: 3, difficulty: 'easy' },
+  };
+}
+
 // Keep backward compat — the original function now returns Board C
 export function generateTutorialBoard(): Board {
   return generateTutorialBoardC();
@@ -153,8 +213,15 @@ export interface TutorialGuideStep {
   highlightWord?: string;
   waitForAction?: 'tap_cells' | 'word_submitted' | 'gravity_done' | 'dismiss';
   showHandPointer?: boolean;
+  /**
+   * Keep highlightPositions for input validation (and for the gravity-replay
+   * integrity test) but do NOT render them as hints — the player locates the
+   * word themselves. This is the difference between teaching word-searching
+   * and teaching tap-where-we-point.
+   */
+  hideHighlight?: boolean;
   delay?: number;
-  board?: 'A' | 'B' | 'C';
+  board?: 'A' | 'B' | 'C' | 'D';
 }
 
 /**
@@ -171,7 +238,7 @@ export interface TutorialGuideStep {
  */
 export const TUTORIAL_STEPS: TutorialGuideStep[] = [
   {
-    message: 'Tap the letters C, A, T to find the hidden word!',
+    message: 'Tap or drag across C, A, T to spell the first word on your list!',
     highlightPositions: [{ row: 2, col: 0 }, { row: 2, col: 1 }, { row: 2, col: 2 }],
     highlightWord: 'CAT',
     waitForAction: 'word_submitted',
@@ -185,13 +252,46 @@ export const TUTORIAL_STEPS: TutorialGuideStep[] = [
     board: 'B',
   },
   {
-    message: 'Now find DOG — gravity moved it down!',
+    // The real skill loop is read-the-list → scan the grid → trace. This is
+    // the one step where the player does it unaided: DOG's post-gravity
+    // positions stay authored (input validation + the gravity-replay
+    // integrity test) but are not shown, and there is no hand pointer. A
+    // 5×4 board keeps the search trivially winnable.
+    message: 'DOG is still on your list — find it!',
     highlightPositions: [{ row: 1, col: 0 }, { row: 1, col: 1 }, { row: 1, col: 2 }],
     highlightWord: 'DOG',
     waitForAction: 'word_submitted',
-    showHandPointer: true,
+    showHandPointer: false,
+    hideHighlight: true,
     delay: 300,
     board: 'B',
+  },
+  // Steps 4-5: the order-matters lesson on board D.
+  //
+  // Everything above teaches that falling letters REVEAL words. Nothing
+  // taught that falling letters can also BURY one, which is the game's only
+  // invisible fail state — so a player's first dead board arrived with no
+  // concept to attach it to and read as a bug.
+  //
+  // The player performs the losing move themselves and watches ICE come
+  // apart. Being told the rule is forgettable; watching three letters you
+  // were about to trace drift out of reach is not. It is safe to teach this
+  // way because input is gated to the highlighted cells and the tutorial
+  // ends on the demonstration rather than asking them to solve board D.
+  {
+    message: 'One more rule — order matters. Tap T, A, P.',
+    highlightPositions: [{ row: 2, col: 1 }, { row: 3, col: 1 }, { row: 4, col: 1 }],
+    highlightWord: 'TAP',
+    waitForAction: 'word_submitted',
+    showHandPointer: true,
+    board: 'D',
+  },
+  {
+    message:
+      'ICE just broke apart. I, C and E are all still there — just not touching any more. Clear the word on top first.',
+    waitForAction: 'dismiss',
+    delay: 700,
+    board: 'D',
   },
 ];
 

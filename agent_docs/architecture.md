@@ -29,7 +29,6 @@ src/
 ├── hooks/            # useGame (zustand store factory), useStorage, useRewardWiring, useCeremonyQueue, useExperiment
 ├── stores/           # gameStore.ts (zustand store, context, selectors)
 ├── services/         # sound, haptics, analytics, notifications, notificationTriggers, iap, ads, firestore, eventManager, playerSegmentation, crashReporting, receiptValidation, funnelTracker, experiments
-├── navigation/       # MainNavigator.tsx (tab/stack definitions)
 ├── contexts/         # AuthContext, EconomyContext, PlayerContext, SettingsContext + PlayerProgressContext, PlayerSocialContext
 ├── components/       # UI organized by domain (common, home, victory, effects, game, modes, events, navigation, economy)
 ├── screens/          # 17 screens (Home, Game, Modes, Collections, Library, Profile, EditProfile, Settings, Shop, CosmeticStore, Club, Leaderboard, WeeklyLeaderboard, Event, Onboarding, Mastery, SeasonPass)

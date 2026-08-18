@@ -10,12 +10,14 @@ import {
   Alert,
 } from 'react-native';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS } from '../constants';
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
@@ -44,6 +46,7 @@ import {
   getFrame,
   getTitleLabel,
 } from '../data/cosmetics';
+import { getRemoteBoolean } from '../services/remoteConfig';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import {
   canPrestige,
@@ -82,6 +85,15 @@ interface ProfileScreenProps {
   player?: any;
   onEditProfile?: () => void;
   onOpenSettings?: () => void;
+  /**
+   * Opens the Clubs screen. ClubScreen was registered in the Profile stack
+   * but NOTHING navigated to it — the entire social layer (club goals,
+   * shared goals, chat, gift inbox, browse-clubs) was reachable only by
+   * following someone else's invite deep link. Onboarding's economy primer
+   * even teaches the player what Clubs are, so the game explained a feature
+   * it then gave no way to open.
+   */
+  onOpenClub?: () => void;
   onOpenMastery?: () => void;
 }
 
@@ -116,6 +128,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   player: playerProp,
   onEditProfile: onEditProfileProp,
   onOpenSettings: onOpenSettingsProp,
+  onOpenClub: onOpenClubProp,
   onOpenMastery: onOpenMasteryProp,
 }) => {
   const [loading, setLoading] = useState(true);
@@ -136,6 +149,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const playerActions = usePlayerActions();
   const onEditProfile = onEditProfileProp ?? (() => {});
   const onOpenSettings = onOpenSettingsProp ?? (() => {});
+  const onOpenClub = onOpenClubProp ?? null;
+  // `clubsEnabled` was a declared Remote Config key that nothing read, so the
+  // most incident-prone feature in the app (Cloud Functions, member chat,
+  // Perspective-API moderation, collective goals) had no off switch. Defaults
+  // true — this only matters the day something needs darkening.
+  const clubsVisible = Boolean(onOpenClub) && getRemoteBoolean('clubsEnabled');
   const onOpenMastery = onOpenMasteryProp ?? (() => {});
 
   useEffect(() => {
@@ -226,11 +245,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // MG3 in launch_blockers.md: animated glow for legendary frames.
   // Pulses scale 1.00 ↔ 1.04 and shadow opacity 0.6 ↔ 1.0 on a 1400ms
   // cycle. Respects reduce-motion — when enabled the ring is static.
+  // Focus-gated like the backdrops: ProfileScreen stays mounted beneath
+  // pushed screens, and an unfocused withRepeat would keep mutating the
+  // shared value (and re-blurring the shadow) every frame while invisible.
   const reduceMotion = useReduceMotion();
+  const isFocused = useIsFocused();
   const isLegendary = equippedFrame.rarity === 'legendary';
   const glowPulse = useSharedValue(0);
   useEffect(() => {
-    if (!isLegendary || reduceMotion) {
+    if (!isLegendary || reduceMotion || !isFocused) {
+      cancelAnimation(glowPulse);
       glowPulse.value = 0;
       return;
     }
@@ -242,7 +266,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       -1,
       false,
     );
-  }, [isLegendary, reduceMotion]);
+    return () => cancelAnimation(glowPulse);
+  }, [isLegendary, reduceMotion, isFocused, glowPulse]);
 
   const animatedRingStyle = useAnimatedStyle(() => {
     if (!isLegendary || reduceMotion) {
@@ -618,6 +643,30 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
           <Text style={styles.masteryChevron}>{'\u203A'}</Text>
         </TouchableOpacity>
+
+        {/* Clubs Button */}
+        {clubsVisible && (
+          <TouchableOpacity
+            style={styles.masteryButton}
+            onPress={onOpenClub!}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Open Clubs"
+          >
+            <LinearGradient
+              colors={[COLORS.teal + '25', COLORS.teal + '10'] as [string, string]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
+            <Text style={styles.masteryButtonIcon}>{'\u{1F465}'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.masteryButtonTitle}>Clubs</Text>
+              <Text style={styles.masteryButtonSub}>Team up for shared goals and rewards</Text>
+            </View>
+            <Text style={styles.masteryChevron}>{'\u203A'}</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Edit Profile Button */}
         <TouchableOpacity style={styles.editButton} onPress={onEditProfile} accessibilityRole="button" accessibilityLabel="Edit profile">

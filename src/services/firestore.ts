@@ -78,6 +78,7 @@
 
 import { db, isFirebaseConfigured } from '../config/firebase';
 import { logger } from '../utils/logger';
+import { getWeekId } from '../utils/weekId';
 import { crashReporter } from './crashReporting';
 import { withRetry } from './retry';
 import {
@@ -120,12 +121,15 @@ function getTodayDateString(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+/**
+ * Week bucket for leaderboard reads/writes. Delegates to the one canonical
+ * implementation in src/utils/weekId.ts — this file used to carry its own
+ * copy, and a divergent copy is exactly how the weekly leaderboard ended up
+ * permanently empty. Must stay byte-identical to `weekIdFor` /
+ * `getClosingWeekId` in functions/src/social.ts.
+ */
 function getCurrentWeekId(): string {
-  const now = new Date();
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
-  const days = Math.floor((now.getTime() - startOfYear.getTime()) / 86400000);
-  const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-  return `${now.getFullYear()}_W${String(weekNumber).padStart(2, '0')}`;
+  return getWeekId();
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -421,15 +425,26 @@ class FirestoreService {
   async submitWeeklyScore(
     userId: string,
     score: number,
-    displayName: string
+    displayName: string,
+    level: number = 0,
+    mode: string = 'classic',
   ): Promise<void> {
     if (!this.enabled || !userId) return;
     if (leaderboardValidationEnabled()) {
       try {
+        // level/mode MUST be sent: the server's plausibility ceiling is
+        // 1000 * (level + 1) * modeMultiplier, and the callable defaults a
+        // missing level to 0 — so omitting them capped every weekly
+        // submission at 1000 points. Any real score bounced with
+        // permission-denied, and the catch below returns without falling
+        // back, which left the weekly leaderboard rejecting essentially all
+        // legitimate entries whenever validation was on.
         await submitValidatedScoreCallable({
           scope: 'weekly',
           score,
           displayName,
+          level,
+          mode,
         });
         return;
       } catch (e) {
@@ -469,15 +484,21 @@ class FirestoreService {
     userId: string,
     score: number,
     displayName: string,
+    level: number = 0,
+    mode: string = 'classic',
   ): Promise<void> {
     if (!this.enabled || !userId || !eventId) return;
     if (leaderboardValidationEnabled()) {
       try {
+        // Same as weekly: without level/mode the server assumes level 0 and
+        // rejects anything above 1000 points.
         await submitValidatedScoreCallable({
           scope: 'event',
           score,
           eventId,
           displayName,
+          level,
+          mode,
         });
         return;
       } catch (e) {
@@ -963,6 +984,72 @@ class FirestoreService {
   }
 
   /**
+   * Cross-device membership discovery: find the club (if any) whose
+   * memberIds contains this uid. Membership is mutated only by the
+   * joinClub/leaveClub Cloud Functions, so this query is the source of
+   * truth on a fresh install — the locally persisted clubId is just a
+   * cache of this answer.
+   *
+   * Return values are three-state on purpose:
+   *   - club object → member of that club
+   *   - null        → query succeeded, definitively NOT in any club
+   *   - undefined   → unknown (offline / disabled / query error) — callers
+   *                   must NOT clear a locally cached clubId on undefined
+   */
+  async findClubByMembership(uid: string): Promise<any | null | undefined> {
+    if (!this.enabled || !uid) return undefined;
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, 'clubs'),
+          where('memberIds', 'array-contains', uid),
+          firestoreLimit(1),
+        ),
+      );
+      if (snap.empty) return null;
+      const docSnap = snap.docs[0];
+      return { id: docSnap.id, ...docSnap.data() };
+    } catch (e) {
+      logger.warn('[Firestore] findClubByMembership failed:', e);
+      return undefined;
+    }
+  }
+
+  /**
+   * Batch-fetch display names for a club's member list. Reads users/{uid}
+   * profile docs (written by syncPlayerProfile) in documentId-in batches of
+   * 10. UIDs without a profile doc fall back to 'Player'.
+   */
+  async getClubMemberProfiles(
+    memberIds: string[],
+  ): Promise<Array<{ id: string; displayName: string }>> {
+    if (!this.enabled || memberIds.length === 0) return [];
+    try {
+      const ids = memberIds.slice(0, 30);
+      const nameById = new Map<string, string>();
+      for (let i = 0; i < ids.length; i += 10) {
+        const batch = ids.slice(i, i + 10);
+        const snap = await getDocs(
+          query(collection(db, 'users'), where(documentId(), 'in', batch)),
+        );
+        for (const d of snap.docs) {
+          const name = d.data().displayName;
+          if (typeof name === 'string' && name.length > 0) {
+            nameById.set(d.id, name);
+          }
+        }
+      }
+      return ids.map((id) => ({
+        id,
+        displayName: nameById.get(id) ?? 'Player',
+      }));
+    } catch (e) {
+      logger.warn('[Firestore] getClubMemberProfiles failed:', e);
+      return memberIds.slice(0, 30).map((id) => ({ id, displayName: 'Player' }));
+    }
+  }
+
+  /**
    * List public clubs that the player can browse + join (S1 in
    * launch_blockers.md). Sorted by weeklyScore descending so active
    * clubs appear first. Empty filter arguments match all clubs.
@@ -1373,6 +1460,93 @@ class FirestoreService {
       logFirestoreError('markReferralRewardClaimed', 'rewards', e);
       return false;
     }
+  }
+
+  /**
+   * Record a puzzle completion at users/{uid}/puzzleResults/{resultId}.
+   * This document is the trigger input for the onPuzzleComplete Cloud
+   * Function (club goal progress, shared-goal contributions, club
+   * weeklyScore) — which listened on a path nothing ever wrote. Nothing
+   * reads it client-side; fire-and-forget from useRewardWiring.
+   */
+  async recordPuzzleResult(
+    userId: string,
+    resultId: string,
+    result: {
+      score: number;
+      stars: number;
+      wordsFound: number;
+      isPerfect: boolean;
+      hintsUsed: number;
+      level: number;
+      mode: string;
+    },
+  ): Promise<boolean> {
+    if (!this.enabled || !userId || !resultId) return false;
+    try {
+      await setDoc(doc(db, 'users', userId, 'puzzleResults', resultId), {
+        ...result,
+        createdAt: serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      logFirestoreError('recordPuzzleResult', 'puzzleResults', e);
+      return false;
+    }
+  }
+
+  /**
+   * Generic reward-inbox reader for the server-granted types no dedicated
+   * surface covers: weekly-leaderboard payouts (distributeWeeklyRewards)
+   * and personal club-goal completions (onPuzzleComplete). Referral and
+   * shared-goal types have their own readers + claim UIs.
+   */
+  async getPendingInboxRewards(
+    userId: string,
+  ): Promise<Array<{
+    id: string;
+    type: 'weekly_leaderboard' | 'club_goal_complete';
+    label: string;
+    coins: number;
+    gems: number;
+    decorations: string[];
+  }>> {
+    if (!this.enabled || !userId) return [];
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'rewards'),
+        where('type', 'in', ['weekly_leaderboard', 'club_goal_complete']),
+        where('claimed', '==', false),
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const type = data.type as 'weekly_leaderboard' | 'club_goal_complete';
+        return {
+          id: d.id,
+          type,
+          label:
+            type === 'weekly_leaderboard'
+              ? `Weekly leaderboard — ${data.tierLabel ?? `rank ${data.rank ?? '?'}`}`
+              : ((data.goalLabel as string) ?? 'Club goal complete'),
+          coins: Number(data.coins) || 0,
+          gems: Number(data.gems) || 0,
+          decorations: Array.isArray(data.decorations) ? (data.decorations as string[]) : [],
+        };
+      });
+    } catch (e) {
+      logger.warn('[Firestore] getPendingInboxRewards failed:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Flip any inbox reward doc to claimed. The rules only allow the
+   * unclaimed → claimed transition, so when two devices race exactly one
+   * update succeeds — the loser must NOT grant locally.
+   */
+  async markInboxRewardClaimed(userId: string, rewardId: string): Promise<boolean> {
+    return this.markReferralRewardClaimed(userId, rewardId);
   }
 
   /**

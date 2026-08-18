@@ -15,6 +15,11 @@ import { AccessibilityInfo } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
+import {
+  economyDifficultyForLevel,
+  perfectClearGems,
+  puzzleCoinReward,
+} from '../data/economyTuning';
 import { LOCAL_IMAGES, LOCAL_VIDEOS } from '../utils/localAssets';
 import { GameMode, VictorySummaryItem } from '../types';
 import {
@@ -34,6 +39,8 @@ import NeonStarBurst from './victory/NeonStarBurst';
 import FlawlessBadge from './victory/FlawlessBadge';
 import { ShareCard } from './ShareCard';
 import { useShareVictory } from '../hooks/useShareVictory';
+import { useReduceMotion } from '../hooks/useReduceMotion';
+import { isCeremonyVisible } from '../hooks/useCeremonyQueue';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -358,6 +365,7 @@ export function PuzzleComplete({
 }: PuzzleCompleteProps) {
   const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
+  const reduceMotion = useReduceMotion();
 
   // Victory card share (Phase 4C). Captures the off-screen <ShareCard/>
   // into a PNG and hands it to the system share sheet. Falls back to a
@@ -477,7 +485,18 @@ export function PuzzleComplete({
 
   useEffect(() => {
     if (autoAdvanceRemainingMs === null) return;
-    const id = setTimeout(() => onNextLevel(), autoAdvanceRemainingMs);
+    const id = setTimeout(() => {
+      // A ceremony modal (first_win, mode unlock, …) may have opened over
+      // the victory screen. Auto-advancing would navigate to the next level
+      // UNDERNEATH it — the player dismisses the modal onto a board they
+      // never chose. Cancel instead of deferring: after reading a ceremony
+      // the next move is theirs.
+      if (isCeremonyVisible()) {
+        setAutoAdvanceCancelled(true);
+        return;
+      }
+      onNextLevel();
+    }, autoAdvanceRemainingMs);
     return () => clearTimeout(id);
   }, [autoAdvanceRemainingMs, onNextLevel]);
 
@@ -520,8 +539,12 @@ export function PuzzleComplete({
     ? 'You solved it without mistakes and kept the board perfectly under control.'
     : 'A clean clear with strong sequencing and smart gravity reads.';
 
-  const difficulty = level <= 5 ? 'easy' : level <= 15 ? 'medium' : level <= 30 ? 'hard' : 'expert';
-  const coinReward = ECONOMY.puzzleCompleteCoins[difficulty] + stars * ECONOMY.starBonus;
+  // Fallback figure for when the awarded total wasn't passed. It must come
+  // from the same source the grant does — when this read a constant and the
+  // grant read Remote Config, a retuned economy would award one number and
+  // display another, which reads to a player as the game shortchanging them.
+  const difficulty = economyDifficultyForLevel(level);
+  const coinReward = puzzleCoinReward(difficulty, stars);
 
   // 20 confetti is plenty visually — 40 was overkill and doubled the number
   // of concurrent Animated drivers during the puzzle-complete celebration.
@@ -582,7 +605,10 @@ export function PuzzleComplete({
           and starts a playback loop. SparkleField / CelebrationBurst / 20
           confetti particles collectively add ~100+ native views. Deferring
           them cuts PuzzleComplete mount time from ~180-220ms to ~60-90ms. */}
-      {decorationsMounted && (
+      {/* Under reduce motion the celebration video and falling confetti are
+          skipped entirely (SparkleField / CelebrationBurst self-gate). The
+          card, stars, and badge still appear — content, not motion. */}
+      {decorationsMounted && !reduceMotion && (
         <>
           <VideoBackground
             source={LOCAL_VIDEOS.victoryCelebration}
@@ -678,7 +704,7 @@ export function PuzzleComplete({
                   solve gets this; streak milestones get a full-screen ceremony
                   on top. */}
               {perfectRun && (
-                <FlawlessBadge visible={starsRevealed} delay={700} />
+                <FlawlessBadge visible={starsRevealed} delay={700} reduceMotion={reduceMotion} />
               )}
 
               {/* Chrome score panel with CRT scan lines */}
@@ -748,7 +774,7 @@ export function PuzzleComplete({
                       style={styles.rewardChipGold}
                     >
                       <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImage} resizeMode="contain" />
-                      <Text style={styles.rewardTextGold}>+{totalGemsAwarded > 0 ? totalGemsAwarded : ECONOMY.perfectClearGems} gems</Text>
+                      <Text style={styles.rewardTextGold}>+{totalGemsAwarded > 0 ? totalGemsAwarded : perfectClearGems()} gems</Text>
                     </LinearGradient>
                   )}
                 </View>
