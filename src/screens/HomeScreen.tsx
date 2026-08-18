@@ -56,6 +56,7 @@ import {
 import { getNextMilestone } from '../data/onboardingMilestones';
 import DailyRewardTimers from '../components/DailyRewardTimers';
 import { getNextGoal } from '../data/nextGoal';
+import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 
 interface DailyMissionDisplay {
   id: string;
@@ -119,11 +120,11 @@ interface HomeScreenProps {
   onClaimLoginReward?: () => void;
 }
 
-const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: string }> = {
-  easy: { label: 'Easy', accent: COLORS.green, icon: '🌱' },
-  medium: { label: 'Medium', accent: COLORS.accent, icon: '⚡' },
-  hard: { label: 'Hard', accent: COLORS.orange, icon: '🔥' },
-  expert: { label: 'Expert', accent: COLORS.purple, icon: '💎' },
+const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: GameIconName }> = {
+  easy: { label: 'Easy', accent: COLORS.green, icon: 'leaf' },
+  medium: { label: 'Medium', accent: COLORS.accent, icon: 'bolt' },
+  hard: { label: 'Hard', accent: COLORS.orange, icon: 'flame' },
+  expert: { label: 'Expert', accent: COLORS.purple, icon: 'gem' },
 };
 
 const MISSION_LABELS: Record<string, { label: string; target: number }> = {
@@ -503,7 +504,8 @@ export function HomeScreen({
                 colors={GRADIENTS.surfaceCard}
                 style={styles.currencyChip}
               >
-                <Text style={styles.currencyLabel}>💡 {currencies.hintTokens}</Text>
+                <GameIcon name="hint" size={14} />
+                <Text style={styles.currencyLabel}>{currencies.hintTokens}</Text>
               </LinearGradient>
             </>
           )}
@@ -550,11 +552,11 @@ export function HomeScreen({
             />
           </View>
           <View style={styles.statsRow}>
-            {[
-              { value: `★ ${totalStars}`, label: 'Stars' },
-              { value: `${progress.puzzlesSolved}`, label: 'Solved' },
-              { value: `🔥 ${progress.currentStreak}`, label: 'Streak' },
-            ].map((stat) => (
+            {([
+              { icon: 'star' as GameIconName, value: `${totalStars}`, label: 'Stars' },
+              { icon: undefined, value: `${progress.puzzlesSolved}`, label: 'Solved' },
+              { icon: 'flame' as GameIconName, value: `${progress.currentStreak}`, label: 'Streak' },
+            ] as Array<{ icon?: GameIconName; value: string; label: string }>).map((stat) => (
               <View key={stat.label} style={styles.statCardWrapper}>
                 <LinearGradient
                   colors={['rgba(168,91,255,0.22)', 'rgba(10,1,32,0.60)']}
@@ -562,7 +564,10 @@ export function HomeScreen({
                   end={{ x: 0.5, y: 1 }}
                   style={styles.statCardSurface}
                 >
-                  <Text style={styles.heroStatValue}>{stat.value}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    {stat.icon && <GameIcon name={stat.icon} size={20} />}
+                    <Text style={styles.heroStatValue}>{stat.value}</Text>
+                  </View>
                   <Text style={styles.heroStatLabel}>{stat.label}</Text>
                 </LinearGradient>
               </View>
@@ -611,7 +616,9 @@ export function HomeScreen({
                       : `${getDailyVariant(today).name} · ${getDailyTheme(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
                   </Text>
                 </View>
-                <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>
+                {dailyDone
+                  ? <GameIcon name="check" size={26} accent={COLORS.green} />
+                  : <GameIcon name="sun" size={26} />}
               </LinearGradient>
             </Pressable>
           )}
@@ -630,7 +637,9 @@ export function HomeScreen({
           colors={['rgba(0,212,255,0.20)', 'rgba(168,85,247,0.10)'] as [string, string]}
           style={styles.welcomeBackBanner}
         >
-          <Text style={styles.welcomeBackIcon}>{'\u{1F44B}'}</Text>
+          <View style={{ marginRight: 12 }}>
+            <GameIcon name="handshake" size={32} />
+          </View>
           <View style={styles.welcomeBackContent}>
             <Text style={styles.welcomeBackTitle}>{segmentWelcomeMessage.title}</Text>
             <Text style={styles.welcomeBackSubtitle}>{segmentWelcomeMessage.subtitle}</Text>
@@ -676,7 +685,7 @@ export function HomeScreen({
             style={styles.milestoneBanner}
           >
             <View style={styles.milestoneBannerIconWrap}>
-              <Text style={styles.milestoneBannerIcon}>{nextGuidedMilestone.icon}</Text>
+              <GameIcon glyph={nextGuidedMilestone.icon} size={27} />
             </View>
             <View style={styles.milestoneBannerContent}>
               <Text style={styles.milestoneBannerText}>{nextGuidedMilestone.message}</Text>
@@ -728,7 +737,9 @@ export function HomeScreen({
                 end={{ x: 1, y: 1 }}
                 style={[styles.eventBanner, { borderColor: eb.color + '60' }]}
               >
-                <Text style={styles.eventBannerIcon}>{eb.icon}</Text>
+                <View style={{ marginRight: 12 }}>
+                  <GameIcon glyph={eb.icon} size={32} />
+                </View>
                 <View style={styles.eventBannerInfo}>
                   <Text style={[styles.eventBannerLabel, { color: eb.color }]}>{eb.label}</Text>
                   <Text style={styles.eventBannerName}>{eb.name}</Text>
@@ -791,7 +802,7 @@ export function HomeScreen({
                       style={StyleSheet.absoluteFill}
                     />
                   </Animated.View>
-                  <Text style={styles.mysteryWheelIcon}>{'\u{1F3B0}'}</Text>
+                  <GameIcon name="wheel" size={27} />
                 </View>
                 <View style={styles.mysteryWheelContent}>
                   <Text style={styles.mysteryWheelTitle}>{t('home.mysteryWheel')}</Text>
@@ -836,7 +847,10 @@ export function HomeScreen({
             style={[styles.dealPanel, SHADOWS.medium]}
           >
             <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelTitle}>{dailyDeal.icon} Today's Deal</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <GameIcon glyph={dailyDeal.icon} size={15} />
+                <Text style={styles.panelTitle}>Today's Deal</Text>
+              </View>
               <Text style={styles.panelMeta}>{t('home.endsInHours', { hours: dealHoursLeft })}</Text>
             </View>
             <View style={styles.dealContent}>
@@ -844,12 +858,14 @@ export function HomeScreen({
                 <Text style={styles.dealName}>{dailyDeal.name}</Text>
                 <Text style={styles.dealDesc}>{dailyDeal.description}</Text>
                 <View style={styles.dealPriceRow}>
-                  <Text style={styles.dealOriginalPrice}>
-                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.originalPrice}
-                  </Text>
-                  <Text style={styles.dealSalePrice}>
-                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.salePrice}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <GameIcon name={dailyDeal.currency === 'coins' ? 'coin' : 'gem'} size={14} />
+                    <Text style={styles.dealOriginalPrice}>{dailyDeal.originalPrice}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <GameIcon name={dailyDeal.currency === 'coins' ? 'coin' : 'gem'} size={17} />
+                    <Text style={styles.dealSalePrice}>{dailyDeal.salePrice}</Text>
+                  </View>
                 </View>
               </View>
               <PrimaryButton
@@ -874,7 +890,9 @@ export function HomeScreen({
               style={[styles.flashSaleTeaser, SHADOWS.medium]}
             >
               <View style={styles.flashSaleTeaserRow}>
-                <Text style={styles.flashSaleTeaserIcon}>{'\u26A1'}</Text>
+                <View style={{ marginRight: 10 }}>
+                  <GameIcon name="bolt" size={27} />
+                </View>
                 <View style={styles.flashSaleTeaserInfo}>
                   <Text style={styles.flashSaleTeaserTitle}>
                     Today's Deal: {flashSale.name} - {flashSale.discountPercent}% OFF!
@@ -924,7 +942,7 @@ export function HomeScreen({
             end={{ x: 1, y: 0 }}
             style={styles.freeSpinToastInner}
           >
-            <Text style={styles.freeSpinToastIcon}>{'\u{1F3B0}'}</Text>
+            <GameIcon name="wheel" size={20} />
             <Text style={styles.freeSpinToastText}>{t('home.freeSpinToast')}</Text>
           </LinearGradient>
         </Animated.View>
@@ -959,7 +977,7 @@ export function HomeScreen({
             accessibilityLabel={`Next goal: ${nextGoal.title}. ${nextGoal.detail}. Play now.`}
           >
             <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.nextGoalCard}>
-              <Text style={styles.nextGoalIcon}>{nextGoal.icon}</Text>
+              <GameIcon glyph={nextGoal.icon} size={30} />
               <View style={styles.nextGoalBody}>
                 <Text style={styles.nextGoalTitle} numberOfLines={1}>
                   {nextGoal.title}
@@ -1070,7 +1088,10 @@ export function HomeScreen({
                     />
                   </View>
                   {!goal.completed && (
-                    <Text style={styles.weeklyGoalReward}>🪙{goal.reward.coins}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                      <GameIcon name="coin" size={13} />
+                      <Text style={styles.weeklyGoalReward}>{goal.reward.coins}</Text>
+                    </View>
                   )}
                 </View>
               );
@@ -1080,7 +1101,13 @@ export function HomeScreen({
                 colors={['rgba(255,215,0,0.12)', 'rgba(255,159,0,0.06)']}
                 style={styles.weeklyBonusBanner}
               >
-                <Text style={styles.weeklyBonusText}>All complete! 🪙{weeklyGoals.allCompleteBonus.coins} 💎{weeklyGoals.allCompleteBonus.gems}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.weeklyBonusText}>All complete!</Text>
+                  <GameIcon name="coin" size={15} />
+                  <Text style={styles.weeklyBonusText}>{weeklyGoals.allCompleteBonus.coins}</Text>
+                  <GameIcon name="gem" size={15} />
+                  <Text style={styles.weeklyBonusText}>{weeklyGoals.allCompleteBonus.gems}</Text>
+                </View>
               </LinearGradient>
             )}
           </LinearGradient>
@@ -1120,13 +1147,13 @@ export function HomeScreen({
                   const isSpecial = dayNum % 7 === 0;
                   const isGrand = dayNum === 30;
 
-                  const rewardIcon = reward.rareTile
-                    ? '✨'
+                  const rewardIcon: GameIconName = reward.rareTile
+                    ? 'sparkle'
                     : (reward.gems && reward.gems >= 10)
-                      ? '💎'
+                      ? 'gem'
                       : reward.hints
-                        ? '💡'
-                        : '🪙';
+                        ? 'hint'
+                        : 'coin';
 
                   return (
                     <View
@@ -1173,11 +1200,11 @@ export function HomeScreen({
                         {isClaimed ? (
                           <Text style={styles.calendarCheckmark}>✓</Text>
                         ) : isGrand ? (
-                          <Text style={styles.calendarGrandIcon}>🏆</Text>
+                          <GameIcon name="trophy" size={16} />
                         ) : (
-                          <Text style={[styles.calendarRewardIcon, isUpcoming && styles.calendarRewardIconDimmed]}>
-                            {rewardIcon}
-                          </Text>
+                          <View style={isUpcoming ? styles.calendarRewardIconDimmed : undefined}>
+                            <GameIcon name={rewardIcon} size={14} />
+                          </View>
                         )}
                         {isSpecial && !isGrand && (
                           <View style={styles.calendarSpecialBadge}>
@@ -1192,7 +1219,24 @@ export function HomeScreen({
               {/* Grand prize label for day 30 */}
               <View style={styles.calendarGrandRow}>
                 <Text style={styles.calendarGrandLabel}>{t('home.calendarGrandPrize')}</Text>
-                <Text style={styles.calendarGrandReward}>🪙1000  💎100  ✨Rare Tile  🎨Exclusive</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <GameIcon name="coin" size={11} />
+                    <Text style={styles.calendarGrandReward}>1000</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <GameIcon name="gem" size={11} />
+                    <Text style={styles.calendarGrandReward}>100</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <GameIcon name="sparkle" size={11} />
+                    <Text style={styles.calendarGrandReward}>Rare Tile</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <GameIcon name="palette" size={11} />
+                    <Text style={styles.calendarGrandReward}>Exclusive</Text>
+                  </View>
+                </View>
               </View>
               {/* Claim button for today */}
               <Pressable
@@ -1237,7 +1281,7 @@ export function HomeScreen({
               colors={GRADIENTS.surfaceCard}
               style={[styles.recommendCard, SHADOWS.medium]}
             >
-              <Text style={styles.recommendIcon}>{recommendation.icon}</Text>
+              <GameIcon glyph={recommendation.icon} size={37} />
               <View style={styles.recommendContent}>
                 <Text style={styles.recommendLabel}>RECOMMENDED FOR YOU</Text>
                 <Text style={styles.recommendTitle}>{recommendation.title}</Text>
@@ -1267,7 +1311,7 @@ export function HomeScreen({
                     style={[styles.quickPlayCard, SHADOWS.soft]}
                   >
                     <View style={[styles.quickPlayIconBg, { backgroundColor: difficultyMeta[difficulty].accent + '22' }]}>
-                      <Text style={styles.quickPlayIcon}>{difficultyMeta[difficulty].icon}</Text>
+                      <GameIcon name={difficultyMeta[difficulty].icon} size={23} accent={difficultyMeta[difficulty].accent} />
                     </View>
                     <Text style={[styles.quickPlayTitle, { color: difficultyMeta[difficulty].accent }]}>
                       {difficultyMeta[difficulty].label}

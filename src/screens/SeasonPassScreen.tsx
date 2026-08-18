@@ -27,7 +27,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, RADIUS, SHADOWS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
-import IconMedallion from '../components/common/IconMedallion';
 import PrimaryButton from '../components/common/PrimaryButton';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import { bentoPanel } from '../styles/bentoPanel';
@@ -47,6 +46,62 @@ import {
 } from '../data/seasonPass';
 import { useCommerce } from '../hooks/useCommerce';
 import { usePlayerActions } from '../stores/playerStore';
+import GameIcon, { GameIconName } from '../components/icons/GameIcon';
+
+/**
+ * IconMedallion's shell (accent ring + glow + body gradient) hosting a
+ * GameIcon SVG instead of an emoji Text — same layered-gem look with the
+ * bespoke icon set. Local because common/IconMedallion is emoji-Text-based.
+ */
+function SvgMedallion({
+  glyph,
+  name,
+  size = 44,
+  accent = COLORS.purple,
+  muted = false,
+  style,
+}: {
+  glyph?: string;
+  name?: GameIconName;
+  size?: number;
+  accent?: string;
+  muted?: boolean;
+  style?: object;
+}) {
+  const alpha = (a: string) => (/^#[0-9a-fA-F]{6}$/.test(accent) ? accent + a : accent);
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : alpha('73'),
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={[muted ? 'rgba(255,255,255,0.05)' : alpha('3D'), 'rgba(8, 2, 22, 0.92)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <GameIcon glyph={glyph} name={name} size={size * 0.58} />
+    </View>
+  );
+}
 
 interface SeasonPassScreenProps {
   onBack?: () => void;
@@ -58,7 +113,7 @@ const TIER_NUMBERS = Array.from({ length: MAX_SEASON_TIER }, (_, i) => i + 1);
 // with margin, so the last tier row is never cut off at max scroll.
 const LADDER_FOOTER = <View style={{ height: 150 }} />;
 
-// ─── DrawnCrown — crown built from pure Views (replaces the 👑 emoji) ──────
+// ─── DrawnCrown — crown built from pure Views (replaces the crown emoji) ──────
 // Gradient gold band + three triangle points + jewel dots + glow. By default
 // it sits in a squircle medallion shell so it drops in where IconMedallion
 // used to render the emoji; `bare` renders just the crown for inline pills.
@@ -444,15 +499,15 @@ const LaneCard = memo(function LaneCard({
       )}
 
       <View style={styles.rewardMedallionWrap}>
-        <IconMedallion
+        <SvgMedallion
           glyph={reward.icon}
           size={42}
           accent={laneAccent}
           muted={!reached || premiumLocked}
         />
         {premiumLocked && (
-          <IconMedallion
-            glyph={'\u{1F512}'}
+          <SvgMedallion
+            name="lock"
             size={22}
             accent={COLORS.gold}
             style={styles.lockOverlay}

@@ -9,6 +9,7 @@ import { LOCAL_IMAGES } from '../utils/localAssets';
 import { getChapterForLevel } from '../data/chapters';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { useRoundedFontReady } from '../services/fontReady';
+import GameIcon from './icons/GameIcon';
 
 /**
  * Floating "+N" callout that rises from the score on every word-found.
@@ -59,7 +60,7 @@ interface GameHeaderProps {
   hintsLeft: number;
   /** Live count of hints used this run; feeds the 3-pip star projection. */
   hintsUsed?: number;
-  /** Current flawless streak count (cross-session). Renders a `🔥 N` chip when > 0. */
+  /** Current flawless streak count (cross-session). Renders a flame + N chip when > 0. */
   flawlessStreak?: number;
   undosLeft: number;
   foundWords: number;
@@ -224,13 +225,14 @@ export const GameHeader = React.memo(function GameHeader({
               action buttons). */}
           <View style={styles.titleBlock}>
             <View style={styles.titleRow}>
-              <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
+              <GameIcon glyph={modeConfig.icon} size={16} />
               <Text style={[styles.titleText, labelFontOverride]} numberOfLines={1}>
                 {modeLabel}
               </Text>
               {showFlawlessChip && (
                 <Animated.View style={[styles.flawlessChip, flawlessStyle]}>
-                  <Text style={styles.flawlessChipText}>🔥 {flawlessStreak}</Text>
+                  <GameIcon name="flame" size={11} />
+                  <Text style={styles.flawlessChipText}> {flawlessStreak}</Text>
                 </Animated.View>
               )}
             </View>

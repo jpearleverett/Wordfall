@@ -1,6 +1,7 @@
 import React from 'react';
-import { Animated, StyleSheet, Text } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { COLORS, FONTS } from '../../constants';
+import { CoinIcon } from '../../components/icons/iconsCore';
 
 /**
  * GameFlashes — collects every full-screen overlay that flashes in response
@@ -23,7 +24,7 @@ interface GameFlashesProps {
   /** Whether the red "invalid word" full-screen flash is active. */
   showInvalidFlash: boolean;
   /** Current score popup content, or null if no popup is visible. */
-  scorePopup: { points: number; label: string } | null;
+  scorePopup: { points: number; label: string; bonusCoins?: number } | null;
   /**
    * Length of the last submitted word. Drives popup scale — 7+ letter
    * words use a dramatically bigger popup than a 3-letter word.
@@ -116,14 +117,29 @@ function GameFlashesImpl({
             ]}
             pointerEvents="none"
           >
-            <Text
-              style={[
-                styles.scorePopupText,
-                wordLen >= 7 && styles.scorePopupTextBig,
-              ]}
-            >
-              {scorePopup.label}
-            </Text>
+            <View style={styles.scorePopupRow}>
+              <Text
+                style={[
+                  styles.scorePopupText,
+                  wordLen >= 7 && styles.scorePopupTextBig,
+                ]}
+              >
+                {scorePopup.label}
+              </Text>
+              {scorePopup.bonusCoins != null && (
+                <View style={styles.scorePopupBonus}>
+                  <CoinIcon size={wordLen >= 7 ? 22 : 17} />
+                  <Text
+                    style={[
+                      styles.scorePopupText,
+                      wordLen >= 7 && styles.scorePopupTextBig,
+                    ]}
+                  >
+                    +{scorePopup.bonusCoins}
+                  </Text>
+                </View>
+              )}
+            </View>
           </Animated.View>
         );
       })()}
@@ -195,6 +211,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textShadowColor: 'rgba(255,255,255,0.5)',
     textShadowRadius: 12,
+  },
+  scorePopupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  scorePopupBonus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
   scorePopupMedium: {
     paddingHorizontal: 40,

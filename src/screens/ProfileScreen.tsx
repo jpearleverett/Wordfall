@@ -746,14 +746,14 @@ function StatGlyph({ statKey, accent, size }: { statKey: string; accent: string;
 function AchievementGlyph({ icon, accent, size }: { icon: string; accent: string; size: number }) {
   switch (icon.replace(/\uFE0F/g, '')) {
     case '\u{1F525}': return <FlameGlyph size={size} />;
-    case '☀': return <SunGlyph size={size} />;
+    case '\u2600': return <SunGlyph size={size} />;
     case '\u{1F48E}': return <DiamondGlyph size={size} accent={accent} />;
     case '⏱': return <ClockGlyph size={size} accent={accent} />;
     case '\u{1F451}': return <CrownGlyph size={size} accent={accent} />;
     case '\u{1F4DA}': case '\u{1F4D6}': case '\u{1F4DD}': return <BookGlyph size={size} accent={accent} />;
     case '\u{1F9E9}': case '\u{1F3AE}': return <TileGridGlyph size={size} accent={accent} />;
     case '\u{1F3C5}': return <MedalGlyph size={size} accent={accent} />;
-    case '⚡': return <BoltGlyph size={size} accent={accent} />;
+    case '\u26A1': return <BoltGlyph size={size} accent={accent} />;
     default: return <StarBurstGlyph size={size} accent={accent} />;
   }
 }

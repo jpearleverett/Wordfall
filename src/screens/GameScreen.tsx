@@ -26,6 +26,7 @@ import { crashReporter } from '../services/crashReporting';
 import { findWordInGrid, choiceAvoidedDeadEnd, isProvablyCompletable } from '../engine/solver';
 import { resolveUndoSource } from '../utils/undoGate';
 import { TutorialOverlay } from '../components/TutorialOverlay';
+import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -213,9 +214,9 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
   // spotlight, coral shuffle — border tint, icon plate ring, glow, and
   // count badge all follow it.
   const boosters = [
-    { key: 'wildcard', label: 'Wildcard', glyph: '★', accent: COLORS.gold, count: wildcardCount, active: wildcardMode, onPress: onWildcard },
-    { key: 'spotlight', label: 'Spotlight', glyph: '💡', accent: COLORS.teal, count: spotlightCount, active: spotlightActive, onPress: onSpotlight },
-    { key: 'shuffle', label: 'Shuffle', glyph: '🔀', accent: COLORS.coral, count: shuffleCount, active: false, onPress: onSmartShuffle },
+    { key: 'wildcard', label: 'Wildcard', icon: 'star' as GameIconName, accent: COLORS.gold, count: wildcardCount, active: wildcardMode, onPress: onWildcard },
+    { key: 'spotlight', label: 'Spotlight', icon: 'hint' as GameIconName, accent: COLORS.teal, count: spotlightCount, active: spotlightActive, onPress: onSpotlight },
+    { key: 'shuffle', label: 'Shuffle', icon: 'shuffle' as GameIconName, accent: COLORS.coral, count: shuffleCount, active: false, onPress: onSmartShuffle },
   ];
   return (
     <View style={[
@@ -240,7 +241,7 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
             />
             <View style={styles.boosterGlassEdge} />
             <View style={[styles.boosterIconPlate, { borderColor: b.accent + '73', shadowColor: b.accent }]}>
-              <Text style={styles.boosterEmoji}>{b.glyph}</Text>
+              <GameIcon name={b.icon} size={20} accent={b.accent} />
             </View>
             <Text style={styles.boosterLabel}>{b.label}</Text>
             <View style={[styles.boosterCount, { backgroundColor: b.accent, shadowColor: b.accent }]}>
@@ -312,12 +313,15 @@ const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
           timeRemaining <= 30 && timeRemaining > 0 && styles.timerBarDanger,
           timeRemaining <= 0 && styles.barHidden,
         ]}>
-          <Text style={[
-            styles.timerText,
-            timeRemaining <= 30 && styles.timerTextDanger,
-          ]}>
-            ⏱ {formatTime(timeRemaining)}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <GameIcon name="hourglass" size={16} accent={timeRemaining <= 30 ? COLORS.coral : undefined} />
+            <Text style={[
+              styles.timerText,
+              timeRemaining <= 30 && styles.timerTextDanger,
+            ]}>
+              {formatTime(timeRemaining)}
+            </Text>
+          </View>
         </View>
       )}
       {hasMoveLimit && maxMoves > 0 && (
@@ -604,7 +608,7 @@ function GameScreenImpl({
   const invalidFlashAnim = useRef(new Animated.Value(0)).current;
   const [showInvalidFlash, setShowInvalidFlash] = useState(false);
   const scorePopupAnim = useRef(new Animated.Value(0)).current;
-  const [scorePopup, setScorePopup] = useState<{ points: number; label: string } | null>(null);
+  const [scorePopup, setScorePopup] = useState<{ points: number; label: string; bonusCoins?: number } | null>(null);
   // Pending reduce-motion popup teardown — cleared before scheduling the next
   // so fast word chains don't have the old word's timer null the new popup.
   const scorePopupTeardownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1444,7 +1448,8 @@ function GameScreenImpl({
 
       setScorePopup({
         points: diff,
-        label: bonusCoins > 0 ? `+${diff}  \u{1FA99}+${bonusCoins}` : `+${diff}`,
+        label: `+${diff}`,
+        bonusCoins: bonusCoins > 0 ? bonusCoins : undefined,
       });
       void wordFoundHaptic();
 
@@ -2644,18 +2649,30 @@ function GameScreenImpl({
               </>
             ) : foundWords > 0 ? (
               <>
-                <Text style={styles.failedTitle}>
-                  {status === 'timeout' ? `⏱ ${t('result.timeUpShort')}` : t('result.keepGoing')}
-                </Text>
+                {status === 'timeout' ? (
+                  <View style={styles.failedTitleRow}>
+                    <GameIcon name="hourglass" size={26} accent={COLORS.coral} />
+                    <Text style={[styles.failedTitle, styles.failedTitleInRow]}>{t('result.timeUpShort')}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.failedTitle}>{t('result.keepGoing')}</Text>
+                )}
                 <Text style={styles.failedSubtext}>
                   {t('result.foundWordsProgress', { found: foundWords, total: totalWords })}
                 </Text>
               </>
             ) : (
               <>
-                <Text style={styles.failedTitle}>
-                  {status === 'timeout' ? `⏱ ${t('result.timeUpShort')}` : `❌ ${t('result.puzzleFailed')}`}
-                </Text>
+                <View style={styles.failedTitleRow}>
+                  <GameIcon
+                    name={status === 'timeout' ? 'hourglass' : 'cross'}
+                    size={26}
+                    accent={COLORS.coral}
+                  />
+                  <Text style={[styles.failedTitle, styles.failedTitleInRow]}>
+                    {status === 'timeout' ? t('result.timeUpShort') : t('result.puzzleFailed')}
+                  </Text>
+                </View>
                 <Text style={styles.failedSubtext}>
                   {status === 'timeout'
                     ? t('result.ranOutOfTime')
@@ -2693,7 +2710,10 @@ function GameScreenImpl({
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={handleWatchAdForHint}
                 >
-                  <Text style={styles.adHintButtonText}>{'\uD83C\uDFAC'} {t('result.watchAdFreeHint')}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <GameIcon name="frame" size={16} accent={COLORS.green} />
+                    <Text style={styles.adHintButtonText}>{t('result.watchAdFreeHint')}</Text>
+                  </View>
                 </Pressable>
               )}
               {undosLeft > 0 && history.length > 0 && (
@@ -2701,7 +2721,10 @@ function GameScreenImpl({
                   style={({ pressed }) => [styles.undoRecoverButton, pressed && styles.buttonPressed]}
                   onPress={handleUndo}
                 >
-                  <Text style={styles.undoRecoverText}>↩ {t('result.undoLastMove')}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <GameIcon name="undo" size={16} accent={COLORS.gold} />
+                    <Text style={styles.undoRecoverText}>{t('result.undoLastMove')}</Text>
+                  </View>
                 </Pressable>
               )}
               <Pressable
@@ -3210,6 +3233,16 @@ const styles = StyleSheet.create({
     shadowRadius: 28,
     elevation: 20,
     overflow: 'hidden',
+  },
+  failedTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  failedTitleInRow: {
+    marginBottom: 0,
   },
   failedTitle: {
     fontFamily: FONTS.display,

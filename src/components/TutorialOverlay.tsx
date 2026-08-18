@@ -1,9 +1,35 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { StyleSheet, Text } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { TutorialGuideStep } from '../data/tutorialBoards';
+import { VB, BodyGrad, gradId, rim, HILITE } from './icons/IconBase';
+
+/**
+ * Pointer hand in the icon set's material recipe (gradient body + dark rim
+ * + top highlight) — replaces the stock pointing-finger emoji so the
+ * tutorial callout matches the rest of the crafted iconography.
+ */
+function PointerHandIcon({ size = 24, accent = '#ffcf99' }: { size?: number; accent?: string }) {
+  const id = useMemo(() => gradId('hand'), []);
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <BodyGrad id={id} color={accent} />
+      {/* Index finger up + curled fist */}
+      <Path
+        d="M10.4 3.9a1.6 1.6 0 0 1 3.2 0v6.3l3.9.9c1.6.4 2.7 1.8 2.7 3.4v2.3c0 .9-.2 1.7-.7 2.5l-.7 1.1c-.5.9-1.5 1.4-2.5 1.4H11c-1 0-1.9-.5-2.4-1.3l-3.2-4.7a1.5 1.5 0 0 1 2.3-1.9l2.7 2.6Z"
+        fill={`url(#${id})`}
+        stroke={rim(accent)}
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      {/* Finger highlight */}
+      <Path d="M11.3 4.4v5" stroke={HILITE} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+    </Svg>
+  );
+}
 
 interface TutorialOverlayProps {
   step: TutorialGuideStep;
@@ -63,14 +89,9 @@ export function TutorialOverlay({ step, visible }: TutorialOverlayProps) {
       >
         <Text style={styles.message}>{step.message}</Text>
         {step.showHandPointer && (
-          <Animated.Text
-            style={[
-              styles.hand,
-              handStyle,
-            ]}
-          >
-            👆
-          </Animated.Text>
+          <Animated.View style={handStyle}>
+            <PointerHandIcon size={32} />
+          </Animated.View>
         )}
       </LinearGradient>
     </Animated.View>
@@ -103,8 +124,5 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyBold,
     lineHeight: 22,
     flex: 1,
-  },
-  hand: {
-    fontSize: 28,
   },
 });

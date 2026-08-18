@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -12,21 +12,23 @@ import Animated, {
 import { COLORS } from '../constants';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { OwlIcon } from './icons/iconsMisc';
+import { FlameIcon } from './icons/iconsCore';
 
 interface GameplayMascotProps {
   /** Monotonic counter — bumps every time a word is found. Drives the bounce. */
   foundCount: number;
   /** Mirrors GameScreen's last-word tension. Drives the wide-eyed state. */
   tensionActive: boolean;
-  /** Player's current flawless streak. Shows the 🔥 overlay when > 0. */
+  /** Player's current flawless streak. Shows the flame overlay when > 0. */
   flawlessStreak: number;
 }
 
 /**
- * Tiny absolute-positioned mascot that reacts to gameplay events. No
- * illustration asset — uses emoji as a placeholder so the system can ship
- * and be tuned before art arrives. Swap the `idleFace`/`tensionFace` etc.
- * for <Image source={sprite} /> when a real sprite is available.
+ * Tiny absolute-positioned mascot that reacts to gameplay events. Renders
+ * the bespoke OwlIcon SVG (gold-tinted under last-word tension) so it can
+ * ship and be tuned before dedicated art arrives. Swap the icon for
+ * <Image source={sprite} /> when a real sprite is available.
  *
  * Mounted absolutely so it never displaces the grid layout. RC-gated via
  * `gameplayMascotEnabled` (default OFF). Reduce-motion-aware: animations
@@ -84,15 +86,16 @@ const GameplayMascot: React.FC<GameplayMascotProps> = ({
 
   if (!enabled) return null;
 
-  // Expression logic — tension wins over neutral; 🔥 overlay when streak > 0.
-  const face = tensionActive ? '😲' : '🦉';
-
+  // Expression logic — tension retints the owl gold; flame overlay when
+  // streak > 0.
   return (
     <View style={styles.container} pointerEvents="none">
       <Animated.View style={[styles.bubble, animStyle]}>
-        <Text style={styles.face}>{face}</Text>
+        <OwlIcon size={25} accent={tensionActive ? COLORS.gold : undefined} />
         {flawlessStreak > 0 && (
-          <Text style={styles.streakOverlay}>🔥</Text>
+          <View style={styles.streakOverlay}>
+            <FlameIcon size={16} />
+          </View>
         )}
       </Animated.View>
     </View>
@@ -124,15 +127,10 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  face: {
-    fontSize: 22,
-    lineHeight: 26,
-  },
   streakOverlay: {
     position: 'absolute',
     bottom: -6,
     right: -6,
-    fontSize: 14,
   },
 });
 

@@ -577,7 +577,7 @@ function ChevronStackGlyph({ size = 22, accent = COLORS.teal }: { size?: number;
 /** Maps a data-driven event emoji icon to a drawn glyph (star-burst fallback). */
 function EventIconGlyph({ icon, accent, size }: { icon?: string; accent: string; size: number }) {
   switch ((icon ?? '').replace(/\uFE0F/g, '')) {
-    case '⚡': return <BoltGlyph size={size} accent={COLORS.gold} />;
+    case '\u26A1': return <BoltGlyph size={size} accent={COLORS.gold} />;
     case '\u{1F3C6}': return <TrophyGlyph size={size} accent={COLORS.gold} />;
     case '\u{1F30D}': return <GlobeGlyph size={size} accent={accent} />;
     case '\u{1F525}': return <FlameGlyph size={size} />;

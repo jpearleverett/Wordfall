@@ -22,7 +22,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, RADIUS, SHADOWS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
-import IconMedallion from '../components/common/IconMedallion';
 import PrimaryButton from '../components/common/PrimaryButton';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import { bentoPanel } from '../styles/bentoPanel';
@@ -39,12 +38,68 @@ import {
 } from '../data/masteryRewards';
 import { CollectionReward } from '../types';
 import { useCommerce } from '../hooks/useCommerce';
+import GameIcon, { GameIconName } from '../components/icons/GameIcon';
+
+/**
+ * IconMedallion's shell (accent ring + glow + body gradient) hosting a
+ * GameIcon SVG instead of an emoji Text — same layered-gem look with the
+ * bespoke icon set. Local because common/IconMedallion is emoji-Text-based.
+ */
+function SvgMedallion({
+  glyph,
+  name,
+  size = 44,
+  accent = COLORS.purple,
+  muted = false,
+  style,
+}: {
+  glyph?: string;
+  name?: GameIconName;
+  size?: number;
+  accent?: string;
+  muted?: boolean;
+  style?: object;
+}) {
+  const alpha = (a: string) => (/^#[0-9a-fA-F]{6}$/.test(accent) ? accent + a : accent);
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : alpha('73'),
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={[muted ? 'rgba(255,255,255,0.05)' : alpha('3D'), 'rgba(8, 2, 22, 0.92)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <GameIcon glyph={glyph} name={name} size={size * 0.58} />
+    </View>
+  );
+}
 
 interface MasteryScreenProps {
   onBack?: () => void;
 }
 
-// ─── DrawnCrown — crown built from pure Views (replaces the 👑 emoji) ──────
+// ─── DrawnCrown — crown built from pure Views (replaces the crown emoji) ──────
 // Gradient gold band + three triangle points + jewel dots + glow. By default
 // it sits in a squircle medallion shell so it drops in where IconMedallion
 // used to render the emoji; `bare` renders just the crown for inline pills.
@@ -248,7 +303,7 @@ const crownStyles = StyleSheet.create({
   },
 });
 
-// ─── DrawnLock — crisp padlock built from pure Views (replaces 🔒 emoji) ───
+// ─── DrawnLock — crisp padlock built from pure Views (replaces the lock emoji) ───
 
 function DrawnLock({ size = 16, accent = COLORS.gold }: { size?: number; accent?: string }) {
   return (
@@ -297,7 +352,7 @@ function DrawnLock({ size = 16, accent = COLORS.gold }: { size?: number; accent?
 // ─── Reward chip list — every reward gets a medallion, not a bare string ───
 
 interface RewardChip {
-  glyph: string;
+  icon: GameIconName;
   label: string;
   accent: string;
 }
@@ -305,19 +360,19 @@ interface RewardChip {
 function buildRewardChips(reward: CollectionReward): RewardChip[] {
   const chips: RewardChip[] = [];
   if (reward.coins > 0) {
-    chips.push({ glyph: '\u{1FA99}', label: `${reward.coins}`, accent: COLORS.gold });
+    chips.push({ icon: 'coin', label: `${reward.coins}`, accent: COLORS.gold });
   }
   if (reward.gems > 0) {
-    chips.push({ glyph: '\u{1F48E}', label: `${reward.gems}`, accent: COLORS.cyan });
+    chips.push({ icon: 'gem', label: `${reward.gems}`, accent: COLORS.cyan });
   }
   if (reward.hintTokens > 0) {
-    chips.push({ glyph: '\u{1F4A1}', label: `${reward.hintTokens}`, accent: COLORS.orange });
+    chips.push({ icon: 'hint', label: `${reward.hintTokens}`, accent: COLORS.orange });
   }
   if (reward.badge) {
-    chips.push({ glyph: '\u{1F396}\u{FE0F}', label: 'Badge', accent: COLORS.purple });
+    chips.push({ icon: 'medal', label: 'Badge', accent: COLORS.purple });
   }
   if (reward.decoration) {
-    chips.push({ glyph: '\u{2728}', label: 'Decor', accent: COLORS.purple });
+    chips.push({ icon: 'sparkle', label: 'Decor', accent: COLORS.purple });
   }
   return chips;
 }
@@ -329,7 +384,7 @@ interface MasteryNodeProps {
   unlocked: boolean;
   isCurrent: boolean;
   isMilestone: boolean;
-  milestoneGlyph?: string;
+  milestoneGlyph?: GameIconName;
   reduceMotion: boolean;
 }
 
@@ -423,9 +478,13 @@ const MasteryNode = memo(function MasteryNode({
           end={{ x: 0.5, y: 1 }}
           style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
         />
-        <Text style={[styles.nodeText, { color: textColor, fontSize: size * 0.36 }]}>
-          {isMilestone && milestoneGlyph ? milestoneGlyph : unlocked ? '✓' : tier}
-        </Text>
+        {isMilestone && milestoneGlyph ? (
+          <GameIcon name={milestoneGlyph} size={size * 0.44} />
+        ) : (
+          <Text style={[styles.nodeText, { color: textColor, fontSize: size * 0.36 }]}>
+            {unlocked ? '✓' : tier}
+          </Text>
+        )}
       </View>
     </Animated.View>
   );
@@ -530,8 +589,8 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
                 milestone && styles.chipRingMilestone,
               ]}
             >
-              <IconMedallion
-                glyph={chip.glyph}
+              <SvgMedallion
+                name={chip.icon}
                 size={chipSize}
                 accent={chip.accent}
               />
@@ -565,8 +624,8 @@ interface MasteryTierRowProps {
   reduceMotion: boolean;
 }
 
-function milestoneGlyphFor(tier: number): string {
-  return tier === 10 ? '⭐' : tier === 20 ? '\u{1F48E}' : tier === 30 ? '\u{1F451}' : '\u{1F3C6}';
+function milestoneGlyphFor(tier: number): GameIconName {
+  return tier === 10 ? 'star' : tier === 20 ? 'gem' : tier === 30 ? 'crown' : 'trophy';
 }
 
 const MasteryTierRow = memo(function MasteryTierRow({

@@ -21,6 +21,7 @@ import { perfCountCellRender } from '../utils/perfInstrument';
 import { useColors } from '../hooks/useColors';
 import { useRoundedFontReady } from '../services/fontReady';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { CoinIcon } from './icons/iconsCore';
 import { useSettings } from '../contexts/SettingsContext';
 import { getColorblindTileRamps } from '../services/colorblind';
 
@@ -492,7 +493,7 @@ export const LetterCell = React.memo(function LetterCell({
               },
             ]}
           >
-            <Text style={{ fontSize: size * 0.2 }}>🪙</Text>
+            <CoinIcon size={size * 0.23} />
           </View>
         )}
 

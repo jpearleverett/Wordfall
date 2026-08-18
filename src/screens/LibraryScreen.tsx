@@ -14,7 +14,6 @@ import { COLORS, GRADIENTS, FONTS, SHADOWS, RADIUS, LIBRARY, MILESTONE_DECORATIO
 import { SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
-import IconMedallion from '../components/common/IconMedallion';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import { bentoPanel } from '../styles/bentoPanel';
 import {
@@ -32,8 +31,67 @@ import {
 import { CHAPTERS } from '../data/chapters';
 import { Chapter } from '../types';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 
 const { width } = Dimensions.get('window');
+
+/**
+ * IconMedallion's shell (accent ring + glow + body gradient) hosting a
+ * GameIcon SVG instead of an emoji Text — same layered-gem look with the
+ * bespoke icon set. Local because common/IconMedallion is emoji-Text-based.
+ */
+function SvgMedallion({
+  glyph,
+  name,
+  size = 44,
+  accent = COLORS.purple,
+  shape = 'circle',
+  muted = false,
+  style,
+}: {
+  glyph?: string;
+  name?: GameIconName;
+  size?: number;
+  accent?: string;
+  shape?: 'circle' | 'squircle';
+  muted?: boolean;
+  style?: object;
+}) {
+  const radius = shape === 'circle' ? size / 2 : size * 0.3;
+  const alpha = (a: string) => (/^#[0-9a-fA-F]{6}$/.test(accent) ? accent + a : accent);
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: radius,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : alpha('73'),
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style as object,
+      ]}
+    >
+      <LinearGradient
+        colors={[muted ? 'rgba(255,255,255,0.05)' : alpha('3D'), 'rgba(8, 2, 22, 0.92)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <GameIcon glyph={glyph} name={name} size={size * 0.58} />
+    </View>
+  );
+}
 
 // Wing theming on the synthwave palette (COLORS tokens). The original
 // hand-picked Material Design hexes (#4caf50, #2196f3, …) read as a
@@ -42,12 +100,12 @@ const { width } = Dimensions.get('window');
 const WING_META: Record<string, { name: string; icon: string; color: string; aura: string }> = {
   nature: { name: 'Nature', icon: '\u{1F33F}', color: COLORS.green, aura: 'rgba(0, 255, 135, 0.16)' },
   science: { name: 'Science', icon: '\u{1F52C}', color: COLORS.cyan, aura: 'rgba(0, 229, 255, 0.16)' },
-  mythology: { name: 'Mythology', icon: '⚡', color: COLORS.gold, aura: 'rgba(255, 184, 0, 0.16)' },
+  mythology: { name: 'Mythology', icon: '\u26A1', color: COLORS.gold, aura: 'rgba(255, 184, 0, 0.16)' },
   ocean: { name: 'Ocean', icon: '\u{1F30A}', color: COLORS.teal, aura: 'rgba(0, 245, 212, 0.16)' },
   arts: { name: 'Arts', icon: '\u{1F3A8}', color: COLORS.accent, aura: 'rgba(255, 45, 149, 0.16)' },
   space: { name: 'Space', icon: '\u{1F680}', color: COLORS.purple, aura: 'rgba(200, 77, 255, 0.16)' },
   history: { name: 'History', icon: '\u{1F4DC}', color: COLORS.orange, aura: 'rgba(255, 106, 0, 0.16)' },
-  elements: { name: 'Elements', icon: '✨', color: COLORS.coral, aura: 'rgba(255, 68, 102, 0.16)' },
+  elements: { name: 'Elements', icon: '\u2728', color: COLORS.coral, aura: 'rgba(255, 68, 102, 0.16)' },
 };
 
 // Hero stat tiles each own an accent so the row reads as crafted gem chips
@@ -322,7 +380,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             />
-            <IconMedallion glyph={'\u{1F4DA}'} accent={COLORS.gold} size={30} shape="squircle" />
+            <SvgMedallion name="book" accent={COLORS.gold} size={30} shape="squircle" />
             <Text style={styles.coachBannerText}>
               Complete chapters to restore wings — each holds themed puzzles & decorations.
             </Text>
@@ -399,8 +457,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               />
               <Text style={styles.nextGoalLabel}>Next restoration goal</Text>
               <View style={styles.nextGoalTitleRow}>
-                <IconMedallion
-                  glyph={nextWingToRestore ? nextWingToRestore.icon : '✨'}
+                <SvgMedallion
+                  glyph={nextWingToRestore ? nextWingToRestore.icon : '\u2728'}
                   accent={nextWingToRestore ? nextWingToRestore.color : COLORS.gold}
                   size={36}
                   shape="squircle"
@@ -483,7 +541,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                           pointerEvents="none"
                         />
                       )}
-                      <IconMedallion
+                      <SvgMedallion
                         glyph={wing.icon}
                         accent={wing.color}
                         muted={isLocked}
@@ -557,7 +615,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               <View style={styles.featureHeaderLeft}>
                 <Text style={styles.featureEyebrow}>ACTIVE WING</Text>
                 <View style={styles.featureTitleRow}>
-                  <IconMedallion glyph={selectedWingData.icon} accent={selectedWingData.color} size={44} />
+                  <SvgMedallion glyph={selectedWingData.icon} accent={selectedWingData.color} size={44} />
                   <Text style={[styles.featureTitle, { color: selectedWingData.color }]} numberOfLines={1}>
                     {selectedWingData.name} Wing
                   </Text>
@@ -582,9 +640,10 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   end={{ x: 0.5, y: 1 }}
                   style={StyleSheet.absoluteFillObject}
                 />
-                <Text style={styles.featureDecorationBadgeText}>
-                  {MILESTONE_DECORATIONS.find(d => d.decoration === decorations[selectedWingData.id])?.icon ?? '\u{1FA91}'}
-                </Text>
+                <GameIcon
+                  glyph={MILESTONE_DECORATIONS.find(d => d.decoration === decorations[selectedWingData.id])?.icon ?? ''}
+                  size={27}
+                />
               </Pressable>
             </View>
 
@@ -650,7 +709,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                   />
-                  <IconMedallion
+                  <SvgMedallion
                     glyph={chapter.icon}
                     accent={status === 'complete' ? COLORS.green : selectedWingData.color}
                     muted={status === 'locked'}
@@ -739,7 +798,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
                       />
-                      <IconMedallion
+                      <SvgMedallion
                         glyph={md.icon}
                         accent={pickable ? COLORS.teal : COLORS.gold}
                         muted={!owned}
@@ -750,9 +809,14 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         {owned ? md.name : `Lvl ${md.level}`}
                       </Text>
                       {owned && placedInWing && (
-                        <Text style={styles.decorationPlaced}>
-                          {WING_META[placedInWing]?.icon ?? ''} placed
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          {WING_META[placedInWing] && (
+                            <View style={{ marginTop: 4 }}>
+                              <GameIcon glyph={WING_META[placedInWing].icon} size={10} />
+                            </View>
+                          )}
+                          <Text style={styles.decorationPlaced}>placed</Text>
+                        </View>
                       )}
                     </Pressable>
                   );
