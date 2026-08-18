@@ -58,6 +58,7 @@ export type EconomyActions = Pick<
   | 'spendHintToken'
   | 'addEventStars'
   | 'addLibraryPoints'
+  | 'spendLibraryPoints'
   | 'canAfford'
   | 'spendLife'
   | 'refillLives'

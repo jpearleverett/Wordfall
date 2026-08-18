@@ -13,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import IconMedallion from '../components/common/IconMedallion';
+import GameIcon from '../components/icons/GameIcon';
+import { useEconomy } from '../contexts/EconomyContext';
 import PrimaryButton from '../components/common/PrimaryButton';
 import {
   useEconomyStore,
@@ -248,6 +250,9 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
   const gems = useEconomyStore(selectGems);
   const libraryPoints = useEconomyStore(selectLibraryPoints);
   const { canAfford, spendCoins, spendGems } = useEconomyActions();
+  // spendLibraryPoints is not yet part of the EconomyActions Pick (defined in
+  // economyStore.ts), so read it off the full context.
+  const { spendLibraryPoints } = useEconomy();
   const equippedFrame = usePlayerStore(selectEquippedFrame);
   const equippedTheme = usePlayerStore(selectEquippedTheme);
   const equippedTitle = usePlayerStore(selectEquippedTitle);
@@ -280,28 +285,28 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         return;
       }
 
-      const currency = item.costCurrency === 'libraryPoints' ? 'coins' : item.costCurrency;
-      // libraryPoints doesn't have spendLibraryPoints; treat as coins for now
       if (item.costCurrency === 'libraryPoints') {
         if ((libraryPoints ?? 0) < item.costAmount) {
-          Alert.alert('Not Enough Library Points', `You need ${item.costAmount} library points.`);
+          Alert.alert('Not Enough Lore', `You need ${item.costAmount} Lore.`);
           return;
         }
-      } else if (!canAfford(currency as 'coins' | 'gems', item.costAmount)) {
+      } else if (!canAfford(item.costCurrency as 'coins' | 'gems', item.costAmount)) {
         Alert.alert(
-          'Not Enough ' + (currency === 'coins' ? 'Coins' : 'Gems'),
-          `You need ${item.costAmount} ${currency}.`,
+          'Not Enough ' + (item.costCurrency === 'coins' ? 'Coins' : 'Gems'),
+          `You need ${item.costAmount} ${item.costCurrency}.`,
         );
         return;
       }
 
-      // Spend currency
+      // Spend currency — every spend* returns false when the balance is
+      // short, so bail without unlocking if the debit did not land.
       if (item.costCurrency === 'coins') {
-        spendCoins(item.costAmount);
+        if (!spendCoins(item.costAmount)) return;
       } else if (item.costCurrency === 'gems') {
-        spendGems(item.costAmount);
+        if (!spendGems(item.costAmount)) return;
+      } else if (item.costCurrency === 'libraryPoints') {
+        if (!spendLibraryPoints(item.costAmount)) return;
       }
-      // libraryPoints: no spend method exists, just unlock
 
       // Decorations have their own ledger (ownedDecorations, written by
       // unlockDecoration). unlockCosmetic early-returns for any id that is
@@ -316,7 +321,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         prev && prev.id === item.id ? { ...prev, owned: true } : prev,
       );
     },
-    [libraryPoints, canAfford, spendCoins, spendGems, unlockCosmetic, unlockDecoration],
+    [libraryPoints, canAfford, spendCoins, spendGems, spendLibraryPoints, unlockCosmetic, unlockDecoration],
   );
 
   const handleEquip = useCallback(
@@ -667,6 +672,14 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
               {gems.toLocaleString()}
             </Text>
           </View>
+          {activeTab === 'decorations' && (
+            <View style={styles.currencyChip}>
+              <GameIcon name="bookOpen" size={12} accent={COLORS.purple} />
+              <Text style={[styles.currencyText, { color: COLORS.purple }]}>
+                {(libraryPoints ?? 0).toLocaleString()} LORE
+              </Text>
+            </View>
+          )}
         </View>
       }
     >
