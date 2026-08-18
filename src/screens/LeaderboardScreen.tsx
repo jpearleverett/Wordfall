@@ -268,7 +268,7 @@ function GlassAvatar({
 }) {
   const hue = highlighted ? COLORS.accent : nameHue(name);
   const ringColors: readonly [string, string, string] =
-    rim ?? ([hue + 'C9', hue + '4D', hue + '9E'] as const);
+    rim ?? ([hue, hue + '73', hue + 'D9'] as const);
   const pad = 1.5;
   return (
     <View
@@ -300,7 +300,7 @@ function GlassAvatar({
           }}
         >
           <LinearGradient
-            colors={[hue + '59', hue + '17', 'rgba(8, 2, 22, 0.96)']}
+            colors={[hue + '8C', hue + '2E', 'rgba(8, 2, 22, 0.94)']}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={StyleSheet.absoluteFillObject}
@@ -314,18 +314,18 @@ function GlassAvatar({
               right: size * 0.16,
               height: size * 0.3,
               borderRadius: size * 0.15,
-              backgroundColor: 'rgba(255,255,255,0.14)',
+              backgroundColor: 'rgba(255,255,255,0.20)',
               transform: [{ scaleY: 0.55 }],
             }}
           />
           <Text
             style={{
               fontFamily: FONTS.display,
-              fontSize: size * 0.42,
+              fontSize: size * 0.46,
               color: COLORS.textPrimary,
-              textShadowColor: hue + 'B3',
+              textShadowColor: hue,
               textShadowOffset: { width: 0, height: 1 },
-              textShadowRadius: 6,
+              textShadowRadius: 3,
             }}
           >
             {name.charAt(0).toUpperCase()}
@@ -458,38 +458,65 @@ function SunGlyph({ size = 20 }: { size?: number }) {
   );
 }
 
-/** Drawn broadcast/signal mark — concentric rings + hue dot, no emoji. */
-function SignalGlyph({ size = 12, accent = COLORS.purple }: { size?: number; accent?: string }) {
+/** Drawn mini trophy — gold gradient cup + handles, stem and base. */
+function TrophyGlyph({ size = 18, accent = COLORS.gold }: { size?: number; accent?: string }) {
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.58,
+          height: size * 0.46,
+          borderBottomLeftRadius: size * 0.29,
+          borderBottomRightRadius: size * 0.29,
+          borderTopLeftRadius: size * 0.06,
+          borderTopRightRadius: size * 0.06,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, accent]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.04,
+            left: size * 0.1,
+            width: size * 0.16,
+            height: size * 0.1,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(255,255,255,0.55)',
+          }}
+        />
+      </View>
       <View
         style={{
           position: 'absolute',
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: 1,
-          borderColor: accent + '66',
+          top: size * 0.04,
+          left: 0,
+          width: size * 0.22,
+          height: size * 0.3,
+          borderRadius: size * 0.11,
+          borderWidth: Math.max(1, size * 0.09),
+          borderColor: accent + 'CC',
         }}
       />
       <View
         style={{
           position: 'absolute',
-          width: size * 0.62,
-          height: size * 0.62,
-          borderRadius: size * 0.31,
-          borderWidth: 1,
-          borderColor: accent + '99',
+          top: size * 0.04,
+          right: 0,
+          width: size * 0.22,
+          height: size * 0.3,
+          borderRadius: size * 0.11,
+          borderWidth: Math.max(1, size * 0.09),
+          borderColor: accent + 'CC',
         }}
       />
-      <View
-        style={{
-          width: size * 0.28,
-          height: size * 0.28,
-          borderRadius: size * 0.14,
-          backgroundColor: accent,
-        }}
-      />
+      <View style={{ width: size * 0.12, height: size * 0.16, backgroundColor: accent + 'D9' }} />
+      <View style={{ width: size * 0.42, height: size * 0.12, borderRadius: size * 0.04, backgroundColor: accent }} />
     </View>
   );
 }
@@ -1393,20 +1420,26 @@ const LeaderboardScreen: React.FC<
         )}
 
         {!isFirestoreAvailable && (
-          <View style={styles.offlinePill}>
+          <View
+            style={styles.practiceHeader}
+            accessibilityLabel="Practice Arena. Live rankings return when you're back online"
+          >
             <LinearGradient
               pointerEvents="none"
-              colors={[COLORS.purple + '14', 'rgba(255,255,255,0.01)']}
+              colors={[COLORS.gold + '1F', 'rgba(255,255,255,0.01)']}
               start={{ x: 0.5, y: 0 }}
               end={{ x: 0.5, y: 1 }}
               style={StyleSheet.absoluteFillObject}
             />
-            <GlyphMedallion size={24} accent={COLORS.purple} muted>
-              <SignalGlyph size={12} accent={COLORS.purpleLight} />
+            <GlyphMedallion size={34} accent={COLORS.gold}>
+              <TrophyGlyph size={18} />
             </GlyphMedallion>
-            <Text style={styles.offlinePillText}>
-              Offline mode — showing simulated leaderboard
-            </Text>
+            <View style={styles.practiceHeaderBody}>
+              <Text style={styles.practiceHeaderTitle}>PRACTICE ARENA</Text>
+              <Text style={styles.practiceHeaderSub}>
+                Live rankings return when you're back online
+              </Text>
+            </View>
           </View>
         )}
 
@@ -1710,26 +1743,42 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.accent,
   },
-  offlinePill: {
+  // PRACTICE ARENA — designed gold-chip header for the offline state
+  // (honest "you're offline" copy, styled as game copy, not a debug string).
+  practiceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    gap: 8,
+    gap: 10,
     marginTop: 8,
-    paddingVertical: 5,
-    paddingLeft: 6,
-    paddingRight: 14,
+    paddingVertical: 7,
+    paddingLeft: 8,
+    paddingRight: 16,
     backgroundColor: COLORS.surfaceGlass,
     borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: COLORS.purple + '40',
+    borderColor: COLORS.gold + '59',
     overflow: 'hidden',
+    ...SHADOWS.glow(COLORS.gold),
   },
-  offlinePillText: {
-    fontSize: 11,
+  practiceHeaderBody: {
+    flexShrink: 1,
+  },
+  practiceHeaderTitle: {
+    fontSize: 12,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 2,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+  practiceHeaderSub: {
+    fontSize: 10,
     fontFamily: FONTS.bodyMedium,
     color: COLORS.textSecondary,
     letterSpacing: 0.3,
+    marginTop: 1,
   },
   scrollView: {
     flex: 1,

@@ -512,6 +512,58 @@ function LockGlyph({ size = 22, accent = COLORS.gold }: { size?: number; accent?
   );
 }
 
+/** Drawn mini trophy — gold gradient cup + handles, stem and base. */
+function TrophyGlyph({ size = 12, accent = COLORS.gold }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.58,
+          height: size * 0.46,
+          borderBottomLeftRadius: size * 0.29,
+          borderBottomRightRadius: size * 0.29,
+          borderTopLeftRadius: size * 0.06,
+          borderTopRightRadius: size * 0.06,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, accent]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.04,
+          left: 0,
+          width: size * 0.22,
+          height: size * 0.3,
+          borderRadius: size * 0.11,
+          borderWidth: Math.max(1, size * 0.09),
+          borderColor: accent + 'CC',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.04,
+          right: 0,
+          width: size * 0.22,
+          height: size * 0.3,
+          borderRadius: size * 0.11,
+          borderWidth: Math.max(1, size * 0.09),
+          borderColor: accent + 'CC',
+        }}
+      />
+      <View style={{ width: size * 0.12, height: size * 0.16, backgroundColor: accent + 'D9' }} />
+      <View style={{ width: size * 0.42, height: size * 0.12, borderRadius: size * 0.04, backgroundColor: accent }} />
+    </View>
+  );
+}
+
 /** Drawn light bulb — gradient globe + stacked base bands (coach tip). */
 function BulbGlyph({ size = 18, accent = COLORS.cyan }: { size?: number; accent?: string }) {
   return (
@@ -575,6 +627,25 @@ interface LockMeter {
   total: number;
   label: string;
 }
+
+/**
+ * The single most meaningful stat per mode card. One chip per card, varied
+ * across modes, so the grid stops reading as ten copies of the same
+ * placeholder stats line. Falls back to play count when the focus stat is
+ * still zero.
+ */
+const STAT_FOCUS: Record<string, 'best' | 'wins' | 'played'> = {
+  classic: 'best',
+  timePressure: 'best',
+  expert: 'best',
+  weekly: 'best',
+  daily: 'played',
+  relax: 'played',
+  noGravity: 'wins',
+  gravityFlip: 'wins',
+  shrinkingBoard: 'wins',
+  perfectSolve: 'wins',
+};
 
 interface ModesScreenProps {
   onSelectMode?: (mode: string) => void;
@@ -645,10 +716,133 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
     return { accessible: true, reason: '', meter: { current: 1, total: 1, label: '' } };
   };
 
+  /** Compact accent chip carrying one stat; null until the mode is played. */
+  const renderStatChip = (modeId: string, accent: string) => {
+    const stats = modeStats[modeId];
+    if (!stats || stats.played <= 0) return null;
+    let focus = STAT_FOCUS[modeId] ?? 'played';
+    if (focus === 'best' && stats.bestScore <= 0) focus = 'played';
+    if (focus === 'wins' && stats.wins <= 0) focus = 'played';
+    const label =
+      focus === 'best'
+        ? `BEST ${stats.bestScore.toLocaleString()}`
+        : focus === 'wins'
+          ? `${stats.wins} WON`
+          : `${stats.played} PLAYED`;
+    const chipAccent = focus === 'best' ? COLORS.gold : accent;
+    return (
+      <View
+        style={[
+          styles.statChip,
+          { borderColor: chipAccent + '59', backgroundColor: chipAccent + '14' },
+        ]}
+      >
+        {focus === 'best' ? (
+          <TrophyGlyph size={11} />
+        ) : focus === 'wins' ? (
+          <StarBurstGlyph size={10} accent={chipAccent} />
+        ) : (
+          <DiamondGlyph size={10} accent={chipAccent} />
+        )}
+        <Text style={[styles.statChipText, { color: chipAccent }]}>{label}</Text>
+      </View>
+    );
+  };
+
+  /** Full stats summary for screen readers (visual chip shows one stat). */
+  const statsA11y = (modeId: string): string => {
+    const stats = modeStats[modeId];
+    if (!stats || stats.played <= 0) return '';
+    return `. ${stats.played} played, best score ${stats.bestScore.toLocaleString()}, ${stats.wins} won`;
+  };
+
   const renderModeCard = (mode: typeof MODES[number]) => {
     const { accessible, reason, meter } = isModeAccessible(mode.id);
     const accent = mode.color;
     const special = mode.id === 'daily' || mode.id === 'weekly';
+
+    // Daily / Weekly events break the grid rhythm as full-width gold banner
+    // rows — medallion left, copy left-aligned, stat chip on the right.
+    if (special) {
+      return (
+        <Pressable
+          key={mode.id}
+          style={({ pressed }) => [
+            styles.bannerCard,
+            accessible
+              ? [{ borderColor: COLORS.gold + '66' }, SHADOWS.glow(COLORS.gold)]
+              : styles.cardLocked,
+            pressed && accessible && styles.cardPressed,
+          ]}
+          onPress={() => accessible && onSelectMode(mode.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`${mode.name} mode${accessible ? '' : ', locked'}: ${accessible ? mode.desc : reason}${accessible ? statsA11y(mode.id) : ''}`}
+          accessibilityState={{ disabled: !accessible }}
+        >
+          <LinearGradient
+            colors={
+              accessible
+                ? [...GRADIENTS.surfaceCard]
+                : (['rgba(18,6,32,0.94)', 'rgba(10,0,21,0.96)'] as const)
+            }
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          {accessible && (
+            <LinearGradient
+              colors={[COLORS.gold + '26', 'transparent'] as [string, string]}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            />
+          )}
+          {accessible && (
+            <View style={[styles.bannerEdge, SHADOWS.neonEdge(COLORS.gold)]} />
+          )}
+          <DrawnMedallion
+            accent={accessible ? accent : COLORS.gold}
+            size={52}
+            shape="squircle"
+            muted={!accessible}
+          >
+            {accessible ? (
+              <ModeGlyph modeId={mode.id} accent={accent} size={26} />
+            ) : (
+              <LockGlyph size={22} accent={COLORS.gold} />
+            )}
+          </DrawnMedallion>
+          <View style={styles.bannerBody}>
+            <Text style={styles.bannerEyebrow}>
+              {mode.id === 'daily' ? 'DAILY EVENT' : 'WEEKLY EVENT'}
+            </Text>
+            <Text style={[styles.bannerName, !accessible && styles.textLocked]}>
+              {mode.name}
+            </Text>
+            {accessible ? (
+              <Text style={styles.bannerDesc} numberOfLines={2} ellipsizeMode="tail">
+                {mode.desc}
+              </Text>
+            ) : (
+              <View style={styles.bannerLockBlock}>
+                <View style={styles.lockChip}>
+                  <Text style={styles.lockChipText}>{meter.label}</Text>
+                </View>
+                <View style={styles.lockMeter}>
+                  <NeonProgressBar
+                    progress={meter.total > 0 ? meter.current / meter.total : 0}
+                    color={COLORS.gold}
+                    height={5}
+                    showGlowDot={false}
+                  />
+                </View>
+              </View>
+            )}
+          </View>
+          {accessible && renderStatChip(mode.id, accent)}
+        </Pressable>
+      );
+    }
 
     return (
       <Pressable
@@ -662,7 +856,7 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
         ]}
         onPress={() => accessible && onSelectMode(mode.id)}
         accessibilityRole="button"
-        accessibilityLabel={`${mode.name} mode${accessible ? '' : ', locked'}: ${accessible ? mode.desc : reason}`}
+        accessibilityLabel={`${mode.name} mode${accessible ? '' : ', locked'}: ${accessible ? mode.desc : reason}${accessible ? statsA11y(mode.id) : ''}`}
         accessibilityState={{ disabled: !accessible }}
       >
         <LinearGradient
@@ -687,17 +881,12 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
           <View
             style={[
               styles.topTick,
-              { backgroundColor: special ? COLORS.gold : accent },
-              SHADOWS.neonEdge(special ? COLORS.gold : accent),
+              { backgroundColor: accent },
+              SHADOWS.neonEdge(accent),
             ]}
           />
         )}
         <View style={styles.cardContent}>
-          {special && accessible && (
-            <Text style={styles.specialEyebrow}>
-              {mode.id === 'daily' ? 'DAILY EVENT' : 'WEEKLY EVENT'}
-            </Text>
-          )}
           <DrawnMedallion
             accent={accessible ? accent : COLORS.gold}
             size={48}
@@ -716,21 +905,13 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
           </Text>
           {accessible ? (
             <>
-              <Text style={styles.cardDesc}>{mode.desc}</Text>
-              {/* R8: the player's own history on the card. modeStats was
-                  tracked from day one and rendered nowhere, so every mode
-                  looked untouched forever — nothing invited a return visit. */}
-              {(() => {
-                const stats = modeStats[mode.id];
-                if (!stats || stats.played <= 0) return null;
-                return (
-                  <Text style={styles.cardStats}>
-                    {stats.played} played · best{' '}
-                    {stats.bestScore.toLocaleString()}
-                    {stats.wins > 0 ? ` · ${stats.wins} won` : ''}
-                  </Text>
-                );
-              })()}
+              <Text style={styles.cardDesc} numberOfLines={2} ellipsizeMode="tail">
+                {mode.desc}
+              </Text>
+              {/* R8: the player's own history on the card — one compact
+                  accent chip per card (full breakdown lives in the a11y
+                  label). Hidden entirely until the mode has been played. */}
+              {renderStatChip(mode.id, accent)}
             </>
           ) : (
             <View style={styles.lockBlock}>
@@ -926,16 +1107,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flex: 1,
   },
-  specialEyebrow: {
-    fontSize: 9,
-    fontFamily: FONTS.display,
-    color: COLORS.gold,
-    letterSpacing: 2,
-    marginBottom: 6,
-    textShadowColor: COLORS.goldGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
-  },
   medallion: {
     marginBottom: 10,
   },
@@ -960,12 +1131,74 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
-  cardStats: {
-    fontSize: 11,
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    marginTop: 8,
+  },
+  statChipText: {
+    fontSize: 9,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
+  },
+  bannerCard: {
+    width: width - 32,
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  bannerEdge: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 3,
+    backgroundColor: COLORS.gold,
+  },
+  bannerBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  bannerEyebrow: {
+    fontSize: 9,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 2,
+    marginBottom: 3,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+  bannerName: {
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    color: COLORS.textPrimary,
+    letterSpacing: 0.5,
+    marginBottom: 3,
+    textShadowColor: 'rgba(255,255,255,0.12)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+  },
+  bannerDesc: {
+    fontSize: 12,
     fontFamily: FONTS.bodyMedium,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 4,
+    color: COLORS.textSecondary,
+    lineHeight: 16,
+  },
+  bannerLockBlock: {
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
+    marginTop: 2,
   },
   lockBlock: {
     alignSelf: 'stretch',

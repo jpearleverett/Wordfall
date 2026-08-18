@@ -477,11 +477,24 @@ function DrawnMedallion({
       ]}
     >
       <LinearGradient
-        colors={[muted ? 'rgba(255,255,255,0.05)' : accent + '3D', 'rgba(8, 2, 22, 0.92)']}
+        colors={[muted ? 'rgba(255,255,255,0.05)' : accent + '59', 'rgba(8, 2, 22, 0.88)']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
+      {/* Lit backing disc — lifts glyph silhouettes off the dark shell so
+          the drawn art reads crisp instead of muddy. */}
+      {!muted && (
+        <View
+          style={{
+            position: 'absolute',
+            width: size * 0.78,
+            height: size * 0.78,
+            borderRadius: size * 0.39,
+            backgroundColor: 'rgba(255,255,255,0.10)',
+          }}
+        />
+      )}
       <View
         style={{
           position: 'absolute',
@@ -490,7 +503,7 @@ function DrawnMedallion({
           right: size * 0.16,
           height: size * 0.16,
           borderRadius: size * 0.08,
-          backgroundColor: 'rgba(255,255,255,0.14)',
+          backgroundColor: 'rgba(255,255,255,0.18)',
         }}
       />
       {children}
@@ -507,6 +520,8 @@ function StarBurstGlyph({ size = 22, accent = COLORS.gold }: { size?: number; ac
     height: sq,
     borderRadius: sq * 0.18,
     overflow: 'hidden' as const,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
   };
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
@@ -578,9 +593,9 @@ function DiamondGlyph({ size = 22, accent = COLORS.cyan }: { size?: number; acce
   const d = size * 0.62;
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: d, height: d, borderRadius: d * 0.16, overflow: 'hidden', transform: [{ rotate: '45deg' }] }}>
+      <View style={{ width: d, height: d, borderRadius: d * 0.16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', transform: [{ rotate: '45deg' }] }}>
         <LinearGradient
-          colors={[accent + 'E6', accent + '66']}
+          colors={[accent, accent + '99']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFillObject}
@@ -599,7 +614,7 @@ function GiftGlyph({ size = 22 }: { size?: number }) {
         <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
         <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
       </View>
-      <View style={{ width: size * 0.96, height: size * 0.24, borderRadius: size * 0.07, overflow: 'hidden' }}>
+      <View style={{ width: size * 0.96, height: size * 0.24, borderRadius: size * 0.07, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' }}>
         <LinearGradient
           colors={[COLORS.accentLight, COLORS.accent]}
           start={{ x: 0.5, y: 0 }}
@@ -616,6 +631,8 @@ function GiftGlyph({ size = 22 }: { size?: number }) {
           borderBottomRightRadius: size * 0.09,
           overflow: 'hidden',
           alignItems: 'center',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.3)',
         }}
       >
         <LinearGradient
@@ -709,14 +726,27 @@ function BookGlyph({ size = 22, accent = COLORS.purple }: { size?: number; accen
         height: size * 0.64,
         borderRadius: size * 0.06,
         overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.45)',
         transform: [{ rotate: rot }],
       }}
     >
       <LinearGradient
-        colors={[accent + 'E6', accent + '73']}
+        colors={[accent, accent + 'B3']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.03,
+          left: size * 0.05,
+          right: size * 0.05,
+          height: size * 0.1,
+          borderRadius: size * 0.05,
+          backgroundColor: 'rgba(255,255,255,0.4)',
+        }}
       />
     </View>
   );
@@ -733,7 +763,7 @@ function BookGlyph({ size = 22, accent = COLORS.purple }: { size?: number; accen
 function BoxGlyph({ size = 22, accent = COLORS.teal }: { size?: number; accent?: string }) {
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}>
-      <View style={{ width: size * 0.96, height: size * 0.26, borderRadius: size * 0.05, marginBottom: -size * 0.02, overflow: 'hidden', zIndex: 1 }}>
+      <View style={{ width: size * 0.96, height: size * 0.26, borderRadius: size * 0.05, marginBottom: -size * 0.02, overflow: 'hidden', zIndex: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' }}>
         <LinearGradient
           colors={[accent, accent + '99']}
           start={{ x: 0.5, y: 0 }}
@@ -749,10 +779,12 @@ function BoxGlyph({ size = 22, accent = COLORS.teal }: { size?: number; accent?:
           borderBottomRightRadius: size * 0.08,
           overflow: 'hidden',
           alignItems: 'center',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.3)',
         }}
       >
         <LinearGradient
-          colors={[accent + 'B3', accent + '59']}
+          colors={[accent + 'D9', accent + '80']}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={StyleSheet.absoluteFillObject}
@@ -858,9 +890,9 @@ function DiceGlyph({ size = 22, accent = COLORS.purple }: { size?: number; accen
   );
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: d, height: d, borderRadius: d * 0.22, overflow: 'hidden' }}>
+      <View style={{ width: d, height: d, borderRadius: d * 0.22, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' }}>
         <LinearGradient
-          colors={[accent, accent + '8C']}
+          colors={[accent, accent + 'B3']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFillObject}
@@ -1227,7 +1259,7 @@ function PiggyBankShopCard({
       <Pressable
         style={({ pressed }) => [
           piggyStyles.button,
-          !ready && piggyStyles.buttonDisabled,
+          ready ? SHADOWS.glow(COLORS.gold) : piggyStyles.buttonGhost,
           pressed && ready && piggyStyles.buttonPressed,
         ]}
         onPress={ready && !purchasing ? onBreak : undefined}
@@ -1239,17 +1271,19 @@ function PiggyBankShopCard({
             : 'Piggy bank not ready yet'
         }
       >
-        <LinearGradient
-          colors={ready ? [COLORS.gold, COLORS.orange] : [COLORS.textMuted, COLORS.textMuted]}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        />
+        {ready && (
+          <LinearGradient
+            colors={[...GRADIENTS.button.gold] as [string, string, ...string[]]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
+        )}
         {purchasing ? (
           <ActivityIndicator size="small" color={COLORS.bg} />
         ) : (
-          <Text style={piggyStyles.buttonText}>
-            {ready ? `BREAK FOR ${priceLabel}` : 'Keep playing to fill'}
+          <Text style={[piggyStyles.buttonText, !ready && piggyStyles.buttonGhostText]}>
+            {ready ? `BREAK FOR ${priceLabel}` : 'KEEP PLAYING TO FILL'}
           </Text>
         )}
       </Pressable>
@@ -1309,22 +1343,31 @@ const piggyStyles = StyleSheet.create({
   },
   button: {
     height: 44,
-    borderRadius: 10,
+    borderRadius: RADIUS.full,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonDisabled: {
-    opacity: 0.7,
+  // Filling state — a quiet ghost capsule (status, not a fake buy button).
+  buttonGhost: {
+    borderWidth: 1,
+    borderColor: COLORS.gold + '40',
+    backgroundColor: COLORS.gold + '0F',
   },
   buttonPressed: {
     opacity: 0.8,
+    transform: [{ scale: 0.98 }],
   },
   buttonText: {
     color: COLORS.bg,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    letterSpacing: 1.5,
+  },
+  buttonGhostText: {
+    color: COLORS.gold,
+    fontSize: 11,
+    letterSpacing: 2,
   },
 });
 
@@ -2107,6 +2150,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   variant="gold"
                   size="medium"
                   disabled={!!purchasingId}
+                  style={{ borderRadius: RADIUS.xl }}
                   accessibilityLabel={`Flash sale: Buy now for ${flashSale.salePrice}`}
                 />
               )}
@@ -2258,7 +2302,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               [<NestedSquaresGlyph key="g" size={13} accent={COLORS.purpleLight} />, 'Exclusive VIP frame'],
               [<ChevronStackGlyph key="g" size={13} accent={COLORS.teal} />, '2x XP boost'],
             ] as [React.ReactNode, string][]).map(([g, label]) => (
-              <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View key={label} style={styles.vipBenefitItem}>
                 {g}
                 <Text style={styles.vipBenefit}>{label}</Text>
               </View>
@@ -2279,6 +2323,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 variant="gold"
                 size="large"
                 fullWidth
+                style={{ borderRadius: RADIUS.xl }}
                 accessibilityLabel="Claim daily VIP rewards: 50 gems and 3 hints"
               />
               <Text style={styles.vipExpiryText}>
@@ -2297,6 +2342,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               size="large"
               fullWidth
               disabled={!!purchasingId}
+              style={{ borderRadius: RADIUS.xl }}
               accessibilityLabel="Subscribe to VIP Weekly for $4.99 per week"
             />
           )}
@@ -2362,6 +2408,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   variant="primary"
                   size="medium"
                   fullWidth
+                  style={{ borderRadius: RADIUS.xl }}
                   accessibilityLabel={`Claim VIP streak weekly bonus: ${currentBonus?.bonusGems} gems and ${currentBonus?.bonusHints} hints`}
                   onPress={() => {
                     const result = claimVipStreakBonus();
@@ -3028,8 +3075,8 @@ const styles = StyleSheet.create({
   },
   adBadge: {
     backgroundColor: COLORS.green,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 14,
     paddingVertical: 6,
   },
   adBadgeText: {
@@ -3108,14 +3155,26 @@ const styles = StyleSheet.create({
     color: COLORS.green,
     letterSpacing: 1,
   },
+  // Two-column wrap grid — halves the card's height and keeps every benefit
+  // line whole (text wraps inside its cell instead of clipping mid-sentence).
   vipBenefits: {
     marginBottom: 16,
-    gap: 6,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 8,
+  },
+  vipBenefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexBasis: '50%',
+    paddingRight: 8,
   },
   vipBenefit: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textPrimary,
     fontFamily: FONTS.bodySemiBold,
+    flexShrink: 1,
   },
   vipActions: {
     alignItems: 'center',
