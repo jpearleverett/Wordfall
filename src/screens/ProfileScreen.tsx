@@ -38,8 +38,10 @@ import {
   selectEquippedFrame,
   selectEquippedTheme,
   selectPrestige,
+  selectCollections,
 } from '../stores/playerStore';
 import { ACHIEVEMENTS, AchievementDef } from '../data/achievements';
+import { ATLAS_PAGES, SEASONAL_ALBUMS, getCurrentSeasonAlbum } from '../data/collections';
 import {
   PROFILE_FRAMES,
   COSMETIC_THEMES,
@@ -775,6 +777,30 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       }),
     [achievementIdsSet],
   );
+  const collections = usePlayerStore(selectCollections);
+  // The three collection percentages were props nothing ever passed — the
+  // card showed 0% for every player forever. Compute from live state.
+  const collectionPcts = useMemo(() => {
+    const atlasFound = Object.values(collections?.atlasPages ?? {}).reduce(
+      (n, words) => n + (words?.length ?? 0),
+      0,
+    );
+    const atlasTotal = ATLAS_PAGES.reduce((n, page) => n + page.words.length, 0);
+    const tilesFound = Object.entries(collections?.rareTiles ?? {}).filter(
+      ([, count]) => (count as number) > 0,
+    ).length;
+    const album = getCurrentSeasonAlbum() ?? SEASONAL_ALBUMS[0];
+    const stampsEarned = (
+      (collections?.seasonalStamps as Record<string, number[]> | undefined)?.[album.id] ?? []
+    ).length;
+    const pct = (found: number, total: number) =>
+      total > 0 ? Math.round((found / total) * 100) : 0;
+    return {
+      atlasProgress: pct(atlasFound, atlasTotal),
+      tilesProgress: pct(tilesFound, 26),
+      stampsProgress: pct(stampsEarned, album.stamps.length),
+    };
+  }, [collections]);
   const contextPlayer = useMemo(
     () => ({
       level: currentLevel,
@@ -785,6 +811,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       currentStreak: playerStreaks.currentStreak,
       perfectSolves,
       totalScore,
+      ...collectionPcts,
       badges: achievementIds.map((id: string) => ({ id, name: id, icon: '\u{1F3C5}' })),
       equippedCosmetics: {
         frame: equippedFrameId,
@@ -803,6 +830,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       achievementIds,
       equippedFrameId,
       equippedThemeId,
+      collectionPcts,
     ],
   );
   const p: PlayerData = useMemo(
