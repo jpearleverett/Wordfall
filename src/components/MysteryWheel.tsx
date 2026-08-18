@@ -11,6 +11,7 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { getActiveWheel } from '../data/seasonalWheels';
 import GameIcon from './icons/GameIcon';
 import {
+  MysteryBoxReward,
   MysteryWheelState,
   WHEEL_SEGMENTS,
   WheelSegment,
@@ -26,7 +27,7 @@ import {
 interface MysteryWheelProps {
   wheelState: MysteryWheelState;
   gems: number;
-  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: { label: string; icon: string; reward: any } }) => void;
+  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: MysteryBoxReward }) => void;
   onBuySpin: (cost: number, count: number) => void;
   onDismiss: () => void;
 }
@@ -68,7 +69,7 @@ export function MysteryWheel({
   const resultProgress = useSharedValue(0);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<WheelSegment | null>(null);
-  const [mysteryBoxResult, setMysteryBoxResult] = useState<{ label: string; icon: string } | null>(null);
+  const [mysteryBoxResult, setMysteryBoxResult] = useState<MysteryBoxReward | null>(null);
   const [oddsVisible, setOddsVisible] = useState(false);
   const currentRotation = useRef(0);
   const reduceMotion = useReduceMotion();
@@ -162,7 +163,7 @@ export function MysteryWheel({
       resultProgress.value = withSpring(1, { damping: 8, stiffness: 120 });
 
       // If mystery box, open immediately for reward granting, show visually after delay
-      let mysteryBoxReward: { label: string; icon: string; reward: any } | undefined;
+      let mysteryBoxReward: MysteryBoxReward | undefined;
       if (segment.reward.mysteryBox) {
         const boxResult = openMysteryBox();
         mysteryBoxReward = boxResult;
@@ -311,7 +312,10 @@ export function MysteryWheel({
                     pointerEvents="none"
                   >
                     <View style={styles.segmentChip}>
-                      <GameIcon glyph={seg.icon} size={18} />
+                      {/* Prefer the wedge's authored SVG icon (distinct per
+                          prize type); the emoji glyph is only a fallback for
+                          segments authored without one. */}
+                      <GameIcon name={seg.iconName} glyph={seg.icon} size={18} />
                     </View>
                   </View>
                 );
@@ -347,7 +351,7 @@ export function MysteryWheel({
                   <Text style={styles.resultChipText}>
                     + {result.label}
                   </Text>
-                  <GameIcon glyph={result.icon} size={16} />
+                  <GameIcon name={result.iconName} glyph={result.icon} size={16} />
                 </View>
                 {result.rarity !== 'common' && (
                   <Text style={[styles.resultRarity, { color: result.color }]}>
@@ -358,7 +362,7 @@ export function MysteryWheel({
                   <View style={styles.mysteryBoxReveal}>
                     <Text style={styles.mysteryBoxLabel}>Contains:</Text>
                     <View style={styles.mysteryBoxIcon}>
-                      <GameIcon glyph={mysteryBoxResult.icon} size={37} />
+                      <GameIcon name={mysteryBoxResult.iconName} glyph={mysteryBoxResult.icon} size={37} />
                     </View>
                     <Text style={styles.mysteryBoxReward}>{mysteryBoxResult.label}</Text>
                   </View>
@@ -457,7 +461,7 @@ export function MysteryWheel({
               {wheelOdds.map(({ segment, percent }) => (
                 <View key={segment.id} style={styles.oddsRow}>
                   <View style={styles.oddsIcon}>
-                    <GameIcon glyph={segment.icon} size={25} />
+                    <GameIcon name={segment.iconName} glyph={segment.icon} size={25} />
                   </View>
                   <View style={styles.oddsRowText}>
                     <Text style={styles.oddsLabel}>{segment.label}</Text>
@@ -477,7 +481,7 @@ export function MysteryWheel({
               {mysteryBoxOdds.map(({ reward, percent }) => (
                 <View key={reward.label} style={styles.oddsRow}>
                   <View style={styles.oddsIcon}>
-                    <GameIcon glyph={reward.icon} size={25} />
+                    <GameIcon name={reward.iconName} glyph={reward.icon} size={25} />
                   </View>
                   <View style={styles.oddsRowText}>
                     <Text style={styles.oddsLabel}>{reward.label}</Text>

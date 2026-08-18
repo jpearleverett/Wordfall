@@ -25,6 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS } from '../constants';
 import { COMBO_DEFINITIONS, type ComboType } from '../data/boosterCombos';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import GameIcon from './icons/GameIcon';
 
 interface BoosterComboBannerProps {
   comboType: ComboType | null;
@@ -104,7 +105,9 @@ const BoosterComboBanner: React.FC<BoosterComboBannerProps> = ({
         end={{ x: 1, y: 1 }}
         style={styles.inner}
       >
-        <Text style={styles.icon}>{def.icon}</Text>
+        <View style={styles.icon}>
+          <GameIcon glyph={def.icon} size={28} />
+        </View>
         <View style={styles.textColumn}>
           <Text style={styles.name}>{def.name.toUpperCase()}</Text>
           <Text style={styles.tagline}>
@@ -140,7 +143,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   icon: {
-    fontSize: 28,
     marginRight: 12,
   },
   textColumn: {

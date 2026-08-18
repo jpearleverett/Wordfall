@@ -457,6 +457,10 @@ const LaneCard = memo(function LaneCard({
   const laneAccent = premiumLane ? COLORS.gold : COLORS.cyan;
   const premiumLocked = premiumLane && !isPremiumUser;
   const claimable = reached && !claimed && (!premiumLane || isPremiumUser);
+  const muted = !reached || premiumLocked;
+  // Landmark tiers (10/20/30/40/50) get a gilded double-ring medallion so
+  // the ladder reads as having milestone payoffs at a glance.
+  const landmark = tier % 10 === 0;
 
   const handlePress = useCallback(() => onClaim(tier, lane), [onClaim, tier, lane]);
 
@@ -499,12 +503,28 @@ const LaneCard = memo(function LaneCard({
       )}
 
       <View style={styles.rewardMedallionWrap}>
-        <SvgMedallion
-          glyph={reward.icon}
-          size={42}
-          accent={laneAccent}
-          muted={!reached || premiumLocked}
-        />
+        {landmark ? (
+          <View
+            style={[styles.gildedRing, muted && styles.gildedRingMuted]}
+            accessibilityLabel={`Landmark tier ${tier} reward`}
+          >
+            <View style={[styles.gildedRingInner, muted && styles.gildedRingInnerMuted]}>
+              <SvgMedallion
+                glyph={reward.icon}
+                size={40}
+                accent={COLORS.gold}
+                muted={muted}
+              />
+            </View>
+          </View>
+        ) : (
+          <SvgMedallion
+            glyph={reward.icon}
+            size={42}
+            accent={laneAccent}
+            muted={muted}
+          />
+        )}
         {premiumLocked && (
           <SvgMedallion
             name="lock"
@@ -1257,6 +1277,34 @@ const styles = StyleSheet.create({
   },
   rewardMedallionWrap: {
     marginBottom: 6,
+  },
+  // Gilded double ring wrapping landmark-tier medallions (10/20/30/40/50).
+  gildedRing: {
+    borderRadius: 27,
+    borderWidth: 1.5,
+    borderColor: COLORS.gold,
+    padding: 2,
+    backgroundColor: 'rgba(255, 184, 0, 0.10)',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.65,
+    shadowRadius: 9,
+    elevation: 7,
+  },
+  gildedRingMuted: {
+    borderColor: 'rgba(255, 184, 0, 0.35)',
+    backgroundColor: 'rgba(255, 184, 0, 0.04)',
+    shadowOpacity: 0.15,
+    elevation: 2,
+  },
+  gildedRingInner: {
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 214, 92, 0.55)',
+    padding: 1.5,
+  },
+  gildedRingInnerMuted: {
+    borderColor: 'rgba(255, 214, 92, 0.2)',
   },
   lockOverlay: {
     position: 'absolute',

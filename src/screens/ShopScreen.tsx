@@ -68,6 +68,7 @@ import {
   getVipStreakProgress,
   VIP_STREAK_BONUSES,
 } from '../data/vipBenefits';
+import GameIcon, { GameIconName, resolveIconName } from '../components/icons/GameIcon';
 import { useCommerce } from '../hooks/useCommerce';
 import {
   selectPiggyBankGems,
@@ -80,6 +81,28 @@ import { analytics } from '../services/analytics';
 
 const { width } = Dimensions.get('window');
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Per-tier reward illustrations for the VIP streak cosmetic ladder — every
+ * tier gets a DISTINCT bespoke render instead of a shared type glyph:
+ * welcome banner → devotion laurel → silver frame → gold frame →
+ * champion crown → legendary VIP trophy.
+ */
+const VIP_TIER_ART: Record<string, { name: GameIconName; accent?: string }> = {
+  vip_welcome: { name: 'bannerDecor' },
+  vip_devoted: { name: 'vipLaurel' },
+  vip_silver: { name: 'frame', accent: '#b9c4d6' },
+  vip_gold: { name: 'frame', accent: '#ffb800' },
+  vip_champion: { name: 'crownWisdom' },
+  vip_trophy: { name: 'vipTrophy' },
+};
+
+/** Fallback art by reward type so a new tier never renders blank. */
+const VIP_TIER_TYPE_ART: Record<string, { name: GameIconName; accent?: string }> = {
+  frame: { name: 'frame' },
+  title: { name: 'scroll' },
+  decoration: { name: 'trophy' },
+};
 
 function formatCountdown(msRemaining: number): string {
   const remaining = Math.max(0, msRemaining);
@@ -511,345 +534,6 @@ function DrawnMedallion({
   );
 }
 
-/** Drawn 8-point star burst — two crossed gradient squares + hot core. */
-function StarBurstGlyph({ size = 22, accent = COLORS.gold }: { size?: number; accent?: string }) {
-  const sq = size * 0.68;
-  const square = {
-    position: 'absolute' as const,
-    width: sq,
-    height: sq,
-    borderRadius: sq * 0.18,
-    overflow: 'hidden' as const,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  };
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={[square, { transform: [{ rotate: '45deg' }] }]}>
-        <LinearGradient
-          colors={[accent, accent + '99']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      <View style={square}>
-        <LinearGradient
-          colors={[accent, accent + '99']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      <View
-        style={{
-          position: 'absolute',
-          width: sq * 0.34,
-          height: sq * 0.34,
-          borderRadius: sq * 0.17,
-          backgroundColor: 'rgba(255,255,255,0.6)',
-        }}
-      />
-    </View>
-  );
-}
-
-/** Drawn lightning bolt — two skewed gradient bars forming the zigzag. */
-function BoltGlyph({ size = 22, accent = COLORS.gold }: { size?: number; accent?: string }) {
-  const bar = (left: number, top: number) => ({
-    position: 'absolute' as const,
-    left,
-    top,
-    width: size * 0.34,
-    height: size * 0.52,
-    borderRadius: size * 0.07,
-    overflow: 'hidden' as const,
-    transform: [{ skewX: '-16deg' }],
-  });
-  return (
-    <View style={{ width: size, height: size }}>
-      <View style={bar(size * 0.38, 0)}>
-        <LinearGradient
-          colors={[accent, accent + 'B3']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      <View style={bar(size * 0.2, size * 0.46)}>
-        <LinearGradient
-          colors={[accent + 'B3', accent + '66']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-    </View>
-  );
-}
-
-/** Drawn faceted gem — rotated gradient square with facet highlight. */
-function DiamondGlyph({ size = 22, accent = COLORS.cyan }: { size?: number; accent?: string }) {
-  const d = size * 0.62;
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: d, height: d, borderRadius: d * 0.16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', transform: [{ rotate: '45deg' }] }}>
-        <LinearGradient
-          colors={[accent, accent + '99']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={{ position: 'absolute', top: 0, left: 0, width: d * 0.5, height: d * 0.5, backgroundColor: 'rgba(255,255,255,0.35)' }} />
-      </View>
-    </View>
-  );
-}
-
-/** Drawn gift box — gradient body, lid band, gold ribbon + bow knots. */
-function GiftGlyph({ size = 22 }: { size?: number }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center' }}>
-      <View style={{ flexDirection: 'row', gap: size * 0.06, marginBottom: -size * 0.04 }}>
-        <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
-        <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
-      </View>
-      <View style={{ width: size * 0.96, height: size * 0.24, borderRadius: size * 0.07, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' }}>
-        <LinearGradient
-          colors={[COLORS.accentLight, COLORS.accent]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      <View
-        style={{
-          width: size * 0.78,
-          height: size * 0.5,
-          marginTop: size * 0.03,
-          borderBottomLeftRadius: size * 0.09,
-          borderBottomRightRadius: size * 0.09,
-          overflow: 'hidden',
-          alignItems: 'center',
-          borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.3)',
-        }}
-      >
-        <LinearGradient
-          colors={[COLORS.accent, COLORS.accentDark]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={{ width: size * 0.14, height: '100%', backgroundColor: COLORS.gold }} />
-      </View>
-    </View>
-  );
-}
-
-/** Drawn crown — three diamond points over a gradient band. */
-function CrownGlyph({ size = 22, accent = COLORS.gold }: { size?: number; accent?: string }) {
-  const spike = (left: number, s: number, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        bottom: size * 0.26,
-        left,
-        width: s,
-        height: s,
-        backgroundColor: accent,
-        transform: [{ rotate: '45deg' }],
-      }}
-    />
-  );
-  return (
-    <View style={{ width: size, height: size, justifyContent: 'flex-end' }}>
-      {spike(size * 0.04, size * 0.28, 0)}
-      {spike(size * 0.36, size * 0.32, 1)}
-      {spike(size * 0.68, size * 0.28, 2)}
-      <View style={{ width: size * 0.92, alignSelf: 'center', height: size * 0.3, borderRadius: size * 0.06, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-        <LinearGradient
-          colors={[COLORS.goldLight, accent]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={{ width: size * 0.12, height: size * 0.12, borderRadius: size * 0.06, backgroundColor: 'rgba(8,2,22,0.55)' }} />
-      </View>
-    </View>
-  );
-}
-
-/** Drawn flame — layered gradient teardrops. */
-function FlameGlyph({ size = 22 }: { size?: number }) {
-  const tear = (d: number, colors: readonly [string, string], dy: number, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        bottom: dy,
-        width: d,
-        height: d,
-        borderRadius: d / 2,
-        borderTopLeftRadius: 0,
-        overflow: 'hidden',
-        transform: [{ rotate: '45deg' }],
-      }}
-    >
-      <LinearGradient
-        colors={[...colors]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-    </View>
-  );
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}>
-      {tear(size * 0.76, [COLORS.orange, COLORS.coral], size * 0.04, 0)}
-      {tear(size * 0.42, [COLORS.goldLight, COLORS.orange], size * 0.1, 1)}
-    </View>
-  );
-}
-
-/** Drawn open book — two splayed gradient pages + spine. */
-function BookGlyph({ size = 22, accent = COLORS.purple }: { size?: number; accent?: string }) {
-  const page = (rot: string, left: number, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        bottom: size * 0.1,
-        left,
-        width: size * 0.42,
-        height: size * 0.64,
-        borderRadius: size * 0.06,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.45)',
-        transform: [{ rotate: rot }],
-      }}
-    >
-      <LinearGradient
-        colors={[accent, accent + 'B3']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          top: size * 0.03,
-          left: size * 0.05,
-          right: size * 0.05,
-          height: size * 0.1,
-          borderRadius: size * 0.05,
-          backgroundColor: 'rgba(255,255,255,0.4)',
-        }}
-      />
-    </View>
-  );
-  return (
-    <View style={{ width: size, height: size }}>
-      {page('-8deg', size * 0.06, 0)}
-      {page('8deg', size * 0.52, 1)}
-      <View style={{ position: 'absolute', bottom: size * 0.08, left: size * 0.47, width: size * 0.06, height: size * 0.66, backgroundColor: 'rgba(8,2,22,0.6)' }} />
-    </View>
-  );
-}
-
-/** Drawn parcel box — lid band + taped gradient body. */
-function BoxGlyph({ size = 22, accent = COLORS.teal }: { size?: number; accent?: string }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}>
-      <View style={{ width: size * 0.96, height: size * 0.26, borderRadius: size * 0.05, marginBottom: -size * 0.02, overflow: 'hidden', zIndex: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' }}>
-        <LinearGradient
-          colors={[accent, accent + '99']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      <View
-        style={{
-          width: size * 0.82,
-          height: size * 0.56,
-          borderBottomLeftRadius: size * 0.08,
-          borderBottomRightRadius: size * 0.08,
-          overflow: 'hidden',
-          alignItems: 'center',
-          borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.3)',
-        }}
-      >
-        <LinearGradient
-          colors={[accent + 'D9', accent + '80']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={{ width: size * 0.12, height: '100%', backgroundColor: 'rgba(8,2,22,0.35)' }} />
-      </View>
-    </View>
-  );
-}
-
-/** Drawn light bulb — gradient globe + stacked base bands. */
-function BulbGlyph({ size = 22, accent = COLORS.gold }: { size?: number; accent?: string }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center' }}>
-      <View style={{ width: size * 0.6, height: size * 0.6, borderRadius: size * 0.3, overflow: 'hidden' }}>
-        <LinearGradient
-          colors={[COLORS.goldLight, accent]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            top: size * 0.07,
-            left: size * 0.1,
-            width: size * 0.16,
-            height: size * 0.12,
-            borderRadius: size * 0.08,
-            backgroundColor: 'rgba(255,255,255,0.6)',
-          }}
-        />
-      </View>
-      <View style={{ width: size * 0.26, height: size * 0.1, marginTop: size * 0.04, borderRadius: size * 0.03, backgroundColor: accent + '99' }} />
-      <View style={{ width: size * 0.18, height: size * 0.07, marginTop: size * 0.02, borderRadius: size * 0.03, backgroundColor: accent + '66' }} />
-    </View>
-  );
-}
-
-/** Drawn coin — gold gradient disc + inner ring. */
-function CoinGlyph({ size = 22 }: { size?: number }) {
-  return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-      <LinearGradient
-        colors={[COLORS.goldLight, COLORS.gold]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View style={{ width: size * 0.6, height: size * 0.6, borderRadius: size * 0.3, borderWidth: size * 0.06, borderColor: 'rgba(8,2,22,0.35)' }} />
-    </View>
-  );
-}
-
-/** Drawn clock — ring + hands + hub. */
-function ClockGlyph({ size = 14, accent = COLORS.coral }: { size?: number; accent?: string }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, borderWidth: Math.max(1.5, size * 0.1), borderColor: accent }} />
-      <View style={{ position: 'absolute', width: Math.max(1.5, size * 0.09), height: size * 0.3, borderRadius: size * 0.05, backgroundColor: accent, top: size * 0.18 }} />
-      <View style={{ position: 'absolute', width: size * 0.26, height: Math.max(1.5, size * 0.09), borderRadius: size * 0.05, backgroundColor: accent, left: size * 0.48 }} />
-    </View>
-  );
-}
-
 /** Drawn play triangle — rewarded-ad mark. */
 function PlayGlyph({ size = 22, accent = COLORS.green }: { size?: number; accent?: string }) {
   return (
@@ -871,219 +555,12 @@ function PlayGlyph({ size = 22, accent = COLORS.green }: { size?: number; accent
   );
 }
 
-/** Drawn die — gradient rounded square + five pips (lucky spin). */
-function DiceGlyph({ size = 22, accent = COLORS.purple }: { size?: number; accent?: string }) {
-  const d = size * 0.86;
-  const pip = (x: number, y: number, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        left: d * x,
-        top: d * y,
-        width: d * 0.18,
-        height: d * 0.18,
-        borderRadius: d * 0.09,
-        backgroundColor: 'rgba(8,2,22,0.8)',
-      }}
-    />
-  );
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: d, height: d, borderRadius: d * 0.22, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' }}>
-        <LinearGradient
-          colors={[accent, accent + 'B3']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        {pip(0.12, 0.12, 0)}
-        {pip(0.7, 0.12, 1)}
-        {pip(0.41, 0.41, 2)}
-        {pip(0.12, 0.7, 3)}
-        {pip(0.7, 0.7, 4)}
-      </View>
-    </View>
-  );
-}
-
 /** Drawn no-ads mark — ring + diagonal slash. */
 function NoAdsGlyph({ size = 22, accent = COLORS.coral }: { size?: number; accent?: string }) {
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, borderWidth: size * 0.11, borderColor: accent }} />
       <View style={{ width: size * 0.82, height: size * 0.11, borderRadius: size * 0.06, backgroundColor: accent, transform: [{ rotate: '-45deg' }] }} />
-    </View>
-  );
-}
-
-/** Drawn eye — pupil in a bordered ellipse (spotlight). */
-function EyeGlyph({ size = 22, accent = COLORS.cyan }: { size?: number; accent?: string }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View
-        style={{
-          width: size,
-          height: size * 0.58,
-          borderRadius: size * 0.29,
-          borderWidth: size * 0.08,
-          borderColor: accent,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <View style={{ width: size * 0.24, height: size * 0.24, borderRadius: size * 0.12, backgroundColor: accent }} />
-      </View>
-    </View>
-  );
-}
-
-/** Drawn shuffle — two crossing bars with diamond arrowheads. */
-function ShuffleGlyph({ size = 22, accent = COLORS.teal }: { size?: number; accent?: string }) {
-  const bar = (rot: string, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        alignSelf: 'center',
-        top: size * 0.44,
-        width: size * 0.92,
-        height: size * 0.13,
-        borderRadius: size * 0.07,
-        backgroundColor: accent,
-        transform: [{ rotate: rot }],
-      }}
-    />
-  );
-  const head = (top: number, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        left: size * 0.76,
-        top,
-        width: size * 0.2,
-        height: size * 0.2,
-        backgroundColor: accent,
-        transform: [{ rotate: '45deg' }],
-      }}
-    />
-  );
-  return (
-    <View style={{ width: size, height: size }}>
-      {bar('24deg', 0)}
-      {bar('-24deg', 1)}
-      {head(size * 0.1, 2)}
-      {head(size * 0.68, 3)}
-    </View>
-  );
-}
-
-/** Drawn snowflake — three crossed thin bars + core dot (freeze). */
-function SnowflakeGlyph({ size = 22, accent = COLORS.cyan }: { size?: number; accent?: string }) {
-  const bar = { position: 'absolute' as const, width: size, height: size * 0.09, borderRadius: size * 0.05, backgroundColor: accent + 'CC' };
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={bar} />
-      <View style={[bar, { transform: [{ rotate: '60deg' }] }]} />
-      <View style={[bar, { transform: [{ rotate: '120deg' }] }]} />
-      <View style={{ width: size * 0.24, height: size * 0.24, borderRadius: size * 0.12, backgroundColor: COLORS.textPrimary }} />
-    </View>
-  );
-}
-
-/** Drawn four-leaf clover — petal discs + core (lucky). */
-function CloverGlyph({ size = 22, accent = COLORS.green }: { size?: number; accent?: string }) {
-  const leaf = (x: number, y: number, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        left: size * x,
-        top: size * y,
-        width: size * 0.42,
-        height: size * 0.42,
-        borderRadius: size * 0.21,
-        backgroundColor: accent + 'D9',
-      }}
-    />
-  );
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      {leaf(0.29, 0, 0)}
-      {leaf(0, 0.29, 1)}
-      {leaf(0.58, 0.29, 2)}
-      {leaf(0.29, 0.58, 3)}
-      <View style={{ width: size * 0.18, height: size * 0.18, borderRadius: size * 0.09, backgroundColor: 'rgba(8,2,22,0.7)' }} />
-    </View>
-  );
-}
-
-/** Drawn undo arrow — three-quarter ring + diamond arrowhead. */
-function UndoGlyph({ size = 22, accent = COLORS.teal }: { size?: number; accent?: string }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View
-        style={{
-          width: size * 0.78,
-          height: size * 0.78,
-          borderRadius: size * 0.39,
-          borderWidth: size * 0.11,
-          borderColor: accent,
-          borderLeftColor: 'transparent',
-          transform: [{ rotate: '45deg' }],
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          left: size * 0.02,
-          top: size * 0.3,
-          width: size * 0.22,
-          height: size * 0.22,
-          backgroundColor: accent,
-          transform: [{ rotate: '45deg' }],
-        }}
-      />
-    </View>
-  );
-}
-
-/** Drawn nested frame squares (frame cosmetic). */
-function NestedSquaresGlyph({ size = 22, accent = COLORS.purple }: { size?: number; accent?: string }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ position: 'absolute', width: size, height: size, borderRadius: size * 0.2, borderWidth: size * 0.08, borderColor: accent + '66' }} />
-      <View style={{ position: 'absolute', width: size * 0.62, height: size * 0.62, borderRadius: size * 0.14, borderWidth: size * 0.08, borderColor: accent + 'B3' }} />
-      <View style={{ width: size * 0.26, height: size * 0.26, borderRadius: size * 0.07, backgroundColor: accent }} />
-    </View>
-  );
-}
-
-/** Drawn rising chevron stack (boost). */
-function ChevronStackGlyph({ size = 22, accent = COLORS.teal }: { size?: number; accent?: string }) {
-  const c = size * 0.5;
-  const chev = (top: number, opacity: number, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        top,
-        alignSelf: 'center',
-        width: c,
-        height: c,
-        borderTopWidth: size * 0.12,
-        borderRightWidth: size * 0.12,
-        borderColor: accent,
-        opacity,
-        transform: [{ rotate: '-45deg' }],
-      }}
-    />
-  );
-  return (
-    <View style={{ width: size, height: size }}>
-      {chev(size * 0.08, 1, 0)}
-      {chev(size * 0.42, 0.5, 1)}
     </View>
   );
 }
@@ -1174,31 +651,29 @@ function JarGlyph({ size = 40 }: { size?: number }) {
 }
 
 /**
- * Maps a data-driven product emoji icon to a drawn glyph (star-burst
- * fallback). Variation selectors are stripped before matching.
+ * Icons whose bespoke art has a canonical material color (gold coins, amber
+ * bulbs, ember flames\u2026) \u2014 these ignore the card accent so the same item reads
+ * identically on every surface. Everything else retints to match its card.
+ */
+const CANONICAL_COLOR_ICONS: ReadonlySet<GameIconName> = new Set<GameIconName>([
+  'coin', 'hint', 'bolt', 'snowflake', 'clover', 'crown', 'flame', 'gift',
+]);
+
+/**
+ * Routes a data-driven product emoji icon through the shared GameIcon set so
+ * every shop surface renders the same bespoke SVG art as the rest of the app.
+ * Unknown glyphs fall back to the accent-tinted sparkle mark.
  */
 function ProductGlyph({ icon, accent, size }: { icon?: string; accent: string; size: number }) {
-  switch ((icon ?? '').replace(/\uFE0F/g, '')) {
-    case '\u{1F4A1}': return <BulbGlyph size={size} accent={COLORS.gold} />;
-    case '\u21A9': return <UndoGlyph size={size} accent={accent} />;
-    case '\u{1F441}': return <EyeGlyph size={size} accent={accent} />;
-    case '\u{1F500}': return <ShuffleGlyph size={size} accent={accent} />;
-    case '\u{1F9CA}': return <SnowflakeGlyph size={size} accent={COLORS.cyan} />;
-    case '\u26A1': return <BoltGlyph size={size} accent={COLORS.gold} />;
-    case '\u{1F340}': return <CloverGlyph size={size} accent={COLORS.green} />;
-    case '\u{1F3B2}': return <DiceGlyph size={size} accent={accent} />;
-    case '\u{1F5BC}': return <NestedSquaresGlyph size={size} accent={accent} />;
-    case '\u{1F3A8}': return <DiamondGlyph size={size} accent={accent} />;
-    case '\u{1FA99}': return <CoinGlyph size={size} />;
-    case '\u{1F451}': return <CrownGlyph size={size} accent={COLORS.gold} />;
-    case '\u{1F48E}': return <DiamondGlyph size={size} accent={accent} />;
-    case '\u{1F525}': return <FlameGlyph size={size} />;
-    case '\u{1F381}': return <GiftGlyph size={size} />;
-    case '\u{1F4D6}': return <BookGlyph size={size} accent={accent} />;
-    case '\u{1F4E6}': return <BoxGlyph size={size} accent={accent} />;
-    case '\u{1F680}': return <ChevronStackGlyph size={size} accent={accent} />;
-    default: return <StarBurstGlyph size={size} accent={accent} />;
-  }
+  const name = icon ? resolveIconName(icon) : null;
+  if (!name) return <GameIcon name="sparkle" size={size} accent={accent} />;
+  return (
+    <GameIcon
+      name={name}
+      size={size}
+      accent={CANONICAL_COLOR_ICONS.has(name) ? undefined : accent}
+    />
+  );
 }
 
 /**
@@ -2102,7 +1577,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             />
             <View style={styles.flashSaleHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <BoltGlyph size={14} accent={COLORS.coral} />
+                <GameIcon name="bolt" size={14} accent={COLORS.coral} />
                 <Text style={styles.flashSaleLabel}>FLASH SALE</Text>
               </View>
               <View style={styles.flashSaleDiscountBadge}>
@@ -2133,7 +1608,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             </View>
             <View style={styles.flashSaleFooter}>
               <View style={[styles.flashSaleTimer, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
-                <ClockGlyph size={12} accent={COLORS.coral} />
+                <GameIcon name="hourglass" size={12} accent={COLORS.coral} />
                 <LiveCountdownText
                   style={styles.flashSaleTimerText}
                   untilMidnight
@@ -2244,7 +1719,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   <ActivityIndicator size="small" color={COLORS.purple} style={{ marginRight: 10 }} />
                 ) : (
                   <DrawnMedallion size={40} accent={COLORS.purple} style={styles.adMedallion}>
-                    <DiceGlyph size={20} accent={COLORS.purple} />
+                    <GameIcon name="dice" size={20} accent={COLORS.purple} />
                   </DrawnMedallion>
                 )}
                 <View style={styles.adInfo}>
@@ -2296,11 +1771,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           </View>
           <View style={styles.vipBenefits}>
             {([
-              [<StarBurstGlyph key="g" size={13} accent={COLORS.gold} />, 'Ad-free experience'],
-              [<DiamondGlyph key="g" size={13} accent={COLORS.cyan} />, '50 daily gems'],
-              [<BulbGlyph key="g" size={13} accent={COLORS.gold} />, '3 daily hints'],
-              [<NestedSquaresGlyph key="g" size={13} accent={COLORS.purpleLight} />, 'Exclusive VIP frame'],
-              [<ChevronStackGlyph key="g" size={13} accent={COLORS.teal} />, '2x XP boost'],
+              [<GameIcon key="g" name="sparkle" size={13} accent={COLORS.gold} />, 'Ad-free experience'],
+              [<GameIcon key="g" name="gem" size={13} accent={COLORS.cyan} />, '50 daily gems'],
+              [<GameIcon key="g" name="hint" size={13} />, '3 daily hints'],
+              [<GameIcon key="g" name="frame" size={13} accent={COLORS.purpleLight} />, 'Exclusive VIP frame'],
+              [<GameIcon key="g" name="rocket" size={13} accent={COLORS.teal} />, '2x XP boost'],
             ] as [React.ReactNode, string][]).map(([g, label]) => (
               <View key={label} style={styles.vipBenefitItem}>
                 {g}
@@ -2366,7 +1841,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               />
               <View style={styles.vipStreakHeader}>
                 <DrawnMedallion size={44} accent={COLORS.purple} style={styles.vipStreakMedallion}>
-                  <CrownGlyph size={22} accent={COLORS.gold} />
+                  <GameIcon name="crown" size={22} accent={COLORS.gold} />
                 </DrawnMedallion>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.vipStreakTitle}>{t('shop.vipStreak')}</Text>
@@ -2447,26 +1922,27 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               const reached = vipStreakWeeks >= tier.weeksRequired;
               const cosmetic = tier.extraReward;
               if (!cosmetic?.id) return null;
-              const typeGlyph =
-                cosmetic.type === 'frame' ? (
-                  <NestedSquaresGlyph size={12} accent={COLORS.purpleLight} />
-                ) : cosmetic.type === 'title' || cosmetic.type === 'decoration' ? (
-                  <CrownGlyph size={12} accent={COLORS.gold} />
-                ) : (
-                  <StarBurstGlyph size={12} accent={COLORS.gold} />
-                );
+              const art =
+                VIP_TIER_ART[cosmetic.id] ??
+                VIP_TIER_TYPE_ART[cosmetic.type] ??
+                { name: 'trophy' as GameIconName };
               return (
                 <View key={tier.weeksRequired} style={styles.vipLadderRow}>
                   <Text style={styles.vipLadderWeeks}>
                     Week {tier.weeksRequired}
                   </Text>
+                  <View
+                    style={[
+                      styles.vipLadderArt,
+                      !reached && styles.vipLadderArtLocked,
+                    ]}
+                  >
+                    <GameIcon name={art.name} size={28} accent={art.accent} />
+                  </View>
                   <View style={styles.vipLadderBody}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      {typeGlyph}
-                      <Text style={styles.vipLadderCosmetic}>
-                        {cosmetic.id.replace(/_/g, ' ')}
-                      </Text>
-                    </View>
+                    <Text style={styles.vipLadderCosmetic}>
+                      {cosmetic.id.replace(/_/g, ' ')}
+                    </Text>
                     <Text style={styles.vipLadderTypeLabel}>
                       {cosmetic.type}
                     </Text>
@@ -2584,7 +2060,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               <Text style={styles.featuredBadgeText}>LIMITED TIME</Text>
             </View>
             <HaloMedallion size={56} accent={COLORS.accent} style={styles.featuredMedallion}>
-              <GiftGlyph size={28} />
+              <GameIcon name="gift" size={28} />
             </HaloMedallion>
             <Text style={styles.featuredName}>Starter Pack</Text>
             <BundleContentsRow items={STARTER_PACK_CONTENTS} accent={COLORS.accent} />
@@ -2626,7 +2102,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               <Text style={styles.featuredBadgeText}>SPECIAL</Text>
             </View>
             <HaloMedallion size={56} accent={COLORS.purple} style={styles.featuredMedallion}>
-              <StarBurstGlyph size={28} accent={COLORS.purple} />
+              <GameIcon name="sparkle" size={28} accent={COLORS.purple} />
             </HaloMedallion>
             <Text style={styles.featuredName}>Weekend Bundle</Text>
             <BundleContentsRow items={WEEKEND_BUNDLE_CONTENTS} accent={COLORS.purple} />
@@ -2723,7 +2199,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               end={{ x: 1, y: 0 }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <DiamondGlyph size={14} accent={COLORS.accent} />
+                <GameIcon name="gem" size={14} accent={COLORS.accent} />
                 <Text style={styles.browseCosmeticsText}>Browse All Cosmetics</Text>
               </View>
               <Text style={styles.browseCosmeticsChevron}>{'\u{203A}'}</Text>
@@ -2763,7 +2239,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               end={{ x: 0, y: 1 }}
             />
             <DrawnMedallion size={44} accent={COLORS.purple} style={styles.premiumMedallion}>
-              <BookGlyph size={22} accent={COLORS.purple} />
+              <GameIcon name="book" size={22} accent={COLORS.purple} />
             </DrawnMedallion>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>{t('shop.chapterBundle')}</Text>
@@ -2787,7 +2263,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               end={{ x: 0, y: 1 }}
             />
             <DrawnMedallion size={44} accent={COLORS.teal} style={styles.premiumMedallion}>
-              <BoxGlyph size={22} accent={COLORS.teal} />
+              <GameIcon name="chest" size={22} accent={COLORS.teal} />
             </DrawnMedallion>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>{t('shop.dailyValuePack')}</Text>
@@ -2816,7 +2292,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               end={{ x: 0, y: 1 }}
             />
             <DrawnMedallion size={44} accent={COLORS.gold} muted={premiumPass} style={styles.premiumMedallion}>
-              <CrownGlyph size={22} accent={COLORS.gold} />
+              <GameIcon name="crown" size={22} accent={COLORS.gold} />
             </DrawnMedallion>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>{t('shop.premiumPass')}</Text>
@@ -2969,7 +2445,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             end={{ x: 0, y: 1 }}
           />
           <DrawnMedallion size={44} accent={COLORS.orange} muted style={styles.rentalPlaceholderMedallion}>
-            <ClockGlyph size={22} accent={COLORS.orange} />
+            <GameIcon name="hourglass" size={22} accent={COLORS.orange} />
           </DrawnMedallion>
           <Text style={styles.rentalPlaceholderTitle}>Temporarily Unavailable</Text>
           <Text style={styles.rentalPlaceholderText}>
@@ -3283,6 +2759,20 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
     width: 64,
+  },
+  vipLadderArt: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: 'rgba(8, 2, 22, 0.85)',
+    borderWidth: 1,
+    borderColor: COLORS.purple + '4D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  vipLadderArtLocked: {
+    opacity: 0.45,
   },
   vipLadderBody: {
     flex: 1,

@@ -262,6 +262,8 @@ export const DECORATION_ICONS: Record<string, GameIconName> = {
   chapter_decoration: 'chapterMarker',
   decoration_whale_trophy: 'whaleTrophy',
   decoration_platinum_exclusive: 'platinumDisplay',
+  // VIP streak ladder reward (iconsDecor6)
+  vip_trophy: 'vipTrophy',
 };
 
 /** Per-TYPE fallback so a catalog addition never regresses to sparkle. */

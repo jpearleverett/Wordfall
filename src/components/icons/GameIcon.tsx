@@ -61,7 +61,7 @@ import {
 } from './iconsDecor5';
 import {
   BlitzTrophyIcon, CommunityStarIcon, GravityCrystalIcon, OceanWaveIcon,
-  PiggyJarIcon,
+  PiggyJarIcon, VipLaurelIcon, VipTrophyIcon,
 } from './iconsDecor6';
 
 export type GameIconName = keyof typeof REGISTRY;
@@ -122,6 +122,8 @@ const REGISTRY = {
   communityStar: CommunityStarIcon, gravityCrystal: GravityCrystalIcon,
   blitzTrophy: BlitzTrophyIcon, oceanWave: OceanWaveIcon,
   piggyJar: PiggyJarIcon,
+  // VIP streak ladder marks (iconsDecor6)
+  vipLaurel: VipLaurelIcon, vipTrophy: VipTrophyIcon,
 } as const;
 
 /**
@@ -133,17 +135,19 @@ const EMOJI_TO_NAME: Record<string, GameIconName> = {
   // currency / rewards
   '🪙': 'coin', '💰': 'coin', '💎': 'gem', '💡': 'hint', '🎁': 'gift',
   '📦': 'chest', '🎰': 'wheel', '🎡': 'wheel', '🎲': 'dice', '🍀': 'clover',
-  '🎟': 'ticket', '🎫': 'ticket',
+  '🎟': 'ticket', '🎫': 'ticket', '🫙': 'piggyJar',
   // status / achievement
   '⭐': 'star', '🌟': 'star', '✨': 'sparkle', '💫': 'sparkle', '🏆': 'trophy',
   '🥇': 'medal', '🥈': 'medal', '🥉': 'medal', '🏅': 'medal', '🎖': 'medal',
   '🔥': 'flame', '⚡': 'bolt', '💯': 'target', '🎯': 'target', '👑': 'crown',
   '🔒': 'lock', '🔓': 'lock', '🔑': 'key', '❤': 'heart', '🫀': 'heart',
   '💜': 'heart', '⏳': 'hourglass', '⏰': 'hourglass', '🕰': 'hourglass',
+  '⌛': 'hourglassDecor',
   '📅': 'calendar', '📋': 'calendar', '🔔': 'bell', '♾': 'infinity',
-  '✅': 'check', '❌': 'cross', '🚫': 'cross',
-  // nature
-  '🌱': 'leaf', '🌿': 'leaf', '🍃': 'leaf', '🌾': 'leaf', '🍂': 'leaf', '🍁': 'leaf',
+  '✅': 'check', '❌': 'cross', '🚫': 'cross', '💪': 'bolt', '💀': 'sword',
+  // nature — chapter emblems get bespoke/thematic art so the five chapters
+  // of a wing never share one icon (blind-panel distinctness pass).
+  '🌱': 'leaf', '🌿': 'leaf', '🍃': 'leaf', '🌾': 'sun', '🍂': 'leaf', '🍁': 'leaf',
   '🌷': 'flower', '🌸': 'flower', '🌺': 'flower', '🌻': 'flower', '💐': 'flower',
   '🏵': 'flower', '🌹': 'flower', '🌼': 'flower',
   '🌲': 'tree', '🌳': 'tree', '🌴': 'tree', '🎄': 'tree',
@@ -151,19 +155,20 @@ const EMOJI_TO_NAME: Record<string, GameIconName> = {
   '☀': 'sun', '🌞': 'sun', '🌅': 'sun', '🌄': 'sun', '⛅': 'sun', '🌤': 'sun',
   '🌡': 'sun', '🌙': 'moon', '🌕': 'moon', '🌑': 'moon',
   '❄': 'snowflake', '🧊': 'snowflake', '🌨': 'snowflake', '⛈': 'snowflake', '🌧': 'droplet',
-  '💧': 'droplet', '💦': 'droplet', '🌊': 'wave', '⛵': 'wave', '🐋': 'wave',
-  '🐠': 'wave', '🐚': 'wave', '🦑': 'wave', '⚓': 'wave', '💨': 'wave',
+  '💧': 'droplet', '💦': 'droplet', '🌊': 'wave', '⛵': 'shipWheel', '🐋': 'whaleTrophy',
+  '🐠': 'oceanGlobe', '🐚': 'oceanWave', '🦑': 'mysteryOrb', '⚓': 'wave', '💨': 'wave',
   '🌈': 'rainbow', '🦋': 'butterfly', '🐝': 'butterfly', '🐦': 'butterfly',
-  '🐾': 'paw', '🦉': 'owl', '🦄': 'crystal', '🐉': 'sword',
+  '🐾': 'paw', '🦉': 'owl', '🦄': 'crystal', '🐉': 'codexMyth', '🦅': 'eye',
+  '🌠': 'sparkle', '🪔': 'paperLantern',
   // science / space
-  '🧪': 'flask', '⚗': 'flask', '🔬': 'flask', '🧬': 'flask',
-  '🔭': 'telescope', '🚀': 'rocket', '✈': 'rocket', '🪐': 'planet', '🌌': 'planet',
+  '🧪': 'flask', '⚗': 'labEquipment', '🔬': 'magnifier', '🧬': 'flask',
+  '🔭': 'telescope', '🚀': 'rocket', '✈': 'rocket', '🪐': 'planet', '🌌': 'gravityCrystal',
   '🌍': 'globe', '🌐': 'globe', '🗺': 'globe', '🧭': 'globe',
   // arts / history
   '🎨': 'palette', '🖌': 'palette', '🎵': 'note', '🎶': 'note', '🎭': 'masks',
   '🖼': 'frame', '📜': 'scroll', '📕': 'book', '📖': 'bookOpen', '📚': 'book',
-  '🔖': 'book', '📝': 'pencil', '✏': 'pencil', '🏺': 'crystal', '🔮': 'crystal',
-  '🏛': 'castle', '🏰': 'castle', '🗽': 'castle', '🏙': 'castle', '🏠': 'house',
+  '🔖': 'book', '📝': 'pencil', '✏': 'pencil', '🏺': 'globeAntique', '🔮': 'crystal',
+  '🏛': 'statueThinker', '🏰': 'castle', '🗽': 'castle', '🏙': 'retroArcade', '🏠': 'house',
   '⚔': 'sword', '🛡': 'shield', '⚖': 'shield', '🚩': 'target',
   // social / misc
   '👥': 'people', '🤝': 'handshake', '💬': 'chat', '💭': 'chat', '🧠': 'brain',
@@ -172,6 +177,7 @@ const EMOJI_TO_NAME: Record<string, GameIconName> = {
   '👁': 'eye', '🔀': 'shuffle', '🔄': 'undo', '↩': 'undo', '🍎': 'apple',
   '🍦': 'apple', '🎉': 'sparkle', '🎊': 'sparkle', '😲': 'owl', '🎬': 'frame',
   '📊': 'target', '❏': 'bookOpen', '🔻': 'gem', '🌦': 'sun', '🎃': 'flower',
+  '▶': 'gamepad', '◆': 'gem',
 };
 
 function stripVariation(glyph: string): string {

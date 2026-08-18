@@ -183,3 +183,90 @@ export function PiggyJarIcon({ size = 24, accent = '#e84fd0' }: IconProps) {
     </Svg>
   );
 }
+
+/** VIP laurel: gold laurel wreath cradling a star — devoted-member title mark. */
+export function VipLaurelIcon({ size = 24, accent = '#e8b13f' }: IconProps) {
+  const gold = useMemo(() => gradId('vlaB'), []);
+  const glow = useMemo(() => gradId('vlaG'), []);
+  const GEM = '#e84fd0';
+  const leaf = (cx: number, cy: number, deg: number, key: string, tone: number) => (
+    <G key={key} transform={`rotate(${deg} ${cx} ${cy})`}>
+      <Ellipse cx={cx} cy={cy} rx="1.7" ry="0.8" fill={`url(#${gold})`} stroke={rim(accent)} strokeWidth="0.55" />
+      <Path d={`M${cx - 1.1} ${cy}h2.2`} stroke={shade(accent, tone)} strokeWidth="0.4" strokeLinecap="round" />
+    </G>
+  );
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={gold} from={shade(accent, 50)} to={shade(accent, -48)} />
+      <GlowGrad id={glow} color="#ffd24d" />
+      <Ground rx={6.8} cy={21.6} />
+      <Circle cx="12" cy="11.6" r="7.4" fill={`url(#${glow})`} opacity="0.5" />
+      {/* branch stems */}
+      <Path d="M11.2 20.4C8 19.4 5.9 17 5.1 13.6c-.5-2.1 0-4.2 1.4-6.2" fill="none" stroke={shade(accent, -30)} strokeWidth="0.85" strokeLinecap="round" />
+      <Path d="M12.8 20.4c3.2-1 5.3-3.4 6.1-6.8.5-2.1 0-4.2-1.4-6.2" fill="none" stroke={shade(accent, -30)} strokeWidth="0.85" strokeLinecap="round" />
+      {/* left branch leaves */}
+      {leaf(8.5, 18.9, -28, 'l1', -44)}
+      {leaf(6.6, 16.4, -52, 'l2', -44)}
+      {leaf(5.6, 13.3, -78, 'l3', -44)}
+      {leaf(5.9, 10.1, -104, 'l4', -44)}
+      {leaf(7.2, 7.4, -128, 'l5', -44)}
+      {/* right branch leaves */}
+      {leaf(15.5, 18.9, 28, 'r1', 40)}
+      {leaf(17.4, 16.4, 52, 'r2', 40)}
+      {leaf(18.4, 13.3, 78, 'r3', 40)}
+      {leaf(18.1, 10.1, 104, 'r4', 40)}
+      {leaf(16.8, 7.4, 128, 'r5', 40)}
+      {/* center star */}
+      <Path d="M12 7.2l1.35 2.75 3.05.45-2.2 2.15.5 3.05L12 14.2l-2.7 1.4.5-3.05-2.2-2.15 3.05-.45Z" fill={`url(#${gold})`} stroke={rim(accent)} strokeWidth="0.8" strokeLinejoin="round" />
+      <Path d="M10.9 9l.6-1.1" stroke="#ffffff" strokeWidth="0.7" strokeLinecap="round" />
+      {/* binding gem at the stems */}
+      <Path d="M12 19.2l1.5 1.25-.6 1.75h-1.8l-.6-1.75Z" fill={GEM} stroke={rim(GEM)} strokeWidth="0.55" strokeLinejoin="round" />
+      <Path d="M11.5 19.9l.5-.45" stroke="#ffffff" strokeWidth="0.5" strokeLinecap="round" />
+      <Circle cx="16.9" cy="4.9" r="0.35" fill="#ffffff" opacity="0.85" />
+      <Circle cx="7.4" cy="4.4" r="0.3" fill="#ffffff" opacity="0.7" />
+    </Svg>
+  );
+}
+
+/** VIP trophy: crowned chalice with scroll handles and a set gem — the
+ * 26-week VIP Legend decoration. */
+export function VipTrophyIcon({ size = 24, accent = '#e8b13f' }: IconProps) {
+  const gold = useMemo(() => gradId('vptB'), []);
+  const glow = useMemo(() => gradId('vptG'), []);
+  const gem = useMemo(() => gradId('vptJ'), []);
+  const DARK = '#33304a';
+  const GEM = '#e84fd0';
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={gold} from={shade(accent, 48)} to={shade(accent, -50)} />
+      <DuoGrad id={gem} from={shade(GEM, 58)} to={shade(GEM, -44)} />
+      <GlowGrad id={glow} color="#ffd24d" />
+      <Ground rx={6.8} cy={21.7} />
+      <Circle cx="12" cy="9" r="7" fill={`url(#${glow})`} opacity="0.55" />
+      {/* floating crown */}
+      <Path d="M9.2 4.9 9.6 2.6l1.5 1.1L12 1.7l.9 2 1.5-1.1.4 2.3Z" fill={`url(#${gold})`} stroke={rim(accent)} strokeWidth="0.7" strokeLinejoin="round" />
+      <Rect x="9" y="4.9" width="6" height="1" rx="0.35" fill={shade(accent, 26)} stroke={rim(accent)} strokeWidth="0.55" />
+      <Circle cx="12" cy="2.5" r="0.35" fill="#ffffff" opacity="0.9" />
+      {/* scroll handles */}
+      <Path d="M7.8 7.6C5.9 7.5 4.9 8.4 4.9 10c0 1.5 1 2.5 2.9 2.8" fill="none" stroke={`url(#${gold})`} strokeWidth="1.3" strokeLinecap="round" />
+      <Path d="M16.2 7.6c1.9-.1 2.9.8 2.9 2.4 0 1.5-1 2.5-2.9 2.8" fill="none" stroke={`url(#${gold})`} strokeWidth="1.3" strokeLinecap="round" />
+      <Circle cx="5.6" cy="9.9" r="0.5" fill={shade(accent, -34)} />
+      <Circle cx="18.4" cy="9.9" r="0.5" fill={shade(accent, -34)} />
+      {/* chalice cup */}
+      <Path d="M7.6 6.6h8.8v3.4c0 3.4-1.8 5.6-4.4 5.6s-4.4-2.2-4.4-5.6Z" fill={`url(#${gold})`} stroke={rim(accent)} strokeWidth="1" strokeLinejoin="round" />
+      <Ellipse cx="12" cy="6.6" rx="4.4" ry="1" fill={shade(accent, 30)} stroke={rim(accent)} strokeWidth="0.7" />
+      {/* set gem */}
+      <Path d="M12 8.6l1.9 1.55-.75 2.45h-2.3l-.75-2.45Z" fill={`url(#${gem})`} stroke={rim(GEM)} strokeWidth="0.6" strokeLinejoin="round" />
+      <Path d="M10.1 10.15h3.8M12 8.6l-.7 1.55.7 2.45.7-2.45Z" fill="none" stroke={shade(GEM, -46)} strokeWidth="0.4" strokeLinejoin="round" />
+      <Path d="M11.1 9.7l.55-.5" stroke="#ffffff" strokeWidth="0.55" strokeLinecap="round" />
+      <Path d="M8.5 7.7c-.1 2 .3 3.6 1.1 4.8" fill="none" stroke={HILITE} strokeWidth="0.9" strokeLinecap="round" />
+      {/* stem, collar, plinth */}
+      <Path d="M10.9 15.6h2.2l.5 2.2h-3.2Z" fill={`url(#${gold})`} stroke={rim(accent)} strokeWidth="0.8" strokeLinejoin="round" />
+      <Rect x="8" y="17.8" width="8" height="1.3" rx="0.4" fill={`url(#${gold})`} stroke={rim(accent)} strokeWidth="0.7" />
+      <Rect x="6.9" y="19.1" width="10.2" height="2.4" rx="0.7" fill={DARK} stroke={rim(DARK)} strokeWidth="0.9" />
+      <Rect x="9.7" y="19.7" width="4.6" height="1.15" rx="0.3" fill={`url(#${gold})`} stroke={rim(accent)} strokeWidth="0.5" />
+      <Path d="M15.7 3.9l.35.85.85.35-.85.35-.35.85-.35-.85-.85-.35.85-.35Z" fill="#ffffff" opacity="0.9" />
+      <Circle cx="7.1" cy="3.4" r="0.3" fill="#ffffff" opacity="0.7" />
+    </Svg>
+  );
+}

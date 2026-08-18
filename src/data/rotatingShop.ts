@@ -19,7 +19,7 @@ export interface RotatingItem {
 
 // ─── Item pool ───────────────────────────────────────────────────────────────
 
-const ROTATING_POOL: RotatingItem[] = [
+export const ROTATING_POOL: RotatingItem[] = [
   {
     id: 'theme_aurora',
     name: 'Aurora Borealis',

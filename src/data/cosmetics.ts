@@ -395,6 +395,9 @@ export const LIBRARY_DECORATIONS: LibraryDecoration[] = [
   { id: 'chapter_decoration', name: 'Chapter Decoration', description: 'Marks your chapter.', icon: '🔖', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
   { id: 'decoration_whale_trophy', name: 'Whale Trophy', description: 'For true patrons.', icon: '🐋', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
   { id: 'decoration_platinum_exclusive', name: 'Platinum Display', description: 'Platinum-cased pride.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+
+  // VIP streak ladder reward (26-week VIP Legend — granted, never purchasable)
+  { id: 'vip_trophy', name: 'VIP Trophy', description: 'Twenty-six weeks of VIP legend.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
 ];
 
 type FrameSeed = Omit<ProfileFrame, 'owned'> & { owned?: boolean };

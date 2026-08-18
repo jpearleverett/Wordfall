@@ -50,6 +50,9 @@ import {
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
 import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
+import { AchievementBadge } from '../components/cosmetics/AchievementBadge';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { DuoGrad, gradId, shade } from '../components/icons/IconBase';
 import {
   canPrestige,
   getPrestigeRewards,
@@ -622,107 +625,6 @@ function UsersGlyph({ size = 20, accent = COLORS.teal }: { size?: number; accent
   );
 }
 
-/** Drawn sun — gold gradient core with crossed ray bars. */
-function SunGlyph({ size = 20 }: { size?: number }) {
-  const core = size * 0.54;
-  const ray = { position: 'absolute' as const, width: size, height: size * 0.1, borderRadius: size * 0.05, backgroundColor: COLORS.gold + 'B3' };
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={ray} />
-      <View style={[ray, { transform: [{ rotate: '45deg' }] }]} />
-      <View style={[ray, { transform: [{ rotate: '90deg' }] }]} />
-      <View style={[ray, { transform: [{ rotate: '135deg' }] }]} />
-      <View style={{ width: core, height: core, borderRadius: core / 2, overflow: 'hidden' }}>
-        <LinearGradient
-          colors={[COLORS.goldLight, COLORS.gold]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-    </View>
-  );
-}
-
-/** Drawn clock — ring + hands + hub. */
-function ClockGlyph({ size = 20, accent = COLORS.orange }: { size?: number; accent?: string }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, borderWidth: size * 0.1, borderColor: accent }} />
-      <View style={{ position: 'absolute', width: size * 0.09, height: size * 0.3, borderRadius: size * 0.05, backgroundColor: accent, top: size * 0.18, left: size / 2 - size * 0.045 }} />
-      <View style={{ position: 'absolute', width: size * 0.26, height: size * 0.09, borderRadius: size * 0.05, backgroundColor: accent, top: size / 2 - size * 0.045, left: size / 2 - size * 0.02 }} />
-      <View style={{ width: size * 0.12, height: size * 0.12, borderRadius: size * 0.06, backgroundColor: COLORS.textPrimary }} />
-    </View>
-  );
-}
-
-/** Drawn crown — three diamond points over a gradient band. */
-function CrownGlyph({ size = 20, accent = COLORS.gold }: { size?: number; accent?: string }) {
-  const spike = (left: number, s: number, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        bottom: size * 0.26,
-        left,
-        width: s,
-        height: s,
-        backgroundColor: accent,
-        transform: [{ rotate: '45deg' }],
-      }}
-    />
-  );
-  return (
-    <View style={{ width: size, height: size, justifyContent: 'flex-end' }}>
-      {spike(size * 0.04, size * 0.28, 0)}
-      {spike(size * 0.36, size * 0.32, 1)}
-      {spike(size * 0.68, size * 0.28, 2)}
-      <View style={{ width: size * 0.92, alignSelf: 'center', height: size * 0.3, borderRadius: size * 0.06, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-        <LinearGradient
-          colors={[COLORS.goldLight, accent]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={{ width: size * 0.12, height: size * 0.12, borderRadius: size * 0.06, backgroundColor: 'rgba(8,2,22,0.55)' }} />
-      </View>
-    </View>
-  );
-}
-
-/** Drawn open book — two splayed gradient pages + spine. */
-function BookGlyph({ size = 20, accent = COLORS.purple }: { size?: number; accent?: string }) {
-  const page = (rot: string, left: number, key: number) => (
-    <View
-      key={key}
-      style={{
-        position: 'absolute',
-        bottom: size * 0.1,
-        left,
-        width: size * 0.42,
-        height: size * 0.64,
-        borderRadius: size * 0.06,
-        overflow: 'hidden',
-        transform: [{ rotate: rot }],
-      }}
-    >
-      <LinearGradient
-        colors={[accent + 'E6', accent + '73']}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-    </View>
-  );
-  return (
-    <View style={{ width: size, height: size }}>
-      {page('-8deg', size * 0.06, 0)}
-      {page('8deg', size * 0.52, 1)}
-      <View style={{ position: 'absolute', bottom: size * 0.08, left: size * 0.47, width: size * 0.06, height: size * 0.66, backgroundColor: 'rgba(8,2,22,0.6)' }} />
-    </View>
-  );
-}
-
 /** Per-stat drawn glyph in the stat's accent color. */
 function StatGlyph({ statKey, accent, size }: { statKey: string; accent: string; size: number }) {
   switch (statKey) {
@@ -744,20 +646,71 @@ function StatGlyph({ statKey, accent, size }: { statKey: string; accent: string;
   }
 }
 
-/** Maps a data-driven achievement emoji to a drawn glyph (star-burst fallback). */
-function AchievementGlyph({ icon, accent, size }: { icon: string; accent: string; size: number }) {
-  switch (icon.replace(/\uFE0F/g, '')) {
-    case '\u{1F525}': return <FlameGlyph size={size} />;
-    case '\u2600': return <SunGlyph size={size} />;
-    case '\u{1F48E}': return <DiamondGlyph size={size} accent={accent} />;
-    case '⏱': return <ClockGlyph size={size} accent={accent} />;
-    case '\u{1F451}': return <CrownGlyph size={size} accent={accent} />;
-    case '\u{1F4DA}': case '\u{1F4D6}': case '\u{1F4DD}': return <BookGlyph size={size} accent={accent} />;
-    case '\u{1F9E9}': case '\u{1F3AE}': return <TileGridGlyph size={size} accent={accent} />;
-    case '\u{1F3C5}': return <MedalGlyph size={size} accent={accent} />;
-    case '\u26A1': return <BoltGlyph size={size} accent={accent} />;
-    default: return <StarBurstGlyph size={size} accent={accent} />;
-  }
+// ─── Prestige tier marks — one distinct SVG mark per prestige tier ──────────
+
+/** Tier metal per prestige level: bronze / silver / gold / diamond / legendary. */
+const PRESTIGE_TIER_COLORS: Record<number, string> = {
+  1: COLORS.tierBronze,
+  2: COLORS.tierSilver,
+  3: COLORS.tierGold,
+  4: COLORS.cyan,
+  5: COLORS.accent,
+};
+
+/** Laurel leaf-dot anchor points (left branch; right branch mirrors on x). */
+const LAUREL_LEAVES = [
+  [5.2, 17.5],
+  [4.3, 14.3],
+  [4.6, 11.0],
+  [5.9, 8.2],
+] as const;
+
+/**
+ * PrestigeTierMark — laurel-flanked star in the tier's metal with one chevron
+ * pip per prestige level (I–V), so Bronze / Silver / Gold / Diamond /
+ * Legendary read apart at a glance instead of sharing one gold star burst.
+ */
+function PrestigeTierMark({ level, size = 24 }: { level: number; size?: number }) {
+  const tier = Math.max(1, Math.min(PRESTIGE_LEVELS.length, level));
+  const metal = PRESTIGE_TIER_COLORS[tier] ?? COLORS.gold;
+  const id = useMemo(() => gradId('prestigeTier'), []);
+  const laurel = shade(metal, -14);
+  const pipSpan = tier * 2.6 + (tier - 1) * 0.9;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <DuoGrad id={id} from={shade(metal, 62)} to={shade(metal, -38)} />
+      <Path d="M7.1 19.6 C4.2 16.9 3.3 12.2 5.5 8.2" stroke={laurel} strokeWidth={1.3} strokeLinecap="round" fill="none" />
+      <Path d="M16.9 19.6 C19.8 16.9 20.7 12.2 18.5 8.2" stroke={laurel} strokeWidth={1.3} strokeLinecap="round" fill="none" />
+      {LAUREL_LEAVES.map(([x, y], i) => (
+        <React.Fragment key={i}>
+          <Circle cx={x} cy={y} r={1.15} fill={metal} />
+          <Circle cx={24 - x} cy={y} r={1.15} fill={metal} />
+        </React.Fragment>
+      ))}
+      <Path
+        d="M12 4.4 L13.41 8.26 L17.52 8.41 L14.28 10.94 L15.41 14.89 L12 12.6 L8.59 14.89 L9.72 10.94 L6.48 8.41 L10.59 8.26 Z"
+        fill={`url(#${id})`}
+        stroke={shade(metal, -78)}
+        strokeWidth={0.7}
+        strokeLinejoin="round"
+      />
+      <Circle cx={10.9} cy={7.6} r={0.9} fill="rgba(255,255,255,0.55)" />
+      {Array.from({ length: tier }, (_, i) => {
+        const sx = 12 - pipSpan / 2 + i * 3.5;
+        return (
+          <Path
+            key={i}
+            d={`M${sx} 19.4 l1.3 1.6 l1.3 -1.6`}
+            stroke={metal}
+            strokeWidth={1.3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        );
+      })}
+    </Svg>
+  );
 }
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({
@@ -1076,12 +1029,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               />
-              <DrawnMedallion accent={COLORS.gold} size={40}>
-                {prestigeDef.icon === '\u{1F3C6}' ? (
-                  <TrophyGlyph size={20} accent={COLORS.gold} />
-                ) : (
-                  <StarBurstGlyph size={20} accent={COLORS.gold} />
-                )}
+              <DrawnMedallion accent={PRESTIGE_TIER_COLORS[prestigeLevel] ?? COLORS.gold} size={40}>
+                <PrestigeTierMark level={prestigeLevel} size={26} />
               </DrawnMedallion>
               <View style={{ flex: 1 }}>
                 <Text style={styles.prestigeBadgeLabel}>{prestigeDef.label}</Text>
@@ -1114,7 +1063,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 `Prestige to ${nextDef.label}?`,
                 `This will reset your level to 1 but you keep all cosmetics.\n\n` +
                 `You'll earn:\n` +
-                `  ${nextDef.icon} ${nextDef.label} prestige bonuses\n` +
+                `  ${nextDef.label} prestige bonuses\n` +
                 `  Exclusive ${nextDef.cosmeticReward.type}\n` +
                 summary.gains.map((g) => `  ${g}`).join('\n') +
                 `\n\nThis cannot be undone.`,
@@ -1140,7 +1089,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             />
-            <Text style={styles.prestigeButtonIcon}>{nextDef.icon}</Text>
+            <View style={styles.prestigeButtonMark}>
+              <PrestigeTierMark level={nextPrestige} size={32} />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.prestigeButtonTitle}>PRESTIGE</Text>
               <Text style={styles.prestigeButtonSub}>
@@ -1206,18 +1157,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
               />
-              <DrawnMedallion
-                accent={highestTier ? tierColor : COLORS.purple}
-                muted={!highestTier}
-                size={40}
-                style={{ marginBottom: 8 }}
-              >
-                <AchievementGlyph
-                  icon={achievement.icon}
-                  accent={highestTier ? tierColor : COLORS.purple}
-                  size={20}
+              <View style={{ marginBottom: 6 }}>
+                <AchievementBadge
+                  achievementId={achievement.id}
+                  earned={!!highestTier}
+                  tier={highestTier ?? undefined}
+                  size={56}
                 />
-              </DrawnMedallion>
+              </View>
               <Text style={styles.achievementName} numberOfLines={1}>{achievement.name}</Text>
               <View style={styles.tierDots}>
                 {achievement.tiers.map(t => {
@@ -1758,12 +1705,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
     ...SHADOWS.glow(COLORS.gold),
   },
-  prestigeButtonIcon: {
-    fontSize: 32,
+  prestigeButtonMark: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(8,2,22,0.32)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
-    textShadowColor: 'rgba(0,0,0,0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   prestigeButtonTitle: {
     fontSize: 18,
