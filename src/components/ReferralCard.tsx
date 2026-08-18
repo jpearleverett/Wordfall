@@ -16,6 +16,7 @@ import { COLORS, FONTS, SHADOWS, GRADIENTS } from '../constants';
 import { getNextMilestone, REFERRAL_MILESTONES } from '../data/referralSystem';
 import { buildReferralLink } from '../utils/deepLinking';
 import { crashReporter } from '../services/crashReporting';
+import GameIcon from './icons/GameIcon';
 
 interface ReferralCardProps {
   /** The player's 6-char referral code */
@@ -115,7 +116,9 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerIcon}>🎁</Text>
+          <View style={styles.headerIcon}>
+            <GameIcon name="gift" size={32} />
+          </View>
           <View style={styles.headerText}>
             <Text style={styles.title}>Invite Friends</Text>
             <Text style={styles.subtitle}>
@@ -180,9 +183,11 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
         {nextMilestone && (
           <View style={styles.milestoneSection}>
             <View style={styles.milestoneHeader}>
-              <Text style={styles.milestoneLabel}>
-                Next: {nextMilestone.icon} {nextMilestone.label}
-              </Text>
+              <View style={styles.milestoneLabelRow}>
+                <Text style={styles.milestoneLabel}>Next:</Text>
+                <GameIcon glyph={nextMilestone.icon} size={15} />
+                <Text style={styles.milestoneLabel}>{nextMilestone.label}</Text>
+              </View>
               <Text style={styles.milestoneCount}>
                 {referralCount}/{nextMilestone.count}
               </Text>
@@ -217,14 +222,11 @@ const ReferralCard: React.FC<ReferralCardProps> = ({
                   pressed && claimable && { transform: [{ scale: 0.92 }] },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.milestoneDotText,
-                    reached && styles.milestoneDotTextReached,
-                  ]}
-                >
-                  {claimed ? '✓' : m.icon}
-                </Text>
+                {claimed ? (
+                  <GameIcon name="check" size={20} />
+                ) : (
+                  <GameIcon glyph={m.icon} size={20} />
+                )}
                 <Text style={styles.milestoneDotCount}>{m.count}</Text>
               </Pressable>
             );
@@ -259,7 +261,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   headerIcon: {
-    fontSize: 28,
     marginRight: 12,
   },
   headerText: {
@@ -369,6 +370,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
+  milestoneLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   milestoneLabel: {
     fontFamily: FONTS.bodyMedium,
     fontSize: 13,
@@ -416,12 +422,6 @@ const styles = StyleSheet.create({
   milestoneDotClaimable: {
     borderColor: COLORS.gold,
     ...SHADOWS.glow(COLORS.gold),
-  },
-  milestoneDotText: {
-    fontSize: 18,
-  },
-  milestoneDotTextReached: {
-    // intentionally empty — reached dots keep their icon style
   },
   milestoneDotCount: {
     fontFamily: FONTS.bodySemiBold,

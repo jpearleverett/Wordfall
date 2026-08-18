@@ -8,6 +8,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { crashReporter } from '../services/crashReporting';
 import { FONTS } from '../constants';
+import GameIcon from './icons/GameIcon';
 
 interface Props {
   children: ReactNode;
@@ -52,7 +53,9 @@ class ErrorBoundary extends Component<Props, State> {
 
     return (
       <View style={ebStyles.container}>
-        <Text style={ebStyles.icon}>{'⚡'}</Text>
+        <View style={ebStyles.icon}>
+          <GameIcon name="bolt" size={64} />
+        </View>
         <Text style={ebStyles.title}>Something went wrong</Text>
         <Text style={ebStyles.subtitle}>
           The app ran into an unexpected error. Restarting should fix things.
@@ -89,7 +92,6 @@ const ebStyles = StyleSheet.create({
     padding: 32,
   },
   icon: {
-    fontSize: 56,
     marginBottom: 16,
   },
   title: {

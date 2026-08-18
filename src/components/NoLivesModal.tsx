@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, LIVES } from '../constants';
+import GameIcon from './icons/GameIcon';
 
 interface NoLivesModalProps {
   visible: boolean;
@@ -96,7 +97,9 @@ export const NoLivesModal: React.FC<NoLivesModalProps> = ({
           end={{ x: 1, y: 1 }}
           style={styles.card}
         >
-          <Text style={styles.heart}>💔</Text>
+          <View style={styles.heart}>
+            <GameIcon name="heart" size={55} accent="#8a4a5a" />
+          </View>
           <Text style={styles.title}>{t('lives.outOfLives')}</Text>
           <Text style={styles.subtitle}>
             {t('lives.youHaveOf', { current: livesRemaining, max: LIVES.max })}
@@ -177,7 +180,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...SHADOWS.soft,
   },
-  heart: { fontSize: 48, marginBottom: 4 },
+  heart: { marginBottom: 4 },
   title: {
     fontFamily: FONTS.bodyBold,
     fontSize: 22,

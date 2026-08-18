@@ -8,20 +8,30 @@ import {
   DailyQuestReward,
   getQuestTemplate,
 } from '../data/dailyQuests';
+import GameIcon, { GameIconName } from './icons/GameIcon';
 
 interface Props {
   quests: DailyQuest[];
   onClaim: (templateId: string) => void;
 }
 
-function rewardLabel(reward: DailyQuestReward): string {
-  const parts: string[] = [];
-  if (reward.coins) parts.push(`${reward.coins}🪙`);
-  if (reward.gems) parts.push(`${reward.gems}💎`);
-  if (reward.hintTokens) parts.push(`${reward.hintTokens}💡`);
-  if (reward.boosterTokens) parts.push(`${reward.boosterTokens}⚡`);
-  if (reward.xp) parts.push(`${reward.xp}XP`);
-  return parts.join(' ');
+function RewardLabel({ reward }: { reward: DailyQuestReward }) {
+  const parts: Array<{ amount: string; icon?: GameIconName }> = [];
+  if (reward.coins) parts.push({ amount: `${reward.coins}`, icon: 'coin' });
+  if (reward.gems) parts.push({ amount: `${reward.gems}`, icon: 'gem' });
+  if (reward.hintTokens) parts.push({ amount: `${reward.hintTokens}`, icon: 'hint' });
+  if (reward.boosterTokens) parts.push({ amount: `${reward.boosterTokens}`, icon: 'bolt' });
+  if (reward.xp) parts.push({ amount: `${reward.xp}XP` });
+  return (
+    <View style={styles.rewardRow}>
+      {parts.map((p, i) => (
+        <View key={i} style={styles.rewardPart}>
+          <Text style={styles.rewardLabel}>{p.amount}</Text>
+          {p.icon ? <GameIcon name={p.icon} size={13} /> : null}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 export default function DailyQuestsCard({ quests, onClaim }: Props) {
@@ -48,7 +58,7 @@ export default function DailyQuestsCard({ quests, onClaim }: Props) {
               <Text style={[styles.label, q.claimed && styles.labelDone]}>
                 {q.claimed ? '✓ ' : ''}{tpl.title}
               </Text>
-              <Text style={styles.rewardLabel}>{rewardLabel(tpl.reward)}</Text>
+              <RewardLabel reward={tpl.reward} />
             </View>
             <View style={styles.track}>
               <View
@@ -105,10 +115,20 @@ const styles = StyleSheet.create({
   labelDone: {
     color: COLORS.green,
   },
+  rewardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  rewardPart: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
   rewardLabel: {
     ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
-    marginTop: 2,
   },
   track: {
     width: 90,

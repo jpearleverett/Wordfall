@@ -7,8 +7,7 @@ import { COLORS, FONTS, GRADIENTS, SHADOWS, STREAK } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-
-const AnimatedText = Animated.createAnimatedComponent(Text);
+import GameIcon from './icons/GameIcon';
 
 interface StreakMilestoneCeremonyProps {
   milestone: number;
@@ -52,9 +51,9 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>{t('ceremony.streakMilestone')}</Text>
 
-          <AnimatedText style={[styles.fireEmoji, fireStyle]}>
-            🔥
-          </AnimatedText>
+          <Animated.View style={[styles.fireEmoji, fireStyle]}>
+            <GameIcon name="flame" size={69} />
+          </Animated.View>
 
           <Text style={styles.milestoneCount}>{milestone}</Text>
           <Text style={styles.milestoneLabel}>{t('ceremony.days')}</Text>
@@ -125,7 +124,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   fireEmoji: {
-    fontSize: 60,
     marginBottom: 8,
   },
   milestoneCount: {

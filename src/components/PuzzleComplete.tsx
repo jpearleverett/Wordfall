@@ -41,6 +41,7 @@ import { ShareCard } from './ShareCard';
 import { useShareVictory } from '../hooks/useShareVictory';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { isCeremonyVisible } from '../hooks/useCeremonyQueue';
+import GameIcon from './icons/GameIcon';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -486,7 +487,7 @@ function OneMoreLevelHooks({ level, stars, statsAnim }: { level: number; stars: 
           style={hookStyles.milestoneCard}
         >
           <IconMedallion tint={COLORS.gold} size={34}>
-            <Text style={hookStyles.milestoneIcon}>{'🎯'}</Text>
+            <GameIcon name="target" size={17} />
           </IconMedallion>
           <Text style={hookStyles.milestoneText}>{milestoneMsg}</Text>
         </LinearGradient>
@@ -838,7 +839,10 @@ export function PuzzleComplete({
                   },
                 ]}
               >
-                <Text style={styles.ribbonText}>{perfectRun ? '✨ PERFECT RUN' : isDaily ? '☀ DAILY WIN' : '🏆 STAGE COMPLETE'}</Text>
+                <View style={styles.ribbonRow}>
+                  <GameIcon name={perfectRun ? 'sparkle' : isDaily ? 'sun' : 'trophy'} size={14} />
+                  <Text style={styles.ribbonText}>{perfectRun ? 'PERFECT RUN' : isDaily ? 'DAILY WIN' : 'STAGE COMPLETE'}</Text>
+                </View>
               </Animated.View>
 
               {/* Chrome title with VHS glitch entrance */}
@@ -991,8 +995,9 @@ export function PuzzleComplete({
                     accessibilityRole="button"
                     accessibilityLabel="Watch ad to double rewards"
                   >
-                    <Text style={{ color: COLORS.green, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5 }}>
-                      {'\uD83C\uDFAC'} Watch Ad to DOUBLE Rewards
+                    <GameIcon name="frame" size={15} />
+                    <Text style={{ color: COLORS.green, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5, marginLeft: 6 }}>
+                      Watch Ad to DOUBLE Rewards
                     </Text>
                   </Pressable>
                 )}
@@ -1009,8 +1014,9 @@ export function PuzzleComplete({
                     borderColor: 'rgba(255, 184, 0, 0.35)',
                     marginTop: 8,
                   }}>
-                    <Text style={{ color: COLORS.gold, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5 }}>
-                      {'\u2728'} Rewards DOUBLED!
+                    <GameIcon name="sparkle" size={15} />
+                    <Text style={{ color: COLORS.gold, fontSize: 13, fontFamily: FONTS.display, letterSpacing: 0.5, marginLeft: 6 }}>
+                      Rewards DOUBLED!
                     </Text>
                   </View>
                 )}
@@ -1020,7 +1026,7 @@ export function PuzzleComplete({
               {isFirstWin && (
                 <Animated.View style={[styles.levelUpBadge, { backgroundColor: COLORS.gold + '20', borderColor: COLORS.gold + '40', opacity: statsAnim }]}>
                   <IconMedallion tint={COLORS.gold} size={36}>
-                    <Text style={styles.levelUpEmoji}>{'\uD83C\uDF89'}</Text>
+                    <GameIcon name="sparkle" size={18} />
                   </IconMedallion>
                   <View>
                     <Text style={[styles.levelUpText, { color: COLORS.gold }]}>{t('result.welcomeToWordfall')}</Text>
@@ -1048,7 +1054,7 @@ export function PuzzleComplete({
                         style={[styles.summaryItem, { backgroundColor: item.accentColor + '15', borderColor: item.accentColor + '30' }]}
                       >
                         <IconMedallion tint={item.accentColor} size={34}>
-                          <Text style={styles.summaryItemIcon}>{item.icon}</Text>
+                          <GameIcon glyph={item.icon} size={17} />
                         </IconMedallion>
                         <View style={styles.summaryItemText}>
                           <Text style={[styles.summaryItemLabel, { color: item.accentColor }]}>{item.label}</Text>
@@ -1090,7 +1096,7 @@ export function PuzzleComplete({
               {friendComparison && friendComparison.total > 0 && (
                 <Animated.View style={[styles.friendCompare, { opacity: statsAnim }]}>
                   <IconMedallion tint={COLORS.cyan} size={28}>
-                    <Text style={styles.friendCompareIcon}>👥</Text>
+                    <GameIcon name="people" size={14} />
                   </IconMedallion>
                   <Text style={styles.friendCompareText}>
                     You beat {friendComparison.beaten} of {friendComparison.total} friends!
@@ -1117,7 +1123,7 @@ export function PuzzleComplete({
                       tint={nextUnlockPreview.unlockLevel - level <= 1 ? COLORS.gold : COLORS.purple}
                       size={36}
                     >
-                      <Text style={styles.nextUnlockIcon}>{nextUnlockPreview.icon}</Text>
+                      <GameIcon glyph={nextUnlockPreview.icon} size={18} />
                     </IconMedallion>
                     <View style={styles.nextUnlockInfo}>
                       <Text style={[
@@ -1336,6 +1342,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+  },
+  ribbonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   ribbonText: {
     color: COLORS.gold,
@@ -1712,10 +1723,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.accent + '30',
   },
-  levelUpEmoji: {
-    fontSize: 16,
-    textAlign: 'center',
-  },
   levelUpText: {
     color: COLORS.accent,
     fontSize: 12,
@@ -1739,10 +1746,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 10,
     borderWidth: 1,
-  },
-  summaryItemIcon: {
-    fontSize: 15,
-    textAlign: 'center',
   },
   summaryItemText: {
     flex: 1,
@@ -1780,10 +1783,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: 'rgba(168,85,247,0.25)',
-  },
-  nextUnlockIcon: {
-    fontSize: 16,
-    textAlign: 'center',
   },
   nextUnlockInfo: {
     flex: 1,
@@ -1823,10 +1822,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(0, 212, 255, 0.15)',
-  },
-  friendCompareIcon: {
-    fontSize: 12,
-    textAlign: 'center',
   },
   friendCompareText: {
     color: COLORS.accent,
@@ -1894,10 +1889,6 @@ const hookStyles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,215,0,0.15)',
-  },
-  milestoneIcon: {
-    fontSize: 15,
-    textAlign: 'center',
   },
   milestoneText: {
     flex: 1,

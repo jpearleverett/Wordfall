@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
+import GameIcon from './icons/GameIcon';
 
 /**
  * General-purpose milestone ceremony for celebrations that don't need
@@ -77,7 +78,7 @@ export function MilestoneCeremony({
             style={iconStyle}
           >
             <View style={[styles.iconBg, { backgroundColor: accentColor + '20', borderColor: accentColor + '40' }]}>
-              <Text style={styles.icon}>{icon}</Text>
+              <GameIcon glyph={icon} size={41} />
             </View>
           </Animated.View>
 
@@ -88,7 +89,7 @@ export function MilestoneCeremony({
             <View style={styles.tipsBox}>
               {tips.map((tip) => (
                 <View key={tip.text} style={styles.tipRow}>
-                  <Text style={styles.tipIcon}>{tip.icon}</Text>
+                  <GameIcon glyph={tip.icon} size={17} />
                   <Text style={styles.tipText}>{tip.text}</Text>
                 </View>
               ))}
@@ -154,9 +155,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     marginBottom: 16,
   },
-  icon: {
-    fontSize: 36,
-  },
   title: {
     fontSize: 22,
     fontFamily: FONTS.display,
@@ -182,9 +180,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  tipIcon: {
-    fontSize: 15,
   },
   tipText: {
     flex: 1,
