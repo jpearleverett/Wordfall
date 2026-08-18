@@ -106,7 +106,7 @@ interface HomeScreenProps {
   /** Segment-driven welcome back message for at-risk/lapsed/returned players */
   segmentWelcomeMessage?: { title: string; subtitle: string } | null;
   /** Active event banners to display */
-  activeEventBanners?: Array<{ id: string; name: string; icon: string; label: string; color: string }>;
+  activeEventBanners?: Array<{ id: string; name: string; icon: string; label: string; color: string; description?: string; endMs?: number }>;
   /** Navigate to event screen */
   onOpenEvents?: () => void;
   /** Navigate to library screen */
@@ -723,31 +723,50 @@ export function HomeScreen({
             transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [48, 0] }) }],
           }}
         >
-          {activeEventBanners.map((eb) => (
-            <Pressable
-              key={eb.id}
-              style={({ pressed }) => [pressed && styles.buttonPressed]}
-              onPress={onOpenEvents}
-              accessibilityRole="button"
-              accessibilityLabel={`Event: ${eb.name}. Tap to view`}
-            >
-              <LinearGradient
-                colors={[eb.color + '55', eb.color + '35'] as [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.eventBanner, { borderColor: eb.color + '60' }]}
+          {activeEventBanners.map((eb) => {
+            const daysLeft = eb.endMs
+              ? Math.max(0, Math.ceil((eb.endMs - Date.now()) / 86400000))
+              : null;
+            return (
+              <Pressable
+                key={eb.id}
+                style={({ pressed }) => [pressed && styles.buttonPressed]}
+                onPress={onOpenEvents}
+                accessibilityRole="button"
+                accessibilityLabel={`Event: ${eb.name}. Tap to view`}
               >
-                <View style={{ marginRight: 12 }}>
-                  <GameIcon glyph={eb.icon} size={32} />
-                </View>
-                <View style={styles.eventBannerInfo}>
-                  <Text style={[styles.eventBannerLabel, { color: eb.color }]}>{eb.label}</Text>
-                  <Text style={styles.eventBannerName}>{eb.name}</Text>
-                </View>
-                <Text style={[styles.eventBannerArrow, { color: eb.color }]}>{'\u{203A}'}</Text>
-              </LinearGradient>
-            </Pressable>
-          ))}
+                <LinearGradient
+                  colors={[eb.color + '55', eb.color + '25', COLORS.surface] as [string, string, string]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.eventBanner, { borderColor: eb.color + '60' }]}
+                >
+                  <View style={styles.eventBannerTopRow}>
+                    <Text style={[styles.eventBannerLabel, { color: eb.color }]}>{eb.label}</Text>
+                    {daysLeft != null && (
+                      <View style={[styles.eventBannerEndsChip, { borderColor: eb.color + '70' }]}>
+                        <Text style={[styles.eventBannerEndsText, { color: eb.color }]}>
+                          {daysLeft <= 1 ? 'ENDS TODAY' : `${daysLeft}D LEFT`}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.eventBannerBody}>
+                    <View style={[styles.eventBannerMedallion, { borderColor: eb.color + '55', backgroundColor: eb.color + '22' }]}>
+                      <GameIcon glyph={eb.icon} size={34} />
+                    </View>
+                    <View style={styles.eventBannerInfo}>
+                      <Text style={styles.eventBannerName} numberOfLines={1}>{eb.name}</Text>
+                      {!!eb.description && (
+                        <Text style={styles.eventBannerDesc} numberOfLines={2}>{eb.description}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={[styles.eventBannerCta, { color: eb.color }]}>JOIN THE EVENT {'\u{203A}'}</Text>
+                </LinearGradient>
+              </Pressable>
+            );
+          })}
         </Animated.View>
       )}
       {/* Mystery Wheel Button */}
@@ -2183,12 +2202,38 @@ const styles = StyleSheet.create({
   // Event banner — Bento pink (event.color overrides borderColor at call site)
   eventBanner: {
     ...bentoPanel('pink'),
+    padding: 14,
+    minHeight: 186,
+    justifyContent: 'space-between',
+  },
+  eventBannerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    justifyContent: 'space-between',
   },
-  eventBannerIcon: {
-    fontSize: 28,
+  eventBannerEndsChip: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  eventBannerEndsText: {
+    fontSize: 9,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+  },
+  eventBannerBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  eventBannerMedallion: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
   eventBannerInfo: {
@@ -2198,15 +2243,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: FONTS.bodyBold,
     letterSpacing: 1.5,
-    marginBottom: 2,
   },
   eventBannerName: {
-    fontSize: 15,
-    fontFamily: FONTS.bodySemiBold,
+    fontSize: 17,
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
+    marginBottom: 3,
   },
-  eventBannerArrow: {
-    fontSize: 24,
+  eventBannerDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.textSecondary,
+  },
+  eventBannerCta: {
+    fontSize: 12,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+    textAlign: 'right',
   },
   // Onboarding milestone banner — Bento gold
   // Purple-family wash (was a mustard-gold gradient the Aug 2026 blind
