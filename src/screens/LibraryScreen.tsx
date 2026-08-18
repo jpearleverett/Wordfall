@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
+  Alert,
   Animated,
   View,
   Text,
@@ -9,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { COLORS, GRADIENTS, FONTS, SHADOWS, RADIUS, LIBRARY, MILESTONE_DECORATIONS } from '../constants';
 import { SkeletonCard, SkeletonGrid } from '../components/common/Skeleton';
 import ScreenScaffold from '../components/common/ScreenScaffold';
@@ -28,10 +29,18 @@ import {
   selectStarsByLevel,
   selectTooltipsShown,
 } from '../stores/playerStore';
-import { CHAPTERS } from '../data/chapters';
+import { CHAPTERS, getChapterForLevel, getLastLevelOfChapter } from '../data/chapters';
 import { Chapter } from '../types';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
+import { getWing, LIBRARIAN, folioGreeting, WingDef } from '../data/library';
+import GrandLibraryScene, { SceneWing, WingSceneState } from '../components/library/GrandLibraryScene';
+import { OwlIcon } from '../components/icons/iconsMisc';
+import PrimaryButton from '../components/common/PrimaryButton';
+import { useEconomy } from '../contexts/EconomyContext';
+import { getDecoration } from '../data/cosmetics';
+import { generateBoard } from '../engine/boardGenerator';
+import { getLevelConfigExtended } from '../engine/puzzleGenerator';
 
 const { width } = Dimensions.get('window');
 
@@ -93,140 +102,55 @@ function SvgMedallion({
   );
 }
 
-// Wing theming on the synthwave palette (COLORS tokens). The original
-// hand-picked Material Design hexes (#4caf50, #2196f3, …) read as a
-// different app sitting inside the neon shell — and the science aura was
-// accidentally pink. Auras are the wing color at 16% alpha.
-const WING_META: Record<string, { name: string; icon: string; color: string; aura: string }> = {
-  nature: { name: 'Nature', icon: '\u{1F33F}', color: COLORS.green, aura: 'rgba(0, 255, 135, 0.16)' },
-  science: { name: 'Science', icon: '\u{1F52C}', color: COLORS.cyan, aura: 'rgba(0, 229, 255, 0.16)' },
-  mythology: { name: 'Mythology', icon: '\u26A1', color: COLORS.gold, aura: 'rgba(255, 184, 0, 0.16)' },
-  ocean: { name: 'Ocean', icon: '\u{1F30A}', color: COLORS.teal, aura: 'rgba(0, 245, 212, 0.16)' },
-  arts: { name: 'Arts', icon: '\u{1F3A8}', color: COLORS.accent, aura: 'rgba(255, 45, 149, 0.16)' },
-  space: { name: 'Space', icon: '\u{1F680}', color: COLORS.purple, aura: 'rgba(200, 77, 255, 0.16)' },
-  history: { name: 'History', icon: '\u{1F4DC}', color: COLORS.orange, aura: 'rgba(255, 106, 0, 0.16)' },
-  elements: { name: 'Elements', icon: '\u2728', color: COLORS.coral, aura: 'rgba(255, 68, 102, 0.16)' },
-};
+// ─── Decoration metadata resolver ───────────────────────────────────────────
+// The grid used to render MILESTONE_DECORATIONS only, which made decorations
+// bought in the cosmetic store (LIBRARY_DECORATIONS) or granted by seasons /
+// events invisible — owned but unplaceable. This resolver checks the
+// milestone table first, then the cosmetics catalog, and finally falls back
+// to a humanized id so ANY owned decoration renders and can be placed.
+
+interface DecorationMeta {
+  id: string;
+  name: string;
+  /** Emoji glyph — resolved to the bespoke SVG set via GameIcon's glyph map. */
+  glyph: string;
+  /** Flavor description (cosmetics catalog entries carry one). */
+  description?: string;
+  /** Unlock level, when the decoration is a milestone reward. */
+  level?: number;
+}
+
+function humanizeDecorationId(id: string): string {
+  return id
+    .replace(/^(decoration|deco)_/, '')
+    .split('_')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function getDecorationMeta(id: string): DecorationMeta {
+  const milestone = MILESTONE_DECORATIONS.find((m) => m.decoration === id);
+  if (milestone) {
+    return { id, name: milestone.name, glyph: milestone.icon, level: milestone.level };
+  }
+  const catalog = getDecoration(id);
+  if (catalog) {
+    return { id, name: catalog.name, glyph: catalog.icon, description: catalog.description };
+  }
+  // Season / event grants outside both catalogs still render gracefully.
+  // The sparkle glyph resolves to GameIcon's 'sparkle' SVG.
+  return {
+    id,
+    name: humanizeDecorationId(id),
+    glyph: '\u2728',
+    description: 'A rare curiosity Folio has not finished cataloguing.',
+  };
+}
 
 // Hero stat tiles each own an accent so the row reads as crafted gem chips
 // (mirrors HomeScreen's hero stat treatment) instead of flat web boxes.
 const HERO_STAT_ACCENTS = [COLORS.cyan, COLORS.accent, COLORS.gold] as const;
-
-// ─── Bookshelf vignette ─────────────────────────────────────────────────────
-// Hand-built illustrated hero shelf, replacing the color-bar placeholder:
-// varied book heights/widths/tilts, spine gradients with a highlight edge and
-// thin title lines, a warm reading lamp, and wood shelf boards with depth
-// shadows. Pure Views + LinearGradients — no image assets.
-
-interface BookSpec {
-  w: number;
-  h: number;
-  colors: [string, string];
-  tilt?: string;
-  lines?: number;
-}
-
-const BOOKS_TOP: BookSpec[] = [
-  { w: 17, h: 46, colors: ['#00e5ff', '#00708c'], lines: 2 },
-  { w: 14, h: 40, colors: ['#ffd24d', '#c28400'], tilt: '-6deg', lines: 1 },
-  { w: 20, h: 52, colors: ['#d8a5ff', '#7c3aed'], lines: 3 },
-  { w: 15, h: 37, colors: ['#ff6eb8', '#b3125f'], lines: 1 },
-  { w: 18, h: 48, colors: ['#ffcc70', '#c26414'], tilt: '5deg', lines: 2 },
-];
-
-const BOOKS_BOTTOM: BookSpec[] = [
-  { w: 16, h: 42, colors: ['#66ff99', '#1d7a3d'], lines: 2 },
-  { w: 21, h: 53, colors: ['#00f5d4', '#00776b'], lines: 3 },
-  { w: 14, h: 36, colors: ['#ffd24d', '#c28400'], tilt: '7deg', lines: 1 },
-  { w: 18, h: 49, colors: ['#ff6eb8', '#b3125f'], tilt: '-5deg', lines: 2 },
-  { w: 16, h: 44, colors: ['#d8a5ff', '#7c3aed'], lines: 2 },
-];
-
-const BookSpine: React.FC<{ spec: BookSpec }> = ({ spec }) => (
-  <View
-    style={[
-      styles.bookOuter,
-      { width: spec.w, height: spec.h },
-      spec.tilt ? { transform: [{ rotate: spec.tilt }] } : null,
-    ]}
-  >
-    <LinearGradient
-      colors={spec.colors}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.bookBody}
-    >
-      <View style={styles.bookEdgeHighlight} />
-      <View style={styles.bookTitleLines}>
-        {Array.from({ length: spec.lines ?? 2 }, (_, i) => (
-          <View key={i} style={styles.bookTitleLine} />
-        ))}
-      </View>
-      <View style={styles.bookFootBand} />
-    </LinearGradient>
-  </View>
-);
-
-const ShelfBoard: React.FC = () => (
-  <View style={styles.shelfBoardWrap}>
-    <LinearGradient
-      colors={['#a8713d', '#6e4522', '#41260f'] as [string, string, string]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
-      style={styles.shelfBoard}
-    >
-      <View style={styles.shelfBoardHighlight} />
-    </LinearGradient>
-    <LinearGradient
-      colors={['rgba(0,0,0,0.45)', 'transparent'] as [string, string]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
-      style={styles.shelfShadow}
-    />
-  </View>
-);
-
-const BookshelfVignette: React.FC = () => (
-  <View style={styles.shelfScene}>
-    <View style={styles.shelfAmbientGlow} />
-    <LinearGradient
-      colors={['rgba(14,18,50,0.85)', 'rgba(10,13,36,0.70)'] as [string, string]}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.shelfArch}
-    >
-      <View style={styles.lampGlowOuter} pointerEvents="none" />
-      <View style={styles.lampGlowInner} pointerEvents="none" />
-      <View style={styles.bookRow}>
-        {BOOKS_TOP.map((spec, i) => (
-          <BookSpine key={i} spec={spec} />
-        ))}
-        <View style={styles.lamp}>
-          <View style={styles.lampBulbGlow} />
-          <LinearGradient
-            colors={['#ffe9a8', '#ffb800'] as [string, string]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={styles.lampShade}
-          />
-          <View style={styles.lampStem} />
-          <View style={styles.lampBase} />
-        </View>
-      </View>
-      <ShelfBoard />
-      <View style={styles.bookRow}>
-        <View style={styles.flatStack}>
-          <View style={[styles.flatBook, { backgroundColor: '#7c3aed', width: 30 }]} />
-          <View style={[styles.flatBook, { backgroundColor: '#0aa2c0', width: 26 }]} />
-        </View>
-        {BOOKS_BOTTOM.map((spec, i) => (
-          <BookSpine key={i} spec={spec} />
-        ))}
-      </View>
-      <ShelfBoard />
-    </LinearGradient>
-  </View>
-);
 
 interface LibraryScreenProps {
   restoredWings?: string[];
@@ -249,6 +173,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const tooltipsShown = usePlayerStore(selectTooltipsShown);
   const { placeDecoration, markTooltipShown } = usePlayerActions();
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
+  const { libraryPoints } = useEconomy();
   const showDecorations = route.params?.showDecorations === true;
   const restoredWings = restoredWingsProp ?? restoredWingsFromStore;
   const currentChapter = currentChapterProp ?? currentChapterFromStore;
@@ -261,10 +187,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   );
   const scrollViewRef = useRef<ScrollView>(null);
   const decorationsPanelY = useRef(0);
+  const featurePanelY = useRef(0);
   const hasAutoScrolled = useRef(false);
 
   const onDecorationsPanelLayout = useCallback((e: { nativeEvent: { layout: { y: number } } }) => {
     decorationsPanelY.current = e.nativeEvent.layout.y;
+  }, []);
+
+  const onFeaturePanelLayout = useCallback((e: { nativeEvent: { layout: { y: number } } }) => {
+    featurePanelY.current = e.nativeEvent.layout.y;
   }, []);
 
   // Auto-scroll to decorations and open picker when navigating from victory modal
@@ -287,11 +218,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
+  // Wing identity (name/icon/accent/aura/tagline/lore) comes from the
+  // canonical WINGS catalog via getWing(); chapter grouping stays local.
   const wings = useMemo(() => {
     const wingIds = Array.from(new Set(CHAPTERS.map((chapter) => chapter.wingId)));
     return wingIds.map((wingId) => ({
-      id: wingId,
-      ...WING_META[wingId],
+      def: getWing(wingId),
       chapters: CHAPTERS.filter((chapter) => chapter.wingId === wingId),
     }));
   }, []);
@@ -322,7 +254,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   }, [wingAnims, reduceMotion]);
 
   const totalLibraryStars = Object.values(starsByLevel).reduce((sum, value) => sum + value, 0);
-  const selectedWingData = wings.find((wing) => wing.id === selectedWing) ?? wings[0];
 
   const getWingProgress = (chapters: Chapter[]) => {
     const completed = chapters.filter((chapter) => chapter.id < currentChapter).length;
@@ -337,9 +268,93 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     return 'locked';
   };
 
+  // Scene state per wing: restored (in restoredWings), current (holds the
+  // active chapter), else ruined.
+  const getWingState = (wing: { def: WingDef; chapters: Chapter[] }): WingSceneState => {
+    if (restoredWings.includes(wing.def.id)) return 'restored';
+    if (wing.chapters.some((chapter) => chapter.id === currentChapter)) return 'current';
+    return 'ruined';
+  };
+
+  const currentWing = wings.find((wing) => wing.chapters.some((ch) => ch.id === currentChapter));
+  const selectedWingData =
+    wings.find((wing) => wing.def.id === selectedWing) ?? currentWing ?? wings[0];
   const selectedProgress = getWingProgress(selectedWingData.chapters);
-  const nextWingToRestore = wings.find((wing) => !restoredWings.includes(wing.id));
+  const selectedWingState = getWingState(selectedWingData);
+  const nextWingToRestore = wings.find((wing) => !restoredWings.includes(wing.def.id));
   const nextMilestoneStars = CHAPTERS.find((chapter) => chapter.id === currentChapter + 1)?.requiredStars;
+
+  const sceneWings: SceneWing[] = wings.map((wing) => ({
+    def: wing.def,
+    state: getWingState(wing),
+    progress: getWingProgress(wing.chapters) / 100,
+  }));
+
+  // Folio's greeting, computed from live state.
+  const placedIds = new Set(Object.values(decorations));
+  const hasUnplacedDecoration =
+    restoredWings.some((id) => !decorations[id]) &&
+    ownedDecorations.some((id) => !placedIds.has(id));
+  const chaptersToNextWing = nextWingToRestore
+    ? nextWingToRestore.chapters.filter((chapter) => chapter.id >= currentChapter).length
+    : null;
+  const greeting = folioGreeting({
+    restoredCount: restoredWings.length,
+    nextWingName: nextWingToRestore?.def.name ?? null,
+    chaptersToNextWing,
+    hasUnplacedDecoration,
+  });
+
+  // Tapping a scene alcove selects that wing and scrolls to the feature panel.
+  const handleSceneWingPress = useCallback((wingId: string) => {
+    setSelectedWing(wingId);
+    scrollViewRef.current?.scrollTo({ y: featurePanelY.current, animated: true });
+  }, []);
+
+  // Launch a classic-mode level the same way HomeScreen / the deep-link
+  // mapping do: generate the board here, then cross-tab navigate into the
+  // Play stack's Game screen.
+  const launchLevel = useCallback(
+    (level: number) => {
+      try {
+        const config = getLevelConfigExtended(level);
+        const chapter = getChapterForLevel(level);
+        const board = generateBoard(
+          config,
+          Date.now() + level * 1337,
+          'classic',
+          chapter?.profile,
+          chapter?.themeWords,
+        );
+        navigation.getParent()?.navigate('Play', {
+          screen: 'Game',
+          params: { board, level, mode: 'classic', isDaily: false },
+        });
+      } catch {
+        Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
+      }
+    },
+    [navigation],
+  );
+
+  const activeChapter = selectedWingData.chapters.find((ch) => ch.id === currentChapter);
+  const firstChapterId = selectedWingData.chapters[0]?.id ?? 1;
+  const wingFirstLevel = firstChapterId <= 1 ? 1 : getLastLevelOfChapter(firstChapterId - 1) + 1;
+
+  // Unified decoration grid: every milestone decoration (locked or owned)
+  // PLUS any owned decoration from other sources (cosmetic store, seasons,
+  // events) not already covered by the milestone table.
+  const decorationGridItems = useMemo(() => {
+    const milestoneIds = new Set(MILESTONE_DECORATIONS.map((m) => m.decoration));
+    const milestoneItems = MILESTONE_DECORATIONS.map((m) => ({
+      meta: getDecorationMeta(m.decoration),
+      owned: ownedDecorations.includes(m.decoration),
+    }));
+    const extraItems = ownedDecorations
+      .filter((id) => !milestoneIds.has(id))
+      .map((id) => ({ meta: getDecorationMeta(id), owned: true }));
+    return [...milestoneItems, ...extraItems];
+  }, [ownedDecorations]);
 
   const heroStats = [
     { label: 'Level', value: currentLevel },
@@ -425,7 +440,38 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <Text style={styles.heroSubtitle}>
               {restoredWings.length} of {wings.length} wings rebuilt {'•'} {totalLibraryStars} stars collected {'•'} Chapter {currentChapter} active
             </Text>
-            <BookshelfVignette />
+
+            {/* Illustrated Grand Library hall — tappable wing alcoves. */}
+            <View style={styles.sceneWrap}>
+              <GrandLibraryScene
+                wings={sceneWings}
+                selectedWingId={selectedWingData.def.id}
+                onWingPress={handleSceneWingPress}
+                width={Math.min(width - 76, 390)}
+              />
+            </View>
+
+            {/* Folio speech card */}
+            <View style={styles.folioRow}>
+              <View style={styles.folioDisc}>
+                <OwlIcon size={26} />
+              </View>
+              <View
+                style={styles.folioBubble}
+                accessible
+                accessibilityLabel={`${LIBRARIAN.name} says: ${greeting}`}
+              >
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.10)', 'rgba(26,10,46,0.90)'] as [string, string]}
+                  style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                />
+                <View style={styles.folioBubbleTail} />
+                <Text style={styles.folioText}>{greeting}</Text>
+                <Text style={styles.folioAttribution}>{'— '}{LIBRARIAN.title}</Text>
+              </View>
+            </View>
 
             <View style={styles.heroStatsRow}>
               {heroStats.map((stat, statIndex) => {
@@ -458,13 +504,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               <Text style={styles.nextGoalLabel}>Next restoration goal</Text>
               <View style={styles.nextGoalTitleRow}>
                 <SvgMedallion
-                  glyph={nextWingToRestore ? nextWingToRestore.icon : '\u2728'}
-                  accent={nextWingToRestore ? nextWingToRestore.color : COLORS.gold}
+                  name={nextWingToRestore ? nextWingToRestore.def.icon : 'sparkle'}
+                  accent={nextWingToRestore ? nextWingToRestore.def.accent : COLORS.gold}
                   size={36}
                   shape="squircle"
                 />
                 <Text style={styles.nextGoalTitle}>
-                  {nextWingToRestore ? `${nextWingToRestore.name} Wing` : 'Entire library restored'}
+                  {nextWingToRestore ? `${nextWingToRestore.def.name} Wing` : 'Entire library restored'}
                 </Text>
               </View>
               <Text style={styles.nextGoalMeta}>
@@ -489,15 +535,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <View style={styles.overviewGrid}>
               {wings.map((wing, wingIndex) => {
                 const progress = getWingProgress(wing.chapters);
-                const isRestored = restoredWings.includes(wing.id);
-                const isSelected = selectedWingData.id === wing.id;
+                const isRestored = restoredWings.includes(wing.def.id);
+                const isSelected = selectedWingData.def.id === wing.def.id;
                 const isLocked = progress === 0 && !isRestored;
                 const shelvesRestored = Math.round((progress / 100) * LIBRARY.shelvesPerWing);
                 const anim = wingAnims[wingIndex];
 
                 return (
                   <Animated.View
-                    key={wing.id}
+                    key={wing.def.id}
                     style={{
                       opacity: anim,
                       transform: [
@@ -510,22 +556,22 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       style={({ pressed }) => [
                         styles.overviewWing,
                         {
-                          borderColor: isRestored || isSelected ? wing.color : 'rgba(255,255,255,0.12)',
-                          shadowColor: isRestored || isSelected ? wing.color : '#000',
+                          borderColor: isRestored || isSelected ? wing.def.accent : 'rgba(255,255,255,0.12)',
+                          shadowColor: isRestored || isSelected ? wing.def.accent : '#000',
                           shadowOpacity: isRestored ? 0.5 : isSelected ? 0.35 : 0.15,
                           opacity: isLocked ? 0.55 : 1,
                         },
                         isRestored && { borderWidth: 1.5 },
                         pressed && styles.cardPressed,
                       ]}
-                      onPress={() => setSelectedWing(wing.id)}
+                      onPress={() => setSelectedWing(wing.def.id)}
                       accessibilityRole="button"
-                      accessibilityLabel={`${wing.name} wing, ${isRestored ? 'restored' : isLocked ? 'locked' : `${shelvesRestored} of ${LIBRARY.shelvesPerWing} shelves restored`}`}
+                      accessibilityLabel={`${wing.def.name} wing, ${isRestored ? 'restored' : isLocked ? 'locked' : `${shelvesRestored} of ${LIBRARY.shelvesPerWing} shelves restored`}`}
                       accessibilityState={{ selected: isSelected }}
                     >
                       <LinearGradient
                         colors={[
-                          isSelected || isRestored ? wing.aura : 'rgba(255,255,255,0.06)',
+                          isSelected || isRestored ? wing.def.aura : 'rgba(255,255,255,0.06)',
                           'rgba(26,10,46,0.92)',
                         ] as [string, string]}
                         style={StyleSheet.absoluteFill}
@@ -542,13 +588,16 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         />
                       )}
                       <SvgMedallion
-                        glyph={wing.icon}
-                        accent={wing.color}
+                        name={wing.def.icon}
+                        accent={wing.def.accent}
                         muted={isLocked}
                         size={36}
                         style={{ marginBottom: 6 }}
                       />
-                      <Text style={[styles.overviewWingName, isSelected && { color: wing.color }, isRestored && { color: COLORS.gold }]}>{wing.name}</Text>
+                      <Text style={[styles.overviewWingName, isSelected && { color: wing.def.accent }, isRestored && { color: COLORS.gold }]}>{wing.def.name}</Text>
+                      <Text style={styles.overviewWingTagline} numberOfLines={2}>
+                        {wing.def.tagline}
+                      </Text>
 
                       {/* Book shelves visualization */}
                       <View style={styles.shelvesContainer}>
@@ -557,7 +606,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                             key={i}
                             style={[
                               styles.shelfSlot,
-                              i < shelvesRestored && { backgroundColor: wing.color + 'cc', shadowColor: wing.color, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 3, elevation: 2 },
+                              i < shelvesRestored && { backgroundColor: wing.def.accent + 'cc', shadowColor: wing.def.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 3, elevation: 2 },
                               i < shelvesRestored && styles.shelfFilled,
                             ]}
                           />
@@ -568,7 +617,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       <View style={styles.wingProgressWrap}>
                         <NeonProgressBar
                           progress={progress / 100}
-                          color={isRestored ? COLORS.gold : wing.color}
+                          color={isRestored ? COLORS.gold : wing.def.accent}
                           height={5}
                           showGlowDot={false}
                         />
@@ -597,9 +646,10 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
           </View>
           {/* Active wing feature panel */}
           <View
+            onLayout={onFeaturePanelLayout}
             style={[
               styles.featurePanel,
-              { borderColor: selectedWingData.color + '66', shadowColor: selectedWingData.color },
+              { borderColor: selectedWingData.def.accent + '66', shadowColor: selectedWingData.def.accent },
             ]}
           >
             <View style={styles.featureDecorClip} pointerEvents="none">
@@ -609,15 +659,15 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
               />
-              <View style={[styles.featurePanelGlow, { backgroundColor: selectedWingData.aura }]} />
+              <View style={[styles.featurePanelGlow, { backgroundColor: selectedWingData.def.aura }]} />
             </View>
             <View style={styles.featureHeader}>
               <View style={styles.featureHeaderLeft}>
                 <Text style={styles.featureEyebrow}>ACTIVE WING</Text>
                 <View style={styles.featureTitleRow}>
-                  <SvgMedallion glyph={selectedWingData.icon} accent={selectedWingData.color} size={44} />
-                  <Text style={[styles.featureTitle, { color: selectedWingData.color }]} numberOfLines={1}>
-                    {selectedWingData.name} Wing
+                  <SvgMedallion name={selectedWingData.def.icon} accent={selectedWingData.def.accent} size={44} />
+                  <Text style={[styles.featureTitle, { color: selectedWingData.def.accent }]} numberOfLines={1}>
+                    {selectedWingData.def.name} Wing
                   </Text>
                 </View>
                 <Text style={styles.featureSubtitle}>
@@ -628,7 +678,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 style={({ pressed }) => [styles.featureDecorationBadge, pressed && styles.cardPressed]}
                 onPress={() => {
                   if (ownedDecorations.length > 0) {
-                    setShowDecorationPicker(selectedWingData.id);
+                    setShowDecorationPicker(selectedWingData.def.id);
                   }
                 }}
                 accessibilityRole="button"
@@ -641,7 +691,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   style={StyleSheet.absoluteFillObject}
                 />
                 <GameIcon
-                  glyph={MILESTONE_DECORATIONS.find(d => d.decoration === decorations[selectedWingData.id])?.icon ?? ''}
+                  glyph={
+                    decorations[selectedWingData.def.id]
+                      ? getDecorationMeta(decorations[selectedWingData.def.id]).glyph
+                      : ''
+                  }
                   size={27}
                 />
               </Pressable>
@@ -650,27 +704,40 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <View style={styles.featureProgressWrap}>
               <NeonProgressBar
                 progress={selectedProgress / 100}
-                color={selectedWingData.color}
+                color={selectedWingData.def.accent}
                 height={12}
               />
             </View>
 
+            {/* Wing lore */}
+            <View style={[styles.loreQuote, { borderLeftColor: selectedWingData.def.accent }]}>
+              <LinearGradient
+                colors={[selectedWingData.def.aura, 'rgba(26,10,46,0.85)'] as [string, string]}
+                style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.lg }]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              />
+              <Text style={styles.loreQuoteText}>{selectedWingData.def.lore}</Text>
+            </View>
+
             <View style={styles.infoCardsRow}>
-              <View style={[styles.infoCard, { borderColor: selectedWingData.color + '33' }]}>
+              <View style={[styles.infoCard, { borderColor: selectedWingData.def.accent + '33' }]}>
                 <LinearGradient
-                  colors={[selectedWingData.aura, 'rgba(26,10,46,0.90)'] as [string, string]}
+                  colors={[selectedWingData.def.aura, 'rgba(26,10,46,0.90)'] as [string, string]}
                   style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
                 />
                 <Text style={styles.infoCardLabel}>Decoration slot</Text>
                 <Text style={styles.infoCardValue}>
-                  {MILESTONE_DECORATIONS.find(d => d.decoration === decorations[selectedWingData.id])?.name ?? 'Empty'}
+                  {decorations[selectedWingData.def.id]
+                    ? getDecorationMeta(decorations[selectedWingData.def.id]).name
+                    : 'Empty'}
                 </Text>
               </View>
-              <View style={[styles.infoCard, { borderColor: selectedWingData.color + '33' }]}>
+              <View style={[styles.infoCard, { borderColor: selectedWingData.def.accent + '33' }]}>
                 <LinearGradient
-                  colors={[selectedWingData.aura, 'rgba(26,10,46,0.90)'] as [string, string]}
+                  colors={[selectedWingData.def.aura, 'rgba(26,10,46,0.90)'] as [string, string]}
                   style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
@@ -680,11 +747,41 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
               </View>
             </View>
 
-            <SectionHeader label="CHAPTER ROADMAP" accent={selectedWingData.color} />
+            {/* Primary CTA — continue / replay / locked, per wing state. */}
+            {selectedWingState === 'current' && activeChapter ? (
+              <PrimaryButton
+                label={`CONTINUE CHAPTER ${activeChapter.id} — ${activeChapter.name.toUpperCase()}`}
+                onPress={() => launchLevel(currentLevel)}
+                variant="gold"
+                fullWidth
+                style={styles.wingCta}
+                accessibilityLabel={`Continue chapter ${activeChapter.id}, ${activeChapter.name}`}
+              />
+            ) : selectedWingState === 'restored' ? (
+              <PrimaryButton
+                label="REPLAY CHAPTERS"
+                onPress={() => launchLevel(wingFirstLevel)}
+                variant="primary"
+                fullWidth
+                style={styles.wingCta}
+                accessibilityLabel={`Replay the ${selectedWingData.def.name} wing chapters`}
+              />
+            ) : (
+              <View
+                style={styles.lockedChip}
+                accessible
+                accessibilityLabel="Locked. Restore previous wings to unlock"
+              >
+                <GameIcon name="lock" size={13} accent="#8a7ba8" />
+                <Text style={styles.lockedChipText}>LOCKED — RESTORE PREVIOUS WINGS</Text>
+              </View>
+            )}
+
+            <SectionHeader label="CHAPTER ROADMAP" accent={selectedWingData.def.accent} />
             {selectedWingData.chapters.map((chapter) => {
               const status = getChapterStatus(chapter.id);
               const statusAccent = status === 'complete' ? COLORS.green
-                : status === 'current' ? selectedWingData.color
+                : status === 'current' ? selectedWingData.def.accent
                 : 'rgba(255,255,255,0.12)';
               return (
                 <View
@@ -701,7 +798,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   <LinearGradient
                     colors={[
                       status === 'complete' ? 'rgba(0,255,135,0.10)'
-                        : status === 'current' ? selectedWingData.aura
+                        : status === 'current' ? selectedWingData.def.aura
                         : 'rgba(255,255,255,0.05)',
                       'rgba(26,10,46,0.92)',
                     ] as [string, string]}
@@ -711,7 +808,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   />
                   <SvgMedallion
                     glyph={chapter.icon}
-                    accent={status === 'complete' ? COLORS.green : selectedWingData.color}
+                    accent={status === 'complete' ? COLORS.green : selectedWingData.def.accent}
                     muted={status === 'locked'}
                     size={48}
                     shape="squircle"
@@ -724,14 +821,14 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         style={[
                           styles.chapterPill,
                           status === 'complete' && styles.chapterPillComplete,
-                          status === 'current' && { borderColor: selectedWingData.color, backgroundColor: selectedWingData.aura },
+                          status === 'current' && { borderColor: selectedWingData.def.accent, backgroundColor: selectedWingData.def.aura },
                         ]}
                       >
                         <Text
                           style={[
                             styles.chapterPillText,
                             status === 'complete' && styles.chapterPillTextComplete,
-                            status === 'current' && { color: selectedWingData.color },
+                            status === 'current' && { color: selectedWingData.def.accent },
                           ]}
                         >
                           {status === 'complete' ? 'COMPLETE' : status === 'current' ? 'CURRENT' : 'LOCKED'}
@@ -757,8 +854,20 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <SectionHeader
               label="DECORATIONS"
               accent={COLORS.gold}
-              meta={`${ownedDecorations.length}/${MILESTONE_DECORATIONS.length} COLLECTED`}
+              meta={`${ownedDecorations.length}/${decorationGridItems.length} COLLECTED`}
             />
+            {/* Lore points balance — display only; spending lives in the
+                cosmetic store. */}
+            <View style={styles.loreChipRow}>
+              <View
+                style={styles.loreChip}
+                accessible
+                accessibilityLabel={`${libraryPoints} lore points`}
+              >
+                <GameIcon name="bookOpen" size={13} />
+                <Text style={styles.loreChipText}>{libraryPoints} LORE</Text>
+              </View>
+            </View>
             <View style={styles.decorationsPanel}>
               <LinearGradient
                 colors={[...GRADIENTS.surfaceCard]}
@@ -767,13 +876,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 end={{ x: 0, y: 1 }}
               />
               <View style={styles.decorationsGrid}>
-                {MILESTONE_DECORATIONS.map((md) => {
-                  const owned = ownedDecorations.includes(md.decoration);
-                  const placedInWing = Object.entries(decorations).find(([, dec]) => dec === md.decoration)?.[0];
+                {decorationGridItems.map(({ meta, owned }) => {
+                  const placedInWing = Object.entries(decorations).find(([, dec]) => dec === meta.id)?.[0];
                   const pickable = Boolean(showDecorationPicker) && owned;
                   return (
                     <Pressable
-                      key={md.decoration}
+                      key={meta.id}
                       style={({ pressed }) => [
                         styles.decorationItem,
                         owned && styles.decorationItemOwned,
@@ -782,12 +890,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       ]}
                       onPress={() => {
                         if (owned && showDecorationPicker) {
-                          placeDecoration(showDecorationPicker, md.decoration);
+                          placeDecoration(showDecorationPicker, meta.id);
                           setShowDecorationPicker(null);
                         }
                       }}
                       accessibilityRole="button"
-                      accessibilityLabel={`Decoration: ${owned ? md.name : `locked, unlocks at level ${md.level}`}${owned && placedInWing ? ', placed' : ''}`}
+                      accessibilityLabel={`Decoration: ${owned ? meta.name : `locked, unlocks at level ${meta.level}`}${owned && placedInWing ? ', placed' : ''}`}
                     >
                       <LinearGradient
                         colors={[
@@ -799,22 +907,25 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         end={{ x: 0, y: 1 }}
                       />
                       <SvgMedallion
-                        glyph={md.icon}
+                        glyph={meta.glyph}
                         accent={pickable ? COLORS.teal : COLORS.gold}
                         muted={!owned}
                         size={40}
                         style={{ marginBottom: 6 }}
                       />
                       <Text style={[styles.decorationName, !owned && { color: COLORS.textMuted }]}>
-                        {owned ? md.name : `Lvl ${md.level}`}
+                        {owned ? meta.name : `Lvl ${meta.level}`}
                       </Text>
+                      {meta.description ? (
+                        <Text style={styles.decorationDescription} numberOfLines={2}>
+                          {meta.description}
+                        </Text>
+                      ) : null}
                       {owned && placedInWing && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                          {WING_META[placedInWing] && (
-                            <View style={{ marginTop: 4 }}>
-                              <GameIcon glyph={WING_META[placedInWing].icon} size={10} />
-                            </View>
-                          )}
+                          <View style={{ marginTop: 4 }}>
+                            <GameIcon name={getWing(placedInWing).icon} size={10} />
+                          </View>
                           <Text style={styles.decorationPlaced}>placed</Text>
                         </View>
                       )}
@@ -908,170 +1019,75 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
   },
-  // ── Bookshelf vignette ────────────────────────────────────────────────
-  shelfScene: {
-    alignItems: 'center',
+  // ── Grand Library scene + Folio ───────────────────────────────────────
+  sceneWrap: {
     marginTop: 6,
-    marginBottom: 18,
-  },
-  shelfAmbientGlow: {
-    position: 'absolute',
-    top: 4,
-    width: 210,
-    height: 150,
-    borderRadius: 105,
-    backgroundColor: 'rgba(255,184,0,0.05)',
-  },
-  shelfArch: {
-    width: 226,
-    borderTopLeftRadius: 90,
-    borderTopRightRadius: 90,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    marginBottom: 14,
+    borderRadius: 24,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,184,0,0.18)',
-    paddingTop: 34,
-    paddingBottom: 12,
-    paddingHorizontal: 16,
-    overflow: 'hidden',
     shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.22,
     shadowRadius: 24,
     elevation: 10,
   },
-  lampGlowOuter: {
-    position: 'absolute',
-    top: 4,
-    right: 0,
-    width: 116,
-    height: 116,
-    borderRadius: 58,
-    backgroundColor: 'rgba(255,184,0,0.10)',
-  },
-  lampGlowInner: {
-    position: 'absolute',
-    top: 22,
-    right: 18,
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: 'rgba(255,210,77,0.16)',
-  },
-  bookRow: {
+  folioRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 18,
+  },
+  folioDisc: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: '#c98b3f',
+    backgroundColor: 'rgba(8, 2, 22, 0.92)',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 2,
+    shadowColor: '#c98b3f',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 9,
+    elevation: 6,
   },
-  bookOuter: {
-    borderRadius: 3,
-    ...SHADOWS.soft,
-  },
-  bookBody: {
+  folioBubble: {
     flex: 1,
-    borderRadius: 3,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(255,184,0,0.28)',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     overflow: 'hidden',
   },
-  bookEdgeHighlight: {
+  folioBubbleTail: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 3,
-    backgroundColor: 'rgba(255,255,255,0.30)',
-  },
-  bookTitleLines: {
-    position: 'absolute',
-    top: '22%',
-    left: '28%',
-    right: '20%',
-    gap: 3,
-  },
-  bookTitleLine: {
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.40)',
-  },
-  bookFootBand: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 3,
-    height: 3,
-    backgroundColor: 'rgba(0,0,0,0.22)',
-  },
-  shelfBoardWrap: {
-    alignSelf: 'stretch',
-    marginTop: -1,
-    marginBottom: 10,
-  },
-  shelfBoard: {
-    height: 9,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  shelfBoardHighlight: {
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.28)',
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
-  },
-  shelfShadow: {
+    left: -5,
+    top: 16,
+    width: 10,
     height: 10,
-    marginHorizontal: 4,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    opacity: 0.8,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,184,0,0.28)',
+    backgroundColor: 'rgba(26,10,46,0.95)',
+    transform: [{ rotate: '45deg' }],
   },
-  lamp: {
-    width: 26,
-    alignItems: 'center',
-    marginLeft: 4,
+  folioText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.bodyMedium,
+    fontStyle: 'italic',
+    marginBottom: 6,
   },
-  lampBulbGlow: {
-    position: 'absolute',
-    top: -8,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,210,77,0.30)',
-  },
-  lampShade: {
-    width: 24,
-    height: 15,
-    borderTopLeftRadius: 11,
-    borderTopRightRadius: 11,
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  lampStem: {
-    width: 3,
-    height: 15,
-    backgroundColor: '#caa04f',
-  },
-  lampBase: {
-    width: 14,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#5c3a18',
-  },
-  flatStack: {
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginRight: 2,
-    gap: 2,
-  },
-  flatBook: {
-    height: 7,
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+  folioAttribution: {
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: COLORS.gold,
+    fontFamily: FONTS.bodySemiBold,
   },
   // ── Hero ──────────────────────────────────────────────────────────────
   heroCard: {
@@ -1211,6 +1227,15 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyBold,
     marginBottom: 4,
     textAlign: 'center',
+  },
+  overviewWingTagline: {
+    fontSize: 8,
+    lineHeight: 11,
+    color: COLORS.textMuted,
+    fontFamily: FONTS.bodyMedium,
+    textAlign: 'center',
+    marginBottom: 5,
+    paddingHorizontal: 2,
   },
   shelvesContainer: {
     flexDirection: 'row',
@@ -1357,6 +1382,47 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
   },
+  loreQuote: {
+    borderRadius: RADIUS.lg,
+    borderLeftWidth: 3,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  loreQuoteText: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.bodyRegular,
+    fontStyle: 'italic',
+  },
+  wingCta: {
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  lockedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    alignSelf: 'stretch',
+    marginTop: 14,
+    marginBottom: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    opacity: 0.75,
+  },
+  lockedChipText: {
+    fontSize: 11,
+    letterSpacing: 1,
+    fontFamily: FONTS.display,
+    color: COLORS.textMuted,
+  },
   // ── Chapter roadmap ───────────────────────────────────────────────────
   chapterCard: {
     flexDirection: 'row',
@@ -1481,6 +1547,38 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontFamily: FONTS.bodyMedium,
     marginTop: 4,
+  },
+  decorationDescription: {
+    fontSize: 9,
+    lineHeight: 12,
+    color: COLORS.textMuted,
+    fontFamily: FONTS.bodyRegular,
+    textAlign: 'center',
+    marginTop: 3,
+    paddingHorizontal: 2,
+  },
+  loreChipRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: -4,
+    marginBottom: 8,
+  },
+  loreChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,184,0,0.35)',
+    backgroundColor: 'rgba(255,184,0,0.08)',
+  },
+  loreChipText: {
+    fontSize: 10,
+    letterSpacing: 1,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
   },
   pickerCancelBtn: {
     alignSelf: 'center',
