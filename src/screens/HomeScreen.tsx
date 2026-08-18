@@ -5,6 +5,7 @@ import {
   Animated,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -1375,11 +1376,19 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   heroLogoGlow: {
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 18,
-    elevation: 10,
+    // iOS-only: CoreAnimation traces the logo's transparent pixels, so the
+    // glow hugs the letterforms. Android elevation and web box-shadow both
+    // draw a hard RECTANGLE around the transparent image view — the blind
+    // design review read it as a pasted-on black box — so those platforms
+    // rely on the glow baked into the logo art instead.
+    ...(Platform.OS === 'ios'
+      ? {
+          shadowColor: COLORS.accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.55,
+          shadowRadius: 18,
+        }
+      : null),
   },
   heroLogo: {
     width: '100%',

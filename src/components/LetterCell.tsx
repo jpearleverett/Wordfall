@@ -34,7 +34,9 @@ const BODY_COLORS_SELECTED_HINT: [string, string, string, string, string] = ['#f
 // identity.
 const BODY_COLORS_SELECTED: [string, string, string, string, string] = ['#d9267a', '#c0206c', '#a8185f', '#8a1250', '#6b0d3e'];
 const BODY_COLORS_WILDCARD = [...GRADIENTS.tile.wildcard] as [string, string, ...string[]];
-const BODY_COLORS_DEFAULT: [string, string, string, string, string] = ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'];
+// Matches the brightened `space` wing ramp in data/chapters.ts (Aug 2026
+// design review — the old near-black ramp read as murky next to AAA refs).
+const BODY_COLORS_DEFAULT: [string, string, string, string, string] = ['#6a3cb5', '#57309c', '#44257e', '#321b5e', '#20113c'];
 const IS_ANDROID = Platform.OS === 'android';
 
 /**
@@ -426,7 +428,7 @@ export const LetterCell = React.memo(function LetterCell({
         <Text
           style={[
             styles.letter,
-            { fontSize: size * 0.46 },
+            { fontSize: size * 0.5 },
             isSelected && styles.letterSelected,
             isValidWord && styles.letterValid,
             !isSelected && !isValidWord && styles.letterDefault,
