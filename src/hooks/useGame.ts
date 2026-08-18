@@ -117,6 +117,7 @@ function createInitialState(
     hintsUsed: 0,
     undosLeft: getUndosForMode(mode),
     undosUsed: 0,
+    shufflesUsed: 0,
     history: [],
     status: 'playing',
     level,
@@ -362,6 +363,21 @@ function applySelectionStep(state: GameState, position: CellPosition): GameState
     selectedCells: newSelected,
     selectionDirection: newDir,
   };
+}
+
+/**
+ * Assist-tier stars (F7, Aug 2026): 3★ = clean solve (no hints, undos, or
+ * shuffles — the FLAWLESS definition), 2★ = exactly one assist, 1★ = more.
+ * Pure and exported for tests — the old formula's `moves <= totalWords`
+ * clause was always true on a win, silently reducing stars to "used a hint
+ * or not"; a guard on the real tiers keeps that from regressing.
+ */
+export function computeStars(
+  status: GameStatus,
+  assistsUsed: number,
+): 0 | 1 | 2 | 3 {
+  if (status !== 'won') return 0;
+  return assistsUsed === 0 ? 3 : assistsUsed === 1 ? 2 : 1;
 }
 
 function gameReducer(state: GameState, action: GameAction): GameState {
@@ -659,6 +675,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // who resumed a puzzle across the upgrade. Any future numeric field
         // needs the same treatment or a version bump.
         undosUsed: action.state.undosUsed ?? 0,
+        shufflesUsed: action.state.shufflesUsed ?? 0,
         selectedCells: [],
         selectionDirection: null,
         lastInvalidTap: null,
@@ -770,6 +787,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           spotlightActive: false,
           spotlightLetters: [],
           boostersUsedThisPuzzle: nextUsed,
+          // A shuffle is an assist: it counts toward the star tiers and —
+          // per game_mechanics.md's FLAWLESS definition ("no hints, no
+          // undos, no shuffle") — breaks the perfect run. perfectRun never
+          // actually flipped here before; the doc was right, the code wrong.
+          shufflesUsed: state.shufflesUsed + 1,
+          perfectRun: false,
         };
       };
 
@@ -963,6 +986,8 @@ export function useGame(
   const moves = useStore(store, s => s.moves);
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const hintsUsed = useStore(store, s => s.hintsUsed);
+  const undosUsed = useStore(store, s => s.undosUsed);
+  const shufflesUsed = useStore(store, s => s.shufflesUsed);
   const shrinkCount = useStore(store, s => s.shrinkCount);
 
   // ── Derived (changes per word, not per tap) ──────────────────────────
@@ -1007,15 +1032,18 @@ export function useGame(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shrinkCount]);
 
-  // ── Stars ────────────────────────────────────────────────────────────
-  const stars =
-    status === 'won'
-      ? hintsUsed === 0 && moves <= totalWords
-        ? 3
-        : hintsUsed <= 1 && moves <= totalWords + 1
-        ? 2
-        : 1
-      : 0;
+  // ── Stars (F7, Aug 2026) ─────────────────────────────────────────────
+  // Assist-tier stars: 3★ = clean solve (no hints, undos, or shuffles —
+  // aligned with the FLAWLESS/perfectRun definition), 2★ = exactly one
+  // assist, 1★ = more. The old formula's `moves <= totalWords` clause was
+  // ALWAYS true on a win (moves only increments on a successful find), so
+  // stars had silently reduced to "used a hint or not" — a hidden boolean
+  // wearing a three-tier costume, with 3★ and FLAWLESS firing together on
+  // every hint-free win. Now the third star is the flawless run and the
+  // second star is the near-miss. Note: this makes 3★ strictly harder for
+  // assist-using players, which slows star-gated chapter unlocks — an
+  // approved balance change (fun backlog F7).
+  const stars = computeStars(status, hintsUsed + undosUsed + shufflesUsed);
 
   // ── Timer for timed modes ────────────────────────────────────────────
   useEffect(() => {

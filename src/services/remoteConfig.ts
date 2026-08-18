@@ -61,6 +61,8 @@ export interface RemoteConfigValues {
   firstSessionStarterBundleEnabled: boolean;
   /** Tier 6 B7 — one-shot chip-pulse + gold glow on last-word tension edge. */
   lastWordTensionPulseEnabled: boolean;
+  /** J11 — once-per-puzzle "kept it open" ordering acknowledgment. */
+  keptOpenBadgeEnabled: boolean;
   /** Tier 6 B4 — route daily/weekly/event score writes through the
    *  `submitValidatedScore` Cloud Function (vs legacy direct client write).
    *  Flip to false to kill-switch back to direct writes if the callable
@@ -300,6 +302,7 @@ const REMOTE_CONFIG_DEFAULTS: RemoteConfigValues = {
   // Tier 6 B7 — last-word tension chip pulse; kill-switch if reduce-motion
   // compliance flags any issue post-launch.
   lastWordTensionPulseEnabled: true,
+  keptOpenBadgeEnabled: true,
   // Tier 6 B4 — server-side score validation. Default ON; flip to false as
   // a soft kill-switch to revert to legacy direct-write path. Rules remain
   // backward-compatible (no tightening yet) so the fallback path keeps working.

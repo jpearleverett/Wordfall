@@ -985,3 +985,96 @@ export function isDeadEndShrinkingBoard(
   if (remainingWords.length === 0) return false;
   return !isSolvableShrinkingBoard(grid, remainingWords, wordsUntilShrink);
 }
+
+// ============ KEPT-IT-OPEN DETECTION (J11) ============
+
+/**
+ * Did the player's clearing choice avoid a dead end that an ALTERNATIVE
+ * choice would have caused?
+ *
+ * Order-sensitivity is the game's stated skill, yet nothing ever confirmed
+ * a GOOD ordering choice at the moment it was made — the player only
+ * learned about ordering by losing. This powers the once-per-puzzle
+ * "kept it open" acknowledgment (no score effect; pure information).
+ *
+ * Honesty over coverage: an alternative only counts as a dead end when the
+ * budgeted solver CONFIRMS no completing order exists. If the time budget
+ * runs out mid-proof the result is inconclusive and we return false — a
+ * missed badge is fine, an unearned one teaches a false rule. Runs deferred
+ * off the word-found hot path; worst case is bounded by `budgetMs`.
+ *
+ * @param prevGrid  the grid BEFORE the player's clear (history snapshot)
+ * @param foundWord the word the player actually cleared
+ * @param remainingWordsBeforeClear all unfound words at that moment,
+ *                  INCLUDING foundWord
+ */
+export function choiceAvoidedDeadEnd(
+  prevGrid: Grid,
+  foundWord: string,
+  remainingWordsBeforeClear: string[],
+  budgetMs: number = 80,
+): boolean {
+  const deadline = Date.now() + budgetMs;
+  const alternatives = remainingWordsBeforeClear.filter((w) => w !== foundWord);
+  // Cap the scan — on an 8-word board checking every alternative would
+  // triple the budget's worst case for marginal extra coverage.
+  for (const alt of alternatives.slice(0, 4)) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 5) return false;
+    const occurrences = findWordInGrid(prevGrid, alt, 1);
+    if (occurrences.length === 0) continue;
+    const afterAlt = removeCellsAndApplyGravity(cloneGrid(prevGrid), occurrences[0]);
+    const rest = remainingWordsBeforeClear.filter((w) => w !== alt);
+
+    // Fast path: any heuristic ordering that completes proves NOT a dead end.
+    const shortFirst = [...rest].sort((a, b) => a.length - b.length);
+    const orderings = [rest, shortFirst, [...shortFirst].reverse()];
+    let solvedByHeuristic = false;
+    for (const ordering of orderings) {
+      if (trySolveWithOrder(cloneGrid(afterAlt), ordering) !== null) {
+        solvedByHeuristic = true;
+        break;
+      }
+    }
+    if (solvedByHeuristic) continue;
+
+    // Slow path: budgeted full solve. null is only trusted as "dead end"
+    // when the solver finished INSIDE its budget — a timeout is
+    // inconclusive, not a proof.
+    const solveTimeout = Math.min(remainingMs - 2, 40);
+    if (solveTimeout <= 5) return false;
+    const started = Date.now();
+    const budget: SolveBudget = {
+      remaining: 5000,
+      startTime: started,
+      timeoutMs: solveTimeout,
+    };
+    const solution = solve(cloneGrid(afterAlt), rest, budget);
+    const ranOut =
+      Date.now() - started >= solveTimeout || budget.remaining <= 0;
+    if (solution === null && !ranOut) {
+      return true; // confirmed: clearing `alt` would have killed the board
+    }
+  }
+  return false;
+}
+
+/**
+ * Cheap positive proof that the board still has a completing order (three
+ * heuristic orderings, O(n) each). Returns false when unproven — which does
+ * NOT mean dead, just "couldn't confirm cheaply". Used as the J11 guard:
+ * the "kept it open" badge must never appear on a board that just died, and
+ * the authoritative isStuck check is debounced past the badge's window.
+ */
+export function isProvablyCompletable(
+  grid: Grid,
+  remainingWords: string[],
+): boolean {
+  if (remainingWords.length === 0) return true;
+  const shortFirst = [...remainingWords].sort((a, b) => a.length - b.length);
+  const orderings = [remainingWords, shortFirst, [...shortFirst].reverse()];
+  for (const ordering of orderings) {
+    if (trySolveWithOrder(cloneGrid(grid), ordering) !== null) return true;
+  }
+  return false;
+}

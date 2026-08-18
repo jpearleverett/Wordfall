@@ -24,12 +24,6 @@ Constraints (from `game_mechanics.md` — read it before editing this list):
 (~20 blocking interruptions before L10; player never plays 2 puzzles
 back-to-back)
 
-- **F7. Stars are a hidden boolean** (moves ≤ totalWords is ALWAYS true → 3★
-  = hintsUsed===0) so 3★ + FLAWLESS both fire on every early win; three
-  rewardless flawless ceremonies inside session 1. FIX: align 3★ with
-  perfectRun (no hints/undos/shuffles), 2★ = one assist; small coin grants +
-  autoDismissMs on 3/5/7 flawless milestones. Interacts with R1 — ship
-  together. ~25 lines + tests (starThresholds defined and unread).
 - **F-minor (remaining):** economy primer hardcoded EN (i18n). Mode-tease
   milestone levels lag their unlocks by 1-4 levels — copy is still true
   ("unlocked"), left as cadence.
@@ -49,10 +43,6 @@ back-to-back)
   silently by an overlapping word. FIX: idle badge pulse (isolated shared
   value), gold-only bloom + coin flight on collect, "coin tile lost" note on
   destruction. ~80 lines, behind bonusTileEnabled.
-- **J11 (design, needs user sign-off). "Kept it open" sequencing
-  acknowledgment** — solver already knows when a clear avoided a dead end;
-  once-per-puzzle teal tint + caption, NO score bonus/multiplier/escalation.
-  New beat outside the sanctioned list — do not ship without approval.
 
 ### Retention (session-to-session) — from the 2026-08-17 retention audit
 
@@ -70,6 +60,28 @@ coordination, victory polish, humane stuck-rescue logic,
 legacyTaskCardsEnabled=false, honest reminder scheduling.
 
 ## SHIPPED
+
+- 2026-08-17 (batch 10 — F7 + J11, USER-APPROVED):
+  - **F7** stars are assist tiers: 3★ = clean solve (no hints/undos/
+    shuffles, aligned with FLAWLESS), 2★ = exactly one assist, 1★ = more.
+    The old `moves <= totalWords` clause was always true on a win, so stars
+    had reduced to "used a hint or not". Also fixed the latent gap the doc
+    always claimed: SMART_SHUFFLE now increments a new `shufflesUsed`
+    counter AND breaks perfectRun (snapshot back-compat via `?? 0` +
+    puzzleSnapshot legacy-payload pin). Pure `computeStars` exported +
+    starTiers suite. Balance note: 3★ is strictly harder for assist users →
+    star-gated chapters slow down for them (approved).
+  - **J11** the kept-it-open acknowledgment: once per puzzle max, when the
+    player's clear PROVABLY avoided a dead end an alternative would have
+    caused, a teal chip ("NICE ORDER — KEPT IT OPEN") shows ~1.6s. Honest
+    by construction: `choiceAvoidedDeadEnd` only claims on solver-CONFIRMED
+    dead-ending alternatives (budget-exhausted = silent), and
+    `isProvablyCompletable` requires positive proof the current board still
+    completes before showing. Deferred 350ms off the word-found hot path,
+    hard 80ms solver budget, RC kill switch `keptOpenBadgeEnabled`, no
+    score effects. Sanctioned in game_mechanics.md as dopamine item 5 with
+    its constraints recorded. keptItOpen suite pins honesty on tutorial
+    board D (the authored order trap).
 
 - 2026-08-17 (batch 9 — mode history, banner entrance, dead code):
   - **R8 (core)** mode cards render the player's own history ("12 played ·

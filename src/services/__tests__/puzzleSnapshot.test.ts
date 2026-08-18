@@ -51,6 +51,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     hintsUsed: 0,
     undosLeft: 0,
     undosUsed: 0,
+    shufflesUsed: 0,
     history: [],
     status: 'playing',
     level: 3,
@@ -218,5 +219,22 @@ describe('snapshots written before a field existed', () => {
     const hydrated = { ...(legacy as GameState), undosUsed: (legacy as GameState).undosUsed ?? 0 };
     expect(Number.isFinite(hydrated.undosUsed + 1)).toBe(true);
     expect(hydrated.undosUsed + 1).toBe(1);
+  });
+
+  it('a payload missing shufflesUsed still describes a resumable puzzle', () => {
+    // Same upgrade hazard as undosUsed, for the F7 field: a pre-F7 snapshot
+    // resumed across the upgrade must not poison `shufflesUsed + 1`.
+    const state = makeState({ moves: 3 });
+    const legacy = { ...state } as Partial<GameState>;
+    delete legacy.shufflesUsed;
+
+    expect(shouldSaveSnapshot(legacy as GameState)).toBe(true);
+
+    const hydrated = {
+      ...(legacy as GameState),
+      shufflesUsed: (legacy as GameState).shufflesUsed ?? 0,
+    };
+    expect(Number.isFinite(hydrated.shufflesUsed + 1)).toBe(true);
+    expect(hydrated.shufflesUsed + 1).toBe(1);
   });
 });

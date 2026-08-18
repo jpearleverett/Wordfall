@@ -22,7 +22,7 @@ import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
 import LocalErrorBoundary from '../components/LocalErrorBoundary';
 import { crashReporter } from '../services/crashReporting';
-import { findWordInGrid } from '../engine/solver';
+import { findWordInGrid, choiceAvoidedDeadEnd, isProvablyCompletable } from '../engine/solver';
 import { resolveUndoSource } from '../utils/undoGate';
 import { TutorialOverlay } from '../components/TutorialOverlay';
 
@@ -1890,6 +1890,79 @@ function GameScreenImpl({
     stuckFeltRef.current = false;
     failFeltRef.current = false;
   }, [level, mode, board]);
+
+  // ── J11: "kept it open" acknowledgment ─────────────────────────────────
+  // Order-sensitivity is the game's stated skill, but the player only ever
+  // learned about ordering by LOSING. When their clear provably avoided a
+  // dead end an alternative would have caused, a small teal chip says so —
+  // once per puzzle at most, no points, no multiplier, no escalation (the
+  // constraints that keep this out of the deleted combo-system territory).
+  // Detection runs deferred (350ms, post-gravity) with a hard 80ms solver
+  // budget, and only fires on a CONFIRMED dead-ending alternative —
+  // inconclusive budget-exhausted checks stay silent (see solver.ts).
+  const [keptOpenVisible, setKeptOpenVisible] = useState(false);
+  const keptOpenFiredRef = useRef(false);
+  const keptOpenAnim = useRef(new Animated.Value(0)).current;
+  const prevFoundForKeptOpenRef = useRef(0);
+  useEffect(() => {
+    keptOpenFiredRef.current = false;
+    prevFoundForKeptOpenRef.current = 0;
+    setKeptOpenVisible(false);
+  }, [level, mode, board]);
+  useEffect(() => {
+    const prev = prevFoundForKeptOpenRef.current;
+    prevFoundForKeptOpenRef.current = foundWords;
+    if (foundWords <= prev || status !== 'playing') return;
+    if (keptOpenFiredRef.current) return;
+    if (!getRemoteBoolean('keptOpenBadgeEnabled')) return;
+    const timer = setTimeout(() => {
+      const s = store.getState();
+      if (s.status !== 'playing') return;
+      const lastStep = s.solveSequence[s.solveSequence.length - 1];
+      const found = lastStep?.wordFound;
+      const prevEntry = s.history[s.history.length - 1];
+      if (!found || !prevEntry) return;
+      const remainingBefore = prevEntry.words
+        .filter((w) => !w.found)
+        .map((w) => w.word);
+      if (remainingBefore.length < 2) return;
+      // The badge must never appear on a board that just died, and the
+      // authoritative isStuck check is debounced past this window — so
+      // require a cheap POSITIVE proof that the current board completes
+      // (unproven = stay silent). Also skip the final word: the victory
+      // screen owns that moment.
+      const remainingNow = s.board.words
+        .filter((w) => !w.found)
+        .map((w) => w.word);
+      if (remainingNow.length === 0) return;
+      if (!isProvablyCompletable(s.board.grid, remainingNow)) return;
+      if (choiceAvoidedDeadEnd(prevEntry.grid, found, remainingBefore, 80)) {
+        keptOpenFiredRef.current = true;
+        setKeptOpenVisible(true);
+        void analytics.logEvent('kept_open_shown', { level, mode });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [foundWords, status, store, level, mode]);
+  useEffect(() => {
+    if (!keptOpenVisible) return;
+    if (reduceMotion) {
+      keptOpenAnim.setValue(1);
+      const t = setTimeout(() => {
+        keptOpenAnim.setValue(0);
+        setKeptOpenVisible(false);
+      }, 1600);
+      return () => clearTimeout(t);
+    }
+    keptOpenAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(keptOpenAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.delay(1400),
+      Animated.timing(keptOpenAnim, { toValue: 0, duration: 260, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) setKeptOpenVisible(false);
+    });
+  }, [keptOpenVisible, reduceMotion, keptOpenAnim]);
   useEffect(() => {
     if (!isStuck || status !== 'playing') {
       if (!isStuck) stuckFeltRef.current = false;
@@ -2366,6 +2439,29 @@ function GameScreenImpl({
         scorePopupAnim={scorePopupAnim}
         bigWordAnim={bigWordAnim}
       />
+
+      {/* J11 — once-per-puzzle ordering acknowledgment. Display-only. */}
+      {keptOpenVisible && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.keptOpenChip,
+            {
+              opacity: keptOpenAnim,
+              transform: [
+                {
+                  translateY: keptOpenAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [8, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Text style={styles.keptOpenText}>NICE ORDER — KEPT IT OPEN</Text>
+        </Animated.View>
+      )}
 
 
       {/* Word bank — reads selection state from the zustand store directly.
@@ -2997,6 +3093,25 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyMedium,
     color: COLORS.textSecondary,
     fontSize: 12,
+  },
+  keptOpenChip: {
+    position: 'absolute',
+    top: '42%',
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: COLORS.teal,
+    backgroundColor: 'rgba(10, 30, 34, 0.88)',
+    zIndex: 240,
+    elevation: 24,
+  },
+  keptOpenText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.teal,
+    letterSpacing: 1.5,
   },
   scorePopup: {
     position: 'absolute',

@@ -63,6 +63,13 @@ export interface GameState {
    * so the two would cancel out.
    */
   undosUsed: number;
+  /**
+   * Monotonic count of smart shuffles spent this puzzle. Counted toward the
+   * star tiers (F7): 3★ = zero assists, 2★ = one, 1★ = more. Also flips
+   * perfectRun — the mechanics doc has always defined FLAWLESS as
+   * "no hints, no undos, no shuffle", but shuffle never actually flipped it.
+   */
+  shufflesUsed: number;
   history: {
     grid: Grid;
     words: WordPlacement[];

@@ -73,7 +73,19 @@ Wordfall is single-solution: every puzzle has essentially one correct find-order
 2. **Flawless badge.** Every puzzle completed with `perfectRun === true` (no hints, no undos, no shuffle, no wrong-trace) shows a gold "FLAWLESS" pill on the victory screen, between the star row and the score panel. Component: `src/components/victory/FlawlessBadge.tsx`. Audio: dedicated `flawlessBadge` slot (synth fallback until `flawless_badge.mp3` lands).
 3. **Flawless streak.** Cross-session counter of consecutive flawless puzzles, incrementing on every flawless solve and resetting on any non-flawless completion. (Previously gated to distinct calendar days, but that masked legitimate same-day solves behind a silent dedup — players were posting flawless runs that never lit up the streak. The reset-on-any-non-flawless rule already provides sufficient anti-farm protection without the day gate.) Milestones at **3 / 5 / 7 / 10 / 15 / 20** queue a full-screen `flawless_streak_milestone` ceremony via the existing `MilestoneCeremony` template, paired with the dedicated `flawlessMilestone` audio slot (the loudest ceremony SFX in the game, fired from `useCeremonyQueue`). Surfaced on the home screen via `FlawlessStreakCard` (gold when active, muted with teach-copy when `currentStreak === 0`). State: `PlayerData.flawlessStreak`.
 4. **Bonus coin tile (June 2026).** ~35% of boards mark one letter of a hidden word with a gold coin badge (`rollBonusTile()` in `src/utils/bonusTile.ts`, pure hash of the board's word list). Finding the word that carries it pays bonus coins on a variable schedule (10 / 25 / rare 50) with the `wordFoundRare` sting + haptic + coin suffix on the score popup. The badge is keyed by **cell ID** so it rides the tile through gravity. RC kill switch `bonusTileEnabled` (default ON). Award is keyed on cell ID so retrying the same board can't farm it. This is the game's only in-puzzle variable-ratio reward — do not confuse it with the rare-tile collection meta.
-5. **Booster combo (unrelated, still real).** Separate 2× score multiplier window activated when the player voluntarily pairs two boosters in the same puzzle (Wildcard + Spotlight = Eagle Eye, Wildcard + SmartShuffle = Lucky Roll, Spotlight + SmartShuffle = Power Surge). Duration: N words (default 3). State fields: `activeComboType`, `comboMultiplier`, `comboWordsRemaining`. UI: `BoosterComboBanner`. Defined in `src/data/boosterCombos.ts`. **Do not confuse this with the deleted successive-find `combo` field — different system, different trigger.**
+5. **Kept-it-open acknowledgment (Aug 2026, user-approved).** At most once
+   per puzzle, when the player's clear PROVABLY avoided a dead end that an
+   alternative clear would have caused (solver-confirmed within a hard 80ms
+   budget — inconclusive checks stay silent), a small teal chip appears for
+   ~1.6s: "NICE ORDER — KEPT IT OPEN". Display-only by design: **no score
+   bonus, no multiplier, no escalation, no streak** — those constraints are
+   what keep this out of the deleted combo-system territory. This is the
+   positive half of the ordering feedback loop (the dead-end banner is the
+   negative half). Implementation: `choiceAvoidedDeadEnd` +
+   `isProvablyCompletable` in `src/engine/solver.ts`, wired in
+   `GameScreen.tsx` deferred 350ms off the word-found hot path. RC kill
+   switch `keptOpenBadgeEnabled` (default ON).
+6. **Booster combo (unrelated, still real).** Separate 2× score multiplier window activated when the player voluntarily pairs two boosters in the same puzzle (Wildcard + Spotlight = Eagle Eye, Wildcard + SmartShuffle = Lucky Roll, Spotlight + SmartShuffle = Power Surge). Duration: N words (default 3). State fields: `activeComboType`, `comboMultiplier`, `comboWordsRemaining`. UI: `BoosterComboBanner`. Defined in `src/data/boosterCombos.ts`. **Do not confuse this with the deleted successive-find `combo` field — different system, different trigger.**
 
 ### What was deleted (do not re-invent)
 
@@ -163,6 +175,18 @@ See `agent_docs/audio_brief.md` for the composer deliverable manifest.
 ---
 
 ## Changelog for this doc
+
+- **2026-08-17 (F7 + J11, user-approved):** (1) Stars are assist tiers now:
+  3★ = clean solve (no hints/undos/shuffles — the FLAWLESS definition),
+  2★ = exactly one assist, 1★ = more. The old formula's `moves <=
+  totalWords` clause was always true on a win, so stars had silently
+  reduced to "used a hint or not". This makes 3★ strictly harder for
+  assist-users and therefore slows star-gated chapter unlocks — an approved
+  balance change. (2) `SMART_SHUFFLE` now increments `shufflesUsed` and
+  breaks `perfectRun` — this doc always said FLAWLESS excludes shuffle, but
+  the reducer never enforced it; the doc was right, the code was wrong.
+  (3) Added the kept-it-open acknowledgment (item 5 above) to the
+  sanctioned dopamine list.
 
 - **2026-06-10 (variety + juice wave):** (1) Fixed the theme-word casing bug — the uppercase dictionary never matched lowercased theme words, so chapter theming had been dead code since launch; theme words now get reserved slots (up to half the find-list). (2) All 40 chapters now have `GenerationProfile`s; `introducedMechanics` (fourLetter/longWords/denseBoard) and `emptyCellDensity` (gravity-stable top-of-column holes) are actually wired into the generator. (3) Levels 41+ use a texture cycle (wide/tall/compact/large shapes rotating per 15-level chapter) instead of one constant config. (4) Daily challenge rotates 7 weekday variants (`DAILY_VARIANTS` / `getDailyVariant`). (5) Mode unlocks accelerated (expert now L22; everything else L2–L14) with softened skill gates. (6) New bonus coin tile (see dopamine list). (7) Tap SFX pitch rises per cell during a trace (`playSound(name, { rate })`); victory score count-up has tick/end SFX; login calendar auto-presents once per session.
 
