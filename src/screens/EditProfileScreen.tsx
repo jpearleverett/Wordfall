@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
+import ThemePreview from '../components/cosmetics/ThemePreview';
 import { bentoPanel, bentoDividerColor } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
@@ -530,22 +531,9 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 0.8 }}
           />
-          {/* Color swatches */}
-          <View style={styles.swatchRow}>
-            {[theme.colors.bg, theme.colors.surface, theme.colors.accent, theme.colors.cellSelected].map(
-              (color, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.swatch,
-                    { backgroundColor: color },
-                    !owned && { opacity: 0.55 },
-                  ]}
-                >
-                  <View style={styles.swatchShine} />
-                </View>
-              ),
-            )}
+          {/* Mini game-board vignette in the theme's palette */}
+          <View style={styles.themeVignette}>
+            <ThemePreview theme={theme} width={THEME_CARD_SIZE - 28} muted={!owned} />
           </View>
           {!owned && (
             <GlyphMedallion
@@ -1143,28 +1131,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...SHADOWS.soft,
   },
-  swatchRow: {
-    flexDirection: 'row',
-    gap: 7,
-    marginBottom: 10,
-    marginTop: 4,
-  },
-  swatch: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+  themeVignette: {
+    marginTop: 2,
+    marginBottom: 9,
+    borderRadius: 10,
     overflow: 'hidden',
-  },
-  swatchShine: {
-    position: 'absolute',
-    top: 3,
-    left: 5,
-    right: 5,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   themeLockBadge: {
     position: 'absolute',

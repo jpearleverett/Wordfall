@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import IconMedallion from '../components/common/IconMedallion';
+import ThemePreview from '../components/cosmetics/ThemePreview';
 import GameIcon from '../components/icons/GameIcon';
 import { useEconomy } from '../contexts/EconomyContext';
 import PrimaryButton from '../components/common/PrimaryButton';
@@ -385,13 +386,8 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     </View>
   );
 
-  const renderThemePreview = (colors: CosmeticTheme['colors']) => (
-    <View style={styles.themePreview}>
-      <View style={[styles.themeSwatchLarge, { backgroundColor: colors.bg }]} />
-      <View style={[styles.themeSwatchLarge, { backgroundColor: colors.surface }]} />
-      <View style={[styles.themeSwatchLarge, { backgroundColor: colors.accent }]} />
-      <View style={[styles.themeSwatchLarge, { backgroundColor: colors.cellSelected }]} />
-    </View>
+  const renderThemePreview = (id: string, colors: CosmeticTheme['colors'], previewWidth: number) => (
+    <ThemePreview theme={{ id, colors }} width={previewWidth} />
   );
 
   const canAffordItem = useCallback(
@@ -456,7 +452,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         {/* Preview area */}
         <View style={styles.cardPreviewArea}>
           {item.tabType === 'themes' && item.preview ? (
-            renderThemePreview(item.preview)
+            renderThemePreview(item.id, item.preview, CARD_WIDTH - 24)
           ) : item.icon ? (
             <IconMedallion glyph={item.icon} size={48} accent={rarityColor} />
           ) : item.tabType === 'frames' ? (
@@ -568,14 +564,11 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
             {/* Large preview */}
             <View style={styles.modalPreview}>
               {selectedItem.tabType === 'themes' && selectedItem.preview ? (
-                <View style={styles.themePreviewLarge}>
-                  {Object.entries(selectedItem.preview).map(([key, color]) => (
-                    <View key={key} style={styles.themeSwatchRow}>
-                      <View style={[styles.themeSwatchBig, { backgroundColor: color }]} />
-                      <Text style={styles.swatchLabel}>{key}</Text>
-                    </View>
-                  ))}
-                </View>
+                renderThemePreview(
+                  selectedItem.id,
+                  selectedItem.preview,
+                  Math.min(width - 96, 312),
+                )
               ) : selectedItem.icon ? (
                 <IconMedallion glyph={selectedItem.icon} size={80} accent={rarityColor} />
               ) : selectedItem.tabType === 'frames' ? (
@@ -826,21 +819,10 @@ const styles = StyleSheet.create({
 
   // Preview area
   cardPreviewArea: {
-    height: 62,
+    minHeight: 62,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
-  },
-  themePreview: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  themeSwatchLarge: {
-    width: 28,
-    height: 28,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
   },
 
   // Card name
@@ -976,26 +958,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
     minHeight: 80,
-  },
-  themePreviewLarge: {
-    gap: 6,
-    width: '100%',
-  },
-  themeSwatchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  themeSwatchBig: {
-    width: 36,
-    height: 24,
-    borderRadius: 6,
-  },
-  swatchLabel: {
-    fontFamily: FONTS.bodyMedium,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textTransform: 'capitalize',
   },
   modalName: {
     fontFamily: FONTS.display,

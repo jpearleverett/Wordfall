@@ -15,17 +15,17 @@ import Svg, {
 } from 'react-native-svg';
 import { IconProps, VB, BodyGrad, DuoGrad, gradId, rim, shade, HILITE, HILITE_SOFT } from './IconBase';
 
-const SHADOW = 'rgba(10,6,30,0.30)';
-const BRASS = '#d9a441';
-const WOOD = '#8a5a30';
+export const SHADOW = 'rgba(10,6,30,0.30)';
+export const BRASS = '#d9a441';
+export const WOOD = '#8a5a30';
 
 /** Soft elliptical ground shadow so pieces sit on the card, not float. */
-function Ground({ cx = 12, cy = 21.4, rx = 7, ry = 1.2 }: { cx?: number; cy?: number; rx?: number; ry?: number }) {
+export function Ground({ cx = 12, cy = 21.4, rx = 7, ry = 1.2 }: { cx?: number; cy?: number; rx?: number; ry?: number }) {
   return <Ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={SHADOW} />;
 }
 
 /** Radial glow for lit elements (lamp light, flames, crystal cores). */
-function GlowGrad({ id, color }: { id: string; color: string }) {
+export function GlowGrad({ id, color }: { id: string; color: string }) {
   return (
     <Defs>
       <RadialGradient id={id} cx="0.5" cy="0.5" r="0.5">

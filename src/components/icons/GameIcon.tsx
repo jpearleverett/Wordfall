@@ -39,6 +39,30 @@ import {
   GlobeAntiqueIcon, LampBrassIcon, PaintingSunsetIcon, StatueThinkerIcon,
   TelescopeMiniIcon,
 } from './iconsDecor';
+import {
+  AntiqueTableIcon, AuroraLampIcon, CandleDecorIcon, CrystalDeskIcon,
+  FireplaceDecorIcon, FireSconceIcon, OakDeskIcon, PaperLanternIcon,
+  WordThroneIcon,
+} from './iconsDecor2';
+import {
+  CascadeCrystalIcon, CrystalDisplayIcon, DiamondPlaqueIcon, GoldenShelfIcon,
+  HourglassDecorIcon, MysteryOrbIcon, RallyBannerIcon, SpeedTrophyIcon,
+  WorldGlobeIcon,
+} from './iconsDecor3';
+import {
+  CommunityStatueIcon, GauntletShieldIcon, LabEquipmentIcon, NaturePlaqueIcon,
+  OceanGlobeIcon, PaintingForestIcon, RetroArcadeIcon, SeasonThroneIcon,
+  ShipWheelIcon,
+} from './iconsDecor4';
+import {
+  AtlasOceanIcon, ChapterMarkerIcon, CodexMythIcon, ForbiddenBookIcon,
+  JournalScienceIcon, PlatinumDisplayIcon, StarterBookendIcon, TomeNatureIcon,
+  WhaleTrophyIcon,
+} from './iconsDecor5';
+import {
+  BlitzTrophyIcon, CommunityStarIcon, GravityCrystalIcon, OceanWaveIcon,
+  PiggyJarIcon,
+} from './iconsDecor6';
 
 export type GameIconName = keyof typeof REGISTRY;
 
@@ -70,6 +94,34 @@ const REGISTRY = {
   telescopeMini: TelescopeMiniIcon, statueThinker: StatueThinkerIcon,
   fernPot: FernPotIcon, paintingSunset: PaintingSunsetIcon,
   crystalBallDecor: CrystalBallDecorIcon, crownWisdom: CrownWisdomIcon,
+  // decoration illustrations — furniture & lighting (iconsDecor2)
+  oakDesk: OakDeskIcon, antiqueTable: AntiqueTableIcon,
+  wordThrone: WordThroneIcon, crystalDesk: CrystalDeskIcon,
+  candleDecor: CandleDecorIcon, paperLantern: PaperLanternIcon,
+  fireplaceDecor: FireplaceDecorIcon, auroraLamp: AuroraLampIcon,
+  fireSconce: FireSconceIcon,
+  // decoration illustrations — ornaments A (iconsDecor3)
+  worldGlobe: WorldGlobeIcon, hourglassDecor: HourglassDecorIcon,
+  goldenShelf: GoldenShelfIcon, crystalDisplay: CrystalDisplayIcon,
+  speedTrophy: SpeedTrophyIcon, diamondPlaque: DiamondPlaqueIcon,
+  rallyBanner: RallyBannerIcon, cascadeCrystal: CascadeCrystalIcon,
+  mysteryOrb: MysteryOrbIcon,
+  // decoration illustrations — ornaments B (iconsDecor4)
+  retroArcade: RetroArcadeIcon, paintingForest: PaintingForestIcon,
+  labEquipment: LabEquipmentIcon, shipWheel: ShipWheelIcon,
+  gauntletShield: GauntletShieldIcon, communityStatue: CommunityStatueIcon,
+  seasonThrone: SeasonThroneIcon, oceanGlobe: OceanGlobeIcon,
+  naturePlaque: NaturePlaqueIcon,
+  // decoration illustrations — books & bundle exclusives (iconsDecor5)
+  tomeNature: TomeNatureIcon, journalScience: JournalScienceIcon,
+  codexMyth: CodexMythIcon, atlasOcean: AtlasOceanIcon,
+  forbiddenBook: ForbiddenBookIcon, starterBookend: StarterBookendIcon,
+  chapterMarker: ChapterMarkerIcon, whaleTrophy: WhaleTrophyIcon,
+  platinumDisplay: PlatinumDisplayIcon,
+  // decoration illustrations — event exclusives + piggy jar (iconsDecor6)
+  communityStar: CommunityStarIcon, gravityCrystal: GravityCrystalIcon,
+  blitzTrophy: BlitzTrophyIcon, oceanWave: OceanWaveIcon,
+  piggyJar: PiggyJarIcon,
 } as const;
 
 /**

@@ -48,6 +48,8 @@ import {
   getTitleLabel,
 } from '../data/cosmetics';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
+import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
 import {
   canPrestige,
   getPrestigeRewards,
@@ -875,6 +877,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         return COLORS.rarityCommon;
     }
   }, [equippedFrame.rarity]);
+  // Bespoke SVG ring art for the equipped frame; its accent drives the glow
+  // shadow so a flame frame glows ember-orange, a circuit frame cyan, etc.
+  const frameArt = useMemo(() => resolveFrameArt(equippedFrameId), [equippedFrameId]);
 
   // MG3 in launch_blockers.md: animated glow for legendary frames.
   // Pulses scale 1.00 ↔ 1.04 and shadow opacity 0.6 ↔ 1.0 on a 1400ms
@@ -975,14 +980,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <Animated.View
           style={[
             styles.avatarRing,
-            {
-              borderColor: frameBorderColor,
-              shadowColor: frameBorderColor,
-              backgroundColor: equippedTheme.colors.surface,
-            },
+            { shadowColor: frameArt.accent },
             animatedRingStyle,
           ]}
         >
+          {/* Bespoke SVG frame ring replaces the old rarity-colored border;
+              the legendary pulse (scale + shadow) wraps it unchanged. */}
+          <ProfileFrameArt frameId={equippedFrameId} size={100}>
           <View
             style={[
               styles.avatarCircle,
@@ -1026,6 +1030,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             {/* Glass top shine */}
             <View style={styles.avatarShine} pointerEvents="none" />
           </View>
+          </ProfileFrameArt>
         </Animated.View>
         <View style={styles.levelBadge}>
           <LinearGradient
@@ -1434,12 +1439,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,229,255,0.20)',
     opacity: 0.6,
   },
+  // The ring itself is now drawn by ProfileFrameArt's bespoke SVG art —
+  // this wrapper only carries the size and the (legendary-pulsed) glow.
   avatarRing: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    borderWidth: 3,
-    borderColor: COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: COLORS.accent,
