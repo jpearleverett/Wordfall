@@ -381,6 +381,23 @@ export const LetterCell = React.memo(function LetterCell({
           }}
         />
 
+        {/* Bevel rim — one View with per-side border colors fakes a lit
+            top-left / shadowed bottom-right chamfer, giving the tile the
+            physical "piece" read AAA boards have, at the cost of a single
+            static native view per cell. */}
+        <View
+          pointerEvents="none"
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            borderRadius: insetBR,
+            borderWidth: 1.5,
+            borderTopColor: 'rgba(255,255,255,0.30)',
+            borderLeftColor: 'rgba(255,255,255,0.16)',
+            borderRightColor: 'rgba(0,0,0,0.28)',
+            borderBottomColor: 'rgba(0,0,0,0.40)',
+          }}
+        />
+
         {/* Top specular pinprick highlight. */}
         <View
           style={{

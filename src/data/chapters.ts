@@ -36,7 +36,11 @@ export const WING_PALETTES: Record<string, { bg: string; surface: string; accent
 // base stop for depth but lifts the top stops into a vivid, jewel-toned
 // range so white letters pop and the board reads as candy, not concrete.
 export const WING_TILE_RAMPS: Record<string, [string, string, string, string, string]> = {
-  nature:    ['#4db06b', '#379552', '#27793f', '#1a5a2e', '#0f3a1e'],
+  // Nature sits in emerald-teal rather than pure green: teal shares a
+  // family with the app's cyan/purple synthwave chrome, so nature boards
+  // harmonize with the shell instead of clashing (repeated blind-review
+  // note: "green board fights purple frame").
+  nature:    ['#35b892', '#2a9c7a', '#1f7d61', '#155d48', '#0c3d2f'],
   science:   ['#5b8fe8', '#4674cc', '#345da8', '#244480', '#162c54'],
   mythology: ['#a04cc0', '#8438a4', '#682a85', '#4d1e64', '#321342'],
   ocean:     ['#42a5dd', '#3186b8', '#236a94', '#164d6e', '#0c3148'],
