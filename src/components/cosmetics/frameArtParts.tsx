@@ -9,7 +9,7 @@
  * decorative flourishes (flames, shards, crowns, stars) reach out to r≈50.
  */
 import React from 'react';
-import { Circle, Path } from 'react-native-svg';
+import { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { HILITE } from '../icons/IconBase';
 
 export const FVB = '0 0 100 100';
@@ -89,6 +89,43 @@ export function TopShine({ r = 42, spread = 52, opacity = 0.7, w = 2 }: {
     <Path
       d={arcPath(r, 360 - spread, 360 + spread)}
       stroke={HILITE}
+      strokeWidth={w}
+      strokeLinecap="round"
+      fill="none"
+      opacity={opacity}
+    />
+  );
+}
+
+/**
+ * Multi-stop vertical gradient for material bands (metals need more than the
+ * two/three stops of BodyGrad/DuoGrad to read as polished surfaces — bright
+ * skylight, tone roll, core color, reflected floor bounce, deep base).
+ * `stops` is [offset 0–1, #rrggbb][].
+ */
+export function MetalGrad({ id, stops }: { id: string; stops: Array<[number, string]> }) {
+  return (
+    <Defs>
+      <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+        {stops.map(([off, c]) => (
+          <Stop key={off} offset={String(off)} stopColor={c} />
+        ))}
+      </LinearGradient>
+    </Defs>
+  );
+}
+
+/**
+ * Dark occlusion arc hugging the band's lower edge — the "sits on the page"
+ * shadow every dimensional ring needs opposite its specular.
+ */
+export function UnderShadow({ r = 44.8, spread = 58, opacity = 0.4, w = 2 }: {
+  r?: number; spread?: number; opacity?: number; w?: number;
+}) {
+  return (
+    <Path
+      d={arcPath(r, 180 - spread, 180 + spread)}
+      stroke="rgba(5,0,16,1)"
       strokeWidth={w}
       strokeLinecap="round"
       fill="none"

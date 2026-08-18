@@ -1,6 +1,9 @@
 /**
  * Shared chrome for the achievement badges: metal ring, enamel disc, ribbon
- * banner, glow backplate, plus the stone palette used by the unearned state.
+ * banner, glow backplate, plus the metal palette (bronze / silver / gold /
+ * stone). Silhouette variants (shield, rosette) and the tier / locked-state
+ * dressings live in `achievementBadgeShapes.tsx`; the tinted-ghost color math
+ * for the unearned state lives in `achievementBadgeCatalog.ts`.
  *
  * Badges draw in a 100×100 viewBox. The medallion is centered at (50,44) so
  * the ribbon banner fits along the base (y 76–94). Same material recipe as
@@ -16,9 +19,10 @@ import { star5 } from './frameArtParts';
 export const ABVB = '0 0 100 100';
 
 /** Props every bespoke emblem receives. `c` maps a #rrggbb literal to its
- * display color: identity when earned, the stone ramp when unearned — so a
- * single authored composition yields both the full-color and the carved-stone
- * silhouette version (with tonal depth preserved, not just opacity). */
+ * display color: identity when earned, the accent-tinted ghost ramp
+ * (`ghostRamp` in the catalog) when unearned — so a single authored
+ * composition yields both the full-color and the tinted-ghost version
+ * (with tonal depth preserved, not just opacity). */
 export interface EmblemProps {
   c: (hex: string) => string;
 }
@@ -38,23 +42,6 @@ export const METALS: Record<BadgeMetal, MetalSpec> = {
   gold: { light: '#ffe27a', dark: '#b06a00', rimC: '#5e3800', stud: '#d99a12' },
   stone: { light: '#9aa0b4', dark: '#4a4f63', rimC: '#272b3a', stud: '#5f6579' },
 };
-
-/** Map any #rrggbb onto a cool slate ramp by luminance, so unearned badges
- * become desaturated stone reliefs that keep their light/shadow structure. */
-export function stoneOf(hex: string): string {
-  const m = /^#([0-9a-fA-F]{6})$/.exec(hex);
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  const r = (n >> 16) & 0xff;
-  const g = (n >> 8) & 0xff;
-  const b = n & 0xff;
-  const l = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  const mix = (lo: number, hi: number) => Math.round(lo + (hi - lo) * l);
-  const rr = mix(0x30, 0xa6);
-  const gg = mix(0x34, 0xac);
-  const bb = mix(0x46, 0xc0);
-  return `#${((rr << 16) | (gg << 8) | bb).toString(16).padStart(6, '0')}`;
-}
 
 /** Soft radial accent glow behind an earned badge. */
 export function BadgeGlow({ accent }: { accent: string }) {

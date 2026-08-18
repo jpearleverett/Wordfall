@@ -50,13 +50,26 @@ import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 import { getDecorationIconName } from '../data/library';
 
 /**
- * Bespoke art for reward kinds whose catalog emoji resolves to a generic
- * fallback icon ('✨' → sparkle, '⭐' → star). Decoration cosmetics resolve
- * through the decoration icon table so a mapped id shows its own art, with
- * the banner as the season-decoration default; rare tiles get the crystal.
- * Returns undefined for kinds whose emoji already resolves to distinct art.
+ * Reward → illustration-grade render (iconsRewards). Amounts escalate the
+ * art so the ladder visibly pays more as it climbs: coins go single coin →
+ * stack → pile, gems go single → cluster → hoard, mystery boxes go bronze
+ * chest → gold chest. Hints get the glowing bulb, boosters the sigil crate,
+ * rare tiles the crystal. Decoration cosmetics resolve through the
+ * decoration icon table so a mapped id shows its own art, with the banner
+ * as the season-decoration default. Returns undefined only for cosmetic
+ * kinds whose catalog emoji already resolves to distinct art.
  */
 function rewardIconName(reward: PassReward): GameIconName | undefined {
+  const amount = reward.amount ?? 0;
+  if (reward.type === 'coins') {
+    return amount < 100 ? 'coinSmall' : amount <= 300 ? 'coinStack' : 'coinPile';
+  }
+  if (reward.type === 'gems') {
+    return amount < 10 ? 'gemSingle' : amount <= 25 ? 'gemCluster' : 'gemHoard';
+  }
+  if (reward.type === 'hints') return 'hintBulbReward';
+  if (reward.type === 'booster') return 'boosterCrate';
+  if (reward.type === 'mystery_box') return amount >= 2 ? 'chestGold' : 'chestBronze';
   if (reward.type === 'rare_tile') return 'cascadeCrystal';
   if (reward.type === 'cosmetic' && reward.cosmeticId && /(^|_)deco/.test(reward.cosmeticId)) {
     const resolved = getDecorationIconName(reward.cosmeticId);
@@ -66,9 +79,56 @@ function rewardIconName(reward: PassReward): GameIconName | undefined {
 }
 
 /**
+ * Reward render sitting directly on the card — no dark medallion well.
+ * A soft glow disc floats behind the art so it reads as lit and
+ * dimensional; the illustrations carry their own grounded shadows.
+ * Deliberately NEVER dimmed: locked rewards stay full-color and covetable
+ * (only the card shell dims — blind-panel "identical dark coin dot" fix).
+ */
+function RewardArt({
+  glyph,
+  name,
+  size = 46,
+  glow = COLORS.gold,
+}: {
+  glyph?: string;
+  name?: GameIconName;
+  size?: number;
+  glow?: string;
+}) {
+  const halo = /^#[0-9a-fA-F]{6}$/.test(glow) ? glow : COLORS.gold;
+  return (
+    <View
+      style={{
+        width: size + 8,
+        height: size + 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <View
+        style={{
+          position: 'absolute',
+          width: size * 0.92,
+          height: size * 0.92,
+          borderRadius: (size * 0.92) / 2,
+          backgroundColor: halo + '14',
+          shadowColor: halo,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.55,
+          shadowRadius: size * 0.28,
+          elevation: 6,
+        }}
+      />
+      <GameIcon glyph={glyph} name={name} size={size} />
+    </View>
+  );
+}
+
+/**
  * IconMedallion's shell (accent ring + glow + body gradient) hosting a
- * GameIcon SVG instead of an emoji Text — same layered-gem look with the
- * bespoke icon set. Local because common/IconMedallion is emoji-Text-based.
+ * GameIcon SVG instead of an emoji Text. Reward art no longer sits in this
+ * dark well (see RewardArt); it survives as the small lock badge chip.
  */
 function SvgMedallion({
   glyph,
@@ -489,6 +549,7 @@ const LaneCard = memo(function LaneCard({
       style={[
         styles.laneCard,
         premiumLane ? styles.laneCardPremium : styles.laneCardFree,
+        muted && styles.laneCardLockedShell,
         claimed && styles.laneCardClaimed,
       ]}
     >
@@ -500,8 +561,22 @@ const LaneCard = memo(function LaneCard({
         }
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
-        style={[StyleSheet.absoluteFillObject, styles.laneCardFill]}
+        style={[
+          StyleSheet.absoluteFillObject,
+          styles.laneCardFill,
+          muted && styles.laneCardFillDim,
+        ]}
       />
+      {/* Warm gold inner wash so the premium lane reads richer than free
+          at a glance, even before the ribbon/border register. */}
+      {premiumLane && (
+        <LinearGradient
+          colors={['rgba(255,184,0,0.16)', 'rgba(255,150,40,0.02)']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[StyleSheet.absoluteFillObject, styles.laneCardFill]}
+        />
+      )}
       {premiumLane && (
         <LinearGradient
           colors={[...GRADIENTS.synthwave.holographic]}
@@ -529,22 +604,20 @@ const LaneCard = memo(function LaneCard({
             accessibilityLabel={`Landmark tier ${tier} reward`}
           >
             <View style={[styles.gildedRingInner, muted && styles.gildedRingInnerMuted]}>
-              <SvgMedallion
+              <RewardArt
                 glyph={reward.icon}
                 name={rewardIconName(reward)}
-                size={40}
-                accent={COLORS.gold}
-                muted={muted}
+                size={44}
+                glow={COLORS.gold}
               />
             </View>
           </View>
         ) : (
-          <SvgMedallion
+          <RewardArt
             glyph={reward.icon}
             name={rewardIconName(reward)}
-            size={42}
-            accent={laneAccent}
-            muted={muted}
+            size={46}
+            glow={laneAccent}
           />
         )}
         {premiumLocked && (
@@ -1269,8 +1342,18 @@ const styles = StyleSheet.create({
   laneCardClaimed: {
     opacity: 0.6,
   },
+  // Locked treatment: dim the SHELL only (border + fill + shadow) — the
+  // reward render stays full-color so it still looks covetable.
+  laneCardLockedShell: {
+    borderColor: 'rgba(255,255,255,0.12)',
+    shadowOpacity: 0.1,
+    elevation: 2,
+  },
   laneCardFill: {
     borderRadius: 18,
+  },
+  laneCardFillDim: {
+    opacity: 0.55,
   },
   holoStrip: {
     position: 'absolute',
@@ -1300,9 +1383,9 @@ const styles = StyleSheet.create({
   rewardMedallionWrap: {
     marginBottom: 6,
   },
-  // Gilded double ring wrapping landmark-tier medallions (10/20/30/40/50).
+  // Gilded double ring wrapping landmark-tier reward art (10/20/30/40/50).
   gildedRing: {
-    borderRadius: 27,
+    borderRadius: 30,
     borderWidth: 1.5,
     borderColor: COLORS.gold,
     padding: 2,
@@ -1320,7 +1403,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   gildedRingInner: {
-    borderRadius: 23,
+    borderRadius: 26,
     borderWidth: 1,
     borderColor: 'rgba(255, 214, 92, 0.55)',
     padding: 1.5,

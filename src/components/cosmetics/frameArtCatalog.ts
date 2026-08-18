@@ -13,6 +13,10 @@ import { getFrame, resolveLegacyCosmeticId } from '../../data/cosmetics';
 
 export type FrameDesign =
   | 'simple'
+  | 'bronzeBand'
+  | 'silverBand'
+  | 'goldBand'
+  | 'diamondRing'
   | 'laurel'
   | 'gilded'
   | 'neonCircuit'
@@ -36,12 +40,12 @@ const spec = (design: FrameDesign, accent: string): FrameArtSpec => ({ design, a
 
 /** Explicit art assignment for every frame id in the catalog (incl. seeds). */
 export const FRAME_ART: Record<string, FrameArtSpec> = {
-  // ── Base progression rings ──
+  // ── Base progression rings — each metal reads as its own material ──
   default: spec('simple', COLORS.rarityCommon),
-  bronze_ring: spec('simple', '#cd8a4e'),
-  silver_ring: spec('simple', '#c3cbd9'),
-  gold_ring: spec('simple', '#ffb800'),
-  diamond_ring: spec('crystal', '#9fd8ff'),
+  bronze_ring: spec('bronzeBand', '#cd8a4e'),
+  silver_ring: spec('silverBand', '#c3cbd9'),
+  gold_ring: spec('goldBand', '#ffb800'),
+  diamond_ring: spec('diamondRing', '#9fd8ff'),
   // ── Wing / mastery frames ──
   nature_frame: spec('vine', '#4caf50'),
   science_frame: spec('neonCircuit', '#39d5ff'),
@@ -90,9 +94,9 @@ export const FRAME_ART: Record<string, FrameArtSpec> = {
   nature_bloom_frame: spec('vine', '#58c15e'),
   cosmic_frame: spec('cosmic', '#c84dff'),
   // ── Prestige ──
-  prestige_bronze: spec('simple', '#cd8a4e'),
-  prestige_silver: spec('simple', '#c9d2e0'),
-  prestige_diamond: spec('crystal', '#bfe3ff'),
+  prestige_bronze: spec('bronzeBand', '#cd8a4e'),
+  prestige_silver: spec('silverBand', '#c9d2e0'),
+  prestige_diamond: spec('diamondRing', '#bfe3ff'),
   // ── Referrals ──
   frame_social_butterfly: spec('vine', '#ff77c8'),
   frame_referral_champion: spec('laurel', '#ffcf5e'),
@@ -108,7 +112,7 @@ export const FRAME_ART: Record<string, FrameArtSpec> = {
   frame_legendary: spec('laurel', '#ffb800'),
   frame_speed: spec('neonCircuit', '#39d5ff'),
   // ── Season pass ──
-  frame_season_bronze: spec('simple', '#cd8a4e'),
+  frame_season_bronze: spec('bronzeBand', '#cd8a4e'),
   frame_season_champion: spec('laurel', '#ffd24d'),
   // ── Seasonal wheels ──
   frame_cherry_blossom: spec('vine', '#ffa5c8'),

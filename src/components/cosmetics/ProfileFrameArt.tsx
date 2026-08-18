@@ -16,6 +16,8 @@ import { FVB, FrameRenderProps } from './frameArtParts';
 import { FrameDesign, resolveFrameArt } from './frameArtCatalog';
 import {
   SimpleRing,
+  BronzeBand,
+  SilverBand,
   LaurelFrame,
   GildedFrame,
   NeonCircuitFrame,
@@ -30,10 +32,16 @@ import {
   CosmicFrame,
   ChromeFrame,
   HoloFrame,
+  GoldBand,
+  DiamondRing,
 } from './frameArtRenders2';
 
 const RENDERERS: Record<FrameDesign, React.ComponentType<FrameRenderProps>> = {
   simple: SimpleRing,
+  bronzeBand: BronzeBand,
+  silverBand: SilverBand,
+  goldBand: GoldBand,
+  diamondRing: DiamondRing,
   laurel: LaurelFrame,
   gilded: GildedFrame,
   neonCircuit: NeonCircuitFrame,

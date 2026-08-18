@@ -5,7 +5,7 @@
 import React, { useMemo } from 'react';
 import { Circle, Defs, Ellipse, G, LinearGradient, Path, Stop } from 'react-native-svg';
 import { DuoGrad, BodyGrad, gradId, shade, HILITE, HILITE_SOFT } from '../icons/IconBase';
-import { FrameRenderProps, arcPath, leafPath, pt, sparkle4, star5, Rims, TopShine } from './frameArtParts';
+import { FrameRenderProps, arcPath, leafPath, pt, sparkle4, star5, MetalGrad, Rims, TopShine, UnderShadow } from './frameArtParts';
 
 /** Rolling ocean: deep-sea band with breaking wave curls and foam caps. */
 export function WaveFrame({ accent }: FrameRenderProps) {
@@ -49,6 +49,7 @@ export function WaveFrame({ accent }: FrameRenderProps) {
       <Path d="M81 24.6 c 1 1.5 1 2.5 0.1 2.9 c -0.9 0.4 -1.7 -0.4 -1.4 -1.5 c 0.2 -0.6 0.7 -1 1.3 -1.4 Z" fill={shade(accent, 42)} stroke={edge} strokeWidth={0.5} />
       <Path d="M18 68 c 0.9 1.3 0.9 2.2 0.1 2.5 c -0.8 0.4 -1.5 -0.3 -1.2 -1.3 c 0.1 -0.5 0.5 -0.8 1.1 -1.2 Z" fill={shade(accent, 42)} stroke={edge} strokeWidth={0.5} />
       <Circle cx={50} cy={50} r={38.7} fill="none" stroke="#dff6ff" strokeWidth={0.9} opacity={0.5} />
+      <UnderShadow r={45.2} spread={48} opacity={0.36} w={1.8} />
       <TopShine r={42} spread={40} opacity={0.6} w={1.8} />
     </>
   );
@@ -89,6 +90,9 @@ export function StarOrbitFrame({ accent }: FrameRenderProps) {
         const p = pt(r, a);
         return <Circle key={i} cx={p.x} cy={p.y} r={i % 2 === 0 ? 0.85 : 0.6} fill="#e8e6ff" opacity={0.55 + (i % 3) * 0.15} />;
       })}
+      {/* moonlight specular + grounding shadow on the night band */}
+      <TopShine r={44.6} spread={30} opacity={0.32} w={1.3} />
+      <UnderShadow r={44.8} spread={46} opacity={0.4} w={1.7} />
     </>
   );
 }
@@ -140,6 +144,7 @@ export function VineFrame({ accent }: FrameRenderProps) {
       {blossom(0)}
       {blossom(118)}
       {blossom(242)}
+      <UnderShadow r={44.4} spread={44} opacity={0.38} w={1.7} />
       <TopShine r={42} spread={26} opacity={0.35} w={1.2} />
     </>
   );
@@ -173,6 +178,10 @@ export function RoyalFrame({ accent }: FrameRenderProps) {
           </G>
         );
       })}
+      {/* specular gleams on the outer gold rim + grounding shadow */}
+      <Path d={arcPath(45.4, 300, 326)} stroke="#fff1c0" strokeWidth={1.3} strokeLinecap="round" fill="none" opacity={0.8} />
+      <Path d={arcPath(45.4, 40, 62)} stroke="#fff1c0" strokeWidth={1} strokeLinecap="round" fill="none" opacity={0.55} />
+      <UnderShadow r={46} spread={48} opacity={0.42} w={1.8} />
       {/* seat shadow beneath the crown */}
       <Path d={arcPath(43.8, 338, 382)} stroke="rgba(20,4,2,0.4)" strokeWidth={6} fill="none" strokeLinecap="round" />
       {/* the crown */}
@@ -224,6 +233,7 @@ export function CosmicFrame({ accent }: FrameRenderProps) {
       <Path d={sparkle4(pt(45, 140).x, pt(45, 140).y, 2.3)} fill="#fff" opacity={0.9} />
       {/* outer aura */}
       <Circle cx={50} cy={50} r={46.8} fill="none" stroke={accent} strokeWidth={1.5} opacity={0.24} />
+      <UnderShadow r={45.6} spread={48} opacity={0.4} w={1.8} />
       <TopShine r={42} spread={30} opacity={0.3} w={1.4} />
     </>
   );
@@ -268,6 +278,7 @@ export function ChromeFrame({ accent }: FrameRenderProps) {
           </G>
         );
       })}
+      <UnderShadow r={45.6} spread={50} opacity={0.42} w={1.9} />
     </>
   );
 }
@@ -307,6 +318,104 @@ export function HoloFrame({ accent }: FrameRenderProps) {
       <Path d={sparkle4(pt(42, 130).x, pt(42, 130).y, 2.2)} fill="#fff" opacity={0.8} />
       <Circle cx={pt(42, 95).x} cy={pt(42, 95).y} r={0.9} fill={accent} opacity={0.8} />
       <Circle cx={pt(42, 220).x} cy={pt(42, 220).y} r={0.7} fill={accent} opacity={0.7} />
+      {/* grounding shadow so the light-show still sits on the page */}
+      <UnderShadow r={45.4} spread={46} opacity={0.28} w={1.6} />
+    </>
+  );
+}
+
+/** Rich gold: deep 5-stop band, beveled edges, triple gleam, engraved dots. */
+export function GoldBand({ accent }: FrameRenderProps) {
+  const body = useMemo(() => gradId('frGldB'), []);
+  const bevO = useMemo(() => gradId('frGldO'), []);
+  const bevI = useMemo(() => gradId('frGldI'), []);
+  const EDGE = '#4a2a05';
+  return (
+    <>
+      <MetalGrad
+        id={body}
+        stops={[[0, '#fff6cf'], [0.24, '#ffd764'], [0.5, '#f0a92e'], [0.76, '#b87614'], [1, '#6e4208']]}
+      />
+      <DuoGrad id={bevO} from="#fff1b4" to="#8a5510" />
+      <DuoGrad id={bevI} from="#7c4c0c" to="#ffdf86" />
+      <Circle cx={50} cy={50} r={42} fill="none" stroke={`url(#${body})`} strokeWidth={8.4} />
+      {/* beveled chamfers: lit outer, shadow-to-bounce inner */}
+      <Circle cx={50} cy={50} r={45.3} fill="none" stroke={`url(#${bevO})`} strokeWidth={1.2} />
+      <Circle cx={50} cy={50} r={38.8} fill="none" stroke={`url(#${bevI})`} strokeWidth={1.1} />
+      <Rims color={EDGE} rOut={46.3} rIn={37.8} w={1.4} />
+      <Circle cx={50} cy={50} r={36.9} fill="none" stroke="rgba(5,0,16,0.4)" strokeWidth={1} />
+      {/* engraved dot chain — dark pit with a catch-light on its lower lip */}
+      {Array.from({ length: 16 }, (_, i) => {
+        const p = pt(42, i * 22.5 + 11.25);
+        return (
+          <G key={i}>
+            <Circle cx={p.x} cy={p.y} r={0.62} fill="#8a5510" opacity={0.85} />
+            <Circle cx={p.x} cy={p.y + 0.62} r={0.3} fill="#ffe9a4" opacity={0.55} />
+          </G>
+        );
+      })}
+      {/* three specular gleams sweeping clockwise off the key light */}
+      <Path d={arcPath(42.7, 314, 352)} stroke="#fffbe8" strokeWidth={2.3} strokeLinecap="round" fill="none" opacity={0.92} />
+      <Path d={arcPath(42.7, 34, 56)} stroke="#fff3c4" strokeWidth={1.5} strokeLinecap="round" fill="none" opacity={0.65} />
+      <Path d={arcPath(42.7, 108, 122)} stroke="#ffedb0" strokeWidth={1.1} strokeLinecap="round" fill="none" opacity={0.5} />
+      <Path d={sparkle4(pt(45.6, 333).x, pt(45.6, 333).y, 2.4)} fill="#fff" opacity={0.95} />
+      {/* warm reflected bounce along the floor of the band */}
+      <Path d={arcPath(40.4, 156, 204)} stroke="#ffc95e" strokeWidth={1.4} strokeLinecap="round" fill="none" opacity={0.45} />
+      <UnderShadow r={45.4} spread={52} opacity={0.42} w={2} />
+    </>
+  );
+}
+
+/** Platinum band set with 8 faceted marquise gems, prismatic sparkle. */
+export function DiamondRing({ accent }: FrameRenderProps) {
+  const body = useMemo(() => gradId('frDiaB'), []);
+  const bevO = useMemo(() => gradId('frDiaO'), []);
+  const EDGE = '#232936';
+  const MARQ = 'M0 -4.3 Q 2.05 0 0 4.3 Q -2.05 0 0 -4.3 Z';
+  const gemLight = shade(accent, 62);
+  const gemMid = shade(accent, 8);
+  const gemDeep = shade(accent, -52);
+  return (
+    <>
+      <MetalGrad
+        id={body}
+        stops={[[0, '#ffffff'], [0.25, '#eef3f9'], [0.5, '#c9d3e1'], [0.76, '#93a0b4'], [1, '#5a6476']]}
+      />
+      <DuoGrad id={bevO} from="#fdfeff" to="#6c7688" />
+      <Circle cx={50} cy={50} r={42} fill="none" stroke={`url(#${body})`} strokeWidth={7.6} />
+      <Circle cx={50} cy={50} r={45.1} fill="none" stroke={`url(#${bevO})`} strokeWidth={1} />
+      <Rims color={EDGE} rOut={45.9} rIn={38.1} w={1.3} />
+      <Circle cx={50} cy={50} r={37.2} fill="none" stroke="rgba(5,0,16,0.36)" strokeWidth={1} />
+      {/* platinum speculars around the settings */}
+      <Path d={arcPath(42.4, 310, 344)} stroke="#ffffff" strokeWidth={1.9} strokeLinecap="round" fill="none" opacity={0.9} />
+      <Path d={arcPath(42.4, 128, 142)} stroke="#dce8f8" strokeWidth={1.2} strokeLinecap="round" fill="none" opacity={0.5} />
+      {/* eight bezel-set marquise gems, radial, 2-facet cut */}
+      {Array.from({ length: 8 }, (_, i) => {
+        const a = i * 45;
+        const p = pt(42, a);
+        return (
+          <G key={a} transform={`translate(${p.x} ${p.y}) rotate(${a})`}>
+            {/* seat shadow + platinum bezel */}
+            <Path d={MARQ} transform="translate(0 0.5) scale(1.24)" fill="rgba(6,10,22,0.4)" />
+            <Path d={MARQ} transform="scale(1.22)" fill="none" stroke="#e8eef8" strokeWidth={0.9} />
+            {/* body, then the two facets meeting at the keel */}
+            <Path d={MARQ} fill={gemMid} stroke={gemDeep} strokeWidth={0.55} strokeLinejoin="round" />
+            <Path d="M0 -4.3 Q -2.05 0 0 4.3 Z" fill={gemLight} opacity={0.95} />
+            <Path d="M0 -4.3 Q 2.05 0 0 4.3 Z" fill={gemDeep} opacity={0.55} />
+            <Path d="M0 -4.3 L 0 4.3" stroke="#ffffff" strokeWidth={0.45} opacity={0.85} />
+            {/* glint on the shoulder */}
+            <Path d="M -0.9 -2.5 L -0.3 -3.6" stroke="#fff" strokeWidth={0.55} strokeLinecap="round" />
+          </G>
+        );
+      })}
+      {/* prismatic fire: white sparkles + refracted color ticks */}
+      <Path d={sparkle4(pt(46.8, 22).x, pt(46.8, 22).y, 3)} fill="#fff" opacity={0.95} />
+      <Path d={sparkle4(pt(46.4, 200).x, pt(46.4, 200).y, 2.2)} fill="#fff" opacity={0.85} />
+      <Path d={sparkle4(pt(46.6, 118).x, pt(46.6, 118).y, 1.8)} fill="#fff" opacity={0.7} />
+      <Path d={arcPath(45.8, 40, 52)} stroke="#ff9ad2" strokeWidth={0.8} strokeLinecap="round" fill="none" opacity={0.75} />
+      <Path d={arcPath(45.8, 54, 64)} stroke="#8ef0e2" strokeWidth={0.8} strokeLinecap="round" fill="none" opacity={0.75} />
+      <Path d={arcPath(45.8, 218, 228)} stroke="#c1a4ff" strokeWidth={0.8} strokeLinecap="round" fill="none" opacity={0.7} />
+      <UnderShadow r={45.2} spread={50} opacity={0.36} w={1.8} />
     </>
   );
 }

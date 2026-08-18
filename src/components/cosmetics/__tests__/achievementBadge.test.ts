@@ -1,15 +1,21 @@
 /**
  * Pins the achievement-badge art catalog to the achievements catalog: every
  * achievement id must have an explicit bespoke art assignment (accent +
- * emblem), no art entry may outlive its achievement, emblems must be unique
- * per achievement (bespoke, never shared), and the resolver must never
- * return undefined for any id, known or not.
+ * emblem + silhouette), no art entry may outlive its achievement, emblems
+ * must be unique per achievement (bespoke, never shared), silhouettes must
+ * follow the family shape map with all three shapes represented on the wall,
+ * the locked-state ghost tint must stay family-colored (never flat slate),
+ * and the resolver must never return undefined for any id, known or not.
  */
 import { ACHIEVEMENTS } from '../../../data/achievements';
 import {
   ACHIEVEMENT_BADGE_ART,
   ACHIEVEMENT_FAMILY_ACCENTS,
+  ACHIEVEMENT_FAMILY_SHAPES,
   DEFAULT_BADGE_ART,
+  ghostCloth,
+  ghostEnamel,
+  ghostRamp,
   resolveAchievementBadgeArt,
 } from '../achievementBadgeCatalog';
 
@@ -39,10 +45,37 @@ describe('achievementBadge art catalog', () => {
     }
   });
 
+  it("keys every entry's silhouette off the family shape map, using all three shapes", () => {
+    for (const achievement of ACHIEVEMENTS) {
+      expect(ACHIEVEMENT_BADGE_ART[achievement.id].shape).toBe(
+        ACHIEVEMENT_FAMILY_SHAPES[achievement.category]
+      );
+    }
+    const wallShapes = new Set(Object.values(ACHIEVEMENT_BADGE_ART).map((a) => a.shape));
+    expect(wallShapes).toEqual(new Set(['circle', 'shield', 'rosette']));
+  });
+
+  it('tints the locked ghost state with each family accent — distinct, never flat slate', () => {
+    const accents = Object.values(ACHIEVEMENT_FAMILY_ACCENTS);
+    const enamels = accents.map(ghostEnamel);
+    const cloths = accents.map(ghostCloth);
+    // Mapping the same lit color through each family's ghost ramp must yield
+    // family-distinct tints (the ramp carries the accent hue, unlike a gray ramp).
+    const litTints = accents.map((accent) => ghostRamp(accent)('#ffffff'));
+    const shadowTints = accents.map((accent) => ghostRamp(accent)('#202020'));
+    for (const set of [enamels, cloths, litTints, shadowTints]) {
+      expect(new Set(set).size).toBe(accents.length);
+      for (const hex of set) expect(hex).toMatch(/^#[0-9a-fA-F]{6}$/);
+    }
+    // The ramp preserves tonal structure: lit input maps brighter than shadow input.
+    litTints.forEach((lit, i) => expect(lit).not.toBe(shadowTints[i]));
+  });
+
   it('falls back to a valid default for unknown ids', () => {
     const fallback = resolveAchievementBadgeArt('some_future_achievement');
     expect(fallback).toEqual(DEFAULT_BADGE_ART);
     expect(fallback.accent).toMatch(/^#[0-9a-fA-F]{6}$/);
     expect(fallback.emblem).toBeTruthy();
+    expect(['circle', 'shield', 'rosette']).toContain(fallback.shape);
   });
 });

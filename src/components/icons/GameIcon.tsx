@@ -63,6 +63,11 @@ import {
   BlitzTrophyIcon, CommunityStarIcon, GravityCrystalIcon, OceanWaveIcon,
   PiggyJarIcon, VipLaurelIcon, VipTrophyIcon,
 } from './iconsDecor6';
+import {
+  BoosterCrateIcon, ChestBronzeIcon, ChestGoldIcon, CoinPileIcon,
+  CoinSmallIcon, CoinStackIcon, GemClusterIcon, GemHoardIcon, GemSingleIcon,
+  HintBulbRewardIcon,
+} from './iconsRewards';
 
 export type GameIconName = keyof typeof REGISTRY;
 
@@ -124,6 +129,11 @@ const REGISTRY = {
   piggyJar: PiggyJarIcon,
   // VIP streak ladder marks (iconsDecor6)
   vipLaurel: VipLaurelIcon, vipTrophy: VipTrophyIcon,
+  // reward renders — escalating currency + loot art (iconsRewards)
+  coinSmall: CoinSmallIcon, coinStack: CoinStackIcon, coinPile: CoinPileIcon,
+  gemSingle: GemSingleIcon, gemCluster: GemClusterIcon, gemHoard: GemHoardIcon,
+  hintBulbReward: HintBulbRewardIcon, boosterCrate: BoosterCrateIcon,
+  chestBronze: ChestBronzeIcon, chestGold: ChestGoldIcon,
 } as const;
 
 /**

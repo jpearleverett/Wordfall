@@ -27,9 +27,12 @@ import {
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { ATLAS_PAGES, SEASONAL_ALBUMS, getCurrentSeasonAlbum } from '../data/collections';
 import GameIcon from '../components/icons/GameIcon';
+import StampArt, { STAMP_PAPERS } from '../components/cosmetics/StampArt';
 
 const { width } = Dimensions.get('window');
 const TILE_SIZE = (width - 80) / 7;
+/** Stamp width inside its card shell (card = (width-68)/3 with 12px padding). */
+const STAMP_SIZE = Math.max(64, Math.min(86, (width - 68) / 3 - 24));
 
 const TABS = ['Word Atlas', 'Rare Tiles', 'Seasonal Stamps'] as const;
 type TabName = typeof TABS[number];
@@ -762,42 +765,6 @@ function DiamondGlyph({ size = 24, accent = COLORS.cyan }: GlyphProps) {
   );
 }
 
-/** Drawn stamp seal — perforated dashed frame around a star burst (Seasonal Stamps). */
-function StampSealGlyph({
-  size = 24,
-  accent = COLORS.purple,
-  collected = true,
-}: GlyphProps & { collected?: boolean }) {
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.16,
-        borderWidth: 1.5,
-        borderStyle: 'dashed',
-        borderColor: collected ? accent + '99' : 'rgba(255,255,255,0.22)',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      {collected ? (
-        <StarBurstGlyph size={size * 0.62} accent={accent} />
-      ) : (
-        <View
-          style={{
-            width: size * 0.34,
-            height: size * 0.34,
-            borderRadius: size * 0.17,
-            borderWidth: 1.5,
-            borderColor: 'rgba(255,255,255,0.3)',
-          }}
-        />
-      )}
-    </View>
-  );
-}
-
 /** Keyed atlas-page glyph mapper — every category gets a drawn mark;
  *  unknown/future pages fall back to the star burst. */
 function AtlasGlyph({ pageId, accent, size }: { pageId: string; accent: string; size: number }) {
@@ -1332,7 +1299,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
         </View>
 
         <View style={styles.stampsGrid}>
-          {stamps.map((stamp: any) => (
+          {stamps.map((stamp: any, stampIdx: number) => (
             <View
               key={stamp.id}
               style={[
@@ -1352,21 +1319,20 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                   end={{ x: 0, y: 1 }}
                 />
               )}
-              <DrawnMedallion
+              {/* Illustrated postage stamp — perforated die-cut paper with the
+                  stamp's own full-color artwork (blind-panel fix: identical
+                  dark squares read as settings icons, not prizes). Paper tint
+                  rotates per index so the sheet reads as a real album page. */}
+              <StampArt
+                icon={stamp.icon}
+                name={stamp.name}
+                earned={!!stamp.collected}
                 accent={COLORS.purple}
-                size={44}
-                muted={!stamp.collected}
+                size={STAMP_SIZE}
+                paperTint={STAMP_PAPERS[stampIdx % STAMP_PAPERS.length]}
+                value={String(stampIdx + 1)}
                 style={styles.stampMedallion}
-              >
-                {stamp.collected ? (
-                  // Each stamp shows ITS icon once earned (the album data
-                  // carries one per stamp) — a sheet of identical seals
-                  // reads as placeholder art.
-                  <GameIcon glyph={stamp.icon} size={26} />
-                ) : (
-                  <StampSealGlyph size={28} accent={COLORS.purple} collected={false} />
-                )}
-              </DrawnMedallion>
+              />
               <Text
                 style={[
                   styles.stampName,

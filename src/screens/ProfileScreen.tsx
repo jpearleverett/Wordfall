@@ -53,8 +53,9 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
 import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
 import { AchievementBadge } from '../components/cosmetics/AchievementBadge';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { DuoGrad, gradId, shade } from '../components/icons/IconBase';
+import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 import {
   canPrestige,
   getPrestigeRewards,
@@ -715,6 +716,80 @@ function PrestigeTierMark({ level, size = 24 }: { level: number; size?: number }
   );
 }
 
+/**
+ * Iconized prestige benefits — replaces the old dot-separated paragraph on
+ * the prestige CTA with three compact, scannable rows.
+ */
+const PRESTIGE_BENEFITS: Array<{ icon: GameIconName; label: string }> = [
+  { icon: 'undo', label: 'Reset to Level 1' },
+  { icon: 'crown', label: 'Keep all cosmetics' },
+  { icon: 'bolt', label: 'Permanent bonuses' },
+];
+
+/**
+ * AvatarSynthwaveBackdrop — subtle portrait scene behind the monogram when
+ * the player has no custom avatar: a sunset sun sinking behind a glowing
+ * horizon with a faint perspective grid floor, so the disc reads as
+ * designed identity art instead of a debug letter. Static (no animation).
+ */
+function AvatarSynthwaveBackdrop({ size, accent }: { size: number; accent: string }) {
+  const sunId = useMemo(() => gradId('avatarSun'), []);
+  // 88-unit viewBox matches the avatarCircle; horizon sits low at y=60.
+  const H = 60;
+  const VERTICALS = [-16, 4, 24, 44, 64, 84, 104];
+  const HORIZONTALS: Array<[number, number]> = [
+    [64, 0.16],
+    [69, 0.14],
+    [75.5, 0.12],
+    [83.5, 0.1],
+  ];
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 88 88"
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+    >
+      <DuoGrad id={sunId} from={COLORS.goldLight} to={COLORS.accent} />
+      {/* Sun disc sinking behind the horizon */}
+      <Circle cx={44} cy={54} r={17} fill={`url(#${sunId})`} opacity={0.5} />
+      {/* Classic synthwave slit bands across the sun's lower half */}
+      <Rect x={26} y={54.5} width={36} height={1.6} fill="rgba(10,0,21,0.55)" />
+      <Rect x={26} y={58.2} width={36} height={2} fill="rgba(10,0,21,0.6)" />
+      {/* Translucent ground plane dims the sun below the horizon */}
+      <Rect x={0} y={H} width={88} height={88 - H} fill="rgba(10,0,21,0.5)" />
+      {/* Horizon glow line in the theme accent */}
+      <Line x1={0} y1={H} x2={88} y2={H} stroke={accent} strokeWidth={1} opacity={0.5} />
+      {/* Faint perspective grid floor converging on the sun's center */}
+      {VERTICALS.map((x) => (
+        <Line
+          key={`v${x}`}
+          x1={44}
+          y1={H}
+          x2={x}
+          y2={88}
+          stroke={COLORS.cyan}
+          strokeWidth={0.8}
+          opacity={0.15}
+        />
+      ))}
+      {HORIZONTALS.map(([y, o]) => (
+        <Line
+          key={`h${y}`}
+          x1={0}
+          y1={y}
+          x2={88}
+          y2={y}
+          stroke={COLORS.cyan}
+          strokeWidth={0.8}
+          opacity={o}
+        />
+      ))}
+    </Svg>
+  );
+}
+
 const ProfileScreen: React.FC<ProfileScreenProps> = ({
   player: playerProp,
   onEditProfile: onEditProfileProp,
@@ -996,13 +1071,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               start={{ x: 0.5, y: 0.45 }}
               end={{ x: 0.5, y: 1 }}
             />
-            {/* Subtle geometric backdrop — orbit ring + rotated diamonds at
-                low alpha give the monogram designed depth. */}
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              <View style={[styles.avatarOrbit, { borderColor: frameBorderColor + '26' }]} />
-              <View style={[styles.avatarDiamond, { borderColor: frameBorderColor + '30' }]} />
-              <View style={styles.avatarDiamondSmall} />
-            </View>
+            {/* Synthwave portrait scene — sunset horizon arc + faint grid
+                floor behind the monogram (no custom avatar support yet, so
+                this is the default identity art). */}
+            <AvatarSynthwaveBackdrop size={88} accent={equippedTheme.colors.accent} />
             {/* Dual-layer bevel monogram: dark offset glyph under the lit glyph. */}
             <View style={styles.avatarGlyphStack}>
               <Text style={[styles.avatarLetter, styles.avatarLetterUnder]}>{initial}</Text>
@@ -1083,7 +1155,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         return (
           <Pressable
-            style={({ pressed }) => [styles.prestigeButton, pressed && styles.cardPressed]}
+            style={({ pressed }) => [styles.prestigeCard, pressed && styles.cardPressed]}
             accessibilityRole="button"
             accessibilityLabel={`Prestige to ${nextDef.label}. Resets level to 1 and unlocks permanent prestige bonuses`}
             onPress={() => {
@@ -1111,20 +1183,35 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               );
             }}
           >
-            <LinearGradient
-              colors={[COLORS.gold, '#b8860b']}
-              style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
-            <View style={styles.prestigeButtonMark}>
-              <PrestigeTierMark level={nextPrestige} size={32} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.prestigeButtonTitle}>PRESTIGE</Text>
-              <Text style={styles.prestigeButtonSub}>
-                Reset to Level 1 {'•'} Keep cosmetics {'•'} Unlock permanent bonuses {'•'} Claim {nextDef.label} rewards
-              </Text>
+            {/* Gilded card: deep plum gradient body inside a thin gold
+                double border, gold sheen falling from the top edge. */}
+            <View style={styles.prestigeCardInner}>
+              <LinearGradient
+                colors={['#3a1258', '#22093d', '#150527']}
+                style={StyleSheet.absoluteFill}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0.9, y: 1 }}
+              />
+              <LinearGradient
+                colors={[...GRADIENTS.goldShine]}
+                style={styles.prestigeCardSheen}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                pointerEvents="none"
+              />
+              <DrawnMedallion accent={COLORS.gold} size={62}>
+                <PrestigeTierMark level={nextPrestige} size={44} />
+              </DrawnMedallion>
+              <View style={styles.prestigeCardBody}>
+                <Text style={styles.prestigeCardHeadline}>PRESTIGE</Text>
+                {PRESTIGE_BENEFITS.map((benefit) => (
+                  <View key={benefit.icon} style={styles.prestigeBenefitRow}>
+                    <GameIcon name={benefit.icon} size={14} accent={COLORS.goldLight} />
+                    <Text style={styles.prestigeBenefitText}>{benefit.label}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.prestigeCardChevron}>{'›'}</Text>
             </View>
           </Pressable>
         );
@@ -1460,37 +1547,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Low-alpha geometric backdrop inside the 88px disc (clipped by the circle).
-  avatarOrbit: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: 6,
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 1,
-  },
-  avatarDiamond: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: 18,
-    width: 52,
-    height: 52,
-    borderWidth: 1.5,
-    borderRadius: 10,
-    transform: [{ rotate: '45deg' }],
-  },
-  avatarDiamondSmall: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: 27,
-    width: 34,
-    height: 34,
-    borderWidth: 1,
-    borderRadius: 7,
-    borderColor: 'rgba(255,255,255,0.09)',
-    transform: [{ rotate: '45deg' }],
-  },
   avatarShine: {
     position: 'absolute',
     top: 7,
@@ -1725,34 +1781,68 @@ const styles = StyleSheet.create({
     color: COLORS.gold,
     opacity: 0.7,
   },
-  prestigeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: RADIUS.xl,
-    padding: 16,
+  // Gilded prestige CTA — thin gold double border (outer ring + inner
+  // hairline) around a deep plum gradient body. Static; reduce-motion safe.
+  prestigeCard: {
     marginTop: 16,
+    borderRadius: RADIUS.xxl,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '8C',
+    padding: 3,
+    backgroundColor: 'rgba(8,2,22,0.9)',
     ...SHADOWS.glow(COLORS.gold),
   },
-  prestigeButtonMark: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(8,2,22,0.32)',
+  prestigeCardInner: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    gap: 14,
+    borderRadius: RADIUS.xxl - 4,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '4D',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    overflow: 'hidden',
   },
-  prestigeButtonTitle: {
-    fontSize: 18,
+  prestigeCardSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 34,
+  },
+  prestigeCardBody: {
+    flex: 1,
+    gap: 4,
+  },
+  prestigeCardHeadline: {
+    fontSize: 21,
     fontFamily: FONTS.display,
-    color: COLORS.bg,
-    letterSpacing: 2,
+    color: COLORS.goldLight,
+    letterSpacing: 2.5,
+    marginBottom: 3,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
-  prestigeButtonSub: {
-    fontSize: 10,
-    color: 'rgba(0,0,0,0.7)',
-    fontFamily: FONTS.bodyMedium,
-    marginTop: 2,
+  prestigeBenefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  prestigeBenefitText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textPrimary,
+    letterSpacing: 0.3,
+  },
+  prestigeCardChevron: {
+    fontSize: 26,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    marginLeft: 2,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
 });
 
