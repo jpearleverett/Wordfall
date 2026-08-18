@@ -24,10 +24,21 @@ interface MilestoneCeremonyProps {
    * ceremonies pass the wing's emblem). Takes precedence over `icon`.
    */
   iconName?: GameIconName;
+  /**
+   * Bespoke illustrated centerpiece (e.g. WingCeremonyEmblem). When set it
+   * replaces the small icon tile entirely and rides the same pop-in spring.
+   */
+  emblem?: React.ReactNode;
   title: string;
   description: string;
   accentColor?: string;
   rewardLabel?: string;
+  /**
+   * Rich reward row: one capsule per currency with its real SVG icon and a
+   * bold colored "+N". When set it replaces the plain rewardLabel chip and
+   * pops in with a delayed burst spring.
+   */
+  rewardCapsules?: Array<{ icon: GameIconName; label: string; color: string }>;
   /**
    * Optional teaching rows rendered under the description. The first_win
    * ceremony carries the gravity/order tips that two deleted onboarding
@@ -43,10 +54,12 @@ export function MilestoneCeremony({
   ribbon,
   icon,
   iconName,
+  emblem,
   title,
   description,
   accentColor = COLORS.gold,
   rewardLabel,
+  rewardCapsules,
   tips,
   buttonText = 'AWESOME!',
   onDismiss,
@@ -54,6 +67,7 @@ export function MilestoneCeremony({
   const fade = useSharedValue(0);
   const scale = useSharedValue(0.6);
   const iconProgress = useSharedValue(0);
+  const rewardPop = useSharedValue(0);
 
   // Defer the SparkleField until ~200ms after mount — see useDeferredMount
   // in perfInstrument.ts. Lets the card pop in fast and the decorations
@@ -64,12 +78,17 @@ export function MilestoneCeremony({
     fade.value = withTiming(1, { duration: 300 });
     scale.value = withSpring(1, { damping: 15, stiffness: 180 });
     iconProgress.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 200 }));
+    rewardPop.value = withDelay(480, withSpring(1, { damping: 12, stiffness: 190 }));
   }, []);
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
   const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const iconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: interpolate(iconProgress.value, [0, 0.5, 1], [0, 1.4, 1]) }],
+  }));
+  const rewardStyle = useAnimatedStyle(() => ({
+    opacity: rewardPop.value,
+    transform: [{ scale: interpolate(rewardPop.value, [0, 0.6, 1], [0.4, 1.12, 1]) }],
   }));
 
   return (
@@ -82,12 +101,14 @@ export function MilestoneCeremony({
           <Text style={[styles.ribbon, { color: accentColor }]}>{ribbon}</Text>
 
           <Animated.View
-            style={iconStyle}
+            style={[iconStyle, emblem ? styles.emblemWrap : null]}
           >
-            <View style={[styles.iconBg, { backgroundColor: accentColor + '20', borderColor: accentColor + '40' }]}>
-              {/* name takes precedence inside GameIcon; glyph is the legacy path */}
-              <GameIcon name={iconName} glyph={icon} size={41} />
-            </View>
+            {emblem ?? (
+              <View style={[styles.iconBg, { backgroundColor: accentColor + '20', borderColor: accentColor + '40' }]}>
+                {/* name takes precedence inside GameIcon; glyph is the legacy path */}
+                <GameIcon name={iconName} glyph={icon} size={41} />
+              </View>
+            )}
           </Animated.View>
 
           <Text style={[styles.title, { color: accentColor }]}>{title}</Text>
@@ -104,11 +125,20 @@ export function MilestoneCeremony({
             </View>
           )}
 
-          {rewardLabel && (
+          {rewardCapsules && rewardCapsules.length > 0 ? (
+            <Animated.View style={[styles.capsuleRow, rewardStyle]}>
+              {rewardCapsules.map((c) => (
+                <View key={`${c.icon}-${c.label}`} style={styles.capsule}>
+                  <GameIcon name={c.icon} size={20} />
+                  <Text style={[styles.capsuleText, { color: c.color }]}>{c.label}</Text>
+                </View>
+              ))}
+            </Animated.View>
+          ) : rewardLabel ? (
             <View style={styles.rewardChip}>
               <Text style={[styles.rewardText, { color: accentColor }]}>{rewardLabel}</Text>
             </View>
-          )}
+          ) : null}
 
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
@@ -130,7 +160,9 @@ export function MilestoneCeremony({
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    // Near-opaque so background UI never bleeds half-legible text around
+    // the ceremony card — the modal must float on a clean field.
+    backgroundColor: 'rgba(6, 2, 14, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -195,12 +227,46 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     lineHeight: 18,
   },
+  emblemWrap: {
+    // The illustrated emblem carries its own glow padding — tuck it in so
+    // the card doesn't read as double-spaced.
+    marginTop: -6,
+    marginBottom: 6,
+  },
   rewardChip: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginBottom: 20,
+  },
+  capsuleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 20,
+  },
+  capsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(12, 4, 26, 0.92)',
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 184, 0, 0.55)',
+    paddingHorizontal: 15,
+    paddingVertical: 9,
+    shadowColor: COLORS.gold,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  capsuleText: {
+    fontFamily: FONTS.display,
+    fontSize: 15,
+    letterSpacing: 0.5,
   },
   rewardText: {
     fontFamily: FONTS.display,

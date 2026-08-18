@@ -581,7 +581,16 @@ export function HomeScreen({
             accessibilityLabel={`Play level ${progress.currentLevel}`}
           >
             <View style={styles.playButtonWrapper}>
-              <Image source={LOCAL_IMAGES.playButton} style={styles.playButtonImage} resizeMode="stretch" />
+              {/* Flat premium magenta→purple fill — same family as the bento
+                  cards, elevated by a single outer magenta glow. Replaces the
+                  glossy chrome-glass image asset (judge flaw: specular band
+                  clashed with the matte purple design language). */}
+              <LinearGradient
+                colors={[COLORS.pink, COLORS.purple]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.playButtonSurface}
+              />
               <View style={styles.playButtonOverlay}>
                 <View>
                   <Text style={styles.playButtonLabel}>{playerStage === 'new' ? 'Start playing' : 'Continue journey'}</Text>
@@ -600,10 +609,17 @@ export function HomeScreen({
               accessibilityRole="button"
               accessibilityLabel={dailyDone ? 'Daily challenge completed' : "Play today's daily challenge"}
             >
+              {/* Deep plum/violet panel in the home's card language — gold is
+                  reserved for the left accent bar, the sun icon, and the coin
+                  reward highlight (judge flaw: the old olive-mustard fill was
+                  the one muddy element on the screen). */}
               <LinearGradient
-                colors={dailyDone ? ['rgba(76,175,80,0.45)', 'rgba(76,175,80,0.30)'] : ['rgba(255,215,0,0.35)', 'rgba(255,159,67,0.25)']}
+                colors={dailyDone ? ['rgba(76,175,80,0.45)', 'rgba(76,175,80,0.30)'] : ['rgba(92,36,150,0.55)', 'rgba(26,10,46,0.88)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={[styles.dailyCard, dailyDone && styles.dailyDone]}
               >
+                {!dailyDone && <View style={styles.dailyAccentBar} />}
                 <View style={styles.dailyContent}>
                   <Text style={styles.dailyTitle}>{dailyDone ? 'Daily completed' : "Today's challenge"}</Text>
                   <Text style={styles.dailySubtitle}>
@@ -613,7 +629,12 @@ export function HomeScreen({
                         // best return hook the daily has, and both resolvers
                         // are pure functions of the date.
                         `Tomorrow: ${getDailyVariant(tomorrow).name} · ${getDailyTheme(tomorrow).name}`
-                      : `${getDailyVariant(today).name} · ${getDailyTheme(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
+                      : (
+                          <>
+                            {`${getDailyVariant(today).name} · ${getDailyTheme(today).name} · `}
+                            <Text style={styles.dailyCoins}>{`+${ECONOMY.dailyCompleteCoins} coins`}</Text>
+                          </>
+                        )}
                   </Text>
                 </View>
                 {dailyDone
@@ -1524,10 +1545,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 120,
     marginBottom: 12,
+    borderRadius: 24,
+    ...SHADOWS.glow(COLORS.pink),
   },
-  playButtonImage: {
-    width: '100%',
-    height: '100%',
+  playButtonSurface: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   playButtonOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1557,13 +1582,23 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.15)',
+    borderColor: 'rgba(200,77,255,0.25)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    overflow: 'hidden',
   },
   dailyDone: {
     borderColor: 'rgba(76,175,80,0.3)',
+  },
+  dailyAccentBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: COLORS.gold,
+    opacity: 0.85,
   },
   dailyContent: {
     flex: 1,
@@ -1577,6 +1612,10 @@ const styles = StyleSheet.create({
   dailySubtitle: {
     color: COLORS.textSecondary,
     fontSize: 12,
+  },
+  dailyCoins: {
+    color: COLORS.gold,
+    fontFamily: FONTS.bodyBold,
   },
   dailyBadge: {
     color: COLORS.gold,

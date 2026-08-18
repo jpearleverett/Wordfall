@@ -33,7 +33,16 @@ import { CHAPTERS, getChapterForLevel, getLastLevelOfChapter } from '../data/cha
 import { Chapter } from '../types';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
-import { getWing, LIBRARIAN, folioGreeting, WingDef } from '../data/library';
+import {
+  getWing,
+  LIBRARIAN,
+  folioGreeting,
+  WingDef,
+  DecorationRarity,
+  getDecorationIconName,
+  MILESTONE_DECORATION_FLAVOR,
+  milestoneRarity,
+} from '../data/library';
 import GrandLibraryScene, { SceneWing, WingSceneState } from '../components/library/GrandLibraryScene';
 import { OwlIcon } from '../components/icons/iconsMisc';
 import PrimaryButton from '../components/common/PrimaryButton';
@@ -56,6 +65,7 @@ function SvgMedallion({
   accent = COLORS.purple,
   shape = 'circle',
   muted = false,
+  teaser = false,
   style,
 }: {
   glyph?: string;
@@ -64,10 +74,18 @@ function SvgMedallion({
   accent?: string;
   shape?: 'circle' | 'squircle';
   muted?: boolean;
+  /**
+   * Locked-but-coming-soon treatment: the medallion keeps its OWN accent —
+   * tinted disc (accent+22 fill, accent+55 ring) with the icon drawn in the
+   * accent at ~45% opacity. A visibly colored teaser of what unlocks, not
+   * the dead gray disc `muted` produces.
+   */
+  teaser?: boolean;
   style?: object;
 }) {
   const radius = shape === 'circle' ? size / 2 : size * 0.3;
   const alpha = (a: string) => (/^#[0-9a-fA-F]{6}$/.test(accent) ? accent + a : accent);
+  const dim = muted && !teaser;
   return (
     <View
       style={[
@@ -76,28 +94,37 @@ function SvgMedallion({
           height: size,
           borderRadius: radius,
           borderWidth: 1.5,
-          borderColor: muted ? 'rgba(255,255,255,0.14)' : alpha('73'),
+          borderColor: dim ? 'rgba(255,255,255,0.14)' : teaser ? alpha('55') : alpha('73'),
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
           backgroundColor: 'rgba(8, 2, 22, 0.92)',
-          shadowColor: muted ? '#000' : accent,
+          shadowColor: dim ? '#000' : accent,
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowOpacity: dim ? 0.2 : teaser ? 0.3 : 0.55,
           shadowRadius: size * 0.22,
-          elevation: muted ? 2 : 6,
+          elevation: dim ? 2 : teaser ? 3 : 6,
         },
-        muted && { opacity: 0.55 },
+        dim && { opacity: 0.55 },
         style as object,
       ]}
     >
       <LinearGradient
-        colors={[muted ? 'rgba(255,255,255,0.05)' : alpha('3D'), 'rgba(8, 2, 22, 0.92)']}
+        colors={[
+          dim ? 'rgba(255,255,255,0.05)' : teaser ? alpha('22') : alpha('3D'),
+          teaser ? alpha('14') : 'rgba(8, 2, 22, 0.92)',
+        ]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
-      <GameIcon glyph={glyph} name={name} size={size * 0.58} />
+      {teaser ? (
+        <View style={{ opacity: 0.45 }}>
+          <GameIcon glyph={glyph} name={name} size={size * 0.58} accent={accent} />
+        </View>
+      ) : (
+        <GameIcon glyph={glyph} name={name} size={size * 0.58} />
+      )}
     </View>
   );
 }
@@ -114,11 +141,22 @@ interface DecorationMeta {
   name: string;
   /** Emoji glyph — resolved to the bespoke SVG set via GameIcon's glyph map. */
   glyph: string;
+  /** Distinct SVG silhouette for this decoration (never the sparkle fallback). */
+  iconName: GameIconName;
+  /** Rarity — tints the collection medallion. Milestones derive from level. */
+  rarity: DecorationRarity;
   /** Flavor description (cosmetics catalog entries carry one). */
   description?: string;
   /** Unlock level, when the decoration is a milestone reward. */
   level?: number;
 }
+
+const RARITY_ACCENT: Record<DecorationRarity, string> = {
+  common: COLORS.rarityCommon,
+  rare: COLORS.rarityRare,
+  epic: COLORS.rarityEpic,
+  legendary: COLORS.rarityLegendary,
+};
 
 function humanizeDecorationId(id: string): string {
   return id
@@ -132,18 +170,35 @@ function humanizeDecorationId(id: string): string {
 function getDecorationMeta(id: string): DecorationMeta {
   const milestone = MILESTONE_DECORATIONS.find((m) => m.decoration === id);
   if (milestone) {
-    return { id, name: milestone.name, glyph: milestone.icon, level: milestone.level };
+    return {
+      id,
+      name: milestone.name,
+      glyph: milestone.icon,
+      iconName: getDecorationIconName(id),
+      rarity: milestoneRarity(milestone.level),
+      description: MILESTONE_DECORATION_FLAVOR[id],
+      level: milestone.level,
+    };
   }
   const catalog = getDecoration(id);
   if (catalog) {
-    return { id, name: catalog.name, glyph: catalog.icon, description: catalog.description };
+    return {
+      id,
+      name: catalog.name,
+      glyph: catalog.icon,
+      iconName: getDecorationIconName(id, catalog.type),
+      rarity: catalog.rarity,
+      description: catalog.description,
+    };
   }
-  // Season / event grants outside both catalogs still render gracefully.
-  // The sparkle glyph resolves to GameIcon's 'sparkle' SVG.
+  // Season / event grants outside both catalogs still render gracefully \u2014
+  // as a treasure chest, never the generic sparkle placeholder.
   return {
     id,
     name: humanizeDecorationId(id),
     glyph: '\u2728',
+    iconName: getDecorationIconName(id),
+    rarity: 'rare',
     description: 'A rare curiosity Folio has not finished cataloguing.',
   };
 }
@@ -356,6 +411,10 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
     return [...milestoneItems, ...extraItems];
   }, [ownedDecorations]);
 
+  // Folio's next find — the first unowned decoration, teased at the foot of
+  // the screen so the collection ends on a goal instead of empty space.
+  const nextFind = decorationGridItems.find((item) => !item.owned)?.meta ?? null;
+
   const heroStats = [
     { label: 'Level', value: currentLevel },
     { label: 'Puzzles', value: puzzlesSolved },
@@ -448,6 +507,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 selectedWingId={selectedWingData.def.id}
                 onWingPress={handleSceneWingPress}
                 width={Math.min(width - 76, 390)}
+                pendingDecoration={hasUnplacedDecoration}
               />
             </View>
 
@@ -556,10 +616,16 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       style={({ pressed }) => [
                         styles.overviewWing,
                         {
-                          borderColor: isRestored || isSelected ? wing.def.accent : 'rgba(255,255,255,0.12)',
-                          shadowColor: isRestored || isSelected ? wing.def.accent : '#000',
+                          // Locked wings tease their own accent — a dimmed
+                          // preview of the wing to come, not a gray husk.
+                          borderColor: isRestored || isSelected
+                            ? wing.def.accent
+                            : isLocked
+                              ? wing.def.accent + '3D'
+                              : 'rgba(255,255,255,0.12)',
+                          shadowColor: isRestored || isSelected ? wing.def.accent : isLocked ? wing.def.accent : '#000',
                           shadowOpacity: isRestored ? 0.5 : isSelected ? 0.35 : 0.15,
-                          opacity: isLocked ? 0.55 : 1,
+                          opacity: isLocked ? 0.88 : 1,
                         },
                         isRestored && { borderWidth: 1.5 },
                         pressed && styles.cardPressed,
@@ -571,7 +637,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     >
                       <LinearGradient
                         colors={[
-                          isSelected || isRestored ? wing.def.aura : 'rgba(255,255,255,0.06)',
+                          isSelected || isRestored
+                            ? wing.def.aura
+                            : isLocked
+                              ? wing.def.accent + '14'
+                              : 'rgba(255,255,255,0.06)',
                           'rgba(26,10,46,0.92)',
                         ] as [string, string]}
                         style={StyleSheet.absoluteFill}
@@ -590,12 +660,12 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                       <SvgMedallion
                         name={wing.def.icon}
                         accent={wing.def.accent}
-                        muted={isLocked}
+                        teaser={isLocked}
                         size={36}
                         style={{ marginBottom: 6 }}
                       />
                       <Text style={[styles.overviewWingName, isSelected && { color: wing.def.accent }, isRestored && { color: COLORS.gold }]}>{wing.def.name}</Text>
-                      <Text style={styles.overviewWingTagline} numberOfLines={2}>
+                      <Text style={styles.overviewWingTagline} numberOfLines={2} ellipsizeMode="tail">
                         {wing.def.tagline}
                       </Text>
 
@@ -690,14 +760,14 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                   end={{ x: 0.5, y: 1 }}
                   style={StyleSheet.absoluteFillObject}
                 />
-                <GameIcon
-                  glyph={
-                    decorations[selectedWingData.def.id]
-                      ? getDecorationMeta(decorations[selectedWingData.def.id]).glyph
-                      : ''
-                  }
-                  size={27}
-                />
+                {decorations[selectedWingData.def.id] ? (
+                  <GameIcon
+                    name={getDecorationMeta(decorations[selectedWingData.def.id]).iconName}
+                    size={27}
+                  />
+                ) : (
+                  <GameIcon glyph="" size={27} />
+                )}
               </Pressable>
             </View>
 
@@ -879,12 +949,14 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 {decorationGridItems.map(({ meta, owned }) => {
                   const placedInWing = Object.entries(decorations).find(([, dec]) => dec === meta.id)?.[0];
                   const pickable = Boolean(showDecorationPicker) && owned;
+                  const rarityAccent = RARITY_ACCENT[meta.rarity];
                   return (
                     <Pressable
                       key={meta.id}
                       style={({ pressed }) => [
                         styles.decorationItem,
                         owned && styles.decorationItemOwned,
+                        owned && { borderColor: rarityAccent + '66', shadowColor: rarityAccent },
                         pickable && styles.decorationItemPickable,
                         pressed && pickable && styles.cardPressed,
                       ]}
@@ -895,11 +967,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         }
                       }}
                       accessibilityRole="button"
-                      accessibilityLabel={`Decoration: ${owned ? meta.name : `locked, unlocks at level ${meta.level}`}${owned && placedInWing ? ', placed' : ''}`}
+                      accessibilityLabel={`Decoration: ${owned ? meta.name : `${meta.name}, locked, unlocks at level ${meta.level}`}${owned && placedInWing ? ', placed' : ''}`}
                     >
                       <LinearGradient
                         colors={[
-                          owned ? COLORS.gold + '1f' : 'rgba(255,255,255,0.05)',
+                          owned ? rarityAccent + '1f' : rarityAccent + '0f',
                           'rgba(26,10,46,0.92)',
                         ] as [string, string]}
                         style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
@@ -907,20 +979,36 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         end={{ x: 0, y: 1 }}
                       />
                       <SvgMedallion
-                        glyph={meta.glyph}
-                        accent={pickable ? COLORS.teal : COLORS.gold}
-                        muted={!owned}
+                        name={meta.iconName}
+                        accent={pickable ? COLORS.teal : rarityAccent}
+                        teaser={!owned}
                         size={40}
                         style={{ marginBottom: 6 }}
                       />
-                      <Text style={[styles.decorationName, !owned && { color: COLORS.textMuted }]}>
-                        {owned ? meta.name : `Lvl ${meta.level}`}
+                      <Text
+                        style={[styles.decorationName, !owned && { color: COLORS.textMuted }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {meta.name}
                       </Text>
                       {meta.description ? (
-                        <Text style={styles.decorationDescription} numberOfLines={2}>
+                        <Text style={styles.decorationDescription} numberOfLines={2} ellipsizeMode="tail">
                           {meta.description}
                         </Text>
                       ) : null}
+                      {!owned && meta.level != null && (
+                        <View
+                          style={[
+                            styles.decorationUnlockChip,
+                            { borderColor: rarityAccent + '55', backgroundColor: rarityAccent + '1a' },
+                          ]}
+                        >
+                          <Text style={[styles.decorationUnlockText, { color: rarityAccent }]}>
+                            LVL {meta.level}
+                          </Text>
+                        </View>
+                      )}
                       {owned && placedInWing && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                           <View style={{ marginTop: 4 }}>
@@ -950,6 +1038,52 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 </Pressable>
               )}
             </View>
+          </View>
+
+          {/* Folio's next find — closes the screen on a collection goal
+              instead of a quarter-screen of empty backdrop. */}
+          <View
+            style={styles.folioFindPanel}
+            accessible
+            accessibilityLabel={
+              nextFind
+                ? `${LIBRARIAN.name}'s next find: ${nextFind.name}${nextFind.level ? `, unlocks at level ${nextFind.level}` : ''}`
+                : `${LIBRARIAN.name} says the collection is complete`
+            }
+          >
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard]}
+              style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xxl }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <LinearGradient
+              colors={[COLORS.gold + '17', 'transparent'] as [string, string]}
+              style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xxl }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <View style={styles.folioDisc}>
+              <OwlIcon size={26} />
+            </View>
+            <View style={styles.folioFindMain}>
+              <Text style={styles.folioFindEyebrow}>FOLIO{'’'}S NEXT FIND</Text>
+              <Text style={styles.folioFindText} numberOfLines={3} ellipsizeMode="tail">
+                {nextFind
+                  ? `“I have shelf space measured for the ${nextFind.name}${nextFind.level ? ` — level ${nextFind.level} should do it` : ''}, Architect.”`
+                  : '“The collection is complete. I dust it hourly, purely for the pleasure.”'}
+              </Text>
+            </View>
+            {nextFind ? (
+              <SvgMedallion
+                name={nextFind.iconName}
+                accent={RARITY_ACCENT[nextFind.rarity]}
+                teaser
+                size={42}
+              />
+            ) : (
+              <SvgMedallion name="trophy" accent={COLORS.gold} size={42} />
+            )}
           </View>
 
           <View style={styles.bottomSpacer} />
@@ -1229,8 +1363,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   overviewWingTagline: {
-    fontSize: 8,
-    lineHeight: 11,
+    fontSize: 9,
+    lineHeight: 12,
+    // Reserve two full lines so every card teases its wing identity at the
+    // same height — no single-line mid-word clipping, no ragged grid.
+    minHeight: 24,
     color: COLORS.textMuted,
     fontFamily: FONTS.bodyMedium,
     textAlign: 'center',
@@ -1550,12 +1687,55 @@ const styles = StyleSheet.create({
   },
   decorationDescription: {
     fontSize: 9,
-    lineHeight: 12,
+    lineHeight: 13,
+    // Two full lines reserved — copy ellipsizes at the tail instead of
+    // clipping mid-sentence, and the grid rows stay level.
+    minHeight: 26,
     color: COLORS.textMuted,
     fontFamily: FONTS.bodyRegular,
     textAlign: 'center',
     marginTop: 3,
     paddingHorizontal: 2,
+  },
+  decorationUnlockChip: {
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+  },
+  decorationUnlockText: {
+    fontSize: 8,
+    letterSpacing: 1,
+    fontFamily: FONTS.display,
+  },
+  // ── Folio's next find ─────────────────────────────────────────────────
+  folioFindPanel: {
+    ...bentoPanel('gold', { borderRadius: RADIUS.xxl, padding: 16, marginBottom: 0 }),
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  folioFindMain: {
+    flex: 1,
+  },
+  folioFindEyebrow: {
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: COLORS.gold,
+    fontFamily: FONTS.display,
+    marginBottom: 4,
+    textShadowColor: 'rgba(255,184,0,0.3)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+  folioFindText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.bodyMedium,
+    fontStyle: 'italic',
   },
   loreChipRow: {
     flexDirection: 'row',

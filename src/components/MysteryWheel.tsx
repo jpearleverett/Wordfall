@@ -818,7 +818,7 @@ const styles = StyleSheet.create({
   },
   oddsBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    backgroundColor: 'rgba(6, 2, 14, 0.94)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,

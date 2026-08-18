@@ -98,7 +98,7 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    backgroundColor: 'rgba(6, 2, 14, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,

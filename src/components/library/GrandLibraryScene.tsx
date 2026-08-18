@@ -21,7 +21,7 @@ import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, RadialGra
 import GameIcon from '../icons/GameIcon';
 import { OwlIcon } from '../icons/iconsMisc';
 import { LockIcon, CheckIcon } from '../icons/iconsCore';
-import { COLORS, FONTS } from '../../constants';
+import { FONTS } from '../../constants';
 import { WingDef } from '../../data/library';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 
@@ -40,6 +40,11 @@ interface GrandLibrarySceneProps {
   onWingPress?: (wingId: string) => void;
   /** Rendered width; height scales at H/W. */
   width?: number;
+  /**
+   * When true, a glowing gift preview floats above the lectern — the
+   * decoration awaiting placement at the hub's focal point.
+   */
+  pendingDecoration?: boolean;
 }
 
 const W = 390;
@@ -150,20 +155,37 @@ function CurrentAlcove({ x, y, accent, index }: { x: number; y: number; accent: 
   );
 }
 
-function RuinedAlcove({ x, y, index }: { x: number; y: number; index: number }) {
+function RuinedAlcove({ x, y, accent, index }: { x: number; y: number; accent: string; index: number }) {
   const cx = x + ALCOVE_W / 2;
+  const tid = `ruin-tint-${index}`;
   return (
-    <G opacity={0.92}>
-      <Path d={archPath(x, y)} fill="#0b0614" stroke="#33244d" strokeWidth={2} />
+    <G>
+      <Defs>
+        <RadialGradient id={tid} cx="0.5" cy="0.4" r="0.8">
+          <Stop offset="0" stopColor={accent} stopOpacity="0.22" />
+          <Stop offset="0.6" stopColor={accent} stopOpacity="0.1" />
+          <Stop offset="1" stopColor={accent} stopOpacity="0.02" />
+        </RadialGradient>
+      </Defs>
+      {/* lifted base stone so the silhouette separates from the hall */}
+      <Path d={archPath(x, y)} fill="#241738" stroke="#4a3566" strokeWidth={2} />
+      {/* low-saturation wash of this wing's own accent — a ghosted color preview */}
+      <Path d={archPath(x, y)} fill={`url(#${tid})`} />
+      {/* faint warm rim light on the arch frame */}
+      <Path d={archPath(x, y)} fill="none" stroke="#e8c07a" strokeWidth={1.1} opacity={0.3} />
+      {/* ghost of the shelving to come, tinted in the wing accent */}
+      {[52, 96].map((dy, r) => (
+        <Rect key={`gs-${index}-${r}`} x={x + 8} y={y + dy} width={ALCOVE_W - 16} height={2.6} rx={1.3} fill={accent} opacity={0.18} />
+      ))}
       {/* fallen shelf remnant */}
-      <Rect x={x + 10} y={y + 84} width={ALCOVE_W - 30} height={3} rx={1.5} fill="#33241a" transform={`rotate(-7 ${cx} ${y + 84})`} />
+      <Rect x={x + 10} y={y + 84} width={ALCOVE_W - 30} height={3} rx={1.5} fill="#4a3626" transform={`rotate(-7 ${cx} ${y + 84})`} />
       {/* boards nailed across */}
-      <Rect x={x + 4} y={y + 44} width={ALCOVE_W - 8} height={9} rx={2} fill="#3a2a18" transform={`rotate(-9 ${cx} ${y + 48})`} />
-      <Rect x={x + 4} y={y + 66} width={ALCOVE_W - 8} height={9} rx={2} fill="#33241a" transform={`rotate(6 ${cx} ${y + 70})`} />
+      <Rect x={x + 4} y={y + 44} width={ALCOVE_W - 8} height={9} rx={2} fill="#54402a" stroke="#2c1f12" strokeWidth={0.8} transform={`rotate(-9 ${cx} ${y + 48})`} />
+      <Rect x={x + 4} y={y + 66} width={ALCOVE_W - 8} height={9} rx={2} fill="#4a3626" stroke="#2c1f12" strokeWidth={0.8} transform={`rotate(6 ${cx} ${y + 70})`} />
       {/* cracks */}
       <Path
         d={`M ${x + 14} ${y + 20} l 7 9 l -4 8 M ${x + ALCOVE_W - 18} ${y + 28} l -6 10 l 5 7`}
-        stroke="#33244d"
+        stroke="#57427c"
         strokeWidth={1.4}
         fill="none"
         strokeLinecap="round"
@@ -171,7 +193,7 @@ function RuinedAlcove({ x, y, index }: { x: number; y: number; index: number }) 
       {/* cobweb, top-left of the arch */}
       <Path
         d={`M ${x + 6} ${y + 24} q 10 2 14 12 M ${x + 6} ${y + 30} q 7 1 10 8 M ${x + 8} ${y + 22} l 10 14`}
-        stroke="rgba(200,210,232,0.28)"
+        stroke="rgba(200,210,232,0.35)"
         strokeWidth={1}
         fill="none"
       />
@@ -216,7 +238,7 @@ function DustMote({ x, delay, reduceMotion }: { x: number; delay: number; reduce
   );
 }
 
-export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, width = W }: GrandLibrarySceneProps) {
+export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, width = W, pendingDecoration = false }: GrandLibrarySceneProps) {
   const reduceMotion = useReduceMotion();
   const scale = width / W;
   const height = H * scale;
@@ -255,6 +277,11 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
               <Stop offset="0" stopColor="#ffd24d" stopOpacity={restoredCount > 0 ? 0.5 : 0.18} />
               <Stop offset="1" stopColor="#ffd24d" stopOpacity="0" />
             </RadialGradient>
+            <RadialGradient id="gift-aura" cx="0.5" cy="0.5" r="0.5">
+              <Stop offset="0" stopColor="#ffd24d" stopOpacity="0.55" />
+              <Stop offset="0.55" stopColor="#ffd24d" stopOpacity="0.22" />
+              <Stop offset="1" stopColor="#ffd24d" stopOpacity="0" />
+            </RadialGradient>
           </Defs>
 
           {/* hall */}
@@ -287,7 +314,7 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
             const { x, y } = alcoveRect(i);
             if (w.state === 'restored') return <RestoredAlcove key={w.def.id} x={x} y={y} accent={w.def.accent} index={i} />;
             if (w.state === 'current') return <CurrentAlcove key={w.def.id} x={x} y={y} accent={w.def.accent} index={i} />;
-            return <RuinedAlcove key={w.def.id} x={x} y={y} index={i} />;
+            return <RuinedAlcove key={w.def.id} x={x} y={y} accent={w.def.accent} index={i} />;
           })}
 
           {/* floor */}
@@ -306,6 +333,35 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
           <Rect x={188} y={358} width={14} height={20} rx={2} fill={WOOD} stroke={WOOD_DARK} strokeWidth={1} />
           <Rect x={182} y={352} width={26} height={8} rx={2} fill={WOOD_DARK} />
           <Rect x={185} y={348} width={20} height={5} rx={1.5} fill="#e8c07a" />
+
+          {/* awaiting decoration — glowing gift preview floating above the lectern */}
+          {pendingDecoration && (
+            <G>
+              <Circle cx={195} cy={337} r={30} fill="url(#gift-aura)" />
+              {/* small rays */}
+              {[-90, -40, 25, 90, 155, 220].map(deg => {
+                const rad = (deg * Math.PI) / 180;
+                const x1 = 195 + Math.cos(rad) * 17;
+                const y1 = 337 + Math.sin(rad) * 17;
+                const x2 = 195 + Math.cos(rad) * 25;
+                const y2 = 337 + Math.sin(rad) * 25;
+                return (
+                  <Path
+                    key={`gr-${deg}`}
+                    d={`M ${x1} ${y1} L ${x2} ${y2}`}
+                    stroke="#ffd24d"
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                    opacity={0.55}
+                  />
+                );
+              })}
+              {/* tiny sparkles */}
+              <Path d="M 173 324 l 2.4 4 l -2.4 4 l -2.4 -4 Z" fill="#ffe9a8" opacity={0.9} />
+              <Circle cx={218} cy={330} r={1.7} fill="#ffe9a8" opacity={0.8} />
+              <Circle cx={210} cy={352} r={1.3} fill="#ffe9a8" opacity={0.65} />
+            </G>
+          )}
         </Svg>
 
         {/* Folio on the dome */}
@@ -320,6 +376,13 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
         >
           <OwlIcon size={28} />
         </Animated.View>
+
+        {/* gift preview icon over the lectern aura */}
+        {pendingDecoration && (
+          <View pointerEvents="none" style={{ position: 'absolute', left: 195 - 13, top: 337 - 13 }}>
+            <GameIcon name="gift" size={26} />
+          </View>
+        )}
 
         {/* wing emblems + touch targets */}
         {wings.slice(0, 8).map((w, i) => {
@@ -340,14 +403,21 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
                 style={[
                   styles.emblem,
                   {
-                    borderColor: w.state === 'ruined' ? 'rgba(200,210,232,0.25)' : w.def.accent,
-                    shadowColor: w.state === 'ruined' ? '#000' : w.def.accent,
-                    shadowOpacity: w.state === 'ruined' ? 0.2 : 0.7,
+                    borderColor: w.state === 'ruined' ? `${w.def.accent}59` : w.def.accent,
+                    shadowColor: w.state === 'ruined' ? w.def.accent : w.def.accent,
+                    shadowOpacity: w.state === 'ruined' ? 0.3 : 0.7,
                   },
                   selected && styles.emblemSelected,
                 ]}
               >
-                <GameIcon name={w.def.icon} size={19} accent={w.state === 'ruined' ? '#5a4a74' : undefined} />
+                {w.state === 'ruined' ? (
+                  // ghosted in the wing's own accent — teases what the wing becomes
+                  <View style={{ opacity: 0.42 }}>
+                    <GameIcon name={w.def.icon} size={19} accent={w.def.accent} />
+                  </View>
+                ) : (
+                  <GameIcon name={w.def.icon} size={19} />
+                )}
               </View>
               <View style={styles.badgeSlot}>
                 {w.state === 'restored' ? (
@@ -420,15 +490,16 @@ const styles = StyleSheet.create({
   },
   wingLabel: {
     position: 'absolute',
-    bottom: -2,
-    fontSize: 8.5,
-    letterSpacing: 1.2,
+    bottom: -5,
+    fontSize: 10.5,
+    letterSpacing: 1,
     fontFamily: FONTS.display,
-    color: COLORS.textPrimary,
-    textShadowColor: 'rgba(0,0,0,0.9)',
-    textShadowRadius: 4,
+    color: '#f6f0ff',
+    textShadowColor: 'rgba(4, 1, 12, 0.95)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
   },
   wingLabelRuined: {
-    color: '#8a7ba8',
+    color: '#cabfe4',
   },
 });

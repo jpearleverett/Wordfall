@@ -192,6 +192,110 @@ export function getWing(wingId: string | undefined): WingDef {
   };
 }
 
+// ─── Decoration silhouettes, rarity & flavor ────────────────────────────────
+// The collection grid used to funnel most decorations through GameIcon's
+// generic sparkle fallback, so every unlockable read as the same purple
+// placeholder. Each decoration now names its own silhouette; unknown ids
+// fall back by decoration TYPE so nothing ever shares one generic glyph.
+
+export type DecorationRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+export const DECORATION_ICONS: Record<string, GameIconName> = {
+  // Milestone decorations (levels 5–50)
+  bookend_oak: 'book',
+  lamp_brass: 'hint',
+  globe_antique: 'globe',
+  clock_pendulum: 'gear',
+  telescope_mini: 'telescope',
+  statue_thinker: 'brain',
+  plant_fern: 'leaf',
+  painting_sunset: 'frame',
+  crystal_ball: 'crystal',
+  crown_wisdom: 'crown',
+  // Furniture
+  reading_chair: 'house',
+  oak_desk: 'pencil',
+  antique_table: 'castle',
+  throne_chair: 'crown',
+  crystal_desk: 'gem',
+  // Lighting
+  candle: 'flame',
+  lantern: 'moon',
+  chandelier: 'star',
+  fireplace: 'sun',
+  aurora_lamp: 'rainbow',
+  fire_sconce: 'bolt',
+  // Ornaments
+  globe: 'planet',
+  telescope: 'telescope',
+  hourglass: 'hourglass',
+  golden_shelf: 'bookOpen',
+  crystal_display: 'magnifier',
+  speed_trophy: 'runner',
+  diamond_plaque: 'medal',
+  rally_banner: 'target',
+  cascade_crystal: 'droplet',
+  mystery_orb: 'puzzle',
+  retro_arcade: 'gamepad',
+  nature_painting: 'mountain',
+  lab_equipment: 'flask',
+  ship_wheel: 'wheel',
+  gauntlet_shield: 'shield',
+  community_statue: 'people',
+  season_throne: 'calendar',
+  ocean_globe: 'wave',
+  nature_plaque: 'tree',
+  // Books
+  nature_tome: 'flower',
+  science_journal: 'flask',
+  myth_codex: 'sword',
+  ocean_atlas: 'globe',
+  forbidden_book: 'lock',
+  // Bundle-exclusive
+  starter_bookend: 'book',
+  chapter_decoration: 'ticket',
+  decoration_whale_trophy: 'trophy',
+  decoration_platinum_exclusive: 'chest',
+};
+
+/** Per-TYPE fallback so a catalog addition never regresses to sparkle. */
+export const DECORATION_TYPE_ICONS: Record<string, GameIconName> = {
+  furniture: 'house',
+  lighting: 'flame',
+  ornament: 'trophy',
+  book: 'book',
+};
+
+export function getDecorationIconName(id: string, type?: string): GameIconName {
+  return DECORATION_ICONS[id] ?? (type ? DECORATION_TYPE_ICONS[type] : undefined) ?? 'chest';
+}
+
+/**
+ * Flavor lines for the milestone decorations (the constants table carries
+ * only name/icon/level). Short and in Folio's voice — the collection cards
+ * give them two lines.
+ */
+export const MILESTONE_DECORATION_FLAVOR: Record<string, string> = {
+  bookend_oak: 'Solid oak, to hold the first shelf you refill.',
+  lamp_brass: 'Warm brass light for the late reading hours.',
+  globe_antique: 'Spin it to choose tonight’s reading voyage.',
+  clock_pendulum: 'Keeps Library time — a touch slow, on purpose.',
+  telescope_mini: 'For reading titles on the very top shelves.',
+  statue_thinker: 'Forever deciding what to read next.',
+  plant_fern: 'Thrives on lamplight and long silences.',
+  painting_sunset: 'The one sunset in the Library that never ends.',
+  crystal_ball: 'Shows the next word you were going to find.',
+  crown_wisdom: 'Worn by the Library’s finest word architects.',
+};
+
+/** Milestone decorations carry no rarity — derive one from unlock level. */
+export function milestoneRarity(level: number): DecorationRarity {
+  if (level >= 50) return 'legendary';
+  if (level >= 35) return 'epic';
+  if (level >= 20) return 'rare';
+  return 'common';
+}
+
 /** The Library's keeper. One name, everywhere. */
 export const LIBRARIAN = {
   name: 'Folio',
