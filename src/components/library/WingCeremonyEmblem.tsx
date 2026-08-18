@@ -103,14 +103,10 @@ const EMBOSS = EMBOSS_ANGLES.map((deg) => {
   return { cx: 100 + 60 * Math.sin(rad), cy: 100 - 60 * Math.cos(rad) };
 });
 
-/**
- * Wings whose vignette is too abstract to carry the disc alone — these keep
- * a small GameIcon seated ON the scene's ground. Every canonical wing's
- * vignette already depicts its theme (columns, waves, arch, flame…), so the
- * icon overlay is dropped there and the scene itself is enlarged to fill the
- * disc — the emblem is the PLACE, not a glyph pasted on a colored puck.
- */
-const ICON_IN_SCENE: ReadonlySet<SceneKey> = new Set(['space', 'beams']);
+// (Two blind-review rounds tested the alternatives: a small icon over a
+// full-strength vignette read as "emoji pasted on", and the vignette alone
+// read as "a tiny illegible glyph". The crest form below — dominant icon,
+// dimmed scene backdrop, laurel anchor — is the composition that survived.)
 
 type SceneKey =
   | 'mythology' | 'nature' | 'science' | 'ocean'
@@ -291,9 +287,6 @@ export default function WingCeremonyEmblem({
   const sceneKey: SceneKey = CANONICAL_SCENES.has(wing.id)
     ? (wing.id as SceneKey)
     : ICON_SCENE[icon] ?? 'beams';
-  // Scenes that depict their theme stand alone (enlarged to fill the disc);
-  // abstract scenes seat a small icon on the ground instead.
-  const showIcon = ICON_IN_SCENE.has(sceneKey);
 
   const ids = useMemo(
     () => ({
@@ -404,28 +397,40 @@ export default function WingCeremonyEmblem({
             emblem); icon scenes stay 1:1 and add a contact shadow the small
             GameIcon stands on. */}
         <G clipPath={`url(#${ids.clip})`}>
-          {showIcon ? (
-            renderScene(sceneKey, tint)
-          ) : (
-            <G transform="translate(100 100) scale(1.16) translate(-100 -100)">
-              {renderScene(sceneKey, tint)}
-            </G>
-          )}
+          {/* Dimmed scene backdrop — sets the place without fighting the
+              crest icon for attention. */}
+          <G opacity="0.55" transform="translate(100 100) scale(1.16) translate(-100 -100)">
+            {renderScene(sceneKey, tint)}
+          </G>
           <Ellipse cx="100" cy="152" rx="62" ry="30" fill={`url(#${ids.discShade})`} />
-          {showIcon && (
-            <Ellipse cx="100" cy="136" rx="24" ry="9" fill={`url(#${ids.iconShadow})`} />
-          )}
+          {/* Contact shadow the crest icon stands on */}
+          <Ellipse cx="100" cy="138" rx="32" ry="11" fill={`url(#${ids.iconShadow})`} />
+          {/* Gold laurel branches cradling the crest */}
+          <Path d="M 62 142 Q 78 152 98 153" fill="none" stroke={GOLD} strokeWidth="2.4" strokeLinecap="round" opacity="0.9" />
+          <Path d="M 138 142 Q 122 152 102 153" fill="none" stroke={GOLD} strokeWidth="2.4" strokeLinecap="round" opacity="0.9" />
+          {[[66, 140, -52], [75, 146, -34], [86, 150, -18], [134, 140, 52], [125, 146, 34], [114, 150, 18]].map(([lx, ly, rot]) => (
+            <Ellipse
+              key={`laurel-${lx}`}
+              cx={lx}
+              cy={ly}
+              rx={5.2}
+              ry={2.2}
+              fill={GOLD_LIGHT}
+              opacity={0.92}
+              transform={`rotate(${rot} ${lx} ${ly})`}
+            />
+          ))}
         </G>
 
         {/* 6 — rim light + inner shadow for depth */}
         <Path
           d="M 62.3 73.6 A 46 46 0 0 1 137.7 73.6"
           fill="none"
-          stroke="rgba(255,255,255,0.62)"
+          stroke="rgba(255,255,255,0.38)"
           strokeWidth="3"
           strokeLinecap="round"
         />
-        <Ellipse cx="100" cy="76" rx="34" ry="14" fill="#ffffff" opacity="0.16" />
+        <Ellipse cx="100" cy="76" rx="34" ry="14" fill="#ffffff" opacity="0.07" />
         <Path
           d="M 64.8 129.6 A 46 46 0 0 0 135.2 129.6"
           fill="none"
@@ -454,18 +459,16 @@ export default function WingCeremonyEmblem({
         <Circle cx="162" cy="152" r="1.4" fill="#ffffff" opacity="0.45" />
       </Svg>
 
-      {/* Icon-in-scene wings only: a SMALL GameIcon (GameIcon renders its own
-          Svg, so it cannot nest inside the one above) seated low in the
-          vignette, standing on the contact shadow — part of the scene, not
-          a glyph pasted over it. Self-sufficient scenes render no overlay. */}
-      {showIcon && (
-        <View
-          style={[styles.iconOverlay, { transform: [{ translateY: size * 0.07 }] }]}
-          pointerEvents="none"
-        >
-          <GameIcon name={icon} size={Math.round(size * 0.24)} />
-        </View>
-      )}
+      {/* The crest: a DOMINANT wing icon (GameIcon renders its own Svg, so
+          it cannot nest inside the one above) standing on the contact
+          shadow, cradled by the laurel — the emblem reads as the wing's
+          heraldry at a glance. */}
+      <View
+        style={[styles.iconOverlay, { transform: [{ translateY: size * 0.02 }] }]}
+        pointerEvents="none"
+      >
+        <GameIcon name={icon} size={Math.round(size * 0.4)} />
+      </View>
     </View>
   );
 }
