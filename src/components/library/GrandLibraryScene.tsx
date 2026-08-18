@@ -4,12 +4,14 @@
  * A cross-section of the Grand Library hall drawn in SVG: a central dome
  * where Folio the archivist perches, and eight arched wing alcoves in two
  * rows. Each alcove renders its wing's live state:
- *   restored — lit from within in the wing's color, shelves full of books,
+ *   restored — lit from within in the wing's color, a hero-scale themed
+ *              interior (fern, flask, pedestal, ship-in-bottle, easel,
+ *              telescope, scroll rack, forge) with at most one book shelf,
  *              light rays spilling from the arch;
  *   current  — work in progress: scaffolding, a half-filled shelf, warm
  *              lamplight, and a progress ring on its emblem;
- *   ruined   — dusk-lit: ghosted book-spine rows in the wing accent, one
- *              board across the arch, cracked stone and cobwebs.
+ *   ruined   — dusk-lit: the same themed interior ghosted in the wing
+ *              accent, one board across the arch, cracked stone, cobwebs.
  *
  * Architecture is one static <Svg>; wing emblems, state badges and touch
  * targets are absolutely-positioned overlays sharing the same geometry, so
@@ -142,13 +144,22 @@ function ghostSpines(x: number, shelfY: number, accent: string, seed: number) {
 }
 
 /**
- * Per-wing themed set-dressing drawn inside an alcove. Each wing gets a
- * distinct hand-crafted silhouette (ivy, flask, marble columns, waves,
- * easel, telescope, scrolls, forge) so every room reads as its own place.
- * Restored alcoves draw it at full accent strength in front of the
- * shelves — furniture in the room; ruined alcoves ghost it (~45%) behind
- * the boards so a locked wing teases its theme instead of repeating a
- * generic bookshelf.
+ * Wings whose interiors keep a single bottom book-shelf row as garnish.
+ * Every other wing is furnished entirely by its theme composition, so no
+ * two alcoves share the "row of spines" silhouette that made them read as
+ * identical bar charts.
+ */
+const SHELF_WINGS = new Set(['nature', 'science', 'mythology']);
+
+/**
+ * Per-wing themed set-dressing drawn inside an alcove — the HERO of the
+ * composition, not garnish. Each wing gets a distinct hand-crafted interior
+ * (ivy + fern, giant flask + tube rack, columns + pedestal, ship-in-bottle
+ * + wave band, easel gallery, telescope observatory, scroll pigeonholes,
+ * forge + tool wall) so every room reads as its own place at a glance.
+ * Restored alcoves draw it at full accent strength in front of the shelf;
+ * ruined alcoves ghost it (~45%) behind the boards so a locked wing teases
+ * its theme instead of repeating a generic bookshelf.
  */
 function WingThemeArt({ x, y, accent, wingId, ghost = false }: { x: number; y: number; accent: string; wingId: string; ghost?: boolean }) {
   // Authored in the legacy 82-wide art space; the outer <G> transform below
@@ -160,51 +171,75 @@ function WingThemeArt({ x, y, accent, wingId, ghost = false }: { x: number; y: n
     case 'nature':
       art = (
         <G>
-          {/* hanging ivy strands from the arch */}
-          <Path d={`M ${x + 13} ${y + 14} q -3 14 2 26 q 4 10 1 18`} stroke={accent} strokeWidth={1.4} fill="none" strokeLinecap="round" opacity={0.85} />
-          <Path d={`M ${x + AW - 13} ${y + 14} q 3 16 -2 28 q -3 9 0 16`} stroke={accent} strokeWidth={1.4} fill="none" strokeLinecap="round" opacity={0.85} />
-          {[[11, 24], [16, 36], [12, 48], [69, 26], [66, 40], [70, 52]].map(([dx, dy], k) => (
-            <Ellipse key={`nl-${k}`} cx={x + dx} cy={y + dy} rx={3} ry={1.8} fill={accent} opacity={0.9} transform={`rotate(${k % 2 ? 38 : -38} ${x + dx} ${y + dy})`} />
+          {/* ivy arch — garlands tracing both arch shoulders, meeting on high */}
+          <Path d={`M ${x + 10} ${y + 20} q -4 16 2 30 q 5 12 1 22`} stroke={accent} strokeWidth={1.8} fill="none" strokeLinecap="round" opacity={0.9} />
+          <Path d={`M ${x + AW - 10} ${y + 20} q 4 17 -2 31 q -4 11 0 21`} stroke={accent} strokeWidth={1.8} fill="none" strokeLinecap="round" opacity={0.9} />
+          <Path d={`M ${x + 20} ${y + 12} q 21 13 42 0`} stroke={accent} strokeWidth={1.5} fill="none" strokeLinecap="round" opacity={0.8} />
+          {[[8, 30], [14, 44], [9, 58], [15, 68], [74, 32], [68, 46], [73, 60], [67, 70], [27, 16], [41, 20], [55, 16]].map(([dx, dy], k) => (
+            <Ellipse key={`nl-${k}`} cx={x + dx} cy={y + dy} rx={4.4} ry={2.6} fill={accent} opacity={0.92} transform={`rotate(${k % 2 ? 40 : -40} ${x + dx} ${y + dy})`} />
           ))}
-          {/* potted plant on the floor */}
-          <Path d={`M ${x + 54} ${y + 92} h 15 l -2.5 9 h -10 Z`} fill="#a45f33" stroke="#5f371c" strokeWidth={0.8} />
-          <Path d={`M ${x + 61} ${y + 92} q -6 -7 -10 -6 q 4 8 10 6 M ${x + 62} ${y + 92} q 1 -9 6 -11 q 2 8 -6 11`} fill={accent} opacity={0.95} />
+          {/* large potted fern — the room's hero prop */}
+          <Path d={`M ${x + 27} ${y + 85} h 28 l -4.5 15 h -19 Z`} fill="#a45f33" stroke="#5f371c" strokeWidth={1} />
+          <Rect x={x + 25} y={y + 82.5} width={32} height={4.5} rx={2} fill="#8a4d28" stroke="#5f371c" strokeWidth={0.8} />
+          <Path d={`M ${x + 41} ${y + 83} q -16 -12 -25 -8 q 9 14 25 8`} fill={accent} opacity={0.95} />
+          <Path d={`M ${x + 41} ${y + 83} q 16 -12 25 -8 q -9 14 -25 8`} fill={accent} opacity={0.95} />
+          <Path d={`M ${x + 40} ${y + 83} q -9 -20 -17 -22 q 0 17 17 22`} fill={accent} opacity={0.85} />
+          <Path d={`M ${x + 42} ${y + 83} q 9 -20 17 -22 q 0 17 -17 22`} fill={accent} opacity={0.85} />
+          <Path d={`M ${x + 40} ${y + 83} q -2 -25 1 -31 q 4 9 2 31`} fill={accent} opacity={0.9} />
         </G>
       );
       break;
     case 'science':
       art = (
         <G>
-          {/* orbit ring under the arch */}
-          <Ellipse cx={cx} cy={y + 22} rx={21} ry={6.5} fill="none" stroke={accent} strokeWidth={1.2} opacity={0.8} transform={`rotate(-14 ${cx} ${y + 22})`} />
-          <Circle cx={cx} cy={y + 22} r={2.6} fill={accent} />
-          <Circle cx={cx + 18} cy={y + 17} r={1.6} fill="#e8c07a" />
-          {/* Erlenmeyer flask on the floor */}
-          <Path d={`M ${x + 15} ${y + 80} h 9 v 7 l 7 12 h -23 l 7 -12 Z`} fill={accent} fillOpacity={0.28} stroke={accent} strokeWidth={1.2} />
-          <Path d={`M ${x + 13} ${y + 93} h 14`} stroke={accent} strokeWidth={2} opacity={0.7} />
+          {/* orbit ring sweeping the lunette */}
+          <Ellipse cx={cx} cy={y + 24} rx={30} ry={9} fill="none" stroke={accent} strokeWidth={1.5} opacity={0.85} transform={`rotate(-13 ${cx} ${y + 24})`} />
+          <Circle cx={cx} cy={y + 24} r={3.6} fill={accent} />
+          <Circle cx={cx + 26} cy={y + 17} r={2.2} fill="#e8c07a" />
+          {/* wall rack of filled test tubes */}
+          <Rect x={x + 55} y={y + 50} width={22} height={3} rx={1.5} fill={WOOD} />
+          {[0, 1, 2].map(k => (
+            <G key={`tt-${k}`}>
+              <Rect x={x + 58 + k * 6.6} y={y + 53} width={3.8} height={14} rx={1.9} fill={accent} fillOpacity={0.28} stroke={accent} strokeWidth={0.9} />
+              <Rect x={x + 58 + k * 6.6} y={y + 61 - k * 1.6} width={3.8} height={6 + k * 1.6} rx={1.8} fill={accent} opacity={0.65} />
+            </G>
+          ))}
+          {/* giant Erlenmeyer flask — the lab's hero */}
+          <Path d={`M ${x + 17} ${y + 81} h 24 l 8 16 h -40 Z`} fill={accent} opacity={0.5} />
+          <Path d={`M ${x + 22} ${y + 59} h 14 v 12 l 13 26 h -40 l 13 -26 Z`} fill={accent} fillOpacity={0.26} stroke={accent} strokeWidth={1.7} />
+          <Path d={`M ${x + 20} ${y + 57} h 18`} stroke={accent} strokeWidth={2.4} strokeLinecap="round" />
           {/* rising bubbles */}
-          <Circle cx={x + 21} cy={y + 72} r={1.6} fill={accent} opacity={0.8} />
-          <Circle cx={x + 25} cy={y + 64} r={1.2} fill={accent} opacity={0.6} />
-          <Circle cx={x + 19} cy={y + 57} r={1} fill={accent} opacity={0.45} />
+          <Circle cx={x + 31} cy={y + 51} r={2.4} fill={accent} opacity={0.8} />
+          <Circle cx={x + 37} cy={y + 41} r={1.8} fill={accent} opacity={0.6} />
+          <Circle cx={x + 28} cy={y + 33} r={1.3} fill={accent} opacity={0.45} />
         </G>
       );
       break;
     case 'mythology':
       art = (
         <G>
-          {/* marble column pair */}
-          {[x + 9, x + AW - 17].map((px, k) => (
+          {/* grand marble column pair framing the room */}
+          {[x + 6, x + AW - 20].map((px, k) => (
             <G key={`mc-${k}`}>
-              <Rect x={px - 1.5} y={y + 30} width={11} height={4} rx={1.5} fill="#d8cdf0" opacity={0.85} />
-              <Rect x={px} y={y + 34} width={8} height={58} fill="#b9abd8" opacity={0.75} />
-              <Path d={`M ${px + 2.5} ${y + 36} v 54 M ${px + 5.5} ${y + 36} v 54`} stroke="#8f7db8" strokeWidth={0.8} opacity={0.7} />
-              <Rect x={px - 1.5} y={y + 92} width={11} height={4} rx={1.5} fill="#d8cdf0" opacity={0.85} />
+              <Rect x={px - 2} y={y + 28} width={18} height={5} rx={2} fill="#d8cdf0" opacity={0.9} />
+              <Rect x={px} y={y + 33} width={14} height={60} fill="#b9abd8" opacity={0.8} />
+              <Path d={`M ${px + 3.5} ${y + 35} v 56 M ${px + 7} ${y + 35} v 56 M ${px + 10.5} ${y + 35} v 56`} stroke="#8f7db8" strokeWidth={0.9} opacity={0.7} />
+              <Rect x={px - 2} y={y + 93} width={18} height={5} rx={2} fill="#d8cdf0" opacity={0.9} />
             </G>
           ))}
+          {/* central pedestal bearing a golden amphora */}
+          <Rect x={cx - 13} y={y + 92} width={26} height={6} rx={1.5} fill="#d8cdf0" opacity={0.9} />
+          <Rect x={cx - 9} y={y + 74} width={18} height={18} fill="#b9abd8" opacity={0.85} />
+          <Path d={`M ${cx - 6} ${y + 76} v 14 M ${cx} ${y + 76} v 14 M ${cx + 6} ${y + 76} v 14`} stroke="#8f7db8" strokeWidth={0.9} opacity={0.6} />
+          <Rect x={cx - 12} y={y + 70} width={24} height={4} rx={1.5} fill="#d8cdf0" opacity={0.9} />
+          <Path d={`M ${cx - 8} ${y + 54} q -3 13 8 17 q 11 -4 8 -17 Z`} fill="#ffd24d" opacity={0.92} />
+          <Rect x={cx - 4} y={y + 48} width={8} height={6} fill="#ffd24d" opacity={0.92} />
+          <Rect x={cx - 6.5} y={y + 45.5} width={13} height={3} rx={1.5} fill="#e8c07a" />
+          <Path d={`M ${cx - 9} ${y + 51} q -6 4 -3 9 M ${cx + 9} ${y + 51} q 6 4 3 9`} stroke="#e8c07a" strokeWidth={1.4} fill="none" />
           {/* constellation in the lunette */}
-          <Path d={`M ${cx - 12} ${y + 22} L ${cx - 3} ${y + 15} L ${cx + 7} ${y + 20} L ${cx + 14} ${y + 13}`} stroke={accent} strokeWidth={0.9} fill="none" opacity={0.75} />
-          {[[-12, 22], [-3, 15], [7, 20], [14, 13]].map(([dx, dy], k) => (
-            <Circle key={`ms-${k}`} cx={cx + dx} cy={y + dy} r={1.5} fill="#ffe9a8" />
+          <Path d={`M ${cx - 14} ${y + 20} L ${cx - 4} ${y + 13} L ${cx + 8} ${y + 18} L ${cx + 16} ${y + 11}`} stroke={accent} strokeWidth={0.9} fill="none" opacity={0.7} />
+          {[[-14, 20], [-4, 13], [8, 18], [16, 11]].map(([dx, dy], k) => (
+            <Circle key={`ms-${k}`} cx={cx + dx} cy={y + dy} r={1.6} fill="#ffe9a8" />
           ))}
         </G>
       );
@@ -212,84 +247,123 @@ function WingThemeArt({ x, y, accent, wingId, ghost = false }: { x: number; y: n
     case 'ocean':
       art = (
         <G>
-          {/* ship in a bottle, lunette */}
-          <Rect x={cx - 16} y={y + 15} width={27} height={11} rx={5.5} fill={accent} fillOpacity={0.2} stroke="#bfe6ff" strokeWidth={1} />
-          <Rect x={cx + 11} y={y + 18.5} width={5} height={4} fill="#bfe6ff" opacity={0.8} />
-          <Rect x={cx + 16} y={y + 17.5} width={2.5} height={6} rx={1} fill="#e8c07a" />
-          <Path d={`M ${cx - 11} ${y + 23} h 9 l -1.6 2.6 h -6 Z`} fill={accent} />
-          <Path d={`M ${cx - 7} ${y + 22.6} v -5 l 4.5 5 Z`} fill="#ffe9a8" opacity={0.95} />
-          {/* wave arcs */}
-          <Path d={`M ${x + 8} ${y + 86} q 8 -9 17 0 t 17 0 t 17 0`} stroke={accent} strokeWidth={1.6} fill="none" opacity={0.9} />
-          <Path d={`M ${x + 12} ${y + 95} q 7 -7 14 0 t 14 0 t 14 0`} stroke={accent} strokeWidth={1.2} fill="none" opacity={0.55} />
+          {/* grand ship in a bottle on its wall bracket — the room's hero */}
+          <Rect x={cx - 24} y={y + 40} width={41} height={17} rx={8.5} fill={accent} fillOpacity={0.22} stroke="#bfe6ff" strokeWidth={1.3} />
+          <Rect x={cx + 17} y={y + 45} width={7} height={7} fill="#bfe6ff" opacity={0.85} />
+          <Rect x={cx + 24} y={y + 43.5} width={3.5} height={10} rx={1.5} fill="#e8c07a" />
+          <Path d={`M ${cx - 18} ${y + 52} h 15 l -2.6 4 h -10 Z`} fill={accent} />
+          <Path d={`M ${cx - 12} ${y + 51} v -8 l 7 8 Z`} fill="#ffe9a8" opacity={0.95} />
+          <Path d={`M ${cx - 13} ${y + 51} v -6 l -5 6 Z`} fill="#ffe9a8" opacity={0.8} />
+          <Path d={`M ${cx - 21} ${y + 53} q 5 -2.5 10 0 t 10 0 t 10 0`} stroke="#bfe6ff" strokeWidth={0.9} fill="none" opacity={0.7} />
+          <Rect x={cx - 26} y={y + 58} width={46} height={3} rx={1.5} fill={WOOD} />
+          <Path d={`M ${cx - 20} ${y + 61} l 5 6 M ${cx + 14} ${y + 61} l -5 6`} stroke={WOOD_DARK} strokeWidth={2} strokeLinecap="round" />
+          {/* layered rolling-wave band across the floor */}
+          <Path d={`M ${x + 4} ${y + 80} q 9 -11 19 0 t 19 0 t 19 0 t 19 0`} stroke={accent} strokeWidth={2.2} fill="none" opacity={0.95} />
+          <Path d={`M ${x + 6} ${y + 89} q 8 -9 17 0 t 17 0 t 17 0 t 17 0`} stroke={accent} strokeWidth={1.7} fill="none" opacity={0.65} />
+          <Path d={`M ${x + 9} ${y + 97} q 7 -7 15 0 t 15 0 t 15 0 t 15 0`} stroke={accent} strokeWidth={1.3} fill="none" opacity={0.4} />
           {/* bubbles */}
-          <Circle cx={x + 18} cy={y + 62} r={2} fill={accent} opacity={0.55} />
-          <Circle cx={x + 62} cy={y + 54} r={1.5} fill={accent} opacity={0.45} />
-          <Circle cx={x + 58} cy={y + 70} r={1.1} fill={accent} opacity={0.4} />
+          <Circle cx={x + 15} cy={y + 66} r={2.4} fill={accent} opacity={0.55} />
+          <Circle cx={x + 68} cy={y + 63} r={1.8} fill={accent} opacity={0.45} />
+          <Circle cx={x + 63} cy={y + 73} r={1.3} fill={accent} opacity={0.4} />
         </G>
       );
       break;
     case 'arts':
       art = (
         <G>
-          {/* wall frames */}
-          <Rect x={x + 50} y={y + 18} width={16} height={12} rx={1.5} fill={accent} fillOpacity={0.3} stroke="#e8c07a" strokeWidth={1.2} />
-          <Path d={`M ${x + 52} ${y + 27} l 4 -4 l 3 3 l 3.5 -5`} stroke={accent} strokeWidth={1.1} fill="none" />
-          <Rect x={x + 16} y={y + 20} width={11} height={9} rx={1.5} fill="none" stroke={accent} strokeWidth={1.1} opacity={0.85} />
-          {/* easel with canvas */}
-          <Path d={`M ${x + 22} ${y + 97} L ${x + 33} ${y + 56} L ${x + 44} ${y + 97} M ${x + 33} ${y + 66} v 30`} stroke={WOOD} strokeWidth={2} strokeLinecap="round" fill="none" />
-          <Rect x={x + 24} y={y + 60} width={18} height={15} rx={1} fill="#f2ead8" stroke={WOOD_DARK} strokeWidth={1} />
-          <Path d={`M ${x + 27} ${y + 70} q 4 -6 8 -1 q 3 3 5 -2`} stroke={accent} strokeWidth={1.6} fill="none" strokeLinecap="round" />
+          {/* gallery wall — hung frames of different shapes */}
+          <Rect x={x + 52} y={y + 24} width={24} height={18} rx={2} fill={accent} fillOpacity={0.32} stroke="#e8c07a" strokeWidth={1.5} />
+          <Path d={`M ${x + 55} ${y + 37} l 6 -6 l 4.5 4.5 l 5.5 -7.5`} stroke={accent} strokeWidth={1.4} fill="none" />
+          <Rect x={x + 55} y={y + 48} width={17} height={13} rx={2} fill="none" stroke={accent} strokeWidth={1.3} opacity={0.9} />
+          <Circle cx={x + 63.5} cy={y + 54.5} r={3.4} fill={accent} opacity={0.6} />
+          <Rect x={x + 8} y={y + 30} width={14} height={11} rx={1.5} fill="none" stroke="#e8c07a" strokeWidth={1.2} opacity={0.8} />
+          {/* grand easel with a work in progress — the room's hero */}
+          <Path d={`M ${x + 10} ${y + 99} L ${x + 27} ${y + 38} L ${x + 44} ${y + 99} M ${x + 27} ${y + 52} v 46`} stroke={WOOD} strokeWidth={2.8} strokeLinecap="round" fill="none" />
+          <Rect x={x + 13} y={y + 44} width={28} height={23} rx={1.5} fill="#f2ead8" stroke={WOOD_DARK} strokeWidth={1.2} />
+          <Path d={`M ${x + 17} ${y + 59} q 6 -9 12 -1.5 q 4.5 4.5 8 -3`} stroke={accent} strokeWidth={2.2} fill="none" strokeLinecap="round" />
+          <Circle cx={x + 20} cy={y + 50} r={2} fill="#e8c07a" opacity={0.8} />
+          {/* palette resting on the easel tray */}
+          <Ellipse cx={x + 36} cy={y + 70} rx={7} ry={4.5} fill={WOOD} opacity={0.95} />
+          <Circle cx={x + 34} cy={y + 69} r={1.2} fill={accent} />
+          <Circle cx={x + 38} cy={y + 71} r={1.2} fill="#ffd24d" />
         </G>
       );
       break;
     case 'space':
       art = (
         <G>
-          {/* ringed planet */}
-          <Circle cx={cx + 17} cy={y + 20} r={5.5} fill={accent} fillOpacity={0.55} stroke={accent} strokeWidth={1} />
-          <Ellipse cx={cx + 17} cy={y + 20} rx={10} ry={2.8} fill="none" stroke="#e8c07a" strokeWidth={1} transform={`rotate(-18 ${cx + 17} ${y + 20})`} />
-          {/* stars */}
-          <Path d={`M ${x + 14} ${y + 18} l 1.8 3 l -1.8 3 l -1.8 -3 Z`} fill="#ffe9a8" opacity={0.9} />
-          <Circle cx={x + 24} cy={y + 30} r={1.2} fill="#ffe9a8" opacity={0.7} />
-          <Circle cx={x + 60} cy={y + 38} r={1.1} fill="#ffe9a8" opacity={0.6} />
-          {/* telescope on tripod */}
-          <Path d={`M ${x + 16} ${y + 84} L ${x + 38} ${y + 60}`} stroke={accent} strokeWidth={5} strokeLinecap="round" />
-          <Path d={`M ${x + 38} ${y + 60} L ${x + 45} ${y + 53}`} stroke={accent} strokeWidth={2.4} strokeLinecap="round" />
-          <Path d={`M ${x + 24} ${y + 78} L ${x + 15} ${y + 98} M ${x + 24} ${y + 78} L ${x + 33} ${y + 98} M ${x + 24} ${y + 82} L ${x + 24} ${y + 98}`} stroke={WOOD} strokeWidth={2} strokeLinecap="round" fill="none" />
+          {/* ringed planet the telescope is trained on */}
+          <Circle cx={x + 62} cy={y + 30} r={8.5} fill={accent} fillOpacity={0.6} stroke={accent} strokeWidth={1.2} />
+          <Ellipse cx={x + 62} cy={y + 30} rx={15.5} ry={4.4} fill="none" stroke="#e8c07a" strokeWidth={1.3} transform={`rotate(-18 ${x + 62} ${y + 30})`} />
+          {/* starfield */}
+          <Path d={`M ${x + 13} ${y + 22} l 2.4 4 l -2.4 4 l -2.4 -4 Z`} fill="#ffe9a8" opacity={0.95} />
+          <Path d={`M ${x + 30} ${y + 12} l 1.8 3 l -1.8 3 l -1.8 -3 Z`} fill="#ffe9a8" opacity={0.8} />
+          <Circle cx={x + 24} cy={y + 36} r={1.5} fill="#ffe9a8" opacity={0.75} />
+          <Circle cx={x + 44} cy={y + 24} r={1.2} fill="#ffe9a8" opacity={0.6} />
+          <Circle cx={x + 70} cy={y + 48} r={1.3} fill="#ffe9a8" opacity={0.6} />
+          <Circle cx={x + 36} cy={y + 44} r={1} fill="#ffe9a8" opacity={0.5} />
+          <Path d={`M ${x + 50} ${y + 12} l 11 5.5`} stroke="#ffe9a8" strokeWidth={1.2} strokeLinecap="round" opacity={0.7} />
+          {/* grand telescope on its tripod — the room's hero */}
+          <Path d={`M ${x + 16} ${y + 88} L ${x + 48} ${y + 50}`} stroke={accent} strokeWidth={8} strokeLinecap="round" />
+          <Path d={`M ${x + 48} ${y + 50} L ${x + 58} ${y + 39}`} stroke={accent} strokeWidth={3.6} strokeLinecap="round" />
+          <Circle cx={x + 27} cy={y + 75} r={3.4} fill="#e8c07a" opacity={0.9} />
+          <Path d={`M ${x + 27} ${y + 80} L ${x + 13} ${y + 100} M ${x + 27} ${y + 80} L ${x + 41} ${y + 100} M ${x + 27} ${y + 84} L ${x + 27} ${y + 100}`} stroke={WOOD} strokeWidth={2.6} strokeLinecap="round" fill="none" />
         </G>
       );
       break;
     case 'history':
       art = (
         <G>
-          {/* hourglass in the lunette */}
-          <Rect x={cx - 7} y={y + 13} width={14} height={2.5} rx={1} fill="#e8c07a" />
-          <Rect x={cx - 7} y={y + 32.5} width={14} height={2.5} rx={1} fill="#e8c07a" />
-          <Path d={`M ${cx - 5.5} ${y + 15.5} h 11 l -5.5 8.5 Z`} fill={accent} fillOpacity={0.55} stroke={accent} strokeWidth={0.9} />
-          <Path d={`M ${cx - 5.5} ${y + 32.5} h 11 l -5.5 -8.5 Z`} fill={accent} fillOpacity={0.3} stroke={accent} strokeWidth={0.9} />
-          {/* scroll stack on the floor */}
-          {[[12, 92, 24], [38, 92, 22], [24, 85, 24]].map(([dx, dy, wd], k) => (
-            <G key={`hsc-${k}`}>
-              <Rect x={x + dx} y={y + dy} width={wd} height={6.5} rx={3.2} fill="#d9c08c" stroke="#8a6b3a" strokeWidth={0.8} />
-              <Circle cx={x + dx + wd} cy={y + dy + 3.2} r={3} fill="#b8935c" stroke="#8a6b3a" strokeWidth={0.7} />
-            </G>
+          {/* tall scroll pigeonhole rack — a wall of rolled scroll ends */}
+          <Rect x={x + 13} y={y + 34} width={56} height={64} rx={2} fill={WOOD_DARK} stroke={WOOD} strokeWidth={1.6} />
+          {[0, 1].map(k => (
+            <Rect key={`hv-${k}`} x={x + 30.7 + k * 18.7} y={y + 36} width={2} height={60} fill={WOOD} opacity={0.9} />
           ))}
+          {[0, 1].map(k => (
+            <Rect key={`hh-${k}`} x={x + 15} y={y + 54.3 + k * 21.3} width={52} height={2} fill={WOOD} opacity={0.9} />
+          ))}
+          {Array.from({ length: 9 }).map((_, k) => {
+            const col = k % 3;
+            const row = Math.floor(k / 3);
+            // one hole left empty — a scroll is out being read
+            if (col === 2 && row === 0) return null;
+            const scx = x + 22.3 + col * 18.7;
+            const scy = y + 44.7 + row * 21.3;
+            return (
+              <G key={`hsc-${k}`}>
+                <Circle cx={scx} cy={scy} r={6.2} fill="#d9c08c" stroke="#8a6b3a" strokeWidth={1} />
+                <Circle cx={scx} cy={scy} r={2.4} fill="none" stroke="#8a6b3a" strokeWidth={0.9} opacity={0.8} />
+                <Circle cx={scx} cy={scy} r={0.9} fill="#8a6b3a" opacity={0.7} />
+              </G>
+            );
+          })}
+          {/* the missing scroll, unrolled across the rack top */}
+          <Rect x={x + 24} y={y + 26} width={34} height={6} rx={3} fill="#d9c08c" stroke="#8a6b3a" strokeWidth={0.9} />
+          <Circle cx={x + 24} cy={y + 29} r={3.4} fill="#b8935c" stroke="#8a6b3a" strokeWidth={0.8} />
+          <Circle cx={x + 58} cy={y + 29} r={3.4} fill="#b8935c" stroke="#8a6b3a" strokeWidth={0.8} />
         </G>
       );
       break;
     case 'elements':
       art = (
         <G>
+          {/* tool wall — hammer and tongs hung on a peg rail */}
+          <Rect x={x + 9} y={y + 30} width={28} height={2.6} rx={1.3} fill={WOOD} />
+          <Path d={`M ${x + 15} ${y + 33} v 17`} stroke="#8a93a8" strokeWidth={2.2} strokeLinecap="round" />
+          <Rect x={x + 10.5} y={y + 33} width={9.5} height={5.5} rx={1.5} fill="#8a93a8" />
+          <Path d={`M ${x + 29} ${y + 33} q -4.5 9 0 18 M ${x + 29} ${y + 33} q 4.5 9 0 18`} stroke="#8a93a8" strokeWidth={1.6} fill="none" strokeLinecap="round" />
           {/* forge glow pooled on the floor */}
-          <Ellipse cx={cx} cy={y + 94} rx={24} ry={9} fill={accent} opacity={0.3} />
-          <Ellipse cx={cx} cy={y + 95} rx={14} ry={5.5} fill="#ffb800" opacity={0.3} />
-          {/* anvil silhouette against the glow */}
-          <Path d={`M ${cx - 15} ${y + 76} h 22 q 9 0 9 4.5 l -9 3.5 h -7 l 2.5 8 h -15 l 2.5 -8 h -5 Z`} fill="#1a0f28" stroke={accent} strokeWidth={1.1} />
-          {/* embers */}
-          <Circle cx={cx - 12} cy={y + 66} r={1.6} fill="#ffb800" opacity={0.85} />
-          <Circle cx={cx + 6} cy={y + 58} r={1.2} fill={accent} opacity={0.7} />
-          <Circle cx={cx + 15} cy={y + 68} r={1} fill="#ffb800" opacity={0.55} />
-          <Circle cx={cx - 4} cy={y + 50} r={0.9} fill={accent} opacity={0.5} />
+          <Ellipse cx={cx} cy={y + 92} rx={32} ry={11} fill={accent} opacity={0.34} />
+          <Ellipse cx={cx} cy={y + 93} rx={19} ry={7} fill="#ffb800" opacity={0.34} />
+          {/* massive anvil on its stump — the forge's hero */}
+          <Rect x={cx - 12} y={y + 86} width={24} height={13} rx={1.5} fill={WOOD_DARK} stroke="#2c1f12" strokeWidth={0.8} />
+          <Path d={`M ${cx - 23} ${y + 62} h 33 q 14 0 14 7 l -14 5.5 h -10 l 4 12 h -23 l 4 -12 h -8 Z`} fill="#1a0f28" stroke={accent} strokeWidth={1.3} />
+          {/* embers drifting up */}
+          <Circle cx={cx - 16} cy={y + 52} r={2} fill="#ffb800" opacity={0.9} />
+          <Circle cx={cx + 8} cy={y + 44} r={1.5} fill={accent} opacity={0.75} />
+          <Circle cx={cx + 20} cy={y + 54} r={1.2} fill="#ffb800" opacity={0.6} />
+          <Circle cx={cx - 5} cy={y + 36} r={1.1} fill={accent} opacity={0.55} />
+          <Circle cx={cx + 2} cy={y + 26} r={0.9} fill="#ffb800" opacity={0.45} />
         </G>
       );
       break;
@@ -322,15 +396,16 @@ function RestoredAlcove({ x, y, accent, index, wingId }: { x: number; y: number;
       <Path d={archPath(x, y)} fill={`url(#${gid})`} />
       {/* warm top-light spilling down from the arch */}
       <Path d={archPath(x, y)} fill="url(#alcove-toplight)" />
-      {/* shelves — books, wood line, cast shadow beneath so each row sits lit */}
-      {[58, 84, 110].map((dy, r) => (
-        <G key={`sh-${index}-${r}`}>
-          {shelfBooks(x, y + dy, accent, index * 3 + r)}
-          <Rect x={x + 6} y={y + dy} width={ALCOVE_W - 12} height={3} rx={1.5} fill={WOOD} />
-          <Rect x={x + 7} y={y + dy + 3} width={ALCOVE_W - 14} height={3.5} rx={1.5} fill="#050110" opacity={0.32} />
+      {/* single bottom shelf — garnish behind the theme prop, and only for
+          wings whose interior calls for books at all */}
+      {SHELF_WINGS.has(wingId) && (
+        <G>
+          {shelfBooks(x, y + 110, accent, index * 3 + 2)}
+          <Rect x={x + 6} y={y + 110} width={ALCOVE_W - 12} height={3} rx={1.5} fill={WOOD} />
+          <Rect x={x + 7} y={y + 113} width={ALCOVE_W - 14} height={3.5} rx={1.5} fill="#050110" opacity={0.32} />
         </G>
-      ))}
-      {/* themed set-dressing — this wing's own room, in front of the shelves */}
+      )}
+      {/* themed set-dressing — the alcove's dominant read, in front of the shelf */}
       <WingThemeArt x={x} y={y} accent={accent} wingId={wingId} />
       {/* light rays from the arch */}
       <Polygon
@@ -387,13 +462,15 @@ function RuinedAlcove({ x, y, accent, index, wingId }: { x: number; y: number; a
       <Path d={archPath(x, y)} fill={`url(#${tid})`} />
       {/* faint warm rim light on the arch frame */}
       <Path d={archPath(x, y)} fill="none" stroke="#e8c07a" strokeWidth={1.1} opacity={0.34} />
-      {/* ghosted library-to-be: two shelf rows of accent spine silhouettes */}
-      {[66, 100].map((dy, r) => (
-        <G key={`gs-${index}-${r}`}>
-          {ghostSpines(x, y + dy, accent, index * 2 + r + 1)}
-          <Rect x={x + 8} y={y + dy} width={ALCOVE_W - 16} height={2.6} rx={1.3} fill={accent} opacity={0.25} />
+      {/* ghosted library-to-be: at most ONE spine row, and only for wings
+          whose restored interior keeps a shelf — the theme art carries the
+          rest so locked wings stay distinguishable too */}
+      {SHELF_WINGS.has(wingId) && (
+        <G>
+          {ghostSpines(x, y + 100, accent, index * 2 + 1)}
+          <Rect x={x + 8} y={y + 100} width={ALCOVE_W - 16} height={2.6} rx={1.3} fill={accent} opacity={0.25} />
         </G>
-      ))}
+      )}
       {/* ghosted theme silhouette — teases what this room becomes */}
       <WingThemeArt x={x} y={y} accent={accent} wingId={wingId} ghost />
       {/* single board — enough to say "closed", not enough to bury the room */}

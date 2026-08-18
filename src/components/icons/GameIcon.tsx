@@ -33,6 +33,12 @@ import {
   OwlIcon, PawIcon, PencilIcon, PeopleIcon, PuzzleIcon, RainbowIcon,
   RunnerIcon, ShieldIcon, SwordIcon,
 } from './iconsMisc';
+import {
+  ArmchairIcon, BannerIcon, BookendOakIcon, ChandelierIcon,
+  ClockPendulumIcon, CrownWisdomIcon, CrystalBallDecorIcon, FernPotIcon,
+  GlobeAntiqueIcon, LampBrassIcon, PaintingSunsetIcon, StatueThinkerIcon,
+  TelescopeMiniIcon,
+} from './iconsDecor';
 
 export type GameIconName = keyof typeof REGISTRY;
 
@@ -57,6 +63,13 @@ const REGISTRY = {
   paw: PawIcon, apple: AppleIcon, house: HouseIcon, rainbow: RainbowIcon,
   butterfly: ButterflyIcon, gamepad: GamepadIcon, crystal: CrystalBallIcon,
   pencil: PencilIcon, link: LinkIcon, runner: RunnerIcon,
+  // decoration illustrations (library collection cards)
+  armchair: ArmchairIcon, chandelierDecor: ChandelierIcon,
+  bannerDecor: BannerIcon, bookendOak: BookendOakIcon, lampBrass: LampBrassIcon,
+  globeAntique: GlobeAntiqueIcon, clockPendulum: ClockPendulumIcon,
+  telescopeMini: TelescopeMiniIcon, statueThinker: StatueThinkerIcon,
+  fernPot: FernPotIcon, paintingSunset: PaintingSunsetIcon,
+  crystalBallDecor: CrystalBallDecorIcon, crownWisdom: CrownWisdomIcon,
 } as const;
 
 /**
