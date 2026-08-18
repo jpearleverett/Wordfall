@@ -5,7 +5,9 @@
  * Layered react-native-svg composition, back to front:
  *   1. soft radial glow in the wing accent (fills the whole canvas)
  *   2. burst of golden rays (alternating long/short, brightest at the tips)
- *   3. gilded double ring — gold gradient stroke with 12 bead details
+ *   3. gilded ring assembly — gold gradient outer stroke, dark inner bevel
+ *      ring, light inner rim, 12 beads, 3 specular ticks (10/2/7 o'clock),
+ *      embossed dot pattern on the lower arc only
  *   4. inner disc with a deep vertical gradient of the wing accent
  *   5. per-wing vignette scene clipped inside the disc (marble columns for
  *      Mythology, leafy arch for Nature, orbit rings for Science, waves for
@@ -14,9 +16,11 @@
  *      a bottom vignette and a soft contact shadow the icon sits on
  *   6. rim light: top inner arc + sheen ellipse, bottom inner shadow arc
  *   7. floating gold/white sparkles at varied positions and opacities
- * The wing's GameIcon emblem is overlaid RN-centered (GameIcon renders its
- * own <Svg>, so it cannot nest inside this one) — it lands on the contact
- * shadow so it reads as part of the scene, not pasted on top.
+ * Most wings' vignettes depict their theme outright, so the scene alone IS
+ * the emblem — enlarged to fill the disc, no icon overlay. Only abstract
+ * scenes (space, beams fallback) overlay a small wing GameIcon (it renders
+ * its own <Svg>, so it cannot nest inside this one) seated low on a contact
+ * shadow, standing in the scene rather than pasted on top.
  *
  * Pass either a `wingId` (resolved via getWing — never undefined, annex
  * fallback) or an explicit `accent` + `iconName` pair; explicit props win.
@@ -79,6 +83,34 @@ const BEADS = RAY_ANGLES.map((deg) => {
   const rad = (deg * Math.PI) / 180;
   return { cx: 100 + 63 * Math.sin(rad), cy: 100 - 63 * Math.cos(rad) };
 });
+
+/**
+ * Specular highlight ticks on the outer ring — short bright arcs at the
+ * 10 / 2 / 7 o'clock positions so the gold reads as polished metal catching
+ * light, not a flat stroke. One arc path at 12 o'clock, rotated into place.
+ */
+const SPECULAR_TICK = 'M 92.3 37.5 A 63 63 0 0 1 107.7 37.5';
+const SPECULAR_ANGLES = [300, 60, 210]; // 10, 2, 7 o'clock
+
+/**
+ * Embossed dot pattern on the LOWER arc only (r=60, between the outer ring
+ * and the inner bevel) — a dark depression with a thin light crescent below,
+ * consistent with the top-down key light.
+ */
+const EMBOSS_ANGLES = [125, 140, 155, 170, 185, 200, 215, 230];
+const EMBOSS = EMBOSS_ANGLES.map((deg) => {
+  const rad = (deg * Math.PI) / 180;
+  return { cx: 100 + 60 * Math.sin(rad), cy: 100 - 60 * Math.cos(rad) };
+});
+
+/**
+ * Wings whose vignette is too abstract to carry the disc alone — these keep
+ * a small GameIcon seated ON the scene's ground. Every canonical wing's
+ * vignette already depicts its theme (columns, waves, arch, flame…), so the
+ * icon overlay is dropped there and the scene itself is enlarged to fill the
+ * disc — the emblem is the PLACE, not a glyph pasted on a colored puck.
+ */
+const ICON_IN_SCENE: ReadonlySet<SceneKey> = new Set(['space', 'beams']);
 
 type SceneKey =
   | 'mythology' | 'nature' | 'science' | 'ocean'
@@ -259,6 +291,9 @@ export default function WingCeremonyEmblem({
   const sceneKey: SceneKey = CANONICAL_SCENES.has(wing.id)
     ? (wing.id as SceneKey)
     : ICON_SCENE[icon] ?? 'beams';
+  // Scenes that depict their theme stand alone (enlarged to fill the disc);
+  // abstract scenes seat a small icon on the ground instead.
+  const showIcon = ICON_IN_SCENE.has(sceneKey);
 
   const ids = useMemo(
     () => ({
@@ -299,7 +334,7 @@ export default function WingCeremonyEmblem({
             <Stop offset="1" stopColor={shade(tint, -98)} />
           </LinearGradient>
           <RadialGradient id={ids.discShade} cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0" stopColor="#000000" stopOpacity="0.55" />
+            <Stop offset="0" stopColor="#000000" stopOpacity="0.68" />
             <Stop offset="1" stopColor="#000000" stopOpacity="0" />
           </RadialGradient>
           <RadialGradient id={ids.iconShadow} cx="0.5" cy="0.5" r="0.5">
@@ -326,8 +361,10 @@ export default function WingCeremonyEmblem({
           />
         ))}
 
-        {/* 3 — gilded double ring with bead details */}
+        {/* 3 — gilded ring assembly: outer gradient ring, dark inner bevel,
+            light inner rim, beads, specular ticks, embossed lower-arc dots */}
         <Circle cx="100" cy="100" r="63" fill="none" stroke={`url(#${ids.ring})`} strokeWidth="5" />
+        <Circle cx="100" cy="100" r="59.6" fill="none" stroke={shade(GOLD, -46)} strokeWidth="2.2" opacity="0.9" />
         <Circle cx="100" cy="100" r="56.5" fill="none" stroke={GOLD_LIGHT} strokeWidth="1.8" opacity="0.85" />
         {BEADS.map((b) => (
           <Circle
@@ -340,16 +377,44 @@ export default function WingCeremonyEmblem({
             strokeWidth="0.6"
           />
         ))}
+        {EMBOSS.map((d) => (
+          <React.Fragment key={`emb-${d.cx.toFixed(1)}-${d.cy.toFixed(1)}`}>
+            <Circle cx={d.cx} cy={d.cy + 0.9} r="1.15" fill={GOLD_LIGHT} opacity="0.5" />
+            <Circle cx={d.cx} cy={d.cy} r="1.05" fill={shade(GOLD, -62)} opacity="0.85" />
+          </React.Fragment>
+        ))}
+        {SPECULAR_ANGLES.map((deg) => (
+          <Path
+            key={`spec-${deg}`}
+            d={SPECULAR_TICK}
+            fill="none"
+            stroke="#fff6d8"
+            strokeWidth="3"
+            strokeLinecap="round"
+            opacity="0.9"
+            transform={`rotate(${deg} 100 100)`}
+          />
+        ))}
 
         {/* 4 — inner disc, hot top light to near-black base */}
         <Circle cx="100" cy="100" r="52" fill={`url(#${ids.disc})`} stroke={rim(tint)} strokeWidth="1.2" />
 
-        {/* 5 — per-wing vignette scene + grounding shadows, clipped to disc */}
+        {/* 5 — per-wing vignette scene + grounding shadows, clipped to disc.
+            Self-sufficient scenes are enlarged to FILL the disc (they are the
+            emblem); icon scenes stay 1:1 and add a contact shadow the small
+            GameIcon stands on. */}
         <G clipPath={`url(#${ids.clip})`}>
-          {renderScene(sceneKey, tint)}
+          {showIcon ? (
+            renderScene(sceneKey, tint)
+          ) : (
+            <G transform="translate(100 100) scale(1.16) translate(-100 -100)">
+              {renderScene(sceneKey, tint)}
+            </G>
+          )}
           <Ellipse cx="100" cy="152" rx="62" ry="30" fill={`url(#${ids.discShade})`} />
-          {/* contact shadow the overlaid GameIcon sits on */}
-          <Ellipse cx="100" cy="113" rx="28" ry="11" fill={`url(#${ids.iconShadow})`} />
+          {showIcon && (
+            <Ellipse cx="100" cy="136" rx="24" ry="9" fill={`url(#${ids.iconShadow})`} />
+          )}
         </G>
 
         {/* 6 — rim light + inner shadow for depth */}
@@ -364,8 +429,15 @@ export default function WingCeremonyEmblem({
         <Path
           d="M 64.8 129.6 A 46 46 0 0 0 135.2 129.6"
           fill="none"
-          stroke="rgba(0,0,0,0.5)"
-          strokeWidth="4"
+          stroke="rgba(0,0,0,0.62)"
+          strokeWidth="5.5"
+          strokeLinecap="round"
+        />
+        <Path
+          d="M 68.5 134.5 A 42 42 0 0 0 131.5 134.5"
+          fill="none"
+          stroke="rgba(0,0,0,0.35)"
+          strokeWidth="8"
           strokeLinecap="round"
         />
 
@@ -382,11 +454,18 @@ export default function WingCeremonyEmblem({
         <Circle cx="162" cy="152" r="1.4" fill="#ffffff" opacity="0.45" />
       </Svg>
 
-      {/* Wing emblem — GameIcon renders its own Svg, so overlay it centered.
-          Sized to sit IN the vignette scene, on the contact shadow. */}
-      <View style={styles.iconOverlay} pointerEvents="none">
-        <GameIcon name={icon} size={Math.round(size * 0.34)} />
-      </View>
+      {/* Icon-in-scene wings only: a SMALL GameIcon (GameIcon renders its own
+          Svg, so it cannot nest inside the one above) seated low in the
+          vignette, standing on the contact shadow — part of the scene, not
+          a glyph pasted over it. Self-sufficient scenes render no overlay. */}
+      {showIcon && (
+        <View
+          style={[styles.iconOverlay, { transform: [{ translateY: size * 0.07 }] }]}
+          pointerEvents="none"
+        >
+          <GameIcon name={icon} size={Math.round(size * 0.24)} />
+        </View>
+      )}
     </View>
   );
 }

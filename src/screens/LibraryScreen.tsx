@@ -150,7 +150,9 @@ function DecorationMedallion({
   size?: number;
   style?: object;
 }) {
-  const ring = size + 4;
+  // Ring stroke scales with the disc so an 84px medallion doesn't wear a
+  // 48px medallion's hairline ring.
+  const ring = size + Math.max(4, Math.round(size / 12));
   const alpha = (a: string) => (/^#[0-9a-fA-F]{6}$/.test(accent) ? accent + a : accent);
   return (
     <View
@@ -520,11 +522,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   // the screen so the collection ends on a goal instead of empty space.
   const nextFind = decorationGridItems.find((item) => !item.owned)?.meta ?? null;
 
-  // The decorations grid lays out 3-up; when the collection count isn't a
-  // multiple of 3 the last row would hold orphaned cards beside empty dark
-  // space. Fill the leftover slots with "future find" placeholders so every
-  // row reads complete.
-  const futureSlotCount = (3 - (decorationGridItems.length % 3)) % 3;
+  // The decorations grid lays out 2-up; when the collection count is odd the
+  // last row would hold an orphaned card beside empty dark space. Fill the
+  // leftover slot with a "future find" placeholder so every row reads
+  // complete.
+  const futureSlotCount = decorationGridItems.length % 2;
 
   const heroStats = [
     { label: 'Level', value: currentLevel },
@@ -898,7 +900,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               />
-              <Text style={styles.loreQuoteText}>{selectedWingData.def.lore}</Text>
+              <Text style={styles.loreQuoteText} numberOfLines={2} ellipsizeMode="tail">
+                {selectedWingData.def.lore}
+              </Text>
             </View>
 
             <View style={styles.infoCardsRow}>
@@ -1094,8 +1098,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         name={meta.iconName}
                         accent={pickable ? COLORS.teal : rarityAccent}
                         owned={owned}
-                        size={48}
-                        style={{ marginBottom: 7 }}
+                        size={84}
+                        style={{ marginBottom: 10 }}
                       />
                       <Text
                         style={[styles.decorationName, !owned && { color: COLORS.textMuted }]}
@@ -1105,7 +1109,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                         {meta.name}
                       </Text>
                       {meta.description ? (
-                        <Text style={styles.decorationDescription} numberOfLines={2} ellipsizeMode="tail">
+                        <Text style={styles.decorationDescription} numberOfLines={1} ellipsizeMode="tail">
                           {meta.description}
                         </Text>
                       ) : null}
@@ -1140,7 +1144,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
                     accessibilityLabel="A future find, still buried in the stacks"
                   >
                     <View style={styles.futureChest}>
-                      <GameIcon name="chest" size={26} accent="#8a7ba8" />
+                      <GameIcon name="chest" size={44} accent="#8a7ba8" />
                     </View>
                     <Text style={styles.decorationFutureText}>One day{'…'}</Text>
                   </View>
@@ -1773,11 +1777,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   decorationItem: {
-    width: '30%',
-    minWidth: 90,
+    // 2-up grid — fewer, bigger cards so the decoration render (not empty
+    // purple card face) carries the tile.
+    width: '48%',
+    minWidth: 140,
     borderRadius: RADIUS.xl,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
@@ -1800,8 +1806,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   decorationName: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 17,
     fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
     textAlign: 'center',
@@ -1813,15 +1819,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   decorationDescription: {
-    fontSize: 9,
-    lineHeight: 13,
-    // Two full lines reserved — copy ellipsizes at the tail instead of
-    // clipping mid-sentence, and the grid rows stay level.
-    minHeight: 26,
-    color: COLORS.textMuted,
+    // One legible line, tail-ellipsized — not rows of micro-type.
+    fontSize: 10.5,
+    lineHeight: 15,
+    color: 'rgba(214,204,236,0.75)',
     fontFamily: FONTS.bodyRegular,
     textAlign: 'center',
-    marginTop: 3,
+    marginTop: 4,
     paddingHorizontal: 2,
   },
   decorationUnlockChip: {
@@ -1847,7 +1851,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   decorationFutureText: {
-    fontSize: 9,
+    fontSize: 10.5,
     letterSpacing: 1,
     color: COLORS.textMuted,
     fontFamily: FONTS.bodyMedium,

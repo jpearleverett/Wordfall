@@ -8,7 +8,8 @@
  *              light rays spilling from the arch;
  *   current  — work in progress: scaffolding, a half-filled shelf, warm
  *              lamplight, and a progress ring on its emblem;
- *   ruined   — dark, boarded over, cracked stone and cobwebs.
+ *   ruined   — dusk-lit: ghosted book-spine rows in the wing accent, one
+ *              board across the arch, cracked stone and cobwebs.
  *
  * Architecture is one static <Svg>; wing emblems, state badges and touch
  * targets are absolutely-positioned overlays sharing the same geometry, so
@@ -48,12 +49,19 @@ interface GrandLibrarySceneProps {
 }
 
 const W = 390;
-const H = 432;
-const ALCOVE_W = 82;
-const ALCOVE_H = 102;
-const GAP = 8;
+const H = 530;
+const ALCOVE_W = 92;
+const ALCOVE_H = 127;
+const GAP = 4;
 const MARGIN = (W - (4 * ALCOVE_W + 3 * GAP)) / 2;
-const ROW_Y = [98, 220];
+const ROW_Y = [98, 239];
+const FLOOR_Y = 374;
+/**
+ * WingThemeArt silhouettes are authored in the original 82×102 alcove
+ * space; this transform maps them onto the larger alcove geometry.
+ */
+const ART_SX = ALCOVE_W / 82;
+const ART_SY = ALCOVE_H / 102;
 
 function alcoveRect(i: number) {
   const col = i % 4;
@@ -62,7 +70,7 @@ function alcoveRect(i: number) {
 }
 
 function archPath(x: number, y: number): string {
-  return `M ${x} ${y + ALCOVE_H} L ${x} ${y + 26} Q ${x + ALCOVE_W / 2} ${y - 16} ${x + ALCOVE_W} ${y + 26} L ${x + ALCOVE_W} ${y + ALCOVE_H} Z`;
+  return `M ${x} ${y + ALCOVE_H} L ${x} ${y + 30} Q ${x + ALCOVE_W / 2} ${y - 18} ${x + ALCOVE_W} ${y + 30} L ${x + ALCOVE_W} ${y + ALCOVE_H} Z`;
 }
 
 const STONE = '#2b1d3e';
@@ -71,14 +79,19 @@ const STONE_EDGE = '#4a3566';
 const WOOD = '#6b4a2a';
 const WOOD_DARK = '#452e18';
 
-/** Book blocks for a restored shelf row — deterministic per wing/row. */
+/**
+ * Book blocks for a restored shelf row — deterministic per wing/row.
+ * Every ~5th spine is a "lit" pale book so rows read as lamplit dioramas
+ * instead of flat colored bars.
+ */
 function shelfBooks(x: number, shelfY: number, accent: string, seed: number) {
   const books: React.ReactElement[] = [];
   let bx = x + 8;
   let k = 0;
   while (bx < x + ALCOVE_W - 12) {
-    const h = 10 + ((seed * 7 + k * 5) % 6);
-    const w = 4 + ((seed * 3 + k * 11) % 4);
+    const h = 11 + ((seed * 7 + k * 5) % 7);
+    const w = 4.5 + ((seed * 3 + k * 11) % 4);
+    const lit = (seed * 5 + k) % 5 === 1;
     const hues = [accent, '#e8c07a', '#c9d2e8', accent];
     books.push(
       <Rect
@@ -88,14 +101,44 @@ function shelfBooks(x: number, shelfY: number, accent: string, seed: number) {
         width={w}
         height={h}
         rx={1}
-        fill={hues[(seed + k) % hues.length]}
-        opacity={0.85}
+        fill={lit ? '#f6e7bb' : hues[(seed + k) % hues.length]}
+        opacity={lit ? 0.98 : 0.85}
       />,
     );
     bx += w + 1.6;
     k += 1;
   }
   return books;
+}
+
+/**
+ * Ghosted spine row for a locked wing — varied-height silhouettes in the
+ * wing accent at 30–38% opacity, so a ruined alcove still reads as a
+ * library waiting to be relit rather than construction debris.
+ */
+function ghostSpines(x: number, shelfY: number, accent: string, seed: number) {
+  const spines: React.ReactElement[] = [];
+  let bx = x + 9;
+  let k = 0;
+  while (bx < x + ALCOVE_W - 13) {
+    const h = 10 + ((seed * 5 + k * 7) % 8);
+    const w = 5 + ((seed * 3 + k * 5) % 4);
+    spines.push(
+      <Rect
+        key={`gsp-${seed}-${k}`}
+        x={bx}
+        y={shelfY - h}
+        width={w}
+        height={h}
+        rx={1.2}
+        fill={accent}
+        opacity={0.3 + ((seed + k * 3) % 5) * 0.02}
+      />,
+    );
+    bx += w + 2.2;
+    k += 1;
+  }
+  return spines;
 }
 
 /**
@@ -108,7 +151,10 @@ function shelfBooks(x: number, shelfY: number, accent: string, seed: number) {
  * generic bookshelf.
  */
 function WingThemeArt({ x, y, accent, wingId, ghost = false }: { x: number; y: number; accent: string; wingId: string; ghost?: boolean }) {
-  const cx = x + ALCOVE_W / 2;
+  // Authored in the legacy 82-wide art space; the outer <G> transform below
+  // stretches it to the live alcove size.
+  const AW = 82;
+  const cx = x + AW / 2;
   let art: React.ReactElement | null = null;
   switch (wingId) {
     case 'nature':
@@ -116,7 +162,7 @@ function WingThemeArt({ x, y, accent, wingId, ghost = false }: { x: number; y: n
         <G>
           {/* hanging ivy strands from the arch */}
           <Path d={`M ${x + 13} ${y + 14} q -3 14 2 26 q 4 10 1 18`} stroke={accent} strokeWidth={1.4} fill="none" strokeLinecap="round" opacity={0.85} />
-          <Path d={`M ${x + ALCOVE_W - 13} ${y + 14} q 3 16 -2 28 q -3 9 0 16`} stroke={accent} strokeWidth={1.4} fill="none" strokeLinecap="round" opacity={0.85} />
+          <Path d={`M ${x + AW - 13} ${y + 14} q 3 16 -2 28 q -3 9 0 16`} stroke={accent} strokeWidth={1.4} fill="none" strokeLinecap="round" opacity={0.85} />
           {[[11, 24], [16, 36], [12, 48], [69, 26], [66, 40], [70, 52]].map(([dx, dy], k) => (
             <Ellipse key={`nl-${k}`} cx={x + dx} cy={y + dy} rx={3} ry={1.8} fill={accent} opacity={0.9} transform={`rotate(${k % 2 ? 38 : -38} ${x + dx} ${y + dy})`} />
           ))}
@@ -147,7 +193,7 @@ function WingThemeArt({ x, y, accent, wingId, ghost = false }: { x: number; y: n
       art = (
         <G>
           {/* marble column pair */}
-          {[x + 9, x + ALCOVE_W - 17].map((px, k) => (
+          {[x + 9, x + AW - 17].map((px, k) => (
             <G key={`mc-${k}`}>
               <Rect x={px - 1.5} y={y + 30} width={11} height={4} rx={1.5} fill="#d8cdf0" opacity={0.85} />
               <Rect x={px} y={y + 34} width={8} height={58} fill="#b9abd8" opacity={0.75} />
@@ -251,7 +297,14 @@ function WingThemeArt({ x, y, accent, wingId, ghost = false }: { x: number; y: n
       art = null;
   }
   if (!art) return null;
-  return <G opacity={ghost ? 0.45 : 1}>{art}</G>;
+  return (
+    <G
+      transform={`translate(${x * (1 - ART_SX)} ${y * (1 - ART_SY)}) scale(${ART_SX} ${ART_SY})`}
+      opacity={ghost ? 0.45 : 1}
+    >
+      {art}
+    </G>
+  );
 }
 
 function RestoredAlcove({ x, y, accent, index, wingId }: { x: number; y: number; accent: string; index: number; wingId: string }) {
@@ -267,23 +320,26 @@ function RestoredAlcove({ x, y, accent, index, wingId }: { x: number; y: number;
       </Defs>
       <Path d={archPath(x, y)} fill="#160b26" stroke={STONE_EDGE} strokeWidth={2} />
       <Path d={archPath(x, y)} fill={`url(#${gid})`} />
-      {/* shelves */}
-      {[46, 68, 90].map((dy, r) => (
+      {/* warm top-light spilling down from the arch */}
+      <Path d={archPath(x, y)} fill="url(#alcove-toplight)" />
+      {/* shelves — books, wood line, cast shadow beneath so each row sits lit */}
+      {[58, 84, 110].map((dy, r) => (
         <G key={`sh-${index}-${r}`}>
           {shelfBooks(x, y + dy, accent, index * 3 + r)}
           <Rect x={x + 6} y={y + dy} width={ALCOVE_W - 12} height={3} rx={1.5} fill={WOOD} />
+          <Rect x={x + 7} y={y + dy + 3} width={ALCOVE_W - 14} height={3.5} rx={1.5} fill="#050110" opacity={0.32} />
         </G>
       ))}
       {/* themed set-dressing — this wing's own room, in front of the shelves */}
       <WingThemeArt x={x} y={y} accent={accent} wingId={wingId} />
       {/* light rays from the arch */}
       <Polygon
-        points={`${x + ALCOVE_W / 2 - 8},${y + 6} ${x + ALCOVE_W / 2 + 8},${y + 6} ${x + ALCOVE_W / 2 + 22},${y + ALCOVE_H} ${x + ALCOVE_W / 2 - 22},${y + ALCOVE_H}`}
+        points={`${x + ALCOVE_W / 2 - 9},${y + 6} ${x + ALCOVE_W / 2 + 9},${y + 6} ${x + ALCOVE_W / 2 + 25},${y + ALCOVE_H} ${x + ALCOVE_W / 2 - 25},${y + ALCOVE_H}`}
         fill={accent}
         opacity={0.1}
       />
       {/* base glow */}
-      <Ellipse cx={x + ALCOVE_W / 2} cy={y + ALCOVE_H - 2} rx={30} ry={6} fill={accent} opacity={0.22} />
+      <Ellipse cx={x + ALCOVE_W / 2} cy={y + ALCOVE_H - 2} rx={34} ry={7} fill={accent} opacity={0.22} />
     </G>
   );
 }
@@ -296,15 +352,15 @@ function CurrentAlcove({ x, y, accent, index }: { x: number; y: number; accent: 
       <Ellipse cx={x + ALCOVE_W / 2} cy={y + ALCOVE_H - 14} rx={26} ry={14} fill="#ffb800" opacity={0.12} />
       <Circle cx={x + ALCOVE_W / 2 + 20} cy={y + ALCOVE_H - 24} r={3.4} fill="#ffd24d" opacity={0.9} />
       {/* one finished shelf, one bare */}
-      <G>{shelfBooks(x, y + 90, accent, index * 3 + 1)}</G>
-      <Rect x={x + 6} y={y + 90} width={ALCOVE_W - 12} height={3} rx={1.5} fill={WOOD} />
-      <Rect x={x + 6} y={y + 64} width={ALCOVE_W - 12} height={3} rx={1.5} fill={WOOD_DARK} />
+      <G>{shelfBooks(x, y + 112, accent, index * 3 + 1)}</G>
+      <Rect x={x + 6} y={y + 112} width={ALCOVE_W - 12} height={3} rx={1.5} fill={WOOD} />
+      <Rect x={x + 6} y={y + 82} width={ALCOVE_W - 12} height={3} rx={1.5} fill={WOOD_DARK} />
       {/* scaffold */}
-      <Rect x={x + 12} y={y + 26} width={3.4} height={ALCOVE_H - 28} fill={WOOD} rx={1.5} />
-      <Rect x={x + ALCOVE_W - 16} y={y + 26} width={3.4} height={ALCOVE_H - 28} fill={WOOD} rx={1.5} />
-      <Rect x={x + 8} y={y + 40} width={ALCOVE_W - 16} height={3} fill={WOOD_DARK} rx={1.5} />
+      <Rect x={x + 12} y={y + 30} width={3.4} height={ALCOVE_H - 32} fill={WOOD} rx={1.5} />
+      <Rect x={x + ALCOVE_W - 16} y={y + 30} width={3.4} height={ALCOVE_H - 32} fill={WOOD} rx={1.5} />
+      <Rect x={x + 8} y={y + 46} width={ALCOVE_W - 16} height={3} fill={WOOD_DARK} rx={1.5} />
       <Path
-        d={`M ${x + 14} ${y + ALCOVE_H - 4} L ${x + ALCOVE_W - 14} ${y + 44}`}
+        d={`M ${x + 14} ${y + ALCOVE_H - 4} L ${x + ALCOVE_W - 14} ${y + 50}`}
         stroke={WOOD}
         strokeWidth={2.6}
         strokeLinecap="round"
@@ -331,17 +387,17 @@ function RuinedAlcove({ x, y, accent, index, wingId }: { x: number; y: number; a
       <Path d={archPath(x, y)} fill={`url(#${tid})`} />
       {/* faint warm rim light on the arch frame */}
       <Path d={archPath(x, y)} fill="none" stroke="#e8c07a" strokeWidth={1.1} opacity={0.34} />
-      {/* ghost of the shelving to come, tinted in the wing accent */}
-      {[52, 96].map((dy, r) => (
-        <Rect key={`gs-${index}-${r}`} x={x + 8} y={y + dy} width={ALCOVE_W - 16} height={2.6} rx={1.3} fill={accent} opacity={0.22} />
+      {/* ghosted library-to-be: two shelf rows of accent spine silhouettes */}
+      {[66, 100].map((dy, r) => (
+        <G key={`gs-${index}-${r}`}>
+          {ghostSpines(x, y + dy, accent, index * 2 + r + 1)}
+          <Rect x={x + 8} y={y + dy} width={ALCOVE_W - 16} height={2.6} rx={1.3} fill={accent} opacity={0.25} />
+        </G>
       ))}
       {/* ghosted theme silhouette — teases what this room becomes */}
       <WingThemeArt x={x} y={y} accent={accent} wingId={wingId} ghost />
-      {/* fallen shelf remnant */}
-      <Rect x={x + 10} y={y + 84} width={ALCOVE_W - 30} height={3} rx={1.5} fill="#4a3626" transform={`rotate(-7 ${cx} ${y + 84})`} />
-      {/* boards nailed across */}
-      <Rect x={x + 4} y={y + 44} width={ALCOVE_W - 8} height={9} rx={2} fill="#54402a" stroke="#2c1f12" strokeWidth={0.8} transform={`rotate(-9 ${cx} ${y + 48})`} />
-      <Rect x={x + 4} y={y + 66} width={ALCOVE_W - 8} height={9} rx={2} fill="#4a3626" stroke="#2c1f12" strokeWidth={0.8} transform={`rotate(6 ${cx} ${y + 70})`} />
+      {/* single board — enough to say "closed", not enough to bury the room */}
+      <Rect x={x + 5} y={y + 50} width={ALCOVE_W - 10} height={9} rx={2} fill="#54402a" stroke="#2c1f12" strokeWidth={0.8} transform={`rotate(-8 ${cx} ${y + 54})`} />
       {/* cracks */}
       <Path
         d={`M ${x + 14} ${y + 20} l 7 9 l -4 8 M ${x + ALCOVE_W - 18} ${y + 28} l -6 10 l 5 7`}
@@ -383,14 +439,14 @@ function DustMote({ x, delay, reduceMotion }: { x: number; delay: number; reduce
       style={{
         position: 'absolute',
         left: x,
-        top: 300,
+        top: 430,
         width: 4,
         height: 4,
         borderRadius: 2,
         backgroundColor: '#ffe9a8',
         opacity: anim.interpolate({ inputRange: [0, 0.15, 0.7, 1], outputRange: [0, 0.7, 0.35, 0] }),
         transform: [
-          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -190] }) },
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -230] }) },
           { translateX: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 6, -4] }) },
         ],
       }}
@@ -433,6 +489,11 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
               <Stop offset="0" stopColor="#2e1c44" />
               <Stop offset="1" stopColor="#160b26" />
             </LinearGradient>
+            <LinearGradient id="alcove-toplight" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor="#ffdf9e" stopOpacity="0.3" />
+              <Stop offset="0.45" stopColor="#ffdf9e" stopOpacity="0.1" />
+              <Stop offset="1" stopColor="#ffdf9e" stopOpacity="0" />
+            </LinearGradient>
             <RadialGradient id="dome-glow" cx="0.5" cy="0.4" r="0.6">
               <Stop offset="0" stopColor="#ffd24d" stopOpacity={restoredCount > 0 ? 0.5 : 0.18} />
               <Stop offset="1" stopColor="#ffd24d" stopOpacity="0" />
@@ -463,13 +524,13 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
           {/* cornice under dome band */}
           <Rect x={10} y={90} width={370} height={5} rx={2.5} fill={STONE_EDGE} opacity={0.7} />
 
-          {/* pilasters */}
+          {/* pilasters — slimmed to the narrower gutters */}
           {[0, 1, 2, 3, 4].map(i => {
-            const px = MARGIN - 8 + i * (ALCOVE_W + GAP);
+            const px = MARGIN - GAP + i * (ALCOVE_W + GAP);
             return (
               <G key={`pl-${i}`}>
-                <Rect x={px} y={96} width={6} height={H - 150} fill={STONE} stroke={STONE_EDGE} strokeWidth={0.8} />
-                <Rect x={px - 2} y={204} width={10} height={7} rx={2} fill={STONE_EDGE} opacity={0.8} />
+                <Rect x={px} y={96} width={GAP} height={320} fill={STONE} stroke={STONE_EDGE} strokeWidth={0.8} />
+                <Rect x={px - 2} y={227} width={GAP + 4} height={8} rx={2} fill={STONE_EDGE} opacity={0.8} />
               </G>
             );
           })}
@@ -483,39 +544,39 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
           })}
 
           {/* floor */}
-          <Rect x={0} y={330} width={W} height={H - 330} fill="url(#hall-floor)" rx={24} />
-          <Rect x={0} y={330} width={W} height={3} fill={STONE_EDGE} opacity={0.6} />
+          <Rect x={0} y={FLOOR_Y} width={W} height={H - FLOOR_Y} fill="url(#hall-floor)" rx={24} />
+          <Rect x={0} y={FLOOR_Y} width={W} height={3} fill={STONE_EDGE} opacity={0.6} />
           {[1, 2, 3].map(i => (
-            <Path key={`fb-${i}`} d={`M ${20 * i} ${H - 4} L ${60 + 34 * i} 336`} stroke="#3a2757" strokeWidth={1} opacity={0.5} />
+            <Path key={`fb-${i}`} d={`M ${20 * i} ${H - 4} L ${60 + 34 * i} ${FLOOR_Y + 6}`} stroke="#3a2757" strokeWidth={1} opacity={0.5} />
           ))}
           {[1, 2, 3].map(i => (
-            <Path key={`fb2-${i}`} d={`M ${W - 20 * i} ${H - 4} L ${W - 60 - 34 * i} 336`} stroke="#3a2757" strokeWidth={1} opacity={0.5} />
+            <Path key={`fb2-${i}`} d={`M ${W - 20 * i} ${H - 4} L ${W - 60 - 34 * i} ${FLOOR_Y + 6}`} stroke="#3a2757" strokeWidth={1} opacity={0.5} />
           ))}
           {/* rug */}
-          <Ellipse cx={195} cy={382} rx={104} ry={26} fill="#4a1b62" stroke="#c84dff" strokeWidth={1.6} opacity={0.85} />
-          <Ellipse cx={195} cy={382} rx={78} ry={18} fill="none" stroke="#ffd24d" strokeWidth={1.1} opacity={0.5} />
+          <Ellipse cx={195} cy={452} rx={118} ry={30} fill="#4a1b62" stroke="#c84dff" strokeWidth={1.6} opacity={0.85} />
+          <Ellipse cx={195} cy={452} rx={88} ry={21} fill="none" stroke="#ffd24d" strokeWidth={1.1} opacity={0.5} />
           {/* warm light pool spilling onto the floor under the reward */}
-          {pendingDecoration && <Ellipse cx={195} cy={380} rx={64} ry={16} fill="url(#gift-pool)" />}
+          {pendingDecoration && <Ellipse cx={195} cy={450} rx={74} ry={19} fill="url(#gift-pool)" />}
           {/* grounded contact shadow so the lectern sits on the rug */}
-          <Ellipse cx={195} cy={379} rx={27} ry={5.5} fill="#04010a" opacity={0.5} />
+          <Ellipse cx={195} cy={449} rx={32} ry={6.5} fill="#04010a" opacity={0.5} />
           {/* welcome lectern on the rug */}
-          <Rect x={188} y={358} width={14} height={20} rx={2} fill={WOOD} stroke={WOOD_DARK} strokeWidth={1} />
-          <Rect x={182} y={352} width={26} height={8} rx={2} fill={WOOD_DARK} />
-          <Rect x={185} y={348} width={20} height={5} rx={1.5} fill="#e8c07a" />
+          <Rect x={187} y={426} width={16} height={24} rx={2} fill={WOOD} stroke={WOOD_DARK} strokeWidth={1} />
+          <Rect x={181} y={419} width={28} height={9} rx={2} fill={WOOD_DARK} />
+          <Rect x={184} y={414} width={22} height={6} rx={1.5} fill="#e8c07a" />
 
           {/* awaiting decoration — glowing gift preview floating above the lectern */}
           {pendingDecoration && (
             <G>
-              <Circle cx={195} cy={337} r={44} fill="url(#gift-aura)" />
+              <Circle cx={195} cy={402} r={52} fill="url(#gift-aura)" />
               {/* light kissing the lectern top — the prop is lit, not floating */}
-              <Ellipse cx={195} cy={358} rx={19} ry={4} fill="#ffd24d" opacity={0.25} />
+              <Ellipse cx={195} cy={426} rx={22} ry={4.5} fill="#ffd24d" opacity={0.25} />
               {/* small rays */}
               {[-90, -40, 25, 90, 155, 220].map(deg => {
                 const rad = (deg * Math.PI) / 180;
-                const x1 = 195 + Math.cos(rad) * 25;
-                const y1 = 337 + Math.sin(rad) * 25;
-                const x2 = 195 + Math.cos(rad) * 35;
-                const y2 = 337 + Math.sin(rad) * 35;
+                const x1 = 195 + Math.cos(rad) * 30;
+                const y1 = 402 + Math.sin(rad) * 30;
+                const x2 = 195 + Math.cos(rad) * 42;
+                const y2 = 402 + Math.sin(rad) * 42;
                 return (
                   <Path
                     key={`gr-${deg}`}
@@ -528,10 +589,10 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
                 );
               })}
               {/* tiny sparkles */}
-              <Path d="M 166 320 l 2.8 4.5 l -2.8 4.5 l -2.8 -4.5 Z" fill="#ffe9a8" opacity={0.9} />
-              <Circle cx={226} cy={326} r={2} fill="#ffe9a8" opacity={0.8} />
-              <Circle cx={216} cy={356} r={1.4} fill="#ffe9a8" opacity={0.65} />
-              <Circle cx={170} cy={350} r={1.2} fill="#ffe9a8" opacity={0.55} />
+              <Path d="M 162 380 l 3.2 5 l -3.2 5 l -3.2 -5 Z" fill="#ffe9a8" opacity={0.9} />
+              <Circle cx={232} cy={388} r={2.4} fill="#ffe9a8" opacity={0.8} />
+              <Circle cx={220} cy={424} r={1.7} fill="#ffe9a8" opacity={0.65} />
+              <Circle cx={168} cy={418} r={1.4} fill="#ffe9a8" opacity={0.55} />
             </G>
           )}
         </Svg>
@@ -551,8 +612,8 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
 
         {/* gift preview icon over the lectern aura */}
         {pendingDecoration && (
-          <View pointerEvents="none" style={{ position: 'absolute', left: 195 - 20, top: 337 - 20 }}>
-            <GameIcon name="gift" size={40} />
+          <View pointerEvents="none" style={{ position: 'absolute', left: 195 - 24, top: 402 - 24 }}>
+            <GameIcon name="gift" size={48} />
           </View>
         )}
 
@@ -585,16 +646,16 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
                 {w.state === 'ruined' ? (
                   // ghosted in the wing's own accent — teases what the wing becomes
                   <View style={{ opacity: 0.42 }}>
-                    <GameIcon name={w.def.icon} size={19} accent={w.def.accent} />
+                    <GameIcon name={w.def.icon} size={23} accent={w.def.accent} />
                   </View>
                 ) : (
-                  <GameIcon name={w.def.icon} size={19} />
+                  <GameIcon name={w.def.icon} size={23} />
                 )}
               </View>
               <View style={styles.badgeSlot}>
                 {w.state === 'restored' ? (
                   <View style={[styles.stateBadge, { borderColor: 'rgba(0,230,118,0.6)' }]}>
-                    <CheckIcon size={11} />
+                    <CheckIcon size={12} />
                   </View>
                 ) : w.state === 'current' ? (
                   <View style={[styles.stateBadge, { borderColor: w.def.accent }]}>
@@ -602,7 +663,7 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
                   </View>
                 ) : (
                   <View style={[styles.stateBadge, { borderColor: 'rgba(255,210,77,0.65)', backgroundColor: 'rgba(12,5,24,0.95)' }]}>
-                    <LockIcon size={11} accent="#ffd24d" />
+                    <LockIcon size={12} accent="#ffd24d" />
                   </View>
                 )}
               </View>
@@ -635,16 +696,16 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
 
 const styles = StyleSheet.create({
   emblem: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1.5,
     backgroundColor: 'rgba(10, 4, 22, 0.85)',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: -4,
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 8,
+    shadowRadius: 9,
     elevation: 5,
   },
   emblemSelected: {
@@ -653,21 +714,21 @@ const styles = StyleSheet.create({
   },
   badgeSlot: {
     position: 'absolute',
-    top: 20,
-    right: ALCOVE_W / 2 - 30,
+    top: 24,
+    right: ALCOVE_W / 2 - 34,
   },
   stateBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 3,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 3.5,
     borderWidth: 1.2,
     backgroundColor: 'rgba(8, 3, 18, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   pctText: {
-    fontSize: 8,
+    fontSize: 9,
     fontFamily: FONTS.display,
     letterSpacing: 0.3,
   },
@@ -676,12 +737,12 @@ const styles = StyleSheet.create({
     bottom: -8,
     maxWidth: ALCOVE_W - 2,
     backgroundColor: 'rgba(6, 2, 14, 0.72)',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
+    borderRadius: 9,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
   wingLabel: {
-    fontSize: 12,
+    fontSize: 13,
     letterSpacing: 1,
     fontFamily: FONTS.display,
     color: '#f6f0ff',
@@ -690,8 +751,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 5,
   },
   wingLabelLong: {
-    fontSize: 10,
-    letterSpacing: 0.4,
+    fontSize: 11,
+    letterSpacing: 0.5,
   },
   wingLabelRuined: {
     color: '#cabfe4',

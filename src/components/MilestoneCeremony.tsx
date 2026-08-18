@@ -2,7 +2,9 @@ import React, { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, {
+  Circle, Defs, LinearGradient as SvgLinearGradient, Polygon, RadialGradient, Rect, Stop,
+} from 'react-native-svg';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
@@ -16,6 +18,26 @@ import { gradId } from './icons/IconBase';
  * word mastery gold, first mode clear, wildcard earned, win streak,
  * mystery wheel jackpot.
  */
+
+/**
+ * Environmental backdrop data — 10 soft light rays fanning from behind the
+ * card's center (alternating wide/narrow) plus 6 static sparkle motes, so
+ * the ceremony sits in a lit moment instead of a bare near-black void.
+ * Everything here is STATIC (no animation), so it is reduce-motion safe by
+ * construction. Motes stay within x 55–145 of the 200-unit viewBox so the
+ * portrait "slice" crop never pushes them off-screen.
+ */
+const BACKDROP_RAYS = [8, 44, 78, 116, 152, 188, 224, 262, 298, 334].map(
+  (deg, i) => ({ deg, wide: i % 2 === 0 }),
+);
+const BACKDROP_MOTES: Array<{ cx: number; cy: number; r: number; o: number; gold: boolean }> = [
+  { cx: 62, cy: 38, r: 1.6, o: 0.42, gold: true },
+  { cx: 138, cy: 30, r: 1.2, o: 0.32, gold: false },
+  { cx: 144, cy: 122, r: 1.8, o: 0.38, gold: true },
+  { cx: 58, cy: 130, r: 1.3, o: 0.3, gold: false },
+  { cx: 72, cy: 176, r: 1.5, o: 0.36, gold: true },
+  { cx: 132, cy: 166, r: 1.1, o: 0.28, gold: false },
+];
 
 interface MilestoneCeremonyProps {
   ribbon: string;
@@ -93,7 +115,14 @@ export function MilestoneCeremony({
     transform: [{ scale: interpolate(rewardPop.value, [0, 0.6, 1], [0.4, 1.12, 1]) }],
   }));
 
-  const vignetteId = useMemo(() => gradId('milestoneVignette'), []);
+  const ids = useMemo(
+    () => ({
+      vignette: gradId('milestoneVignette'),
+      ray: gradId('milestoneRay'),
+      corona: gradId('milestoneCorona'),
+    }),
+    [],
+  );
 
   return (
     <Animated.View style={[styles.overlay, overlayStyle]}>
@@ -109,13 +138,57 @@ export function MilestoneCeremony({
         pointerEvents="none"
       >
         <Defs>
-          <RadialGradient id={vignetteId} cx="0.5" cy="0.7" rx="0.75" ry="0.55">
+          <RadialGradient id={ids.vignette} cx="0.5" cy="0.7" rx="0.75" ry="0.55">
             <Stop offset="0" stopColor="#000000" stopOpacity="0.55" />
             <Stop offset="0.7" stopColor="#000000" stopOpacity="0.28" />
             <Stop offset="1" stopColor="#000000" stopOpacity="0" />
           </RadialGradient>
         </Defs>
-        <Rect x="0" y="0" width="100" height="100" fill={`url(#${vignetteId})`} />
+        <Rect x="0" y="0" width="100" height="100" fill={`url(#${ids.vignette})`} />
+      </Svg>
+      {/* Environmental backdrop above the scrim, behind the card: a soft
+          accent corona + gold light rays fanning from the card's center +
+          static sparkle motes. Low alpha keeps the card the subject; static
+          rendering keeps it reduce-motion safe. */}
+      <Svg
+        width="100%"
+        height="100%"
+        style={StyleSheet.absoluteFill}
+        viewBox="0 0 200 200"
+        preserveAspectRatio="xMidYMid slice"
+        pointerEvents="none"
+      >
+        <Defs>
+          <SvgLinearGradient id={ids.ray} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={COLORS.gold} stopOpacity="0" />
+            <Stop offset="1" stopColor={COLORS.goldLight} stopOpacity="1" />
+          </SvgLinearGradient>
+          <RadialGradient id={ids.corona} cx="0.5" cy="0.5" r="0.5">
+            <Stop offset="0" stopColor={accentColor} stopOpacity="0.12" />
+            <Stop offset="0.6" stopColor={accentColor} stopOpacity="0.05" />
+            <Stop offset="1" stopColor={accentColor} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Circle cx="100" cy="100" r="82" fill={`url(#${ids.corona})`} />
+        {BACKDROP_RAYS.map((r) => (
+          <Polygon
+            key={`bg-ray-${r.deg}`}
+            points={r.wide ? '100,100 93,-40 107,-40' : '100,100 95.5,-40 104.5,-40'}
+            fill={`url(#${ids.ray})`}
+            opacity={r.wide ? 0.09 : 0.055}
+            transform={`rotate(${r.deg} 100 100)`}
+          />
+        ))}
+        {BACKDROP_MOTES.map((m) => (
+          <Circle
+            key={`bg-mote-${m.cx}-${m.cy}`}
+            cx={m.cx}
+            cy={m.cy}
+            r={m.r}
+            fill={m.gold ? COLORS.goldLight : '#ffffff'}
+            opacity={m.o}
+          />
+        ))}
       </Svg>
       {decorationsMounted && (
         <SparkleField count={16} intensity="medium" colors={[accentColor, COLORS.gold, '#fff']} />
@@ -168,9 +241,12 @@ export function MilestoneCeremony({
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={onDismiss}
           >
+            {/* Primary action is ALWAYS gold — an accent-tinted pill on the
+                purple card had almost no value contrast (judge round 3).
+                Gold → amber gradient, dark text, soft gold outer glow. */}
             <LinearGradient
-              colors={[accentColor, accentColor + 'CC']}
-              style={[styles.button, SHADOWS.glow(accentColor)]}
+              colors={GRADIENTS.button.gold}
+              style={[styles.button, SHADOWS.glow(COLORS.gold)]}
             >
               <Text style={styles.buttonText}>{buttonText}</Text>
             </LinearGradient>
@@ -303,10 +379,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 40,
     alignItems: 'center',
+    // Light top-edge catch so the gold pill reads as a lit, raised control.
+    borderWidth: 1,
+    borderColor: 'rgba(255, 244, 214, 0.55)',
     ...SHADOWS.medium,
   },
   buttonText: {
-    color: COLORS.bg,
+    // Dark warm brown on gold — max value contrast for the primary action.
+    color: '#2e1a00',
     fontSize: 14,
     fontFamily: FONTS.display,
     letterSpacing: 1.5,

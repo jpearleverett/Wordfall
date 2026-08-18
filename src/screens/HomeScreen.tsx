@@ -1501,9 +1501,11 @@ const styles = StyleSheet.create({
   },
   heroLogo: {
     // Aug 2026 blind review: the wordmark "eats roughly a third of the
-    // screen" — shrunk ~24% (180 → 136 tall, full → 78% wide) so the card
-    // system below moves up and owns the fold.
-    width: '78%',
+    // screen" — shrunk ~24% so the card system below owns the fold.
+    // Fixed px, not '78%': the wrapper (heroLogoGlow) is content-sized, so
+    // a percentage width resolves against an auto parent and collapses to
+    // zero on web — the logo vanished entirely in the Aug 2026 captures.
+    width: 272,
     height: 136,
     alignSelf: 'center',
   },
