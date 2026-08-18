@@ -25,7 +25,6 @@ import {
   selectCollections,
   selectTooltipsShown,
 } from '../stores/playerStore';
-import { Tooltip } from '../components/common/Tooltip';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { ATLAS_PAGES } from '../data/collections';
 
@@ -514,20 +513,40 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
         />
       }
     >
-      {/* Zero-height anchor: the Tooltip positions itself 100px below its
-          parent, so anchoring it here (below the scaffold header) keeps it
-          floating over the content without ever occluding the header. */}
-      <View style={styles.tooltipAnchor} pointerEvents="box-none">
-        <Tooltip
-          message="Collect words, rare tiles, and seasonal stamps as you play. Complete sets for bonus rewards!"
-          visible={showTooltip}
-          onDismiss={() => {
+      {/* First-visit coach mark — an IN-FLOW glass banner under the header.
+          It pushes the tab bar + list down instead of floating over them
+          (the old absolutely-positioned Tooltip occluded the atlas cards). */}
+      {showTooltip && (
+        <Pressable
+          onPress={() => {
             setShowTooltip(false);
             markTooltipShown('collections_screen');
           }}
-          position="top"
-        />
-      </View>
+          style={({ pressed }) => [styles.coachBanner, pressed && styles.coachBannerPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Tip: Collect words, rare tiles, and seasonal stamps as you play. Complete sets for bonus rewards. Tap to dismiss"
+        >
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <LinearGradient
+            colors={[COLORS.cyan + '1F', 'transparent'] as [string, string]}
+            style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+          <IconMedallion glyph={'\u{1F48E}'} accent={COLORS.cyan} size={30} shape="squircle" />
+          <Text style={styles.coachBannerText}>
+            Collect words, rare tiles & seasonal stamps — complete sets for bonus rewards!
+          </Text>
+          <View style={styles.coachDismiss}>
+            <Text style={styles.coachDismissText}>{'✕'}</Text>
+          </View>
+        </Pressable>
+      )}
       <View
         style={styles.tabBar}
         onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
@@ -605,9 +624,45 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
 };
 
 const styles = StyleSheet.create({
-  tooltipAnchor: {
-    height: 0,
-    zIndex: 50,
+  coachBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,255,0.28)',
+    overflow: 'hidden',
+    ...SHADOWS.soft,
+  },
+  coachBannerPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.88,
+  },
+  coachBannerText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textSecondary,
+  },
+  coachDismiss: {
+    width: 22,
+    height: 22,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coachDismissText: {
+    fontSize: 10,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textSecondary,
   },
   headerGem: {
     width: 30,

@@ -24,7 +24,6 @@ import {
   selectTooltipsShown,
   selectModeStats,
 } from '../stores/playerStore';
-import { Tooltip } from '../components/common/Tooltip';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -251,20 +250,40 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
         ) : undefined
       }
     >
-      {/* Zero-height anchor: the Tooltip positions itself 100px below its
-          parent, so anchoring it here (below the scaffold header) keeps it
-          floating over the grid without ever occluding the header. */}
-      <View style={styles.tooltipAnchor} pointerEvents="box-none">
-        <Tooltip
-          message="Each mode has unique rules! Unlock more modes by advancing through levels."
-          visible={showTooltip}
-          onDismiss={() => {
+      {/* First-visit coach mark — an IN-FLOW glass banner under the header.
+          It pushes the grid down instead of floating over it (the old
+          absolutely-positioned Tooltip occluded the mode cards). */}
+      {showTooltip && (
+        <Pressable
+          onPress={() => {
             setShowTooltip(false);
             markTooltipShown('modes_screen');
           }}
-          position="top"
-        />
-      </View>
+          style={({ pressed }) => [styles.coachBanner, pressed && styles.coachBannerPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Tip: Each mode has unique rules. Advance through levels to unlock more. Tap to dismiss"
+        >
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard]}
+            style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+          <LinearGradient
+            colors={[COLORS.cyan + '1F', 'transparent'] as [string, string]}
+            style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+          <IconMedallion glyph={'\u{1F4A1}'} accent={COLORS.cyan} size={30} shape="squircle" />
+          <Text style={styles.coachBannerText}>
+            Each mode has unique rules — advance through levels to unlock more.
+          </Text>
+          <View style={styles.coachDismiss}>
+            <Text style={styles.coachDismissText}>{'✕'}</Text>
+          </View>
+        </Pressable>
+      )}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.grid}
@@ -277,9 +296,45 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  tooltipAnchor: {
-    height: 0,
-    zIndex: 50,
+  coachBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,255,0.28)',
+    overflow: 'hidden',
+    ...SHADOWS.soft,
+  },
+  coachBannerPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.88,
+  },
+  coachBannerText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textSecondary,
+  },
+  coachDismiss: {
+    width: 22,
+    height: 22,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coachDismissText: {
+    fontSize: 10,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textSecondary,
   },
   headerBtnPressed: {
     transform: [{ scale: 0.93 }],

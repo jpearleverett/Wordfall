@@ -32,8 +32,6 @@ import {
 import { CHAPTERS } from '../data/chapters';
 import { Chapter } from '../types';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-import { LibraryHeroIllustration } from '../components/common/HeroIllustrations';
-import { Tooltip } from '../components/common/Tooltip';
 
 const { width } = Dimensions.get('window');
 
@@ -55,6 +53,122 @@ const WING_META: Record<string, { name: string; icon: string; color: string; aur
 // Hero stat tiles each own an accent so the row reads as crafted gem chips
 // (mirrors HomeScreen's hero stat treatment) instead of flat web boxes.
 const HERO_STAT_ACCENTS = [COLORS.cyan, COLORS.accent, COLORS.gold] as const;
+
+// ─── Bookshelf vignette ─────────────────────────────────────────────────────
+// Hand-built illustrated hero shelf, replacing the color-bar placeholder:
+// varied book heights/widths/tilts, spine gradients with a highlight edge and
+// thin title lines, a warm reading lamp, and wood shelf boards with depth
+// shadows. Pure Views + LinearGradients — no image assets.
+
+interface BookSpec {
+  w: number;
+  h: number;
+  colors: [string, string];
+  tilt?: string;
+  lines?: number;
+}
+
+const BOOKS_TOP: BookSpec[] = [
+  { w: 17, h: 46, colors: ['#00e5ff', '#00708c'], lines: 2 },
+  { w: 14, h: 40, colors: ['#ffd24d', '#c28400'], tilt: '-6deg', lines: 1 },
+  { w: 20, h: 52, colors: ['#d8a5ff', '#7c3aed'], lines: 3 },
+  { w: 15, h: 37, colors: ['#ff6eb8', '#b3125f'], lines: 1 },
+  { w: 18, h: 48, colors: ['#ffcc70', '#c26414'], tilt: '5deg', lines: 2 },
+];
+
+const BOOKS_BOTTOM: BookSpec[] = [
+  { w: 16, h: 42, colors: ['#66ff99', '#1d7a3d'], lines: 2 },
+  { w: 21, h: 53, colors: ['#00f5d4', '#00776b'], lines: 3 },
+  { w: 14, h: 36, colors: ['#ffd24d', '#c28400'], tilt: '7deg', lines: 1 },
+  { w: 18, h: 49, colors: ['#ff6eb8', '#b3125f'], tilt: '-5deg', lines: 2 },
+  { w: 16, h: 44, colors: ['#d8a5ff', '#7c3aed'], lines: 2 },
+];
+
+const BookSpine: React.FC<{ spec: BookSpec }> = ({ spec }) => (
+  <View
+    style={[
+      styles.bookOuter,
+      { width: spec.w, height: spec.h },
+      spec.tilt ? { transform: [{ rotate: spec.tilt }] } : null,
+    ]}
+  >
+    <LinearGradient
+      colors={spec.colors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.bookBody}
+    >
+      <View style={styles.bookEdgeHighlight} />
+      <View style={styles.bookTitleLines}>
+        {Array.from({ length: spec.lines ?? 2 }, (_, i) => (
+          <View key={i} style={styles.bookTitleLine} />
+        ))}
+      </View>
+      <View style={styles.bookFootBand} />
+    </LinearGradient>
+  </View>
+);
+
+const ShelfBoard: React.FC = () => (
+  <View style={styles.shelfBoardWrap}>
+    <LinearGradient
+      colors={['#a8713d', '#6e4522', '#41260f'] as [string, string, string]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={styles.shelfBoard}
+    >
+      <View style={styles.shelfBoardHighlight} />
+    </LinearGradient>
+    <LinearGradient
+      colors={['rgba(0,0,0,0.45)', 'transparent'] as [string, string]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={styles.shelfShadow}
+    />
+  </View>
+);
+
+const BookshelfVignette: React.FC = () => (
+  <View style={styles.shelfScene}>
+    <View style={styles.shelfAmbientGlow} />
+    <LinearGradient
+      colors={['rgba(14,18,50,0.85)', 'rgba(10,13,36,0.70)'] as [string, string]}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.shelfArch}
+    >
+      <View style={styles.lampGlowOuter} pointerEvents="none" />
+      <View style={styles.lampGlowInner} pointerEvents="none" />
+      <View style={styles.bookRow}>
+        {BOOKS_TOP.map((spec, i) => (
+          <BookSpine key={i} spec={spec} />
+        ))}
+        <View style={styles.lamp}>
+          <View style={styles.lampBulbGlow} />
+          <LinearGradient
+            colors={['#ffe9a8', '#ffb800'] as [string, string]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={styles.lampShade}
+          />
+          <View style={styles.lampStem} />
+          <View style={styles.lampBase} />
+        </View>
+      </View>
+      <ShelfBoard />
+      <View style={styles.bookRow}>
+        <View style={styles.flatStack}>
+          <View style={[styles.flatBook, { backgroundColor: '#7c3aed', width: 30 }]} />
+          <View style={[styles.flatBook, { backgroundColor: '#0aa2c0', width: 26 }]} />
+        </View>
+        {BOOKS_BOTTOM.map((spec, i) => (
+          <BookSpine key={i} spec={spec} />
+        ))}
+      </View>
+      <ShelfBoard />
+    </LinearGradient>
+  </View>
+);
 
 interface LibraryScreenProps {
   restoredWings?: string[];
@@ -183,6 +297,40 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         backdrop="library"
         scroll={false}
       >
+        {/* First-visit coach mark — an IN-FLOW glass banner under the header.
+            It pushes the hero card down instead of floating over the headline
+            (the old absolutely-positioned Tooltip occluded it). */}
+        {showTooltip && (
+          <Pressable
+            onPress={() => {
+              setShowTooltip(false);
+              markTooltipShown('library_screen');
+            }}
+            style={({ pressed }) => [styles.coachBanner, pressed && styles.coachBannerPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Tip: Restore library wings by completing chapters. Each wing has themed word puzzles and unique decorations. Tap to dismiss"
+          >
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard]}
+              style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+            <LinearGradient
+              colors={[COLORS.gold + '1F', 'transparent'] as [string, string]}
+              style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <IconMedallion glyph={'\u{1F4DA}'} accent={COLORS.gold} size={30} shape="squircle" />
+            <Text style={styles.coachBannerText}>
+              Complete chapters to restore wings — each holds themed puzzles & decorations.
+            </Text>
+            <View style={styles.coachDismiss}>
+              <Text style={styles.coachDismissText}>{'✕'}</Text>
+            </View>
+          </Pressable>
+        )}
         {loading ? (
           <ScrollView
             style={styles.scrollView}
@@ -219,7 +367,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
             <Text style={styles.heroSubtitle}>
               {restoredWings.length} of {wings.length} wings rebuilt {'•'} {totalLibraryStars} stars collected {'•'} Chapter {currentChapter} active
             </Text>
-            <LibraryHeroIllustration />
+            <BookshelfVignette />
 
             <View style={styles.heroStatsRow}>
               {heroStats.map((stat, statIndex) => {
@@ -633,15 +781,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         </ScrollView>
         )}
       </ScreenScaffold>
-      <Tooltip
-        message="Restore library wings by completing chapters. Each wing has themed word puzzles and unique decorations!"
-        visible={showTooltip}
-        onDismiss={() => {
-          setShowTooltip(false);
-          markTooltipShown('library_screen');
-        }}
-        position="top"
-      />
     </View>
   );
 };
@@ -662,6 +801,213 @@ const styles = StyleSheet.create({
   cardPressed: {
     transform: [{ scale: 0.97 }],
     opacity: 0.9,
+  },
+  // ── Coach banner ──────────────────────────────────────────────────────
+  coachBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 2,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(255,184,0,0.30)',
+    overflow: 'hidden',
+    ...SHADOWS.soft,
+  },
+  coachBannerPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.88,
+  },
+  coachBannerText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textSecondary,
+  },
+  coachDismiss: {
+    width: 22,
+    height: 22,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coachDismissText: {
+    fontSize: 10,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.textSecondary,
+  },
+  // ── Bookshelf vignette ────────────────────────────────────────────────
+  shelfScene: {
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 18,
+  },
+  shelfAmbientGlow: {
+    position: 'absolute',
+    top: 4,
+    width: 210,
+    height: 150,
+    borderRadius: 105,
+    backgroundColor: 'rgba(255,184,0,0.05)',
+  },
+  shelfArch: {
+    width: 226,
+    borderTopLeftRadius: 90,
+    borderTopRightRadius: 90,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,184,0,0.18)',
+    paddingTop: 34,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    overflow: 'hidden',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  lampGlowOuter: {
+    position: 'absolute',
+    top: 4,
+    right: 0,
+    width: 116,
+    height: 116,
+    borderRadius: 58,
+    backgroundColor: 'rgba(255,184,0,0.10)',
+  },
+  lampGlowInner: {
+    position: 'absolute',
+    top: 22,
+    right: 18,
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    backgroundColor: 'rgba(255,210,77,0.16)',
+  },
+  bookRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 2,
+  },
+  bookOuter: {
+    borderRadius: 3,
+    ...SHADOWS.soft,
+  },
+  bookBody: {
+    flex: 1,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    overflow: 'hidden',
+  },
+  bookEdgeHighlight: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 3,
+    backgroundColor: 'rgba(255,255,255,0.30)',
+  },
+  bookTitleLines: {
+    position: 'absolute',
+    top: '22%',
+    left: '28%',
+    right: '20%',
+    gap: 3,
+  },
+  bookTitleLine: {
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.40)',
+  },
+  bookFootBand: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 3,
+    height: 3,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+  },
+  shelfBoardWrap: {
+    alignSelf: 'stretch',
+    marginTop: -1,
+    marginBottom: 10,
+  },
+  shelfBoard: {
+    height: 9,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  shelfBoardHighlight: {
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+  },
+  shelfShadow: {
+    height: 10,
+    marginHorizontal: 4,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    opacity: 0.8,
+  },
+  lamp: {
+    width: 26,
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  lampBulbGlow: {
+    position: 'absolute',
+    top: -8,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,210,77,0.30)',
+  },
+  lampShade: {
+    width: 24,
+    height: 15,
+    borderTopLeftRadius: 11,
+    borderTopRightRadius: 11,
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  lampStem: {
+    width: 3,
+    height: 15,
+    backgroundColor: '#caa04f',
+  },
+  lampBase: {
+    width: 14,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#5c3a18',
+  },
+  flatStack: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginRight: 2,
+    gap: 2,
+  },
+  flatBook: {
+    height: 7,
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   // ── Hero ──────────────────────────────────────────────────────────────
   heroCard: {

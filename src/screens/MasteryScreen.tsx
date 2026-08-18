@@ -438,9 +438,12 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
           style={[StyleSheet.absoluteFillObject, styles.panelFill]}
         />
         <View style={styles.progressTopRow}>
-          <View style={styles.progressTierBlock}>
-            <Text style={styles.progressTierNumber}>{currentTier}</Text>
-            <Text style={styles.progressTierMax}>/ {MASTERY_MAX_TIER}</Text>
+          <View>
+            <Text style={styles.progressTierEyebrow}>TIER</Text>
+            <View style={styles.progressTierBlock}>
+              <Text style={styles.progressTierNumber}>{currentTier}</Text>
+              <Text style={styles.progressTierMax}>/ {MASTERY_MAX_TIER}</Text>
+            </View>
           </View>
           {isPremium ? (
             <View style={styles.premiumPill}>
@@ -464,13 +467,13 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
         >
           <NeonProgressBar progress={progressPercent / 100} color={COLORS.teal} height={12} />
         </View>
-        <Text style={styles.progressXP}>
-          {tierProgress} / {tierNeeded} XP
-        </Text>
+        {/* ONE supporting line. The bar's fill already shows the ratio, so
+            the old "200 / 500 XP" + "300 XP to next tier" double readout is
+            consolidated into a single "what do I do next" statement. */}
         <Text style={styles.progressHint}>
           {currentTier >= MASTERY_MAX_TIER
             ? 'Mastery track complete! Check back next season.'
-            : `${tierNeeded - tierProgress} XP to next tier`}
+            : `${tierNeeded - tierProgress} XP to Tier ${currentTier + 1}`}
         </Text>
         {isPremium && (
           <Text style={styles.countdownInline}>
@@ -608,18 +611,18 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
     letterSpacing: 0.5,
   },
-  progressXP: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textAlign: 'right',
-    marginTop: 10,
+  progressTierEyebrow: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 2.5,
+    color: COLORS.textMuted,
+    marginBottom: 2,
   },
   progressHint: {
-    fontFamily: FONTS.bodyMedium,
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 13,
-    color: COLORS.textMuted,
-    marginTop: 4,
+    color: COLORS.textSecondary,
+    marginTop: 10,
   },
   countdownInline: {
     fontFamily: FONTS.bodySemiBold,
