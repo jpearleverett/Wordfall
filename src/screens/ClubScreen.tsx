@@ -18,6 +18,7 @@ import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
 import IconMedallion from '../components/common/IconMedallion';
 import PrimaryButton from '../components/common/PrimaryButton';
+import GameIcon from '../components/icons/GameIcon';
 import { bentoPanel } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
@@ -96,6 +97,18 @@ const TIER_METAL: Record<string, readonly [string, string, string]> = {
   gold: ['#fff3c4', '#ffd24d', '#a86f00'],
   diamond: ['#d9fbff', '#00e5ff', '#0077a8'],
 };
+
+/**
+ * Softened CTA shadow — spread into PrimaryButton's `style` to override its
+ * default hard {0,4} drop glow with a centered, smaller halo (blind-panel
+ * "heavy drop-shadow gradient buttons" flag).
+ */
+const SOFT_BTN_SHADOW = {
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0.32,
+  shadowRadius: 7,
+  elevation: 4,
+} as const;
 
 /**
  * CrestMedallion — layered squircle crest for clubs: metallic (or accent)
@@ -443,77 +456,6 @@ function ChatBubbleGlyph({ size = 18, accent = COLORS.cyan }: { size?: number; a
   );
 }
 
-/** Drawn gift box — gradient body, lid band, gold ribbon + bow knots. */
-function GiftGlyph({ size = 18 }: { size?: number }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center' }}>
-      {/* Bow knots */}
-      <View style={{ flexDirection: 'row', gap: size * 0.06, marginBottom: -size * 0.04 }}>
-        <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
-        <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
-      </View>
-      {/* Lid */}
-      <View style={{ width: size * 0.96, height: size * 0.24, borderRadius: size * 0.07, overflow: 'hidden' }}>
-        <LinearGradient
-          colors={[COLORS.accentLight, COLORS.accent]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      {/* Body */}
-      <View
-        style={{
-          width: size * 0.78,
-          height: size * 0.5,
-          marginTop: size * 0.03,
-          borderBottomLeftRadius: size * 0.09,
-          borderBottomRightRadius: size * 0.09,
-          overflow: 'hidden',
-          alignItems: 'center',
-        }}
-      >
-        <LinearGradient
-          colors={[COLORS.accent, COLORS.accentDark]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={{ width: size * 0.14, height: '100%', backgroundColor: COLORS.gold }} />
-      </View>
-    </View>
-  );
-}
-
-/** Drawn podium — three gradient ranking bars, center tallest. */
-function PodiumGlyph({ size = 18 }: { size?: number }) {
-  const bar = (h: number, colors: readonly [string, string]) => (
-    <View style={{ width: size * 0.26, height: size * h, borderRadius: size * 0.06, overflow: 'hidden' }}>
-      <LinearGradient
-        colors={[...colors]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-    </View>
-  );
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-        justifyContent: 'center',
-        gap: size * 0.08,
-      }}
-    >
-      {bar(0.55, [COLORS.cyan, COLORS.cyan + '80'])}
-      {bar(0.95, [COLORS.goldLight, COLORS.gold])}
-      {bar(0.4, [COLORS.purpleLight, COLORS.purple])}
-    </View>
-  );
-}
 
 /** Drawn magnifier — ring + angled handle. */
 function MagnifierGlyph({ size = 14, accent = COLORS.cyan }: { size?: number; accent?: string }) {
@@ -906,7 +848,6 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   const [searchFocused, setSearchFocused] = useState(false);
   const [createFocused, setCreateFocused] = useState(false);
   const [chatFocused, setChatFocused] = useState(false);
-  const searchInputRef = useRef<TextInput>(null);
 
   // Ambient breathing scale on the hero crest cluster (recruitment moment).
   const crestPulse = useRef(new Animated.Value(0)).current;
@@ -1446,26 +1387,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </Text>
 
         <View style={styles.benefitList}>
-          <BenefitRow icon={<GiftGlyph size={17} />} accent={COLORS.gold} text="Send and receive booster gifts with clubmates" />
-          <BenefitRow icon={<PodiumGlyph size={17} />} accent={COLORS.cyan} text="Climb the weekly club rankings as a team" />
-          <BenefitRow icon={<ChatBubbleGlyph size={16} accent={COLORS.purpleLight} />} accent={COLORS.purple} text="Chat, react, and clear shared goals together" />
-        </View>
-
-        <View style={styles.heroCtas}>
-          <PrimaryButton
-            label="FIND A CLUB"
-            onPress={() => searchInputRef.current?.focus()}
-            fullWidth
-            accessibilityLabel="Find a club"
-          />
-          <PrimaryButton
-            label="CREATE A CLUB"
-            variant="gold"
-            onPress={() => setShowCreate(true)}
-            fullWidth
-            style={styles.heroCtaGap}
-            accessibilityLabel="Create a club"
-          />
+          <BenefitRow icon={<GameIcon name="gift" size={18} accent={COLORS.gold} />} accent={COLORS.gold} text="Send and receive booster gifts with clubmates" />
+          <BenefitRow icon={<GameIcon name="trophy" size={18} accent={COLORS.cyan} />} accent={COLORS.cyan} text="Climb the weekly club rankings as a team" />
+          <BenefitRow icon={<GameIcon name="chat" size={18} accent={COLORS.purpleLight} />} accent={COLORS.purple} text="Chat, react, and clear shared goals together" />
         </View>
       </View>
 
@@ -1477,7 +1401,6 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             <MagnifierGlyph size={14} accent={COLORS.cyan} />
           </GlyphMedallion>
           <TextInput
-            ref={searchInputRef}
             style={styles.searchInput}
             placeholder={t('club.searchPlaceholder')}
             placeholderTextColor={COLORS.textMuted}
@@ -1494,7 +1417,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             onPress={() => joinClub(searchText)}
             fullWidth
             accessibilityLabel="Search and join club"
-            style={{ marginTop: 10 }}
+            style={{ ...SOFT_BTN_SHADOW, marginTop: 10 }}
           />
         )}
       </View>
@@ -1608,7 +1531,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                   }
                 }}
                 disabled={!createName.trim()}
-                style={styles.createConfirm}
+                style={{ ...SOFT_BTN_SHADOW, ...styles.createConfirm }}
                 accessibilityLabel="Create club"
               />
             </View>
@@ -1943,6 +1866,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                   onPress={handleSendMessage}
                   size="small"
                   disabled={!chatInput.trim()}
+                  style={SOFT_BTN_SHADOW}
                   accessibilityLabel="Send message"
                 />
               </View>
@@ -1997,6 +1921,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             label="RETRY"
             size="small"
             onPress={() => void refreshClub()}
+            style={SOFT_BTN_SHADOW}
             accessibilityLabel="Retry loading club"
           />
         )}
@@ -2096,13 +2021,7 @@ const styles = StyleSheet.create({
   benefitList: {
     alignSelf: 'stretch',
     marginTop: 8,
-    marginBottom: 18,
-  },
-  heroCtas: {
-    alignSelf: 'stretch',
-  },
-  heroCtaGap: {
-    marginTop: 10,
+    marginBottom: 2,
   },
   searchSection: {
     marginBottom: 10,

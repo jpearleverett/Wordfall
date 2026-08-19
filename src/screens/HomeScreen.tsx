@@ -138,6 +138,47 @@ const MISSION_LABELS: Record<string, { label: string; target: number }> = {
   play_5_minutes: { label: 'Play for 5 minutes', target: 1 },
 };
 
+// Bespoke wordmark: WORDFALL spelled in the game's own letter tiles, each
+// tile dropped a little further than the last so the brand carries the
+// falling-letters mechanic. Replaces the raster logo, which two blind
+// review rounds read as "AI-generated" art.
+const WORDMARK_TILES: Array<{ letter: string; colors: [string, string]; drop: number; tilt: string }> = [
+  { letter: 'W', colors: ['#ff2d95', '#c81f7a'], drop: 0, tilt: '-3deg' },
+  { letter: 'O', colors: ['#f0409f', '#b32a85'], drop: 7, tilt: '2deg' },
+  { letter: 'R', colors: ['#d84fb4', '#9a3490'], drop: 2, tilt: '-2deg' },
+  { letter: 'D', colors: ['#b95ccb', '#7d3ea0'], drop: 10, tilt: '3deg' },
+  { letter: 'F', colors: ['#9866dd', '#6647af'], drop: 4, tilt: '-2deg' },
+  { letter: 'A', colors: ['#7377e8', '#4d54bd'], drop: 12, tilt: '2deg' },
+  { letter: 'L', colors: ['#4d94ee', '#3268c4'], drop: 6, tilt: '-3deg' },
+  { letter: 'L', colors: ['#22b8f0', '#1585c2'], drop: 14, tilt: '3deg' },
+];
+
+function WordfallWordmark() {
+  return (
+    <View style={styles.wordmarkRow} accessibilityRole="header" accessibilityLabel="Wordfall">
+      {WORDMARK_TILES.map((tile, i) => (
+        <View
+          key={`${tile.letter}${i}`}
+          style={[
+            styles.wordmarkTileWrap,
+            { transform: [{ translateY: tile.drop }, { rotate: tile.tilt }] },
+          ]}
+        >
+          <LinearGradient
+            colors={tile.colors}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
+            style={[styles.wordmarkTile, { shadowColor: tile.colors[0] }]}
+          >
+            <View style={styles.wordmarkTileSheen} pointerEvents="none" />
+            <Text style={styles.wordmarkLetter}>{tile.letter}</Text>
+          </LinearGradient>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function HomeScreen({
   progress,
   onPlay,
@@ -490,14 +531,14 @@ export function HomeScreen({
                 colors={GRADIENTS.surfaceCard}
                 style={styles.currencyChip}
               >
-                <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.currencyIcon} resizeMode="contain" />
+                <GameIcon name="coin" size={16} />
                 <Text style={styles.currencyLabel}>{currencies.coins}</Text>
               </LinearGradient>
               <LinearGradient
                 colors={GRADIENTS.surfaceCard}
                 style={styles.currencyChip}
               >
-                <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.currencyIcon} resizeMode="contain" />
+                <GameIcon name="gem" size={16} />
                 <Text style={styles.currencyLabel}>{currencies.gems}</Text>
               </LinearGradient>
               <LinearGradient
@@ -522,12 +563,15 @@ export function HomeScreen({
           )}
           {onOpenShop && (
             <Pressable onPress={onOpenShop} style={({ pressed }) => [pressed && styles.buttonPressed]} accessibilityRole="button" accessibilityLabel={t('home.openShop')}>
-              <View style={styles.shopButtonWrapper}>
-                <Image source={LOCAL_IMAGES.shopButton} style={styles.shopButtonImage} resizeMode="contain" />
-                <View style={styles.shopButtonOverlay}>
-                  <Text style={styles.shopButtonText}>{t('home.shop')}</Text>
-                </View>
-              </View>
+              <LinearGradient
+                colors={['#ff2d95', '#a855f7']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.shopButtonWrapper}
+              >
+                <GameIcon name="gem" size={14} />
+                <Text style={styles.shopButtonText}>{t('home.shop')}</Text>
+              </LinearGradient>
             </Pressable>
           )}
         </View>
@@ -555,19 +599,15 @@ export function HomeScreen({
             <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowMid]} />
             <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowInner]} />
             <View style={styles.heroLogoGlow}>
-              <Image
-                source={LOCAL_IMAGES.wordfallLogo}
-                style={styles.heroLogo}
-                resizeMode="contain"
-              />
+              <WordfallWordmark />
             </View>
           </View>
           <View style={styles.statsRow}>
             {([
-              { icon: 'star' as GameIconName, value: `${totalStars}`, label: 'Stars' },
-              { icon: 'bookOpen' as GameIconName, value: `${progress.puzzlesSolved}`, label: 'Solved' },
-              { icon: 'flame' as GameIconName, value: `${progress.currentStreak}`, label: 'Streak' },
-            ] as Array<{ icon?: GameIconName; value: string; label: string }>).map((stat) => (
+              { icon: 'star' as GameIconName, value: `${totalStars}`, label: 'Stars', tint: '#ffd700' },
+              { icon: 'bookOpen' as GameIconName, value: `${progress.puzzlesSolved}`, label: 'Solved', tint: '#22d3c5' },
+              { icon: 'flame' as GameIconName, value: `${progress.currentStreak}`, label: 'Streak', tint: '#ff7a45' },
+            ] as Array<{ icon?: GameIconName; value: string; label: string; tint: string }>).map((stat) => (
               <View key={stat.label} style={styles.statCardWrapper}>
                 <LinearGradient
                   colors={['rgba(168,91,255,0.22)', 'rgba(10,1,32,0.60)']}
@@ -575,10 +615,12 @@ export function HomeScreen({
                   end={{ x: 0.5, y: 1 }}
                   style={styles.statCardSurface}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                    {stat.icon && <GameIcon name={stat.icon} size={20} />}
-                    <Text style={styles.heroStatValue}>{stat.value}</Text>
-                  </View>
+                  {stat.icon && (
+                    <View style={[styles.statIconWell, { backgroundColor: stat.tint + '24', borderColor: stat.tint + '55' }]}>
+                      <GameIcon name={stat.icon} size={20} />
+                    </View>
+                  )}
+                  <Text style={styles.heroStatValue}>{stat.value}</Text>
                   <Text style={styles.heroStatLabel}>{stat.label}</Text>
                 </LinearGradient>
               </View>
@@ -1462,18 +1504,20 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyBold,
   },
   shopButtonWrapper: {
-    position: 'relative',
-    width: 60,
-    height: 36,
-  },
-  shopButtonImage: {
-    width: '100%',
-    height: '100%',
-  },
-  shopButtonOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    shadowColor: '#ff2d95',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 6,
   },
   shopButtonText: {
     color: '#fff',
@@ -1499,15 +1543,50 @@ const styles = StyleSheet.create({
         }
       : null),
   },
-  heroLogo: {
-    // Aug 2026 blind review: the wordmark "eats roughly a third of the
-    // screen" — shrunk ~24% so the card system below owns the fold.
-    // Fixed px, not '78%': the wrapper (heroLogoGlow) is content-sized, so
-    // a percentage width resolves against an auto parent and collapses to
-    // zero on web — the logo vanished entirely in the Aug 2026 captures.
-    width: 272,
-    height: 136,
-    alignSelf: 'center',
+  wordmarkRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 5,
+    paddingTop: 18,
+    paddingBottom: 30, // room for the deepest tile drop
+  },
+  wordmarkTileWrap: {
+    // transform lives on the wrapper so the gradient tile keeps a clean
+    // shadow box.
+  },
+  wordmarkTile: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    elevation: 6,
+    overflow: 'hidden',
+  },
+  wordmarkTileSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '46%',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+  wordmarkLetter: {
+    color: '#fff',
+    fontFamily: FONTS.displayRounded,
+    fontSize: 22,
+    lineHeight: 26,
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   heroLogoBlock: {
     alignItems: 'center',
@@ -1565,6 +1644,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 14,
     elevation: 8,
+  },
+  statIconWell: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   heroStatValue: {
     color: '#ffffff',

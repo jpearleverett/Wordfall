@@ -2,13 +2,12 @@ import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   Animated,
   StyleSheet,
 } from 'react-native';
 import { FONTS } from '../../constants';
-import { LOCAL_IMAGES } from '../../utils/localAssets';
+import GameIcon, { GameIconName } from '../icons/GameIcon';
 
 const COLORS = {
   bg: '#0a0e27',
@@ -71,11 +70,11 @@ function useAnimatedValue(target: number) {
 // Single currency item
 // ---------------------------------------------------------------------------
 
-/** Map of currency type to image asset source */
-const CURRENCY_ICONS: Record<string, number | null> = {
-  coins: LOCAL_IMAGES.iconCoinGold,
-  gems: LOCAL_IMAGES.iconGemDiamond,
-  hints: null, // no image asset for hints yet
+/** Map of currency type to bespoke SVG icon */
+const CURRENCY_ICONS: Record<string, GameIconName | null> = {
+  coins: 'coin',
+  gems: 'gem',
+  hints: 'hint',
 };
 
 interface ItemProps {
@@ -99,7 +98,7 @@ function CurrencyItem({ icon, iconKey, amount, label, color, compact, onPress }:
       : String(value);
 
   const glowColor = GLOW_COLORS[color] || 'rgba(255,255,255,0.3)';
-  const imageSource = iconKey ? CURRENCY_ICONS[iconKey] : null;
+  const iconName = iconKey ? CURRENCY_ICONS[iconKey] : null;
 
   const content = (
     <Animated.View
@@ -109,10 +108,10 @@ function CurrencyItem({ icon, iconKey, amount, label, color, compact, onPress }:
         { transform: [{ scale: scaleAnim }] },
       ]}
     >
-      {imageSource ? (
-        <Image source={imageSource} style={styles.iconImage} resizeMode="contain" />
+      {iconName ? (
+        <GameIcon name={iconName} size={compact ? 16 : 20} />
       ) : (
-        <Text style={styles.icon}>{icon}</Text>
+        <GameIcon glyph={icon} size={compact ? 16 : 20} />
       )}
       <Text
         style={[

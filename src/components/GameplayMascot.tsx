@@ -120,14 +120,16 @@ const GameplayMascot: React.FC<GameplayMascotProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // Absolute-positioned above the booster shelf on the right side so the
-  // mascot doesn't displace any existing layout and doesn't overlap the
-  // HUD action buttons at the top. Tune once a real sprite arrives.
+  // Absolute-positioned at the right screen edge, half-tucked off-screen so
+  // Folio reads as deliberately "peeking in" at the board rather than a
+  // stray badge floating over the tiles (round-1 blind review: "floating
+  // owl badge looks accidental"). Tune once a real sprite arrives.
   container: {
     position: 'absolute',
     bottom: 180,
-    right: 10,
+    right: -16,
     zIndex: 20,
+    transform: [{ rotate: '-14deg' }],
   },
   bubble: {
     width: 44,

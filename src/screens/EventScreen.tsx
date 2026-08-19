@@ -56,7 +56,7 @@ function DrawnMedallion({
           height: size,
           borderRadius: size / 2,
           borderWidth: 1.5,
-          borderColor: muted ? 'rgba(255,255,255,0.14)' : accent + '73',
+          borderColor: muted ? accent + '59' : accent + '73',
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
@@ -67,12 +67,13 @@ function DrawnMedallion({
           shadowRadius: size * 0.22,
           elevation: muted ? 2 : 6,
         },
-        muted && { opacity: 0.55 },
         style ?? null,
       ]}
     >
+      {/* Muted keeps the accent tint + full opacity — locked reads via the
+          lock badge and dimmed CARD shell, never by darkening the glyph. */}
       <LinearGradient
-        colors={[muted ? 'rgba(255,255,255,0.05)' : accent + '3D', 'rgba(8, 2, 22, 0.92)']}
+        colors={[muted ? accent + '26' : accent + '3D', 'rgba(8, 2, 22, 0.92)']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
@@ -771,7 +772,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
   const hasActiveMultipliers = multipliers.coins > 1 || multipliers.xp > 1 || multipliers.rareTileChance > 1;
 
   /** Reward-specific glyph for a tier's PRIMARY payout — locked tiers show
-   *  the actual reward dimly instead of an identical padlock everywhere. */
+   *  the actual reward full-color instead of an identical padlock everywhere. */
   const getTierRewardGlyph = (
     rewards: { coins?: number; gems?: number; hintTokens?: number; badge?: string; decoration?: string },
     accent: string,
@@ -993,8 +994,8 @@ const EventScreen: React.FC<EventScreenProps> = ({
               />
 
               {/* Reward Tiers — cards scale up with reward magnitude; every
-                  tier shows its OWN reward glyph (locked ones dimmed behind a
-                  small lock badge), with distinct reached / next / far states. */}
+                  tier shows its OWN reward glyph at full brightness (locked =
+                  lock badge + darker card), with reached / next / far states. */}
               <Animated.View style={[styles.rewardTiersRow, { transform: [{ scale: claimAnim }] }]}>
                 {activeEvent.rewards.map((reward, tierIdx) => {
                   const canClaim = reward.reached && !reward.claimed;
@@ -1032,7 +1033,9 @@ const EventScreen: React.FC<EventScreenProps> = ({
                             ? ([COLORS.gold + '26', 'rgba(26,10,46,0.92)'] as [string, string])
                             : isNext
                               ? ([color + '1F', 'rgba(26,10,46,0.92)'] as [string, string])
-                              : ([...GRADIENTS.surfaceCard] as [string, string])
+                              : isFar
+                                ? (['rgba(255,255,255,0.03)', 'rgba(13,5,26,0.95)'] as [string, string])
+                                : ([...GRADIENTS.surfaceCard] as [string, string])
                         }
                         style={StyleSheet.absoluteFill}
                         start={{ x: 0.5, y: 0 }}
@@ -1045,19 +1048,19 @@ const EventScreen: React.FC<EventScreenProps> = ({
                             width: haloSize,
                             height: haloSize,
                             borderRadius: haloSize / 2,
-                            borderColor: tierAccent + (reward.reached ? '66' : isNext ? '55' : '33'),
-                            backgroundColor: tierAccent + '12',
+                            borderColor: tierAccent + (reward.reached ? '66' : isNext ? '55' : '59'),
+                            backgroundColor: tierAccent + '26',
                             ...(reward.reached || isNext ? SHADOWS.glow(tierAccent) : null),
                           },
                         ]}
                       >
                         <DrawnMedallion size={medSize} accent={tierAccent} muted={isFar}>
                           {reward.claimed ? (
-                            <CheckGlyph size={medSize * 0.5} accent={COLORS.green} />
+                            <CheckGlyph size={medSize * 0.6} accent={COLORS.green} />
                           ) : reward.reached ? (
-                            <GiftGlyph size={medSize * 0.5} />
+                            <GiftGlyph size={medSize * 0.6} />
                           ) : (
-                            getTierRewardGlyph(reward.rewards, tierAccent, medSize * 0.5)
+                            getTierRewardGlyph(reward.rewards, tierAccent, medSize * 0.6)
                           )}
                         </DrawnMedallion>
                         {!reward.reached && (
@@ -1476,9 +1479,10 @@ const styles = StyleSheet.create({
   rewardTierCardNext: {
     borderWidth: 1.5,
   },
-  // Distant tiers: dimmed to ~75% — visibly future, still readable.
+  // Distant tiers: darker, desaturated CARD shell — the reward glyph itself
+  // stays full-brightness (blind-panel "locked icons vanish into cards" fix).
   rewardTierCardFar: {
-    opacity: 0.75,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   rewardTierCardClaimable: {
     borderColor: COLORS.gold + '77',
