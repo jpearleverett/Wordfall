@@ -144,13 +144,13 @@ const MISSION_LABELS: Record<string, { label: string; target: number }> = {
 // review rounds read as "AI-generated" art.
 const WORDMARK_TILES: Array<{ letter: string; colors: [string, string]; drop: number; tilt: string }> = [
   { letter: 'W', colors: ['#ff2d95', '#c81f7a'], drop: 0, tilt: '-3deg' },
-  { letter: 'O', colors: ['#f0409f', '#b32a85'], drop: 7, tilt: '2deg' },
+  { letter: 'O', colors: ['#f0409f', '#b32a85'], drop: 6, tilt: '2deg' },
   { letter: 'R', colors: ['#d84fb4', '#9a3490'], drop: 2, tilt: '-2deg' },
-  { letter: 'D', colors: ['#b95ccb', '#7d3ea0'], drop: 10, tilt: '3deg' },
+  { letter: 'D', colors: ['#b95ccb', '#7d3ea0'], drop: 8, tilt: '3deg' },
   { letter: 'F', colors: ['#9866dd', '#6647af'], drop: 4, tilt: '-2deg' },
-  { letter: 'A', colors: ['#7377e8', '#4d54bd'], drop: 12, tilt: '2deg' },
+  { letter: 'A', colors: ['#7377e8', '#4d54bd'], drop: 9, tilt: '2deg' },
   { letter: 'L', colors: ['#4d94ee', '#3268c4'], drop: 6, tilt: '-3deg' },
-  { letter: 'L', colors: ['#22b8f0', '#1585c2'], drop: 14, tilt: '3deg' },
+  { letter: 'L', colors: ['#22b8f0', '#1585c2'], drop: 11, tilt: '3deg' },
 ];
 
 function WordfallWordmark() {
@@ -1466,7 +1466,7 @@ const styles = StyleSheet.create({
   topBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
   },
@@ -1488,7 +1488,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 9,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
@@ -1507,9 +1507,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
     height: 34,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     borderRadius: 17,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.35)',
