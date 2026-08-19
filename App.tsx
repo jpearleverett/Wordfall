@@ -1848,6 +1848,8 @@ function HomeMainScreen({ route, navigation }: any) {
           id: e.id,
           name: e.name,
           icon: e.icon,
+          description: e.description,
+          endMs: e.endTime,
           label: e.type === 'weekend_blitz' ? 'WEEKEND BLITZ' : e.type === 'mini' ? 'MINI EVENT' : 'EVENT',
           color: e.type === 'weekend_blitz' ? COLORS.orange : e.type === 'mini' ? COLORS.teal : COLORS.accent,
         }))}

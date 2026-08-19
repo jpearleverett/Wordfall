@@ -10,6 +10,9 @@ import PrestigeResetCeremony from '../components/PrestigeResetCeremony';
 import SeasonPassCompleteCeremony from '../components/SeasonPassCompleteCeremony';
 import { FirstPurchaseOfferModal } from '../components/FirstPurchaseOfferModal';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { getWing } from '../data/library';
+import WingCeremonyEmblem from '../components/library/WingCeremonyEmblem';
+import { GameIconName } from '../components/icons/GameIcon';
 import { CeremonyItem } from '../types';
 import { ceremonyEconomyGrant, ceremonyGrantLabel } from '../utils/ceremonyGrants';
 import { COLORS } from '../constants';
@@ -141,20 +144,37 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           onDismiss={onDismiss}
         />
       )}
-      {activeCeremony?.type === 'wing_complete' && (
-        <MilestoneCeremony
-          ribbon="WING RESTORED"
-          icon={'\u{1F4DA}'}
-          title={`${activeCeremony.data.wingName} Complete!`}
-          description="Another wing of the library has been fully restored!"
-          rewardLabel={(() => {
-            const grant = ceremonyEconomyGrant(activeCeremony);
-            return grant ? ceremonyGrantLabel(grant) : undefined;
-          })()}
-          accentColor={COLORS.teal}
-          onDismiss={onDismiss}
-        />
-      )}
+      {activeCeremony?.type === 'wing_complete' && (() => {
+        // Grand Library story beat: each wing restores in its own colors,
+        // under its own emblem, with Folio's per-wing line. getWing() never
+        // returns undefined (annex fallback), so remote/procedural wingIds
+        // are safe here too. Reward capsules are built from the SAME grant
+        // source the pop-time credit used, so what is shown is exactly what
+        // was paid (missing/empty reward → no capsules).
+        const wing = getWing(activeCeremony.data.wingId);
+        const grant = ceremonyEconomyGrant(activeCeremony);
+        const capsules: Array<{ icon: GameIconName; label: string; color: string }> = [];
+        if (grant?.coins) capsules.push({ icon: 'coin', label: `+${grant.coins}`, color: COLORS.gold });
+        if (grant?.gems) capsules.push({ icon: 'gem', label: `+${grant.gems}`, color: COLORS.cyan });
+        if (grant?.hintTokens) capsules.push({ icon: 'hint', label: `+${grant.hintTokens}`, color: COLORS.purpleLight });
+        return (
+          <MilestoneCeremony
+            ribbon="WING RESTORED"
+            emblem={<WingCeremonyEmblem wingId={activeCeremony.data.wingId} accent={wing.accent} iconName={wing.icon} size={170} />}
+            title={`${wing.name} Wing Restored!`}
+            description={wing.restorationLine}
+            rewardCapsules={capsules.length > 0 ? capsules : undefined}
+            rewardLabel={
+              // Rare-tile-only (or otherwise capsule-less) grants still get
+              // the text chip so no credited reward goes unshown.
+              capsules.length === 0 && grant ? ceremonyGrantLabel(grant) : undefined
+            }
+            accentColor={wing.accent}
+            buttonText="VISIT THE LIBRARY"
+            onDismiss={onDismiss}
+          />
+        );
+      })()}
       {activeCeremony?.type === 'word_mastery_gold' && (
         <MilestoneCeremony
           ribbon="GOLD MASTERY"
@@ -227,7 +247,7 @@ export function CeremonyRouter({ activeCeremony, onDismiss, economy }: CeremonyR
           ribbon="FIRST VICTORY!"
           icon={'\u{1F389}'}
           title="You Did It!"
-          description={`Your first puzzle is complete! +${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems, and a free Mystery Wheel spin!`}
+          description={`Your first puzzle is complete! +${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems, and a free Mystery Wheel spin! Folio the archivist stirs: 'Words! Real words! The Library will hear of this.'`}
           accentColor={COLORS.gold}
           tips={activeCeremony.data.tips}
           rewardLabel={`+${activeCeremony.data.coins} coins, +${activeCeremony.data.gems} gems`}

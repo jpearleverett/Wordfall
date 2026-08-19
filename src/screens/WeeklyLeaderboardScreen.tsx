@@ -28,6 +28,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS } from '../constants';
+import GameIcon from '../components/icons/GameIcon';
 import { firestoreService, type FirestoreLeaderboardEntry } from '../services/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { analytics } from '../services/analytics';
@@ -46,11 +47,17 @@ function tierColor(rank: number): string {
   return TIER_COLORS.default;
 }
 
-function rewardHint(rank: number): string | null {
-  if (rank === 1) return '🏆 1000 gems + trophy';
-  if (rank <= 10) return '🥇 500 gems + frame';
-  if (rank <= 100) return '🎖 100 gems';
-  if (rank <= 1000) return '🏅 20 gems';
+type RewardHint = {
+  icon: 'trophy' | 'medal';
+  metal?: 'gold' | 'silver' | 'bronze';
+  label: string;
+};
+
+function rewardHint(rank: number): RewardHint | null {
+  if (rank === 1) return { icon: 'trophy', label: '1000 gems + trophy' };
+  if (rank <= 10) return { icon: 'medal', metal: 'gold', label: '500 gems + frame' };
+  if (rank <= 100) return { icon: 'medal', metal: 'silver', label: '100 gems' };
+  if (rank <= 1000) return { icon: 'medal', metal: 'bronze', label: '20 gems' };
   return null;
 }
 
@@ -107,7 +114,12 @@ export function WeeklyLeaderboardScreen({
           </Text>
           <View style={styles.rightCol}>
             <Text style={styles.score}>{item.score.toLocaleString()}</Text>
-            {reward && <Text style={styles.reward}>{reward}</Text>}
+            {reward && (
+              <View style={styles.rewardRow}>
+                <GameIcon name={reward.icon} metal={reward.metal} size={12} />
+                <Text style={styles.reward}>{reward.label}</Text>
+              </View>
+            )}
           </View>
         </View>
       );
@@ -142,9 +154,15 @@ export function WeeklyLeaderboardScreen({
           <Text style={styles.myRankValue}>
             #{myRank} · {myEntry.score.toLocaleString()} pts
           </Text>
-          {rewardHint(myRank) && (
-            <Text style={styles.myRankReward}>{rewardHint(myRank)}</Text>
-          )}
+          {(() => {
+            const myReward = rewardHint(myRank);
+            return myReward ? (
+              <View style={styles.myRankRewardRow}>
+                <GameIcon name={myReward.icon} metal={myReward.metal} size={15} />
+                <Text style={styles.myRankReward}>{myReward.label}</Text>
+              </View>
+            ) : null;
+          })()}
         </View>
       )}
 
@@ -206,8 +224,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: COLORS.textPrimary,
   },
-  myRankReward: {
+  myRankRewardRow: {
     marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  myRankReward: {
     fontFamily: FONTS.bodySemiBold,
     fontSize: 13,
     color: COLORS.gold,
@@ -245,10 +268,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textPrimary,
   },
+  rewardRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
   reward: {
     fontSize: 10,
     color: COLORS.textSecondary,
-    marginTop: 2,
   },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: {

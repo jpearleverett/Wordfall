@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
+import GameIcon from './icons/GameIcon';
 
 interface DifficultyTransitionCeremonyProps {
   from: string;
@@ -13,7 +14,8 @@ interface DifficultyTransitionCeremonyProps {
   onDismiss: () => void;
 }
 
-const DIFFICULTY_META: Record<string, { color: string; icon: string; label: string }> = {
+/** Exported for the shop-glyph coverage test — icons must resolve in GameIcon. */
+export const DIFFICULTY_META: Record<string, { color: string; icon: string; label: string }> = {
   easy: { color: COLORS.green, icon: '\u{1F331}', label: 'EASY' },
   medium: { color: COLORS.accent, icon: '\u{1F525}', label: 'MEDIUM' },
   hard: { color: COLORS.orange, icon: '\u{26A1}', label: 'HARD' },
@@ -60,19 +62,23 @@ export function DifficultyTransitionCeremony({
 
           <View style={styles.transitionRow}>
             <View style={[styles.tierBadge, { borderColor: fromMeta.color, backgroundColor: fromMeta.color + '20' }]}>
-              <Text style={styles.tierIcon}>{fromMeta.icon}</Text>
+              <View style={styles.tierIcon}>
+                <GameIcon glyph={fromMeta.icon} size={28} accent={fromMeta.color} />
+              </View>
               <Text style={[styles.tierLabel, { color: fromMeta.color }]}>{fromMeta.label}</Text>
             </View>
 
             <Animated.View style={arrowStyle}>
-              <Text style={styles.arrow}>{'\u{27A1}\u{FE0F}'}</Text>
+              <Text style={[styles.arrow, { color: toMeta.color }]}>{'→'}</Text>
             </Animated.View>
 
             <Animated.View
               style={toStyle}
             >
               <View style={[styles.tierBadge, styles.tierBadgeTo, { borderColor: toMeta.color, backgroundColor: toMeta.color + '20' }]}>
-                <Text style={styles.tierIcon}>{toMeta.icon}</Text>
+                <View style={styles.tierIcon}>
+                  <GameIcon glyph={toMeta.icon} size={30} accent={toMeta.color} />
+                </View>
                 <Text style={[styles.tierLabel, { color: toMeta.color }]}>{toMeta.label}</Text>
               </View>
             </Animated.View>
@@ -102,7 +108,7 @@ export function DifficultyTransitionCeremony({
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    backgroundColor: 'rgba(6, 2, 14, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -147,8 +153,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
   },
   tierIcon: {
-    fontSize: 28,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   tierLabel: {
     fontSize: 10,

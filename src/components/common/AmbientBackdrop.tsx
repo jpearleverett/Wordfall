@@ -156,7 +156,11 @@ export function AmbientBackdrop({ variant = 'home', colorOverride }: AmbientBack
       colorOverride?.accent ?? (dim ? '#140428' : '#1a0533'),
       colorOverride?.bg ?? '#0d0020',
     ] as [string, string, ...string[]];
-    const bgImageOpacity = dim ? 0.25 : 0.5;
+    // The baked bg image is magenta/purple synthwave art. When a chapter
+    // palette override is active (e.g. green nature levels) the purple
+    // floor grid fights the chapter-tinted board — fade the image well
+    // back so the chapter gradient owns the scene.
+    const bgImageOpacity = colorOverride ? 0.12 : dim ? 0.25 : 0.5;
     // Game screen gets a STATIC backdrop — just the sky gradient + bg image.
     // Previously this rendered SynthwaveBackdrop with a looping H.264 video,
     // an animated NeonSun, a scrolling perspective grid, and 10-25 twinkling

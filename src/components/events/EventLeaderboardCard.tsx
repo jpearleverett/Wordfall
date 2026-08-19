@@ -13,6 +13,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, FONTS, SHADOWS } from '../../constants';
 import { firestoreService } from '../../services/firestore';
+import GameIcon from '../icons/GameIcon';
 
 interface LeaderboardEntry {
   userId: string;
@@ -149,12 +150,19 @@ function Row({
   score: number;
   isMe: boolean;
 }) {
-  const rankStyle = [styles.rank, rank <= 3 && styles.rankTop];
   return (
     <View style={[styles.row, isMe && styles.rowMe]}>
-      <Text style={rankStyle}>
-        {rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`}
-      </Text>
+      {rank <= 3 ? (
+        <View style={styles.rankIconBox}>
+          <GameIcon
+            name="medal"
+            metal={(['gold', 'silver', 'bronze'] as const)[rank - 1]}
+            size={21}
+          />
+        </View>
+      ) : (
+        <Text style={styles.rank}>#{rank}</Text>
+      )}
       <Text style={[styles.name, isMe && styles.nameMe]} numberOfLines={1}>
         {isMe ? 'You' : name}
       </Text>
@@ -216,8 +224,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: FONTS.bodyBold,
   },
-  rankTop: {
-    fontSize: 18,
+  rankIconBox: {
+    width: 36,
   },
   name: {
     flex: 1,

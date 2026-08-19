@@ -5,6 +5,7 @@ import {
   Animated,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -55,6 +56,7 @@ import {
 import { getNextMilestone } from '../data/onboardingMilestones';
 import DailyRewardTimers from '../components/DailyRewardTimers';
 import { getNextGoal } from '../data/nextGoal';
+import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 
 interface DailyMissionDisplay {
   id: string;
@@ -104,7 +106,7 @@ interface HomeScreenProps {
   /** Segment-driven welcome back message for at-risk/lapsed/returned players */
   segmentWelcomeMessage?: { title: string; subtitle: string } | null;
   /** Active event banners to display */
-  activeEventBanners?: Array<{ id: string; name: string; icon: string; label: string; color: string }>;
+  activeEventBanners?: Array<{ id: string; name: string; icon: string; label: string; color: string; description?: string; endMs?: number }>;
   /** Navigate to event screen */
   onOpenEvents?: () => void;
   /** Navigate to library screen */
@@ -118,11 +120,11 @@ interface HomeScreenProps {
   onClaimLoginReward?: () => void;
 }
 
-const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: string }> = {
-  easy: { label: 'Easy', accent: COLORS.green, icon: '🌱' },
-  medium: { label: 'Medium', accent: COLORS.accent, icon: '⚡' },
-  hard: { label: 'Hard', accent: COLORS.orange, icon: '🔥' },
-  expert: { label: 'Expert', accent: COLORS.purple, icon: '💎' },
+const difficultyMeta: Record<Difficulty, { label: string; accent: string; icon: GameIconName }> = {
+  easy: { label: 'Easy', accent: COLORS.green, icon: 'leaf' },
+  medium: { label: 'Medium', accent: COLORS.accent, icon: 'bolt' },
+  hard: { label: 'Hard', accent: COLORS.orange, icon: 'flame' },
+  expert: { label: 'Expert', accent: COLORS.purple, icon: 'gem' },
 };
 
 const MISSION_LABELS: Record<string, { label: string; target: number }> = {
@@ -502,7 +504,8 @@ export function HomeScreen({
                 colors={GRADIENTS.surfaceCard}
                 style={styles.currencyChip}
               >
-                <Text style={styles.currencyLabel}>💡 {currencies.hintTokens}</Text>
+                <GameIcon name="hint" size={14} />
+                <Text style={styles.currencyLabel}>{currencies.hintTokens}</Text>
               </LinearGradient>
             </>
           )}
@@ -541,19 +544,30 @@ export function HomeScreen({
         <View
           style={styles.heroCard}
         >
-          <View style={styles.heroLogoGlow}>
-            <Image
-              source={LOCAL_IMAGES.wordfallLogo}
-              style={styles.heroLogo}
-              resizeMode="contain"
-            />
+          <View style={styles.heroLogoBlock}>
+            {/* Soft radial-ish backing glow — three stacked low-alpha
+                purple/magenta ellipses approximate a radial gradient and
+                lift the wordmark's drip tails off the near-black page so
+                they read as lit art instead of dissolving into compression
+                mush (Aug 2026 blind review). Plain Views: no image assets,
+                no per-frame cost, works on all platforms. */}
+            <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowOuter]} />
+            <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowMid]} />
+            <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowInner]} />
+            <View style={styles.heroLogoGlow}>
+              <Image
+                source={LOCAL_IMAGES.wordfallLogo}
+                style={styles.heroLogo}
+                resizeMode="contain"
+              />
+            </View>
           </View>
           <View style={styles.statsRow}>
-            {[
-              { value: `★ ${totalStars}`, label: 'Stars' },
-              { value: `${progress.puzzlesSolved}`, label: 'Solved' },
-              { value: `🔥 ${progress.currentStreak}`, label: 'Streak' },
-            ].map((stat) => (
+            {([
+              { icon: 'star' as GameIconName, value: `${totalStars}`, label: 'Stars' },
+              { icon: 'bookOpen' as GameIconName, value: `${progress.puzzlesSolved}`, label: 'Solved' },
+              { icon: 'flame' as GameIconName, value: `${progress.currentStreak}`, label: 'Streak' },
+            ] as Array<{ icon?: GameIconName; value: string; label: string }>).map((stat) => (
               <View key={stat.label} style={styles.statCardWrapper}>
                 <LinearGradient
                   colors={['rgba(168,91,255,0.22)', 'rgba(10,1,32,0.60)']}
@@ -561,7 +575,10 @@ export function HomeScreen({
                   end={{ x: 0.5, y: 1 }}
                   style={styles.statCardSurface}
                 >
-                  <Text style={styles.heroStatValue}>{stat.value}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    {stat.icon && <GameIcon name={stat.icon} size={20} />}
+                    <Text style={styles.heroStatValue}>{stat.value}</Text>
+                  </View>
                   <Text style={styles.heroStatLabel}>{stat.label}</Text>
                 </LinearGradient>
               </View>
@@ -575,7 +592,16 @@ export function HomeScreen({
             accessibilityLabel={`Play level ${progress.currentLevel}`}
           >
             <View style={styles.playButtonWrapper}>
-              <Image source={LOCAL_IMAGES.playButton} style={styles.playButtonImage} resizeMode="stretch" />
+              {/* Flat premium magenta→purple fill — same family as the bento
+                  cards, elevated by a single outer magenta glow. Replaces the
+                  glossy chrome-glass image asset (judge flaw: specular band
+                  clashed with the matte purple design language). */}
+              <LinearGradient
+                colors={[COLORS.pink, COLORS.purple]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.playButtonSurface}
+              />
               <View style={styles.playButtonOverlay}>
                 <View>
                   <Text style={styles.playButtonLabel}>{playerStage === 'new' ? 'Start playing' : 'Continue journey'}</Text>
@@ -594,10 +620,17 @@ export function HomeScreen({
               accessibilityRole="button"
               accessibilityLabel={dailyDone ? 'Daily challenge completed' : "Play today's daily challenge"}
             >
+              {/* Deep plum/violet panel in the home's card language — gold is
+                  reserved for the left accent bar, the sun icon, and the coin
+                  reward highlight (judge flaw: the old olive-mustard fill was
+                  the one muddy element on the screen). */}
               <LinearGradient
-                colors={dailyDone ? ['rgba(76,175,80,0.45)', 'rgba(76,175,80,0.30)'] : ['rgba(255,215,0,0.35)', 'rgba(255,159,67,0.25)']}
+                colors={dailyDone ? ['rgba(76,175,80,0.45)', 'rgba(76,175,80,0.30)'] : ['rgba(92,36,150,0.55)', 'rgba(26,10,46,0.88)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={[styles.dailyCard, dailyDone && styles.dailyDone]}
               >
+                {!dailyDone && <View style={styles.dailyAccentBar} />}
                 <View style={styles.dailyContent}>
                   <Text style={styles.dailyTitle}>{dailyDone ? 'Daily completed' : "Today's challenge"}</Text>
                   <Text style={styles.dailySubtitle}>
@@ -607,10 +640,17 @@ export function HomeScreen({
                         // best return hook the daily has, and both resolvers
                         // are pure functions of the date.
                         `Tomorrow: ${getDailyVariant(tomorrow).name} · ${getDailyTheme(tomorrow).name}`
-                      : `${getDailyVariant(today).name} · ${getDailyTheme(today).name} · +${ECONOMY.dailyCompleteCoins} coins`}
+                      : (
+                          <>
+                            {`${getDailyVariant(today).name} · ${getDailyTheme(today).name} · `}
+                            <Text style={styles.dailyCoins}>{`+${ECONOMY.dailyCompleteCoins} coins`}</Text>
+                          </>
+                        )}
                   </Text>
                 </View>
-                <Text style={styles.dailyBadge}>{dailyDone ? '✓' : '☀'}</Text>
+                {dailyDone
+                  ? <GameIcon name="check" size={26} accent={COLORS.green} />
+                  : <GameIcon name="sun" size={26} />}
               </LinearGradient>
             </Pressable>
           )}
@@ -629,7 +669,9 @@ export function HomeScreen({
           colors={['rgba(0,212,255,0.20)', 'rgba(168,85,247,0.10)'] as [string, string]}
           style={styles.welcomeBackBanner}
         >
-          <Text style={styles.welcomeBackIcon}>{'\u{1F44B}'}</Text>
+          <View style={{ marginRight: 12 }}>
+            <GameIcon name="handshake" size={32} />
+          </View>
           <View style={styles.welcomeBackContent}>
             <Text style={styles.welcomeBackTitle}>{segmentWelcomeMessage.title}</Text>
             <Text style={styles.welcomeBackSubtitle}>{segmentWelcomeMessage.subtitle}</Text>
@@ -671,10 +713,17 @@ export function HomeScreen({
           }}
         >
           <LinearGradient
-            colors={['rgba(255,215,0,0.20)', 'rgba(255,159,67,0.10)'] as [string, string]}
+            // Lifted violet-plum fill, clearly lighter than the page bg —
+            // the old 0.16/0.07 wash read "near-black on near-black … as a
+            // disabled element" in the Aug 2026 blind review.
+            colors={['rgba(172,86,255,0.42)', 'rgba(118,44,196,0.26)'] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.milestoneBanner}
           >
-            <Text style={styles.milestoneBannerIcon}>{nextGuidedMilestone.icon}</Text>
+            <View style={styles.milestoneBannerIconWrap}>
+              <GameIcon glyph={nextGuidedMilestone.icon} size={27} />
+            </View>
             <View style={styles.milestoneBannerContent}>
               <Text style={styles.milestoneBannerText}>{nextGuidedMilestone.message}</Text>
               <Text style={styles.milestoneBannerCta}>{nextGuidedMilestone.ctaLabel} →</Text>
@@ -711,29 +760,50 @@ export function HomeScreen({
             transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [48, 0] }) }],
           }}
         >
-          {activeEventBanners.map((eb) => (
-            <Pressable
-              key={eb.id}
-              style={({ pressed }) => [pressed && styles.buttonPressed]}
-              onPress={onOpenEvents}
-              accessibilityRole="button"
-              accessibilityLabel={`Event: ${eb.name}. Tap to view`}
-            >
-              <LinearGradient
-                colors={[eb.color + '55', eb.color + '35'] as [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.eventBanner, { borderColor: eb.color + '60' }]}
+          {activeEventBanners.map((eb) => {
+            const daysLeft = eb.endMs
+              ? Math.max(0, Math.ceil((eb.endMs - Date.now()) / 86400000))
+              : null;
+            return (
+              <Pressable
+                key={eb.id}
+                style={({ pressed }) => [pressed && styles.buttonPressed]}
+                onPress={onOpenEvents}
+                accessibilityRole="button"
+                accessibilityLabel={`Event: ${eb.name}. Tap to view`}
               >
-                <Text style={styles.eventBannerIcon}>{eb.icon}</Text>
-                <View style={styles.eventBannerInfo}>
-                  <Text style={[styles.eventBannerLabel, { color: eb.color }]}>{eb.label}</Text>
-                  <Text style={styles.eventBannerName}>{eb.name}</Text>
-                </View>
-                <Text style={[styles.eventBannerArrow, { color: eb.color }]}>{'\u{203A}'}</Text>
-              </LinearGradient>
-            </Pressable>
-          ))}
+                <LinearGradient
+                  colors={[eb.color + '55', eb.color + '25', COLORS.surface] as [string, string, string]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.eventBanner, { borderColor: eb.color + '60' }]}
+                >
+                  <View style={styles.eventBannerTopRow}>
+                    <Text style={[styles.eventBannerLabel, { color: eb.color }]}>{eb.label}</Text>
+                    {daysLeft != null && (
+                      <View style={[styles.eventBannerEndsChip, { borderColor: eb.color + '70' }]}>
+                        <Text style={[styles.eventBannerEndsText, { color: eb.color }]}>
+                          {daysLeft <= 1 ? 'ENDS TODAY' : `${daysLeft}D LEFT`}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.eventBannerBody}>
+                    <View style={[styles.eventBannerMedallion, { borderColor: eb.color + '55', backgroundColor: eb.color + '22' }]}>
+                      <GameIcon glyph={eb.icon} size={34} />
+                    </View>
+                    <View style={styles.eventBannerInfo}>
+                      <Text style={styles.eventBannerName} numberOfLines={1}>{eb.name}</Text>
+                      {!!eb.description && (
+                        <Text style={styles.eventBannerDesc} numberOfLines={2}>{eb.description}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={[styles.eventBannerCta, { color: eb.color }]}>JOIN THE EVENT {'\u{203A}'}</Text>
+                </LinearGradient>
+              </Pressable>
+            );
+          })}
         </Animated.View>
       )}
       {/* Mystery Wheel Button */}
@@ -788,7 +858,7 @@ export function HomeScreen({
                       style={StyleSheet.absoluteFill}
                     />
                   </Animated.View>
-                  <Text style={styles.mysteryWheelIcon}>{'\u{1F3B0}'}</Text>
+                  <GameIcon name="wheel" size={27} />
                 </View>
                 <View style={styles.mysteryWheelContent}>
                   <Text style={styles.mysteryWheelTitle}>{t('home.mysteryWheel')}</Text>
@@ -833,7 +903,10 @@ export function HomeScreen({
             style={[styles.dealPanel, SHADOWS.medium]}
           >
             <View style={styles.panelHeaderRow}>
-              <Text style={styles.panelTitle}>{dailyDeal.icon} Today's Deal</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <GameIcon glyph={dailyDeal.icon} size={15} />
+                <Text style={styles.panelTitle}>Today's Deal</Text>
+              </View>
               <Text style={styles.panelMeta}>{t('home.endsInHours', { hours: dealHoursLeft })}</Text>
             </View>
             <View style={styles.dealContent}>
@@ -841,12 +914,14 @@ export function HomeScreen({
                 <Text style={styles.dealName}>{dailyDeal.name}</Text>
                 <Text style={styles.dealDesc}>{dailyDeal.description}</Text>
                 <View style={styles.dealPriceRow}>
-                  <Text style={styles.dealOriginalPrice}>
-                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.originalPrice}
-                  </Text>
-                  <Text style={styles.dealSalePrice}>
-                    {dailyDeal.currency === 'coins' ? '\u{1FA99}' : '\u{1F48E}'}{dailyDeal.salePrice}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <GameIcon name={dailyDeal.currency === 'coins' ? 'coin' : 'gem'} size={14} />
+                    <Text style={styles.dealOriginalPrice}>{dailyDeal.originalPrice}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <GameIcon name={dailyDeal.currency === 'coins' ? 'coin' : 'gem'} size={17} />
+                    <Text style={styles.dealSalePrice}>{dailyDeal.salePrice}</Text>
+                  </View>
                 </View>
               </View>
               <PrimaryButton
@@ -871,7 +946,9 @@ export function HomeScreen({
               style={[styles.flashSaleTeaser, SHADOWS.medium]}
             >
               <View style={styles.flashSaleTeaserRow}>
-                <Text style={styles.flashSaleTeaserIcon}>{'\u26A1'}</Text>
+                <View style={{ marginRight: 10 }}>
+                  <GameIcon name="bolt" size={27} />
+                </View>
                 <View style={styles.flashSaleTeaserInfo}>
                   <Text style={styles.flashSaleTeaserTitle}>
                     Today's Deal: {flashSale.name} - {flashSale.discountPercent}% OFF!
@@ -921,7 +998,7 @@ export function HomeScreen({
             end={{ x: 1, y: 0 }}
             style={styles.freeSpinToastInner}
           >
-            <Text style={styles.freeSpinToastIcon}>{'\u{1F3B0}'}</Text>
+            <GameIcon name="wheel" size={20} />
             <Text style={styles.freeSpinToastText}>{t('home.freeSpinToast')}</Text>
           </LinearGradient>
         </Animated.View>
@@ -956,7 +1033,13 @@ export function HomeScreen({
             accessibilityLabel={`Next goal: ${nextGoal.title}. ${nextGoal.detail}. Play now.`}
           >
             <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.nextGoalCard}>
-              <Text style={styles.nextGoalIcon}>{nextGoal.icon}</Text>
+              {/* Wing goals carry the wing's SVG emblem + accent; chapter
+                  goals keep the legacy glyph path. */}
+              {nextGoal.kind === 'wing' && nextGoal.iconName ? (
+                <GameIcon name={nextGoal.iconName} size={30} accent={nextGoal.accent} />
+              ) : (
+                <GameIcon glyph={nextGoal.icon} size={30} />
+              )}
               <View style={styles.nextGoalBody}>
                 <Text style={styles.nextGoalTitle} numberOfLines={1}>
                   {nextGoal.title}
@@ -966,6 +1049,7 @@ export function HomeScreen({
                     style={[
                       styles.nextGoalBarFill,
                       { width: `${Math.round(nextGoal.progress * 100)}%` },
+                      nextGoal.accent ? { backgroundColor: nextGoal.accent } : null,
                     ]}
                   />
                 </View>
@@ -1067,7 +1151,10 @@ export function HomeScreen({
                     />
                   </View>
                   {!goal.completed && (
-                    <Text style={styles.weeklyGoalReward}>🪙{goal.reward.coins}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                      <GameIcon name="coin" size={13} />
+                      <Text style={styles.weeklyGoalReward}>{goal.reward.coins}</Text>
+                    </View>
                   )}
                 </View>
               );
@@ -1077,7 +1164,13 @@ export function HomeScreen({
                 colors={['rgba(255,215,0,0.12)', 'rgba(255,159,0,0.06)']}
                 style={styles.weeklyBonusBanner}
               >
-                <Text style={styles.weeklyBonusText}>All complete! 🪙{weeklyGoals.allCompleteBonus.coins} 💎{weeklyGoals.allCompleteBonus.gems}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.weeklyBonusText}>All complete!</Text>
+                  <GameIcon name="coin" size={15} />
+                  <Text style={styles.weeklyBonusText}>{weeklyGoals.allCompleteBonus.coins}</Text>
+                  <GameIcon name="gem" size={15} />
+                  <Text style={styles.weeklyBonusText}>{weeklyGoals.allCompleteBonus.gems}</Text>
+                </View>
               </LinearGradient>
             )}
           </LinearGradient>
@@ -1117,13 +1210,13 @@ export function HomeScreen({
                   const isSpecial = dayNum % 7 === 0;
                   const isGrand = dayNum === 30;
 
-                  const rewardIcon = reward.rareTile
-                    ? '✨'
+                  const rewardIcon: GameIconName = reward.rareTile
+                    ? 'sparkle'
                     : (reward.gems && reward.gems >= 10)
-                      ? '💎'
+                      ? 'gem'
                       : reward.hints
-                        ? '💡'
-                        : '🪙';
+                        ? 'hint'
+                        : 'coin';
 
                   return (
                     <View
@@ -1170,11 +1263,11 @@ export function HomeScreen({
                         {isClaimed ? (
                           <Text style={styles.calendarCheckmark}>✓</Text>
                         ) : isGrand ? (
-                          <Text style={styles.calendarGrandIcon}>🏆</Text>
+                          <GameIcon name="trophy" size={16} />
                         ) : (
-                          <Text style={[styles.calendarRewardIcon, isUpcoming && styles.calendarRewardIconDimmed]}>
-                            {rewardIcon}
-                          </Text>
+                          <View style={isUpcoming ? styles.calendarRewardIconDimmed : undefined}>
+                            <GameIcon name={rewardIcon} size={14} />
+                          </View>
                         )}
                         {isSpecial && !isGrand && (
                           <View style={styles.calendarSpecialBadge}>
@@ -1189,7 +1282,24 @@ export function HomeScreen({
               {/* Grand prize label for day 30 */}
               <View style={styles.calendarGrandRow}>
                 <Text style={styles.calendarGrandLabel}>{t('home.calendarGrandPrize')}</Text>
-                <Text style={styles.calendarGrandReward}>🪙1000  💎100  ✨Rare Tile  🎨Exclusive</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <GameIcon name="coin" size={11} />
+                    <Text style={styles.calendarGrandReward}>1000</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <GameIcon name="gem" size={11} />
+                    <Text style={styles.calendarGrandReward}>100</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <GameIcon name="sparkle" size={11} />
+                    <Text style={styles.calendarGrandReward}>Rare Tile</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <GameIcon name="palette" size={11} />
+                    <Text style={styles.calendarGrandReward}>Exclusive</Text>
+                  </View>
+                </View>
               </View>
               {/* Claim button for today */}
               <Pressable
@@ -1234,7 +1344,7 @@ export function HomeScreen({
               colors={GRADIENTS.surfaceCard}
               style={[styles.recommendCard, SHADOWS.medium]}
             >
-              <Text style={styles.recommendIcon}>{recommendation.icon}</Text>
+              <GameIcon glyph={recommendation.icon} size={37} />
               <View style={styles.recommendContent}>
                 <Text style={styles.recommendLabel}>RECOMMENDED FOR YOU</Text>
                 <Text style={styles.recommendTitle}>{recommendation.title}</Text>
@@ -1264,7 +1374,7 @@ export function HomeScreen({
                     style={[styles.quickPlayCard, SHADOWS.soft]}
                   >
                     <View style={[styles.quickPlayIconBg, { backgroundColor: difficultyMeta[difficulty].accent + '22' }]}>
-                      <Text style={styles.quickPlayIcon}>{difficultyMeta[difficulty].icon}</Text>
+                      <GameIcon name={difficultyMeta[difficulty].icon} size={23} accent={difficultyMeta[difficulty].accent} />
                     </View>
                     <Text style={[styles.quickPlayTitle, { color: difficultyMeta[difficulty].accent }]}>
                       {difficultyMeta[difficulty].label}
@@ -1375,17 +1485,54 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   heroLogoGlow: {
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 18,
-    elevation: 10,
+    // iOS-only: CoreAnimation traces the logo's transparent pixels, so the
+    // glow hugs the letterforms. Android elevation and web box-shadow both
+    // draw a hard RECTANGLE around the transparent image view — the blind
+    // design review read it as a pasted-on black box — so those platforms
+    // rely on the glow baked into the logo art instead.
+    ...(Platform.OS === 'ios'
+      ? {
+          shadowColor: COLORS.accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.55,
+          shadowRadius: 18,
+        }
+      : null),
   },
   heroLogo: {
-    width: '100%',
-    height: 180,
-    marginBottom: 8,
+    // Aug 2026 blind review: the wordmark "eats roughly a third of the
+    // screen" — shrunk ~24% so the card system below owns the fold.
+    // Fixed px, not '78%': the wrapper (heroLogoGlow) is content-sized, so
+    // a percentage width resolves against an auto parent and collapses to
+    // zero on web — the logo vanished entirely in the Aug 2026 captures.
+    width: 272,
+    height: 136,
     alignSelf: 'center',
+  },
+  heroLogoBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  heroGlowLayer: {
+    position: 'absolute',
+    alignSelf: 'center',
+    borderRadius: 999,
+  },
+  heroGlowOuter: {
+    width: '100%',
+    height: 150,
+    backgroundColor: 'rgba(168,91,255,0.08)',
+  },
+  heroGlowMid: {
+    width: '80%',
+    height: 116,
+    backgroundColor: 'rgba(200,77,255,0.10)',
+  },
+  heroGlowInner: {
+    width: '58%',
+    height: 84,
+    backgroundColor: 'rgba(255,45,149,0.08)',
   },
   subtitle: {
     color: COLORS.textSecondary,
@@ -1443,10 +1590,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 120,
     marginBottom: 12,
+    borderRadius: 24,
+    ...SHADOWS.glow(COLORS.pink),
   },
-  playButtonImage: {
-    width: '100%',
-    height: '100%',
+  playButtonSurface: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   playButtonOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1476,13 +1627,23 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.15)',
+    borderColor: 'rgba(200,77,255,0.25)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    overflow: 'hidden',
   },
   dailyDone: {
     borderColor: 'rgba(76,175,80,0.3)',
+  },
+  dailyAccentBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: COLORS.gold,
+    opacity: 0.85,
   },
   dailyContent: {
     flex: 1,
@@ -1496,6 +1657,10 @@ const styles = StyleSheet.create({
   dailySubtitle: {
     color: COLORS.textSecondary,
     fontSize: 12,
+  },
+  dailyCoins: {
+    color: COLORS.gold,
+    fontFamily: FONTS.bodyBold,
   },
   dailyBadge: {
     color: COLORS.gold,
@@ -2121,12 +2286,38 @@ const styles = StyleSheet.create({
   // Event banner — Bento pink (event.color overrides borderColor at call site)
   eventBanner: {
     ...bentoPanel('pink'),
+    padding: 14,
+    minHeight: 186,
+    justifyContent: 'space-between',
+  },
+  eventBannerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    justifyContent: 'space-between',
   },
-  eventBannerIcon: {
-    fontSize: 28,
+  eventBannerEndsChip: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  eventBannerEndsText: {
+    fontSize: 9,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+  },
+  eventBannerBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  eventBannerMedallion: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
   eventBannerInfo: {
@@ -2136,26 +2327,56 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: FONTS.bodyBold,
     letterSpacing: 1.5,
-    marginBottom: 2,
   },
   eventBannerName: {
-    fontSize: 15,
-    fontFamily: FONTS.bodySemiBold,
+    fontSize: 17,
+    fontFamily: FONTS.display,
     color: COLORS.textPrimary,
+    marginBottom: 3,
   },
-  eventBannerArrow: {
-    fontSize: 24,
+  eventBannerDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.textSecondary,
   },
-  // Onboarding milestone banner — Bento gold
+  eventBannerCta: {
+    fontSize: 12,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+    textAlign: 'right',
+  },
+  // Onboarding milestone banner — celebration surface.
+  // Lifted violet-plum gradient (see JSX) over the bento purple shell, with
+  // a gold-tinted hairline + warm gold glow so it registers as a moment,
+  // not a disabled element (Aug 2026 blind review). Gold stays confined to
+  // the border tint, icon ring, and CTA — the fill itself is purple-family.
   milestoneBanner: {
-    ...bentoPanel('gold'),
+    ...bentoPanel('purple'),
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
+    borderColor: 'rgba(255,184,0,0.35)',
+    shadowColor: COLORS.gold,
+    shadowOpacity: 0.3,
+  },
+  milestoneBannerIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    marginRight: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8, 2, 22, 0.75)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,184,0,0.45)',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 5,
   },
   milestoneBannerIcon: {
-    fontSize: 32,
-    marginRight: 14,
+    fontSize: 24,
   },
   milestoneBannerContent: {
     flex: 1,

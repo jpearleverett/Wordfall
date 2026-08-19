@@ -3,6 +3,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS, FONTS } from '../../constants';
 import { GameMode, GameStatus, GravityDirection } from '../../types';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
+import GameIcon from '../../components/icons/GameIcon';
 
 /**
  * Spring-in wrapper for the dead-end banners. The stuck/retry strip used to
@@ -163,45 +164,62 @@ function GameBannersImpl({
     <>
       {isSpike && isPlaying && (
         <View style={[styles.cascadeBar, styles.cascadeBarSpike]}>
-          <Text style={[styles.cascadeText, styles.cascadeTextSpike]}>
-            {'⚡'} CHALLENGE LEVEL
-          </Text>
+          <View style={styles.bannerRow}>
+            <GameIcon name="bolt" size={15} accent={COLORS.gold} />
+            <Text style={[styles.cascadeText, styles.cascadeTextSpike]}>
+              CHALLENGE LEVEL
+            </Text>
+          </View>
         </View>
       )}
       {showGravityBanner && (
         <View style={styles.cascadeBar}>
-          <Text style={styles.cascadeText}>
-            {'\uD83D\uDD04'} Gravity:{' '}
-            {gravityDirection === 'right' ? '\u2192' : gravityDirection === 'up' ? '\u2191' : '\u2190'}
-          </Text>
+          <View style={styles.bannerRow}>
+            <GameIcon name="undo" size={16} accent={COLORS.coral} />
+            <Text style={styles.cascadeText}>
+              Gravity:{' '}
+              {gravityDirection === 'right' ? '\u2192' : gravityDirection === 'up' ? '\u2191' : '\u2190'}
+            </Text>
+          </View>
         </View>
       )}
       {showShrinkBanner && (
         <View style={[styles.cascadeBar, styles.cascadeBarCoral]}>
-          <Text style={[styles.cascadeText, styles.cascadeTextCoral]}>
-            {'\uD83D\uDD3B'} SHRINKING IN 1 WORD
-          </Text>
+          <View style={styles.bannerRow}>
+            <GameIcon name="gem" size={15} accent={COLORS.coral} />
+            <Text style={[styles.cascadeText, styles.cascadeTextCoral]}>
+              SHRINKING IN 1 WORD
+            </Text>
+          </View>
         </View>
       )}
       {showWildcardBanner && (
         <View style={[styles.cascadeBar, styles.cascadeBarGold]}>
-          <Text style={[styles.cascadeText, styles.cascadeTextGold]}>
-            {'\u2605'} Tap a cell to place wildcard
-          </Text>
+          <View style={styles.bannerRow}>
+            <GameIcon name="star" size={15} accent={COLORS.gold} />
+            <Text style={[styles.cascadeText, styles.cascadeTextGold]}>
+              Tap a cell to place wildcard
+            </Text>
+          </View>
         </View>
       )}
       {showIdleHelpBanner && (
         <Pressable style={styles.idleHintBanner} onPress={onIdleHintTap}>
-          <Text style={styles.idleHintText}>
-            Need help? Tap here or press {'\uD83D\uDCA1'} for a hint
-          </Text>
+          <View style={styles.bannerRow}>
+            <Text style={styles.idleHintText}>Need help? Tap here or press</Text>
+            <GameIcon name="hint" size={13} />
+            <Text style={styles.idleHintText}>for a hint</Text>
+          </View>
         </Pressable>
       )}
       {showAdHelpBanner && (
         <Pressable style={styles.adHintBanner} onPress={onAdHintTap}>
-          <Text style={styles.adHintBannerText}>
-            {'\uD83C\uDFAC'} Out of hints — watch ad for +1 hint
-          </Text>
+          <View style={styles.bannerRow}>
+            <GameIcon name="frame" size={14} accent={COLORS.green} />
+            <Text style={styles.adHintBannerText}>
+              Out of hints — watch ad for +1 hint
+            </Text>
+          </View>
         </Pressable>
       )}
       {showUndoBanner && (
@@ -235,6 +253,11 @@ function GameBannersImpl({
 export const GameBanners = React.memo(GameBannersImpl);
 
 const styles = StyleSheet.create({
+  bannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   cascadeBar: {
     backgroundColor: 'rgba(50, 15, 20, 0.75)',
     paddingVertical: 7,

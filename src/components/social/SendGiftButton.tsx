@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet } from 'react-native';
 import { COLORS } from '../../constants';
+import GameIcon from '../icons/GameIcon';
 import { sendGiftSecure, type GiftType } from '../../services/gifts';
 import { analytics } from '../../services/analytics';
 import { usePlayerStore, selectEquippedTitle } from '../../stores/playerStore';
@@ -130,7 +131,7 @@ export function SendGiftButton({
       {sending ? (
         <ActivityIndicator size="small" color={COLORS.gold} />
       ) : (
-        <Text style={[styles.emoji, compact ? styles.emojiCompact : styles.emojiNormal]}>🎁</Text>
+        <GameIcon name="gift" size={compact ? 21 : 25} />
       )}
     </Pressable>
   );
@@ -157,9 +158,4 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     transform: [{ scale: 0.94 }],
   },
-  emoji: {
-    textAlign: 'center',
-  },
-  emojiCompact: { fontSize: 18 },
-  emojiNormal: { fontSize: 22 },
 });

@@ -39,10 +39,10 @@ interface PlayFieldProps {
   showValidFlash: boolean;
   /** Spotlight dimmed cell set (or empty set when inactive) */
   spotlightDimmedSet: Set<string>;
-  /** Fall animation map from gravity animation effect */
-  fallAnimMap: Map<string, Animated.Value>;
-  /** Moved cells for post-gravity highlight */
-  movedCells: CellPosition[];
+  /** Fired when a gravity fall fully settles (GameScreen plays the landing haptic) */
+  onGravitySettled?: () => void;
+  /** Chapter accent color tinting the grid's neon frame (see Grid.frameAccent) */
+  frameAccent?: string;
   /** Bonus coin tile (variable reward) — cell ID, travels with gravity */
   bonusCellId?: string | null;
 }
@@ -79,8 +79,8 @@ function PlayFieldImpl({
   gridScaleStyle,
   showValidFlash,
   spotlightDimmedSet,
-  fallAnimMap,
-  movedCells,
+  onGravitySettled,
+  frameAccent,
   bonusCellId = null,
 }: PlayFieldProps) {
   const dispatch = useGameDispatch();
@@ -243,14 +243,14 @@ function PlayFieldImpl({
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             validWord={showValidFlash}
-            movedCells={mode === 'noGravity' ? EMPTY_CELL_ARRAY : movedCells}
             maxHeight={gridAreaHeight}
             wildcardCells={wildcardCells}
             spotlightDimmedCells={spotlightDimmedSet}
             bonusCellId={bonusCellId}
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
             noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
-            fallAnimMap={fallAnimMap}
+            onGravitySettled={onGravitySettled}
+            frameAccent={frameAccent}
             wildcardMode={wildcardMode}
           />
         </React.Profiler>
@@ -268,7 +268,19 @@ export const PlayField = React.memo(PlayFieldImpl);
  * selected word or word-found state changes (per-tap for selection, per-word
  * for found status).
  */
-function ConnectedWordBankImpl() {
+interface ConnectedWordBankProps {
+  /**
+   * When true (victory/failure overlay is up) the word band is fully hidden
+   * and non-interactive. Layout is preserved (opacity, not unmount) so the
+   * grid behind the overlay doesn't visibly reflow during the overlay's
+   * fade-in. Without this, the chips' Android elevation could paint them
+   * on top of the completion overlay — chips floating over the victory
+   * modal and "following" its scroll.
+   */
+  hidden?: boolean;
+}
+
+function ConnectedWordBankImpl({ hidden = false }: ConnectedWordBankProps) {
   const selectedCells = useGameStore(useShallow((s: GameState) => s.selectedCells));
   const grid = useGameStore(s => s.board.grid);
   const words = useGameStore(useShallow((s: GameState) => s.board.words));
@@ -309,7 +321,10 @@ function ConnectedWordBankImpl() {
   }, [words]);
 
   return (
-    <View style={styles.wordArea}>
+    <View
+      style={[styles.wordArea, hidden && styles.wordAreaHidden]}
+      pointerEvents={hidden ? 'none' : 'auto'}
+    >
       <React.Profiler id="WordBank" onRender={profilerOnRender}>
         <WordBank
           words={words}
@@ -328,6 +343,13 @@ const styles = StyleSheet.create({
   wordArea: {
     paddingTop: 2,
     paddingBottom: 2,
-    height: 86,
+    // minHeight (not a fixed height): with 6+ words the wrapped chip panel
+    // grows past 86px, and a fixed height let the overflow paint on top of
+    // the grid below. Auto-sizing pushes the gridArea down instead — the
+    // grid re-measures via onLayout and shrinks its cells to fit.
+    minHeight: 86,
+  },
+  wordAreaHidden: {
+    opacity: 0,
   },
 });

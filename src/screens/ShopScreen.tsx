@@ -6,15 +6,25 @@ import {
   Text,
   Image,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Dimensions,
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
+  ViewStyle,
+  StyleProp,
+  ImageSourcePropType,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, FONTS } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { COLORS, GRADIENTS, FONTS, SHADOWS, RADIUS } from '../constants';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import SectionHeader from '../components/common/SectionHeader';
+import IconMedallion from '../components/common/IconMedallion';
+import PrimaryButton from '../components/common/PrimaryButton';
+import NeonProgressBar from '../components/common/NeonProgressBar';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import LocalErrorBoundary from '../components/LocalErrorBoundary';
 import type { CommercialEffectId } from '../services/commercialEntitlements';
@@ -23,6 +33,7 @@ import {
   useEconomyStore,
   useEconomyActions,
   selectCoins,
+  selectGems,
   selectVipExpiresAt,
   selectIsVipActive,
   selectIsAdFreeComputed,
@@ -57,12 +68,41 @@ import {
   getVipStreakProgress,
   VIP_STREAK_BONUSES,
 } from '../data/vipBenefits';
+import GameIcon, { GameIconName, resolveIconName } from '../components/icons/GameIcon';
 import { useCommerce } from '../hooks/useCommerce';
-import PiggyBankCard from '../components/PiggyBankCard';
+import {
+  selectPiggyBankGems,
+  selectPiggyBankCapacity,
+  selectPiggyBankReady,
+} from '../stores/economyStore';
+import { getRemoteNumber } from '../services/remoteConfig';
+import { bentoPanel } from '../styles/bentoPanel';
 import { analytics } from '../services/analytics';
 
 const { width } = Dimensions.get('window');
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Per-tier reward illustrations for the VIP streak cosmetic ladder — every
+ * tier gets a DISTINCT bespoke render instead of a shared type glyph:
+ * welcome banner → devotion laurel → silver frame → gold frame →
+ * champion crown → legendary VIP trophy.
+ */
+const VIP_TIER_ART: Record<string, { name: GameIconName; accent?: string }> = {
+  vip_welcome: { name: 'bannerDecor' },
+  vip_devoted: { name: 'vipLaurel' },
+  vip_silver: { name: 'frame', accent: '#b9c4d6' },
+  vip_gold: { name: 'frame', accent: '#ffb800' },
+  vip_champion: { name: 'crownWisdom' },
+  vip_trophy: { name: 'vipTrophy' },
+};
+
+/** Fallback art by reward type so a new tier never renders blank. */
+const VIP_TIER_TYPE_ART: Record<string, { name: GameIconName; accent?: string }> = {
+  frame: { name: 'frame' },
+  title: { name: 'scroll' },
+  decoration: { name: 'trophy' },
+};
 
 function formatCountdown(msRemaining: number): string {
   const remaining = Math.max(0, msRemaining);
@@ -109,12 +149,711 @@ const LiveCountdownText = React.memo(function LiveCountdownText({
   return <Text style={style}>{prefix}{text}</Text>;
 });
 
+// ─── Shared visual helpers ───────────────────────────────────────────────────
+
+/** Pressable with the standard press-scale feel for every tappable card. */
+function PressableScale({
+  onPress,
+  disabled,
+  style,
+  children,
+  accessibilityLabel,
+  accessibilityState,
+}: {
+  onPress?: () => void;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+  accessibilityLabel?: string;
+  accessibilityState?: { disabled?: boolean };
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={accessibilityState}
+      style={({ pressed }) => [
+        style,
+        pressed && !disabled && helperStyles.pressed,
+      ]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+/** Angled gradient ribbon pinned to a card's top-right corner. */
+function Ribbon({
+  label,
+  colors,
+}: {
+  label: string;
+  colors: readonly [string, string, ...string[]];
+}) {
+  return (
+    <View style={helperStyles.ribbonHost} pointerEvents="none">
+      <View style={helperStyles.ribbonRotator}>
+        <LinearGradient
+          colors={colors as [string, string, ...string[]]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        />
+        <Text style={helperStyles.ribbonText} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** Strikethrough anchor + bold sale price inside one capsule chip. */
+function PriceCapsule({
+  price,
+  originalPrice,
+  loading,
+  accent = COLORS.gold,
+}: {
+  price: string;
+  originalPrice?: string | null;
+  loading?: boolean;
+  accent?: string;
+}) {
+  return (
+    <View style={[helperStyles.priceCapsule, { borderColor: accent + '55' }]}>
+      <LinearGradient
+        colors={[accent + '2E', 'rgba(10,0,21,0.65)'] as [string, string]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      />
+      {loading ? (
+        <ActivityIndicator size="small" color={accent} />
+      ) : (
+        <>
+          {originalPrice != null && (
+            <Text style={helperStyles.priceCapsuleAnchor}>{originalPrice}</Text>
+          )}
+          <Text style={[helperStyles.priceCapsulePrice, { color: accent }]}>{price}</Text>
+        </>
+      )}
+    </View>
+  );
+}
+
+/**
+ * HaloMedallion — bigger-presence product art for featured / flash cards:
+ * an outer accent ring with inner glow wash wrapping the shared
+ * IconMedallion, so hero product art reads as crafted rather than a small
+ * emoji floating on the card.
+ */
+function HaloMedallion({
+  glyph,
+  source,
+  size = 52,
+  accent,
+  style,
+  children,
+}: {
+  glyph?: string;
+  source?: ImageSourcePropType;
+  size?: number;
+  accent: string;
+  style?: StyleProp<ViewStyle>;
+  /** Drawn glyph content — takes priority over glyph/source (no emoji). */
+  children?: React.ReactNode;
+}) {
+  const outer = size + 14;
+  return (
+    <View
+      style={[
+        {
+          width: outer,
+          height: outer,
+          borderRadius: outer / 2,
+          borderWidth: 1.5,
+          borderColor: accent + '59',
+          backgroundColor: accent + '14',
+          alignItems: 'center',
+          justifyContent: 'center',
+          ...SHADOWS.glow(accent),
+        },
+        style,
+      ]}
+    >
+      {children ? (
+        <DrawnMedallion size={size} accent={accent}>
+          {children}
+        </DrawnMedallion>
+      ) : (
+        <IconMedallion glyph={glyph} source={source} size={size} accent={accent} />
+      )}
+    </View>
+  );
+}
+
+/**
+ * Stacked-contents row for bundle cards — mini medallions of what's inside
+ * (AAA-shop treatment), replacing a plain "+"-joined text description.
+ */
+function BundleContentsRow({
+  items,
+  accent,
+}: {
+  items: { source?: ImageSourcePropType; glyph?: string; label: string }[];
+  accent: string;
+}) {
+  return (
+    <View style={helperStyles.bundleRow}>
+      {items.map((it, i) => (
+        <View key={i} style={[helperStyles.bundleChip, { borderColor: accent + '30' }]}>
+          {it.source ? (
+            <IconMedallion source={it.source} size={22} accent={accent} />
+          ) : (
+            <DrawnMedallion size={22} accent={accent}>
+              <ProductGlyph icon={it.glyph} accent={accent} size={12} />
+            </DrawnMedallion>
+          )}
+          <Text style={helperStyles.bundleChipLabel}>{it.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Animated shine sweep for the flash-sale card — a skewed light band loops
+ * across the card. Skipped entirely under reduce-motion.
+ */
+function ShineSweep({ sweepWidth }: { sweepWidth: number }) {
+  const reduceMotion = useReduceMotion();
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 1700,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.delay(2400),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion, anim]);
+
+  if (reduceMotion) return null;
+
+  const translateX = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-180, sweepWidth + 180],
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { transform: [{ translateX }] }]}
+    >
+      <LinearGradient
+        colors={[
+          'transparent',
+          'rgba(255,255,255,0.07)',
+          'rgba(255,255,255,0.16)',
+          'rgba(255,255,255,0.07)',
+          'transparent',
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={helperStyles.shineBand}
+      />
+    </Animated.View>
+  );
+}
+
+const helperStyles = StyleSheet.create({
+  pressed: {
+    transform: [{ scale: 0.97 }],
+    opacity: 0.9,
+  },
+  ribbonHost: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+    borderRadius: 14,
+  },
+  ribbonRotator: {
+    position: 'absolute',
+    top: 12,
+    right: -34,
+    width: 130,
+    paddingVertical: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    transform: [{ rotate: '35deg' }],
+    ...SHADOWS.soft,
+  },
+  ribbonText: {
+    fontSize: 8,
+    fontFamily: FONTS.display,
+    color: COLORS.bg,
+    letterSpacing: 1,
+  },
+  priceCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    overflow: 'hidden',
+    minHeight: 26,
+  },
+  priceCapsuleAnchor: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textDecorationLine: 'line-through',
+    fontFamily: FONTS.bodyMedium,
+  },
+  priceCapsulePrice: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    letterSpacing: 0.5,
+  },
+  shineBand: {
+    width: 140,
+    height: '100%',
+    transform: [{ skewX: '-20deg' }],
+  },
+  bundleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  bundleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: RADIUS.full,
+    paddingLeft: 3,
+    paddingRight: 8,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(10,0,21,0.5)',
+  },
+  bundleChipLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: COLORS.textPrimary,
+  },
+});
+
+// ─── Drawn glyph kit — layered Views/gradients, no emoji (same technique as
+// LeaderboardScreen's GlyphMedallion / ClubScreen's ShieldCrest family). ────
+
+/**
+ * DrawnMedallion — IconMedallion's layered-gem shell, but hosting drawn
+ * View-based glyphs instead of raw emoji (the art review's residual flag).
+ */
+function DrawnMedallion({
+  size = 44,
+  accent = COLORS.purple,
+  muted = false,
+  style,
+  children,
+}: {
+  size?: number;
+  accent?: string;
+  muted?: boolean;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : accent + '73',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={[muted ? 'rgba(255,255,255,0.05)' : accent + '59', 'rgba(8, 2, 22, 0.88)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      {/* Lit backing disc — lifts glyph silhouettes off the dark shell so
+          the drawn art reads crisp instead of muddy. */}
+      {!muted && (
+        <View
+          style={{
+            position: 'absolute',
+            width: size * 0.78,
+            height: size * 0.78,
+            borderRadius: size * 0.39,
+            backgroundColor: 'rgba(255,255,255,0.10)',
+          }}
+        />
+      )}
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.18)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/** Drawn play triangle — rewarded-ad mark. */
+function PlayGlyph({ size = 22, accent = COLORS.green }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: 0,
+          height: 0,
+          marginLeft: size * 0.12,
+          borderTopWidth: size * 0.32,
+          borderBottomWidth: size * 0.32,
+          borderLeftWidth: size * 0.5,
+          borderTopColor: 'transparent',
+          borderBottomColor: 'transparent',
+          borderLeftColor: accent,
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn no-ads mark — ring + diagonal slash. */
+function NoAdsGlyph({ size = 22, accent = COLORS.coral }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, borderWidth: size * 0.11, borderColor: accent }} />
+      <View style={{ width: size * 0.82, height: size * 0.11, borderRadius: size * 0.06, backgroundColor: accent, transform: [{ rotate: '-45deg' }] }} />
+    </View>
+  );
+}
+
+/** Drawn glass gem jar — lid + coin slot, glass body, gold coins inside. */
+function JarGlyph({ size = 40 }: { size?: number }) {
+  const coin = (left: number, bottom: number, d: number, key: number) => (
+    <View
+      key={key}
+      style={{
+        position: 'absolute',
+        left,
+        bottom,
+        width: d,
+        height: d,
+        borderRadius: d / 2,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(8,2,22,0.35)',
+      }}
+    >
+      <LinearGradient
+        colors={[COLORS.goldLight, COLORS.gold]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+    </View>
+  );
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.64,
+          height: size * 0.18,
+          borderRadius: size * 0.05,
+          overflow: 'hidden',
+          zIndex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ width: size * 0.3, height: size * 0.05, borderRadius: size * 0.03, backgroundColor: 'rgba(8,2,22,0.65)' }} />
+      </View>
+      <View
+        style={{
+          width: size * 0.82,
+          height: size * 0.74,
+          marginTop: -size * 0.02,
+          borderRadius: size * 0.16,
+          borderTopLeftRadius: size * 0.08,
+          borderTopRightRadius: size * 0.08,
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.3)',
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={['rgba(255,255,255,0.16)', 'rgba(255,255,255,0.03)']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        {coin(size * 0.08, size * 0.02, size * 0.26, 0)}
+        {coin(size * 0.3, size * 0.06, size * 0.28, 1)}
+        {coin(size * 0.52, size * 0.02, size * 0.24, 2)}
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.07,
+            left: size * 0.08,
+            width: size * 0.09,
+            height: size * 0.36,
+            borderRadius: size * 0.05,
+            backgroundColor: 'rgba(255,255,255,0.35)',
+            transform: [{ rotate: '12deg' }],
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Icons whose bespoke art has a canonical material color (gold coins, amber
+ * bulbs, ember flames\u2026) \u2014 these ignore the card accent so the same item reads
+ * identically on every surface. Everything else retints to match its card.
+ */
+const CANONICAL_COLOR_ICONS: ReadonlySet<GameIconName> = new Set<GameIconName>([
+  'coin', 'hint', 'bolt', 'snowflake', 'clover', 'crown', 'flame', 'gift',
+]);
+
+/**
+ * Routes a data-driven product emoji icon through the shared GameIcon set so
+ * every shop surface renders the same bespoke SVG art as the rest of the app.
+ * Unknown glyphs fall back to the accent-tinted sparkle mark.
+ */
+function ProductGlyph({ icon, accent, size }: { icon?: string; accent: string; size: number }) {
+  const name = icon ? resolveIconName(icon) : null;
+  if (!name) return <GameIcon name="sparkle" size={size} accent={accent} />;
+  return (
+    <GameIcon
+      name={name}
+      size={size}
+      accent={CANONICAL_COLOR_ICONS.has(name) ? undefined : accent}
+    />
+  );
+}
+
+/**
+ * Piggy Bank shop card — same fill/break logic as components/PiggyBankCard's
+ * full variant (which stays in use for the Home compact variant), but with a
+ * drawn glass gem jar instead of the flat jar emoji the art review flagged.
+ */
+function PiggyBankShopCard({
+  onBreak,
+  purchasing = false,
+}: {
+  onBreak: () => void;
+  purchasing?: boolean;
+}) {
+  const gems = useEconomyStore(selectPiggyBankGems);
+  const capacity = useEconomyStore(selectPiggyBankCapacity);
+  const ready = useEconomyStore(selectPiggyBankReady);
+
+  const priceUSD = getRemoteNumber('piggyBankPriceUSD');
+  const priceLabel = useMemo(() => `$${priceUSD.toFixed(2)}`, [priceUSD]);
+  const fillPct = capacity > 0 ? Math.min(1, gems / capacity) : 0;
+
+  useEffect(() => {
+    if (ready) {
+      void analytics.logEvent('piggy_bank_offer_shown', { gems, capacity });
+    }
+  }, [ready, gems, capacity]);
+
+  if (!getRemoteBoolean('piggyBankEnabled')) return null;
+
+  const subtitle = ready
+    ? `Break it open for ${gems} gems!`
+    : `${gems}/${capacity} gems — fills as you play`;
+
+  return (
+    <View style={piggyStyles.card}>
+      <LinearGradient
+        colors={[COLORS.pink + '26', 'rgba(26,10,46,0.94)', COLORS.surface]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+      />
+      <View style={piggyStyles.header}>
+        <DrawnMedallion size={52} accent={COLORS.gold} style={piggyStyles.jarMedallion}>
+          <JarGlyph size={30} />
+        </DrawnMedallion>
+        <View style={piggyStyles.headerInfo}>
+          <Text style={piggyStyles.title}>Piggy Bank</Text>
+          <Text style={piggyStyles.subtitle}>{subtitle}</Text>
+        </View>
+      </View>
+
+      <View style={piggyStyles.barTrack}>
+        <View style={[piggyStyles.barFill, { width: `${fillPct * 100}%` }]} />
+        <Text style={piggyStyles.barLabel}>{Math.round(fillPct * 100)}%</Text>
+      </View>
+
+      <Pressable
+        style={({ pressed }) => [
+          piggyStyles.button,
+          ready ? SHADOWS.glow(COLORS.gold) : piggyStyles.buttonGhost,
+          pressed && ready && piggyStyles.buttonPressed,
+        ]}
+        onPress={ready && !purchasing ? onBreak : undefined}
+        disabled={!ready || purchasing}
+        accessibilityRole="button"
+        accessibilityLabel={
+          ready
+            ? `Break piggy bank for ${priceLabel} to claim ${gems} gems`
+            : 'Piggy bank not ready yet'
+        }
+      >
+        {ready && (
+          <LinearGradient
+            colors={[...GRADIENTS.button.gold] as [string, string, ...string[]]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
+        )}
+        {purchasing ? (
+          <ActivityIndicator size="small" color={COLORS.bg} />
+        ) : (
+          <Text style={[piggyStyles.buttonText, !ready && piggyStyles.buttonGhostText]}>
+            {ready ? `BREAK FOR ${priceLabel}` : 'KEEP PLAYING TO FILL'}
+          </Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+const piggyStyles = StyleSheet.create({
+  card: {
+    ...bentoPanel('gold'),
+    padding: 16,
+    overflow: 'hidden',
+    backgroundColor: COLORS.surface,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  jarMedallion: {
+    marginRight: 12,
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.display,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  barTrack: {
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: COLORS.surface,
+    overflow: 'hidden',
+    marginBottom: 12,
+    justifyContent: 'center',
+  },
+  barFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: COLORS.pink,
+  },
+  barLabel: {
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  button: {
+    height: 44,
+    borderRadius: RADIUS.full,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Filling state — a quiet ghost capsule (status, not a fake buy button).
+  buttonGhost: {
+    borderWidth: 1,
+    borderColor: COLORS.gold + '40',
+    backgroundColor: COLORS.gold + '0F',
+  },
+  buttonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
+  },
+  buttonText: {
+    color: COLORS.bg,
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    letterSpacing: 1.5,
+  },
+  buttonGhostText: {
+    color: COLORS.gold,
+    fontSize: 11,
+    letterSpacing: 2,
+  },
+});
+
 // ─── Static item data ────────────────────────────────────────────────────────
 
 interface ShopItem {
   id: string;
   name: string;
   icon: string;
+  /** Real image asset for the medallion \u2014 takes priority over the emoji icon. */
+  image?: ImageSourcePropType;
   price: string;
   quantity?: number;
   bestValue?: boolean;
@@ -122,27 +861,40 @@ interface ShopItem {
 }
 
 const HINT_BUNDLES: ShopItem[] = [
-  { id: 'hints_10', name: '10 Hints', icon: '\u{1F4A1}', price: '$0.99', quantity: 10, iapProductId: 'hint_bundle_10' },
-  { id: 'hints_25', name: '25 Hints', icon: '\u{1F4A1}', price: '$1.99', quantity: 25, iapProductId: 'hint_bundle_25' },
-  { id: 'hints_50', name: '50 Hints', icon: '\u{1F4A1}', price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'hint_bundle_50' },
+  { id: 'hints_10', name: '10 Hints', icon: '\u{1F4A1}', image: LOCAL_IMAGES.iconHint, price: '$0.99', quantity: 10, iapProductId: 'hint_bundle_10' },
+  { id: 'hints_25', name: '25 Hints', icon: '\u{1F4A1}', image: LOCAL_IMAGES.iconHint, price: '$1.99', quantity: 25, iapProductId: 'hint_bundle_25' },
+  { id: 'hints_50', name: '50 Hints', icon: '\u{1F4A1}', image: LOCAL_IMAGES.iconHint, price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'hint_bundle_50' },
 ];
 
 const UNDO_BUNDLES: ShopItem[] = [
-  { id: 'undos_10', name: '10 Undos', icon: '\u21A9\uFE0F', price: '$0.99', quantity: 10, iapProductId: 'undo_bundle_10' },
-  { id: 'undos_25', name: '25 Undos', icon: '\u21A9\uFE0F', price: '$1.99', quantity: 25, iapProductId: 'undo_bundle_25' },
-  { id: 'undos_50', name: '50 Undos', icon: '\u21A9\uFE0F', price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'undo_bundle_50' },
+  { id: 'undos_10', name: '10 Undos', icon: '\u21A9\uFE0F', image: LOCAL_IMAGES.iconUndo, price: '$0.99', quantity: 10, iapProductId: 'undo_bundle_10' },
+  { id: 'undos_25', name: '25 Undos', icon: '\u21A9\uFE0F', image: LOCAL_IMAGES.iconUndo, price: '$1.99', quantity: 25, iapProductId: 'undo_bundle_25' },
+  { id: 'undos_50', name: '50 Undos', icon: '\u21A9\uFE0F', image: LOCAL_IMAGES.iconUndo, price: '$2.99', quantity: 50, bestValue: true, iapProductId: 'undo_bundle_50' },
 ];
 
 const COIN_PACKS: ShopItem[] = [
-  { id: 'coins_500', name: '500 Coins', icon: '\u{1FA99}', price: '$0.99', quantity: 500 },
-  { id: 'coins_1500', name: '1,500 Coins', icon: '\u{1FA99}', price: '$2.99', quantity: 1500 },
-  { id: 'coins_5000', name: '5,000 Coins', icon: '\u{1FA99}', price: '$7.99', quantity: 5000, bestValue: true },
+  { id: 'coins_500', name: '500 Coins', icon: '\u{1FA99}', image: LOCAL_IMAGES.iconCoinGold, price: '$0.99', quantity: 500 },
+  { id: 'coins_1500', name: '1,500 Coins', icon: '\u{1FA99}', image: LOCAL_IMAGES.iconCoinGold, price: '$2.99', quantity: 1500 },
+  { id: 'coins_5000', name: '5,000 Coins', icon: '\u{1FA99}', image: LOCAL_IMAGES.iconCoinGold, price: '$7.99', quantity: 5000, bestValue: true },
 ];
 
 const GEM_PACKS: ShopItem[] = [
-  { id: 'gems_50', name: '50 Gems', icon: '\u{1F48E}', price: '$0.99', quantity: 50, iapProductId: 'gems_50' },
-  { id: 'gems_250', name: '250 Gems', icon: '\u{1F48E}', price: '$4.99', quantity: 250, iapProductId: 'gems_250' },
-  { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', price: '$9.99', quantity: 500, bestValue: true, iapProductId: 'gems_500' },
+  { id: 'gems_50', name: '50 Gems', icon: '\u{1F48E}', image: LOCAL_IMAGES.iconGemDiamond, price: '$0.99', quantity: 50, iapProductId: 'gems_50' },
+  { id: 'gems_250', name: '250 Gems', icon: '\u{1F48E}', image: LOCAL_IMAGES.iconGemDiamond, price: '$4.99', quantity: 250, iapProductId: 'gems_250' },
+  { id: 'gems_500', name: '500 Gems', icon: '\u{1F48E}', image: LOCAL_IMAGES.iconGemDiamond, price: '$9.99', quantity: 500, bestValue: true, iapProductId: 'gems_500' },
+];
+
+// Stacked-contents rows for the hardcoded bundle cards (mini medallions).
+const STARTER_PACK_CONTENTS = [
+  { source: LOCAL_IMAGES.iconCoinGold, label: '500' },
+  { source: LOCAL_IMAGES.iconGemDiamond, label: '50' },
+  { source: LOCAL_IMAGES.iconHint, label: '10' },
+  { glyph: '\u{1F3A8}', label: 'DECOR' },
+];
+const WEEKEND_BUNDLE_CONTENTS = [
+  { source: LOCAL_IMAGES.iconGemDiamond, label: '100' },
+  { source: LOCAL_IMAGES.iconCoinGold, label: '3,000' },
+  { glyph: '\u{1F5BC}\uFE0F', label: 'FRAME' },
 ];
 
 // ─── Coin Shop categories ────────────────────────────────────────────────────
@@ -246,6 +998,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
   // Narrow zustand subscriptions — ShopScreen no longer re-renders on every
   // economy churn; only on the slices it actually reads.
   const coins = useEconomyStore(selectCoins);
+  const gems = useEconomyStore(selectGems);
   const vipExpiresAt = useEconomyStore(selectVipExpiresAt);
   const isVip = useEconomyStore(selectIsVipActive);
   const isAdFreeComputed = useEconomyStore(selectIsAdFreeComputed);
@@ -682,7 +1435,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     return { originalPrice: product.originalPrice, discountPercent: discount };
   };
 
-  const renderItemCard = (item: ShopItem) => {
+  const renderItemCard = (item: ShopItem, accent: string = COLORS.gold) => {
     const productId = item.iapProductId ?? item.id;
     const displayPrice = getDisplayPrice(item);
     const anchor = getAnchor(item);
@@ -709,82 +1462,100 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         : [...GRADIENTS.button.gold];
 
     return (
-      <TouchableOpacity
+      <PressableScale
         key={item.id}
-        style={styles.itemCard}
+        style={[styles.itemCard, { borderColor: accent + '3D' }]}
         onPress={() => handlePurchase(productId)}
-        activeOpacity={0.7}
         disabled={!!purchasingId}
-        accessibilityRole="button"
         accessibilityLabel={`Buy ${item.name} for ${displayPrice}${
           ribbonLabel ? `, ${ribbonLabel.toLowerCase()}` : ''
         }`}
       >
         <LinearGradient
-          colors={[...GRADIENTS.surfaceCard]}
+          colors={[accent + '14', 'rgba(26,10,46,0.94)'] as [string, string]}
           style={StyleSheet.absoluteFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
         />
-        {ribbonLabel && (
-          <View style={styles.bestValueBadge}>
-            <LinearGradient
-              colors={ribbonGradient as unknown as readonly [string, string, ...string[]]}
-              style={StyleSheet.absoluteFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
-            <Text style={styles.bestValueText}>{ribbonLabel}</Text>
-          </View>
+        <LinearGradient
+          colors={['transparent', accent + '99', 'transparent'] as [string, string, string]}
+          style={styles.itemTopEdge}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+        />
+        {item.image ? (
+          <IconMedallion
+            source={item.image}
+            size={48}
+            accent={accent}
+            style={styles.itemMedallion}
+          />
+        ) : (
+          <DrawnMedallion size={48} accent={accent} style={styles.itemMedallion}>
+            <ProductGlyph icon={item.icon} accent={accent} size={24} />
+          </DrawnMedallion>
         )}
-        <Text style={styles.itemIcon}>{item.icon}</Text>
         <Text style={styles.itemName}>{item.name}</Text>
         {anchor && (
-          <View style={styles.itemAnchorRow}>
-            <Text style={styles.itemAnchorPrice}>{anchor.originalPrice}</Text>
-            <View style={styles.itemDiscountBadge}>
-              <Text style={styles.itemDiscountText}>{anchor.discountPercent}% OFF</Text>
-            </View>
+          <View style={styles.itemDiscountBadge}>
+            <Text style={styles.itemDiscountText}>{anchor.discountPercent}% OFF</Text>
           </View>
         )}
-        <View style={styles.priceTag}>
-          <LinearGradient
-            colors={[...GRADIENTS.button.primary]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+        <PriceCapsule
+          price={displayPrice}
+          originalPrice={anchor?.originalPrice}
+          loading={isLoading(productId)}
+          accent={accent}
+        />
+        {ribbonLabel && (
+          <Ribbon
+            label={ribbonLabel}
+            colors={ribbonGradient as unknown as readonly [string, string, ...string[]]}
           />
-          {isLoading(productId) ? (
-            <ActivityIndicator size="small" color={COLORS.bg} />
-          ) : (
-            <Text style={styles.priceText}>{displayPrice}</Text>
-          )}
-        </View>
-      </TouchableOpacity>
+        )}
+      </PressableScale>
     );
   };
 
-  const renderItemRow = (items: ShopItem[]) => (
+  const renderItemRow = (items: ShopItem[], accent: string) => (
     <View style={styles.itemRow}>
-      {items.map(renderItemCard)}
+      {items.map((item) => renderItemCard(item, accent))}
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="shop" />
-      <View style={styles.header}>
-        <Image source={LOCAL_IMAGES.iconGemDiamond} style={{ width: 26, height: 26 }} resizeMode="contain" />
-        <Text style={styles.headerTitle}>SHOP</Text>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+    <View style={styles.root}>
+      <ScreenScaffold
+        title="SHOP"
+        eyebrow="DAILY DEALS"
+        accent={COLORS.accent}
+        backdrop="shop"
+        onBack={navigation ? () => navigation.goBack() : undefined}
+        headerRight={
+          <View style={styles.headerCurrency}>
+            <View style={styles.currencyChip}>
+              <Image
+                source={LOCAL_IMAGES.iconCoinGold}
+                style={styles.currencyChipIcon}
+                resizeMode="contain"
+              />
+              <Text style={styles.currencyChipText}>{coins.toLocaleString()}</Text>
+            </View>
+            <View style={styles.currencyChip}>
+              <Image
+                source={LOCAL_IMAGES.iconGemDiamond}
+                style={styles.currencyChipIcon}
+                resizeMode="contain"
+              />
+              <Text style={[styles.currencyChipText, { color: COLORS.cyan }]}>
+                {gems.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        }
       >
-        {/* ── Piggy Bank ──────────────────────────────────────────── */}
-        <PiggyBankCard
+        {/* ── Piggy Bank (drawn jar — see PiggyBankShopCard) ───────── */}
+        <PiggyBankShopCard
           onBreak={() => handlePurchase('piggy_bank_break')}
           purchasing={purchasingId === 'piggy_bank_break'}
         />
@@ -793,76 +1564,90 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         {flashSale && (
           <View style={styles.flashSaleCard}>
             <LinearGradient
-              colors={[COLORS.coral + '30', COLORS.orange + '15', COLORS.surface]}
+              colors={[COLORS.coral + '1F', 'rgba(45,20,82,0.60)', 'rgba(26,10,46,0.96)']}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             />
+            <LinearGradient
+              colors={['transparent', COLORS.coral, 'transparent'] as [string, string, string]}
+              style={styles.flashTopEdge}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+            />
             <View style={styles.flashSaleHeader}>
-              <Text style={styles.flashSaleLabel}>{'\u26A1'} FLASH SALE</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <GameIcon name="bolt" size={14} accent={COLORS.coral} />
+                <Text style={styles.flashSaleLabel}>FLASH SALE</Text>
+              </View>
               <View style={styles.flashSaleDiscountBadge}>
-                <Text style={styles.flashSaleDiscountText}>{flashSale.discountPercent}% OFF</Text>
-              </View>
-            </View>
-            <View style={styles.flashSaleBody}>
-              <Text style={styles.flashSaleIcon}>{flashSale.icon}</Text>
-              <View style={styles.flashSaleInfo}>
-                <Text style={styles.flashSaleName}>{flashSale.name}</Text>
-                <Text style={styles.flashSaleDesc}>{flashSale.description}</Text>
-                <View style={styles.flashSalePriceRow}>
-                  <Text style={styles.flashSaleOriginalPrice}>{flashSale.originalPrice}</Text>
-                  <Text style={styles.flashSaleSalePrice}>{flashSale.salePrice}</Text>
-                </View>
-              </View>
-            </View>
-            <View style={styles.flashSaleFooter}>
-              <View style={styles.flashSaleTimer}>
-                <LiveCountdownText
-                  prefix={'\u23F0 '}
-                  style={styles.flashSaleTimerText}
-                  untilMidnight
-                />
-              </View>
-              <TouchableOpacity
-                style={styles.flashSaleBuyButton}
-                onPress={() => handlePurchase(flashSale.productId)}
-                activeOpacity={0.7}
-                disabled={!!purchasingId}
-                accessibilityRole="button"
-                accessibilityLabel={`Flash sale: Buy now for ${flashSale.salePrice}`}
-              >
                 <LinearGradient
-                  colors={[COLORS.gold, COLORS.orange]}
+                  colors={[COLORS.coral, COLORS.orange] as [string, string]}
                   style={StyleSheet.absoluteFill}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 />
-                {isLoading(flashSale.productId) ? (
-                  <ActivityIndicator size="small" color={COLORS.bg} />
-                ) : (
-                  <Text style={styles.flashSaleBuyText}>BUY NOW {flashSale.salePrice}</Text>
-                )}
-              </TouchableOpacity>
+                <Text style={styles.flashSaleDiscountText}>{flashSale.discountPercent}% OFF</Text>
+              </View>
             </View>
+            <View style={styles.flashSaleBody}>
+              <HaloMedallion size={60} accent={COLORS.coral} style={styles.flashSaleMedallion}>
+                <ProductGlyph icon={flashSale.icon} accent={COLORS.coral} size={30} />
+              </HaloMedallion>
+              <View style={styles.flashSaleInfo}>
+                <Text style={styles.flashSaleName}>{flashSale.name}</Text>
+                <Text style={styles.flashSaleDesc}>{flashSale.description}</Text>
+                <View style={styles.flashSalePriceRow}>
+                  <PriceCapsule
+                    price={flashSale.salePrice}
+                    originalPrice={flashSale.originalPrice}
+                    accent={COLORS.gold}
+                  />
+                </View>
+              </View>
+            </View>
+            <View style={styles.flashSaleFooter}>
+              <View style={[styles.flashSaleTimer, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}>
+                <GameIcon name="hourglass" size={12} accent={COLORS.coral} />
+                <LiveCountdownText
+                  style={styles.flashSaleTimerText}
+                  untilMidnight
+                />
+              </View>
+              {isLoading(flashSale.productId) ? (
+                <View style={styles.flashSaleLoadingPill}>
+                  <ActivityIndicator size="small" color={COLORS.gold} />
+                </View>
+              ) : (
+                <PrimaryButton
+                  label={`BUY NOW ${flashSale.salePrice}`}
+                  onPress={() => handlePurchase(flashSale.productId)}
+                  variant="gold"
+                  size="medium"
+                  disabled={!!purchasingId}
+                  style={{ borderRadius: RADIUS.xl }}
+                  accessibilityLabel={`Flash sale: Buy now for ${flashSale.salePrice}`}
+                />
+              )}
+            </View>
+            <ShineSweep sweepWidth={width - 32} />
           </View>
         )}
 
         {/* ── Free Rewards (Watch Ads) ──────────────────────────────── */}
         {!adsRemoved && (
           <View style={styles.adSection}>
-            <Text style={styles.adSectionTitle}>Free Rewards</Text>
+            <SectionHeader label="FREE REWARDS" accent={COLORS.green} />
 
             {/* Watch Ad for Hint */}
-            <TouchableOpacity
+            <PressableScale
               style={styles.adBanner}
               onPress={handleWatchAdForHint}
-              activeOpacity={0.7}
               disabled={watchingAd}
-              accessibilityRole="button"
               accessibilityLabel="Watch ad for 1 free hint"
             >
               <LinearGradient
-                colors={[COLORS.green + '30', COLORS.teal + '20']}
+                colors={[COLORS.green + '1A', 'rgba(26,10,46,0.94)']}
                 style={StyleSheet.absoluteFill}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
@@ -870,7 +1655,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               {watchingAd ? (
                 <ActivityIndicator size="small" color={COLORS.green} style={{ marginRight: 10 }} />
               ) : (
-                <Text style={styles.adIcon}>{'\u{1F3AC}'}</Text>
+                <DrawnMedallion size={40} accent={COLORS.green} style={styles.adMedallion}>
+                  <PlayGlyph size={20} accent={COLORS.green} />
+                </DrawnMedallion>
               )}
               <View style={styles.adInfo}>
                 <Text style={styles.adTitle}>Watch Ad for 1 Free Hint</Text>
@@ -881,20 +1668,18 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               <View style={styles.adBadge}>
                 <Text style={styles.adBadgeText}>FREE</Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
 
             {/* Watch Ad for Coins (max 3/day) */}
             {adManager.canWatchCoinAd() && (
-              <TouchableOpacity
-                style={styles.adBanner}
+              <PressableScale
+                style={[styles.adBanner, { borderColor: COLORS.gold + '40' }]}
                 onPress={handleWatchAdForCoins}
-                activeOpacity={0.7}
                 disabled={watchingAd}
-                accessibilityRole="button"
                 accessibilityLabel={`Watch ad for 50 coins, ${adManager.coinAdsRemaining()} remaining today`}
               >
                 <LinearGradient
-                  colors={[COLORS.gold + '30', COLORS.orange + '20']}
+                  colors={[COLORS.gold + '1A', 'rgba(26,10,46,0.94)']}
                   style={StyleSheet.absoluteFill}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -902,7 +1687,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 {watchingAd ? (
                   <ActivityIndicator size="small" color={COLORS.gold} style={{ marginRight: 10 }} />
                 ) : (
-                  <Text style={styles.adIcon}>{'\u{1FA99}'}</Text>
+                  <IconMedallion source={LOCAL_IMAGES.iconCoinGold} size={40} accent={COLORS.gold} style={styles.adMedallion} />
                 )}
                 <View style={styles.adInfo}>
                   <Text style={[styles.adTitle, { color: COLORS.gold }]}>Watch Ad for 50 Coins</Text>
@@ -913,21 +1698,19 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 <View style={[styles.adBadge, { backgroundColor: COLORS.gold + '20' }]}>
                   <Text style={[styles.adBadgeText, { color: COLORS.gold }]}>FREE</Text>
                 </View>
-              </TouchableOpacity>
+              </PressableScale>
             )}
 
             {/* Watch Ad for Mystery Wheel Spin */}
             {adManager.canShowAd('spin_reward') && (
-              <TouchableOpacity
-                style={styles.adBanner}
+              <PressableScale
+                style={[styles.adBanner, { borderColor: COLORS.purple + '40' }]}
                 onPress={handleWatchAdForSpin}
-                activeOpacity={0.7}
                 disabled={watchingAd}
-                accessibilityRole="button"
                 accessibilityLabel="Watch ad for mystery wheel spin"
               >
                 <LinearGradient
-                  colors={[COLORS.purple + '30', COLORS.accent + '20']}
+                  colors={[COLORS.purple + '1A', 'rgba(26,10,46,0.94)']}
                   style={StyleSheet.absoluteFill}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -935,7 +1718,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 {watchingAd ? (
                   <ActivityIndicator size="small" color={COLORS.purple} style={{ marginRight: 10 }} />
                 ) : (
-                  <Text style={styles.adIcon}>{'\u{1F3B0}'}</Text>
+                  <DrawnMedallion size={40} accent={COLORS.purple} style={styles.adMedallion}>
+                    <GameIcon name="dice" size={20} accent={COLORS.purple} />
+                  </DrawnMedallion>
                 )}
                 <View style={styles.adInfo}>
                   <Text style={[styles.adTitle, { color: COLORS.purple }]}>Watch Ad for Mystery Spin</Text>
@@ -946,7 +1731,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 <View style={[styles.adBadge, { backgroundColor: COLORS.purple + '20' }]}>
                   <Text style={[styles.adBadgeText, { color: COLORS.purple }]}>FREE</Text>
                 </View>
-              </TouchableOpacity>
+              </PressableScale>
             )}
           </View>
         )}
@@ -954,14 +1739,26 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         {/* ── VIP Subscription ───────────────────────────────────────── */}
         <View style={styles.vipCard}>
           <LinearGradient
-            colors={['#2a1854', '#1a1042']}
+            colors={['#3a1466', '#22093f', '#160528']}
             style={StyleSheet.absoluteFill}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
           />
-          <View style={styles.vipGlow} />
+          {/* Holographic top edge — royal purple/gold treatment */}
+          <LinearGradient
+            colors={[...GRADIENTS.synthwave.holographic] as [string, string, ...string[]]}
+            style={styles.vipHoloEdge}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+          />
+          <LinearGradient
+            colors={[COLORS.gold + '1F', 'transparent'] as [string, string]}
+            style={styles.vipGlow}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+          />
           <View style={styles.vipHeader}>
-            <Text style={styles.vipIcon}>{'\u{1F48E}'}</Text>
+            <HaloMedallion source={LOCAL_IMAGES.iconGemDiamond} size={52} accent={COLORS.gold} style={styles.vipMedallion} />
             <View style={{ flex: 1 }}>
               <Text style={styles.vipTitle}>{t('shop.vipWeekly')}</Text>
               <Text style={styles.vipSubtitle}>The ultimate Wordfall experience</Text>
@@ -973,16 +1770,23 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             )}
           </View>
           <View style={styles.vipBenefits}>
-            <Text style={styles.vipBenefit}>{'\u2728'} Ad-free experience</Text>
-            <Text style={styles.vipBenefit}>{'\u{1F48E}'} 50 daily gems</Text>
-            <Text style={styles.vipBenefit}>{'\u{1F4A1}'} 3 daily hints</Text>
-            <Text style={styles.vipBenefit}>{'\u{1F5BC}\uFE0F'} Exclusive VIP frame</Text>
-            <Text style={styles.vipBenefit}>{'\u{1F680}'} 2x XP boost</Text>
+            {([
+              [<GameIcon key="g" name="sparkle" size={13} accent={COLORS.gold} />, 'Ad-free experience'],
+              [<GameIcon key="g" name="gem" size={13} accent={COLORS.cyan} />, '50 daily gems'],
+              [<GameIcon key="g" name="hint" size={13} />, '3 daily hints'],
+              [<GameIcon key="g" name="frame" size={13} accent={COLORS.purpleLight} />, 'Exclusive VIP frame'],
+              [<GameIcon key="g" name="rocket" size={13} accent={COLORS.teal} />, '2x XP boost'],
+            ] as [React.ReactNode, string][]).map(([g, label]) => (
+              <View key={label} style={styles.vipBenefitItem}>
+                {g}
+                <Text style={styles.vipBenefit}>{label}</Text>
+              </View>
+            ))}
           </View>
           {isVip ? (
             <View style={styles.vipActions}>
-              <TouchableOpacity
-                style={styles.vipClaimButton}
+              <PrimaryButton
+                label="CLAIM DAILY REWARDS"
                 onPress={() => {
                   const claimed = claimVipDailyRewards();
                   if (claimed) {
@@ -991,43 +1795,31 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                     Alert.alert('Already Claimed', 'Come back tomorrow for more VIP rewards!');
                   }
                 }}
-                activeOpacity={0.7}
-                accessibilityRole="button"
+                variant="gold"
+                size="large"
+                fullWidth
+                style={{ borderRadius: RADIUS.xl }}
                 accessibilityLabel="Claim daily VIP rewards: 50 gems and 3 hints"
-              >
-                <LinearGradient
-                  colors={[COLORS.gold, COLORS.orange]}
-                  style={StyleSheet.absoluteFill}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                />
-                <Text style={styles.vipClaimText}>CLAIM DAILY REWARDS</Text>
-              </TouchableOpacity>
+              />
               <Text style={styles.vipExpiryText}>
                 Renews {new Date(vipExpiresAt).toLocaleDateString()}
               </Text>
             </View>
+          ) : isLoading('vip_weekly') ? (
+            <View style={styles.vipLoadingRow}>
+              <ActivityIndicator size="small" color={COLORS.gold} />
+            </View>
           ) : (
-            <TouchableOpacity
-              style={styles.vipSubscribeButton}
+            <PrimaryButton
+              label="SUBSCRIBE  $4.99/WEEK"
               onPress={() => handlePurchase('vip_weekly')}
-              activeOpacity={0.7}
+              variant="primary"
+              size="large"
+              fullWidth
               disabled={!!purchasingId}
-              accessibilityRole="button"
+              style={{ borderRadius: RADIUS.xl }}
               accessibilityLabel="Subscribe to VIP Weekly for $4.99 per week"
-            >
-              <LinearGradient
-                colors={[COLORS.purple, '#6a1b9a']}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-              {isLoading('vip_weekly') ? (
-                <ActivityIndicator size="small" color={COLORS.textPrimary} />
-              ) : (
-                <Text style={styles.vipSubscribeText}>SUBSCRIBE  $4.99/week</Text>
-              )}
-            </TouchableOpacity>
+            />
           )}
         </View>
 
@@ -1042,13 +1834,15 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           return (
             <View style={styles.vipStreakCard}>
               <LinearGradient
-                colors={['#2a1854', '#1a1042']}
+                colors={['#341260', '#1d0838']}
                 style={StyleSheet.absoluteFill}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
               />
               <View style={styles.vipStreakHeader}>
-                <Text style={styles.vipStreakIcon}>{'\u{1F451}'}</Text>
+                <DrawnMedallion size={44} accent={COLORS.purple} style={styles.vipStreakMedallion}>
+                  <GameIcon name="crown" size={22} accent={COLORS.gold} />
+                </DrawnMedallion>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.vipStreakTitle}>{t('shop.vipStreak')}</Text>
                   <Text style={styles.vipStreakWeeks}>
@@ -1066,11 +1860,10 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               {nextMilestone && (
                 <View style={styles.vipStreakProgressSection}>
                   <View style={styles.vipStreakProgressBar}>
-                    <View
-                      style={[
-                        styles.vipStreakProgressFill,
-                        { width: `${Math.min(progress.progress * 100, 100)}%` },
-                      ]}
+                    <NeonProgressBar
+                      progress={Math.min(progress.progress, 1)}
+                      color={COLORS.purple}
+                      height={8}
                     />
                   </View>
                   <Text style={styles.vipStreakProgressText}>
@@ -1085,9 +1878,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
               {/* Claim button when eligible */}
               {currentBonus && !streakBonusClaimed && (
-                <TouchableOpacity
-                  style={styles.vipStreakClaimButton}
-                  accessibilityRole="button"
+                <PrimaryButton
+                  label="CLAIM WEEKLY BONUS"
+                  variant="primary"
+                  size="medium"
+                  fullWidth
+                  style={{ borderRadius: RADIUS.xl }}
                   accessibilityLabel={`Claim VIP streak weekly bonus: ${currentBonus?.bonusGems} gems and ${currentBonus?.bonusHints} hints`}
                   onPress={() => {
                     const result = claimVipStreakBonus();
@@ -1103,16 +1899,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                       `You earned +${currentBonus.bonusGems} gems and +${currentBonus.bonusHints} hints for being a ${currentBonus.label}!${cosmeticLine}`,
                     );
                   }}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={[COLORS.purple, '#8b5cf6']}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  />
-                  <Text style={styles.vipStreakClaimText}>CLAIM WEEKLY BONUS</Text>
-                </TouchableOpacity>
+                />
               )}
               {currentBonus && streakBonusClaimed && (
                 <Text style={styles.vipStreakClaimedText}>Weekly bonus claimed</Text>
@@ -1135,22 +1922,26 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               const reached = vipStreakWeeks >= tier.weeksRequired;
               const cosmetic = tier.extraReward;
               if (!cosmetic?.id) return null;
-              const typeGlyph =
-                cosmetic.type === 'frame'
-                  ? '\u{1F3F5}'
-                  : cosmetic.type === 'title'
-                    ? '\u{1F3C6}'
-                    : cosmetic.type === 'decoration'
-                      ? '\u{1F3C6}'
-                      : '\u2728';
+              const art =
+                VIP_TIER_ART[cosmetic.id] ??
+                VIP_TIER_TYPE_ART[cosmetic.type] ??
+                { name: 'trophy' as GameIconName };
               return (
                 <View key={tier.weeksRequired} style={styles.vipLadderRow}>
                   <Text style={styles.vipLadderWeeks}>
                     Week {tier.weeksRequired}
                   </Text>
+                  <View
+                    style={[
+                      styles.vipLadderArt,
+                      !reached && styles.vipLadderArtLocked,
+                    ]}
+                  >
+                    <GameIcon name={art.name} size={28} accent={art.accent} />
+                  </View>
                   <View style={styles.vipLadderBody}>
                     <Text style={styles.vipLadderCosmetic}>
-                      {typeGlyph} {cosmetic.id.replace(/_/g, ' ')}
+                      {cosmetic.id.replace(/_/g, ' ')}
                     </Text>
                     <Text style={styles.vipLadderTypeLabel}>
                       {cosmetic.type}
@@ -1173,7 +1964,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         {/* ── Tier 6 B6 — For You (dynamic offers) ─────────────────────── */}
         {dynamicOffers.length > 0 && (
           <View style={styles.dynamicOffersSection}>
-            <Text style={styles.dynamicOffersHeading}>For you</Text>
+            <SectionHeader label="FOR YOU" accent={COLORS.pink} meta="PERSONAL" />
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -1186,7 +1977,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 const originalPrice = product?.originalPrice;
                 const icon = product?.icon ?? '\u{1F381}';
                 return (
-                  <TouchableOpacity
+                  <PressableScale
                     key={`${offer.productId}-${offer.discountPercent}`}
                     style={styles.featuredCard}
                     onPress={() => {
@@ -1197,39 +1988,42 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                       });
                       handlePurchase(offer.productId);
                     }}
-                    activeOpacity={0.7}
                     disabled={!!purchasingId}
-                    accessibilityRole="button"
                     accessibilityLabel={`Personalized offer: ${name} at ${offer.discountPercent} percent off`}
                   >
                     <LinearGradient
-                      colors={['#2a1e52', '#1a1240']}
+                      colors={[...GRADIENTS.surfaceCard] as [string, string]}
                       style={StyleSheet.absoluteFill}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 0, y: 1 }}
                     />
-                    <View style={styles.featuredGlow} />
+                    <LinearGradient
+                      colors={[COLORS.accent + '30', 'transparent'] as [string, string]}
+                      style={styles.featuredGlow}
+                      start={{ x: 0.5, y: 0 }}
+                      end={{ x: 0.5, y: 1 }}
+                    />
                     {offer.badge && (
                       <View style={styles.featuredBadge}>
                         <Text style={styles.featuredBadgeText}>{offer.badge}</Text>
                       </View>
                     )}
-                    <Text style={styles.featuredIcon}>{icon}</Text>
+                    <HaloMedallion size={56} accent={COLORS.pink} style={styles.featuredMedallion}>
+                      <ProductGlyph icon={icon} accent={COLORS.pink} size={28} />
+                    </HaloMedallion>
                     <Text style={styles.featuredName}>{name}</Text>
                     <Text style={styles.featuredDesc}>
                       {`${offer.discountPercent}% off for you`}
                     </Text>
                     <View style={styles.featuredPriceRow}>
-                      {originalPrice && (
-                        <Text style={styles.featuredOldPrice}>{originalPrice}</Text>
-                      )}
-                      {isLoading(offer.productId) ? (
-                        <ActivityIndicator size="small" color={COLORS.green} />
-                      ) : (
-                        <Text style={styles.featuredPrice}>{price}</Text>
-                      )}
+                      <PriceCapsule
+                        price={price}
+                        originalPrice={originalPrice}
+                        loading={isLoading(offer.productId)}
+                        accent={COLORS.green}
+                      />
                     </View>
-                  </TouchableOpacity>
+                  </PressableScale>
                 );
               })}
             </ScrollView>
@@ -1237,42 +2031,46 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         )}
 
         {/* ── Featured Offers ────────────────────────────────────────── */}
+        <SectionHeader label="FEATURED OFFERS" accent={COLORS.accent} meta="LIMITED" />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.featuredScroll}
           contentContainerStyle={styles.featuredContent}
         >
-          <TouchableOpacity
+          <PressableScale
             style={styles.featuredCard}
             onPress={() => handlePurchase('starter_pack')}
-            activeOpacity={0.7}
             disabled={!!purchasingId}
-            accessibilityRole="button"
             accessibilityLabel="Buy Starter Pack: 500 coins, 50 gems, 10 hints, and exclusive decoration for $1.99"
           >
             <LinearGradient
-              colors={['#1e2352', '#181d42']}
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             />
-            <View style={styles.featuredGlow} />
+            <LinearGradient
+              colors={[COLORS.accent + '30', 'transparent'] as [string, string]}
+              style={styles.featuredGlow}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+            />
             <View style={styles.featuredBadge}>
               <Text style={styles.featuredBadgeText}>LIMITED TIME</Text>
             </View>
-            <Text style={styles.featuredIcon}>{'\u{1F381}'}</Text>
+            <HaloMedallion size={56} accent={COLORS.accent} style={styles.featuredMedallion}>
+              <GameIcon name="gift" size={28} />
+            </HaloMedallion>
             <Text style={styles.featuredName}>Starter Pack</Text>
-            <Text style={styles.featuredDesc}>
-              500 Coins + 50 Gems + 10 Hints + Exclusive Decoration
-            </Text>
+            <BundleContentsRow items={STARTER_PACK_CONTENTS} accent={COLORS.accent} />
             <View style={styles.featuredPriceRow}>
-              <Text style={styles.featuredOldPrice}>$4.99</Text>
-              {isLoading('starter_pack') ? (
-                <ActivityIndicator size="small" color={COLORS.green} />
-              ) : (
-                <Text style={styles.featuredPrice}>$1.99</Text>
-              )}
+              <PriceCapsule
+                price="$1.99"
+                originalPrice="$4.99"
+                loading={isLoading('starter_pack')}
+                accent={COLORS.green}
+              />
             </View>
             <View style={styles.timerContainer}>
               <LiveCountdownText
@@ -1280,50 +2078,57 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 targetTime={featuredExpiryAtRef.current}
               />
             </View>
-          </TouchableOpacity>
+          </PressableScale>
 
-          <TouchableOpacity
+          <PressableScale
             style={[styles.featuredCard, styles.featuredCardAlt]}
             onPress={() => handlePurchase('chapter_bundle')}
-            activeOpacity={0.7}
             disabled={!!purchasingId}
-            accessibilityRole="button"
             accessibilityLabel="Buy Weekend Bundle: 100 gems, 3000 coins, and rare frame for $4.99"
           >
             <LinearGradient
-              colors={['#251e52', '#1e1842']}
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             />
-            <View style={[styles.featuredGlow, { backgroundColor: COLORS.purpleGlow }]} />
+            <LinearGradient
+              colors={[COLORS.purple + '33', 'transparent'] as [string, string]}
+              style={styles.featuredGlow}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+            />
             <View style={[styles.featuredBadge, { backgroundColor: COLORS.purple }]}>
               <Text style={styles.featuredBadgeText}>SPECIAL</Text>
             </View>
-            <Text style={styles.featuredIcon}>{'\u2728'}</Text>
+            <HaloMedallion size={56} accent={COLORS.purple} style={styles.featuredMedallion}>
+              <GameIcon name="sparkle" size={28} accent={COLORS.purple} />
+            </HaloMedallion>
             <Text style={styles.featuredName}>Weekend Bundle</Text>
-            <Text style={styles.featuredDesc}>
-              100 Gems + 3000 Coins + Rare Frame
-            </Text>
+            <BundleContentsRow items={WEEKEND_BUNDLE_CONTENTS} accent={COLORS.purple} />
             <View style={styles.featuredPriceRow}>
-              <Text style={styles.featuredOldPrice}>$14.99</Text>
-              {isLoading('chapter_bundle') ? (
-                <ActivityIndicator size="small" color={COLORS.green} />
-              ) : (
-                <Text style={styles.featuredPrice}>$4.99</Text>
-              )}
+              <PriceCapsule
+                price="$4.99"
+                originalPrice="$14.99"
+                loading={isLoading('chapter_bundle')}
+                accent={COLORS.green}
+              />
             </View>
             <View style={[styles.timerContainer, { backgroundColor: COLORS.purple + '30' }]}>
               <LiveCountdownText
-                style={[styles.timerText, { color: COLORS.purple }]}
+                style={[styles.timerText, { color: COLORS.purpleLight }]}
                 targetTime={featuredExpiryAtRef.current}
               />
             </View>
-          </TouchableOpacity>
+          </PressableScale>
         </ScrollView>
 
         {/* ── Rotating Exclusive Shop ────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>{t('shop.exclusiveCosmetics')}</Text>
+        <SectionHeader
+          label={t('shop.exclusiveCosmetics').toUpperCase()}
+          accent={COLORS.purple}
+          meta="ROTATING"
+        />
         <Text style={styles.rotatingSubtitle}>
           {rotatingHoursLeft > 0
             ? `Leaving in ${rotatingHoursLeft}h — won't return for months!`
@@ -1337,46 +2142,54 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           {rotatingItems.map((item) => {
             const rarityColor = getRarityColor(item.rarity);
             return (
-              <TouchableOpacity
+              <PressableScale
                 key={item.id}
-                style={[styles.rotatingCard, { borderColor: rarityColor + '60' }]}
+                style={[styles.rotatingCard, { borderColor: rarityColor + '60', ...SHADOWS.glow(rarityColor) }]}
                 onPress={() => handleRotatingPurchase(item)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
                 accessibilityLabel={`${item.name}, ${item.rarity} rarity, ${item.gemCost} gems`}
               >
                 <LinearGradient
-                  colors={[rarityColor + '18', rarityColor + '08']}
+                  colors={[rarityColor + '18', 'rgba(26,10,46,0.94)']}
                   style={StyleSheet.absoluteFill}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
                 />
-                <View style={[styles.rarityBadge, { backgroundColor: rarityColor + '30' }]}>
+                <LinearGradient
+                  colors={['transparent', rarityColor + 'AA', 'transparent'] as [string, string, string]}
+                  style={styles.itemTopEdge}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                />
+                <View style={[styles.rarityBadge, { backgroundColor: rarityColor + '26', borderColor: rarityColor + '66' }]}>
                   <Text style={[styles.rarityText, { color: rarityColor }]}>
                     {item.rarity.toUpperCase()}
                   </Text>
                 </View>
-                <Text style={styles.rotatingIcon}>{item.icon}</Text>
+                <DrawnMedallion size={48} accent={rarityColor} style={styles.rotatingMedallion}>
+                  <ProductGlyph icon={item.icon} accent={rarityColor} size={24} />
+                </DrawnMedallion>
                 <Text style={styles.rotatingName}>{item.name}</Text>
                 <Text style={styles.rotatingDesc}>{item.description}</Text>
                 <View style={styles.gemPriceRow}>
-                  <Text style={styles.gemIcon}>{'\u{1F48E}'}</Text>
+                  <Image
+                    source={LOCAL_IMAGES.iconGemDiamond}
+                    style={styles.gemIconImg}
+                    resizeMode="contain"
+                  />
                   <Text style={[styles.gemPrice, { color: rarityColor }]}>{item.gemCost}</Text>
                 </View>
                 <Text style={styles.rotatingTimer}>
                   {item.returnsInDays >= 180 ? "Won't return for 6 months" : `Returns in ${item.returnsInDays} days`}
                 </Text>
-              </TouchableOpacity>
+              </PressableScale>
             );
           })}
         </ScrollView>
 
         {navigation && (
-          <TouchableOpacity
+          <PressableScale
             style={styles.browseCosmetics}
             onPress={() => navigation.navigate('CosmeticStore')}
-            activeOpacity={0.7}
-            accessibilityRole="button"
             accessibilityLabel="Browse all cosmetics"
           >
             <LinearGradient
@@ -1385,121 +2198,102 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={styles.browseCosmeticsText}>{'\u{1F3A8}'} Browse All Cosmetics</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <GameIcon name="gem" size={14} accent={COLORS.accent} />
+                <Text style={styles.browseCosmeticsText}>Browse All Cosmetics</Text>
+              </View>
               <Text style={styles.browseCosmeticsChevron}>{'\u{203A}'}</Text>
             </LinearGradient>
-          </TouchableOpacity>
+          </PressableScale>
         )}
 
         {/* ── Hint Bundles ───────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>{t('shop.hintBundles')}</Text>
-        {renderItemRow(HINT_BUNDLES)}
+        <SectionHeader label={t('shop.hintBundles').toUpperCase()} accent={COLORS.gold} />
+        {renderItemRow(HINT_BUNDLES, COLORS.gold)}
 
         {/* ── Undo Bundles ───────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>{t('shop.undoBundles')}</Text>
-        {renderItemRow(UNDO_BUNDLES)}
+        <SectionHeader label={t('shop.undoBundles').toUpperCase()} accent={COLORS.teal} />
+        {renderItemRow(UNDO_BUNDLES, COLORS.teal)}
 
         {/* ── Coin Packs ─────────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>{t('shop.coinPacks')}</Text>
-        {renderItemRow(COIN_PACKS)}
+        <SectionHeader label={t('shop.coinPacks').toUpperCase()} accent={COLORS.orange} />
+        {renderItemRow(COIN_PACKS, COLORS.orange)}
 
         {/* ── Gem Packs ──────────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>{t('shop.gemPacks')}</Text>
-        {renderItemRow(GEM_PACKS)}
+        <SectionHeader label={t('shop.gemPacks').toUpperCase()} accent={COLORS.cyan} />
+        {renderItemRow(GEM_PACKS, COLORS.cyan)}
 
         {/* ── Premium ────────────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>{t('shop.premium')}</Text>
+        <SectionHeader label={t('shop.premium').toUpperCase()} accent={COLORS.purple} />
         <View style={styles.premiumSection}>
-          <TouchableOpacity
-            style={styles.premiumCard}
+          <PressableScale
+            style={[styles.premiumCard, { borderColor: COLORS.purple + '3D' }]}
             onPress={() => handlePurchase('chapter_bundle')}
-            activeOpacity={0.7}
             disabled={!!purchasingId}
-            accessibilityRole="button"
             accessibilityLabel="Buy Chapter Bundle for $2.99: theme decoration, 20 gems, 10 hints, and 1 board preview"
           >
             <LinearGradient
-              colors={[...GRADIENTS.surfaceCard]}
+              colors={[COLORS.purple + '12', 'rgba(26,10,46,0.94)']}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             />
-            <Text style={styles.premiumIcon}>{'\u{1F4D6}'}</Text>
+            <DrawnMedallion size={44} accent={COLORS.purple} style={styles.premiumMedallion}>
+              <GameIcon name="book" size={22} accent={COLORS.purple} />
+            </DrawnMedallion>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>{t('shop.chapterBundle')}</Text>
               <Text style={styles.premiumDesc}>
                 Theme decoration + 20 gems + 10 hints + 1 Board Preview
               </Text>
             </View>
-            <View style={styles.priceTag}>
-              <LinearGradient
-                colors={[...GRADIENTS.button.primary]}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-              {isLoading('chapter_bundle') ? (
-                <ActivityIndicator size="small" color={COLORS.bg} />
-              ) : (
-                <Text style={styles.priceText}>$2.99</Text>
-              )}
-            </View>
-          </TouchableOpacity>
+            <PriceCapsule price="$2.99" loading={isLoading('chapter_bundle')} accent={COLORS.purpleLight} />
+          </PressableScale>
 
-          <TouchableOpacity
-            style={styles.premiumCard}
+          <PressableScale
+            style={[styles.premiumCard, { borderColor: COLORS.teal + '3D' }]}
             onPress={() => handlePurchase('daily_value_pack')}
-            activeOpacity={0.7}
             disabled={!!purchasingId}
-            accessibilityRole="button"
             accessibilityLabel="Buy Daily Value Pack for $0.99: bonus rewards every day for 30 days"
           >
             <LinearGradient
-              colors={[...GRADIENTS.surfaceCard]}
+              colors={[COLORS.teal + '10', 'rgba(26,10,46,0.94)']}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             />
-            <Text style={styles.premiumIcon}>{'\u{1F4E6}'}</Text>
+            <DrawnMedallion size={44} accent={COLORS.teal} style={styles.premiumMedallion}>
+              <GameIcon name="chest" size={22} accent={COLORS.teal} />
+            </DrawnMedallion>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>{t('shop.dailyValuePack')}</Text>
               <Text style={styles.premiumDesc}>
                 Bonus rewards every day for 30 days
               </Text>
             </View>
-            <View style={styles.priceTag}>
-              <LinearGradient
-                colors={[...GRADIENTS.button.primary]}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-              {isLoading('daily_value_pack') ? (
-                <ActivityIndicator size="small" color={COLORS.bg} />
-              ) : (
-                <Text style={styles.priceText}>$0.99</Text>
-              )}
-            </View>
-          </TouchableOpacity>
+            <PriceCapsule price="$0.99" loading={isLoading('daily_value_pack')} accent={COLORS.teal} />
+          </PressableScale>
 
-          <TouchableOpacity
+          <PressableScale
             style={[
               styles.premiumCard,
+              { borderColor: COLORS.gold + '3D' },
               premiumPass && styles.purchasedCard,
             ]}
             onPress={() => !premiumPass && handlePurchase('premium_pass')}
-            activeOpacity={premiumPass ? 1 : 0.7}
             disabled={premiumPass || !!purchasingId}
-            accessibilityRole="button"
             accessibilityLabel={premiumPass ? 'Premium Pass, owned' : 'Buy Premium Pass for $4.99: unlock premium rewards this season'}
+            accessibilityState={{ disabled: premiumPass }}
           >
             <LinearGradient
-              colors={[...GRADIENTS.surfaceCard]}
+              colors={[COLORS.gold + '10', 'rgba(26,10,46,0.94)']}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             />
-            <Text style={styles.premiumIcon}>{'\u{1F451}'}</Text>
+            <DrawnMedallion size={44} accent={COLORS.gold} muted={premiumPass} style={styles.premiumMedallion}>
+              <GameIcon name="crown" size={22} accent={COLORS.gold} />
+            </DrawnMedallion>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>{t('shop.premiumPass')}</Text>
               <Text style={styles.premiumDesc}>
@@ -1511,40 +2305,30 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 <Text style={styles.ownedText}>OWNED</Text>
               </View>
             ) : (
-              <View style={styles.priceTag}>
-                <LinearGradient
-                  colors={[...GRADIENTS.button.primary]}
-                  style={StyleSheet.absoluteFill}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                />
-                {isLoading('premium_pass') ? (
-                  <ActivityIndicator size="small" color={COLORS.bg} />
-                ) : (
-                  <Text style={styles.priceText}>$4.99</Text>
-                )}
-              </View>
+              <PriceCapsule price="$4.99" loading={isLoading('premium_pass')} accent={COLORS.gold} />
             )}
-          </TouchableOpacity>
+          </PressableScale>
 
-          <TouchableOpacity
+          <PressableScale
             style={[
               styles.premiumCard,
+              { borderColor: COLORS.coral + '3D' },
               adsRemoved && styles.purchasedCard,
             ]}
             onPress={() => !adsRemoved && handlePurchase('ad_removal')}
-            activeOpacity={adsRemoved ? 1 : 0.7}
             disabled={adsRemoved || !!purchasingId}
-            accessibilityRole="button"
             accessibilityLabel={adsRemoved ? 'Remove Ads, owned' : 'Buy Remove Ads for $4.99: ad-free experience forever'}
+            accessibilityState={{ disabled: adsRemoved }}
           >
             <LinearGradient
-              colors={[...GRADIENTS.surfaceCard]}
+              colors={[COLORS.coral + '10', 'rgba(26,10,46,0.94)']}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             />
-            <Text style={styles.premiumIcon}>{'\u{1F6AB}'}</Text>
+            <DrawnMedallion size={44} accent={COLORS.coral} muted={adsRemoved} style={styles.premiumMedallion}>
+              <NoAdsGlyph size={22} accent={COLORS.coral} />
+            </DrawnMedallion>
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>{t('shop.removeAds')}</Text>
               <Text style={styles.premiumDesc}>
@@ -1556,33 +2340,22 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 <Text style={styles.ownedText}>OWNED</Text>
               </View>
             ) : (
-              <View style={styles.priceTag}>
-                <LinearGradient
-                  colors={[...GRADIENTS.button.primary]}
-                  style={StyleSheet.absoluteFill}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                />
-                {isLoading('ad_removal') ? (
-                  <ActivityIndicator size="small" color={COLORS.bg} />
-                ) : (
-                  <Text style={styles.priceText}>$4.99</Text>
-                )}
-              </View>
+              <PriceCapsule price="$4.99" loading={isLoading('ad_removal')} accent={COLORS.coral} />
             )}
-          </TouchableOpacity>
+          </PressableScale>
         </View>
 
         {/* ── Coin Shop (spend coins on consumables) ─────────────────── */}
-        <Text style={styles.sectionTitle}>{t('shop.spendCoins')}</Text>
-        <Text style={styles.coinShopSubtitle}>
-          {'\u{1FA99}'} {coins.toLocaleString()} coins available
-        </Text>
+        <SectionHeader
+          label={t('shop.spendCoins').toUpperCase()}
+          accent={COLORS.gold}
+          meta={`${coins.toLocaleString()} COINS`}
+        />
 
         {coinShopConfirmation && (
           <View style={styles.coinShopConfirmBanner}>
             <Text style={styles.coinShopConfirmText}>
-              {'\u2705'} {coinShopConfirmation} purchased!
+              {'\u2713'} {coinShopConfirmation} purchased!
             </Text>
           </View>
         )}
@@ -1606,12 +2379,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                   const disabled = limitReached || cantAfford;
 
                   return (
-                    <TouchableOpacity
+                    <PressableScale
                       key={item.id}
                       style={[styles.coinShopCard, disabled && styles.coinShopCardDisabled]}
-                      activeOpacity={disabled ? 1 : 0.7}
                       onPress={() => !disabled && handleCoinShopPurchase(item)}
-                      accessibilityRole="button"
+                      disabled={disabled}
                       accessibilityLabel={`${item.name} for ${item.costCoins} coins${limitReached ? ', daily limit reached' : cantAfford ? ', not enough coins' : ''}`}
                       accessibilityState={{ disabled }}
                     >
@@ -1621,7 +2393,14 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
                       />
-                      <Text style={styles.coinShopIcon}>{item.icon}</Text>
+                      <DrawnMedallion
+                        size={40}
+                        accent={COLORS.gold}
+                        muted={disabled}
+                        style={styles.coinShopMedallion}
+                      >
+                        <ProductGlyph icon={item.icon} accent={COLORS.gold} size={20} />
+                      </DrawnMedallion>
                       <Text style={[styles.coinShopName, disabled && styles.coinShopTextDisabled]}>
                         {item.name}
                       </Text>
@@ -1629,8 +2408,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                         {item.description}
                       </Text>
                       <View style={[styles.coinShopPrice, cantAfford && styles.coinShopPriceDisabled]}>
+                        <Image
+                          source={LOCAL_IMAGES.iconCoinGold}
+                          style={[styles.coinPriceIcon, cantAfford && { opacity: 0.4 }]}
+                          resizeMode="contain"
+                        />
                         <Text style={[styles.coinShopPriceText, cantAfford && styles.coinShopPriceTextDisabled]}>
-                          {'\u{1FA99}'} {item.costCoins}
+                          {item.costCoins.toLocaleString()}
                         </Text>
                       </View>
                       {item.dailyLimit !== undefined && (
@@ -1641,7 +2425,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                           {todayCount}/{item.dailyLimit} today
                         </Text>
                       )}
-                    </TouchableOpacity>
+                    </PressableScale>
                   );
                 })}
               </View>
@@ -1649,7 +2433,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           );
         })}
 
-        <Text style={styles.sectionTitle}>{'\u23F0'} {t('shop.limitedRentals')}</Text>
+        <SectionHeader label={t('shop.limitedRentals').toUpperCase()} accent={COLORS.orange} meta="SOON" />
         <Text style={styles.rentalSubtitle}>
           Timed rentals and temporary boosts return in a future update after their gameplay hooks are fully wired.
         </Text>
@@ -1660,7 +2444,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
           />
-          <Text style={styles.rentalPlaceholderIcon}>{'\u{1F6A7}'}</Text>
+          <DrawnMedallion size={44} accent={COLORS.orange} muted style={styles.rentalPlaceholderMedallion}>
+            <GameIcon name="hourglass" size={22} accent={COLORS.orange} />
+          </DrawnMedallion>
           <Text style={styles.rentalPlaceholderTitle}>Temporarily Unavailable</Text>
           <Text style={styles.rentalPlaceholderText}>
             These timed rentals return once each effect is fully playable in live gameplay.
@@ -1668,21 +2454,20 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         </View>
 
         {/* ── Restore Purchases ──────────────────────────────────────── */}
-        <TouchableOpacity
+        <PressableScale
           style={styles.restoreButton}
           onPress={handleRestorePurchases}
-          activeOpacity={0.7}
           disabled={restoringPurchases}
+          accessibilityLabel={t('shop.restorePurchases')}
         >
           {restoringPurchases ? (
             <ActivityIndicator size="small" color={COLORS.textSecondary} />
           ) : (
             <Text style={styles.restoreText}>{t('shop.restorePurchases')}</Text>
           )}
-        </TouchableOpacity>
+        </PressableScale>
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
+      </ScreenScaffold>
 
       {/* Mock Ad Modal — shown during development when no real ad SDK is installed */}
       {mockAdState && (
@@ -1701,41 +2486,41 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 const ITEM_CARD_WIDTH = (width - 56) / 3;
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: COLORS.bg,
   },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 16,
+
+  // ── Header currency cluster ───────────────────────────────────────────
+  headerCurrency: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  currencyChip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.surfaceGlass,
   },
-  headerTitle: {
-    fontSize: 28,
+  currencyChipIcon: {
+    width: 14,
+    height: 14,
+  },
+  currencyChipText: {
     fontFamily: FONTS.display,
-    color: COLORS.accent,
-    letterSpacing: 4,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
+    fontSize: 11,
+    color: COLORS.gold,
+    fontVariant: ['tabular-nums'],
   },
 
   // ── Ad section ────────────────────────────────────────────────────────
   adSection: {
     marginBottom: 12,
-  },
-  adSectionTitle: {
-    fontFamily: FONTS.display,
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    letterSpacing: 1,
-    marginBottom: 10,
   },
   adBanner: {
     flexDirection: 'row',
@@ -1746,9 +2531,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.green + '40',
     overflow: 'hidden',
+    backgroundColor: COLORS.surface,
   },
-  adIcon: {
-    fontSize: 26,
+  adMedallion: {
     marginRight: 10,
   },
   adInfo: {
@@ -1766,8 +2551,8 @@ const styles = StyleSheet.create({
   },
   adBadge: {
     backgroundColor: COLORS.green,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 14,
     paddingVertical: 6,
   },
   adBadgeText: {
@@ -1791,22 +2576,32 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
+  vipHoloEdge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+  },
   vipGlow: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 80,
-    backgroundColor: COLORS.purpleGlow,
   },
   vipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
   },
-  vipIcon: {
-    fontSize: 36,
+  vipMedallion: {
     marginRight: 12,
+  },
+  vipLoadingRow: {
+    width: '100%',
+    paddingVertical: 14,
+    alignItems: 'center',
   },
   vipTitle: {
     fontSize: 22,
@@ -1836,48 +2631,34 @@ const styles = StyleSheet.create({
     color: COLORS.green,
     letterSpacing: 1,
   },
+  // Two-column wrap grid — halves the card's height and keeps every benefit
+  // line whole (text wraps inside its cell instead of clipping mid-sentence).
   vipBenefits: {
     marginBottom: 16,
-    gap: 6,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 8,
+  },
+  vipBenefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexBasis: '50%',
+    paddingRight: 8,
   },
   vipBenefit: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textPrimary,
     fontFamily: FONTS.bodySemiBold,
+    flexShrink: 1,
   },
   vipActions: {
     alignItems: 'center',
     gap: 8,
   },
-  vipClaimButton: {
-    width: '100%',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  vipClaimText: {
-    fontSize: 15,
-    fontFamily: FONTS.display,
-    color: COLORS.bg,
-    letterSpacing: 1,
-  },
   vipExpiryText: {
     fontSize: 11,
     color: COLORS.textMuted,
-  },
-  vipSubscribeButton: {
-    width: '100%',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  vipSubscribeText: {
-    fontSize: 16,
-    fontFamily: FONTS.display,
-    color: COLORS.textPrimary,
-    letterSpacing: 1,
   },
 
   // ── VIP streak ─────────────────────────────────────────────────────────
@@ -1888,14 +2669,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.purple + '40',
     overflow: 'hidden',
+    backgroundColor: COLORS.surface,
   },
   vipStreakHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
-  vipStreakIcon: {
-    fontSize: 28,
+  vipStreakMedallion: {
     marginRight: 10,
   },
   vipStreakTitle: {
@@ -1927,16 +2708,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   vipStreakProgressBar: {
-    height: 8,
-    backgroundColor: COLORS.cellDefault,
-    borderRadius: 4,
-    overflow: 'hidden',
     marginBottom: 6,
-  },
-  vipStreakProgressFill: {
-    height: '100%',
-    backgroundColor: COLORS.purple,
-    borderRadius: 4,
   },
   vipStreakProgressText: {
     fontSize: 12,
@@ -1948,19 +2720,6 @@ const styles = StyleSheet.create({
     color: COLORS.purpleLight,
     marginTop: 2,
   },
-  vipStreakClaimButton: {
-    width: '100%',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  vipStreakClaimText: {
-    fontSize: 14,
-    fontFamily: FONTS.display,
-    color: COLORS.textPrimary,
-    letterSpacing: 1,
-  },
   vipStreakClaimedText: {
     fontSize: 12,
     color: COLORS.textMuted,
@@ -1969,7 +2728,7 @@ const styles = StyleSheet.create({
 
   // ── VIP cosmetic ladder ─────────────────────────────────────────────
   vipLadderCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceGlass,
     borderRadius: 16,
     padding: 14,
     marginBottom: 16,
@@ -2000,6 +2759,20 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
     width: 64,
+  },
+  vipLadderArt: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: 'rgba(8, 2, 22, 0.85)',
+    borderWidth: 1,
+    borderColor: COLORS.purple + '4D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  vipLadderArtLocked: {
+    opacity: 0.45,
   },
   vipLadderBody: {
     flex: 1,
@@ -2044,10 +2817,12 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     overflow: 'hidden',
+    backgroundColor: COLORS.surface,
   },
   rarityBadge: {
     alignSelf: 'flex-start',
     borderRadius: 6,
+    borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
     marginBottom: 8,
@@ -2057,8 +2832,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     letterSpacing: 1,
   },
-  rotatingIcon: {
-    fontSize: 36,
+  rotatingMedallion: {
     marginBottom: 8,
   },
   rotatingName: {
@@ -2082,6 +2856,10 @@ const styles = StyleSheet.create({
   gemIcon: {
     fontSize: 16,
   },
+  gemIconImg: {
+    width: 16,
+    height: 16,
+  },
   gemPrice: {
     fontSize: 18,
     fontFamily: FONTS.display,
@@ -2093,18 +2871,8 @@ const styles = StyleSheet.create({
   },
 
   // ── Sections ──────────────────────────────────────────────────────────
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textPrimary,
-    marginTop: 24,
-    marginBottom: 12,
-    textShadowColor: 'rgba(255,255,255,0.1)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
-  },
   featuredScroll: {
-    marginTop: 8,
+    marginTop: 2,
   },
   featuredContent: {
     gap: 12,
@@ -2114,15 +2882,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 4,
   },
-  dynamicOffersHeading: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    fontFamily: FONTS.bodyBold,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-    paddingLeft: 2,
-  },
   featuredCard: {
     width: width * 0.7,
     borderRadius: 18,
@@ -2130,6 +2889,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.accent,
     overflow: 'hidden',
+    backgroundColor: COLORS.surface,
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
@@ -2146,7 +2906,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 80,
-    backgroundColor: COLORS.accentGlow,
+  },
+  featuredMedallion: {
+    marginBottom: 8,
   },
   featuredBadge: {
     alignSelf: 'flex-start',
@@ -2161,10 +2923,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     letterSpacing: 1,
-  },
-  featuredIcon: {
-    fontSize: 40,
-    marginBottom: 8,
   },
   featuredName: {
     fontSize: 20,
@@ -2187,19 +2945,6 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 10,
   },
-  featuredOldPrice: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    textDecorationLine: 'line-through',
-  },
-  featuredPrice: {
-    fontSize: 24,
-    fontFamily: FONTS.display,
-    color: COLORS.green,
-    textShadowColor: 'rgba(76,175,80,0.4)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
   timerContainer: {
     backgroundColor: COLORS.accent + '20',
     borderRadius: 8,
@@ -2221,34 +2966,21 @@ const styles = StyleSheet.create({
     width: ITEM_CARD_WIDTH,
     borderRadius: 14,
     padding: 14,
+    paddingTop: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: COLORS.surface,
+    ...SHADOWS.medium,
   },
-  bestValueBadge: {
+  itemTopEdge: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    paddingVertical: 3,
-    alignItems: 'center',
-    overflow: 'hidden',
+    height: 2,
   },
-  bestValueText: {
-    fontSize: 9,
-    fontFamily: FONTS.display,
-    color: COLORS.bg,
-    letterSpacing: 1,
-  },
-  itemIcon: {
-    fontSize: 30,
-    marginTop: 6,
+  itemMedallion: {
     marginBottom: 8,
   },
   itemName: {
@@ -2261,39 +2993,18 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 4,
   },
-  priceTag: {
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    overflow: 'hidden',
-  },
-  itemAnchorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  itemAnchorPrice: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textDecorationLine: 'line-through' as const,
-  },
   itemDiscountBadge: {
     backgroundColor: COLORS.coral,
     borderRadius: 6,
     paddingHorizontal: 5,
     paddingVertical: 2,
+    marginBottom: 6,
   },
   itemDiscountText: {
     fontSize: 9,
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
     letterSpacing: 0.5,
-  },
-  priceText: {
-    fontSize: 14,
-    fontFamily: FONTS.display,
-    color: COLORS.bg,
   },
   premiumSection: {
     gap: 10,
@@ -2304,19 +3015,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: COLORS.surface,
+    ...SHADOWS.medium,
   },
   purchasedCard: {
     opacity: 0.6,
   },
-  premiumIcon: {
-    fontSize: 28,
+  premiumMedallion: {
     marginRight: 14,
   },
   premiumInfo: {
@@ -2362,49 +3068,39 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  bottomSpacer: {
-    height: 40,
-  },
 
   // ── Coin Shop ──────────────────────────────────────────────────────────
-  coinShopSubtitle: {
-    color: COLORS.gold,
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
   coinShopConfirmBanner: {
-    backgroundColor: 'rgba(76,175,80,0.2)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(0,255,135,0.14)',
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.green + '44',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    marginHorizontal: 16,
     marginBottom: 12,
     alignItems: 'center',
   },
   coinShopConfirmText: {
     color: COLORS.green,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
   },
   coinShopCategorySection: {
     marginBottom: 16,
   },
   coinShopCategoryTitle: {
     color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    paddingHorizontal: 20,
+    paddingHorizontal: 4,
     marginBottom: 8,
   },
   coinShopGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
     gap: 10,
   },
   coinShopCard: {
@@ -2414,25 +3110,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: COLORS.gold + '2E',
+    backgroundColor: COLORS.surface,
+    ...SHADOWS.soft,
   },
   coinShopCardDisabled: {
     opacity: 0.45,
   },
-  coinShopIcon: {
-    fontSize: 24,
-    marginBottom: 4,
+  coinShopMedallion: {
+    marginBottom: 6,
   },
   coinShopName: {
     color: COLORS.textPrimary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.bodySemiBold,
     marginBottom: 3,
     textAlign: 'center',
   },
   coinShopDesc: {
     color: COLORS.textSecondary,
     fontSize: 10,
+    fontFamily: FONTS.bodyMedium,
     textAlign: 'center',
     marginBottom: 6,
     lineHeight: 13,
@@ -2441,18 +3139,29 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.35)',
   },
   coinShopPrice: {
-    backgroundColor: 'rgba(255,215,0,0.15)',
-    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.gold + '26',
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '55',
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
+  coinPriceIcon: {
+    width: 12,
+    height: 12,
+  },
   coinShopPriceDisabled: {
     backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: COLORS.borderSubtle,
   },
   coinShopPriceText: {
     color: COLORS.gold,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.display,
+    fontVariant: ['tabular-nums'],
   },
   coinShopPriceTextDisabled: {
     color: 'rgba(255,255,255,0.35)',
@@ -2474,6 +3183,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.coral + '60',
     overflow: 'hidden',
+    backgroundColor: COLORS.surface,
     shadowColor: COLORS.coral,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
@@ -2495,11 +3205,19 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
   },
+  flashTopEdge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
+  },
   flashSaleDiscountBadge: {
-    backgroundColor: COLORS.coral,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    overflow: 'hidden',
+    ...SHADOWS.glow(COLORS.coral),
   },
   flashSaleDiscountText: {
     fontSize: 12,
@@ -2512,8 +3230,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 14,
   },
-  flashSaleIcon: {
-    fontSize: 42,
+  flashSaleMedallion: {
     marginRight: 14,
   },
   flashSaleInfo: {
@@ -2536,19 +3253,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  flashSaleOriginalPrice: {
-    fontSize: 16,
-    color: COLORS.textMuted,
-    textDecorationLine: 'line-through' as const,
-  },
-  flashSaleSalePrice: {
-    fontSize: 22,
-    fontFamily: FONTS.display,
-    color: COLORS.gold,
-    textShadowColor: 'rgba(255,215,0,0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
   flashSaleFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2566,19 +3270,15 @@ const styles = StyleSheet.create({
     color: COLORS.coral,
     fontVariant: ['tabular-nums' as const],
   },
-  flashSaleBuyButton: {
+  flashSaleLoadingPill: {
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 20,
     alignItems: 'center',
-    overflow: 'hidden',
     minWidth: 140,
-  },
-  flashSaleBuyText: {
-    fontSize: 14,
-    fontFamily: FONTS.display,
-    color: COLORS.bg,
-    letterSpacing: 1,
+    backgroundColor: COLORS.surfaceGlass,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '44',
   },
 
   // ── Limited Rentals ────────────────────────────────────────────────────
@@ -2589,40 +3289,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: -6,
   },
-  rentalGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  rentalCard: {
-    width: (width - 52) / 2,
-    borderRadius: 16,
-    padding: 14,
-    alignItems: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    marginBottom: 4,
-  },
-  rentalIcon: {
-    fontSize: 30,
-    marginBottom: 6,
-  },
-  rentalName: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  rentalDesc: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    textAlign: 'center',
-    marginBottom: 8,
-    lineHeight: 14,
-  },
   rentalPlaceholderCard: {
     borderRadius: 16,
     paddingVertical: 20,
@@ -2632,9 +3298,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     marginBottom: 8,
+    backgroundColor: COLORS.surface,
   },
-  rentalPlaceholderIcon: {
-    fontSize: 28,
+  rentalPlaceholderMedallion: {
     marginBottom: 8,
   },
   rentalPlaceholderTitle: {
@@ -2651,40 +3317,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     textAlign: 'center',
     maxWidth: 280,
-  },
-  rentalDurationBadge: {
-    backgroundColor: COLORS.accent + '20',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    marginBottom: 8,
-  },
-  rentalDurationText: {
-    fontSize: 11,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.accent,
-  },
-  rentalBuyButton: {
-    backgroundColor: COLORS.gold + '20',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: COLORS.gold + '40',
-  },
-  rentalBuyButtonDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  rentalBuyText: {
-    fontSize: 13,
-    fontFamily: FONTS.display,
-    color: COLORS.gold,
-    letterSpacing: 0.5,
-  },
-  rentalBuyTextDisabled: {
-    color: COLORS.textMuted,
   },
   browseCosmetics: {
     marginTop: 12,

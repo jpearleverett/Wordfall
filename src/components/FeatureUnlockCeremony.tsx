@@ -7,6 +7,7 @@ import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import GameIcon from './icons/GameIcon';
 
 interface FeatureUnlockCeremonyProps {
   icon: string;
@@ -83,7 +84,7 @@ export function FeatureUnlockCeremony({
           >
             <View style={[styles.iconBg, { backgroundColor: accentColor + '25', borderColor: accentColor + '40' }]}>
               <Image source={LOCAL_IMAGES.energyRing} style={styles.energyRingDecor} resizeMode="contain" />
-              <Text style={styles.icon}>{icon}</Text>
+              <GameIcon glyph={icon} size={40} accent={accentColor} />
             </View>
           </Animated.View>
 
@@ -112,7 +113,7 @@ export function FeatureUnlockCeremony({
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    backgroundColor: 'rgba(6, 2, 14, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -164,9 +165,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     opacity: 0.3,
-  },
-  icon: {
-    fontSize: 40,
   },
   title: {
     fontSize: 24,

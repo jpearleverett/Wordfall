@@ -122,9 +122,17 @@ export function getNextMilestone(
   currentLevel: number,
   completedMilestones: string[],
 ): OnboardingMilestone | null {
-  // Filter to milestones whose triggerLevel is reached and not yet completed
+  // Filter to milestones whose triggerLevel is reached and not yet completed.
+  // A milestone also EXPIRES once the player is more than GRACE levels past
+  // it — a level-160 player must not see "Level 15! You're halfway to
+  // Expert mode." next to a "Play Level 160" CTA (Aug 2026 blind review
+  // flagged the contradiction). Onboarding is over when it's outgrown.
+  const GRACE = 5;
   const eligible = ONBOARDING_MILESTONES.filter(
-    (m) => m.triggerLevel <= currentLevel && !completedMilestones.includes(m.id),
+    (m) =>
+      m.triggerLevel <= currentLevel &&
+      currentLevel <= m.triggerLevel + GRACE &&
+      !completedMilestones.includes(m.id),
   );
   if (eligible.length === 0) return null;
 

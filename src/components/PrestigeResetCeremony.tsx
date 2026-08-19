@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, TYPOGRAPHY } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { PermanentBonus } from '../data/prestigeSystem';
+import GameIcon from './icons/GameIcon';
 
 interface Props {
   level: number;
@@ -74,7 +75,7 @@ export default function PrestigeResetCeremony({
 
           <Animated.View style={iconStyle}>
             <View style={styles.iconBg}>
-              <Text style={styles.icon}>{icon}</Text>
+              <GameIcon glyph={icon} size={62} />
             </View>
           </Animated.View>
 
@@ -95,7 +96,8 @@ export default function PrestigeResetCeremony({
 
           {cosmeticReward && (
             <View style={[styles.rewardRow, styles.cosmeticRow]}>
-              <Text style={styles.cosmeticLabel}>✨ Exclusive cosmetic unlocked</Text>
+              <GameIcon name="sparkle" size={16} />
+              <Text style={styles.cosmeticLabel}>Exclusive cosmetic unlocked</Text>
             </View>
           )}
 
@@ -120,7 +122,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(6, 2, 14, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10000,
@@ -154,9 +156,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-  },
-  icon: {
-    fontSize: 54,
   },
   title: {
     ...TYPOGRAPHY.displayLarge,
@@ -200,12 +199,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.purple + '33',
     borderColor: COLORS.purple,
     borderWidth: 1,
+    justifyContent: 'center',
+    gap: 6,
   },
   cosmeticLabel: {
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.purpleLight,
     textAlign: 'center',
-    width: '100%',
   },
   button: {
     marginTop: 18,

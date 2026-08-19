@@ -694,10 +694,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 // ============ COSMETICS ============
+/** Shared rarity ladder for every cosmetic surface (themes, frames, titles, decorations). */
+export type CosmeticRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
 export interface CosmeticTheme {
   id: string;
   name: string;
   description: string;
+  /** Drives store badge color/label — see RARITY rules in src/data/cosmetics.ts. */
+  rarity: CosmeticRarity;
   colors: {
     bg: string;
     surface: string;

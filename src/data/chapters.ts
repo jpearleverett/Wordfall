@@ -31,15 +31,23 @@ export const WING_PALETTES: Record<string, { bg: string; surface: string; accent
  * the backdrop so tiles pop off the page; the brightest stop is still
  * lighter than the backdrop's accent stop for the glossy highlight read.
  */
+// Brightened + saturated (Aug 2026 blind design review: the old ramps read
+// as "murky, low contrast" against AAA references). Each ramp keeps a dark
+// base stop for depth but lifts the top stops into a vivid, jewel-toned
+// range so white letters pop and the board reads as candy, not concrete.
 export const WING_TILE_RAMPS: Record<string, [string, string, string, string, string]> = {
-  nature:    ['#2a6b3e', '#215433', '#174029', '#102e1e', '#0a1e14'],
-  science:   ['#3a6fc9', '#2b57a2', '#1f4280', '#152e5c', '#0d1e3d'],
-  mythology: ['#7a3390', '#602578', '#4a1b62', '#36134a', '#220a30'],
-  ocean:     ['#2a7fb8', '#1f648f', '#164d6f', '#0f3752', '#082234'],
-  arts:      ['#8a2a8c', '#6d2070', '#551857', '#3e103e', '#260a26'],
-  space:     ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'],
-  history:   ['#8a6728', '#6c4f1e', '#513b16', '#3a2a0f', '#241906'],
-  elements:  ['#b23814', '#8a2a0e', '#6b1f08', '#4a1404', '#2a0a02'],
+  // Nature sits in emerald-teal rather than pure green: teal shares a
+  // family with the app's cyan/purple synthwave chrome, so nature boards
+  // harmonize with the shell instead of clashing (repeated blind-review
+  // note: "green board fights purple frame").
+  nature:    ['#35b892', '#2a9c7a', '#1f7d61', '#155d48', '#0c3d2f'],
+  science:   ['#5b8fe8', '#4674cc', '#345da8', '#244480', '#162c54'],
+  mythology: ['#a04cc0', '#8438a4', '#682a85', '#4d1e64', '#321342'],
+  ocean:     ['#42a5dd', '#3186b8', '#236a94', '#164d6e', '#0c3148'],
+  arts:      ['#c04ac2', '#a038a2', '#7f2b81', '#5d1f5e', '#3a123b'],
+  space:     ['#6a3cb5', '#57309c', '#44257e', '#321b5e', '#20113c'],
+  history:   ['#c99b45', '#a87c32', '#856024', '#614619', '#3d2c0e'],
+  elements:  ['#e0562a', '#bc4420', '#953517', '#6c250e', '#421606'],
 };
 
 const FALLBACK_TILE_RAMP: [string, string, string, string, string] = WING_TILE_RAMPS.space;

@@ -9,7 +9,9 @@ import { SparkleField } from './effects/ParticleSystem';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { getActiveWheel } from '../data/seasonalWheels';
+import GameIcon from './icons/GameIcon';
 import {
+  MysteryBoxReward,
   MysteryWheelState,
   WHEEL_SEGMENTS,
   WheelSegment,
@@ -25,7 +27,7 @@ import {
 interface MysteryWheelProps {
   wheelState: MysteryWheelState;
   gems: number;
-  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: { label: string; icon: string; reward: any } }) => void;
+  onSpin: (result: { segment: WheelSegment; updatedState: MysteryWheelState; mysteryBoxReward?: MysteryBoxReward }) => void;
   onBuySpin: (cost: number, count: number) => void;
   onDismiss: () => void;
 }
@@ -67,7 +69,7 @@ export function MysteryWheel({
   const resultProgress = useSharedValue(0);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<WheelSegment | null>(null);
-  const [mysteryBoxResult, setMysteryBoxResult] = useState<{ label: string; icon: string } | null>(null);
+  const [mysteryBoxResult, setMysteryBoxResult] = useState<MysteryBoxReward | null>(null);
   const [oddsVisible, setOddsVisible] = useState(false);
   const currentRotation = useRef(0);
   const reduceMotion = useReduceMotion();
@@ -161,7 +163,7 @@ export function MysteryWheel({
       resultProgress.value = withSpring(1, { damping: 8, stiffness: 120 });
 
       // If mystery box, open immediately for reward granting, show visually after delay
-      let mysteryBoxReward: { label: string; icon: string; reward: any } | undefined;
+      let mysteryBoxReward: MysteryBoxReward | undefined;
       if (segment.reward.mysteryBox) {
         const boxResult = openMysteryBox();
         mysteryBoxReward = boxResult;
@@ -310,7 +312,10 @@ export function MysteryWheel({
                     pointerEvents="none"
                   >
                     <View style={styles.segmentChip}>
-                      <Text style={styles.segmentIcon}>{seg.icon}</Text>
+                      {/* Prefer the wedge's authored SVG icon (distinct per
+                          prize type); the emoji glyph is only a fallback for
+                          segments authored without one. */}
+                      <GameIcon name={seg.iconName} glyph={seg.icon} size={18} />
                     </View>
                   </View>
                 );
@@ -325,7 +330,7 @@ export function MysteryWheel({
                 start={{ x: 0.3, y: 0.3 }}
                 end={{ x: 1, y: 1 }}
               />
-              <Text style={styles.hubText}>{spinning ? '⚡' : '⚡'}</Text>
+              <GameIcon name="bolt" size={25} />
             </View>
           </View>
 
@@ -342,9 +347,12 @@ export function MysteryWheel({
                   },
                 ]}
               >
-                <Text style={styles.resultChipText}>
-                  + {result.label} {result.icon}
-                </Text>
+                <View style={styles.resultChipRow}>
+                  <Text style={styles.resultChipText}>
+                    + {result.label}
+                  </Text>
+                  <GameIcon name={result.iconName} glyph={result.icon} size={16} />
+                </View>
                 {result.rarity !== 'common' && (
                   <Text style={[styles.resultRarity, { color: result.color }]}>
                     {result.rarity.toUpperCase()}
@@ -353,7 +361,9 @@ export function MysteryWheel({
                 {mysteryBoxResult && (
                   <View style={styles.mysteryBoxReveal}>
                     <Text style={styles.mysteryBoxLabel}>Contains:</Text>
-                    <Text style={styles.mysteryBoxIcon}>{mysteryBoxResult.icon}</Text>
+                    <View style={styles.mysteryBoxIcon}>
+                      <GameIcon name={mysteryBoxResult.iconName} glyph={mysteryBoxResult.icon} size={37} />
+                    </View>
                     <Text style={styles.mysteryBoxReward}>{mysteryBoxResult.label}</Text>
                   </View>
                 )}
@@ -391,7 +401,10 @@ export function MysteryWheel({
                 >
                   <View style={styles.buyButton}>
                     <Text style={styles.buyText}>1 Spin</Text>
-                    <Text style={styles.buyPrice}>{'\u{1F48E}'} {SPIN_COST_GEMS}</Text>
+                    <View style={styles.buyPriceRow}>
+                      <GameIcon name="gem" size={14} />
+                      <Text style={styles.buyPrice}>{SPIN_COST_GEMS}</Text>
+                    </View>
                     <Text style={styles.buyDiscountPlaceholder}> </Text>
                   </View>
                 </Pressable>
@@ -404,7 +417,10 @@ export function MysteryWheel({
                 >
                   <View style={[styles.buyButton, styles.buyButtonBundle]}>
                     <Text style={styles.buyText}>{SPIN_BUNDLE_COUNT} Spins</Text>
-                    <Text style={styles.buyPrice}>{'\u{1F48E}'} {SPIN_BUNDLE_COST_GEMS}</Text>
+                    <View style={styles.buyPriceRow}>
+                      <GameIcon name="gem" size={14} />
+                      <Text style={styles.buyPrice}>{SPIN_BUNDLE_COST_GEMS}</Text>
+                    </View>
                     <Text style={styles.buyDiscount}>20% OFF</Text>
                   </View>
                 </Pressable>
@@ -444,9 +460,9 @@ export function MysteryWheel({
             <ScrollView style={styles.oddsScroll} showsVerticalScrollIndicator={false}>
               {wheelOdds.map(({ segment, percent }) => (
                 <View key={segment.id} style={styles.oddsRow}>
-                  <Text style={[styles.oddsIcon, { textShadowColor: segment.color }]}>
-                    {segment.icon}
-                  </Text>
+                  <View style={styles.oddsIcon}>
+                    <GameIcon name={segment.iconName} glyph={segment.icon} size={25} />
+                  </View>
                   <View style={styles.oddsRowText}>
                     <Text style={styles.oddsLabel}>{segment.label}</Text>
                     <Text style={[styles.oddsRarity, { color: segment.color }]}>
@@ -464,7 +480,9 @@ export function MysteryWheel({
               </Text>
               {mysteryBoxOdds.map(({ reward, percent }) => (
                 <View key={reward.label} style={styles.oddsRow}>
-                  <Text style={styles.oddsIcon}>{reward.icon}</Text>
+                  <View style={styles.oddsIcon}>
+                    <GameIcon name={reward.iconName} glyph={reward.icon} size={25} />
+                  </View>
                   <View style={styles.oddsRowText}>
                     <Text style={styles.oddsLabel}>{reward.label}</Text>
                   </View>
@@ -641,11 +659,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segmentIcon: {
-    fontSize: 16,
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowRadius: 3,
-  },
   hub: {
     position: 'absolute',
     width: 64,
@@ -659,11 +672,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 12,
     elevation: 10,
-  },
-  hubText: {
-    color: '#0a0215',
-    fontSize: 22,
-    fontFamily: FONTS.display,
   },
   resultChipWrap: {
     alignItems: 'center',
@@ -680,6 +688,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 14,
     elevation: 6,
+  },
+  resultChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   resultChipText: {
     color: '#fff',
@@ -706,7 +719,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   mysteryBoxIcon: {
-    fontSize: 32,
     marginBottom: 4,
   },
   mysteryBoxReward: {
@@ -767,10 +779,15 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     fontSize: 13,
   },
+  buyPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
   buyPrice: {
     color: COLORS.accent,
     fontSize: 12,
-    marginTop: 2,
   },
   buyDiscount: {
     color: COLORS.green,
@@ -805,7 +822,7 @@ const styles = StyleSheet.create({
   },
   oddsBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    backgroundColor: 'rgba(6, 2, 14, 0.94)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -845,9 +862,8 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   oddsIcon: {
-    fontSize: 22,
     width: 32,
-    textAlign: 'center',
+    alignItems: 'center',
   },
   oddsRowText: {
     flex: 1,

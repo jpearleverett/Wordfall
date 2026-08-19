@@ -50,6 +50,9 @@ const styles = StyleSheet.create({
   },
   card: {
     flexShrink: 0,
+    // Cards have varied intrinsic heights; center shorter ones in the rail
+    // instead of leaving dead space beneath them.
+    justifyContent: 'center',
   },
 });
 

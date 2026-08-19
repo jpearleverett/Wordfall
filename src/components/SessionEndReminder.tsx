@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
+import GameIcon from './icons/GameIcon';
 
 interface SessionEndReminderProps {
   type: 'daily' | 'streak';
@@ -28,7 +29,6 @@ export function SessionEndReminder({ type, message, onDismiss }: SessionEndRemin
     return () => clearTimeout(timer);
   }, [onDismiss]);
 
-  const icon = type === 'daily' ? '☀️' : '🔥';
   const accentColor = type === 'daily' ? COLORS.gold : COLORS.orange;
 
   const containerStyle = useAnimatedStyle(() => ({
@@ -48,7 +48,7 @@ export function SessionEndReminder({ type, message, onDismiss }: SessionEndRemin
           colors={GRADIENTS.surfaceCard}
           style={[styles.banner, { borderColor: accentColor + '40' }, SHADOWS.medium]}
         >
-          <Text style={styles.icon}>{icon}</Text>
+          <GameIcon name={type === 'daily' ? 'sun' : 'flame'} size={25} />
           <Text style={[styles.message, { color: accentColor }]}>{message}</Text>
           <Text style={styles.dismiss}>✕</Text>
         </LinearGradient>
@@ -73,7 +73,6 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
   },
-  icon: { fontSize: 22 },
   message: {
     flex: 1,
     fontSize: 13,

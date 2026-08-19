@@ -15,6 +15,7 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { analytics } from '../services/analytics';
 import { getProductById } from '../data/shopProducts';
 import { logger } from '../utils/logger';
+import GameIcon from './icons/GameIcon';
 
 /**
  * First-purchase hard-modal offer. Fires once post-puzzle for non-payers
@@ -107,7 +108,11 @@ export function FirstPurchaseOfferModal({ onDismiss }: FirstPurchaseOfferModalPr
           <Text style={[styles.ribbon, { color: ACCENT }]}>WELCOME GIFT</Text>
 
           <View style={[styles.iconBg, { backgroundColor: ACCENT + '20', borderColor: ACCENT + '40' }]}>
-            <Text style={styles.icon}>{product?.icon ?? '🎁'}</Text>
+            {product?.icon ? (
+              <GameIcon glyph={product.icon} size={44} />
+            ) : (
+              <GameIcon name="gift" size={44} />
+            )}
           </View>
 
           <Text style={[styles.title, { color: ACCENT }]}>First Purchase — 75% off</Text>
@@ -159,7 +164,7 @@ export function FirstPurchaseOfferModal({ onDismiss }: FirstPurchaseOfferModalPr
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(5, 7, 20, 0.88)',
+    backgroundColor: 'rgba(6, 2, 14, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -192,7 +197,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     marginBottom: 16,
   },
-  icon: { fontSize: 38 },
   title: {
     fontSize: 20,
     fontFamily: FONTS.display,

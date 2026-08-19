@@ -1,4 +1,4 @@
-import { CosmeticTheme, ProfileFrame, ProfileTitle, LibraryDecoration, CurrencyType, CosmeticBonuses } from '../types';
+import { CosmeticTheme, CosmeticRarity, ProfileFrame, ProfileTitle, LibraryDecoration, CurrencyType, CosmeticBonuses } from '../types';
 import { ECONOMY, STAR_MILESTONES } from '../constants';
 import { EVENT_TEMPLATES } from './events';
 import { GRAND_CHALLENGES } from './grandChallenges';
@@ -11,11 +11,17 @@ import { VIP_STREAK_BONUSES } from './vipBenefits';
 
 // ── Color Themes ────────────────────────────────────────────────────────────
 
+// Rarity ladder (keep new themes on this rule so the store badge stays honest):
+//   common     — free/default and entry-tier coin themes (<= 2,000 coins)
+//   rare       — deep coin-sink themes (> 2,000 coins) and 50-gem themes
+//   epic       — premium gem themes (75–150 gems), incl. rotating-shop variants
+//   legendary  — 200+ gem exclusives and bundle/IAP-only themes that can never be earned
 export const COSMETIC_THEMES: CosmeticTheme[] = [
   {
     id: 'default',
     name: 'Outrun Classic',
     description: 'The signature synthwave palette — hot pink, cyan, and purple neon.',
+    rarity: 'common',
     colors: { bg: '#0a0015', surface: '#1a0a2e', accent: '#ff2d95', cellDefault: '#2a1548', cellSelected: '#ff2d95' },
     owned: true,
     equipped: true,
@@ -24,6 +30,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'midnight_chrome',
     name: 'Midnight Chrome',
     description: 'Silver and ice blue — a chrome-heavy synthwave variant.',
+    rarity: 'rare',
     colors: { bg: '#080810', surface: '#12121e', accent: '#d4e0f7', cellDefault: '#1a1a2e', cellSelected: '#8a9ab5' },
     cost: { currency: 'gems', amount: 50 },
     owned: false,
@@ -33,6 +40,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'sunset_boulevard',
     name: 'Sunset Boulevard',
     description: 'Warm orange and magenta — the golden hour of synthwave.',
+    rarity: 'rare',
     colors: { bg: '#1a0808', surface: '#2a1210', accent: '#ff6b35', cellDefault: '#3a1a14', cellSelected: '#ff9f43' },
     cost: { currency: 'gems', amount: 50 },
     owned: false,
@@ -42,6 +50,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'digital_ocean',
     name: 'Digital Ocean',
     description: 'Teal and deep blue — ocean waves under neon moonlight.',
+    rarity: 'epic',
     colors: { bg: '#040a12', surface: '#0a1520', accent: '#00f5d4', cellDefault: '#0f2030', cellSelected: '#00e5ff' },
     cost: { currency: 'gems', amount: 75 },
     owned: false,
@@ -51,6 +60,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'neon_tokyo',
     name: 'Neon Tokyo',
     description: 'Red and white neon — rain-soaked streets of a cyberpunk city.',
+    rarity: 'epic',
     colors: { bg: '#0a0008', surface: '#1a0a14', accent: '#ff1744', cellDefault: '#2a1018', cellSelected: '#ff4081' },
     cost: { currency: 'gems', amount: 100 },
     owned: false,
@@ -60,6 +70,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'midnight_blue',
     name: 'Midnight Blue',
     description: 'A calming deep blue palette.',
+    rarity: 'common',
     colors: { bg: '#0d1b2a', surface: '#1b263b', accent: '#5c9ead', cellDefault: '#2d3a4a', cellSelected: '#5c9ead' },
     cost: { currency: 'coins', amount: 1000 },
     owned: false,
@@ -69,6 +80,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'forest_dark',
     name: 'Enchanted Forest',
     description: 'Deep greens of the mystical woods.',
+    rarity: 'common',
     colors: { bg: '#0b1a0f', surface: '#1a2e1f', accent: '#4caf50', cellDefault: '#2a4030', cellSelected: '#4caf50' },
     cost: { currency: 'coins', amount: 1500 },
     owned: false,
@@ -78,6 +90,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'volcanic',
     name: 'Volcanic',
     description: 'Fiery reds against dark stone.',
+    rarity: 'common',
     colors: { bg: '#1a0a0a', surface: '#2a1515', accent: '#ff6b6b', cellDefault: '#3a2020', cellSelected: '#ff6b6b' },
     cost: { currency: 'coins', amount: 1500 },
     owned: false,
@@ -87,6 +100,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'royal_purple',
     name: 'Royal Purple',
     description: 'Regal purple for word royalty.',
+    rarity: 'common',
     colors: { bg: '#120a1e', surface: '#1e1535', accent: '#a855f7', cellDefault: '#2a2040', cellSelected: '#a855f7' },
     cost: { currency: 'coins', amount: 2000 },
     owned: false,
@@ -96,6 +110,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'golden_age',
     name: 'Golden Age',
     description: 'Luxurious gold on warm dark tones.',
+    rarity: 'rare',
     colors: { bg: '#1a1508', surface: '#2a2210', accent: '#ffd700', cellDefault: '#3a3018', cellSelected: '#ffd700' },
     cost: { currency: 'gems', amount: 50 },
     owned: false,
@@ -105,6 +120,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'ocean_depths',
     name: 'Ocean Depths',
     description: 'Deep sea blues and teals.',
+    rarity: 'common',
     colors: { bg: '#0a1520', surface: '#152535', accent: '#2ed8a3', cellDefault: '#1a3040', cellSelected: '#2ed8a3' },
     cost: { currency: 'coins', amount: 2000 },
     owned: false,
@@ -114,6 +130,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'aurora',
     name: 'Aurora Borealis',
     description: 'Northern lights dancing across the sky.',
+    rarity: 'epic',
     colors: { bg: '#0a0e1a', surface: '#151a2e', accent: '#00ffaa', cellDefault: '#1a2538', cellSelected: '#00ffaa' },
     cost: { currency: 'gems', amount: 75 },
     owned: false,
@@ -123,6 +140,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'sakura',
     name: 'Cherry Blossom',
     description: 'Soft pinks inspired by sakura season.',
+    rarity: 'epic',
     colors: { bg: '#1a0f14', surface: '#2a1a22', accent: '#ff9ecd', cellDefault: '#3a2530', cellSelected: '#ff9ecd' },
     cost: { currency: 'gems', amount: 75 },
     owned: false,
@@ -132,6 +150,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'neon_city',
     name: 'Neon City',
     description: 'Cyberpunk neon against dark streets.',
+    rarity: 'epic',
     colors: { bg: '#0a0a14', surface: '#14142a', accent: '#ff00ff', cellDefault: '#1e1e38', cellSelected: '#ff00ff' },
     cost: { currency: 'gems', amount: 100 },
     owned: false,
@@ -141,6 +160,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'arctic',
     name: 'Arctic Frost',
     description: 'Cool icy blues of the frozen north.',
+    rarity: 'rare',
     colors: { bg: '#0a1218', surface: '#151e28', accent: '#b9f2ff', cellDefault: '#1a2a35', cellSelected: '#b9f2ff' },
     cost: { currency: 'coins', amount: 2500 },
     owned: false,
@@ -150,6 +170,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'sunset',
     name: 'Desert Sunset',
     description: 'Warm oranges fading into twilight.',
+    rarity: 'rare',
     colors: { bg: '#1a100a', surface: '#2a1a10', accent: '#ff9f43', cellDefault: '#3a2818', cellSelected: '#ff9f43' },
     cost: { currency: 'coins', amount: 2500 },
     owned: false,
@@ -160,6 +181,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'cherry_blossom',
     name: 'Cherry Blossom',
     description: 'Delicate pinks and whites of spring blossoms in full bloom.',
+    rarity: 'common',
     colors: { bg: '#1a0a10', surface: '#2a1520', accent: '#ffb7d5', cellDefault: '#3a2030', cellSelected: '#ffb7d5' },
     cost: { currency: 'coins', amount: 2000 },
     owned: false,
@@ -169,6 +191,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'deep_space',
     name: 'Deep Space',
     description: 'The vast darkness between galaxies, lit by distant nebulae.',
+    rarity: 'rare',
     colors: { bg: '#020208', surface: '#0a0a1e', accent: '#7b68ee', cellDefault: '#141428', cellSelected: '#7b68ee' },
     cost: { currency: 'coins', amount: 4000 },
     owned: false,
@@ -178,6 +201,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'underwater',
     name: 'Underwater',
     description: 'Sunlight filtering through deep ocean waters.',
+    rarity: 'rare',
     colors: { bg: '#040e14', surface: '#0a1e28', accent: '#00bcd4', cellDefault: '#102a38', cellSelected: '#00bcd4' },
     cost: { currency: 'coins', amount: 4000 },
     owned: false,
@@ -187,6 +211,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'volcanic_eruption',
     name: 'Volcanic',
     description: 'Molten lava flowing through cracks of cooled obsidian.',
+    rarity: 'rare',
     colors: { bg: '#120404', surface: '#1e0a0a', accent: '#ff4500', cellDefault: '#2e1212', cellSelected: '#ff4500' },
     cost: { currency: 'coins', amount: 6000 },
     owned: false,
@@ -196,6 +221,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'holographic',
     name: 'Holographic',
     description: 'Iridescent rainbow shimmer across a dark chrome surface.',
+    rarity: 'rare',
     colors: { bg: '#0a0a10', surface: '#14142a', accent: '#e0c3fc', cellDefault: '#1e1e38', cellSelected: '#e0c3fc' },
     cost: { currency: 'coins', amount: 8000 },
     owned: false,
@@ -206,6 +232,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'theme_aurora',
     name: 'Aurora Borealis (Exclusive)',
     description: 'Northern lights shimmer across every tile — exclusive rotating shop variant.',
+    rarity: 'legendary',
     colors: { bg: '#0a0e1a', surface: '#151a2e', accent: '#00ffaa', cellDefault: '#1a2538', cellSelected: '#00ffaa' },
     cost: { currency: 'gems', amount: 200 },
     owned: false,
@@ -215,6 +242,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'theme_neon_city',
     name: 'Neon City (Exclusive)',
     description: 'Cyberpunk glow on every surface — exclusive rotating shop variant.',
+    rarity: 'epic',
     colors: { bg: '#0a0a14', surface: '#14142a', accent: '#ff00ff', cellDefault: '#1e1e38', cellSelected: '#ff00ff' },
     cost: { currency: 'gems', amount: 120 },
     owned: false,
@@ -224,6 +252,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'theme_sakura',
     name: 'Sakura Bloom (Exclusive)',
     description: 'Petals drift across a warm twilight — exclusive rotating shop variant.',
+    rarity: 'epic',
     colors: { bg: '#1a0f14', surface: '#2a1a22', accent: '#ff9ecd', cellDefault: '#3a2530', cellSelected: '#ff9ecd' },
     cost: { currency: 'gems', amount: 130 },
     owned: false,
@@ -234,6 +263,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'theme_whale_exclusive',
     name: 'Whale Exclusive',
     description: 'A deep ocean palette reserved for the most dedicated supporters.',
+    rarity: 'legendary',
     colors: { bg: '#0a0a1e', surface: '#141432', accent: '#00d4ff', cellDefault: '#1e1e46', cellSelected: '#00d4ff' },
     owned: false,
     equipped: false,
@@ -242,6 +272,7 @@ export const COSMETIC_THEMES: CosmeticTheme[] = [
     id: 'theme_legendary_neon',
     name: 'Legendary Neon',
     description: 'Blazing neon legends — an ultimate reward for true collectors.',
+    rarity: 'legendary',
     colors: { bg: '#0a0014', surface: '#1a0a28', accent: '#ff00e5', cellDefault: '#2a1438', cellSelected: '#ff00e5' },
     owned: false,
     equipped: false,
@@ -346,25 +377,25 @@ const BASE_PROFILE_TITLES: ProfileTitle[] = [
 
 export const LIBRARY_DECORATIONS: LibraryDecoration[] = [
   // Furniture
-  { id: 'reading_chair', name: 'Reading Chair', description: 'A cozy chair for word contemplation.', icon: '🪑', type: 'furniture', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 50 } },
-  { id: 'oak_desk', name: 'Oak Writing Desk', description: 'A sturdy desk for your word discoveries.', icon: '🪵', type: 'furniture', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 75 } },
-  { id: 'antique_table', name: 'Antique Table', description: 'An elegant table from a bygone era.', icon: '🏛️', type: 'furniture', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 150 } },
-  { id: 'throne_chair', name: 'Word Throne', description: 'Sit upon the throne of words.', icon: '👑', type: 'furniture', rarity: 'epic', owned: false, equipped: false, cost: { currency: 'gems', amount: 50 } },
-  { id: 'crystal_desk', name: 'Crystal Desk', description: 'A desk carved from pure crystal.', icon: '💎', type: 'furniture', rarity: 'legendary', owned: false, equipped: false, cost: { currency: 'gems', amount: 100 } },
+  { id: 'reading_chair', name: 'Reading Chair', description: 'For word contemplation.', icon: '🪑', type: 'furniture', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 50 } },
+  { id: 'oak_desk', name: 'Oak Writing Desk', description: 'For word discoveries.', icon: '🪵', type: 'furniture', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 75 } },
+  { id: 'antique_table', name: 'Antique Table', description: 'From a bygone era.', icon: '🏛️', type: 'furniture', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 150 } },
+  { id: 'throne_chair', name: 'Word Throne', description: 'The throne of words.', icon: '👑', type: 'furniture', rarity: 'epic', owned: false, equipped: false, cost: { currency: 'gems', amount: 50 } },
+  { id: 'crystal_desk', name: 'Crystal Desk', description: 'Carved from crystal.', icon: '💎', type: 'furniture', rarity: 'legendary', owned: false, equipped: false, cost: { currency: 'gems', amount: 100 } },
 
   // Lighting
-  { id: 'candle', name: 'Candle', description: 'A warm flickering candle.', icon: '🕯️', type: 'lighting', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 30 } },
-  { id: 'lantern', name: 'Paper Lantern', description: 'Soft light from an eastern lantern.', icon: '🏮', type: 'lighting', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 40 } },
-  { id: 'chandelier', name: 'Chandelier', description: 'A grand chandelier that illuminates the wing.', icon: '✨', type: 'lighting', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 120 } },
-  { id: 'fireplace', name: 'Fireplace', description: 'A roaring fireplace for cozy reading.', icon: '🔥', type: 'lighting', rarity: 'epic', owned: false, equipped: false, cost: { currency: 'gems', amount: 40 } },
-  { id: 'aurora_lamp', name: 'Aurora Lamp', description: 'Projects northern lights onto the ceiling.', icon: '🌌', type: 'lighting', rarity: 'legendary', owned: false, equipped: false, cost: { currency: 'gems', amount: 80 } },
+  { id: 'candle', name: 'Candle', description: 'Warm, flickering light.', icon: '🕯️', type: 'lighting', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 30 } },
+  { id: 'lantern', name: 'Paper Lantern', description: 'Soft eastern light.', icon: '🏮', type: 'lighting', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 40 } },
+  { id: 'chandelier', name: 'Chandelier', description: 'Lights the whole wing.', icon: '✨', type: 'lighting', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 120 } },
+  { id: 'fireplace', name: 'Fireplace', description: 'For cozy reading.', icon: '🔥', type: 'lighting', rarity: 'epic', owned: false, equipped: false, cost: { currency: 'gems', amount: 40 } },
+  { id: 'aurora_lamp', name: 'Aurora Lamp', description: 'Indoor northern lights.', icon: '🌌', type: 'lighting', rarity: 'legendary', owned: false, equipped: false, cost: { currency: 'gems', amount: 80 } },
 
   // Ornaments
-  { id: 'globe', name: 'World Globe', description: 'A spinning globe of word knowledge.', icon: '🌍', type: 'ornament', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 60 } },
-  { id: 'telescope', name: 'Telescope', description: 'Gaze into the universe of words.', icon: '🔭', type: 'ornament', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 100 } },
-  { id: 'hourglass', name: 'Hourglass', description: 'Time flows like letters falling.', icon: '⏳', type: 'ornament', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 100 } },
-  { id: 'golden_shelf', name: 'Golden Bookshelf', description: 'A shelf of pure gold for your finest tomes.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
-  { id: 'crystal_display', name: 'Crystal Display Case', description: 'Show off rare letter tiles.', icon: '🔮', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'globe', name: 'World Globe', description: 'A world of words.', icon: '🌍', type: 'ornament', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 60 } },
+  { id: 'telescope', name: 'Telescope', description: 'Scan the word cosmos.', icon: '🔭', type: 'ornament', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 100 } },
+  { id: 'hourglass', name: 'Hourglass', description: 'Time falls like letters.', icon: '⏳', type: 'ornament', rarity: 'rare', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 100 } },
+  { id: 'golden_shelf', name: 'Golden Bookshelf', description: 'For your finest tomes.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'crystal_display', name: 'Crystal Display Case', description: 'Displays rare tiles.', icon: '🔮', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
 
   // Books
   { id: 'nature_tome', name: 'Tome of Nature', description: 'A beautifully illustrated nature book.', icon: '🌿', type: 'book', rarity: 'common', owned: false, equipped: false, cost: { currency: 'libraryPoints', amount: 40 } },
@@ -374,27 +405,30 @@ export const LIBRARY_DECORATIONS: LibraryDecoration[] = [
   { id: 'forbidden_book', name: 'Forbidden Book', description: 'Its contents are known only to masters.', icon: '📕', type: 'book', rarity: 'legendary', owned: false, equipped: false },
 
   // Event rewards (no cost - earned through events)
-  { id: 'speed_trophy', name: 'Speed Trophy', description: 'Awarded to the fastest solvers.', icon: '⚡', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
-  { id: 'diamond_plaque', name: 'Diamond Plaque', description: 'For achieving perfection.', icon: '💎', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'speed_trophy', name: 'Speed Trophy', description: 'For the fastest solvers.', icon: '⚡', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'diamond_plaque', name: 'Diamond Plaque', description: 'For perfection.', icon: '💎', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
   { id: 'rally_banner', name: 'Rally Banner', description: 'Your club\'s rallying symbol.', icon: '🚩', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
-  { id: 'cascade_crystal', name: 'Cascade Crystal', description: 'Glows brighter with each chain.', icon: '🔥', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
-  { id: 'mystery_orb', name: 'Mystery Orb', description: 'Swirling with unknown words.', icon: '🔮', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'cascade_crystal', name: 'Cascade Crystal', description: 'Glows with each find.', icon: '🔥', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'mystery_orb', name: 'Mystery Orb', description: 'Swirls with unknown words.', icon: '🔮', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
   { id: 'retro_arcade', name: 'Retro Arcade Cabinet', description: 'A blast from the past.', icon: '🕹️', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
   { id: 'nature_painting', name: 'Nature Painting', description: 'A serene landscape painting.', icon: '🖼️', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
-  { id: 'lab_equipment', name: 'Lab Equipment', description: 'Bubbling beakers and test tubes.', icon: '🧪', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
-  { id: 'ship_wheel', name: 'Ship\'s Wheel', description: 'Navigate the seas of knowledge.', icon: '⚓', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'lab_equipment', name: 'Lab Equipment', description: 'Beakers, mid-bubble.', icon: '🧪', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'ship_wheel', name: 'Ship\'s Wheel', description: 'Steers the word seas.', icon: '⚓', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
   { id: 'gauntlet_shield', name: 'Gauntlet Shield', description: 'Survived the Expert Gauntlet.', icon: '🛡️', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
-  { id: 'community_statue', name: 'Community Statue', description: 'A monument to collective achievement.', icon: '🗽', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'community_statue', name: 'Community Statue', description: 'A monument to teamwork.', icon: '🗽', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
   { id: 'season_throne', name: 'Season Throne', description: 'The ultimate seasonal reward.', icon: '👑', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
   { id: 'fire_sconce', name: 'Fire Sconce', description: 'Eternal flames light the way.', icon: '🔥', type: 'lighting', rarity: 'epic', owned: false, equipped: false },
-  { id: 'ocean_globe', name: 'Ocean Globe', description: 'A miniature ocean in a sphere.', icon: '🌊', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
+  { id: 'ocean_globe', name: 'Ocean Globe', description: 'An ocean in a sphere.', icon: '🌊', type: 'ornament', rarity: 'epic', owned: false, equipped: false },
   { id: 'nature_plaque', name: 'Nature Plaque', description: 'Carved from ancient oak.', icon: '🌳', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
 
   // Bundle-exclusive decorations (IAP purchases)
-  { id: 'starter_bookend', name: 'Starter Bookend', description: 'A commemorative bookend for early supporters.', icon: '📚', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
-  { id: 'chapter_decoration', name: 'Chapter Decoration', description: 'A decorative chapter marker for your library.', icon: '🔖', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
-  { id: 'decoration_whale_trophy', name: 'Whale Trophy', description: 'A legendary trophy for the most dedicated supporters.', icon: '🐋', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
-  { id: 'decoration_platinum_exclusive', name: 'Platinum Display', description: 'An exclusive platinum display case.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'starter_bookend', name: 'Starter Bookend', description: 'For early supporters.', icon: '📚', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'chapter_decoration', name: 'Chapter Decoration', description: 'Marks your chapter.', icon: '🔖', type: 'ornament', rarity: 'rare', owned: false, equipped: false },
+  { id: 'decoration_whale_trophy', name: 'Whale Trophy', description: 'For true patrons.', icon: '🐋', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+  { id: 'decoration_platinum_exclusive', name: 'Platinum Display', description: 'Platinum-cased pride.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
+
+  // VIP streak ladder reward (26-week VIP Legend — granted, never purchasable)
+  { id: 'vip_trophy', name: 'VIP Trophy', description: 'Twenty-six weeks of VIP legend.', icon: '🏆', type: 'ornament', rarity: 'legendary', owned: false, equipped: false },
 ];
 
 type FrameSeed = Omit<ProfileFrame, 'owned'> & { owned?: boolean };
@@ -714,6 +748,15 @@ export const PROFILE_TITLES: ProfileTitle[] = dedupeById([
 
 export function getTheme(id: string): CosmeticTheme | undefined {
   return COSMETIC_THEMES.find((t) => t.id === id);
+}
+
+/** Rarity of a theme id — falls back to 'common' for unknown/legacy ids. */
+export function getThemeRarity(id: string): CosmeticRarity {
+  return getTheme(resolveLegacyCosmeticId(id))?.rarity ?? 'common';
+}
+
+export function getThemesByRarity(rarity: CosmeticRarity): CosmeticTheme[] {
+  return COSMETIC_THEMES.filter((t) => t.rarity === rarity);
 }
 
 export function getFrame(id: string): ProfileFrame | undefined {

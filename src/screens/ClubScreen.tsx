@@ -5,16 +5,21 @@ import {
   Text,
   ScrollView,
   FlatList,
-  TouchableOpacity,
+  Pressable,
   TextInput,
   StyleSheet,
-  Dimensions,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import SectionHeader from '../components/common/SectionHeader';
+import IconMedallion from '../components/common/IconMedallion';
 import PrimaryButton from '../components/common/PrimaryButton';
+import { bentoPanel } from '../styles/bentoPanel';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
   usePlayerStore,
   usePlayerActions,
@@ -39,8 +44,6 @@ import {
   ClubLeaderboardEntry,
 } from '../data/clubEvents';
 import { filterMessage } from '../utils/profanityFilter';
-
-const { width } = Dimensions.get('window');
 
 interface ClubMember {
   id: string;
@@ -72,7 +75,813 @@ interface ClubScreenProps {
   onLeaveClub?: () => void;
   /** Injected by React Navigation; club_invite deep links set joinClubId. */
   route?: { params?: { joinClubId?: string } };
+  /** Injected by React Navigation. */
+  navigation?: { goBack: () => void; canGoBack?: () => boolean };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Design primitives (screen-local)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TIER_ACCENT: Record<string, string> = {
+  bronze: COLORS.tierBronze,
+  silver: COLORS.tierSilver,
+  gold: COLORS.tierGold,
+  diamond: COLORS.tierDiamond,
+};
+
+const TIER_METAL: Record<string, readonly [string, string, string]> = {
+  bronze: ['#f4b880', '#cd7f32', '#7a4715'],
+  silver: ['#ffffff', '#c9d3e6', '#7e8ca6'],
+  gold: ['#fff3c4', '#ffd24d', '#a86f00'],
+  diamond: ['#d9fbff', '#00e5ff', '#0077a8'],
+};
+
+/**
+ * CrestMedallion — layered squircle crest for clubs: metallic (or accent)
+ * gradient ring, dark gem body, glass highlight, initial in the display font.
+ * Replaces the flat single-letter shields and raw-emoji crests.
+ */
+function CrestMedallion({
+  letter,
+  size = 64,
+  accent = COLORS.accent,
+  ring,
+}: {
+  letter: string;
+  size?: number;
+  accent?: string;
+  ring?: readonly [string, string, string];
+}) {
+  const tint = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent + '3D' : accent;
+  const ringColors = ring ?? ([accent + 'C0', accent + '55', accent + 'C0'] as const);
+  const outerRadius = size * 0.32;
+  return (
+    <LinearGradient
+      colors={[...ringColors]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: outerRadius,
+        padding: 2,
+        shadowColor: ring ? ring[1] : accent,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.55,
+        shadowRadius: size * 0.22,
+        elevation: 8,
+      }}
+    >
+      <View
+        style={{
+          flex: 1,
+          borderRadius: outerRadius - 2,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+        }}
+      >
+        <LinearGradient
+          colors={[tint, 'rgba(8, 2, 22, 0.92)']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.06,
+            left: size * 0.16,
+            right: size * 0.16,
+            height: size * 0.15,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(255,255,255,0.14)',
+          }}
+        />
+        <Text
+          style={{
+            fontFamily: FONTS.display,
+            fontSize: size * 0.4,
+            color: COLORS.textPrimary,
+            textShadowColor: accent + '99',
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: 8,
+          }}
+        >
+          {letter}
+        </Text>
+      </View>
+    </LinearGradient>
+  );
+}
+
+/** Metallic member-rank disc — gold/silver/bronze for the top 3, glass after. */
+const RANK_METALS: Record<
+  number,
+  { metal: readonly [string, string, string]; text: string; ring: string }
+> = {
+  1: { metal: TIER_METAL.gold, text: '#3a2600', ring: 'rgba(255,222,120,0.95)' },
+  2: { metal: TIER_METAL.silver, text: '#1f2738', ring: 'rgba(226,234,248,0.95)' },
+  3: { metal: TIER_METAL.bronze, text: '#331c04', ring: 'rgba(235,164,96,0.95)' },
+};
+
+function RankDisc({ rank, size = 28 }: { rank: number; size?: number }) {
+  const spec = RANK_METALS[rank];
+  if (!spec) {
+    return (
+      <View
+        style={[
+          clubPrimStyles.glassDisc,
+          { width: size, height: size, borderRadius: size / 2 },
+        ]}
+      >
+        <Text style={[clubPrimStyles.glassDiscText, { fontSize: size * 0.42 }]}>{rank}</Text>
+      </View>
+    );
+  }
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 1,
+        borderColor: spec.ring,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        backgroundColor: spec.metal[2],
+      }}
+    >
+      <LinearGradient
+        colors={[...spec.metal]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <Text style={{ fontFamily: FONTS.display, fontSize: size * 0.42, color: spec.text }}>
+        {rank}
+      </Text>
+    </View>
+  );
+}
+
+/** Glass avatar disc with accent-tinted gem body and initial. */
+function MemberAvatar({
+  name,
+  size = 38,
+  accent = COLORS.purple,
+  online = false,
+}: {
+  name: string;
+  size?: number;
+  accent?: string;
+  online?: boolean;
+}) {
+  const tint = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent + '3D' : accent;
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: online ? 2 : 1,
+          borderColor: online ? COLORS.green : accent + '55',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+        },
+        online && SHADOWS.glow(COLORS.green),
+      ]}
+    >
+      <LinearGradient
+        colors={[tint, 'rgba(8, 2, 22, 0.92)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.07,
+          left: size * 0.18,
+          right: size * 0.18,
+          height: size * 0.15,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.12)',
+        }}
+      />
+      <Text
+        style={{ fontFamily: FONTS.display, fontSize: size * 0.42, color: COLORS.textPrimary }}
+      >
+        {name.charAt(0).toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * GlyphMedallion — IconMedallion's layered-gem body, but hosting drawn
+ * View-based glyphs instead of raw emoji (the art review's residual flag).
+ */
+function GlyphMedallion({
+  size = 34,
+  accent = COLORS.purple,
+  muted = false,
+  style,
+  children,
+}: {
+  size?: number;
+  accent?: string;
+  muted?: boolean;
+  style?: object;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : accent + '73',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={[
+          muted ? 'rgba(255,255,255,0.05)' : accent + '3D',
+          'rgba(8, 2, 22, 0.92)',
+        ]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.14)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/** Drawn 8-point star burst — two crossed gradient squares + hot core. */
+function StarBurstGlyph({ size = 18 }: { size?: number }) {
+  const sq = size * 0.68;
+  const square = {
+    position: 'absolute' as const,
+    width: sq,
+    height: sq,
+    borderRadius: sq * 0.18,
+    overflow: 'hidden' as const,
+  };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={[square, { transform: [{ rotate: '45deg' }] }]}>
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View style={square}>
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          width: sq * 0.34,
+          height: sq * 0.34,
+          borderRadius: sq * 0.17,
+          backgroundColor: 'rgba(255,255,255,0.6)',
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn chat bubble — gradient rounded rect, rotated-square tail, 3 dots. */
+function ChatBubbleGlyph({ size = 18, accent = COLORS.cyan }: { size?: number; accent?: string }) {
+  const w = size;
+  const h = size * 0.74;
+  const dot = w * 0.13;
+  return (
+    <View style={{ width: w, height: size }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: w * 0.16,
+          bottom: size * 0.04,
+          width: w * 0.24,
+          height: w * 0.24,
+          borderRadius: w * 0.05,
+          backgroundColor: accent,
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+      <View
+        style={{
+          width: w,
+          height: h,
+          borderRadius: h * 0.42,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + 'B3']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ flexDirection: 'row', gap: dot * 0.5 }}>
+          {[0, 1, 2].map((i) => (
+            <View
+              key={i}
+              style={{
+                width: dot,
+                height: dot,
+                borderRadius: dot / 2,
+                backgroundColor: 'rgba(8,2,22,0.75)',
+              }}
+            />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/** Drawn gift box — gradient body, lid band, gold ribbon + bow knots. */
+function GiftGlyph({ size = 18 }: { size?: number }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      {/* Bow knots */}
+      <View style={{ flexDirection: 'row', gap: size * 0.06, marginBottom: -size * 0.04 }}>
+        <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
+        <View style={{ width: size * 0.2, height: size * 0.16, borderRadius: size * 0.08, backgroundColor: COLORS.goldLight }} />
+      </View>
+      {/* Lid */}
+      <View style={{ width: size * 0.96, height: size * 0.24, borderRadius: size * 0.07, overflow: 'hidden' }}>
+        <LinearGradient
+          colors={[COLORS.accentLight, COLORS.accent]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      {/* Body */}
+      <View
+        style={{
+          width: size * 0.78,
+          height: size * 0.5,
+          marginTop: size * 0.03,
+          borderBottomLeftRadius: size * 0.09,
+          borderBottomRightRadius: size * 0.09,
+          overflow: 'hidden',
+          alignItems: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.accent, COLORS.accentDark]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={{ width: size * 0.14, height: '100%', backgroundColor: COLORS.gold }} />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn podium — three gradient ranking bars, center tallest. */
+function PodiumGlyph({ size = 18 }: { size?: number }) {
+  const bar = (h: number, colors: readonly [string, string]) => (
+    <View style={{ width: size * 0.26, height: size * h, borderRadius: size * 0.06, overflow: 'hidden' }}>
+      <LinearGradient
+        colors={[...colors]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+    </View>
+  );
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        gap: size * 0.08,
+      }}
+    >
+      {bar(0.55, [COLORS.cyan, COLORS.cyan + '80'])}
+      {bar(0.95, [COLORS.goldLight, COLORS.gold])}
+      {bar(0.4, [COLORS.purpleLight, COLORS.purple])}
+    </View>
+  );
+}
+
+/** Drawn magnifier — ring + angled handle. */
+function MagnifierGlyph({ size = 14, accent = COLORS.cyan }: { size?: number; accent?: string }) {
+  const ring = size * 0.66;
+  return (
+    <View style={{ width: size, height: size }}>
+      <View
+        style={{
+          width: ring,
+          height: ring,
+          borderRadius: ring / 2,
+          borderWidth: size * 0.13,
+          borderColor: accent,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          right: size * 0.02,
+          bottom: size * 0.14,
+          width: size * 0.42,
+          height: size * 0.14,
+          borderRadius: size * 0.07,
+          backgroundColor: accent,
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+    </View>
+  );
+}
+
+/** Drawn mini padlock — ring shackle + gradient rounded-rect body. */
+function LockGlyph({ size = 18, accent = COLORS.gold }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.5,
+          height: size * 0.4,
+          borderTopLeftRadius: size * 0.25,
+          borderTopRightRadius: size * 0.25,
+          borderWidth: size * 0.11,
+          borderBottomWidth: 0,
+          borderColor: accent + 'D9',
+          marginBottom: -size * 0.05,
+        }}
+      />
+      <View
+        style={{
+          width: size * 0.82,
+          height: size * 0.56,
+          borderRadius: size * 0.14,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <LinearGradient
+          colors={[accent, accent + '8C']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            width: size * 0.16,
+            height: size * 0.22,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(8,2,22,0.7)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn 2x2 letter-tile grid — the club puzzle mark. */
+function TileGridGlyph({ size = 20, accent = COLORS.accent }: { size?: number; accent?: string }) {
+  const cell = size * 0.44;
+  const tile = (filled: boolean, key: number) => (
+    <View
+      key={key}
+      style={{
+        width: cell,
+        height: cell,
+        borderRadius: cell * 0.24,
+        overflow: 'hidden',
+        borderWidth: filled ? 0 : 1,
+        borderColor: accent + '88',
+        backgroundColor: filled ? undefined : 'rgba(255,255,255,0.06)',
+      }}
+    >
+      {filled && (
+        <LinearGradient
+          colors={[COLORS.accentLight, accent]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      )}
+    </View>
+  );
+  return (
+    <View style={{ width: size, height: size, justifyContent: 'space-between' }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {tile(true, 0)}
+        {tile(false, 1)}
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {tile(false, 2)}
+        {tile(true, 3)}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * ShieldCrest — designed club crest drawn entirely from Views/gradients:
+ * metallic-rim shield silhouette (rounded top block + rotated-diamond point),
+ * dark gem inner field with glass highlight and rivets, gold star spark over
+ * a display-font W emblem, and small gold wing accents. Replaces the emoji
+ * shield-on-disc the art review flagged.
+ */
+function ShieldCrest({ size = 92, muted = false }: { size?: number; muted?: boolean }) {
+  const w = size * 0.76;
+  const topH = size * 0.48;
+  const topR = size * 0.12;
+  const inset = size * 0.045;
+  const diag = w / Math.SQRT2;
+  const diagIn = (w - inset * 2) / Math.SQRT2;
+  // A rotated square's visual bounding box is side * sqrt(2) = w, so the
+  // point reaches w / 2 below the block bottom.
+  const height = topH + w / 2 + size * 0.02;
+  const rim = [COLORS.accentLight, COLORS.accent, COLORS.purple] as const;
+  const field = ['rgba(58,26,102,0.98)', 'rgba(12,4,28,0.99)'] as const;
+  const wing = (side: 'left' | 'right', idx: number) => {
+    const len = size * (0.3 - idx * 0.07);
+    const rot = (side === 'left' ? -1 : 1) * (14 + idx * 10);
+    return (
+      <View
+        key={`${side}${idx}`}
+        style={{
+          position: 'absolute',
+          top: size * (0.16 + idx * 0.13),
+          ...(side === 'left' ? { left: -size * 0.1 } : { right: -size * 0.1 }),
+          width: len,
+          height: size * 0.055,
+          borderRadius: size * 0.03,
+          overflow: 'hidden',
+          transform: [{ rotate: `${rot}deg` }],
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold + '66']}
+          start={side === 'left' ? { x: 1, y: 0.5 } : { x: 0, y: 0.5 }}
+          end={side === 'left' ? { x: 0, y: 0.5 } : { x: 1, y: 0.5 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    );
+  };
+  return (
+    <View
+      style={{
+        width: size * 1.2,
+        height: height,
+        alignItems: 'center',
+        opacity: muted ? 0.55 : 1,
+        shadowColor: COLORS.accent,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: muted ? 0.2 : 0.6,
+        shadowRadius: size * 0.2,
+        elevation: muted ? 2 : 9,
+      }}
+    >
+      {wing('left', 0)}
+      {wing('left', 1)}
+      {wing('left', 2)}
+      {wing('right', 0)}
+      {wing('right', 1)}
+      {wing('right', 2)}
+      {/* Metallic rim: top block */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          width: w,
+          height: topH + 1,
+          borderTopLeftRadius: topR,
+          borderTopRightRadius: topR,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[...rim]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      {/* Metallic rim: shield point */}
+      <View
+        style={{
+          position: 'absolute',
+          top: topH - diag / 2,
+          width: diag,
+          height: diag,
+          borderRadius: size * 0.07,
+          overflow: 'hidden',
+          transform: [{ rotate: '45deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[...rim]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      {/* Inner dark field: top block */}
+      <View
+        style={{
+          position: 'absolute',
+          top: inset,
+          width: w - inset * 2,
+          height: topH - inset + 1,
+          borderTopLeftRadius: topR * 0.72,
+          borderTopRightRadius: topR * 0.72,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[...field]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        {/* Glass highlight */}
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.035,
+            left: w * 0.16,
+            right: w * 0.16,
+            height: size * 0.09,
+            borderRadius: size * 0.05,
+            backgroundColor: 'rgba(255,255,255,0.13)',
+          }}
+        />
+        {/* Rivets */}
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.05,
+            left: w * 0.06,
+            width: size * 0.045,
+            height: size * 0.045,
+            borderRadius: size * 0.03,
+            backgroundColor: 'rgba(255,255,255,0.35)',
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.05,
+            right: w * 0.06,
+            width: size * 0.045,
+            height: size * 0.045,
+            borderRadius: size * 0.03,
+            backgroundColor: 'rgba(255,255,255,0.35)',
+          }}
+        />
+      </View>
+      {/* Inner dark field: point */}
+      <View
+        style={{
+          position: 'absolute',
+          top: topH - diagIn / 2,
+          width: diagIn,
+          height: diagIn,
+          borderRadius: size * 0.05,
+          overflow: 'hidden',
+          transform: [{ rotate: '45deg' }],
+        }}
+      >
+        <LinearGradient
+          colors={[...field]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      {/* Emblem: gold spark over display-font W */}
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.1,
+          width: w,
+          alignItems: 'center',
+        }}
+      >
+        <StarBurstGlyph size={size * 0.17} />
+        <Text
+          style={{
+            fontFamily: FONTS.display,
+            fontSize: size * 0.34,
+            lineHeight: size * 0.42,
+            color: COLORS.textPrimary,
+            textShadowColor: COLORS.accentGlow,
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: size * 0.1,
+            marginTop: size * 0.015,
+          }}
+        >
+          W
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** Hero benefit bullet: small drawn-glyph medallion + copy. */
+function BenefitRow({
+  icon,
+  accent,
+  text,
+}: {
+  icon: React.ReactNode;
+  accent: string;
+  text: string;
+}) {
+  return (
+    <View style={clubPrimStyles.benefitRow}>
+      <GlyphMedallion size={34} accent={accent}>
+        {icon}
+      </GlyphMedallion>
+      <Text style={clubPrimStyles.benefitText}>{text}</Text>
+    </View>
+  );
+}
+
+const clubPrimStyles = StyleSheet.create({
+  glassDisc: {
+    backgroundColor: COLORS.surfaceGlass,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  glassDiscText: {
+    fontFamily: FONTS.display,
+    color: COLORS.textMuted,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 10,
+  },
+  benefitText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+});
 
 const ClubScreen: React.FC<ClubScreenProps> = ({
   clubId: clubIdProp,
@@ -81,8 +890,10 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   onJoinClub,
   onLeaveClub,
   route,
+  navigation,
 }) => {
   const { t } = useTranslation();
+  const reduceMotion = useReduceMotion();
   const clubIdFromStore = usePlayerStore(selectClubId);
   const { setClubId } = usePlayerActions();
   const equippedTitle = usePlayerStore(selectEquippedTitle);
@@ -92,6 +903,37 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   const [searchText, setSearchText] = useState('');
   const [createName, setCreateName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [createFocused, setCreateFocused] = useState(false);
+  const [chatFocused, setChatFocused] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
+
+  // Ambient breathing scale on the hero crest cluster (recruitment moment).
+  const crestPulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) {
+      crestPulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(crestPulse, {
+          toValue: 1,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(crestPulse, {
+          toValue: 0,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion, crestPulse]);
   // S1 in launch_blockers.md: browse public clubs alongside join-by-code.
   const [browseList, setBrowseList] = useState<
     Array<{
@@ -555,27 +1397,94 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       style={styles.scrollView}
       contentContainerStyle={styles.noClubContent}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.noClubHero}>
-        <Text style={styles.noClubIcon}>🏠</Text>
+      {/* Hero recruitment panel */}
+      <View style={styles.heroPanel}>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <LinearGradient
+          colors={[COLORS.accent + '24', COLORS.purple + '12', 'rgba(8,2,22,0.0)']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+
+        {/* Crest medallion cluster */}
+        <View style={styles.crestCluster}>
+          <GlyphMedallion size={44} accent={COLORS.gold} style={styles.crestSideLeft}>
+            <StarBurstGlyph size={22} />
+          </GlyphMedallion>
+          <Animated.View
+            style={{
+              zIndex: 2,
+              transform: [
+                {
+                  scale: crestPulse.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.05],
+                  }),
+                },
+              ],
+            }}
+          >
+            <ShieldCrest size={96} />
+          </Animated.View>
+          <GlyphMedallion size={44} accent={COLORS.cyan} style={styles.crestSideRight}>
+            <ChatBubbleGlyph size={20} accent={COLORS.cyan} />
+          </GlyphMedallion>
+        </View>
+
         <Text style={styles.noClubTitle}>{t('club.joinOrCreate')}</Text>
         <Text style={styles.noClubDesc}>
           Team up with friends, compete in weekly challenges, and climb the
           leaderboards together!
         </Text>
+
+        <View style={styles.benefitList}>
+          <BenefitRow icon={<GiftGlyph size={17} />} accent={COLORS.gold} text="Send and receive booster gifts with clubmates" />
+          <BenefitRow icon={<PodiumGlyph size={17} />} accent={COLORS.cyan} text="Climb the weekly club rankings as a team" />
+          <BenefitRow icon={<ChatBubbleGlyph size={16} accent={COLORS.purpleLight} />} accent={COLORS.purple} text="Chat, react, and clear shared goals together" />
+        </View>
+
+        <View style={styles.heroCtas}>
+          <PrimaryButton
+            label="FIND A CLUB"
+            onPress={() => searchInputRef.current?.focus()}
+            fullWidth
+            accessibilityLabel="Find a club"
+          />
+          <PrimaryButton
+            label="CREATE A CLUB"
+            variant="gold"
+            onPress={() => setShowCreate(true)}
+            fullWidth
+            style={styles.heroCtaGap}
+            accessibilityLabel="Create a club"
+          />
+        </View>
       </View>
 
       {/* Search */}
       <View style={styles.searchSection}>
-        <Text style={styles.sectionTitle}>{t('club.findClub')}</Text>
-        <View style={styles.searchBar}>
-          <Text style={styles.searchIcon}>🔍</Text>
+        <SectionHeader label={t('club.findClub')} accent={COLORS.cyan} />
+        <View style={[styles.searchBar, searchFocused && styles.inputFocused]}>
+          <GlyphMedallion size={28} accent={COLORS.cyan}>
+            <MagnifierGlyph size={14} accent={COLORS.cyan} />
+          </GlyphMedallion>
           <TextInput
+            ref={searchInputRef}
             style={styles.searchInput}
             placeholder={t('club.searchPlaceholder')}
             placeholderTextColor={COLORS.textMuted}
             value={searchText}
             onChangeText={setSearchText}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             accessibilityLabel="Search clubs by name or code"
           />
         </View>
@@ -594,17 +1503,20 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       {firestoreService.isAvailable() && (
         <View style={styles.searchSection}>
           <View style={styles.browseHeaderRow}>
-            <Text style={styles.sectionTitle}>Browse clubs</Text>
-            <TouchableOpacity
+            <View style={styles.browseHeaderLabel}>
+              <SectionHeader label="Browse clubs" accent={COLORS.purple} />
+            </View>
+            <Pressable
               onPress={refreshBrowseList}
               disabled={browseLoading}
               accessibilityRole="button"
               accessibilityLabel="Refresh club list"
+              style={({ pressed }) => [styles.browseRefreshBtn, pressed && styles.chipPressed]}
             >
               <Text style={styles.browseRefresh}>
                 {browseLoading ? '...' : 'Refresh'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
           {browseList.length === 0 && !browseLoading && (
             <Text style={styles.browseEmpty}>
@@ -613,14 +1525,20 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             </Text>
           )}
           {browseList.map((c) => (
-            <TouchableOpacity
+            <Pressable
               key={c.id}
-              style={styles.browseCard}
+              style={({ pressed }) => [styles.browseCard, pressed && styles.cardPressed]}
               onPress={() => joinClub(c.id)}
-              activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={`Join ${c.name} — ${c.memberCount} of ${c.maxMembers} members`}
             >
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard] as [string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <CrestMedallion letter={c.name.charAt(0).toUpperCase()} size={46} accent={COLORS.purple} />
               <View style={styles.browseCardMain}>
                 <Text style={styles.browseCardName} numberOfLines={1}>
                   {c.name}
@@ -630,32 +1548,49 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                     {c.description}
                   </Text>
                 ) : null}
-                <Text style={styles.browseCardMeta}>
-                  {c.memberCount}/{c.maxMembers} members · {c.weeklyScore.toLocaleString()} pts/wk
-                </Text>
+                <View style={styles.browseCardMetaRow}>
+                  <View style={styles.memberChip}>
+                    <Text style={styles.memberChipText}>
+                      {c.memberCount}/{c.maxMembers}
+                    </Text>
+                  </View>
+                  <Text style={styles.browseCardMeta}>
+                    {c.weeklyScore.toLocaleString()} pts/wk
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.browseCardCta}>JOIN</Text>
-            </TouchableOpacity>
+              <View style={styles.joinChip}>
+                <Text style={styles.joinChipText}>JOIN</Text>
+              </View>
+            </Pressable>
           ))}
         </View>
       )}
 
       {/* Create */}
       <View style={styles.createSection}>
-        <Text style={styles.sectionTitle}>{t('club.createClub')}</Text>
+        <SectionHeader label={t('club.createClub')} accent={COLORS.gold} />
         {showCreate ? (
           <View style={styles.createForm}>
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
             <TextInput
-              style={styles.createInput}
+              style={[styles.createInput, createFocused && styles.inputFocused]}
               placeholder={t('club.createPlaceholder')}
               placeholderTextColor={COLORS.textMuted}
               value={createName}
               onChangeText={setCreateName}
+              onFocus={() => setCreateFocused(true)}
+              onBlur={() => setCreateFocused(false)}
               maxLength={24}
             />
             <View style={styles.createButtons}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
+              <Pressable
+                style={({ pressed }) => [styles.cancelBtn, pressed && styles.chipPressed]}
                 onPress={() => {
                   setShowCreate(false);
                   setCreateName('');
@@ -664,34 +1599,32 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                 accessibilityLabel="Cancel club creation"
               >
                 <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.confirmBtn,
-                  !createName.trim() && styles.confirmBtnDisabled,
-                ]}
+              </Pressable>
+              <PrimaryButton
+                label={t('club.create')}
                 onPress={() => {
                   if (createName.trim()) {
                     createClub(createName.trim());
                   }
                 }}
-                accessibilityRole="button"
+                disabled={!createName.trim()}
+                style={styles.createConfirm}
                 accessibilityLabel="Create club"
-              >
-                <Text style={styles.confirmBtnText}>{t('club.create')}</Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         ) : (
-          <TouchableOpacity
-            style={styles.createButton}
+          <Pressable
+            style={({ pressed }) => [styles.createButton, pressed && styles.cardPressed]}
             onPress={() => setShowCreate(true)}
             accessibilityRole="button"
             accessibilityLabel="Create new club"
           >
-            <Text style={styles.createButtonIcon}>+</Text>
+            <GlyphMedallion size={36} accent={COLORS.accent}>
+              <Text style={styles.plusGlyph}>+</Text>
+            </GlyphMedallion>
             <Text style={styles.createButtonText}>{t('club.createNewClub')}</Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
       </View>
     </ScrollView>
@@ -699,6 +1632,8 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 
   const renderClub = () => {
     if (!data) return null;
+    const tier = data.tier ?? 'bronze';
+    const tierColor = TIER_ACCENT[tier] ?? COLORS.tierBronze;
 
     return (
       <ScrollView
@@ -706,46 +1641,70 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         contentContainerStyle={styles.clubContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Club Header */}
-        <View style={styles.clubHeader}>
+        {/* Club hero header */}
+        <View style={styles.clubHeroPanel}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <LinearGradient
+            colors={[COLORS.accent + '1E', COLORS.purple + '0E', 'rgba(8,2,22,0.0)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <CrestMedallion
+            letter={data.name.charAt(0).toUpperCase()}
+            size={76}
+            accent={COLORS.accent}
+            ring={TIER_METAL[tier]}
+          />
+          <Text style={styles.clubName}>{data.name}</Text>
+          <View style={styles.clubChipRow}>
+            <View style={styles.memberChip}>
+              <Text style={styles.memberChipText}>
+                {t('club.memberCountLabel', { current: data.memberCount, max: data.maxMembers })}
+              </Text>
+            </View>
+            <View style={[styles.tierChip, { borderColor: tierColor + '88' }]}>
+              <Text style={[styles.tierChipText, { color: tierColor }]}>
+                {tier.toUpperCase()}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Weekly Score */}
+        <View style={styles.weeklyScoreCard}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard] as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.clubShield}
-          >
-            <Text style={styles.clubShieldText}>
-              {data.name.charAt(0).toUpperCase()}
-            </Text>
-          </LinearGradient>
-          <Text style={styles.clubName}>{data.name}</Text>
-          <Text style={styles.clubMemberCount}>
-            {t('club.memberCountLabel', { current: data.memberCount, max: data.maxMembers })}
-          </Text>
-        </View>
-
-        {/* Weekly Score */}
-        <LinearGradient
-          colors={[...GRADIENTS.surfaceCard] as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.weeklyScoreCard}
-        >
+            style={StyleSheet.absoluteFillObject}
+          />
           <Text style={styles.weeklyScoreLabel}>{t('club.weeklyClubScore')}</Text>
           <Text style={styles.weeklyScoreValue}>
             {data.weeklyScore.toLocaleString()}
           </Text>
-        </LinearGradient>
+        </View>
 
         {/* Club Puzzle */}
-        <TouchableOpacity activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Play today's club puzzle">
+        <Pressable
+          style={({ pressed }) => [pressed && styles.cardPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Play today's club puzzle"
+        >
           <LinearGradient
             colors={[COLORS.accent + '18', COLORS.accent + '08'] as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.clubPuzzleBtn}
           >
-            <Text style={styles.clubPuzzleIcon}>🧩</Text>
+            <GlyphMedallion size={44} accent={COLORS.accent}>
+              <TileGridGlyph size={20} accent={COLORS.accent} />
+            </GlyphMedallion>
             <View style={styles.clubPuzzleInfo}>
               <Text style={styles.clubPuzzleTitle}>{t('club.clubPuzzle')}</Text>
               <Text style={styles.clubPuzzleDesc}>
@@ -754,7 +1713,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             </View>
             <Text style={styles.chevron}>›</Text>
           </LinearGradient>
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Pending Gifts */}
         <GiftInbox />
@@ -762,7 +1721,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         {/* Club Cooperative Goal */}
         {clubGoal && (
           <>
-            <Text style={styles.sectionTitle}>{t('club.clubGoal')}</Text>
+            <SectionHeader label={t('club.clubGoal')} accent={COLORS.gold} />
             <ClubGoalCard goal={clubGoal} playerContribution={playerContribution} />
           </>
         )}
@@ -771,13 +1730,14 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         <ClubSharedGoals clubId={clubId ?? null} memberNames={memberNames} />
 
         {/* Your Contribution */}
-        <Text style={styles.sectionTitle}>{t('club.yourContribution')}</Text>
-        <LinearGradient
-          colors={[...GRADIENTS.surfaceCard] as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.contributeCard}
-        >
+        <SectionHeader label={t('club.yourContribution')} accent={COLORS.accent} />
+        <View style={styles.contributeCard}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
           <View style={styles.contributeRow}>
             <View style={styles.contributeStat}>
               <Text style={styles.contributeStatValue}>
@@ -803,43 +1763,47 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           <Text style={styles.contributeHint}>
             Keep playing to help your club reach the goal!
           </Text>
-        </LinearGradient>
+        </View>
 
         {/* Club Leaderboard */}
-        <Text style={styles.sectionTitle}>{t('club.weeklyRankings')}</Text>
+        <SectionHeader label={t('club.weeklyRankings')} accent={COLORS.cyan} />
         <ClubLeaderboard entries={leaderboardEntries} currentClubId={clubId} />
 
         {/* Members with Weekly Scores */}
-        <Text style={styles.sectionTitle}>{t('club.members')}</Text>
-        <LinearGradient
-          colors={[...GRADIENTS.surfaceCard] as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.membersCard}
-        >
+        <SectionHeader
+          label={t('club.members')}
+          accent={COLORS.purple}
+          meta={`${data.members.length}`}
+        />
+        <View style={styles.membersBlock}>
           {data.members.length > 0 ? (
             data.members.map((member, index) => (
-              <View key={member.id}>
-                {index > 0 && <View style={styles.memberDivider} />}
-                <View style={styles.memberRow} accessibilityRole="text" accessibilityLabel={`Rank ${index + 1}: ${member.name}, ${member.score.toLocaleString()} points${member.isLeader ? ', club leader' : ''}${member.isOnline ? ', online' : ''}`}>
-                  <View style={styles.memberRank}>
-                    <Text style={styles.memberRankText}>{index + 1}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.memberAvatar,
-                      member.isOnline && styles.memberAvatarOnline,
-                    ]}
-                  >
-                    <Text style={styles.memberAvatarText}>
-                      {member.name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
+              <View key={member.id} style={styles.memberCard}>
+                <LinearGradient
+                  colors={[...GRADIENTS.surfaceCard] as [string, string]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+                <View
+                  style={styles.memberRow}
+                  accessibilityRole="text"
+                  accessibilityLabel={`Rank ${index + 1}: ${member.name}, ${member.score.toLocaleString()} points${member.isLeader ? ', club leader' : ''}${member.isOnline ? ', online' : ''}`}
+                >
+                  <RankDisc rank={index + 1} size={28} />
+                  <MemberAvatar
+                    name={member.name}
+                    size={38}
+                    accent={member.isLeader ? COLORS.gold : COLORS.purple}
+                    online={member.isOnline}
+                  />
                   <View style={styles.memberInfo}>
                     <View style={styles.memberNameRow}>
-                      <Text style={styles.memberName}>{member.name}</Text>
+                      <Text style={styles.memberName} numberOfLines={1}>{member.name}</Text>
                       {member.isLeader && (
-                        <Text style={styles.leaderBadge}>👑</Text>
+                        <View style={styles.leaderChip}>
+                          <Text style={styles.leaderChipText}>LEADER</Text>
+                        </View>
                       )}
                     </View>
                     <Text style={styles.memberScore}>
@@ -865,15 +1829,20 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
               <Text style={styles.emptyMembersText}>No members yet</Text>
             </View>
           )}
-        </LinearGradient>
+        </View>
 
         {/* Emoji Reactions */}
-        <Text style={styles.sectionTitle}>{t('club.quickReactions')}</Text>
+        <SectionHeader label={t('club.quickReactions')} accent={COLORS.gold} />
         <View style={styles.emojiBar}>
           {REACTION_EMOJIS.map((emoji) => (
-            <TouchableOpacity key={emoji} style={styles.emojiBtn} accessibilityRole="button" accessibilityLabel={`React with ${emoji}`}>
-              <Text style={styles.emojiBtnText}>{emoji}</Text>
-            </TouchableOpacity>
+            <Pressable
+              key={emoji}
+              style={({ pressed }) => [pressed && styles.chipPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`React with ${emoji}`}
+            >
+              <IconMedallion glyph={emoji} size={38} accent={COLORS.purple} />
+            </Pressable>
           ))}
         </View>
 
@@ -889,13 +1858,14 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         )}
 
         {/* Club Chat */}
-        <Text style={styles.sectionTitle}>{t('club.clubChat')}</Text>
-        <LinearGradient
-          colors={[...GRADIENTS.surfaceCard] as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.chatCard}
-        >
+        <SectionHeader label={t('club.clubChat')} accent={COLORS.cyan} />
+        <View style={styles.chatCard}>
+          <LinearGradient
+            colors={[...GRADIENTS.surfaceCard] as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
           {firestoreService.isAvailable() ? (
             <>
               {/* Messages */}
@@ -906,8 +1876,12 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                   </View>
                 ) : visibleChatMessages.length === 0 ? (
                   <View style={styles.chatPlaceholder}>
-                    <Text style={styles.chatPlaceholderIcon}>💬</Text>
-                    <Text style={styles.chatPlaceholderText}>No messages yet. Say hello!</Text>
+                    <GlyphMedallion size={44} accent={COLORS.cyan} muted>
+                      <ChatBubbleGlyph size={20} accent={COLORS.cyan} />
+                    </GlyphMedallion>
+                    <Text style={[styles.chatPlaceholderText, styles.chatPlaceholderGap]}>
+                      No messages yet. Say hello!
+                    </Text>
                   </View>
                 ) : (
                   <FlatList
@@ -926,10 +1900,10 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                     // players could only ever read the newest few messages.
                     nestedScrollEnabled
                     renderItem={({ item }) => (
-                      <TouchableOpacity
+                      <Pressable
                         onLongPress={() => handleMessageLongPress(item)}
-                        activeOpacity={0.7}
                         delayLongPress={300}
+                        style={({ pressed }) => [pressed && styles.messagePressed]}
                         accessibilityRole="button"
                         accessibilityLabel={`Message from ${item.displayName}. Long-press for options.`}
                         accessibilityHint="Long-press to report or block this user"
@@ -943,7 +1917,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
                             <Text style={styles.chatMessageText}>{item.message}</Text>
                           </View>
                         </View>
-                      </TouchableOpacity>
+                      </Pressable>
                     )}
                   />
                 )}
@@ -952,42 +1926,51 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
               {/* Input */}
               <View style={styles.chatInputRow}>
                 <TextInput
-                  style={styles.chatInput}
+                  style={[styles.chatInput, chatFocused && styles.inputFocused]}
                   placeholder={t('club.chatPlaceholder')}
                   placeholderTextColor={COLORS.textMuted}
                   value={chatInput}
                   onChangeText={setChatInput}
+                  onFocus={() => setChatFocused(true)}
+                  onBlur={() => setChatFocused(false)}
                   maxLength={200}
                   returnKeyType="send"
                   onSubmitEditing={handleSendMessage}
                   accessibilityLabel="Chat message input"
                 />
-                <TouchableOpacity
-                  style={[styles.chatSendBtn, !chatInput.trim() && styles.chatSendBtnDisabled]}
+                <PrimaryButton
+                  label={t('club.send')}
                   onPress={handleSendMessage}
+                  size="small"
                   disabled={!chatInput.trim()}
-                  accessibilityRole="button"
                   accessibilityLabel="Send message"
-                >
-                  <Text style={styles.chatSendBtnText}>{t('club.send')}</Text>
-                </TouchableOpacity>
+                />
               </View>
             </>
           ) : (
             <View style={styles.chatPlaceholder}>
-              <Text style={styles.chatPlaceholderIcon}>🔒</Text>
-              <Text style={styles.chatPlaceholderText}>Club chat requires Firebase</Text>
+              <GlyphMedallion size={44} accent={COLORS.purple} muted>
+                <LockGlyph size={20} accent={COLORS.purpleLight} />
+              </GlyphMedallion>
+              <Text style={[styles.chatPlaceholderText, styles.chatPlaceholderGap]}>
+                Club chat requires Firebase
+              </Text>
               <Text style={styles.chatPlaceholderSubtext}>
                 Set EXPO_PUBLIC_FIREBASE_* env vars to enable
               </Text>
             </View>
           )}
-        </LinearGradient>
+        </View>
 
         {/* Leave Club */}
-        <TouchableOpacity style={styles.leaveButton} onPress={leaveClub}>
+        <Pressable
+          style={({ pressed }) => [styles.leaveButton, pressed && styles.chipPressed]}
+          onPress={leaveClub}
+          accessibilityRole="button"
+          accessibilityLabel={t('club.leave')}
+        >
           <Text style={styles.leaveButtonText}>{t('club.leave')}</Text>
-        </TouchableOpacity>
+        </Pressable>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -998,52 +1981,49 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   // loading/retry pane instead of the misleading no-club browse view.
   const renderClubLoading = () => (
     <View style={styles.clubLoading}>
-      <Text style={styles.clubLoadingText}>
-        {clubFetchFailed ? 'Could not load your club.' : 'Loading your club…'}
-      </Text>
-      {clubFetchFailed && (
-        <TouchableOpacity
-          style={styles.clubRetryBtn}
-          onPress={() => void refreshClub()}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading club"
-        >
-          <Text style={styles.clubRetryText}>Retry</Text>
-        </TouchableOpacity>
-      )}
+      <View style={styles.clubLoadingCard}>
+        <LinearGradient
+          colors={[...GRADIENTS.surfaceCard] as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <ShieldCrest size={52} muted={clubFetchFailed} />
+        <Text style={styles.clubLoadingText}>
+          {clubFetchFailed ? 'Could not load your club.' : 'Loading your club…'}
+        </Text>
+        {clubFetchFailed && (
+          <PrimaryButton
+            label="RETRY"
+            size="small"
+            onPress={() => void refreshClub()}
+            accessibilityLabel="Retry loading club"
+          />
+        )}
+      </View>
     </View>
   );
 
+  const onBack =
+    navigation && (navigation.canGoBack ? navigation.canGoBack() : true)
+      ? () => navigation.goBack()
+      : undefined;
+
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="club" />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('club.header')}</Text>
-      </View>
+    <ScreenScaffold
+      title={t('club.header')}
+      eyebrow="TEAM UP"
+      accent={COLORS.accent}
+      backdrop="club"
+      scroll={false}
+      onBack={onBack}
+    >
       {clubId ? (data ? renderClub() : renderClubLoading()) : renderNoClub()}
-    </View>
+    </ScreenScaffold>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 16,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    letterSpacing: 4,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
   scrollView: {
     flex: 1,
   },
@@ -1051,113 +2031,160 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  clubLoadingCard: {
+    ...bentoPanel('purple', { padding: 24 }),
+    alignSelf: 'stretch',
+    alignItems: 'center',
     gap: 14,
+    overflow: 'hidden',
+    backgroundColor: COLORS.surfaceGlass,
   },
   clubLoadingText: {
     fontSize: 15,
-    color: COLORS.textMuted,
-  },
-  clubRetryBtn: {
-    paddingHorizontal: 22,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-  },
-  clubRetryText: {
-    fontSize: 14,
-    color: COLORS.accent,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textSecondary,
   },
   noClubContent: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingTop: 8,
+    // Clears the floating tab bar (64pt + home-indicator inset) with margin,
+    // so the create-club input at the bottom never sits clipped against the
+    // screen edge — and stays reachable above the keyboard while focused.
+    paddingBottom: 150,
   },
-  noClubHero: {
+  heroPanel: {
+    ...bentoPanel('pink', { padding: 20, borderRadius: RADIUS.xxl }),
     alignItems: 'center',
-    paddingVertical: 30,
+    overflow: 'hidden',
+    backgroundColor: COLORS.surfaceGlass,
   },
-  noClubIcon: {
-    fontSize: 56,
+  crestCluster: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginTop: 6,
     marginBottom: 16,
   },
+  crestSideLeft: {
+    marginRight: -12,
+    marginBottom: 4,
+  },
+  crestSideRight: {
+    marginLeft: -12,
+    marginBottom: 4,
+  },
   noClubTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
+    letterSpacing: 1,
     marginBottom: 8,
+    textAlign: 'center',
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
   noClubDesc: {
     fontSize: 14,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
-    paddingHorizontal: 20,
+    paddingHorizontal: 10,
+  },
+  benefitList: {
+    alignSelf: 'stretch',
+    marginTop: 8,
+    marginBottom: 18,
+  },
+  heroCtas: {
+    alignSelf: 'stretch',
+  },
+  heroCtaGap: {
+    marginTop: 10,
   },
   searchSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-    textShadowColor: 'rgba(255,255,255,0.08)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    marginBottom: 10,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(26, 31, 69, 0.8)',
-    borderRadius: 14,
-    paddingHorizontal: 14,
+    gap: 10,
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.xl,
+    paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: COLORS.borderSubtle,
     ...SHADOWS.soft,
-  },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
   },
   searchInput: {
     flex: 1,
     height: 48,
     fontSize: 15,
+    fontFamily: FONTS.bodyMedium,
     color: COLORS.textPrimary,
+  },
+  inputFocused: {
+    borderColor: COLORS.accent + '99',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 5,
   },
   // S1 club browser
   browseHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    gap: 10,
+  },
+  browseHeaderLabel: {
+    flex: 1,
+  },
+  browseRefreshBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.accent + '18',
+    borderWidth: 1,
+    borderColor: COLORS.accent + '44',
+    marginTop: 10,
   },
   browseRefresh: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
     letterSpacing: 1,
   },
   browseEmpty: {
     color: COLORS.textSecondary,
     fontSize: 14,
+    fontFamily: FONTS.bodyRegular,
     lineHeight: 20,
     paddingVertical: 12,
   },
   browseCard: {
+    ...bentoPanel('purple', { padding: 12, marginBottom: 10 }),
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(26,31,69,0.7)',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    gap: 12,
+    overflow: 'hidden',
+    backgroundColor: COLORS.surfaceGlass,
+  },
+  cardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.985 }],
+  },
+  chipPressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.96 }],
+  },
+  messagePressed: {
+    opacity: 0.7,
   },
   browseCardMain: {
     flex: 1,
-    marginRight: 12,
   },
   browseCardName: {
     color: COLORS.textPrimary,
@@ -1170,17 +2197,49 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.bodyRegular,
     lineHeight: 17,
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  browseCardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  memberChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+  },
+  memberChipText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
+    letterSpacing: 0.5,
   },
   browseCardMeta: {
     color: COLORS.textMuted,
     fontSize: 12,
     fontFamily: FONTS.bodyRegular,
   },
-  browseCardCta: {
+  joinChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.accent + '20',
+    borderWidth: 1,
+    borderColor: COLORS.accent + '55',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  joinChipText: {
     color: COLORS.accent,
     fontSize: 12,
-    fontFamily: FONTS.bodyBold,
+    fontFamily: FONTS.display,
     letterSpacing: 1.5,
   },
   createSection: {
@@ -1190,129 +2249,122 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(26, 31, 69, 0.6)',
-    borderRadius: 16,
-    paddingVertical: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 45, 149, 0.15)',
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.xl,
+    paddingVertical: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.accent + '40',
     borderStyle: 'dashed',
-    gap: 10,
+    gap: 12,
     ...SHADOWS.soft,
   },
-  createButtonIcon: {
-    fontSize: 24,
-    color: COLORS.accent,
-  },
   createButtonText: {
-    fontSize: 16,
-    fontFamily: FONTS.bodySemiBold,
+    fontSize: 15,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  plusGlyph: {
+    fontSize: 20,
+    lineHeight: 24,
+    fontFamily: FONTS.display,
+    color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   createForm: {
-    backgroundColor: 'rgba(26, 31, 69, 0.8)',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    ...SHADOWS.medium,
+    ...bentoPanel('gold', { padding: 16 }),
+    overflow: 'hidden',
+    backgroundColor: COLORS.surfaceGlass,
   },
   createInput: {
     height: 48,
-    backgroundColor: COLORS.bgLight,
-    borderRadius: 10,
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.lg,
     paddingHorizontal: 14,
     fontSize: 15,
+    fontFamily: FONTS.bodyMedium,
     color: COLORS.textPrimary,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: COLORS.cellDefault,
+    borderColor: COLORS.borderSubtle,
   },
   createButtons: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   cancelBtn: {
     flex: 1,
-    backgroundColor: 'rgba(37, 43, 94, 0.8)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: RADIUS.lg,
     paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: COLORS.borderSubtle,
   },
   cancelBtnText: {
     fontSize: 14,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
   },
-  confirmBtn: {
+  createConfirm: {
     flex: 1,
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    ...SHADOWS.glow(COLORS.accent),
-  },
-  confirmBtnDisabled: {
-    opacity: 0.4,
-  },
-  confirmBtnText: {
-    fontSize: 14,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.bg,
   },
   clubContent: {
     paddingHorizontal: 16,
+    paddingTop: 8,
   },
-  clubHeader: {
+  clubHeroPanel: {
+    ...bentoPanel('pink', { padding: 18, borderRadius: RADIUS.xxl }),
     alignItems: 'center',
-    paddingVertical: 16,
-  },
-  clubShield: {
-    width: 76,
-    height: 76,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: COLORS.accent + '60',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
     overflow: 'hidden',
-    ...SHADOWS.glow(COLORS.accent),
-  },
-  clubShieldText: {
-    fontSize: 32,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
+    backgroundColor: COLORS.surfaceGlass,
   },
   clubName: {
     fontSize: 24,
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
-    marginBottom: 4,
-    textShadowColor: 'rgba(255,255,255,0.1)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    letterSpacing: 1,
+    marginTop: 12,
+    marginBottom: 8,
+    textAlign: 'center',
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
-  clubMemberCount: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+  clubChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tierChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+  },
+  tierChipText: {
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    letterSpacing: 1.5,
   },
   weeklyScoreCard: {
-    borderRadius: 18,
-    padding: 22,
+    ...bentoPanel('gold', { padding: 20 }),
     alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
-    ...SHADOWS.medium,
+    backgroundColor: COLORS.surfaceGlass,
   },
   weeklyScoreLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
     marginBottom: 6,
   },
@@ -1327,16 +2379,13 @@ const styles = StyleSheet.create({
   clubPuzzleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
-    padding: 18,
+    gap: 14,
+    borderRadius: RADIUS.xl,
+    padding: 14,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: COLORS.accent + '30',
     ...SHADOWS.glow(COLORS.accent),
-  },
-  clubPuzzleIcon: {
-    fontSize: 28,
-    marginRight: 14,
   },
   clubPuzzleInfo: {
     flex: 1,
@@ -1349,60 +2398,28 @@ const styles = StyleSheet.create({
   },
   clubPuzzleDesc: {
     fontSize: 12,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textSecondary,
   },
   chevron: {
     fontSize: 24,
+    fontFamily: FONTS.display,
     color: COLORS.accent,
   },
-  membersCard: {
-    borderRadius: 16,
+  membersBlock: {
+    marginBottom: 8,
+  },
+  memberCard: {
+    ...bentoPanel('purple', { padding: 0, marginBottom: 8 }),
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    marginBottom: 20,
-    ...SHADOWS.medium,
+    backgroundColor: COLORS.surfaceGlass,
   },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-  },
-  memberDivider: {
-    height: 1,
-    backgroundColor: COLORS.bgLight,
-    marginHorizontal: 14,
-  },
-  memberRank: {
-    width: 24,
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  memberRankText: {
-    fontSize: 13,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textMuted,
-  },
-  memberAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(37, 43, 94, 0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  memberAvatarOnline: {
-    borderWidth: 2,
-    borderColor: COLORS.green,
-    ...SHADOWS.glow(COLORS.green),
-  },
-  memberAvatarText: {
-    fontSize: 16,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textPrimary,
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   memberInfo: {
     flex: 1,
@@ -1410,18 +2427,31 @@ const styles = StyleSheet.create({
   memberNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   memberName: {
     fontSize: 15,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
+    flexShrink: 1,
   },
-  leaderBadge: {
-    fontSize: 14,
+  leaderChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.gold + '1C',
+    borderWidth: 1,
+    borderColor: COLORS.gold + '66',
+  },
+  leaderChipText: {
+    fontSize: 9,
+    fontFamily: FONTS.display,
+    letterSpacing: 1.2,
+    color: COLORS.gold,
   },
   memberScore: {
     fontSize: 12,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textSecondary,
     marginTop: 1,
   },
@@ -1437,36 +2467,25 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   emptyMembers: {
-    padding: 24,
+    ...bentoPanel('purple', { padding: 24 }),
     alignItems: 'center',
+    backgroundColor: COLORS.surfaceGlass,
   },
   emptyMembersText: {
     fontSize: 14,
+    fontFamily: FONTS.bodyMedium,
     color: COLORS.textMuted,
   },
   emojiBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(26, 31, 69, 0.7)',
-    borderRadius: 16,
-    padding: 12,
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.xl,
+    padding: 10,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: COLORS.borderSubtle,
     ...SHADOWS.soft,
-  },
-  emojiBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: 'rgba(17, 22, 56, 0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  emojiBtnText: {
-    fontSize: 18,
   },
   recentReactions: {
     flexDirection: 'row',
@@ -1476,22 +2495,18 @@ const styles = StyleSheet.create({
   },
   reactionEmoji: {
     fontSize: 20,
-    backgroundColor: 'rgba(26, 31, 69, 0.7)',
-    borderRadius: 10,
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.md,
     paddingHorizontal: 8,
     paddingVertical: 4,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: COLORS.borderSubtle,
   },
   contributeCard: {
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.borderMedium,
+    ...bentoPanel('pink', { padding: 18 }),
     overflow: 'hidden',
-    ...SHADOWS.medium,
+    backgroundColor: COLORS.surfaceGlass,
   },
   contributeRow: {
     flexDirection: 'row',
@@ -1526,6 +2541,7 @@ const styles = StyleSheet.create({
   },
   contributeHint: {
     fontSize: 12,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
@@ -1533,7 +2549,7 @@ const styles = StyleSheet.create({
   leaveButton: {
     borderWidth: 1,
     borderColor: COLORS.coral + '40',
-    borderRadius: 14,
+    borderRadius: RADIUS.xl,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
@@ -1548,12 +2564,9 @@ const styles = StyleSheet.create({
     textShadowRadius: 6,
   },
   chatCard: {
-    borderRadius: 16,
+    ...bentoPanel('cyan', { padding: 0 }),
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    marginBottom: 20,
-    ...SHADOWS.medium,
+    backgroundColor: COLORS.surfaceGlass,
   },
   chatMessagesContainer: {
     height: 240,
@@ -1566,12 +2579,12 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   chatMessageBubble: {
-    backgroundColor: 'rgba(17, 22, 56, 0.6)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: RADIUS.lg,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(255,255,255,0.07)',
   },
   chatMessageHeader: {
     flexDirection: 'row',
@@ -1586,10 +2599,12 @@ const styles = StyleSheet.create({
   },
   chatTimestamp: {
     fontSize: 10,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textMuted,
   },
   chatMessageText: {
     fontSize: 14,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textPrimary,
     lineHeight: 19,
   },
@@ -1598,34 +2613,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    borderTopColor: COLORS.borderSubtle,
     gap: 8,
   },
   chatInput: {
     flex: 1,
     height: 40,
-    backgroundColor: COLORS.bgLight,
-    borderRadius: 12,
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.lg,
     paddingHorizontal: 14,
     fontSize: 14,
+    fontFamily: FONTS.bodyMedium,
     color: COLORS.textPrimary,
     borderWidth: 1,
-    borderColor: COLORS.cellDefault,
-  },
-  chatSendBtn: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    ...SHADOWS.glow(COLORS.accent),
-  },
-  chatSendBtnDisabled: {
-    opacity: 0.4,
-  },
-  chatSendBtnText: {
-    fontSize: 13,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.bg,
+    borderColor: COLORS.borderSubtle,
   },
   chatPlaceholder: {
     flex: 1,
@@ -1633,17 +2634,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  chatPlaceholderIcon: {
-    fontSize: 32,
-    marginBottom: 8,
+  chatPlaceholderGap: {
+    marginTop: 10,
   },
   chatPlaceholderText: {
     fontSize: 14,
+    fontFamily: FONTS.bodyMedium,
     color: COLORS.textSecondary,
     textAlign: 'center',
   },
   chatPlaceholderSubtext: {
     fontSize: 12,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textMuted,
     textAlign: 'center',
     marginTop: 4,

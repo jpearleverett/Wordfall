@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS } from '../constants';
+import GameIcon from './icons/GameIcon';
 import { bentoPanel } from '../styles/bentoPanel';
 import {
   useEconomyStore,
@@ -73,7 +74,9 @@ const PiggyBankCard: React.FC<PiggyBankCardProps> = ({
         end={{ x: 0, y: 1 }}
       />
       <View style={styles.header}>
-        <Text style={styles.icon}>{'\u{1FAD9}'}</Text>
+        <View style={styles.iconWrap}>
+          <GameIcon name="piggyJar" size={40} />
+        </View>
         <View style={styles.headerInfo}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
@@ -134,8 +137,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  icon: {
-    fontSize: 40,
+  iconWrap: {
     marginRight: 12,
   },
   headerInfo: {

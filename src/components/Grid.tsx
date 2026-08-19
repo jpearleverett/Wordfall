@@ -1,6 +1,7 @@
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, useCallback, useEffect, useLayoutEffect, useState, useImperativeHandle, forwardRef } from 'react';
 import {
   Animated,
+  Easing,
   Image,
   Platform,
   StyleSheet,
@@ -18,9 +19,18 @@ import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import SelectionTrailOverlay from './game/SelectionTrailOverlay';
 import { perfDragStart, perfDragDispatch, perfDragEnd } from '../utils/perfInstrument';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 // Extracted constants to avoid creating new objects on every render
 const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]];
+
+/** #rrggbb → rgba() string; passes anything else through at full alpha. */
+function hexToRgba(color: string, alpha: number): string {
+  const m = color.match(/^#([0-9a-fA-F]{6})$/);
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 0xff},${(n >> 8) & 0xff},${n & 0xff},${alpha})`;
+}
 const GRADIENT_START = { x: 0, y: 0 };
 const GRADIENT_END = { x: 1, y: 1 };
 const EMPTY_FLEX = { flex: 1 } as const;
@@ -53,10 +63,20 @@ interface GridProps {
   /** When true, cells render at their grid row position instead of stacking to bottom */
   noGravityLayout?: boolean;
   validWord?: boolean;
-  movedCells?: CellPosition[];
   maxHeight?: number;
-  /** Per-tile gravity fall Animated.Values keyed by cell ID */
-  fallAnimMap?: Map<string, Animated.Value>;
+  /**
+   * Fired once when every tile from a gravity fall has landed and settled.
+   * GameScreen uses it for the landing haptic. Not fired for interrupted
+   * runs (a second word found mid-fall) — the successor run fires instead.
+   */
+  onGravitySettled?: () => void;
+  /**
+   * Chapter accent color (#rrggbb). Tints the neon frame + outer glow so
+   * the board chrome harmonizes with the chapter's tile ramp instead of
+   * always being pink — the blind design review flagged green nature tiles
+   * clashing inside the fixed magenta frame.
+   */
+  frameAccent?: string;
   /** When true, all grid positions become tappable (for wildcard placement on empty cells) */
   wildcardMode?: boolean;
   /**
@@ -65,6 +85,135 @@ interface GridProps {
    */
   bonusCellId?: string | null;
 }
+
+// ── Cleared-word ghost tiles ────────────────────────────────────────────────
+// When a word resolves, its tiles are removed from the grid data and would
+// unmount instantly — a harsh pop. The ghost layer re-renders each cleared
+// tile at its old position for ~350ms as a glowing green tile that swells,
+// lifts, and dissolves, giving the clear a physical "burst" beat before the
+// gravity cascade lands in the vacated space. Everything is native-driven.
+
+interface GhostSpec {
+  id: string;
+  letter: string;
+  x: number;
+  y: number;
+  col: number;
+}
+
+interface GhostLayerHandle {
+  spawn(specs: GhostSpec[]): void;
+}
+
+interface GhostEntry extends GhostSpec {
+  key: string;
+  order: number;
+}
+
+// Matches LetterCell's valid-word (green) tile ramp so the ghost reads as a
+// direct continuation of the valid-word flash the tiles showed at submit.
+const GHOST_BODY_COLORS = ['#33ffaa', '#00d96e', '#008844'] as [string, string, string];
+const GHOST_STAGGER_MS = 24;
+const GHOST_DURATION_MS = 340;
+
+const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: GhostEntry; cellSize: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(ghost.order * GHOST_STAGGER_MS),
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: GHOST_DURATION_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const borderRadius = cellSize * 0.2;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: ghost.x + CELL_GAP / 2,
+        top: ghost.y + CELL_GAP / 2,
+        width: cellSize,
+        height: cellSize,
+        borderRadius,
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [1, 0.95, 0] }),
+        transform: [
+          { scale: anim.interpolate({ inputRange: [0, 0.35, 1], outputRange: [1, 1.14, 1.22] }) },
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -cellSize * 0.18] }) },
+        ],
+      }}
+    >
+      <LinearGradient
+        colors={GHOST_BODY_COLORS}
+        start={GRADIENT_START}
+        end={GRADIENT_END}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <Text
+        style={{
+          color: '#ffffff',
+          fontFamily: 'SpaceGrotesk_700Bold',
+          fontSize: cellSize * 0.46,
+          textShadowColor: 'rgba(0,40,15,1)',
+          textShadowRadius: 8,
+        }}
+      >
+        {ghost.letter}
+      </Text>
+    </Animated.View>
+  );
+});
+
+const ClearGhostLayer = React.memo(forwardRef<GhostLayerHandle, { cellSize: number }>(
+  function ClearGhostLayer({ cellSize }, ref) {
+    const [ghosts, setGhosts] = useState<GhostEntry[]>([]);
+    const batchRef = useRef(0);
+    const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+    useImperativeHandle(ref, () => ({
+      spawn(specs: GhostSpec[]) {
+        if (specs.length === 0) return;
+        const batch = ++batchRef.current;
+        const entries: GhostEntry[] = specs.map((s, i) => ({
+          ...s,
+          key: `${batch}-${s.id}`,
+          order: i,
+        }));
+        setGhosts(prev => [...prev, ...entries]);
+        const ttl = GHOST_DURATION_MS + specs.length * GHOST_STAGGER_MS + 60;
+        const t = setTimeout(() => {
+          timersRef.current.delete(t);
+          const keys = new Set(entries.map(e => e.key));
+          setGhosts(prev => prev.filter(g => !keys.has(g.key)));
+        }, ttl);
+        timersRef.current.add(t);
+      },
+    }), []);
+
+    useEffect(() => () => {
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current.clear();
+    }, []);
+
+    if (ghosts.length === 0) return null;
+    return (
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        {ghosts.map(g => (
+          <GhostTile key={g.key} ghost={g} cellSize={cellSize} />
+        ))}
+      </View>
+    );
+  },
+));
 
 function GameGridImpl({
   grid,
@@ -78,10 +227,10 @@ function GameGridImpl({
   spotlightDimmedCells,
   gravityDirection,
   validWord = false,
-  movedCells = [],
   maxHeight,
   noGravityLayout = false,
-  fallAnimMap,
+  onGravitySettled,
+  frameAccent,
   wildcardMode = false,
   bonusCellId = null,
 }: GridProps) {
@@ -138,12 +287,6 @@ function GameGridImpl({
     wildcardCells.forEach(c => set.add(`${c.row},${c.col}`));
     return set;
   }, [wildcardCells]);
-
-  const movedSet = useMemo(() => {
-    const set = new Set<string>();
-    movedCells.forEach(c => set.add(`${c.row},${c.col}`));
-    return set;
-  }, [movedCells]);
 
   const columns = useMemo(() => {
     const cols_arr: { cell: NonNullable<GridType[0][0]> | null; row: number; col: number }[][] = [];
@@ -210,6 +353,202 @@ function GameGridImpl({
     }
     return bounds;
   }, [grid, rows, cols, cellSize, gridHeight, noGravityLayout]);
+
+  // ── Gravity animation engine ─────────────────────────────────────────────
+  // Grid owns the whole fall animation. The critical property: translate
+  // offsets are computed and applied DURING RENDER, in the same pass that
+  // moves each tile to its new layout slot. The first frame the new tree
+  // paints, every moved tile already carries the transform that puts it back
+  // at its old position — there is no window where a tile can flash at its
+  // destination before the animation starts (the root cause of the old
+  // "flicker then awkward settle"). A diff of the previous grid against the
+  // current one also yields the cleared cells, which become dissolving
+  // ghost tiles, and works for ALL gravity directions (the old fallRows
+  // pipeline only animated vertical falls — gravityFlip left/right
+  // teleported).
+  const reduceMotion = useReduceMotion();
+
+  // Map cell ID → pixel bound for the current grid.
+  const boundsById = useMemo(() => {
+    const byPos = new Map<string, { x: number; y: number }>();
+    for (const b of cellBounds) byPos.set(`${b.row},${b.col}`, { x: b.x, y: b.y });
+    const map = new Map<string, { x: number; y: number; col: number; letter: string }>();
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cell = grid[r][c];
+        if (!cell) continue;
+        const b = byPos.get(`${r},${c}`);
+        if (b) map.set(cell.id, { x: b.x, y: b.y, col: c, letter: cell.letter });
+      }
+    }
+    return map;
+  }, [grid, cellBounds, rows, cols]);
+
+  const fallAnimMapRef = useRef(new Map<string, Animated.ValueXY>());
+  // Live offsets reported by native-driver listeners while a fall is in
+  // flight — lets an interrupting clear start the next fall from the tile's
+  // CURRENT visual position instead of teleporting it to its settled slot.
+  const liveOffsetRef = useRef(new Map<string, { x: number; y: number }>());
+  const listenerHandleRef = useRef(new Map<string, string>());
+  const prevGridRef = useRef<GridType | null>(null);
+  const prevBoundsRef = useRef<Map<string, { x: number; y: number; col: number; letter: string }> | null>(null);
+  const prevCellSizeRef = useRef(cellSize);
+  const prevDimsRef = useRef({ rows, cols });
+  const pendingFallsRef = useRef<{ id: string; dx: number; dy: number; col: number }[]>([]);
+  const pendingGhostsRef = useRef<GhostSpec[]>([]);
+  const fallRunIdRef = useRef(0);
+  const ghostLayerRef = useRef<GhostLayerHandle | null>(null);
+  const onGravitySettledRef = useRef(onGravitySettled);
+  onGravitySettledRef.current = onGravitySettled;
+
+  // Render-phase diff. Runs exactly once per grid-data change; geometry
+  // changes (cell size / board dims from layout settle or board shrink)
+  // reset the baseline without animating.
+  if (prevGridRef.current !== grid) {
+    const prevBounds = prevBoundsRef.current;
+    const sameGeometry =
+      prevCellSizeRef.current === cellSize &&
+      prevDimsRef.current.rows === rows &&
+      prevDimsRef.current.cols === cols &&
+      prevBounds !== null;
+    const falls: { id: string; dx: number; dy: number; col: number }[] = [];
+    const ghosts: GhostSpec[] = [];
+    if (prevGridRef.current !== null && prevBounds && sameGeometry && !reduceMotion) {
+      for (const [id, bound] of boundsById) {
+        const prev = prevBounds.get(id);
+        if (!prev) continue;
+        const live = liveOffsetRef.current.get(id);
+        const dx = prev.x + (live?.x ?? 0) - bound.x;
+        const dy = prev.y + (live?.y ?? 0) - bound.y;
+        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+          const existing = fallAnimMapRef.current.get(id);
+          if (existing) {
+            existing.setValue({ x: dx, y: dy });
+          } else {
+            fallAnimMapRef.current.set(id, new Animated.ValueXY({ x: dx, y: dy }));
+          }
+          falls.push({ id, dx, dy, col: bound.col });
+        }
+      }
+      for (const [id, prev] of prevBounds) {
+        if (!boundsById.has(id)) {
+          ghosts.push({ id, letter: prev.letter, x: prev.x, y: prev.y, col: prev.col });
+        }
+      }
+    } else if (!sameGeometry) {
+      // Layout settle / board-shrink: the pixel space changed, so any
+      // in-flight offsets are meaningless — snap everything to rest.
+      for (const av of fallAnimMapRef.current.values()) {
+        av.setValue({ x: 0, y: 0 });
+      }
+      liveOffsetRef.current.clear();
+    }
+    pendingFallsRef.current = falls;
+    pendingGhostsRef.current = ghosts;
+    prevGridRef.current = grid;
+    prevBoundsRef.current = boundsById;
+    prevCellSizeRef.current = cellSize;
+    prevDimsRef.current = { rows, cols };
+  }
+
+  // Start the fall + ghost animations for the diff computed this render.
+  // useLayoutEffect so it fires in the same frame as the commit; the
+  // offsets were already applied during render, so even if a frame slips
+  // in first, tiles paint at their OLD positions (never the destination).
+  useLayoutEffect(() => {
+    const ghosts = pendingGhostsRef.current;
+    if (ghosts.length > 0) {
+      pendingGhostsRef.current = [];
+      ghostLayerRef.current?.spawn(ghosts);
+    }
+    const falls = pendingFallsRef.current;
+    if (falls.length === 0) return;
+    pendingFallsRef.current = [];
+    const runId = ++fallRunIdRef.current;
+
+    // Hold just long enough for the cleared word's ghost pop to register,
+    // then cascade columns outward from the cleared word's centroid.
+    const FALL_HOLD = 70;
+    const COL_STAGGER = 26;
+    const centroidCol =
+      ghosts.length > 0
+        ? ghosts.reduce((s, g) => s + g.col, 0) / ghosts.length
+        : null;
+    const movedColsArr = Array.from(new Set(falls.map(f => f.col))).sort((a, b) =>
+      centroidCol === null
+        ? a - b
+        : Math.abs(a - centroidCol) - Math.abs(b - centroidCol) || a - b,
+    );
+    const colDelay = new Map<number, number>();
+    movedColsArr.forEach((c, i) => colDelay.set(c, i * COL_STAGGER));
+
+    const stride = cellSize + CELL_GAP;
+    let remaining = falls.length;
+    for (const f of falls) {
+      const av = fallAnimMapRef.current.get(f.id);
+      if (!av) { remaining -= 1; continue; }
+      // Track the live offset (native events → JS) so an interrupting
+      // clear can pick the tile up mid-air instead of snapping it.
+      if (!listenerHandleRef.current.has(f.id)) {
+        const cellId = f.id;
+        const handle = av.addListener(({ x, y }) => {
+          liveOffsetRef.current.set(cellId, { x, y });
+        });
+        listenerHandleRef.current.set(f.id, handle);
+      }
+      const dist = Math.hypot(f.dx, f.dy);
+      const rowsFallen = Math.max(1, dist / stride);
+      // Distance-scaled fall time (√d, like real gravity) with an
+      // accelerating ease-in, then a small directional rebound whose
+      // size scales with impact distance. Reads as: drop, thud, settle.
+      const fallDur = Math.min(520, 150 + 130 * Math.sqrt(rowsFallen));
+      const bounceMag = Math.min(9, dist * 0.055);
+      const bx = f.dx === 0 ? 0 : Math.sign(f.dx) * bounceMag;
+      const by = f.dy === 0 ? 0 : Math.sign(f.dy) * bounceMag;
+      Animated.sequence([
+        Animated.delay(FALL_HOLD + (colDelay.get(f.col) ?? 0)),
+        Animated.timing(av, {
+          toValue: { x: 0, y: 0 },
+          duration: fallDur,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(av, {
+          toValue: { x: bx, y: by },
+          duration: 85,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(av, {
+          toValue: { x: 0, y: 0 },
+          duration: 100,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        // Interrupted tiles belong to the successor run — it re-computed
+        // their offsets from the live listener values and owns cleanup.
+        if (!finished) return;
+        const h = listenerHandleRef.current.get(f.id);
+        if (h) {
+          av.removeListener(h);
+          listenerHandleRef.current.delete(f.id);
+        }
+        liveOffsetRef.current.delete(f.id);
+        remaining -= 1;
+        if (remaining === 0 && runId === fallRunIdRef.current) {
+          onGravitySettledRef.current?.();
+          // Prune anims for tiles no longer on the board.
+          const active = prevBoundsRef.current;
+          if (active) {
+            for (const id of fallAnimMapRef.current.keys()) {
+              if (!active.has(id)) fallAnimMapRef.current.delete(id);
+            }
+          }
+        }
+      });
+    }
+  });
 
   const gridRef = useRef<View>(null);
   const gridLayoutRef = useRef({ x: 0, y: 0 });
@@ -462,7 +801,18 @@ function GameGridImpl({
   const outerGlowStyle = useMemo(() => [
     styles.outerGlow,
     { width: outerWidth + 12, height: outerHeight + 12, borderRadius: 28, opacity: outerGlowOpacity },
-  ], [outerWidth, outerHeight, outerGlowOpacity]);
+    frameAccent
+      ? { backgroundColor: hexToRgba(frameAccent, 0.08), shadowColor: frameAccent }
+      : null,
+  ], [outerWidth, outerHeight, outerGlowOpacity, frameAccent]);
+
+  const frameColors = useMemo<[string, string, ...string[]]>(
+    () =>
+      frameAccent
+        ? [hexToRgba(frameAccent, 0.38), hexToRgba(frameAccent, 0.22), 'rgba(0,229,255,0.16)']
+        : NEON_FRAME_COLORS,
+    [frameAccent],
+  );
 
   const neonFrameWrapStyle = useMemo(() => [
     styles.neonFrameWrap, { width: outerWidth + 16, height: outerHeight + 16, borderRadius: 28 }
@@ -504,13 +854,18 @@ function GameGridImpl({
       <View style={neonFrameWrapStyle}>
         <Image
           source={LOCAL_IMAGES.neonFrame}
-          style={styles.neonFrameImage}
+          style={[
+            styles.neonFrameImage,
+            // The baked frame art is magenta; when a chapter accent tints
+            // the chrome, fade it back so the accent gradient dominates.
+            frameAccent ? { opacity: 0.18 } : null,
+          ]}
           resizeMode="stretch"
         />
       </View>
 
       <LinearGradient
-        colors={NEON_FRAME_COLORS}
+        colors={frameColors}
         start={GRADIENT_START}
         end={GRADIENT_END}
         style={neonFrameStyle}
@@ -534,6 +889,11 @@ function GameGridImpl({
               cellBounds={cellBounds}
             />
           )}
+
+          {/* Cleared-word ghost tiles — a brief celebratory dissolve at the
+              positions the found word just vacated. Mounted BEFORE the tile
+              grid so falling tiles paint over the fading ghosts. */}
+          <ClearGhostLayer ref={ghostLayerRef} cellSize={cellSize} />
 
           <GestureDetector gesture={composedGesture}>
             <View
@@ -559,18 +919,16 @@ function GameGridImpl({
                     const selIndex = selectedSet.get(key) ?? -1;
                     const isSelected = selIndex >= 0;
                     const isHinted = hintedSet.has(key);
-                    // Create the fall value lazily at RENDER time so the
-                    // translateY transform is attached from a tile's very
-                    // first post-gravity frame. Created only in the effect
-                    // (post-commit), a first-time mover rendered at its
-                    // DESTINATION with no transform until the setMovedCells
-                    // re-render landed — a visible teleport-then-fall pop.
-                    // With the node always attached, the effect's setValue
-                    // applies on the UI thread without waiting for React.
-                    let cellFallAnim = fallAnimMap ? fallAnimMap.get(cell.id) : undefined;
-                    if (!cellFallAnim && fallAnimMap) {
-                      cellFallAnim = new Animated.Value(0);
-                      fallAnimMap.set(cell.id, cellFallAnim);
+                    // The fall value is created lazily so the translate
+                    // transform is attached from a tile's very first frame.
+                    // The render-phase diff above already seeded moved
+                    // tiles' values with their old-position offsets, so the
+                    // first painted frame of the new tree can never show a
+                    // tile at its destination.
+                    let cellFallAnim = fallAnimMapRef.current.get(cell.id);
+                    if (!cellFallAnim) {
+                      cellFallAnim = new Animated.ValueXY({ x: 0, y: 0 });
+                      fallAnimMapRef.current.set(cell.id, cellFallAnim);
                     }
 
                     return (
@@ -583,7 +941,6 @@ function GameGridImpl({
                         isHinted={isHinted}
                         selectionIndex={selIndex}
                         isValidWord={validWord && isSelected}
-                        isMoved={movedSet.has(key)}
                         isWildcard={wildcardSet.has(`${row},${col}`)}
                         isSpotlightDimmed={spotlightDimmedCells?.has(`${row},${col}`) || false}
                         isBonusTile={bonusCellId != null && cell.id === bonusCellId}

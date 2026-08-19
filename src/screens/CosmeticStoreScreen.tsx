@@ -3,15 +3,29 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Dimensions,
   Modal,
   Alert,
+  ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS, TYPOGRAPHY } from '../constants';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
+import AvatarPortrait from '../components/cosmetics/AvatarPortrait';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import IconMedallion from '../components/common/IconMedallion';
+import ThemePreview from '../components/cosmetics/ThemePreview';
+import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
+import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
+import {
+  AVATAR_VARIANT_ORDER,
+  hashAvatarSeed,
+} from '../components/cosmetics/avatarVariants';
+import GameIcon from '../components/icons/GameIcon';
+import { useEconomy } from '../contexts/EconomyContext';
+import PrimaryButton from '../components/common/PrimaryButton';
 import {
   useEconomyStore,
   useEconomyActions,
@@ -40,6 +54,31 @@ import { CosmeticTheme, ProfileFrame, ProfileTitle, LibraryDecoration, CurrencyT
 const { width } = Dimensions.get('window');
 const CARD_GAP = 10;
 const CARD_WIDTH = (width - 40 - CARD_GAP) / 2;
+const CARD_PADDING = 12;
+const CARD_BORDER = 1.5;
+/** Inner content width of a card (inside its border). */
+const CARD_INNER_WIDTH = CARD_WIDTH - CARD_BORDER * 2;
+
+// Theme previews bleed edge-to-edge across the card (only the 1.5px border
+// insets them), rendered square-cornered and clipped by the card's radius.
+// ThemePreview keeps a 160:96 aspect, so on narrow phones a full-bleed width
+// yields <100px of height — we therefore render it at whatever width the
+// minimum height demands and let the bleed container clip the overflow, so
+// the vignette always reaches both card edges AND stays >= 100px tall.
+const THEME_PREVIEW_MIN_HEIGHT = 104;
+const THEME_PREVIEW_WIDTH = Math.round(
+  Math.max(CARD_INNER_WIDTH, (THEME_PREVIEW_MIN_HEIGHT * 160) / 96),
+);
+const THEME_PREVIEW_HEIGHT = Math.max(
+  THEME_PREVIEW_MIN_HEIGHT,
+  Math.round((THEME_PREVIEW_WIDTH * 96) / 160),
+);
+
+// Frame previews are the product on the Frames tab — the ring fills the card
+// (inner width minus the card padding) instead of floating at thumbnail size.
+const FRAME_PREVIEW_SIZE = Math.round(
+  Math.min(CARD_INNER_WIDTH - CARD_PADDING * 2, 136),
+);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +97,13 @@ interface NormalizedItem {
   source?: string;
   preview?: CosmeticTheme['colors'];
   tabType: TabId;
+  /**
+   * Position in the rendered list for this tab. Portrait variants key off it
+   * (not off an id hash) so ADJACENT cards can never land on the same figure —
+   * hashing clumped the first screenful of frames onto one avatar, which read
+   * as "every frame is the same picture with a different ring".
+   */
+  listIndex: number;
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -89,6 +135,169 @@ const CURRENCY_ICONS: Record<string, string> = {
   libraryPoints: '\u{1F4DA}',
 };
 
+type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+interface RarityTreatment {
+  /** 3-stop backplate gradient (top tint / body / base tint). */
+  body: [string, string, string];
+  borderColor: string;
+  borderWidth: number;
+  /** Outer glow — null for tiers that stay flat. */
+  glow: ViewStyle | null;
+  /** Legendary-only corner sunburst. */
+  sunburst: boolean;
+}
+
+/**
+ * Tiered card treatment — rarity must be legible from the CARD, not just from
+ * a text pill. Common stays a flat surface; each higher tier adds a tinted
+ * gradient backplate, a stronger rarity border, and (epic+) an outer glow,
+ * with legendary topped by a faint corner sunburst.
+ */
+function rarityTreatment(rarity: Rarity, color: string): RarityTreatment {
+  switch (rarity) {
+    case 'legendary':
+      return {
+        body: [color + '3D', 'rgba(44,24,8,0.93)', color + '20'],
+        borderColor: color + 'CC',
+        borderWidth: 2,
+        glow: {
+          shadowColor: color,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.75,
+          shadowRadius: 20,
+          elevation: 16,
+        },
+        sunburst: true,
+      };
+    case 'epic':
+      return {
+        body: [color + '30', 'rgba(33,12,54,0.94)', color + '18'],
+        borderColor: color + 'AA',
+        borderWidth: 1.75,
+        glow: {
+          shadowColor: color,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.55,
+          shadowRadius: 14,
+          elevation: 12,
+        },
+        sunburst: false,
+      };
+    case 'rare':
+      return {
+        body: [color + '20', 'rgba(15,26,45,0.95)', color + '10'],
+        borderColor: color + '77',
+        borderWidth: 1,
+        glow: null,
+        sunburst: false,
+      };
+    default:
+      // Common — flat surface, no tint, no glow.
+      return {
+        body: ['rgba(26,10,46,0.94)', 'rgba(26,10,46,0.94)', 'rgba(21,8,39,0.96)'],
+        borderColor: COLORS.borderSubtle,
+        borderWidth: 1,
+        glow: null,
+        sunburst: false,
+      };
+  }
+}
+
+/** Faint radiating corner sunburst — legendary tier only. */
+function CornerSunburst({ color }: { color: string }) {
+  const rays = useMemo(() => {
+    const out: string[] = [];
+    const R = 132;
+    for (let i = 0; i < 9; i++) {
+      const a0 = ((96 + i * 10.5) * Math.PI) / 180;
+      const a1 = a0 + (4.8 * Math.PI) / 180;
+      const p = (a: number) =>
+        `${(100 + R * Math.cos(a)).toFixed(1)} ${(R * Math.sin(a)).toFixed(1)}`;
+      out.push(`M100 0 L${p(a0)} L${p(a1)} Z`);
+    }
+    return out;
+  }, []);
+  return (
+    <View style={styles.cornerSunburst} pointerEvents="none">
+      <Svg width={104} height={104} viewBox="0 0 100 100">
+        <Circle cx={100} cy={0} r={56} fill={color} opacity={0.1} />
+        {rays.map((d, i) => (
+          <Path key={`ray${i}`} d={d} fill={color} opacity={i % 2 === 0 ? 0.13 : 0.06} />
+        ))}
+      </Svg>
+    </View>
+  );
+}
+
+// ── Frame art preview ────────────────────────────────────────────────────────
+
+/**
+ * Real frame art preview — ProfileFrameArt's bespoke SVG ring wrapped around
+ * a mini portrait vignette (matching ProfileScreen's avatar footprint), so
+ * store cards show the actual frame framing a picture. Locked/unowned
+ * cards render it dimmed via `dimmed`.
+ */
+/**
+ * Pick the portrait variant for a frame card. Keyed on the card's INDEX in the
+ * rendered list, stepped by the four-variant rotation, so cards 0..3 are always
+ * four different characters and no two neighbours (row-wise or column-wise in a
+ * 2-up grid) repeat. The id only breaks ties when no index is available (the
+ * detail modal for an item that isn't in the current list), where it falls back
+ * to the catalog's own hash.
+ */
+function portraitVariantFor(frameId: string, index?: number): string {
+  const order = AVATAR_VARIANT_ORDER;
+  if (index === undefined || index < 0) {
+    return order[hashAvatarSeed(frameId) % order.length];
+  }
+  return order[index % order.length];
+}
+
+function FramePreview({
+  frameId,
+  portraitIndex,
+  size = FRAME_PREVIEW_SIZE,
+  dimmed = false,
+}: {
+  frameId: string;
+  /** Index of this frame in the rendered list — drives the portrait variant. */
+  portraitIndex?: number;
+  size?: number;
+  dimmed?: boolean;
+}) {
+  // Avatar disc at ~88% of size so the frame band seats on its rim
+  // (same ratio ProfileScreen uses: 88px disc in a 100px frame).
+  const discSize = Math.round(size * 0.88);
+  // The portrait borrows the frame art's own accent so each ring frames a
+  // picture in its own hue rather than the same dark bust every time.
+  const accent = useMemo(() => resolveFrameArt(frameId).accent, [frameId]);
+  const variant = useMemo(
+    () => portraitVariantFor(frameId, portraitIndex),
+    [frameId, portraitIndex],
+  );
+  return (
+    <View style={dimmed && { opacity: 0.55 }}>
+      <ProfileFrameArt frameId={frameId} size={size}>
+        <View
+          style={{
+            width: discSize,
+            height: discSize,
+            borderRadius: discSize / 2,
+            overflow: 'hidden',
+            backgroundColor: 'rgba(10,0,21,0.92)',
+          }}
+        >
+          {/* Illustrated Word Architect portrait, variant keyed by the card's
+              list position so adjacent frame cards never enclose the same
+              figure (an id hash clumped the first visible cards). */}
+          <AvatarPortrait size={discSize} accent={accent} variant={variant} />
+        </View>
+      </ProfileFrameArt>
+    </View>
+  );
+}
+
 // ── Normalize data into a common shape ───────────────────────────────────────
 
 function normalizeThemes(
@@ -96,11 +305,16 @@ function normalizeThemes(
   unlockedCosmetics: string[],
   equippedTheme: string,
 ): NormalizedItem[] {
-  return themes.map((t) => ({
+  return themes.map((t, i) => ({
     id: t.id,
     name: t.name,
     description: t.description,
-    rarity: 'rare' as const,
+    // Real per-theme tier from the catalog. This used to be hardcoded 'rare',
+    // so every visible theme card wore the same chip and the rarity ladder
+    // communicated no tiering at all — it also fed rarityTreatment(), meaning
+    // the backplate/glow/sunburst were flat across the whole tab.
+    rarity: t.rarity,
+    listIndex: i,
     owned: t.id === 'default' || unlockedCosmetics.includes(t.id),
     equipped: equippedTheme === t.id,
     costCurrency: t.cost?.currency,
@@ -115,11 +329,12 @@ function normalizeFrames(
   unlockedCosmetics: string[],
   equippedFrame: string,
 ): NormalizedItem[] {
-  return frames.map((f) => ({
+  return frames.map((f, i) => ({
     id: f.id,
     name: f.name,
     description: f.source,
     rarity: f.rarity,
+    listIndex: i,
     owned: f.id === 'default' || unlockedCosmetics.includes(f.id),
     equipped: equippedFrame === f.id,
     source: f.source,
@@ -132,11 +347,12 @@ function normalizeTitles(
   unlockedCosmetics: string[],
   equippedTitle: string,
 ): NormalizedItem[] {
-  return titles.map((t) => ({
+  return titles.map((t, i) => ({
     id: t.id,
     name: t.title,
     description: t.source,
     rarity: 'common' as const,
+    listIndex: i,
     owned: t.id === 'title_newcomer' || unlockedCosmetics.includes(t.id),
     equipped: equippedTitle === t.id,
     source: t.source,
@@ -148,12 +364,13 @@ function normalizeDecorations(
   decorations: LibraryDecoration[],
   unlockedCosmetics: string[],
 ): NormalizedItem[] {
-  return decorations.map((d) => ({
+  return decorations.map((d, i) => ({
     id: d.id,
     name: d.name,
     description: d.description,
     icon: d.icon,
     rarity: d.rarity,
+    listIndex: i,
     owned: unlockedCosmetics.includes(d.id),
     equipped: false,
     costCurrency: d.cost?.currency,
@@ -173,6 +390,9 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
   const gems = useEconomyStore(selectGems);
   const libraryPoints = useEconomyStore(selectLibraryPoints);
   const { canAfford, spendCoins, spendGems } = useEconomyActions();
+  // spendLibraryPoints is not yet part of the EconomyActions Pick (defined in
+  // economyStore.ts), so read it off the full context.
+  const { spendLibraryPoints } = useEconomy();
   const equippedFrame = usePlayerStore(selectEquippedFrame);
   const equippedTheme = usePlayerStore(selectEquippedTheme);
   const equippedTitle = usePlayerStore(selectEquippedTitle);
@@ -205,28 +425,28 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         return;
       }
 
-      const currency = item.costCurrency === 'libraryPoints' ? 'coins' : item.costCurrency;
-      // libraryPoints doesn't have spendLibraryPoints; treat as coins for now
       if (item.costCurrency === 'libraryPoints') {
         if ((libraryPoints ?? 0) < item.costAmount) {
-          Alert.alert('Not Enough Library Points', `You need ${item.costAmount} library points.`);
+          Alert.alert('Not Enough Lore', `You need ${item.costAmount} Lore.`);
           return;
         }
-      } else if (!canAfford(currency as 'coins' | 'gems', item.costAmount)) {
+      } else if (!canAfford(item.costCurrency as 'coins' | 'gems', item.costAmount)) {
         Alert.alert(
-          'Not Enough ' + (currency === 'coins' ? 'Coins' : 'Gems'),
-          `You need ${item.costAmount} ${currency}.`,
+          'Not Enough ' + (item.costCurrency === 'coins' ? 'Coins' : 'Gems'),
+          `You need ${item.costAmount} ${item.costCurrency}.`,
         );
         return;
       }
 
-      // Spend currency
+      // Spend currency — every spend* returns false when the balance is
+      // short, so bail without unlocking if the debit did not land.
       if (item.costCurrency === 'coins') {
-        spendCoins(item.costAmount);
+        if (!spendCoins(item.costAmount)) return;
       } else if (item.costCurrency === 'gems') {
-        spendGems(item.costAmount);
+        if (!spendGems(item.costAmount)) return;
+      } else if (item.costCurrency === 'libraryPoints') {
+        if (!spendLibraryPoints(item.costAmount)) return;
       }
-      // libraryPoints: no spend method exists, just unlock
 
       // Decorations have their own ledger (ownedDecorations, written by
       // unlockDecoration). unlockCosmetic early-returns for any id that is
@@ -241,7 +461,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         prev && prev.id === item.id ? { ...prev, owned: true } : prev,
       );
     },
-    [libraryPoints, canAfford, spendCoins, spendGems, unlockCosmetic, unlockDecoration],
+    [libraryPoints, canAfford, spendCoins, spendGems, spendLibraryPoints, unlockCosmetic, unlockDecoration],
   );
 
   const handleEquip = useCallback(
@@ -270,29 +490,48 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
 
   const renderTabBar = () => (
     <View style={styles.tabBar}>
-      {TABS.map((tab) => (
-        <TouchableOpacity
-          key={tab.id}
-          style={[styles.tab, activeTab === tab.id && styles.tabActive]}
-          onPress={() => setActiveTab(tab.id)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
-            {tab.label}
-          </Text>
-          {activeTab === tab.id && <View style={styles.tabIndicator} />}
-        </TouchableOpacity>
-      ))}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0.02)'] as [string, string]}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: RADIUS.xl }]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+      />
+      {TABS.map((tab) => {
+        const active = activeTab === tab.id;
+        return (
+          <Pressable
+            key={tab.id}
+            style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
+            onPress={() => setActiveTab(tab.id)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`${tab.label} tab`}
+          >
+            {active && (
+              <LinearGradient
+                colors={[COLORS.accent + '30', COLORS.purple + '14'] as [string, string]}
+                style={[StyleSheet.absoluteFillObject, { borderRadius: RADIUS.lg }]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+              />
+            )}
+            <Text style={[styles.tabText, active && styles.tabTextActive]}>
+              {tab.label}
+            </Text>
+            <View style={[styles.tabIndicator, active && styles.tabIndicatorActive]} />
+          </Pressable>
+        );
+      })}
     </View>
   );
 
-  const renderThemePreview = (colors: CosmeticTheme['colors']) => (
-    <View style={styles.themePreview}>
-      <View style={[styles.themeSwatchLarge, { backgroundColor: colors.bg }]} />
-      <View style={[styles.themeSwatchLarge, { backgroundColor: colors.surface }]} />
-      <View style={[styles.themeSwatchLarge, { backgroundColor: colors.accent }]} />
-      <View style={[styles.themeSwatchLarge, { backgroundColor: colors.cellSelected }]} />
-    </View>
+  const renderThemePreview = (
+    id: string,
+    colors: CosmeticTheme['colors'],
+    previewWidth: number,
+    cornerRadius?: number,
+  ) => (
+    <ThemePreview theme={{ id, colors }} width={previewWidth} cornerRadius={cornerRadius} />
   );
 
   const canAffordItem = useCallback(
@@ -314,70 +553,119 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     const isOwned = item.owned;
     const hasCost = !!(item.costCurrency && item.costAmount);
     const affordable = hasCost && !isOwned ? canAffordItem(item) : true;
+    const isThemeCard = item.tabType === 'themes' && !!item.preview;
+    const isFrameCard = item.tabType === 'frames' && !item.icon;
+    const treat = rarityTreatment(item.rarity, rarityColor);
 
     return (
-      <TouchableOpacity
+      <Pressable
         key={item.id}
-        style={[styles.cardWrapper, isEquipped && { ...SHADOWS.glow(COLORS.accent) }]}
+        style={({ pressed }) => [
+          styles.card,
+          { borderColor: treat.borderColor, borderWidth: treat.borderWidth },
+          isEquipped
+            ? {
+                borderColor: COLORS.accent + '99',
+                borderWidth: Math.max(treat.borderWidth, 1.75),
+                ...SHADOWS.glow(COLORS.accent),
+              }
+            : treat.glow,
+          pressed && styles.pressedScale,
+        ]}
         onPress={() => setSelectedItem(item)}
-        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.name}, ${item.rarity} rarity${
+          isEquipped ? ', equipped' : isOwned ? ', owned' : ''
+        }`}
       >
+        {/* Tiered rarity backplate — common flat, higher tiers tinted */}
         <LinearGradient
-          colors={[...GRADIENTS.surfaceCard]}
-          style={[styles.card, isEquipped && styles.cardEquipped]}
-        >
-          {/* Rarity badge */}
-          <View style={[styles.rarityBadge, { backgroundColor: rarityColor + '30' }]}>
-            <Text style={[styles.rarityText, { color: rarityColor }]}>
-              {RARITY_LABELS[item.rarity] ?? 'COMMON'}
-            </Text>
-          </View>
+          colors={treat.body}
+          locations={[0, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
 
-          {/* Preview area */}
-          <View style={styles.cardPreviewArea}>
-            {item.tabType === 'themes' && item.preview ? (
-              renderThemePreview(item.preview)
-            ) : item.icon ? (
-              <Text style={styles.itemIcon}>{item.icon}</Text>
+        {/* Full-bleed theme world preview */}
+        {isThemeCard && (
+          <View style={styles.themeBleed}>
+            {renderThemePreview(item.id, item.preview!, THEME_PREVIEW_WIDTH, 0)}
+          </View>
+        )}
+
+        {/* Legendary corner sunburst */}
+        {treat.sunburst && <CornerSunburst color={rarityColor} />}
+
+        {/* Rarity top edge */}
+        <LinearGradient
+          colors={['transparent', rarityColor, 'transparent'] as [string, string, string]}
+          style={styles.rarityTopEdge}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+        />
+
+        {/* Rarity badge \u2014 overlaid on the vignette for theme cards */}
+        <View
+          style={[
+            styles.rarityBadge,
+            { backgroundColor: rarityColor + '26', borderColor: rarityColor + '66' },
+            isThemeCard && styles.rarityBadgeOverlay,
+          ]}
+        >
+          <Text style={[styles.rarityText, { color: rarityColor }]}>
+            {RARITY_LABELS[item.rarity] ?? 'COMMON'}
+          </Text>
+        </View>
+
+        {/* Preview area (non-theme tabs) */}
+        {!isThemeCard && (
+          <View style={[styles.cardPreviewArea, isFrameCard && styles.cardPreviewAreaFrame]}>
+            {item.icon ? (
+              <IconMedallion glyph={item.icon} size={48} accent={rarityColor} />
             ) : item.tabType === 'frames' ? (
-              <View style={[styles.framePlaceholder, { borderColor: rarityColor }]}>
-                <Text style={styles.framePlaceholderText}>{item.name.charAt(0)}</Text>
-              </View>
+              <FramePreview
+                frameId={item.id}
+                portraitIndex={item.listIndex}
+                dimmed={!isOwned}
+              />
             ) : (
-              <Text style={styles.itemIcon}>
-                {item.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
-              </Text>
+              <IconMedallion
+                glyph={item.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
+                size={48}
+                accent={rarityColor}
+              />
             )}
           </View>
+        )}
 
-          {/* Name */}
-          <Text style={styles.cardName} numberOfLines={1}>
-            {item.name}
-          </Text>
+        {/* Name */}
+        <Text style={styles.cardName} numberOfLines={1}>
+          {item.name}
+        </Text>
 
-          {/* Status / Price */}
-          {isEquipped ? (
-            <View style={styles.equippedBadge}>
-              <Text style={styles.equippedText}>EQUIPPED</Text>
-            </View>
-          ) : isOwned ? (
-            <View style={styles.ownedBadge}>
-              <Text style={styles.ownedText}>{'\u2713'} OWNED</Text>
-            </View>
-          ) : hasCost ? (
-            <View style={[styles.priceRow, !affordable && styles.priceRowUnaffordable]}>
-              <Text style={[styles.priceIcon, !affordable && styles.priceIconUnaffordable]}>
-                {CURRENCY_ICONS[item.costCurrency!] ?? '\u{1FA99}'}
-              </Text>
-              <Text style={[styles.priceText, !affordable && styles.priceTextUnaffordable]}>
-                {formatPrice(item.costAmount!)}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.earnLabel}>Earn in-game</Text>
-          )}
-        </LinearGradient>
-      </TouchableOpacity>
+        {/* Status / Price */}
+        {isEquipped ? (
+          <View style={styles.equippedBadge}>
+            <Text style={styles.equippedText}>EQUIPPED</Text>
+          </View>
+        ) : isOwned ? (
+          <View style={styles.ownedBadge}>
+            <Text style={styles.ownedText}>{'\u2713'} OWNED</Text>
+          </View>
+        ) : hasCost ? (
+          <View style={[styles.priceChip, !affordable && styles.priceChipUnaffordable]}>
+            <Text style={[styles.priceIcon, !affordable && styles.priceIconUnaffordable]}>
+              {CURRENCY_ICONS[item.costCurrency!] ?? '\u{1FA99}'}
+            </Text>
+            <Text style={[styles.priceText, !affordable && styles.priceTextUnaffordable]}>
+              {formatPrice(item.costAmount!)}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.earnLabel}>Earn in-game</Text>
+        )}
+      </Pressable>
     );
   };
 
@@ -410,25 +698,37 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
         onRequestClose={() => setSelectedItem(null)}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity
+          <Pressable
             style={StyleSheet.absoluteFill}
-            activeOpacity={1}
             onPress={() => setSelectedItem(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss"
           />
-          <LinearGradient
-            colors={[...GRADIENTS.victoryCard]}
-            style={styles.modalCard}
-          >
+          <View style={[styles.modalCard, { borderColor: rarityColor + '55', ...SHADOWS.glow(rarityColor) }]}>
+            <LinearGradient
+              colors={[...GRADIENTS.victoryCard]}
+              style={StyleSheet.absoluteFill}
+            />
+            {/* Rarity top edge */}
+            <LinearGradient
+              colors={['transparent', rarityColor, 'transparent'] as [string, string, string]}
+              style={styles.rarityTopEdge}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+            />
             {/* Close button */}
-            <TouchableOpacity
-              style={styles.closeButton}
+            <Pressable
+              style={({ pressed }) => [styles.closeButton, pressed && styles.pressedScale]}
               onPress={() => setSelectedItem(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={8}
             >
               <Text style={styles.closeButtonText}>{'\u2715'}</Text>
-            </TouchableOpacity>
+            </Pressable>
 
             {/* Rarity */}
-            <View style={[styles.modalRarityBadge, { backgroundColor: rarityColor + '25' }]}>
+            <View style={[styles.modalRarityBadge, { backgroundColor: rarityColor + '25', borderColor: rarityColor + '66' }]}>
               <Text style={[styles.modalRarityText, { color: rarityColor }]}>
                 {RARITY_LABELS[selectedItem.rarity] ?? 'COMMON'}
               </Text>
@@ -437,26 +737,26 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
             {/* Large preview */}
             <View style={styles.modalPreview}>
               {selectedItem.tabType === 'themes' && selectedItem.preview ? (
-                <View style={styles.themePreviewLarge}>
-                  {Object.entries(selectedItem.preview).map(([key, color]) => (
-                    <View key={key} style={styles.themeSwatchRow}>
-                      <View style={[styles.themeSwatchBig, { backgroundColor: color }]} />
-                      <Text style={styles.swatchLabel}>{key}</Text>
-                    </View>
-                  ))}
-                </View>
+                renderThemePreview(
+                  selectedItem.id,
+                  selectedItem.preview,
+                  Math.min(width - 96, 312),
+                )
               ) : selectedItem.icon ? (
-                <Text style={styles.modalIcon}>{selectedItem.icon}</Text>
+                <IconMedallion glyph={selectedItem.icon} size={80} accent={rarityColor} />
               ) : selectedItem.tabType === 'frames' ? (
-                <View style={[styles.framePlaceholderLarge, { borderColor: rarityColor }]}>
-                  <Text style={styles.framePlaceholderTextLarge}>
-                    {selectedItem.name.charAt(0)}
-                  </Text>
-                </View>
+                <FramePreview
+                  frameId={selectedItem.id}
+                  portraitIndex={selectedItem.listIndex}
+                  size={Math.min(width - 140, 176)}
+                  dimmed={!isOwned}
+                />
               ) : (
-                <Text style={styles.modalIcon}>
-                  {selectedItem.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
-                </Text>
+                <IconMedallion
+                  glyph={selectedItem.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
+                  size={80}
+                  accent={rarityColor}
+                />
               )}
             </View>
 
@@ -480,34 +780,24 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
                   <Text style={styles.equippedButtonText}>CURRENTLY EQUIPPED</Text>
                 </View>
               ) : isOwned ? (
-                <TouchableOpacity
-                  activeOpacity={0.7}
+                <PrimaryButton
+                  label={selectedItem.tabType === 'decorations' ? 'PLACE IN LIBRARY' : 'EQUIP'}
                   onPress={() => handleEquip(selectedItem)}
-                >
-                  <LinearGradient
-                    colors={[...GRADIENTS.button.primary]}
-                    style={styles.actionButton}
-                  >
-                    <Text style={styles.actionButtonText}>
-                      {selectedItem.tabType === 'decorations' ? 'PLACE IN LIBRARY' : 'EQUIP'}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                  variant="primary"
+                  size="large"
+                  fullWidth
+                  style={styles.modalActionButton}
+                />
               ) : hasCost && canBuy ? (
-                <TouchableOpacity
-                  activeOpacity={0.7}
+                <PrimaryButton
+                  label={`BUY ${CURRENCY_ICONS[selectedItem.costCurrency!]} ${formatPrice(selectedItem.costAmount!)}`}
                   onPress={() => handlePurchase(selectedItem)}
-                >
-                  <LinearGradient
-                    colors={[...GRADIENTS.button.gold]}
-                    style={styles.actionButton}
-                  >
-                    <Text style={styles.actionButtonTextDark}>
-                      BUY {CURRENCY_ICONS[selectedItem.costCurrency!]}{' '}
-                      {formatPrice(selectedItem.costAmount!)}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                  variant="gold"
+                  size="large"
+                  fullWidth
+                  accessibilityLabel={`Buy ${selectedItem.name} for ${formatPrice(selectedItem.costAmount!)} ${selectedItem.costCurrency}`}
+                  style={styles.modalActionButton}
+                />
               ) : hasCost && !canBuy ? (
                 <View style={styles.cantAffordButton}>
                   <Text style={styles.cantAffordButtonText}>
@@ -521,7 +811,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
                 </View>
               );
             })()}
-          </LinearGradient>
+          </View>
         </View>
       </Modal>
     );
@@ -530,23 +820,36 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
   // ── Main render ─────────────────────────────────────────────────────────
 
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="home" />
-
-      {/* Header */}
-      <View style={styles.header}>
-        {navigation && (
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>{'\u2190'}</Text>
-          </TouchableOpacity>
-        )}
-        <Text style={styles.title}>COSMETICS</Text>
-        <View style={styles.currencyRow}>
-          <Text style={styles.currencyText}>{'\u{1FA99}'} {coins}</Text>
-          <Text style={styles.currencyText}>{'\u{1F48E}'} {gems}</Text>
+    <ScreenScaffold
+      title="COSMETICS"
+      eyebrow="STYLE VAULT"
+      accent={COLORS.purple}
+      backdrop="shop"
+      onBack={navigation ? () => navigation.goBack() : undefined}
+      scroll={false}
+      headerRight={
+        <View style={styles.currencyCluster}>
+          <View style={styles.currencyChip}>
+            <Text style={styles.currencyGlyph}>{'\u{1FA99}'}</Text>
+            <Text style={styles.currencyText}>{coins.toLocaleString()}</Text>
+          </View>
+          <View style={styles.currencyChip}>
+            <Text style={styles.currencyGlyph}>{'\u{1F48E}'}</Text>
+            <Text style={[styles.currencyText, { color: COLORS.cyan }]}>
+              {gems.toLocaleString()}
+            </Text>
+          </View>
+          {activeTab === 'decorations' && (
+            <View style={styles.currencyChip}>
+              <GameIcon name="bookOpen" size={12} accent={COLORS.purple} />
+              <Text style={[styles.currencyText, { color: COLORS.purple }]}>
+                {(libraryPoints ?? 0).toLocaleString()} LORE
+              </Text>
+            </View>
+          )}
         </View>
-      </View>
-
+      }
+    >
       {renderTabBar()}
 
       <ScrollView
@@ -556,97 +859,92 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
       >
         {currentItems.map((item) => renderItemCard(item))}
         {/* Bottom spacing */}
-        <View style={{ height: 40 }} />
+        <View style={{ height: 40, width: '100%' }} />
       </ScrollView>
 
       {renderDetailModal()}
-    </View>
+    </ScreenScaffold>
   );
 };
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-    paddingTop: 60,
+  pressedScale: {
+    transform: [{ scale: 0.97 }],
+    opacity: 0.9,
   },
 
-  // Header
-  header: {
+  // Header currency cluster
+  currencyCluster: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  currencyChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.surfaceGlass,
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  backButtonText: {
-    color: COLORS.textPrimary,
-    fontSize: 20,
-  },
-  title: {
-    fontFamily: FONTS.display,
-    fontSize: 24,
-    letterSpacing: 2,
-    color: COLORS.textPrimary,
-    flex: 1,
-    textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 12,
-    textShadowOffset: { width: 0, height: 0 },
-  },
-  currencyRow: {
-    flexDirection: 'row',
-    gap: 12,
+  currencyGlyph: {
+    fontSize: 10,
   },
   currencyText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 14,
+    fontFamily: FONTS.display,
+    fontSize: 11,
     color: COLORS.gold,
+    fontVariant: ['tabular-nums'],
   },
 
   // Tab bar
   tabBar: {
     flexDirection: 'row',
     marginHorizontal: 16,
+    marginTop: 12,
     marginBottom: 12,
-    backgroundColor: COLORS.surface + '80',
-    borderRadius: 16,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
     padding: 4,
+    overflow: 'hidden',
   },
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 9,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
   },
-  tabActive: {
-    backgroundColor: COLORS.accent + '25',
+  tabPressed: {
+    opacity: 0.8,
   },
   tabText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 13,
+    fontFamily: FONTS.display,
+    fontSize: 12,
     color: COLORS.textMuted,
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   tabTextActive: {
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   tabIndicator: {
-    width: 20,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: COLORS.accent,
+    width: 22,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'transparent',
     marginTop: 4,
+  },
+  tabIndicatorActive: {
+    backgroundColor: COLORS.accent,
+    ...SHADOWS.neonEdge(COLORS.accent),
   },
 
   // Grid
@@ -658,23 +956,32 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     gap: CARD_GAP,
+    paddingBottom: 90,
   },
 
-  // Card
-  cardWrapper: {
-    width: CARD_WIDTH,
-    borderRadius: 16,
-    ...SHADOWS.medium,
-  },
+  // Card — rarity drives border, glow, and top edge
   card: {
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    width: CARD_WIDTH,
+    borderRadius: RADIUS.xl,
+    padding: CARD_PADDING,
+    borderWidth: CARD_BORDER,
     minHeight: 170,
+    overflow: 'hidden',
   },
-  cardEquipped: {
-    borderColor: COLORS.accent + '50',
+  // Legendary corner sunburst, anchored to the card's top-right corner.
+  cornerSunburst: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 104,
+    height: 104,
+  },
+  rarityTopEdge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
   },
 
   // Rarity badge
@@ -682,47 +989,54 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
     marginBottom: 8,
   },
   rarityText: {
-    fontFamily: FONTS.bodySemiBold,
+    fontFamily: FONTS.display,
     fontSize: 9,
     letterSpacing: 1.5,
+  },
+  rarityBadgeOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    marginBottom: 0,
+    backgroundColor: 'rgba(8,2,20,0.62)',
+    zIndex: 2,
+  },
+
+  // Full-bleed theme vignette — escapes the card padding so the theme's
+  // world fills the card edge-to-edge; card overflow clips the top corners.
+  // Full-bleed theme vignette — escapes the card padding AND the border inset
+  // so the theme's world reaches both card edges with no dark margin. The
+  // preview is rendered at >= the container width (see THEME_PREVIEW_WIDTH),
+  // centered, and any overflow is clipped here rather than leaving a gap.
+  themeBleed: {
+    marginTop: -CARD_PADDING,
+    marginHorizontal: -CARD_PADDING,
+    marginBottom: 10,
+    height: THEME_PREVIEW_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopLeftRadius: RADIUS.xl - CARD_BORDER,
+    borderTopRightRadius: RADIUS.xl - CARD_BORDER,
+    overflow: 'hidden',
   },
 
   // Preview area
   cardPreviewArea: {
-    height: 56,
+    minHeight: 62,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
-  themePreview: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  themeSwatchLarge: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-  },
-  itemIcon: {
-    fontSize: 36,
-  },
-  framePlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-  },
-  framePlaceholderText: {
-    fontFamily: FONTS.display,
-    fontSize: 20,
-    color: COLORS.textPrimary,
+  // Frames tab — the ring IS the product, so it fills the card's padding box.
+  cardPreviewAreaFrame: {
+    minHeight: FRAME_PREVIEW_SIZE,
+    marginTop: 2,
+    marginBottom: 10,
   },
 
   // Card name
@@ -763,22 +1077,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Price
-  priceRow: {
+  // Price capsule
+  priceChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '55',
+    backgroundColor: COLORS.gold + '14',
   },
   priceIcon: {
-    fontSize: 14,
+    fontSize: 12,
   },
   priceText: {
-    fontFamily: FONTS.bodySemiBold,
-    fontSize: 13,
+    fontFamily: FONTS.display,
+    fontSize: 12,
     color: COLORS.gold,
+    fontVariant: ['tabular-nums'],
   },
-  priceRowUnaffordable: {
+  priceChipUnaffordable: {
     opacity: 0.5,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   priceIconUnaffordable: {
     opacity: 0.6,
@@ -805,11 +1129,10 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 360,
-    borderRadius: 24,
+    borderRadius: RADIUS.xxl,
     padding: 24,
-    borderWidth: 1,
-    borderColor: COLORS.borderMedium,
-    ...SHADOWS.strong,
+    borderWidth: 1.5,
+    overflow: 'hidden',
   },
   closeButton: {
     position: 'absolute',
@@ -818,7 +1141,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceGlass,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
@@ -832,11 +1157,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
     marginBottom: 16,
   },
   modalRarityText: {
-    fontFamily: FONTS.bodySemiBold,
+    fontFamily: FONTS.display,
     fontSize: 11,
     letterSpacing: 1.5,
   },
@@ -847,44 +1173,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     minHeight: 80,
   },
-  themePreviewLarge: {
-    gap: 6,
-    width: '100%',
-  },
-  themeSwatchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  themeSwatchBig: {
-    width: 36,
-    height: 24,
-    borderRadius: 6,
-  },
-  swatchLabel: {
-    fontFamily: FONTS.bodyMedium,
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textTransform: 'capitalize',
-  },
-  modalIcon: {
-    fontSize: 56,
-  },
-  framePlaceholderLarge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-  },
-  framePlaceholderTextLarge: {
-    fontFamily: FONTS.display,
-    fontSize: 30,
-    color: COLORS.textPrimary,
-  },
-
   modalName: {
     fontFamily: FONTS.display,
     fontSize: 22,
@@ -911,30 +1199,15 @@ const styles = StyleSheet.create({
   },
 
   // Action buttons
-  actionButton: {
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
+  modalActionButton: {
     marginTop: 8,
-  },
-  actionButtonText: {
-    fontFamily: FONTS.display,
-    fontSize: 16,
-    color: '#fff',
-    letterSpacing: 1.5,
-  },
-  actionButtonTextDark: {
-    fontFamily: FONTS.display,
-    fontSize: 16,
-    color: '#1a0a2e',
-    letterSpacing: 1.5,
   },
   equippedButtonDisabled: {
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: RADIUS.xl,
     alignItems: 'center',
     marginTop: 8,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceGlass,
     borderWidth: 1,
     borderColor: COLORS.accent + '40',
   },
@@ -946,10 +1219,10 @@ const styles = StyleSheet.create({
   },
   cantAffordButton: {
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: RADIUS.xl,
     alignItems: 'center',
     marginTop: 8,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceGlass,
     borderWidth: 1,
     borderColor: COLORS.coral + '30',
     opacity: 0.7,
@@ -962,10 +1235,10 @@ const styles = StyleSheet.create({
   },
   earnButton: {
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: RADIUS.xl,
     alignItems: 'center',
     marginTop: 8,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.surfaceGlass,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
   },

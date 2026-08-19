@@ -128,6 +128,7 @@ export interface EconomyContextType extends Economy {
   spendHintToken: () => boolean;
   addEventStars: (amount: number) => void;
   addLibraryPoints: (amount: number) => void;
+  spendLibraryPoints: (amount: number) => boolean;
   canAfford: (currency: 'coins' | 'gems', amount: number) => boolean;
   totalEarned: TotalEarned;
   purchaseHistory: PurchaseRecord[];
@@ -259,6 +260,7 @@ const EconomyContext = createContext<EconomyContextType>({
   spendHintToken: () => false,
   addEventStars: () => {},
   addLibraryPoints: () => {},
+  spendLibraryPoints: () => false,
   canAfford: () => false,
   loaded: false,
   lives: LIVES.max,
@@ -777,6 +779,18 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const spendLibraryPoints = useCallback((amount: number): boolean => {
+    let success = false;
+    setState((prev) => {
+      if (prev.libraryPoints >= amount) {
+        success = true;
+        return { ...prev, libraryPoints: prev.libraryPoints - amount };
+      }
+      return prev;
+    });
+    return success;
+  }, []);
+
   // Read latest state via ref so canAfford has stable identity across the
   // many state mutations economy goes through. Behavior is unchanged because
   // latestStateRef is updated synchronously in the persist effect above on
@@ -1218,6 +1232,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       spendHintToken,
       addEventStars,
       addLibraryPoints,
+      spendLibraryPoints,
       canAfford,
       loaded,
       lives: currentLives,
@@ -1274,6 +1289,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       spendHintToken,
       addEventStars,
       addLibraryPoints,
+      spendLibraryPoints,
       canAfford,
       spendLife,
       refillLives,
@@ -1311,7 +1327,10 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
   // selector don't re-render when undoTokens churns. This memo's identity is
   // stable across normal state churn because every dep is a stable callback;
   // it only changes when one of the underlying useCallback identities does.
-  const actions = useMemo<EconomyActions>(
+  // Widened inline with spendLibraryPoints: EconomyActions is a Pick over
+  // EconomyContextType defined in economyStore.ts; the intersection keeps the
+  // spend method flowing through the actions bag without loosening the type.
+  const actions = useMemo<EconomyActions & Pick<EconomyContextType, 'spendLibraryPoints'>>(
     () => ({
       loaded,
       addCoins,
@@ -1322,6 +1341,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       spendHintToken,
       addEventStars,
       addLibraryPoints,
+      spendLibraryPoints,
       canAfford,
       spendLife,
       refillLives,
@@ -1360,6 +1380,7 @@ export function EconomyProvider({ children }: { children: ReactNode }) {
       spendHintToken,
       addEventStars,
       addLibraryPoints,
+      spendLibraryPoints,
       canAfford,
       spendLife,
       refillLives,

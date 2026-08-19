@@ -7,8 +7,10 @@ import { COLORS, FONTS, GRADIENTS, MODE_CONFIGS } from '../constants';
 import { GameMode } from '../types';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { getChapterForLevel } from '../data/chapters';
+import { getWing } from '../data/library';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { useRoundedFontReady } from '../services/fontReady';
+import GameIcon from './icons/GameIcon';
 
 /**
  * Floating "+N" callout that rises from the score on every word-found.
@@ -59,7 +61,7 @@ interface GameHeaderProps {
   hintsLeft: number;
   /** Live count of hints used this run; feeds the 3-pip star projection. */
   hintsUsed?: number;
-  /** Current flawless streak count (cross-session). Renders a `🔥 N` chip when > 0. */
+  /** Current flawless streak count (cross-session). Renders a flame + N chip when > 0. */
   flawlessStreak?: number;
   undosLeft: number;
   foundWords: number;
@@ -107,13 +109,21 @@ export const GameHeader = React.memo(function GameHeader({
   // Classic mode: fold the chapter name into the level pill when RC permits,
   // so players see "NEON NIGHTS · L33" instead of a bare level number. Daily
   // and specialty modes keep their own labels — they don't map to chapters.
+  // The chapter is resolved once and shared with the wing emblem chip below.
+  const inlineChapter =
+    !isDaily && mode === 'classic' && getRemoteBoolean('gameScreenChapterInlineEnabled')
+      ? getChapterForLevel(level)
+      : null;
   const classicLabel = (() => {
-    if (!getRemoteBoolean('gameScreenChapterInlineEnabled')) return `Lv ${level}`;
-    const chapter = getChapterForLevel(level);
-    if (!chapter) return `Lv ${level}`;
-    const short = chapter.name.length > 12 ? chapter.name.slice(0, 11) + '…' : chapter.name;
+    if (!inlineChapter) return `Lv ${level}`;
+    const short =
+      inlineChapter.name.length > 12 ? inlineChapter.name.slice(0, 11) + '…' : inlineChapter.name;
     return `${short.toUpperCase()} · L${level}`;
   })();
+  // Grand Library thread: the wing this chapter belongs to, shown as a tiny
+  // tinted emblem chip before the chapter name. getWing never returns
+  // undefined (annex fallback covers procedural/remote wingIds).
+  const chapterWing = inlineChapter ? getWing(inlineChapter.wingId) : null;
   const modeLabel = isDaily ? 'Daily' : mode !== 'classic' ? modeConfig.name : classicLabel;
   const progress = totalWords > 0 ? (foundWords / totalWords) * 100 : 0;
   const scoreScale = useSharedValue(1);
@@ -224,13 +234,28 @@ export const GameHeader = React.memo(function GameHeader({
               action buttons). */}
           <View style={styles.titleBlock}>
             <View style={styles.titleRow}>
-              <Text style={styles.modeIcon}>{modeConfig.icon}</Text>
+              <GameIcon glyph={modeConfig.icon} size={16} />
+              {chapterWing && (
+                <View
+                  style={[
+                    styles.wingChip,
+                    {
+                      backgroundColor: `${chapterWing.accent}1F`,
+                      borderColor: `${chapterWing.accent}55`,
+                    },
+                  ]}
+                  accessibilityLabel={`${chapterWing.name} Wing`}
+                >
+                  <GameIcon name={chapterWing.icon} size={12} accent={chapterWing.accent} />
+                </View>
+              )}
               <Text style={[styles.titleText, labelFontOverride]} numberOfLines={1}>
                 {modeLabel}
               </Text>
               {showFlawlessChip && (
                 <Animated.View style={[styles.flawlessChip, flawlessStyle]}>
-                  <Text style={styles.flawlessChipText}>🔥 {flawlessStreak}</Text>
+                  <GameIcon name="flame" size={11} />
+                  <Text style={styles.flawlessChipText}> {flawlessStreak}</Text>
                 </Animated.View>
               )}
             </View>
@@ -438,6 +463,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.6,
+  },
+  // Tiny wing emblem chip before the chapter name — Grand Library thread.
+  wingChip: {
+    width: 20,
+    height: 20,
+    borderRadius: 7,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pipsRow: {
     flexDirection: 'row',

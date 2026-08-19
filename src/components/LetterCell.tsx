@@ -21,6 +21,7 @@ import { perfCountCellRender } from '../utils/perfInstrument';
 import { useColors } from '../hooks/useColors';
 import { useRoundedFontReady } from '../services/fontReady';
 import { getRemoteBoolean } from '../services/remoteConfig';
+import { CoinIcon } from './icons/iconsCore';
 import { useSettings } from '../contexts/SettingsContext';
 import { getColorblindTileRamps } from '../services/colorblind';
 
@@ -34,7 +35,9 @@ const BODY_COLORS_SELECTED_HINT: [string, string, string, string, string] = ['#f
 // identity.
 const BODY_COLORS_SELECTED: [string, string, string, string, string] = ['#d9267a', '#c0206c', '#a8185f', '#8a1250', '#6b0d3e'];
 const BODY_COLORS_WILDCARD = [...GRADIENTS.tile.wildcard] as [string, string, ...string[]];
-const BODY_COLORS_DEFAULT: [string, string, string, string, string] = ['#4a2580', '#3d1e6d', '#2d1452', '#221040', '#160a2e'];
+// Matches the brightened `space` wing ramp in data/chapters.ts (Aug 2026
+// design review — the old near-black ramp read as murky next to AAA refs).
+const BODY_COLORS_DEFAULT: [string, string, string, string, string] = ['#6a3cb5', '#57309c', '#44257e', '#321b5e', '#20113c'];
 const IS_ANDROID = Platform.OS === 'android';
 
 /**
@@ -54,6 +57,18 @@ const HIGHLIGHT_SELECTED: [string, string] = ['rgba(255,210,240,0.60)', 'rgba(25
 const HIGHLIGHT_DEFAULT: [string, string] = ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.0)'];
 
 const DEFAULT_BORDER_COLOR = 'rgba(200, 77, 255, 0.40)';
+
+/** #rrggbb → rgba() with the given alpha; non-hex passes through. */
+function rampBorderColor(hex: string): string {
+  const m = hex.match(/^#([0-9a-fA-F]{6})$/);
+  if (!m) return DEFAULT_BORDER_COLOR;
+  const n = parseInt(m[1], 16);
+  // Lift toward white so the rim reads as a lit edge of the tile color.
+  const r = Math.min(255, ((n >> 16) & 0xff) + 70);
+  const g = Math.min(255, ((n >> 8) & 0xff) + 70);
+  const b = Math.min(255, (n & 0xff) + 70);
+  return `rgba(${r}, ${g}, ${b}, 0.55)`;
+}
 
 const GRADIENT_START_02_0 = { x: 0.2, y: 0 };
 const GRADIENT_END_08_1 = { x: 0.8, y: 1 };
@@ -106,7 +121,6 @@ interface LetterCellProps {
   isHinted: boolean;
   selectionIndex: number;
   isValidWord?: boolean;
-  isMoved?: boolean;
   isWildcard?: boolean;
   isSpotlightDimmed?: boolean;
   /**
@@ -114,8 +128,12 @@ interface LetterCellProps {
    * when the word containing it is found. Renders a small gold coin badge.
    */
   isBonusTile?: boolean;
-  /** Animated.Value driving gravity fall translateY (pixels, animates to 0) */
-  fallAnim?: Animated.Value;
+  /**
+   * Animated.ValueXY driving the gravity-fall translation (pixels, animates
+   * to {0,0}). XY so horizontal gravity (gravityFlip left/right) animates
+   * exactly like vertical falls.
+   */
+  fallAnim?: Animated.ValueXY;
   /** Grid row index (0-based). Used to build screen-reader position hints. */
   row?: number;
   /** Grid column index (0-based). Used to build screen-reader position hints. */
@@ -132,7 +150,6 @@ export const LetterCell = React.memo(function LetterCell({
   isHinted,
   selectionIndex,
   isValidWord = false,
-  isMoved = false,
   isWildcard = false,
   isSpotlightDimmed = false,
   isBonusTile = false,
@@ -180,7 +197,6 @@ export const LetterCell = React.memo(function LetterCell({
   // suggests. Full Reanimated migration was evaluated in Tier 6 B5 and
   // deferred — see `agent_docs/gotchas.md` for the tradeoff analysis.
   const scaleAnim = useSharedValue(1);
-  const movedAnim = useSharedValue(0);
 
   useEffect(() => {
     // One withSequence call per selection change. Scale pop is the only
@@ -199,18 +215,8 @@ export const LetterCell = React.memo(function LetterCell({
     }
   }, [isSelected, scaleAnim]);
 
-  useEffect(() => {
-    if (isMoved) {
-      movedAnim.value = 1;
-      movedAnim.value = withTiming(0, { duration: 400 });
-    }
-  }, [isMoved, movedAnim]);
-
   const scaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleAnim.value }],
-  }));
-  const movedOpacityStyle = useAnimatedStyle(() => ({
-    opacity: movedAnim.value,
   }));
 
   const borderRadius = size * 0.20;
@@ -245,7 +251,10 @@ export const LetterCell = React.memo(function LetterCell({
     else if (isSelected && isHinted) border = palette.gold;
     else if (isSelected) border = palette.accent;
     else if (isWildcard) border = palette.gold;
-    else border = DEFAULT_BORDER_COLOR;
+    // Resting tiles rim in a lit edge of their own chapter color — a fixed
+    // purple rim on e.g. green nature tiles read as a clash in the blind
+    // design review.
+    else border = chapterTileRamp ? rampBorderColor(chapterTileRamp[0]) : DEFAULT_BORDER_COLOR;
 
     let shadow: string;
     if (isValidWord) shadow = palette.green;
@@ -274,7 +283,7 @@ export const LetterCell = React.memo(function LetterCell({
   const outerStyle = useMemo(() => {
     const s: any = {};
     if (isSpotlightDimmed) s.opacity = 0.3;
-    if (fallAnim) s.transform = [{ translateY: fallAnim }];
+    if (fallAnim) s.transform = fallAnim.getTranslateTransform();
     return s;
   }, [isSpotlightDimmed, fallAnim]);
 
@@ -319,24 +328,11 @@ export const LetterCell = React.memo(function LetterCell({
        * tap-to-commit latency.
        */}
 
-      {isMoved && (
-        <Reanimated.View
-          pointerEvents="none"
-          style={[
-            {
-              position: 'absolute',
-              top: -2,
-              left: -2,
-              right: -2,
-              bottom: -2,
-              borderRadius: borderRadius + 2,
-              borderWidth: 1.5,
-              borderColor: palette.accent,
-            },
-            movedOpacityStyle,
-          ]}
-        />
-      )}
+      {/* The old `isMoved` accent ring (a border flash on every tile that
+          gravity displaced) was removed in the gravity-animation rework —
+          the motion itself communicates the movement, and the ring's
+          mount/flash/unmount cycle on up to ~20 tiles per clear read as
+          flicker layered on top of the fall. */}
 
       <Reanimated.View
         style={[
@@ -386,6 +382,23 @@ export const LetterCell = React.memo(function LetterCell({
           }}
         />
 
+        {/* Bevel rim — one View with per-side border colors fakes a lit
+            top-left / shadowed bottom-right chamfer, giving the tile the
+            physical "piece" read AAA boards have, at the cost of a single
+            static native view per cell. */}
+        <View
+          pointerEvents="none"
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            borderRadius: insetBR,
+            borderWidth: 1.5,
+            borderTopColor: 'rgba(255,255,255,0.30)',
+            borderLeftColor: 'rgba(255,255,255,0.16)',
+            borderRightColor: 'rgba(0,0,0,0.28)',
+            borderBottomColor: 'rgba(0,0,0,0.40)',
+          }}
+        />
+
         {/* Top specular pinprick highlight. */}
         <View
           style={{
@@ -428,7 +441,9 @@ export const LetterCell = React.memo(function LetterCell({
             style={{
               ...StyleSheet.absoluteFillObject,
               borderRadius: insetBR,
-              opacity: 0.18,
+              // 0.18 desaturated the brightened tile ramps back toward the
+              // "murky" look the design review flagged.
+              opacity: 0.1,
             }}
             resizeMode="cover"
           />
@@ -448,7 +463,7 @@ export const LetterCell = React.memo(function LetterCell({
         <Text
           style={[
             styles.letter,
-            { fontSize: size * 0.46 },
+            { fontSize: size * 0.5 },
             isSelected && styles.letterSelected,
             isValidWord && styles.letterValid,
             !isSelected && !isValidWord && styles.letterDefault,
@@ -478,7 +493,7 @@ export const LetterCell = React.memo(function LetterCell({
               },
             ]}
           >
-            <Text style={{ fontSize: size * 0.2 }}>🪙</Text>
+            <CoinIcon size={size * 0.23} />
           </View>
         )}
 

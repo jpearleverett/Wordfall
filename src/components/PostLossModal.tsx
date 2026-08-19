@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS } from '../constants';
 import { analytics } from '../services/analytics';
 import { errorHaptic, wordFoundHaptic } from '../services/haptics';
+import GameIcon, { GameIconName } from './icons/GameIcon';
 
 /**
  * Loss variants.
@@ -40,7 +41,7 @@ interface PostLossModalProps {
 const AUTO_DISMISS_MS = 8000;
 
 interface VariantTheme {
-  icon: string;
+  icon: GameIconName;
   title: string;
   subtitleStuck: (wordsRemaining: number, totalWords: number, percent: number) => string;
   accentColor: string;
@@ -52,7 +53,7 @@ interface VariantTheme {
 
 const VARIANTS: Record<PostLossVariant, VariantTheme> = {
   stuck: {
-    icon: '🎯',
+    icon: 'target',
     title: 'So Close!',
     subtitleStuck: (wordsRemaining, _total, percent) =>
       wordsRemaining === 1
@@ -65,7 +66,7 @@ const VARIANTS: Record<PostLossVariant, VariantTheme> = {
     analyticsOfferType: 'post_loss',
   },
   timeout: {
-    icon: '⏱️',
+    icon: 'hourglass',
     title: "Time's Up!",
     subtitleStuck: (wordsRemaining, _total, percent) =>
       `${percent}% done when the clock ran out — ${wordsRemaining} word${
@@ -78,7 +79,7 @@ const VARIANTS: Record<PostLossVariant, VariantTheme> = {
     analyticsOfferType: 'post_loss_timeout',
   },
   perfect_broken: {
-    icon: '💎',
+    icon: 'gem',
     title: 'Perfect Broken',
     subtitleStuck: (wordsRemaining, _total, percent) =>
       `One slip. ${percent}% solved, ${wordsRemaining} word${
@@ -170,7 +171,9 @@ export function PostLossModal({
           colors={[COLORS.surface, COLORS.bgLight]}
           style={styles.gradient}
         >
-          <Text style={styles.icon}>{theme.icon}</Text>
+          <View style={styles.icon}>
+            <GameIcon name={theme.icon} size={48} accent={theme.accentColor} />
+          </View>
           <Text
             style={[
               styles.title,
@@ -258,7 +261,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   icon: {
-    fontSize: 42,
     marginBottom: 6,
   },
   title: {

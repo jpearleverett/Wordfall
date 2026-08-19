@@ -1,21 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   TextInput,
   StyleSheet,
   Dimensions,
   RefreshControl,
   Alert,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../constants';
+import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import { getLevelConfigExtended } from '../engine/puzzleGenerator';
-import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
+import ScreenScaffold from '../components/common/ScreenScaffold';
+import IconMedallion from '../components/common/IconMedallion';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { logger } from '../utils/logger';
 import { useAuth } from '../contexts/AuthContext';
@@ -143,6 +146,606 @@ interface LeaderboardScreenProps {
   scope?: LeaderboardScope;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Design primitives (screen-local)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Metallic specs for the crafted gold / silver / bronze rank medallions. */
+const MEDAL_SPECS: Record<
+  number,
+  { metal: readonly [string, string, string]; glow: string; text: string; ring: string }
+> = {
+  1: { metal: ['#fff3c4', '#ffd24d', '#a86f00'], glow: COLORS.gold, text: '#3a2600', ring: 'rgba(255,222,120,0.95)' },
+  2: { metal: ['#ffffff', '#c9d3e6', '#7e8ca6'], glow: COLORS.chrome, text: '#1f2738', ring: 'rgba(226,234,248,0.95)' },
+  3: { metal: ['#f4b880', '#cd7f32', '#7a4715'], glow: '#e08e3c', text: '#331c04', ring: 'rgba(235,164,96,0.95)' },
+};
+
+/**
+ * RankMedallion — crafted rank disc. Top-3 get a metallic gradient coin with
+ * a glass highlight and colored glow; everyone else gets a quiet glass disc.
+ * Replaces the emoji medals the art review flagged as placeholder art.
+ */
+function RankMedallion({ rank, size = 34 }: { rank: number; size?: number }) {
+  const spec = MEDAL_SPECS[rank];
+  if (!spec) {
+    return (
+      <View
+        style={[
+          medStyles.glassDisc,
+          { width: size, height: size, borderRadius: size / 2 },
+        ]}
+      >
+        <Text style={[medStyles.glassRankText, { fontSize: size * 0.4 }]}>{rank}</Text>
+      </View>
+    );
+  }
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 1.5,
+        borderColor: spec.ring,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        backgroundColor: spec.metal[2],
+        shadowColor: spec.glow,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.7,
+        shadowRadius: size * 0.3,
+        elevation: 8,
+      }}
+    >
+      <LinearGradient
+        colors={[...spec.metal]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      {/* Glass top highlight */}
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.08,
+          left: size * 0.18,
+          right: size * 0.18,
+          height: size * 0.18,
+          borderRadius: size * 0.09,
+          backgroundColor: 'rgba(255,255,255,0.45)',
+        }}
+      />
+      <Text
+        style={{
+          fontFamily: FONTS.display,
+          fontSize: size * 0.42,
+          color: spec.text,
+        }}
+      >
+        {rank}
+      </Text>
+    </View>
+  );
+}
+
+/** Per-player hue pool — deterministic pick via name hash so rows differ. */
+const AVATAR_HUES = [
+  COLORS.purple,
+  COLORS.cyan,
+  COLORS.teal,
+  COLORS.gold,
+  COLORS.orange,
+  COLORS.green,
+  COLORS.accentLight,
+  COLORS.purpleLight,
+] as const;
+
+function nameHue(name: string): string {
+  let h = 5381;
+  for (let i = 0; i < name.length; i++) {
+    h = ((h * 33) ^ name.charCodeAt(i)) >>> 0;
+  }
+  return AVATAR_HUES[h % AVATAR_HUES.length];
+}
+
+/**
+ * GlassAvatar — "monogram gem". Layered gradient disc with a per-player hue
+ * (derived deterministically from the name hash), radial-ish inner highlight,
+ * tinted gradient ring, and display-font initial with a hue glow. Podium rows
+ * pass `rim` to wrap the gem in a metallic ring matching their rank metal.
+ */
+function GlassAvatar({
+  name,
+  size = 36,
+  highlighted = false,
+  rim,
+}: {
+  name: string;
+  size?: number;
+  highlighted?: boolean;
+  rim?: readonly [string, string, string];
+}) {
+  const hue = highlighted ? COLORS.accent : nameHue(name);
+  const ringColors: readonly [string, string, string] =
+    rim ?? ([hue, hue + '73', hue + 'D9'] as const);
+  const pad = 1.5;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        shadowColor: rim ? rim[1] : hue,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: highlighted || rim ? 0.6 : 0.35,
+        shadowRadius: size * 0.2,
+        elevation: highlighted || rim ? 7 : 4,
+      }}
+    >
+      <LinearGradient
+        colors={[...ringColors]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={{ flex: 1, borderRadius: size / 2, padding: pad }}
+      >
+        <View
+          style={{
+            flex: 1,
+            borderRadius: (size - pad * 2) / 2,
+            overflow: 'hidden',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(8, 2, 22, 0.95)',
+          }}
+        >
+          <LinearGradient
+            colors={[hue + '8C', hue + '2E', 'rgba(8, 2, 22, 0.94)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          {/* Radial-ish top highlight */}
+          <View
+            style={{
+              position: 'absolute',
+              top: size * 0.05,
+              left: size * 0.16,
+              right: size * 0.16,
+              height: size * 0.3,
+              borderRadius: size * 0.15,
+              backgroundColor: 'rgba(255,255,255,0.20)',
+              transform: [{ scaleY: 0.55 }],
+            }}
+          />
+          <Text
+            style={{
+              fontFamily: FONTS.display,
+              fontSize: size * 0.46,
+              color: COLORS.textPrimary,
+              textShadowColor: hue,
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 3,
+            }}
+          >
+            {name.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+      </LinearGradient>
+    </View>
+  );
+}
+
+const medStyles = StyleSheet.create({
+  glassDisc: {
+    backgroundColor: COLORS.surfaceGlass,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  glassRankText: {
+    fontFamily: FONTS.display,
+    color: COLORS.textMuted,
+  },
+});
+
+/**
+ * GlyphMedallion — IconMedallion's layered-gem body, but hosting drawn
+ * View-based glyphs instead of raw emoji (the art review's residual flag).
+ */
+function GlyphMedallion({
+  size = 38,
+  accent = COLORS.purple,
+  muted = false,
+  children,
+}: {
+  size?: number;
+  accent?: string;
+  muted?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: muted ? 'rgba(255,255,255,0.14)' : accent + '73',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: 'rgba(8, 2, 22, 0.92)',
+          shadowColor: muted ? '#000' : accent,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowRadius: size * 0.22,
+          elevation: muted ? 2 : 6,
+        },
+        muted && { opacity: 0.55 },
+      ]}
+    >
+      <LinearGradient
+        colors={[
+          muted ? 'rgba(255,255,255,0.05)' : accent + '3D',
+          'rgba(8, 2, 22, 0.92)',
+        ]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.14)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/** Drawn sun — gold gradient core with crossed ray bars, no emoji. */
+function SunGlyph({ size = 20 }: { size?: number }) {
+  const core = size * 0.54;
+  const ray = { position: 'absolute' as const, width: size, height: size * 0.1, borderRadius: size * 0.05, backgroundColor: COLORS.gold + 'B3' };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={ray} />
+      <View style={[ray, { transform: [{ rotate: '45deg' }] }]} />
+      <View style={[ray, { transform: [{ rotate: '90deg' }] }]} />
+      <View style={[ray, { transform: [{ rotate: '135deg' }] }]} />
+      <View
+        style={{
+          width: core,
+          height: core,
+          borderRadius: core / 2,
+          overflow: 'hidden',
+          shadowColor: COLORS.gold,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.8,
+          shadowRadius: size * 0.3,
+          elevation: 4,
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: core * 0.12,
+            left: core * 0.2,
+            width: core * 0.3,
+            height: core * 0.22,
+            borderRadius: core * 0.15,
+            backgroundColor: 'rgba(255,255,255,0.55)',
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Drawn mini trophy — gold gradient cup + handles, stem and base. */
+function TrophyGlyph({ size = 18, accent = COLORS.gold }: { size?: number; accent?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View
+        style={{
+          width: size * 0.58,
+          height: size * 0.46,
+          borderBottomLeftRadius: size * 0.29,
+          borderBottomRightRadius: size * 0.29,
+          borderTopLeftRadius: size * 0.06,
+          borderTopRightRadius: size * 0.06,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[COLORS.goldLight, accent]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: size * 0.04,
+            left: size * 0.1,
+            width: size * 0.16,
+            height: size * 0.1,
+            borderRadius: size * 0.08,
+            backgroundColor: 'rgba(255,255,255,0.55)',
+          }}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.04,
+          left: 0,
+          width: size * 0.22,
+          height: size * 0.3,
+          borderRadius: size * 0.11,
+          borderWidth: Math.max(1, size * 0.09),
+          borderColor: accent + 'CC',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.04,
+          right: 0,
+          width: size * 0.22,
+          height: size * 0.3,
+          borderRadius: size * 0.11,
+          borderWidth: Math.max(1, size * 0.09),
+          borderColor: accent + 'CC',
+        }}
+      />
+      <View style={{ width: size * 0.12, height: size * 0.16, backgroundColor: accent + 'D9' }} />
+      <View style={{ width: size * 0.42, height: size * 0.12, borderRadius: size * 0.04, backgroundColor: accent }} />
+    </View>
+  );
+}
+
+/** Drawn 8-point star burst — two crossed gradient squares + hot core. */
+function StarBurstGlyph({ size = 30 }: { size?: number }) {
+  const sq = size * 0.68;
+  const square = {
+    position: 'absolute' as const,
+    width: sq,
+    height: sq,
+    borderRadius: sq * 0.18,
+    overflow: 'hidden' as const,
+  };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={[square, { transform: [{ rotate: '45deg' }] }]}>
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View style={square}>
+        <LinearGradient
+          colors={[COLORS.goldLight, COLORS.gold]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          width: sq * 0.34,
+          height: sq * 0.34,
+          borderRadius: sq * 0.17,
+          backgroundColor: 'rgba(255,255,255,0.6)',
+        }}
+      />
+    </View>
+  );
+}
+
+/**
+ * SegmentedNeonTabs — the single tab control language for this screen. A
+ * glass track with a spring-animated neon glow pill sliding under the active
+ * segment; replaces the two stacked flat web tab bars.
+ */
+function SegmentedNeonTabs({
+  tabs,
+  activeKey,
+  onSelect,
+  accent = COLORS.accent,
+  compact = false,
+  a11yLabelSuffix = '',
+}: {
+  tabs: ReadonlyArray<{ key: string; label: string }>;
+  activeKey: string;
+  onSelect: (key: string) => void;
+  accent?: string;
+  compact?: boolean;
+  a11yLabelSuffix?: string;
+}) {
+  const reduceMotion = useReduceMotion();
+  const [trackWidth, setTrackWidth] = useState(0);
+  const activeIndex = Math.max(0, tabs.findIndex((t) => t.key === activeKey));
+  const anim = useRef(new Animated.Value(activeIndex)).current;
+
+  useEffect(() => {
+    if (reduceMotion) {
+      anim.setValue(activeIndex);
+      return;
+    }
+    Animated.spring(anim, {
+      toValue: activeIndex,
+      stiffness: 260,
+      damping: 26,
+      mass: 0.9,
+      useNativeDriver: true,
+    }).start();
+  }, [activeIndex, reduceMotion, anim]);
+
+  const pad = 4;
+  const segWidth = trackWidth > 0 ? (trackWidth - pad * 2) / tabs.length : 0;
+  const maxIndex = Math.max(1, tabs.length - 1);
+  const translateX = anim.interpolate({
+    inputRange: [0, maxIndex],
+    outputRange: [0, segWidth * maxIndex],
+  });
+
+  return (
+    <View
+      style={[segStyles.track, compact && segStyles.trackCompact]}
+      onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+    >
+      {/* Glass gradient fill so the track reads as a lit surface, not a flat pill */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0.07)', 'rgba(255,255,255,0.01)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={[StyleSheet.absoluteFillObject, { borderRadius: RADIUS.full }]}
+      />
+      {segWidth > 0 && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            segStyles.indicator,
+            compact && segStyles.indicatorCompact,
+            {
+              width: segWidth,
+              borderColor: accent + '66',
+              backgroundColor: accent + '1C',
+              shadowColor: accent,
+              transform: [{ translateX }],
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={[accent + '30', accent + '0A']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={[StyleSheet.absoluteFillObject, { borderRadius: RADIUS.full }]}
+          />
+          <View style={[segStyles.indicatorUnderline, { backgroundColor: accent }]} />
+        </Animated.View>
+      )}
+      {tabs.map((tab) => {
+        const isActive = tab.key === activeKey;
+        return (
+          <Pressable
+            key={tab.key}
+            style={({ pressed }) => [
+              segStyles.segment,
+              compact && segStyles.segmentCompact,
+              pressed && !isActive && segStyles.segmentPressed,
+            ]}
+            onPress={() => onSelect(tab.key)}
+            accessibilityRole="tab"
+            accessibilityLabel={`${tab.label}${a11yLabelSuffix}`}
+            accessibilityState={{ selected: isActive }}
+          >
+            <Text
+              style={[
+                segStyles.segmentText,
+                compact && segStyles.segmentTextCompact,
+                isActive && {
+                  color: accent,
+                  textShadowColor: accent + '80',
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 8,
+                },
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const segStyles = StyleSheet.create({
+  track: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.full,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    ...SHADOWS.soft,
+  },
+  trackCompact: {
+    padding: 3,
+  },
+  indicator: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  indicatorCompact: {
+    top: 3,
+    bottom: 3,
+    left: 3,
+  },
+  indicatorUnderline: {
+    position: 'absolute',
+    bottom: 3,
+    alignSelf: 'center',
+    width: 18,
+    height: 2,
+    borderRadius: 1,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.full,
+  },
+  segmentCompact: {
+    paddingVertical: 7,
+  },
+  segmentPressed: {
+    opacity: 0.7,
+  },
+  segmentText: {
+    fontSize: 12,
+    fontFamily: FONTS.display,
+    letterSpacing: 1.2,
+    color: COLORS.textMuted,
+  },
+  segmentTextCompact: {
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+});
+
 /**
  * One list row, extracted so React (with the Compiler's auto-memoization)
  * can bail out unchanged rows when the screen re-renders — previously every
@@ -153,28 +756,38 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
   isCurrentUser,
   showDivider,
   showGift,
+  alternate,
   onChallenge,
 }: {
   entry: LeaderboardEntry;
   isCurrentUser: boolean;
   showDivider: boolean;
   showGift: boolean;
+  alternate: boolean;
   onChallenge: (entry: LeaderboardEntry) => void;
 }) {
   return (
     <View>
       {showDivider && <View style={styles.listDivider} />}
-      <View style={[styles.listRow, isCurrentUser && styles.listRowHighlight]}>
+      <View
+        style={[
+          styles.listRow,
+          alternate && styles.listRowAlternate,
+          isCurrentUser && styles.listRowHighlight,
+        ]}
+      >
+        {isCurrentUser && (
+          <LinearGradient
+            colors={[COLORS.accent + '22', COLORS.accent + '08']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+        )}
         <View style={styles.rankContainer}>
-          <Text style={[styles.rankText, isCurrentUser && styles.rankTextHighlight]}>
-            {entry.rank}
-          </Text>
+          <RankMedallion rank={entry.rank} size={30} />
         </View>
-        <View style={[styles.listAvatar, isCurrentUser && styles.listAvatarHighlight]}>
-          <Text style={styles.listAvatarText}>
-            {entry.name.charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        <GlassAvatar name={entry.name} size={36} highlighted={isCurrentUser} />
         <View style={styles.listInfo}>
           <Text
             style={[styles.listName, isCurrentUser && styles.listNameHighlight]}
@@ -188,12 +801,21 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
           {entry.score.toLocaleString()}
         </Text>
         {!isCurrentUser && (
-          <TouchableOpacity
-            style={styles.challengeButton}
+          <Pressable
+            style={({ pressed }) => [styles.challengeButton, pressed && styles.chipPressed]}
             onPress={() => onChallenge(entry)}
+            accessibilityRole="button"
+            accessibilityLabel={`Challenge ${entry.name}`}
           >
-            <Text style={styles.challengeButtonText}>{'⚔️'}</Text>
-          </TouchableOpacity>
+            <LinearGradient
+              pointerEvents="none"
+              colors={[COLORS.accent + '3D', COLORS.accent + '10']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <Text style={styles.challengeButtonText}>VS</Text>
+          </Pressable>
         )}
         {!isCurrentUser && showGift && (
           <SendGiftButton
@@ -208,17 +830,29 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
   );
 });
 
-const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: { scope?: LeaderboardScope } } }> = ({
+const SCOPE_TABS = [
+  { key: 'global', label: 'Global' },
+  { key: 'friends', label: 'Friends' },
+] as const;
+
+const LeaderboardScreen: React.FC<
+  LeaderboardScreenProps & {
+    route?: { params?: { scope?: LeaderboardScope } };
+    navigation?: { goBack: () => void; canGoBack?: () => boolean };
+  }
+> = ({
   leaderboardData,
   currentUserId: currentUserIdProp,
   activeTab: activeTabProp,
   onChangeTab: onChangeTabProp,
   scope: scopeProp,
   route,
+  navigation,
 }) => {
   const initialScope: LeaderboardScope = scopeProp ?? route?.params?.scope ?? 'global';
   const [scope, setScope] = useState<LeaderboardScope>(initialScope);
   const { user } = useAuth();
+  const reduceMotion = useReduceMotion();
   const currentLevel = usePlayerStore(selectCurrentLevel);
   const dailyCompleted = usePlayerStore(selectDailyCompleted);
   const totalScore = usePlayerStore(selectTotalScore);
@@ -247,6 +881,34 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [addFriendInput, setAddFriendInput] = useState('');
   const [addingFriend, setAddingFriend] = useState(false);
+  const [addFriendFocused, setAddFriendFocused] = useState(false);
+
+  // Champion card ambient shimmer — a slow breathing glow behind rank #1.
+  const championPulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) {
+      championPulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(championPulse, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(championPulse, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion, championPulse]);
 
   const isFirestoreAvailable = firestoreService.isAvailable();
 
@@ -468,20 +1130,6 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
     Alert.alert('Challenge Sent!', `You challenged ${entry.name}!`);
   }, [currentLevel, totalScore, sendChallenge]);
 
-  const getRankColor = (rank: number): string => {
-    if (rank === 1) return '#FFD700';
-    if (rank === 2) return '#C0C0C0';
-    if (rank === 3) return '#CD7F32';
-    return COLORS.textMuted;
-  };
-
-  const getRankEmoji = (rank: number): string => {
-    if (rank === 1) return '🥇';
-    if (rank === 2) return '🥈';
-    if (rank === 3) return '🥉';
-    return '';
-  };
-
   const currentUser = entries.find((e) => e.id === currentUserId);
 
   const renderTopThree = () => {
@@ -498,56 +1146,81 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
 
           const isFirst = idx === 0;
           const isMe = entry.id === currentUserId;
-          const rankColor = getRankColor(entry.rank);
+          const spec = MEDAL_SPECS[entry.rank] ?? MEDAL_SPECS[3];
+          const metal = isMe
+            ? ([COLORS.accentLight, COLORS.accent, COLORS.accentDark] as const)
+            : spec.metal;
+          const glow = isMe ? COLORS.accent : spec.glow;
 
           return (
+            // Metallic gradient border frame — glow scaled by rank.
             <LinearGradient
               key={entry.id}
-              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              colors={[...metal]}
               start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
+              end={{ x: 0.8, y: 1 }}
               style={[
-                styles.topCard,
-                isFirst && styles.topCardFirst,
-                isMe && { borderColor: COLORS.accent + '60' },
+                styles.topCardFrame,
+                isFirst && styles.topCardFrameFirst,
+                {
+                  shadowColor: glow,
+                  shadowOpacity: isFirst ? 0.6 : 0.3,
+                },
               ]}
             >
-              <Text style={styles.topRankEmoji}>{getRankEmoji(entry.rank)}</Text>
-              <View
-                style={[
-                  styles.topAvatar,
-                  isFirst && styles.topAvatarFirst,
-                  { borderColor: isMe ? COLORS.accent : rankColor },
-                  isFirst && SHADOWS.glow(rankColor),
-                ]}
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard] as [string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={[styles.topCard, isFirst && styles.topCardFirst]}
               >
+                {isFirst && (
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      StyleSheet.absoluteFillObject,
+                      {
+                        opacity: championPulse.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.12, 0.5],
+                        }),
+                      },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[...GRADIENTS.goldShine] as [string, string, string]}
+                      start={{ x: 0.5, y: 0 }}
+                      end={{ x: 0.5, y: 1 }}
+                      style={StyleSheet.absoluteFillObject}
+                    />
+                  </Animated.View>
+                )}
+                <RankMedallion rank={entry.rank} size={isFirst ? 44 : 34} />
+                <View style={styles.topAvatarSpacer} />
+                <GlassAvatar
+                  name={entry.name}
+                  size={isFirst ? 56 : 44}
+                  highlighted={isMe}
+                  rim={metal}
+                />
+                <Text style={styles.topName} numberOfLines={1}>
+                  {entry.name}
+                  {isMe ? ' (You)' : ''}
+                </Text>
                 <Text
                   style={[
-                    styles.topAvatarText,
-                    isFirst && styles.topAvatarTextFirst,
+                    styles.topScore,
+                    {
+                      color: glow,
+                      textShadowColor: glow + '60',
+                      textShadowOffset: { width: 0, height: 0 },
+                      textShadowRadius: 8,
+                    },
                   ]}
                 >
-                  {entry.name.charAt(0).toUpperCase()}
+                  {entry.score.toLocaleString()}
                 </Text>
-              </View>
-              <Text style={styles.topName} numberOfLines={1}>
-                {entry.name}
-                {isMe ? ' (You)' : ''}
-              </Text>
-              <Text
-                style={[
-                  styles.topScore,
-                  {
-                    color: isMe ? COLORS.accent : rankColor,
-                    textShadowColor:
-                      (isMe ? COLORS.accent : rankColor) + '60',
-                    textShadowOffset: { width: 0, height: 0 },
-                    textShadowRadius: 8,
-                  },
-                ]}
-              >
-                {entry.score.toLocaleString()}
-              </Text>
+              </LinearGradient>
             </LinearGradient>
           );
         })}
@@ -555,381 +1228,397 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps & { route?: { params?: 
     );
   };
 
+  const onBack =
+    navigation && (navigation.canGoBack ? navigation.canGoBack() : true)
+      ? () => navigation.goBack()
+      : undefined;
+
   return (
-    <View style={styles.container}>
-      <AmbientBackdrop variant="leaderboard" />
-      <View style={styles.header}>
-        <Image
+    <ScreenScaffold
+      title={scope === 'friends' ? 'FRIENDS' : 'LEADERBOARD'}
+      eyebrow="HALL OF FAME"
+      accent={COLORS.accent}
+      backdrop="leaderboard"
+      scroll={false}
+      onBack={onBack}
+      headerRight={
+        <IconMedallion
           source={LOCAL_IMAGES.trophyCrown}
-          style={{ width: 28, height: 28 }}
-          resizeMode="contain"
+          size={38}
+          accent={COLORS.gold}
         />
-        <Text style={styles.headerTitle}>
-          {scope === 'friends' ? 'FRIENDS' : 'LEADERBOARD'}
-        </Text>
-      </View>
+      }
+    >
+      <View style={styles.body}>
+        {/* Scope + time — one cohesive neon segmented control language */}
+        <SegmentedNeonTabs
+          tabs={SCOPE_TABS}
+          activeKey={scope}
+          onSelect={(key) => setScope(key as LeaderboardScope)}
+          accent={COLORS.accent}
+          a11yLabelSuffix=" leaderboard"
+        />
+        <View style={styles.tabGap} />
+        <SegmentedNeonTabs
+          tabs={TIME_TABS.map((t) => ({ key: t, label: t }))}
+          activeKey={activeTime}
+          onSelect={(key) => setActiveTime(key as TimeTab)}
+          accent={COLORS.cyan}
+          compact
+          a11yLabelSuffix=" leaderboard"
+        />
 
-      {/* Scope Tabs — Global / Friends */}
-      <View style={styles.tabBar}>
-        {(['global', 'friends'] as const).map((s) => {
-          const isActive = scope === s;
-          const label = s === 'global' ? 'Global' : 'Friends';
-          return (
-            <TouchableOpacity
-              key={s}
-              style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => setScope(s)}
-              accessibilityRole="tab"
-              accessibilityLabel={`${label} leaderboard`}
-              accessibilityState={{ selected: isActive }}
-            >
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Time Tabs */}
-      <View style={styles.tabBar}>
-        {TIME_TABS.map((tab) => {
-          const isActive = activeTime === tab;
-          return (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => setActiveTime(tab)}
-              accessibilityRole="tab"
-              accessibilityLabel={`${tab} leaderboard`}
-              accessibilityState={{ selected: isActive }}
-            >
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Daily Date Header */}
-      {activeTime === 'Daily' && (
-        <LinearGradient
-          colors={
-            ['rgba(255,215,0,0.10)', 'rgba(255,159,0,0.05)'] as [
-              string,
-              string,
-            ]
-          }
-          style={styles.dailyDateBanner}
-        >
-          <Text style={styles.dailyDateIcon}>{'☀️'}</Text>
-          <View>
-            <Text style={styles.dailyDateTitle}>Daily Challenge</Text>
-            <Text style={styles.dailyDateText}>{formatTodayDate()}</Text>
-          </View>
-          {!playerCompletedDaily && (
-            <View style={styles.dailyNotCompleted}>
-              <Text style={styles.dailyNotCompletedText}>Not played yet</Text>
-            </View>
-          )}
-        </LinearGradient>
-      )}
-
-      {/* Friend Code + Add Friend */}
-      <View style={styles.friendCodeBar}>
-        <View style={styles.friendCodeLeft}>
-          <Text style={styles.friendCodeLabel}>Your Code:</Text>
-          <Text style={styles.friendCodeValue}>{myFriendCode}</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.addFriendButton}
-          onPress={() => setShowAddFriend(!showAddFriend)}
-          accessibilityRole="button"
-          accessibilityLabel={showAddFriend ? 'Cancel adding friend' : 'Add friend'}
-        >
-          <Text style={styles.addFriendButtonText}>
-            {showAddFriend ? 'Cancel' : '+ Add Friend'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {showAddFriend && (
-        <>
-          <View style={styles.searchModeTabs}>
-            <TouchableOpacity
-              style={[styles.searchModeTab, searchMode === 'code' && styles.searchModeTabActive]}
-              onPress={() => { setSearchMode('code'); setNameSearchResults([]); setAddFriendInput(''); }}
-            >
-              <Text style={[styles.searchModeTabText, searchMode === 'code' && styles.searchModeTabTextActive]}>
-                By Code
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.searchModeTab, searchMode === 'name' && styles.searchModeTabActive]}
-              onPress={() => { setSearchMode('name'); setNameSearchResults([]); setAddFriendInput(''); }}
-            >
-              <Text style={[styles.searchModeTabText, searchMode === 'name' && styles.searchModeTabTextActive]}>
-                By Name
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.addFriendRow}>
-            <TextInput
-              style={styles.addFriendInput}
-              placeholder={searchMode === 'code' ? 'Enter friend code...' : 'Search by display name...'}
-              placeholderTextColor={COLORS.textMuted}
-              value={addFriendInput}
-              onChangeText={setAddFriendInput}
-              autoCapitalize={searchMode === 'code' ? 'characters' : 'none'}
-              maxLength={searchMode === 'code' ? 12 : 40}
-            />
-            <TouchableOpacity
-              style={[
-                styles.addFriendSubmit,
-                addingFriend && { opacity: 0.5 },
-              ]}
-              onPress={handleAddFriend}
-              disabled={addingFriend}
-              accessibilityRole="button"
-              accessibilityLabel={searchMode === 'code' ? 'Send friend request' : 'Search by name'}
-            >
-              {addingFriend ? (
-                <ActivityIndicator size="small" color={COLORS.bg} />
-              ) : (
-                <Text style={styles.addFriendSubmitText}>
-                  {searchMode === 'code' ? 'Send' : 'Search'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-          {searchMode === 'name' && nameSearchResults.length > 0 && (
-            <View style={styles.searchResultsCard}>
-              {nameSearchResults.map((r) => (
-                <View key={r.userId} style={styles.searchResultRow}>
-                  <Text style={styles.searchResultName} numberOfLines={1}>{r.displayName}</Text>
-                  <TouchableOpacity
-                    style={styles.searchResultBtn}
-                    onPress={() => handleSendRequestToSearchResult(r.userId, r.displayName)}
-                    disabled={addingFriend}
-                  >
-                    <Text style={styles.searchResultBtnText}>Add</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </>
-      )}
-
-      {!isFirestoreAvailable && (
-        <View style={styles.offlineBanner}>
-          <Text style={styles.offlineBannerText}>
-            Offline mode — showing simulated leaderboard
-          </Text>
-        </View>
-      )}
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={COLORS.accent}
-            colors={[COLORS.accent]}
-          />
-        }
-      >
-        <ReferralPendingRewards />
-        <FriendLeaderboardCard onViewAll={() => setScope('friends')} />
-        {referralCode ? (
-          <ReferralCard
-            referralCode={referralCode}
-            referralCount={referralCount}
-            milestonesClaimed={referralMilestonesClaimed}
-            onClaimMilestone={(count) => claimReferralMilestone(count)}
-          />
-        ) : null}
-
-        {loading && entries.length === 0 ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color={COLORS.accent} />
-            <Text style={styles.emptySubtext}>Loading leaderboard...</Text>
-          </View>
-        ) : entries.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>{'🏆'}</Text>
-            <Text style={styles.emptyText}>
-              {scope === 'friends' ? 'No friend scores yet' : 'No leaderboard data yet'}
-            </Text>
-            <Text style={styles.emptySubtext}>
-              {scope === 'friends'
-                ? 'Add friends with "+ Add Friend" above, or have them play today\'s daily.'
-                : 'Play puzzles to appear on the leaderboard!'}
-            </Text>
-          </View>
-        ) : (
-          <>
-            {renderTopThree()}
-
-            {/* Remaining entries */}
-            <LinearGradient
-              colors={[...GRADIENTS.surfaceCard] as [string, string]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.listCard}
-            >
-              {entries.slice(3).map((entry, index) => (
-                <LeaderboardRow
-                  key={entry.id}
-                  entry={entry}
-                  isCurrentUser={entry.id === currentUserId}
-                  showDivider={index > 0}
-                  showGift={scope === 'friends' || friendIds.includes(entry.id)}
-                  onChallenge={handleChallenge}
-                />
-              ))}
-            </LinearGradient>
-          </>
-        )}
-
-        {/* Current user bar (sticky at bottom if not in top list) */}
-        {currentUser && currentUser.rank > 3 && (
+        {/* Daily Date Header */}
+        {activeTime === 'Daily' && (
           <LinearGradient
-            colors={
-              [COLORS.accent + '18', COLORS.accent + '08'] as [string, string]
-            }
+            colors={['rgba(255,210,77,0.12)', 'rgba(255,149,0,0.04)'] as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.currentUserBar}
+            style={styles.dailyDateBanner}
           >
-            <View style={styles.currentUserContent}>
-              <Text style={styles.currentUserRank}>#{currentUser.rank}</Text>
-              <View style={styles.currentUserAvatar}>
-                <Text style={styles.currentUserAvatarText}>
-                  {currentUser.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.currentUserName} numberOfLines={1}>
-                {currentUser.name}
-              </Text>
-              <Text style={styles.currentUserScore}>
-                {currentUser.score.toLocaleString()}
-              </Text>
+            <GlyphMedallion size={38} accent={COLORS.gold}>
+              <SunGlyph size={20} />
+            </GlyphMedallion>
+            <View>
+              <Text style={styles.dailyDateTitle}>Daily Challenge</Text>
+              <Text style={styles.dailyDateText}>{formatTodayDate()}</Text>
             </View>
+            {!playerCompletedDaily && (
+              <View style={styles.dailyNotCompleted}>
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={['rgba(255,210,77,0.18)', 'rgba(255,210,77,0.04)']}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+                <Text style={styles.dailyNotCompletedText}>Not played yet</Text>
+              </View>
+            )}
           </LinearGradient>
         )}
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-    </View>
+        {/* Friend Code + Add Friend */}
+        <View style={styles.friendCodeBar}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[COLORS.accent + '14', 'rgba(255,255,255,0.02)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.friendCodeLeft}>
+            <Text style={styles.friendCodeLabel}>Your Code:</Text>
+            <Text style={styles.friendCodeValue}>{myFriendCode}</Text>
+          </View>
+          <Pressable
+            style={({ pressed }) => [styles.addFriendButton, pressed && styles.chipPressed]}
+            onPress={() => setShowAddFriend(!showAddFriend)}
+            accessibilityRole="button"
+            accessibilityLabel={showAddFriend ? 'Cancel adding friend' : 'Add friend'}
+          >
+            <LinearGradient
+              pointerEvents="none"
+              colors={[COLORS.accent + '4D', COLORS.accent + '12']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <Text style={styles.addFriendButtonText}>
+              {showAddFriend ? 'Cancel' : '+ Add Friend'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {showAddFriend && (
+          <>
+            <View style={styles.searchModeTabs}>
+              <SegmentedNeonTabs
+                tabs={[
+                  { key: 'code', label: 'By Code' },
+                  { key: 'name', label: 'By Name' },
+                ]}
+                activeKey={searchMode}
+                onSelect={(key) => {
+                  setSearchMode(key as 'code' | 'name');
+                  setNameSearchResults([]);
+                  setAddFriendInput('');
+                }}
+                accent={COLORS.purple}
+                compact
+              />
+            </View>
+            <View style={styles.addFriendRow}>
+              <TextInput
+                style={[
+                  styles.addFriendInput,
+                  addFriendFocused && styles.addFriendInputFocused,
+                ]}
+                placeholder={searchMode === 'code' ? 'Enter friend code...' : 'Search by display name...'}
+                placeholderTextColor={COLORS.textMuted}
+                value={addFriendInput}
+                onChangeText={setAddFriendInput}
+                onFocus={() => setAddFriendFocused(true)}
+                onBlur={() => setAddFriendFocused(false)}
+                autoCapitalize={searchMode === 'code' ? 'characters' : 'none'}
+                maxLength={searchMode === 'code' ? 12 : 40}
+              />
+              <Pressable
+                style={({ pressed }) => [
+                  styles.addFriendSubmit,
+                  SHADOWS.glow(COLORS.accent),
+                  addingFriend && { opacity: 0.5 },
+                  pressed && !addingFriend && styles.chipPressed,
+                ]}
+                onPress={handleAddFriend}
+                disabled={addingFriend}
+                accessibilityRole="button"
+                accessibilityLabel={searchMode === 'code' ? 'Send friend request' : 'Search by name'}
+              >
+                <LinearGradient
+                  colors={[...GRADIENTS.button.primary] as [string, string, string]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.addFriendSubmitFill}
+                >
+                  {addingFriend ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.addFriendSubmitText}>
+                      {searchMode === 'code' ? 'SEND' : 'SEARCH'}
+                    </Text>
+                  )}
+                </LinearGradient>
+              </Pressable>
+            </View>
+            {searchMode === 'name' && nameSearchResults.length > 0 && (
+              <View style={styles.searchResultsCard}>
+                {nameSearchResults.map((r) => (
+                  <View key={r.userId} style={styles.searchResultRow}>
+                    <Text style={styles.searchResultName} numberOfLines={1}>{r.displayName}</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.searchResultBtn, pressed && styles.chipPressed]}
+                      onPress={() => handleSendRequestToSearchResult(r.userId, r.displayName)}
+                      disabled={addingFriend}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add ${r.displayName}`}
+                    >
+                      <LinearGradient
+                        pointerEvents="none"
+                        colors={[COLORS.accent + '3D', COLORS.accent + '10']}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                        style={StyleSheet.absoluteFillObject}
+                      />
+                      <Text style={styles.searchResultBtnText}>Add</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {!isFirestoreAvailable && (
+          <View
+            style={styles.practiceHeader}
+            accessibilityLabel="Practice Arena. Live rankings return when you're back online"
+          >
+            <LinearGradient
+              pointerEvents="none"
+              colors={[COLORS.gold + '1F', 'rgba(255,255,255,0.01)']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <GlyphMedallion size={34} accent={COLORS.gold}>
+              <TrophyGlyph size={18} />
+            </GlyphMedallion>
+            <View style={styles.practiceHeaderBody}>
+              <Text style={styles.practiceHeaderTitle}>PRACTICE ARENA</Text>
+              <Text style={styles.practiceHeaderSub}>
+                Live rankings return when you're back online
+              </Text>
+            </View>
+          </View>
+        )}
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.accent}
+              colors={[COLORS.accent]}
+            />
+          }
+        >
+          <ReferralPendingRewards />
+          <FriendLeaderboardCard onViewAll={() => setScope('friends')} />
+          {referralCode ? (
+            <ReferralCard
+              referralCode={referralCode}
+              referralCount={referralCount}
+              milestonesClaimed={referralMilestonesClaimed}
+              onClaimMilestone={(count) => claimReferralMilestone(count)}
+            />
+          ) : null}
+
+          {loading && entries.length === 0 ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="large" color={COLORS.accent} />
+              <Text style={styles.emptySubtext}>Loading leaderboard...</Text>
+            </View>
+          ) : entries.length === 0 ? (
+            <View style={styles.emptyState}>
+              <GlyphMedallion size={72} accent={COLORS.gold}>
+                <StarBurstGlyph size={34} />
+              </GlyphMedallion>
+              <Text style={styles.emptyText}>
+                {scope === 'friends' ? 'No friend scores yet' : 'No leaderboard data yet'}
+              </Text>
+              <Text style={styles.emptySubtext}>
+                {scope === 'friends'
+                  ? 'Add friends with "+ Add Friend" above, or have them play today\'s daily.'
+                  : 'Play puzzles to appear on the leaderboard!'}
+              </Text>
+            </View>
+          ) : (
+            <>
+              {renderTopThree()}
+
+              {/* Remaining entries */}
+              <LinearGradient
+                colors={[...GRADIENTS.surfaceCard] as [string, string]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.listCard}
+              >
+                {entries.slice(3).map((entry, index) => (
+                  <LeaderboardRow
+                    key={entry.id}
+                    entry={entry}
+                    isCurrentUser={entry.id === currentUserId}
+                    showDivider={index > 0}
+                    showGift={scope === 'friends' || friendIds.includes(entry.id)}
+                    alternate={index % 2 === 1}
+                    onChallenge={handleChallenge}
+                  />
+                ))}
+              </LinearGradient>
+            </>
+          )}
+
+          {/* Current user bar (sticky at bottom if not in top list) */}
+          {currentUser && currentUser.rank > 3 && (
+            <LinearGradient
+              colors={
+                [COLORS.accent + '18', COLORS.accent + '08'] as [string, string]
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.currentUserBar}
+            >
+              <View style={styles.currentUserContent}>
+                <Text style={styles.currentUserRank}>#{currentUser.rank}</Text>
+                <GlassAvatar name={currentUser.name} size={36} highlighted />
+                <Text style={styles.currentUserName} numberOfLines={1}>
+                  {currentUser.name}
+                </Text>
+                <Text style={styles.currentUserScore}>
+                  {currentUser.score.toLocaleString()}
+                </Text>
+              </View>
+            </LinearGradient>
+          )}
+
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      </View>
+    </ScreenScaffold>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  body: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 12,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    letterSpacing: 4,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    backgroundColor: 'rgba(17, 22, 56, 0.8)',
-    borderRadius: 14,
-    padding: 4,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    ...SHADOWS.soft,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 10,
-  },
-  tabActive: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    ...SHADOWS.soft,
-  },
-  tabText: {
-    fontSize: 13,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textMuted,
-  },
-  tabTextActive: {
-    color: COLORS.accent,
+  tabGap: {
+    height: 8,
   },
   dailyDateBanner: {
-    marginHorizontal: 16,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: RADIUS.xl,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 8,
+    marginTop: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,215,0,0.15)',
-  },
-  dailyDateIcon: {
-    fontSize: 28,
+    borderColor: 'rgba(255,210,77,0.22)',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 4,
   },
   dailyDateTitle: {
     color: COLORS.gold,
     fontSize: 15,
     fontFamily: FONTS.display,
     letterSpacing: 0.5,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   dailyDateText: {
     color: COLORS.textSecondary,
     fontSize: 13,
+    fontFamily: FONTS.bodyMedium,
     marginTop: 2,
   },
   dailyNotCompleted: {
     marginLeft: 'auto',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 999,
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.full,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,210,77,0.38)',
+    overflow: 'hidden',
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   dailyNotCompletedText: {
-    color: COLORS.textMuted,
+    color: COLORS.goldLight,
     fontSize: 10,
     fontFamily: FONTS.bodySemiBold,
+    letterSpacing: 0.3,
   },
   friendCodeBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 16,
-    marginBottom: 8,
+    marginTop: 8,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(17, 22, 56, 0.6)',
-    borderRadius: 12,
+    paddingVertical: 9,
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: COLORS.accent + '30',
+    overflow: 'hidden',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 3,
   },
   friendCodeLeft: {
     flexDirection: 'row',
@@ -946,86 +1635,86 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     color: COLORS.accent,
     letterSpacing: 2,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   addFriendButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: COLORS.accent + '20',
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(8, 2, 22, 0.6)',
     borderWidth: 1,
-    borderColor: COLORS.accent + '40',
+    borderColor: COLORS.accent + '66',
+    overflow: 'hidden',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
   },
   addFriendButtonText: {
     fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.accent,
   },
+  chipPressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.96 }],
+  },
   addFriendRow: {
     flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 8,
+    marginTop: 8,
     gap: 8,
   },
   addFriendInput: {
     flex: 1,
     height: 42,
-    backgroundColor: 'rgba(17, 22, 56, 0.8)',
-    borderRadius: 10,
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.lg,
     paddingHorizontal: 14,
     fontSize: 14,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: COLORS.borderSubtle,
     letterSpacing: 2,
+  },
+  addFriendInputFocused: {
+    borderColor: COLORS.accent + '99',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 5,
   },
   addFriendSubmit: {
     height: 42,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: COLORS.accent,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+  },
+  addFriendSubmitFill: {
+    height: 42,
+    minWidth: 86,
+    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addFriendSubmitText: {
-    fontSize: 14,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.bg,
+    fontSize: 13,
+    fontFamily: FONTS.display,
+    letterSpacing: 1.5,
+    color: '#fff',
   },
   searchModeTabs: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 6,
-    gap: 6,
-  },
-  searchModeTab: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(17, 22, 56, 0.6)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-  },
-  searchModeTabActive: {
-    backgroundColor: COLORS.accent + '20',
-    borderColor: COLORS.accent + '50',
-  },
-  searchModeTabText: {
-    fontSize: 12,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textMuted,
-  },
-  searchModeTabTextActive: {
-    color: COLORS.accent,
+    marginTop: 8,
   },
   searchResultsCard: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(17, 22, 56, 0.6)',
+    marginTop: 8,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.surfaceGlass,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: COLORS.borderSubtle,
     paddingVertical: 4,
   },
   searchResultRow: {
@@ -1043,56 +1732,79 @@ const styles = StyleSheet.create({
   searchResultBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: COLORS.accent + '20',
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(8, 2, 22, 0.6)',
     borderWidth: 1,
-    borderColor: COLORS.accent + '40',
+    borderColor: COLORS.accent + '55',
+    overflow: 'hidden',
   },
   searchResultBtnText: {
     fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.accent,
   },
-  offlineBanner: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,159,67,0.12)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,159,67,0.25)',
+  // PRACTICE ARENA — designed gold-chip header for the offline state
+  // (honest "you're offline" copy, styled as game copy, not a debug string).
+  practiceHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
+    gap: 10,
+    marginTop: 8,
+    paddingVertical: 7,
+    paddingLeft: 8,
+    paddingRight: 16,
+    backgroundColor: COLORS.surfaceGlass,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.gold + '59',
+    overflow: 'hidden',
+    ...SHADOWS.glow(COLORS.gold),
   },
-  offlineBannerText: {
-    fontSize: 11,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.orange,
+  practiceHeaderBody: {
+    flexShrink: 1,
+  },
+  practiceHeaderTitle: {
+    fontSize: 12,
+    fontFamily: FONTS.display,
+    color: COLORS.gold,
+    letterSpacing: 2,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+  practiceHeaderSub: {
+    fontSize: 10,
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.textSecondary,
+    letterSpacing: 0.3,
+    marginTop: 1,
   },
   scrollView: {
     flex: 1,
+    marginTop: 10,
   },
   content: {
-    paddingHorizontal: 16,
+    paddingBottom: 4,
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+    gap: 4,
   },
   emptyText: {
     fontSize: 18,
     fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
+    marginTop: 16,
     marginBottom: 6,
   },
   emptySubtext: {
     fontSize: 14,
+    fontFamily: FONTS.bodyRegular,
     color: COLORS.textSecondary,
     marginTop: 8,
+    textAlign: 'center',
   },
   topThreeContainer: {
     flexDirection: 'row',
@@ -1105,55 +1817,38 @@ const styles = StyleSheet.create({
   topPlaceholder: {
     width: (width - 52) / 3,
   },
-  topCard: {
+  // Metallic border frame: gradient fill + 1.5px padding = gradient border.
+  topCardFrame: {
     width: (width - 52) / 3,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: RADIUS.xl + 2,
+    padding: 1.5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  topCardFrameFirst: {
+    marginBottom: 12,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  topCard: {
+    borderRadius: RADIUS.xl,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
-    ...SHADOWS.medium,
   },
   topCardFirst: {
     paddingVertical: 20,
-    borderColor: '#FFD700' + '50',
-    marginBottom: 10,
-    ...SHADOWS.glow('#FFD700'),
   },
-  topRankEmoji: {
-    fontSize: 22,
-    marginBottom: 6,
-  },
-  topAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(17, 22, 56, 0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    marginBottom: 8,
-    ...SHADOWS.soft,
-  },
-  topAvatarFirst: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 3,
-  },
-  topAvatarText: {
-    fontSize: 18,
-    fontFamily: FONTS.display,
-    color: COLORS.textPrimary,
-  },
-  topAvatarTextFirst: {
-    fontSize: 24,
+  topAvatarSpacer: {
+    height: 8,
   },
   topName: {
     fontSize: 12,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textPrimary,
+    marginTop: 8,
     marginBottom: 4,
     textAlign: 'center',
   },
@@ -1162,62 +1857,38 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
   },
   listCard: {
-    borderRadius: 16,
+    borderRadius: RADIUS.xl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: COLORS.borderSubtle,
     ...SHADOWS.medium,
   },
   listDivider: {
     height: 1,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     marginHorizontal: 14,
   },
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    padding: 12,
+    overflow: 'hidden',
+  },
+  listRowAlternate: {
+    backgroundColor: 'rgba(255,255,255,0.025)',
   },
   listRowHighlight: {
-    backgroundColor: COLORS.accent + '12',
     borderLeftWidth: 3,
-    borderLeftColor: COLORS.accent + '60',
+    borderLeftColor: COLORS.accent,
   },
   rankContainer: {
-    width: 30,
+    width: 34,
     alignItems: 'center',
     marginRight: 10,
   },
-  rankText: {
-    fontSize: 14,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textMuted,
-  },
-  rankTextHighlight: {
-    color: COLORS.accent,
-  },
-  listAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(37, 43, 94, 0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  listAvatarHighlight: {
-    borderWidth: 2,
-    borderColor: COLORS.accent,
-  },
-  listAvatarText: {
-    fontSize: 15,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textPrimary,
-  },
   listInfo: {
     flex: 1,
+    marginLeft: 12,
   },
   listName: {
     fontSize: 15,
@@ -1226,19 +1897,25 @@ const styles = StyleSheet.create({
   },
   listNameHighlight: {
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   listScore: {
     fontSize: 15,
-    fontFamily: FONTS.bodyBold,
+    fontFamily: FONTS.display,
     color: COLORS.textSecondary,
     marginLeft: 8,
   },
   listScoreHighlight: {
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   currentUserBar: {
     marginTop: 16,
-    borderRadius: 16,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
     borderColor: COLORS.accent + '50',
     overflow: 'hidden',
@@ -1248,26 +1925,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
+    gap: 12,
   },
   currentUserRank: {
     fontSize: 14,
     fontFamily: FONTS.display,
     color: COLORS.accent,
     width: 40,
-  },
-  currentUserAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  currentUserAvatarText: {
-    fontSize: 15,
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.bg,
   },
   currentUserName: {
     flex: 1,
@@ -1287,15 +1951,20 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: COLORS.accent + '20',
+    borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(8, 2, 22, 0.6)',
     borderWidth: 1,
-    borderColor: COLORS.accent + '40',
+    borderColor: COLORS.accent + '55',
+    overflow: 'hidden',
   },
   challengeButtonText: {
-    fontSize: 12,
-    fontFamily: FONTS.bodySemiBold,
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    letterSpacing: 1,
     color: COLORS.accent,
+    textShadowColor: COLORS.accentGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
   bottomSpacer: {
     height: 40,

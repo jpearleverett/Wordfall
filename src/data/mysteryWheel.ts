@@ -8,10 +8,20 @@
  * creates the anticipation-dopamine loop that drives engagement.
  */
 
+import type { GameIconName } from '../components/icons/GameIcon';
+
 export interface WheelSegment {
   id: string;
   label: string;
   icon: string;
+  /**
+   * Bespoke SVG icon for the wedge chip. Every prize TYPE on a wheel gets a
+   * distinct name (coins / big coins / gems / hints / each booster / cosmetic /
+   * rare tile / mystery box), and the jackpot wedge gets the crown treatment —
+   * so no two wedges on one wheel read as the same prize. `icon` (emoji) stays
+   * as the resolveIconName fallback for any segment authored without one.
+   */
+  iconName?: GameIconName;
   reward: WheelReward;
   weight: number; // Higher = more likely. Weights are relative, not percentages.
   color: string;
@@ -58,6 +68,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'coins_small',
     label: '50 Coins',
     icon: '\u{1FA99}',
+    iconName: 'coin',
     reward: { coins: 50 },
     weight: 21,
     color: '#cd7f32',
@@ -67,6 +78,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'coins_medium',
     label: '150 Coins',
     icon: '\u{1FA99}',
+    iconName: 'chest',
     reward: { coins: 150 },
     weight: 15,
     color: '#daa520',
@@ -76,6 +88,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'hints_small',
     label: '2 Hints',
     icon: '\u{1F4A1}',
+    iconName: 'hint',
     reward: { hints: 2 },
     weight: 18,
     color: '#5c9ead',
@@ -85,6 +98,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'booster_shuffle',
     label: 'Shuffle',
     icon: '\u{1F500}',
+    iconName: 'shuffle',
     reward: { booster: 'shuffleFiller' },
     weight: 12,
     color: '#6c5ce7',
@@ -94,6 +108,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'gems_small',
     label: '5 Gems',
     icon: '\u{1F48E}',
+    iconName: 'gem',
     reward: { gems: 5 },
     weight: 10,
     color: '#00d4ff',
@@ -103,6 +118,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'booster_preview',
     label: 'Preview',
     icon: '\u{1F441}\u{FE0F}',
+    iconName: 'eye',
     reward: { booster: 'boardPreview' },
     weight: 8,
     color: '#a855f7',
@@ -112,6 +128,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'mystery_box',
     label: 'Mystery Box',
     icon: '\u{1F381}',
+    iconName: 'gift',
     reward: { mysteryBox: true },
     weight: 5,
     color: '#ff6b6b',
@@ -121,6 +138,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'rare_tile',
     label: 'Rare Tile!',
     icon: '\u{2B50}',
+    iconName: 'cascadeCrystal',
     reward: { rareTile: true },
     weight: 4,
     color: '#ffd700',
@@ -130,6 +148,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'gems_jackpot',
     label: '25 Gems!',
     icon: '\u{1F48E}\u{2728}',
+    iconName: 'crystalDisplay',
     reward: { gems: 25 },
     weight: 3,
     color: '#00ffcc',
@@ -139,6 +158,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'xp_boost',
     label: '2x XP!',
     icon: '\u{1F680}',
+    iconName: 'rocket',
     reward: { xpMultiplier: { multiplier: 2, durationMinutes: 30 } },
     weight: 3,
     color: '#ff9f43',
@@ -148,6 +168,7 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
     id: 'gems_500_jackpot',
     label: '500 Gems!',
     icon: '\u{1F451}',
+    iconName: 'crown',
     reward: { gems: 500 },
     weight: 1,
     color: '#ffd700',
@@ -159,13 +180,22 @@ export const WHEEL_SEGMENTS: WheelSegment[] = [
  * Mystery Box secondary reward table — opened when landing on Mystery Box.
  * These are always good-to-great rewards.
  */
-export const MYSTERY_BOX_REWARDS: { label: string; icon: string; reward: WheelReward; weight: number }[] = [
-  { label: '300 Coins', icon: '\u{1FA99}', reward: { coins: 300 }, weight: 30 },
-  { label: '10 Gems', icon: '\u{1F48E}', reward: { gems: 10 }, weight: 25 },
-  { label: '5 Hints', icon: '\u{1F4A1}', reward: { hints: 5 }, weight: 20 },
-  { label: 'Rare Tile!', icon: '\u{2B50}', reward: { rareTile: true }, weight: 10 },
-  { label: 'Freeze Booster', icon: '\u{2744}\u{FE0F}', reward: { booster: 'freezeColumn' }, weight: 10 },
-  { label: '50 Gems!!', icon: '\u{1F48E}\u{1F525}', reward: { gems: 50 }, weight: 5 },
+export interface MysteryBoxReward {
+  label: string;
+  icon: string;
+  /** Bespoke SVG icon — same contract as WheelSegment.iconName. */
+  iconName?: GameIconName;
+  reward: WheelReward;
+  weight: number;
+}
+
+export const MYSTERY_BOX_REWARDS: MysteryBoxReward[] = [
+  { label: '300 Coins', icon: '\u{1FA99}', iconName: 'coin', reward: { coins: 300 }, weight: 30 },
+  { label: '10 Gems', icon: '\u{1F48E}', iconName: 'gem', reward: { gems: 10 }, weight: 25 },
+  { label: '5 Hints', icon: '\u{1F4A1}', iconName: 'hint', reward: { hints: 5 }, weight: 20 },
+  { label: 'Rare Tile!', icon: '\u{2B50}', iconName: 'cascadeCrystal', reward: { rareTile: true }, weight: 10 },
+  { label: 'Freeze Booster', icon: '\u{2744}\u{FE0F}', iconName: 'snowflake', reward: { booster: 'freezeColumn' }, weight: 10 },
+  { label: '50 Gems!!', icon: '\u{1F48E}\u{1F525}', iconName: 'trophy', reward: { gems: 50 }, weight: 5 },
 ];
 
 /**
@@ -242,7 +272,7 @@ export function spinWheel(
 /**
  * Roll a mystery box secondary reward.
  */
-export function openMysteryBox(): { label: string; icon: string; reward: WheelReward } {
+export function openMysteryBox(): MysteryBoxReward {
   const totalWeight = MYSTERY_BOX_REWARDS.reduce((sum, r) => sum + r.weight, 0);
   let random = Math.random() * totalWeight;
 

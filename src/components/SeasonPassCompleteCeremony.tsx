@@ -22,6 +22,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, TYPOGRAPHY } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
+import GameIcon from './icons/GameIcon';
 
 interface Props {
   seasonName?: string;
@@ -77,7 +78,7 @@ export default function SeasonPassCompleteCeremony({
 
           <Animated.View style={iconStyle}>
             <View style={styles.iconBg}>
-              <Text style={styles.icon}>{'\u{1F451}'}</Text>
+              <GameIcon name="crown" size={62} />
             </View>
           </Animated.View>
 
@@ -99,8 +100,9 @@ export default function SeasonPassCompleteCeremony({
 
           {cosmeticSetId && (
             <View style={[styles.rewardRow, styles.cosmeticRow]}>
+              <GameIcon name="bannerDecor" size={16} />
               <Text style={styles.cosmeticLabel}>
-                ✨ Legendary set unlocked
+                Legendary set unlocked
               </Text>
             </View>
           )}
@@ -130,7 +132,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: 'rgba(6, 2, 14, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10000,
@@ -165,9 +167,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-  },
-  icon: {
-    fontSize: 54,
   },
   title: {
     ...TYPOGRAPHY.displayLarge,
@@ -212,12 +211,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.purple + '33',
     borderColor: COLORS.purple,
     borderWidth: 1,
+    justifyContent: 'center',
+    gap: 6,
   },
   cosmeticLabel: {
     ...TYPOGRAPHY.bodyMedium,
     color: COLORS.purpleLight,
     textAlign: 'center',
-    width: '100%',
   },
   button: {
     marginTop: 14,

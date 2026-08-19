@@ -5,6 +5,7 @@ import {
   Animated,
   Image,
   LayoutAnimation,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -25,6 +26,7 @@ import { crashReporter } from '../services/crashReporting';
 import { findWordInGrid, choiceAvoidedDeadEnd, isProvablyCompletable } from '../engine/solver';
 import { resolveUndoSource } from '../utils/undoGate';
 import { TutorialOverlay } from '../components/TutorialOverlay';
+import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 
 import { AmbientBackdrop } from '../components/common/AmbientBackdrop';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -68,6 +70,7 @@ import GameplayMascot from '../components/GameplayMascot';
 import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCombos';
 import { getTheme } from '../data/cosmetics';
 import { getChapterForLevel, getChapterPalette, getChapterTileRamp } from '../data/chapters';
+import { getWing } from '../data/library';
 import { rollBonusTile } from '../utils/bonusTile';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
@@ -207,77 +210,46 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
   onSpotlight,
   onSmartShuffle,
 }: BoosterBarMemoProps) {
+  // Per-booster accent identity ("boosters feel flat" — Aug 2026 blind
+  // design review). Each booster owns a color: gold wildcard, teal
+  // spotlight, coral shuffle — border tint, icon plate ring, glow, and
+  // count badge all follow it.
+  const boosters = [
+    { key: 'wildcard', label: 'Wildcard', icon: 'star' as GameIconName, accent: COLORS.gold, count: wildcardCount, active: wildcardMode, onPress: onWildcard },
+    { key: 'spotlight', label: 'Spotlight', icon: 'hint' as GameIconName, accent: COLORS.teal, count: spotlightCount, active: spotlightActive, onPress: onSpotlight },
+    { key: 'shuffle', label: 'Shuffle', icon: 'shuffle' as GameIconName, accent: COLORS.coral, count: shuffleCount, active: false, onPress: onSmartShuffle },
+  ];
   return (
     <View style={[
       styles.boosterBar,
       !(hasAnyBoosters && isPlaying) && styles.boosterBarHidden,
     ]}>
       <View style={styles.boosterShelf}>
-        {wildcardCount > 0 && (
+        {boosters.map(b => b.count > 0 && (
           <Pressable
+            key={b.key}
             style={({ pressed }) => [
               styles.boosterButton,
-              wildcardMode && styles.boosterActive,
+              { borderColor: b.accent + '66', shadowColor: b.accent },
+              b.active && [styles.boosterActive, { borderColor: b.accent }],
               pressed && styles.boosterPressed,
             ]}
-            onPress={onWildcard}
+            onPress={b.onPress}
           >
             <LinearGradient
               colors={BOOSTER_BODY_GRADIENT}
               style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
             />
             <View style={styles.boosterGlassEdge} />
-            <View style={styles.boosterIconWrap}>
-              <Text style={styles.boosterEmoji}>★</Text>
+            <View style={[styles.boosterIconPlate, { borderColor: b.accent + '73', shadowColor: b.accent }]}>
+              <GameIcon name={b.icon} size={20} accent={b.accent} />
             </View>
-            <Text style={styles.boosterLabel}>Wildcard</Text>
-            <View style={styles.boosterCount}>
-              <Text style={styles.boosterCountText}>{wildcardCount}</Text>
-            </View>
-          </Pressable>
-        )}
-        {spotlightCount > 0 && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.boosterButton,
-              spotlightActive && styles.boosterActive,
-              pressed && styles.boosterPressed,
-            ]}
-            onPress={onSpotlight}
-          >
-            <LinearGradient
-              colors={BOOSTER_BODY_GRADIENT}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-            />
-            <View style={styles.boosterGlassEdge} />
-            <View style={styles.boosterIconWrap}>
-              <Text style={styles.boosterEmoji}>💡</Text>
-            </View>
-            <Text style={styles.boosterLabel}>Spotlight</Text>
-            <View style={styles.boosterCount}>
-              <Text style={styles.boosterCountText}>{spotlightCount}</Text>
+            <Text style={styles.boosterLabel}>{b.label}</Text>
+            <View style={[styles.boosterCount, { backgroundColor: b.accent, shadowColor: b.accent }]}>
+              <Text style={styles.boosterCountText}>{b.count}</Text>
             </View>
           </Pressable>
-        )}
-        {shuffleCount > 0 && (
-          <Pressable
-            style={({ pressed }) => [styles.boosterButton, pressed && styles.boosterPressed]}
-            onPress={onSmartShuffle}
-          >
-            <LinearGradient
-              colors={BOOSTER_BODY_GRADIENT}
-              style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-            />
-            <View style={styles.boosterGlassEdge} />
-            <View style={styles.boosterIconWrap}>
-              <Text style={styles.boosterEmoji}>🔀</Text>
-            </View>
-            <Text style={styles.boosterLabel}>Shuffle</Text>
-            <View style={styles.boosterCount}>
-              <Text style={styles.boosterCountText}>{shuffleCount}</Text>
-            </View>
-          </Pressable>
-        )}
+        ))}
       </View>
     </View>
   );
@@ -342,12 +314,15 @@ const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
           timeRemaining <= 30 && timeRemaining > 0 && styles.timerBarDanger,
           timeRemaining <= 0 && styles.barHidden,
         ]}>
-          <Text style={[
-            styles.timerText,
-            timeRemaining <= 30 && styles.timerTextDanger,
-          ]}>
-            ⏱ {formatTime(timeRemaining)}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <GameIcon name="hourglass" size={16} accent={timeRemaining <= 30 ? COLORS.coral : undefined} />
+            <Text style={[
+              styles.timerText,
+              timeRemaining <= 30 && styles.timerTextDanger,
+            ]}>
+              {formatTime(timeRemaining)}
+            </Text>
+          </View>
         </View>
       )}
       {hasMoveLimit && maxMoves > 0 && (
@@ -634,7 +609,7 @@ function GameScreenImpl({
   const invalidFlashAnim = useRef(new Animated.Value(0)).current;
   const [showInvalidFlash, setShowInvalidFlash] = useState(false);
   const scorePopupAnim = useRef(new Animated.Value(0)).current;
-  const [scorePopup, setScorePopup] = useState<{ points: number; label: string } | null>(null);
+  const [scorePopup, setScorePopup] = useState<{ points: number; label: string; bonusCoins?: number } | null>(null);
   // Pending reduce-motion popup teardown — cleared before scheduling the next
   // so fast word chains don't have the old word's timer null the new popup.
   const scorePopupTeardownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -646,7 +621,6 @@ function GameScreenImpl({
   const modeTutorialSteps = useMemo(() => getModeTutorial(mode), [mode]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const prevFoundWordsRef = useRef(foundWords);
-  const [movedCells, setMovedCells] = useState<CellPosition[]>([]);
   // Multi-tile bloom queue — owned by the sibling `ClearParticleLayer` so
   // pushes/removes don't re-render the 2700-line GameScreen parent. We talk
   // to it through an imperative handle (Fix F, April 2026 perf pass).
@@ -672,9 +646,6 @@ function GameScreenImpl({
   const undoFlashAnim = useRef(new Animated.Value(0)).current;
   const [showUndoFlash, setShowUndoFlash] = useState(false);
   const undoPulseAnim = useRef(new Animated.Value(1)).current;
-
-  // --- Per-tile gravity fall animation state ---
-  const fallAnimMap = useRef(new Map<string, Animated.Value>()).current;
 
   // --- Big word celebration state (Task 2) ---
   const [bigWordLabel, setBigWordLabel] = useState<string | null>(null);
@@ -1342,12 +1313,20 @@ function GameScreenImpl({
     };
   }, [mode, level, isDaily, board.words.length, board.config.rows, board.config.cols]);
 
-  // Track post-gravity moved cells + per-tile fall animation
+  // Gravity SFX + analytics on word found. The fall ANIMATION itself now
+  // lives entirely inside Grid.tsx — it diffs the grid data at render time
+  // and applies translate offsets in the same pass, so tiles can never
+  // paint at their destination before the animation starts (the old
+  // GameScreen-effect pipeline had a visible teleport/flicker window, and
+  // its Animated.parallel froze every in-flight tile when a second word
+  // interrupted it). GameScreen keeps the whoosh sound, analytics, and the
+  // reduce-motion settle haptic (Grid skips all motion under reduce-motion,
+  // so its onGravitySettled never fires there — feedback must not vanish
+  // with motion).
   useEffect(() => {
-    // Capture-then-update BEFORE branching: the word-found branch returns a
-    // cleanup function, so a trailing assignment would be unreachable and the
-    // stale ref would replay the gravity whoosh/haptic on every undo (which
-    // drops foundWords from N to N-1 — still above a never-updated 0).
+    // Capture-then-update BEFORE branching: the word-found branch returns
+    // early, so a trailing assignment would leave a stale ref that replays
+    // the gravity whoosh on every undo.
     const prevFound = prevFoundWordsRef.current;
     prevFoundWordsRef.current = foundWords;
     if (foundWords > prevFound && status === 'playing') {
@@ -1362,110 +1341,33 @@ function GameScreenImpl({
       requestAnimationFrame(() => {
         void analytics.logEvent('gravity_interaction', analyticsPayload);
       });
-      // Per-tile gravity fall animation. Prepare Animated.Values before
-      // publishing movedCells so the single render triggered by setMovedCells
-      // already contains the initial transform; avoid a separate fallActive
-      // render on start/end.
-      if (!reduceMotion && moved.length > 0) {
-        const rows = grid.length;
-        const cols = grid[0]?.length ?? 0;
-        // Compute cellStride (same formula as Grid.tsx)
-        const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-        let cellSize = Math.floor(availableWidth / cols);
-        if (gridAreaHeight > 0) {
-          const frameAllowance = 58;
-          const heightAvail = gridAreaHeight - frameAllowance;
-          const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
-          cellSize = Math.min(cellSize, heightBased);
-        }
-        const cellStride = cellSize + CELL_GAP;
-
-        // Stagger delay per column, radiating OUT from the cleared word's
-        // centroid so the wave reads as caused by the clear. A plain
-        // left-to-right sweep (the old ascending-col sort) always started at
-        // the grid's left edge regardless of where the word was.
-        const staggerDelay = ANIM.gravityStagger || 30;
-        const movedCols = new Set(moved.map(c => c.col));
-        const submitted = lastSubmittedCellsRef.current;
-        const centroidCol = submitted.length > 0
-          ? submitted.reduce((s, c) => s + c.col, 0) / submitted.length
-          : null;
-        const colOrder = Array.from(movedCols).sort((a, b) =>
-          centroidCol === null
-            ? a - b
-            : Math.abs(a - centroidCol) - Math.abs(b - centroidCol) || a - b,
-        );
-        const colDelayMap = new Map<number, number>();
-        colOrder.forEach((c, i) => colDelayMap.set(c, i * staggerDelay));
-
-        const animations: Animated.CompositeAnimation[] = [];
-        for (const cell of moved) {
-          // Get or create Animated.Value for this cell
-          let anim = fallAnimMap.get(cell.cellId);
-          if (!anim) {
-            anim = new Animated.Value(0);
-            fallAnimMap.set(cell.cellId, anim);
-          }
-          // Set offset so tile visually appears at old position
-          // fallRows > 0 means tile fell down, so start with negative translateY (above)
-          const offsetPx = -(cell.fallRows * cellStride);
-          anim.setValue(offsetPx);
-
-          const delay = colDelayMap.get(cell.col) ?? 0;
-          // Animate to 0 (final position) with gravity-like feel.
-          // Phase 3.10: friction dropped 12 → 9 for a subtle landing bounce
-          // overshoot (reduceMotion users already skip this block at line 1048).
-          animations.push(
-            Animated.sequence([
-              Animated.delay(delay),
-              Animated.spring(anim, {
-                toValue: 0,
-                tension: 180,
-                friction: 9,
-                useNativeDriver: true,
-              }),
-            ])
-          );
-        }
-        setMovedCells(moved);
-        Animated.parallel(animations).start(({ finished }) => {
-          // Interrupted runs (the next word's setValue force-stops in-flight
-          // springs on shared columns) must not fire the landing haptic while
-          // tiles are mid-air — the completed successor run handles both the
-          // haptic and the pruning with fresh state.
-          if (!finished) return;
-          // C1 in launch_blockers.md: fire the gravity-land haptic now that
-          // the spring animation has settled. Previously this function was
-          // defined in haptics.ts:51 but never called in production.
-          void gravityLandHaptic();
-          // Clean up animated values for cells no longer on the grid
-          const activeCellIds = new Set<string>();
-          grid.forEach(row =>
-            row.forEach(c => { if (c) activeCellIds.add(c.id); })
-          );
-          for (const id of fallAnimMap.keys()) {
-            if (!activeCellIds.has(id)) fallAnimMap.delete(id);
-          }
-        });
-      } else {
-        // Words cleared along the bottom rows move nothing — keep the state's
-        // existing (often empty) array reference so PlayField/GameGrid skip
-        // two pointless grid-wide reconciliations during the clear window.
-        setMovedCells(prev => (prev.length === 0 && moved.length === 0 ? prev : moved));
-        // Reduce-motion suppresses the spring, not the settle confirmation —
-        // motion off must not mean feedback off. Tiles still moved; say so.
-        if (reduceMotion && moved.length > 0) {
-          void gravityLandHaptic();
-        }
+      if (reduceMotion && moved.length > 0) {
+        void gravityLandHaptic();
       }
-
-      const timer = setTimeout(
-        () => setMovedCells(prev => (prev.length === 0 ? prev : [])),
-        400,
-      );
-      return () => clearTimeout(timer);
     }
   }, [foundWords, status]);
+
+  // Landing haptic — fired by Grid when every tile from a fall has settled.
+  const handleGravitySettled = useCallback(() => {
+    void gravityLandHaptic();
+  }, []);
+
+  // E2E driver hook — web only, and only when the page was opened with an
+  // `e2e` query param (never true in the shipped Android app; the web build
+  // is used solely by the screenshot/design-review pipeline, where headless
+  // Chromium cannot deliver the pointer events react-native-gesture-handler
+  // expects). Exposes the game store so the driver can select cells and
+  // read board state directly.
+  useEffect(() => {
+    if (
+      Platform.OS === 'web' &&
+      typeof window !== 'undefined' &&
+      typeof window.location?.search === 'string' &&
+      window.location.search.includes('e2e')
+    ) {
+      (window as unknown as Record<string, unknown>).__wfStore = store;
+    }
+  }, [store]);
 
   // Last-word tension hook (plan task 2). When `remainingWords` transitions to
   // exactly 1, crossfade to the tense BGM, fire a one-shot sting, and run a
@@ -1547,7 +1449,8 @@ function GameScreenImpl({
 
       setScorePopup({
         points: diff,
-        label: bonusCoins > 0 ? `+${diff}  \u{1FA99}+${bonusCoins}` : `+${diff}`,
+        label: `+${diff}`,
+        bonusCoins: bonusCoins > 0 ? bonusCoins : undefined,
       });
       void wordFoundHaptic();
 
@@ -2381,6 +2284,9 @@ function GameScreenImpl({
         foundCount={foundWords}
         tensionActive={tensionEligible && totalWords - foundWords === 1}
         flawlessStreak={flawlessStreakCurrent}
+        // Folio wears the current wing's colors — same chapter resolution
+        // as the backdrop palette, so mascot + backdrop always agree.
+        wingAccent={chapterForBackdrop ? getWing(chapterForBackdrop.wingId).accent : undefined}
       />
 
       <GameHeader
@@ -2465,8 +2371,10 @@ function GameScreenImpl({
 
 
       {/* Word bank — reads selection state from the zustand store directly.
-          Renders above the grid area in its original layout position. */}
-      <ConnectedWordBank />
+          Renders above the grid area in its original layout position.
+          Hidden (opacity 0, layout preserved) while any completion overlay
+          is up so the chips can never paint over the victory/failure UI. */}
+      <ConnectedWordBank hidden={showComplete || showFailed || showPostLoss} />
 
       {/* Grid area — onLayout measures the available space for Grid sizing */}
       <View style={styles.gridArea} onLayout={handleGridLayout}>
@@ -2488,8 +2396,8 @@ function GameScreenImpl({
           gridScaleStyle={gridScaleStyle}
           showValidFlash={showValidFlash}
           spotlightDimmedSet={spotlightDimmedSet}
-          fallAnimMap={fallAnimMap}
-          movedCells={movedCells}
+          onGravitySettled={handleGravitySettled}
+          frameAccent={chapterTileRamp?.[0]}
           bonusCellId={bonusTile?.cellId ?? null}
         />
         </TilePaletteContext.Provider>
@@ -2745,18 +2653,30 @@ function GameScreenImpl({
               </>
             ) : foundWords > 0 ? (
               <>
-                <Text style={styles.failedTitle}>
-                  {status === 'timeout' ? `⏱ ${t('result.timeUpShort')}` : t('result.keepGoing')}
-                </Text>
+                {status === 'timeout' ? (
+                  <View style={styles.failedTitleRow}>
+                    <GameIcon name="hourglass" size={26} accent={COLORS.coral} />
+                    <Text style={[styles.failedTitle, styles.failedTitleInRow]}>{t('result.timeUpShort')}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.failedTitle}>{t('result.keepGoing')}</Text>
+                )}
                 <Text style={styles.failedSubtext}>
                   {t('result.foundWordsProgress', { found: foundWords, total: totalWords })}
                 </Text>
               </>
             ) : (
               <>
-                <Text style={styles.failedTitle}>
-                  {status === 'timeout' ? `⏱ ${t('result.timeUpShort')}` : `❌ ${t('result.puzzleFailed')}`}
-                </Text>
+                <View style={styles.failedTitleRow}>
+                  <GameIcon
+                    name={status === 'timeout' ? 'hourglass' : 'cross'}
+                    size={26}
+                    accent={COLORS.coral}
+                  />
+                  <Text style={[styles.failedTitle, styles.failedTitleInRow]}>
+                    {status === 'timeout' ? t('result.timeUpShort') : t('result.puzzleFailed')}
+                  </Text>
+                </View>
                 <Text style={styles.failedSubtext}>
                   {status === 'timeout'
                     ? t('result.ranOutOfTime')
@@ -2794,7 +2714,10 @@ function GameScreenImpl({
                   style={({ pressed }) => [styles.adHintButton, pressed && styles.buttonPressed]}
                   onPress={handleWatchAdForHint}
                 >
-                  <Text style={styles.adHintButtonText}>{'\uD83C\uDFAC'} {t('result.watchAdFreeHint')}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <GameIcon name="frame" size={16} accent={COLORS.green} />
+                    <Text style={styles.adHintButtonText}>{t('result.watchAdFreeHint')}</Text>
+                  </View>
                 </Pressable>
               )}
               {undosLeft > 0 && history.length > 0 && (
@@ -2802,7 +2725,10 @@ function GameScreenImpl({
                   style={({ pressed }) => [styles.undoRecoverButton, pressed && styles.buttonPressed]}
                   onPress={handleUndo}
                 >
-                  <Text style={styles.undoRecoverText}>↩ {t('result.undoLastMove')}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <GameIcon name="undo" size={16} accent={COLORS.gold} />
+                    <Text style={styles.undoRecoverText}>{t('result.undoLastMove')}</Text>
+                  </View>
                 </Pressable>
               )}
               <Pressable
@@ -3214,21 +3140,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 13,
-    borderWidth: 1,
-    borderColor: 'rgba(200, 77, 255, 0.35)',
-    minWidth: 76,
+    borderWidth: 1.5,
+    minWidth: 82,
     overflow: 'visible',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 9,
     elevation: 5,
   },
   boosterActive: {
-    borderColor: COLORS.accent,
-    shadowColor: COLORS.accent,
-    shadowOpacity: 0.7,
-    shadowRadius: 12,
+    shadowOpacity: 0.75,
+    shadowRadius: 14,
   },
   boosterPressed: {
     transform: [{ scale: 0.94 }],
@@ -3246,12 +3168,19 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  boosterIconWrap: {
+  boosterIconPlate: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8, 2, 22, 0.7)',
     marginBottom: 3,
-  },
-  boosterIconImage: {
-    width: 26,
-    height: 26,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 4,
   },
   boosterLabel: {
     fontFamily: FONTS.bodySemiBold,
@@ -3260,7 +3189,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   boosterEmoji: {
-    fontSize: 22,
+    fontSize: 17,
   },
   boosterCount: {
     position: 'absolute',
@@ -3308,6 +3237,16 @@ const styles = StyleSheet.create({
     shadowRadius: 28,
     elevation: 20,
     overflow: 'hidden',
+  },
+  failedTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  failedTitleInRow: {
+    marginBottom: 0,
   },
   failedTitle: {
     fontFamily: FONTS.display,

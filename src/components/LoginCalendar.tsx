@@ -13,6 +13,7 @@ import {
   getLoginCycleLength,
   getNextLoginRewardPreview,
 } from '../data/loginCalendar';
+import GameIcon from './icons/GameIcon';
 
 interface LoginCalendarProps {
   /** Current day in the active login cycle (1..cycleLength) */
@@ -57,20 +58,20 @@ const DayCircle = React.memo(function DayCircle({
           ]}
         >
           {isClaimed ? (
-            <Text style={styles.checkmark}>✓</Text>
+            <GameIcon name="check" size={18} />
           ) : (
             <Text style={styles.dayNumber}>{day}</Text>
           )}
         </View>
       </Animated.View>
-      <Text
+      <View
         style={[
           styles.dayIcon,
           isFuture && styles.dayIconDimmed,
         ]}
       >
-        {icon}
-      </Text>
+        <GameIcon glyph={icon} size={16} />
+      </View>
       {day % 7 === 0 && (
         <Text style={styles.jackpotBadge}>★</Text>
       )}
@@ -163,8 +164,9 @@ const LoginCalendar: React.FC<LoginCalendarProps> = ({
       ) : (
         <View style={styles.previewContainer}>
           <Text style={styles.previewLabel}>Tomorrow:</Text>
+          <GameIcon glyph={nextReward.icon} size={15} />
           <Text style={styles.previewText}>
-            {nextReward.icon} {nextReward.label}
+            {' '}{nextReward.label}
           </Text>
         </View>
       )}
@@ -230,13 +232,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textPrimary,
   },
-  checkmark: {
-    fontFamily: FONTS.display,
-    fontSize: 16,
-    color: COLORS.green,
-  },
   dayIcon: {
-    fontSize: 14,
     marginTop: 2,
   },
   dayIconDimmed: {
