@@ -79,6 +79,90 @@ function rewardIconName(reward: PassReward): GameIconName | undefined {
 }
 
 /**
+ * Reward rarity — driven by what the reward is WORTH, not by which lane it
+ * sits in. Blind-panel fix: "a premium Rare Tile reads no more valuable than
+ * 55 coins". Every card now wears a frame sized to its payout, so scrolling
+ * the ladder visibly escalates common → uncommon → rare → legendary.
+ *
+ * Landmark tiers (10/20/30/40/50) and every cosmetic/decoration payout are
+ * legendary by definition; boosters, rare tiles and mystery boxes are rare
+ * regardless of amount; raw currency is bucketed by size.
+ */
+type RewardRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
+
+function rewardRarity(reward: PassReward, tier: number): RewardRarity {
+  if (tier % 10 === 0 || reward.type === 'cosmetic') return 'legendary';
+  if (
+    reward.type === 'booster' ||
+    reward.type === 'rare_tile' ||
+    reward.type === 'mystery_box'
+  ) {
+    return 'rare';
+  }
+  const amount = reward.amount ?? 0;
+  if (reward.type === 'coins') return amount >= 400 ? 'rare' : amount >= 150 ? 'uncommon' : 'common';
+  if (reward.type === 'gems') return amount >= 20 ? 'rare' : amount >= 10 ? 'uncommon' : 'common';
+  if (reward.type === 'hints') return amount >= 8 ? 'rare' : amount >= 3 ? 'uncommon' : 'common';
+  return 'common';
+}
+
+/**
+ * Frame recipe per rarity: border weight/colour, card fill gradient, outer
+ * glow strength and reward-art scale. Art grows with rarity so the biggest
+ * payouts physically dominate the card (the freed space from the deleted
+ * per-card LOCKED pill goes straight into the illustration).
+ */
+const RARITY_FRAME: Record<
+  RewardRarity,
+  {
+    accent: string;
+    border: string;
+    borderWidth: number;
+    fill: readonly [string, string];
+    glowOpacity: number;
+    glowRadius: number;
+    artSize: number;
+  }
+> = {
+  common: {
+    accent: COLORS.textMuted,
+    border: 'rgba(255,255,255,0.11)',
+    borderWidth: 1,
+    fill: ['rgba(38,17,70,0.88)', 'rgba(19,7,36,0.96)'],
+    glowOpacity: 0,
+    glowRadius: 0,
+    artSize: 58,
+  },
+  uncommon: {
+    accent: COLORS.cyan,
+    border: 'rgba(0,229,255,0.48)',
+    borderWidth: 1.25,
+    fill: ['rgba(0,120,155,0.26)', 'rgba(19,7,38,0.96)'],
+    glowOpacity: 0.24,
+    glowRadius: 9,
+    artSize: 60,
+  },
+  rare: {
+    accent: COLORS.purple,
+    border: 'rgba(200,77,255,0.66)',
+    borderWidth: 1.5,
+    fill: ['rgba(142,44,205,0.44)', 'rgba(29,8,56,0.97)'],
+    glowOpacity: 0.42,
+    glowRadius: 12,
+    artSize: 62,
+  },
+  legendary: {
+    accent: COLORS.gold,
+    border: 'rgba(255,196,32,0.78)',
+    borderWidth: 1.75,
+    fill: ['rgba(255,170,24,0.32)', 'rgba(46,17,44,0.97)'],
+    glowOpacity: 0.58,
+    glowRadius: 14,
+    artSize: 64,
+  },
+};
+
+/**
  * Reward render sitting directly on the card — no dark medallion well.
  * A soft glow disc floats behind the art so it reads as lit and
  * dimensional; the illustrations carry their own grounded shadows.
@@ -534,31 +618,50 @@ const LaneCard = memo(function LaneCard({
   onClaim,
 }: LaneCardProps) {
   const premiumLane = lane === 'premium';
-  const laneAccent = premiumLane ? COLORS.gold : COLORS.cyan;
   const premiumLocked = premiumLane && !isPremiumUser;
   const claimable = reached && !claimed && (!premiumLane || isPremiumUser);
   const muted = !reached || premiumLocked;
   // Landmark tiers (10/20/30/40/50) get a gilded double-ring medallion so
   // the ladder reads as having milestone payoffs at a glance.
   const landmark = tier % 10 === 0;
+  const rarity = rewardRarity(reward, tier);
+  const frame = RARITY_FRAME[rarity];
+  const laneAccent = frame.accent;
+  // Locked = padlock chip on the medallion corner + dimmed shell. There is
+  // no per-card LOCKED pill any more (blind-panel: ~10 identical grey pills
+  // per screen flattened the whole ladder).
+  const showLock = !reached || premiumLocked;
 
   const handlePress = useCallback(() => onClaim(tier, lane), [onClaim, tier, lane]);
 
   return (
     <View
+      accessible
+      accessibilityLabel={
+        claimed
+          ? `Tier ${tier} ${lane} reward, ${reward.label}, claimed`
+          : claimable
+            ? `Tier ${tier} ${lane} reward, ${reward.label}, ready to claim`
+            : premiumLocked
+              ? `Tier ${tier} premium reward, ${reward.label}, requires premium pass`
+              : `Tier ${tier} ${lane} reward, ${reward.label}, locked`
+      }
       style={[
         styles.laneCard,
-        premiumLane ? styles.laneCardPremium : styles.laneCardFree,
+        {
+          borderColor: frame.border,
+          borderWidth: frame.borderWidth,
+          shadowColor: frame.accent,
+          shadowOpacity: muted ? frame.glowOpacity * 0.3 : frame.glowOpacity,
+          shadowRadius: frame.glowRadius,
+          elevation: frame.glowOpacity > 0.35 ? 6 : 3,
+        },
         muted && styles.laneCardLockedShell,
         claimed && styles.laneCardClaimed,
       ]}
     >
       <LinearGradient
-        colors={
-          premiumLane
-            ? ['rgba(98,52,160,0.95)', 'rgba(26,9,50,0.98)']
-            : [...GRADIENTS.surfaceCard]
-        }
+        colors={[...frame.fill]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={[
@@ -567,11 +670,11 @@ const LaneCard = memo(function LaneCard({
           muted && styles.laneCardFillDim,
         ]}
       />
-      {/* Warm gold inner wash so the premium lane reads richer than free
-          at a glance, even before the ribbon/border register. */}
+      {/* Faint warm wash keeps the premium lane a touch richer than free,
+          without competing with the rarity frame for the border read. */}
       {premiumLane && (
         <LinearGradient
-          colors={['rgba(255,184,0,0.16)', 'rgba(255,150,40,0.02)']}
+          colors={['rgba(255,184,0,0.09)', 'rgba(255,150,40,0.01)']}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={[StyleSheet.absoluteFillObject, styles.laneCardFill]}
@@ -599,15 +702,12 @@ const LaneCard = memo(function LaneCard({
 
       <View style={styles.rewardMedallionWrap}>
         {landmark ? (
-          <View
-            style={[styles.gildedRing, muted && styles.gildedRingMuted]}
-            accessibilityLabel={`Landmark tier ${tier} reward`}
-          >
+          <View style={[styles.gildedRing, muted && styles.gildedRingMuted]}>
             <View style={[styles.gildedRingInner, muted && styles.gildedRingInnerMuted]}>
               <RewardArt
                 glyph={reward.icon}
                 name={rewardIconName(reward)}
-                size={44}
+                size={frame.artSize - 8}
                 glow={COLORS.gold}
               />
             </View>
@@ -616,27 +716,33 @@ const LaneCard = memo(function LaneCard({
           <RewardArt
             glyph={reward.icon}
             name={rewardIconName(reward)}
-            size={46}
+            size={frame.artSize}
             glow={laneAccent}
           />
         )}
-        {premiumLocked && (
+        {showLock && (
           <SvgMedallion
             name="lock"
             size={22}
-            accent={COLORS.gold}
+            accent={premiumLocked ? COLORS.gold : COLORS.textMuted}
+            muted={!premiumLocked}
             style={styles.lockOverlay}
           />
         )}
+        {claimed && (
+          <View style={styles.claimedChip}>
+            <Text style={styles.claimedChipText}>✓</Text>
+          </View>
+        )}
       </View>
       <Text
-        style={[styles.rewardLabel, (!reached || premiumLocked) && styles.rewardLabelMuted]}
+        style={[styles.rewardLabel, muted && styles.rewardLabelMuted]}
         numberOfLines={2}
       >
         {reward.label}
       </Text>
 
-      {claimable ? (
+      {claimable && (
         <PrimaryButton
           label="CLAIM"
           variant="gold"
@@ -645,32 +751,6 @@ const LaneCard = memo(function LaneCard({
           accessibilityLabel={`Claim ${lane} reward for tier ${tier}`}
           style={styles.claimButton}
         />
-      ) : (
-        <View
-          style={[
-            styles.statusChip,
-            claimed && styles.statusChipClaimed,
-            premiumLocked && reached && styles.statusChipPremium,
-          ]}
-          accessibilityLabel={
-            claimed
-              ? `Tier ${tier} ${lane} reward claimed`
-              : premiumLocked
-                ? `Tier ${tier} premium reward requires premium pass`
-                : `Tier ${tier} ${lane} reward locked`
-          }
-        >
-          <Text
-            style={[
-              styles.statusChipText,
-              claimed && styles.statusChipTextClaimed,
-              premiumLocked && reached && styles.statusChipTextPremium,
-            ]}
-            numberOfLines={1}
-          >
-            {claimed ? '✓ CLAIMED' : premiumLocked && reached ? 'PREMIUM' : 'LOCKED'}
-          </Text>
-        </View>
       )}
     </View>
   );
@@ -1311,36 +1391,25 @@ const styles = StyleSheet.create({
   },
 
   // ── Lane cards ───────────────────────────────────────────────────────
+  // Denser than before: the deleted LOCKED pill's ~36pt went into the art,
+  // and the card lost 6pt of vertical padding on top of that.
   laneCard: {
     flex: 1,
     borderRadius: 18,
-    borderWidth: 1,
-    padding: 12,
-    paddingTop: 16,
-    marginBottom: 14,
+    paddingHorizontal: 10,
+    paddingTop: 12,
+    paddingBottom: 10,
+    marginBottom: 12,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 136,
+    justifyContent: 'center',
+    minHeight: 118,
+    shadowOffset: { width: 0, height: 0 },
     // Opaque base under the gradient fill — content sits ON the card
     // instead of blending into the floor grid behind it.
     backgroundColor: 'rgba(12,4,28,0.96)',
   },
-  laneCardFree: {
-    borderColor: 'rgba(0,229,255,0.20)',
-    ...SHADOWS.soft,
-  },
-  laneCardPremium: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,196,32,0.55)',
-    backgroundColor: 'rgba(28,11,54,0.97)',
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-    elevation: 5,
-  },
   laneCardClaimed: {
-    opacity: 0.6,
+    opacity: 0.62,
   },
   // Locked treatment: dim the SHELL only (border + fill + shadow) — the
   // reward render stays full-color so it still looks covetable.
@@ -1385,7 +1454,7 @@ const styles = StyleSheet.create({
   },
   // Gilded double ring wrapping landmark-tier reward art (10/20/30/40/50).
   gildedRing: {
-    borderRadius: 30,
+    borderRadius: 36,
     borderWidth: 1.5,
     borderColor: COLORS.gold,
     padding: 2,
@@ -1403,7 +1472,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   gildedRingInner: {
-    borderRadius: 26,
+    borderRadius: 32,
     borderWidth: 1,
     borderColor: 'rgba(255, 214, 92, 0.55)',
     padding: 1.5,
@@ -1411,10 +1480,37 @@ const styles = StyleSheet.create({
   gildedRingInnerMuted: {
     borderColor: 'rgba(255, 214, 92, 0.2)',
   },
+  // Lock now lives ON the reward medallion's corner — it replaces the whole
+  // grey per-card pill, so state costs a 22pt chip instead of a full row.
   lockOverlay: {
     position: 'absolute',
-    top: -6,
-    right: -8,
+    bottom: -4,
+    right: -6,
+  },
+  // Claimed state: a small green check chip, same corner slot as the lock.
+  claimedChip: {
+    position: 'absolute',
+    bottom: -4,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.green + '99',
+    backgroundColor: 'rgba(0,40,24,0.95)',
+    shadowColor: COLORS.green,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  claimedChipText: {
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    lineHeight: 13,
+    color: COLORS.green,
   },
   rewardLabel: {
     fontFamily: FONTS.bodySemiBold,
@@ -1422,42 +1518,14 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     textAlign: 'center',
     lineHeight: 15,
-    marginBottom: 8,
+    marginTop: 2,
   },
   rewardLabelMuted: {
     color: COLORS.textMuted,
   },
   claimButton: {
     alignSelf: 'stretch',
-  },
-  statusChip: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    paddingVertical: 7,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  statusChipClaimed: {
-    borderColor: COLORS.green + '55',
-    backgroundColor: 'rgba(0,255,135,0.08)',
-  },
-  statusChipPremium: {
-    borderColor: COLORS.gold + '45',
-    backgroundColor: 'rgba(255,184,0,0.08)',
-  },
-  statusChipText: {
-    fontFamily: FONTS.display,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: COLORS.textMuted,
-  },
-  statusChipTextClaimed: {
-    color: COLORS.green,
-  },
-  statusChipTextPremium: {
-    color: COLORS.gold,
+    marginTop: 8,
   },
 
   // ── Tier 50 showcase ─────────────────────────────────────────────────

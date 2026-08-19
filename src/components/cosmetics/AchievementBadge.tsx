@@ -1,17 +1,27 @@
 /**
  * AchievementBadge — premium SVG trophy for the 19 achievements.
  *
- * Each achievement family gets its own medallion SILHOUETTE (puzzle = circle
- * medallion, collection/mode = heater shield, streak/mastery = star-scallop
- * rosette) and enamel accent, with a bespoke emblem per achievement — so the
- * wall reads as a varied trophy case, never a repeated placeholder.
+ * Every achievement carries a bespoke emblem plus one of SIX distinct
+ * medallion SILHOUETTES (round medallion / heater shield / scalloped rosette /
+ * hexagonal plaque / laurel-wreath disc / banner-draped crest), spread so no
+ * more than four badges share a form and each form mixes families — the wall
+ * reads as a varied trophy case, never one asset with a swapped inner glyph.
+ *
+ * Two things the badge deliberately does NOT do: float, and stay small. The
+ * medallion is centered on (50, 43.5) at radius 38.5 in a 100×100 box, so the
+ * frame reaches ~86% of the card's width, and `emblemFit` blows each emblem up
+ * until its own authored radius fills the silhouette's safe circle — 55–69% of
+ * the box, and the same apparent size for every badge on a given form.
  *
  * Composition (back to front): gold ray burst (gold tier only) → accent glow
- * (earned) → dashed silhouette echo (locked) → enamel plate → bespoke emblem
- * (from `achievementEmblems1/2`, fitted per silhouette) → riveted metal frame
- * (bronze / silver / gold by tier, slate when locked) → silver ring gleam
- * (silver tier only) → dovetailed ribbon with 1–3 tier stars → padlock chip
- * (locked).
+ * (earned) → enameled plate (body gradient
+ * under a radial enamel bloom, so it reads as enamel over metal, not a vector
+ * fill) → engraved dashed silhouette echo (locked) → bespoke emblem (from
+ * `achievementEmblems1/2`, fitted per silhouette)
+ * → riveted metal frame (hammered copper / brushed steel / rich gold by tier,
+ * slate when locked) → tier surface dressing (hammer facets · brushed
+ * striations + specular sweep · sparkles) → dovetailed ribbon with 1–3 tier
+ * stars, gem-set at gold → padlock chip (locked).
  *
  * Locked badges are TINTED GHOSTS, not gray stone: the emblem re-tones
  * through a luminance ramp pulled toward the badge's own family accent
@@ -29,11 +39,11 @@ import { ABVB, BadgeGlow, BadgeMetal, EmblemProps, RibbonBanner } from './achiev
 import {
   BadgeFrame,
   BadgePlate,
-  EMBLEM_FIT,
   GhostEcho,
   GoldRayBurst,
   LockChip,
-  SilverGleam,
+  TierDressing,
+  emblemFit,
 } from './achievementBadgeShapes';
 import {
   ACHIEVEMENT_BADGE_ART,
@@ -113,17 +123,18 @@ export function AchievementBadge({ achievementId, size, earned, tier }: Achievem
     <Svg width={size} height={size} viewBox={ABVB}>
       {earned && metal === 'gold' && <GoldRayBurst />}
       {earned && <BadgeGlow accent={art.accent} />}
-      {!earned && <GhostEcho shape={art.shape} accent={art.accent} />}
       <BadgePlate shape={art.shape} tone={earned ? art.accent : ghostEnamel(art.accent)} />
-      <G transform={EMBLEM_FIT[art.shape]}>
+      {!earned && <GhostEcho shape={art.shape} accent={art.accent} />}
+      <G transform={emblemFit(art.shape, art.emblem)}>
         <Emblem c={c} />
       </G>
       <BadgeFrame shape={art.shape} metal={metal} />
-      {earned && metal === 'silver' && <SilverGleam shape={art.shape} />}
+      {earned && <TierDressing shape={art.shape} metal={metal} />}
       <RibbonBanner
         metal={metal}
         cloth={earned ? shade(art.accent, -28) : ghostCloth(art.accent)}
         stars={earned ? TIER_STARS[tier ?? 'bronze'] : 0}
+        gem={earned && metal === 'gold'}
       />
       {!earned && <LockChip />}
     </Svg>

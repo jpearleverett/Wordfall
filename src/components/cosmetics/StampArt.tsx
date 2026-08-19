@@ -28,6 +28,7 @@ import Svg, {
 import { COLORS } from '../../constants';
 import { gradId, shade } from '../icons/IconBase';
 import GameIcon from '../icons/GameIcon';
+import { stampIconName } from '../icons/iconsStamps';
 
 /** Rotating parchment hues so a sheet of stamps reads as a real album page. */
 export const STAMP_PAPERS = ['#f2e8cf', '#e9eed9', '#f3e2d8', '#e4e9ef'];
@@ -83,6 +84,13 @@ function star(cx: number, cy: number, r: number): string {
 }
 
 export interface StampArtProps {
+  /**
+   * Catalog stamp id (e.g. 'su26_4'). Preferred: resolves bespoke art that
+   * matches the stamp's NAME via STAMP_ICON_BY_ID. The stored `icon` emoji
+   * is only a fallback — several catalog emoji contradict their labels
+   * (an apple stored on 'Ice Cream', a pine tree on 'Tropical').
+   */
+  stampId?: string;
   /** Stored emoji glyph from the album catalog (resolved via GameIcon). */
   icon: string;
   /** Stamp display name — engraved in tiny caps along the base. */
@@ -99,6 +107,7 @@ export interface StampArtProps {
 }
 
 export default function StampArt({
+  stampId,
   icon,
   name,
   earned,
@@ -117,6 +126,7 @@ export default function StampArt({
     }),
     [],
   );
+  const motif = stampIconName(stampId);
   const paper = earned ? paperTint : GHOST_PAPER;
   const h = size * 1.2;
   const iconSize = size * 0.46;
@@ -281,7 +291,11 @@ export default function StampArt({
             alignItems: 'center',
           }}
         >
-          <GameIcon glyph={icon} size={iconSize} />
+          {motif ? (
+            <GameIcon name={motif} size={iconSize} />
+          ) : (
+            <GameIcon glyph={icon} size={iconSize} />
+          )}
         </View>
       )}
     </View>

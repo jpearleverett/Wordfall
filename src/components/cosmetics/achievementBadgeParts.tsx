@@ -1,19 +1,25 @@
 /**
- * Shared chrome for the achievement badges: metal ring, enamel disc, ribbon
- * banner, glow backplate, plus the metal palette (bronze / silver / gold /
- * stone). Silhouette variants (shield, rosette) and the tier / locked-state
- * dressings live in `achievementBadgeShapes.tsx`; the tinted-ghost color math
- * for the unearned state lives in `achievementBadgeCatalog.ts`.
+ * Shared chrome for the achievement badges: the metal palette (bronze /
+ * silver / gold / stone), the accent glow backplate and the ribbon banner.
  *
- * Badges draw in a 100×100 viewBox. The medallion is centered at (50,44) so
- * the ribbon banner fits along the base (y 76–94). Same material recipe as
- * `iconsDecor` / the frame art: gradient bodies, dark rim strokes, top-light
- * specular arcs, riveted studs. Emblems draw inside the enamel disc — keep
- * their shapes within r≈28 of (50,44).
+ * Materials escalate unmistakably by tier, which is why each metal carries a
+ * full multi-stop `stops` ramp rather than a light/dark pair:
+ * - bronze  warm hammered COPPER, deliberately flat-ish (narrow tonal range)
+ * - silver  cool BRUSHED STEEL — bright skylight, dark core, second bounce
+ * - gold    rich GOLD with a hot rim and a deep amber base
+ * - stone   locked slate
+ * The surface treatments that ride on top of those ramps (hammer facets,
+ * brushed striations + specular sweep, ray burst + sparkles) live in
+ * `achievementBadgeShapes.tsx`.
+ *
+ * Badges draw in a 100×100 viewBox with the medallion centered at (50, 43.5)
+ * and a base radius of 38.5, so the ribbon banner fits along the base
+ * (y 78–98). Emblems draw inside the enamel plate — keep their shapes within
+ * r≈28 of (50, 44); `EMBLEM_FIT` scales them up per silhouette.
  */
 import React, { useMemo } from 'react';
-import { Circle, Defs, Ellipse, Path, RadialGradient, Stop } from 'react-native-svg';
-import { BodyGrad, DuoGrad, gradId, shade, HILITE } from '../icons/IconBase';
+import { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
+import { DuoGrad, gradId, shade } from '../icons/IconBase';
 import { star5 } from './frameArtParts';
 
 export const ABVB = '0 0 100 100';
@@ -30,17 +36,65 @@ export interface EmblemProps {
 export type BadgeMetal = 'bronze' | 'silver' | 'gold' | 'stone';
 
 interface MetalSpec {
+  /** Brightest tone — ribbon stars, frame highlights. */
   light: string;
-  dark: string;
+  /** Dark rim/outline for every metal part. */
   rimC: string;
+  /** Rivet / stud / bead fill. */
   stud: string;
+  /** Full vertical ramp for the frame band (see the per-tier notes above). */
+  stops: Array<[number, string]>;
 }
 
 export const METALS: Record<BadgeMetal, MetalSpec> = {
-  bronze: { light: '#f0b478', dark: '#8a4d1f', rimC: '#4f2a0e', stud: '#a8642c' },
-  silver: { light: '#f2f6fc', dark: '#8c96ac', rimC: '#454e63', stud: '#a5aec2' },
-  gold: { light: '#ffe27a', dark: '#b06a00', rimC: '#5e3800', stud: '#d99a12' },
-  stone: { light: '#9aa0b4', dark: '#4a4f63', rimC: '#272b3a', stud: '#5f6579' },
+  bronze: {
+    light: '#e8a670',
+    rimC: '#4a2510',
+    stud: '#b06a33',
+    // Flat-ish copper: shallow ramp, no hot specular stop.
+    stops: [
+      [0, '#e2a06a'],
+      [0.42, '#c07840'],
+      [0.74, '#a35f2c'],
+      [1, '#8a4d22'],
+    ],
+  },
+  silver: {
+    light: '#f7fbff',
+    rimC: '#3d465c',
+    stud: '#aeb8cb',
+    // Brushed steel: skylight, roll-off, dark core, floor bounce, deep base.
+    stops: [
+      [0, '#fdfeff'],
+      [0.26, '#d7e0ee'],
+      [0.5, '#8d99b0'],
+      [0.72, '#cbd5e4'],
+      [1, '#69738a'],
+    ],
+  },
+  gold: {
+    light: '#fff0a8',
+    rimC: '#5a3400',
+    stud: '#e0a71a',
+    // Rich gold: hot rim, saturated body, amber core, second glint, deep base.
+    stops: [
+      [0, '#fff4bd'],
+      [0.24, '#ffd85e'],
+      [0.5, '#e8a416'],
+      [0.74, '#ffcf4a'],
+      [1, '#9c5c00'],
+    ],
+  },
+  stone: {
+    light: '#9aa0b4',
+    rimC: '#272b3a',
+    stud: '#5f6579',
+    stops: [
+      [0, '#9aa0b4'],
+      [0.5, '#6a7086'],
+      [1, '#454a5e'],
+    ],
+  },
 };
 
 /** Soft radial accent glow behind an earned badge. */
@@ -55,82 +109,61 @@ export function BadgeGlow({ accent }: { accent: string }) {
           <Stop offset="1" stopColor={accent} stopOpacity="0" />
         </RadialGradient>
       </Defs>
-      <Circle cx={50} cy={46} r={46} fill={`url(#${id})`} />
+      <Circle cx={50} cy={45} r={50} fill={`url(#${id})`} />
     </>
   );
 }
 
-/** Enamel field the emblem sits on: lit-top gradient, inner shadow, sheen. */
-export function EnamelDisc({ tone }: { tone: string }) {
-  const id = useMemo(() => gradId('abDisc'), []);
+const STAR_ROWS: Record<number, number[]> = { 1: [50], 2: [43, 57], 3: [37.5, 50, 62.5] };
+
+/** Faceted ice gem set into the ribbon — the GOLD tier's centerpiece. */
+function RibbonGem() {
   return (
     <>
-      <BodyGrad id={id} color={tone} />
-      <Circle cx={50} cy={44} r={31.6} fill={`url(#${id})`} />
-      <Circle cx={50} cy={44} r={29.6} fill="none" stroke={shade(tone, -66)} strokeWidth={1.6} opacity={0.5} />
-      <Ellipse cx={50} cy={26.5} rx={20} ry={8} fill="#ffffff" opacity={0.12} />
+      <Path d="M50 80.4 L56 84.8 L50 91.8 L44 84.8 Z" fill="#8fe6ff" stroke="#0e5f78" strokeWidth={1.2} strokeLinejoin="round" />
+      <Path d="M50 80.4 L56 84.8 L50 86.2 Z" fill="#e4f9ff" opacity={0.95} />
+      <Path d="M44 84.8 L50 86.2 L50 91.8 Z" fill="#4fc4ea" opacity={0.85} />
+      <Path d="M46.4 84.4 L49 82.2" stroke="#ffffff" strokeWidth={1.1} strokeLinecap="round" opacity={0.9} />
     </>
   );
 }
 
-const STUDS: Array<[number, number]> = [
-  [25.3, 19.3],
-  [74.7, 19.3],
-  [74.7, 68.7],
-  [25.3, 68.7],
-];
-
-/** Riveted metal band with rims and a top specular arc. */
-export function MetalRing({ metal }: { metal: BadgeMetal }) {
-  const id = useMemo(() => gradId('abRing'), []);
-  const m = METALS[metal];
-  return (
-    <>
-      <DuoGrad id={id} from={m.light} to={m.dark} />
-      <Circle cx={50} cy={44} r={35} fill="none" stroke={`url(#${id})`} strokeWidth={7} />
-      <Circle cx={50} cy={44} r={38.6} fill="none" stroke={m.rimC} strokeWidth={1.5} />
-      <Circle cx={50} cy={44} r={31.4} fill="none" stroke={m.rimC} strokeWidth={1.1} />
-      {STUDS.map(([x, y]) => (
-        <React.Fragment key={`${x}-${y}`}>
-          <Circle cx={x} cy={y} r={2.3} fill={m.stud} stroke={m.rimC} strokeWidth={0.8} />
-          <Circle cx={x - 0.6} cy={y - 0.7} r={0.7} fill={HILITE} />
-        </React.Fragment>
-      ))}
-      <Path
-        d="M23.2 21.5 A35 35 0 0 1 76.8 21.5"
-        stroke={HILITE}
-        strokeWidth={2.2}
-        strokeLinecap="round"
-        fill="none"
-        opacity={0.6}
-      />
-    </>
-  );
-}
-
-const STAR_ROWS: Record<number, number[]> = { 1: [50], 2: [44.5, 55.5], 3: [40, 50, 60] };
-
-/** Dovetailed ribbon banner across the base; `stars` (0–3) marks the tier. */
-export function RibbonBanner({ metal, cloth, stars }: { metal: BadgeMetal; cloth: string; stars: number }) {
+/**
+ * Dovetailed ribbon banner across the base; `stars` (0–3) marks the tier and
+ * `gem` swaps the center star for a set gem (gold tier).
+ */
+export function RibbonBanner({
+  metal,
+  cloth,
+  stars,
+  gem,
+}: {
+  metal: BadgeMetal;
+  cloth: string;
+  stars: number;
+  gem?: boolean;
+}) {
   const id = useMemo(() => gradId('abRib'), []);
   const m = METALS[metal];
   const edge = shade(cloth, -62);
+  const positions = (STAR_ROWS[stars] ?? []).filter((x) => !(gem && x === 50));
   return (
     <>
       <DuoGrad id={id} from={shade(cloth, 26)} to={shade(cloth, -30)} />
       {/* dovetail tails */}
-      <Path d="M14 78.5 H30 V93 H14 L20.5 85.75 Z" fill={shade(cloth, -34)} stroke={edge} strokeWidth={1.2} strokeLinejoin="round" />
-      <Path d="M86 78.5 H70 V93 H86 L79.5 85.75 Z" fill={shade(cloth, -34)} stroke={edge} strokeWidth={1.2} strokeLinejoin="round" />
+      <Path d="M8 81 H26 V97 H8 L15.5 89 Z" fill={shade(cloth, -34)} stroke={edge} strokeWidth={1.2} strokeLinejoin="round" />
+      <Path d="M92 81 H74 V97 H92 L84.5 89 Z" fill={shade(cloth, -34)} stroke={edge} strokeWidth={1.2} strokeLinejoin="round" />
       {/* fold shadows under the front band */}
-      <Path d="M26 90.2 L26 93.8 L30.8 90.6 Z" fill={shade(cloth, -70)} />
-      <Path d="M74 90.2 L74 93.8 L69.2 90.6 Z" fill={shade(cloth, -70)} />
+      <Path d="M21 94.4 L21 98.4 L26.4 94.8 Z" fill={shade(cloth, -70)} />
+      <Path d="M79 94.4 L79 98.4 L73.6 94.8 Z" fill={shade(cloth, -70)} />
       {/* front band with a gentle belly */}
-      <Path d="M26 76 H74 V89.5 Q50 94.5 26 89.5 Z" fill={`url(#${id})`} stroke={edge} strokeWidth={1.4} strokeLinejoin="round" />
-      <Path d="M28 78.2 H72" stroke={m.light} strokeWidth={1} opacity={0.75} />
-      <Path d="M28 87.6 Q50 92.2 72 87.6" stroke={m.light} strokeWidth={1} opacity={0.55} fill="none" />
-      {(STAR_ROWS[stars] ?? []).map((x) => (
-        <Path key={x} d={star5(x, 83.2, 4.2, 1.75)} fill={m.light} stroke={m.rimC} strokeWidth={0.9} strokeLinejoin="round" />
+      <Path d="M21 78.5 H79 V93.6 Q50 99.2 21 93.6 Z" fill={`url(#${id})`} stroke={edge} strokeWidth={1.4} strokeLinejoin="round" />
+      <Path d="M23.5 81 H76.5" stroke={m.light} strokeWidth={1} opacity={0.75} />
+      <Path d="M23.5 91.6 Q50 96.8 76.5 91.6" stroke={m.light} strokeWidth={1} opacity={0.55} fill="none" />
+      {positions.map((x) => (
+        <Path key={x} d={star5(x, 86.2, 4.8, 2)} fill={m.light} stroke={m.rimC} strokeWidth={0.9} strokeLinejoin="round" />
       ))}
+      {gem && <RibbonGem />}
     </>
   );
 }

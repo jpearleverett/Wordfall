@@ -1,10 +1,11 @@
 /**
  * Achievement-badge art catalog: assigns every achievement in
- * `src/data/achievements.ts` a bespoke emblem, an enamel accent AND a
- * medallion silhouette per achievement family (puzzle / streak / collection /
- * mode / mastery), so the trophy wall reads as a varied case — circle
- * medallions, heater shields and star-scallop rosettes in five family
- * colors — rather than a grid of recolored generics.
+ * `src/data/achievements.ts` a bespoke emblem, an enamel accent (per family:
+ * puzzle / streak / collection / mode / mastery) AND one of SIX distinct
+ * medallion silhouettes, so the trophy wall reads as a varied case — round
+ * medallions, heater shields, scalloped rosettes, hexagonal plaques,
+ * laurel-wreath discs and banner-draped crests in five family colors —
+ * rather than a grid of recolored generics.
  *
  * Also home to the "tinted ghost" color math for the unearned state: a locked
  * badge keeps its own family accent at low saturation (mixed toward dark
@@ -40,15 +41,39 @@ export type AchievementEmblem =
   | 'owl' // night_owl — owl on a branch under the moon
   | 'wingedShoe'; // marathon_player — winged running shoe
 
-/** Medallion silhouettes — the wall mixes all three. */
-export type BadgeShape = 'circle' | 'shield' | 'rosette';
+/**
+ * Medallion silhouettes — SIX distinct outline geometries, not one outline
+ * with a swapped inner glyph. The wall mixes all six, at most four badges to
+ * a form, so no two neighbours read as the same asset:
+ *
+ * - `circle`  classic round medallion (riveted band)
+ * - `shield`  heater shield (pointed base, shouldered top)
+ * - `rosette` scalloped star rosette (12 petals + bead studs)
+ * - `hex`     hexagonal plaque (hard straight facets, corner bolts)
+ * - `laurel`  laurel-wreath disc (small disc inside a leafed wreath)
+ * - `crest`   banner-draped crest (curled ears, draped banner across the top)
+ */
+export type BadgeShape = 'circle' | 'shield' | 'rosette' | 'hex' | 'laurel' | 'crest';
+
+/** Every silhouette on the wall, in "flattest → most ornate" order. */
+export const BADGE_SHAPES: readonly BadgeShape[] = [
+  'circle',
+  'shield',
+  'rosette',
+  'hex',
+  'laurel',
+  'crest',
+];
+
+/** Ceiling on how many achievements may share one silhouette (pinned by test). */
+export const MAX_PER_SHAPE = 4;
 
 export interface AchievementBadgeArt {
   /** Enamel-disc hue (#rrggbb), shared per achievement family. */
   accent: string;
   /** Which bespoke emblem composition to render. */
   emblem: AchievementEmblem;
-  /** Medallion silhouette, shared per achievement family. */
+  /** Medallion silhouette — assigned per achievement, spread across all six. */
   shape: BadgeShape;
 }
 
@@ -63,48 +88,106 @@ export const ACHIEVEMENT_FAMILY_ACCENTS = {
 
 export type AchievementFamily = keyof typeof ACHIEVEMENT_FAMILY_ACCENTS;
 
-/** Medallion silhouette per achievement family. */
-export const ACHIEVEMENT_FAMILY_SHAPES: Record<AchievementFamily, BadgeShape> = {
-  puzzle: 'circle',
-  streak: 'rosette',
-  collection: 'shield',
-  mode: 'shield',
-  mastery: 'rosette',
-};
-
-const art = (family: AchievementFamily, emblem: AchievementEmblem): AchievementBadgeArt => ({
+const art = (
+  family: AchievementFamily,
+  emblem: AchievementEmblem,
+  shape: BadgeShape
+): AchievementBadgeArt => ({
   accent: ACHIEVEMENT_FAMILY_ACCENTS[family],
   emblem,
-  shape: ACHIEVEMENT_FAMILY_SHAPES[family],
+  shape,
 });
 
-/** Explicit art assignment for every achievement id in the catalog. */
+/**
+ * Explicit art assignment for every achievement id.
+ *
+ * Silhouettes are deliberately NOT keyed off family: a family-keyed map put
+ * seven puzzle badges on one outline and made four collection badges
+ * (atlas / tile / library / collector) read as the same asset. Shapes are
+ * spread so every form carries 3–4 badges drawn from at least two families,
+ * with the crest — the most ornate form — reserved for the capstone
+ * achievements of their family (supreme collector, streak master, marathon).
+ */
 export const ACHIEVEMENT_BADGE_ART: Record<string, AchievementBadgeArt> = {
   // ── Puzzle ──
-  word_finder: art('puzzle', 'lens'),
-  puzzle_solver: art('puzzle', 'jigsaw'),
-  perfect_player: art('puzzle', 'triStar'),
-  high_scorer: art('puzzle', 'scoreBars'),
-  speed_solver: art('puzzle', 'boltClock'),
-  no_hint_master: art('puzzle', 'brain'),
-  combo_king: art('puzzle', 'chain'),
+  word_finder: art('puzzle', 'lens', 'circle'),
+  puzzle_solver: art('puzzle', 'jigsaw', 'circle'),
+  perfect_player: art('puzzle', 'triStar', 'rosette'),
+  high_scorer: art('puzzle', 'scoreBars', 'circle'),
+  speed_solver: art('puzzle', 'boltClock', 'hex'),
+  no_hint_master: art('puzzle', 'brain', 'shield'),
+  combo_king: art('puzzle', 'chain', 'laurel'),
   // ── Streak ──
-  streak_master: art('streak', 'flame'),
-  daily_devotee: art('streak', 'sunrise'),
+  streak_master: art('streak', 'flame', 'crest'),
+  daily_devotee: art('streak', 'sunrise', 'rosette'),
   // ── Collection ──
-  atlas_scholar: art('collection', 'atlas'),
-  tile_collector: art('collection', 'gemTile'),
-  library_restorer: art('collection', 'temple'),
-  collector_supreme: art('collection', 'crownGems'),
+  atlas_scholar: art('collection', 'atlas', 'shield'),
+  tile_collector: art('collection', 'gemTile', 'hex'),
+  library_restorer: art('collection', 'temple', 'laurel'),
+  collector_supreme: art('collection', 'crownGems', 'crest'),
   // ── Mode ──
-  mode_explorer: art('mode', 'compass'),
-  speed_demon: art('mode', 'stopwatch'),
+  mode_explorer: art('mode', 'compass', 'shield'),
+  speed_demon: art('mode', 'stopwatch', 'hex'),
   // ── Mastery ──
-  level_climber: art('mastery', 'peak'),
-  star_collector: art('mastery', 'starCluster'),
-  night_owl: art('mastery', 'owl'),
-  marathon_player: art('mastery', 'wingedShoe'),
+  level_climber: art('mastery', 'peak', 'laurel'),
+  star_collector: art('mastery', 'starCluster', 'rosette'),
+  night_owl: art('mastery', 'owl', 'circle'),
+  marathon_player: art('mastery', 'wingedShoe', 'crest'),
 };
+
+// ── Emblem sizing (the "art too small" fix) ─────────────────────────────────
+
+/**
+ * Authored content radius of each emblem: the greatest distance any of its
+ * artwork reaches from the (50, 44) emblem origin, measured off the authored
+ * SVG. They differ by 40% (a 3-star fan is compact, a mountain range is not),
+ * which is why one flat per-silhouette scale either clipped the big emblems
+ * or left the small ones swimming.
+ */
+export const EMBLEM_RADIUS: Record<AchievementEmblem, number> = {
+  lens: 29.4,
+  jigsaw: 28.5,
+  triStar: 26,
+  scoreBars: 30.1,
+  boltClock: 26.2,
+  brain: 25,
+  chain: 27.6,
+  flame: 25,
+  sunrise: 28.2,
+  atlas: 28.8,
+  gemTile: 23,
+  temple: 30.4,
+  crownGems: 26.4,
+  compass: 23.9,
+  stopwatch: 30.6,
+  peak: 32.8,
+  starCluster: 28.2,
+  owl: 29.2,
+  wingedShoe: 29.4,
+};
+
+/**
+ * Radius the emblem is blown up to fill inside each silhouette — the largest
+ * circle that clears that form's enamel plate and stays off the metal band.
+ * Because every emblem is scaled TO this radius, the rendered emblem always
+ * spans `2 × SHAPE_SAFE_R` of the 100-unit badge box (55–69%), whatever it
+ * was authored at.
+ */
+export const SHAPE_SAFE_R: Record<BadgeShape, number> = {
+  circle: 34.5,
+  // Shield and crest taper toward the base, so their safe circle is the
+  // tightest — it has to clear the flanks, not just the widest point.
+  shield: 27.5,
+  rosette: 29.5,
+  hex: 29.5,
+  laurel: 29.5,
+  crest: 27.5,
+};
+
+/** Uniform-apparent-size scale factor for one emblem on one silhouette. */
+export function emblemScale(shape: BadgeShape, emblem: AchievementEmblem): number {
+  return SHAPE_SAFE_R[shape] / EMBLEM_RADIUS[emblem];
+}
 
 /** Fallback for ids not (yet) in the explicit map. */
 export const DEFAULT_BADGE_ART: AchievementBadgeArt = {

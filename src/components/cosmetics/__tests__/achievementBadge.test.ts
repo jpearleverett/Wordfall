@@ -2,17 +2,23 @@
  * Pins the achievement-badge art catalog to the achievements catalog: every
  * achievement id must have an explicit bespoke art assignment (accent +
  * emblem + silhouette), no art entry may outlive its achievement, emblems
- * must be unique per achievement (bespoke, never shared), silhouettes must
- * follow the family shape map with all three shapes represented on the wall,
- * the locked-state ghost tint must stay family-colored (never flat slate),
- * and the resolver must never return undefined for any id, known or not.
+ * must be unique per achievement (bespoke, never shared), all SIX silhouettes
+ * must be in play with no form carrying more than `MAX_PER_SHAPE` badges (the
+ * anti-sameness guard — a family-keyed shape map used to put 7 puzzle badges
+ * on one outline), the locked-state ghost tint must stay family-colored
+ * (never flat slate), and the resolver must never return undefined for any
+ * id, known or not.
  */
 import { ACHIEVEMENTS } from '../../../data/achievements';
 import {
   ACHIEVEMENT_BADGE_ART,
   ACHIEVEMENT_FAMILY_ACCENTS,
-  ACHIEVEMENT_FAMILY_SHAPES,
+  BADGE_SHAPES,
   DEFAULT_BADGE_ART,
+  EMBLEM_RADIUS,
+  MAX_PER_SHAPE,
+  SHAPE_SAFE_R,
+  emblemScale,
   ghostCloth,
   ghostEnamel,
   ghostRamp,
@@ -45,14 +51,43 @@ describe('achievementBadge art catalog', () => {
     }
   });
 
-  it("keys every entry's silhouette off the family shape map, using all three shapes", () => {
-    for (const achievement of ACHIEVEMENTS) {
-      expect(ACHIEVEMENT_BADGE_ART[achievement.id].shape).toBe(
-        ACHIEVEMENT_FAMILY_SHAPES[achievement.category]
-      );
+  it('spreads the wall across all six silhouettes, none over the share ceiling', () => {
+    const shapes = ACHIEVEMENTS.map((a) => ACHIEVEMENT_BADGE_ART[a.id].shape);
+    for (const shape of shapes) expect(BADGE_SHAPES).toContain(shape);
+    // Every form is in play...
+    expect(new Set(shapes)).toEqual(new Set(BADGE_SHAPES));
+    // ...and none of them is doing all the work.
+    for (const shape of BADGE_SHAPES) {
+      expect(shapes.filter((s) => s === shape).length).toBeLessThanOrEqual(MAX_PER_SHAPE);
     }
-    const wallShapes = new Set(Object.values(ACHIEVEMENT_BADGE_ART).map((a) => a.shape));
-    expect(wallShapes).toEqual(new Set(['circle', 'shield', 'rosette']));
+  });
+
+  it('mixes at least two families into every silhouette — no form reads as one family', () => {
+    const byShape = new Map<string, Set<string>>();
+    for (const achievement of ACHIEVEMENTS) {
+      const { shape } = ACHIEVEMENT_BADGE_ART[achievement.id];
+      byShape.set(shape, (byShape.get(shape) ?? new Set()).add(achievement.category));
+    }
+    for (const [shape, families] of byShape) {
+      expect(`${shape}:${families.size >= 2}`).toBe(`${shape}:true`);
+    }
+  });
+
+  it('blows every emblem up to fill its silhouette — the art fills the card', () => {
+    for (const shape of BADGE_SHAPES) {
+      // The emblem is scaled TO this radius, so this IS the rendered emblem
+      // size: at least 55% of the 100-unit badge box on every form.
+      expect(`${shape}:${SHAPE_SAFE_R[shape] * 2 >= 55}`).toBe(`${shape}:true`);
+    }
+    for (const achievement of ACHIEVEMENTS) {
+      const { shape, emblem } = ACHIEVEMENT_BADGE_ART[achievement.id];
+      expect(EMBLEM_RADIUS[emblem]).toBeGreaterThan(0);
+      const scale = emblemScale(shape, emblem);
+      expect(scale).toBeGreaterThan(0.8);
+      expect(scale).toBeLessThan(1.6);
+      // Scaling normalizes apparent size: every emblem lands on the safe circle.
+      expect(scale * EMBLEM_RADIUS[emblem]).toBeCloseTo(SHAPE_SAFE_R[shape], 6);
+    }
   });
 
   it('tints the locked ghost state with each family accent — distinct, never flat slate', () => {
@@ -76,6 +111,6 @@ describe('achievementBadge art catalog', () => {
     expect(fallback).toEqual(DEFAULT_BADGE_ART);
     expect(fallback.accent).toMatch(/^#[0-9a-fA-F]{6}$/);
     expect(fallback.emblem).toBeTruthy();
-    expect(['circle', 'shield', 'rosette']).toContain(fallback.shape);
+    expect(BADGE_SHAPES).toContain(fallback.shape);
   });
 });

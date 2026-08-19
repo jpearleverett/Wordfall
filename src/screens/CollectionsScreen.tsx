@@ -1324,6 +1324,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                   dark squares read as settings icons, not prizes). Paper tint
                   rotates per index so the sheet reads as a real album page. */}
               <StampArt
+                stampId={stamp.id}
                 icon={stamp.icon}
                 name={stamp.name}
                 earned={!!stamp.collected}

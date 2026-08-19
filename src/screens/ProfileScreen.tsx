@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -53,7 +54,7 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
 import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
 import { AchievementBadge } from '../components/cosmetics/AchievementBadge';
-import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Ellipse, Line, Path, Rect } from 'react-native-svg';
 import { DuoGrad, gradId, shade } from '../components/icons/IconBase';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 import {
@@ -727,22 +728,37 @@ const PRESTIGE_BENEFITS: Array<{ icon: GameIconName; label: string }> = [
 ];
 
 /**
- * AvatarSynthwaveBackdrop — subtle portrait scene behind the monogram when
- * the player has no custom avatar: a sunset sun sinking behind a glowing
- * horizon with a faint perspective grid floor, so the disc reads as
- * designed identity art instead of a debug letter. Static (no animation).
+ * AvatarPortraitArt — the default identity art filling the whole avatar disc:
+ * a hooded character bust silhouetted against a sunset horizon with a
+ * perspective grid floor, rim-lit along its edge in the equipped frame's
+ * accent. This is the HERO of the avatar (the player's initial is demoted to
+ * a small monogram chip), so it renders edge-to-edge in the 88-unit disc.
+ * Static — no animation; the ring's legendary pulse wraps it unchanged.
  */
-function AvatarSynthwaveBackdrop({ size, accent }: { size: number; accent: string }) {
+function AvatarPortraitArt({
+  size,
+  accent,
+  rimColor,
+}: {
+  size: number;
+  accent: string;
+  rimColor: string;
+}) {
   const sunId = useMemo(() => gradId('avatarSun'), []);
-  // 88-unit viewBox matches the avatarCircle; horizon sits low at y=60.
-  const H = 60;
-  const VERTICALS = [-16, 4, 24, 44, 64, 84, 104];
+  const bustId = useMemo(() => gradId('avatarBust'), []);
+  // 88-unit viewBox matches the avatarCircle; horizon sits low at y=58.
+  const H = 58;
+  const VERTICALS = [-20, 2, 23, 44, 65, 86, 108];
   const HORIZONTALS: Array<[number, number]> = [
-    [64, 0.16],
-    [69, 0.14],
-    [75.5, 0.12],
-    [83.5, 0.1],
+    [62.5, 0.16],
+    [68, 0.14],
+    [75, 0.12],
+    [84, 0.1],
   ];
+  // Head + shoulders silhouette. Shoulders run off the bottom edge so the
+  // bust reads as a cropped portrait rather than a floating token.
+  const SHOULDERS = 'M6 89 C6 72 22 63.5 44 63.5 C66 63.5 82 72 82 89 Z';
+  const HOOD = 'M28.5 43 C28.5 26.5 59.5 26.5 59.5 43 C59.5 34 53 29.5 44 29.5 C35 29.5 28.5 34 28.5 43 Z';
   return (
     <Svg
       width={size}
@@ -751,41 +767,60 @@ function AvatarSynthwaveBackdrop({ size, accent }: { size: number; accent: strin
       style={StyleSheet.absoluteFill}
       pointerEvents="none"
     >
-      <DuoGrad id={sunId} from={COLORS.goldLight} to={COLORS.accent} />
-      {/* Sun disc sinking behind the horizon */}
-      <Circle cx={44} cy={54} r={17} fill={`url(#${sunId})`} opacity={0.5} />
+      <DuoGrad id={sunId} from={COLORS.goldLight} to={accent} />
+      <DuoGrad id={bustId} from="rgba(24,8,48,0.94)" to="rgba(6,1,18,0.98)" />
+      {/* Sun disc sinking behind the horizon — the bust's back light */}
+      <Circle cx={44} cy={48} r={22} fill={`url(#${sunId})`} opacity={0.55} />
       {/* Classic synthwave slit bands across the sun's lower half */}
-      <Rect x={26} y={54.5} width={36} height={1.6} fill="rgba(10,0,21,0.55)" />
-      <Rect x={26} y={58.2} width={36} height={2} fill="rgba(10,0,21,0.6)" />
+      <Rect x={20} y={48.5} width={48} height={1.8} fill="rgba(10,0,21,0.5)" />
+      <Rect x={20} y={53} width={48} height={2.2} fill="rgba(10,0,21,0.55)" />
       {/* Translucent ground plane dims the sun below the horizon */}
       <Rect x={0} y={H} width={88} height={88 - H} fill="rgba(10,0,21,0.5)" />
       {/* Horizon glow line in the theme accent */}
       <Line x1={0} y1={H} x2={88} y2={H} stroke={accent} strokeWidth={1} opacity={0.5} />
       {/* Faint perspective grid floor converging on the sun's center */}
       {VERTICALS.map((x) => (
-        <Line
-          key={`v${x}`}
-          x1={44}
-          y1={H}
-          x2={x}
-          y2={88}
-          stroke={COLORS.cyan}
-          strokeWidth={0.8}
-          opacity={0.15}
-        />
+        <Line key={`v${x}`} x1={44} y1={H} x2={x} y2={88} stroke={COLORS.cyan} strokeWidth={0.8} opacity={0.15} />
       ))}
       {HORIZONTALS.map(([y, o]) => (
-        <Line
-          key={`h${y}`}
-          x1={0}
-          y1={y}
-          x2={88}
-          y2={y}
-          stroke={COLORS.cyan}
-          strokeWidth={0.8}
-          opacity={o}
-        />
+        <Line key={`h${y}`} x1={0} y1={y} x2={88} y2={y} stroke={COLORS.cyan} strokeWidth={0.8} opacity={o} />
       ))}
+      {/* ── Character bust ── */}
+      {/* Neck, tucked under the head and over the shoulders */}
+      <Rect x={38} y={48} width={12} height={18} rx={5} fill={`url(#${bustId})`} />
+      <Path d={SHOULDERS} fill={`url(#${bustId})`} stroke={rimColor} strokeWidth={1.5} strokeOpacity={0.75} />
+      {/* Head */}
+      <Ellipse cx={44} cy={38} rx={13.5} ry={15} fill={`url(#${bustId})`} stroke={rimColor} strokeWidth={1.5} strokeOpacity={0.8} />
+      {/* Hood crest over the crown — silhouette reads as a character, not a dot */}
+      <Path d={HOOD} fill="rgba(4,0,14,0.95)" stroke={rimColor} strokeWidth={1.2} strokeOpacity={0.55} />
+      {/* Bright rim light where the sun wraps the left edge of head + shoulder */}
+      <Path
+        d="M33.5 27.5 C27.5 32 27 43 32 50.5"
+        stroke={accent}
+        strokeWidth={2}
+        strokeOpacity={0.85}
+        strokeLinecap="round"
+        fill="none"
+      />
+      <Path
+        d="M20 70.5 C24 66.5 30 64.5 37 63.8"
+        stroke={accent}
+        strokeWidth={1.6}
+        strokeOpacity={0.5}
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Cooler counter-rim on the right edge so the bust reads volumetric */}
+      <Path
+        d="M55.5 29 C60.5 34 60.5 44 56.5 50"
+        stroke={COLORS.cyan}
+        strokeWidth={1.4}
+        strokeOpacity={0.45}
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Faint visor glint — a single eye-line spark of life */}
+      <Rect x={37} y={38.5} width={14} height={2} rx={1} fill={accent} opacity={0.22} />
     </Svg>
   );
 }
@@ -913,6 +948,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     [contextPlayer, playerProp],
   );
   const initial = useMemo(() => p.name.charAt(0).toUpperCase(), [p.name]);
+
+  // Achievement badges must FILL their card, not float inside it. The grid is
+  // 3 columns of `achievementCard` (width 31%) inside the scaffold's 16px
+  // content padding, so derive the art size from the real card width and
+  // leave only ~28px of breathing room, then clamp for phone/tablet extremes.
+  const { width: windowWidth } = useWindowDimensions();
+  const achievementBadgeSize = useMemo(() => {
+    const cardWidth = (windowWidth - 32) * 0.31;
+    return Math.round(Math.max(56, Math.min(84, cardWidth - 28)));
+  }, [windowWidth]);
   const equippedTheme = useMemo(
     () => getTheme(equippedThemeId) ?? COSMETIC_THEMES[0],
     [equippedThemeId],
@@ -1071,17 +1116,29 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               start={{ x: 0.5, y: 0.45 }}
               end={{ x: 0.5, y: 1 }}
             />
-            {/* Synthwave portrait scene — sunset horizon arc + faint grid
-                floor behind the monogram (no custom avatar support yet, so
-                this is the default identity art). */}
-            <AvatarSynthwaveBackdrop size={88} accent={equippedTheme.colors.accent} />
-            {/* Dual-layer bevel monogram: dark offset glyph under the lit glyph. */}
-            <View style={styles.avatarGlyphStack}>
-              <Text style={[styles.avatarLetter, styles.avatarLetterUnder]}>{initial}</Text>
-              <Text style={[styles.avatarLetter, { color: equippedTheme.colors.accent }]}>{initial}</Text>
-            </View>
+            {/* Rim-lit character bust against a synthwave sunset — the hero
+                of the disc (no custom avatar upload support yet, so this is
+                the default identity art). Fills the disc edge to edge. */}
+            <AvatarPortraitArt
+              size={88}
+              accent={equippedTheme.colors.accent}
+              rimColor={frameBorderColor}
+            />
             {/* Glass top shine */}
             <View style={styles.avatarShine} pointerEvents="none" />
+            {/* Initial demoted to a small monogram chip on the disc's lower
+                edge — identity signature, not the centerpiece. */}
+            <View
+              style={[
+                styles.avatarMonogramChip,
+                { borderColor: frameBorderColor + 'AA', shadowColor: frameBorderColor },
+              ]}
+              pointerEvents="none"
+            >
+              <Text style={[styles.avatarMonogramText, { color: equippedTheme.colors.accent }]}>
+                {initial}
+              </Text>
+            </View>
           </View>
           </ProfileFrameArt>
         </Animated.View>
@@ -1272,12 +1329,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
               />
-              <View style={{ marginBottom: 6 }}>
+              <View style={styles.achievementBadgeWrap}>
                 <AchievementBadge
                   achievementId={achievement.id}
                   earned={!!highestTier}
                   tier={highestTier ?? undefined}
-                  size={56}
+                  size={achievementBadgeSize}
                 />
               </View>
               <Text style={styles.achievementName} numberOfLines={1}>{achievement.name}</Text>
@@ -1523,29 +1580,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  avatarLetter: {
-    fontSize: 40,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
-  // Dark offset copy rendered UNDER the lit glyph — reads as a bevel edge.
-  avatarLetterUnder: {
+  // Small monogram chip riding the disc's lower-left edge. The portrait art
+  // is the hero now; the initial is a signature, so it stays compact and
+  // clear of the level badge that overlaps the ring's bottom center.
+  avatarMonogramChip: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    color: 'rgba(5,0,16,0.65)',
-    textShadowColor: 'transparent',
-    textShadowRadius: 0,
-    transform: [{ translateY: 2.5 }, { translateX: 1.5 }],
-  },
-  avatarGlyphStack: {
+    left: 7,
+    bottom: 7,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    backgroundColor: 'rgba(6,1,18,0.82)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  avatarMonogramText: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontFamily: FONTS.display,
+    color: COLORS.accent,
   },
   avatarShine: {
     position: 'absolute',
@@ -1643,7 +1701,10 @@ const styles = StyleSheet.create({
   achievementCard: {
     width: '31%',
     borderRadius: RADIUS.xl,
-    padding: 12,
+    // Tight vertical padding so the badge art — not the dark plate — is what
+    // the eye lands on. Horizontal padding only guards the border radius.
+    paddingVertical: 8,
+    paddingHorizontal: 6,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
@@ -1653,12 +1714,15 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
+  achievementBadgeWrap: {
+    marginBottom: 4,
+  },
   achievementName: {
     fontSize: 10,
     color: COLORS.textPrimary,
     textAlign: 'center',
     fontFamily: FONTS.bodySemiBold,
-    marginBottom: 6,
+    marginBottom: 5,
   },
   tierDots: {
     flexDirection: 'row',

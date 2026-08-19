@@ -8,6 +8,7 @@ import {
   Dimensions,
   Modal,
   Alert,
+  ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, {
@@ -21,11 +22,12 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
-import { gradId } from '../components/icons/IconBase';
+import { gradId, shade } from '../components/icons/IconBase';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import IconMedallion from '../components/common/IconMedallion';
 import ThemePreview from '../components/cosmetics/ThemePreview';
 import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
+import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
 import GameIcon from '../components/icons/GameIcon';
 import { useEconomy } from '../contexts/EconomyContext';
 import PrimaryButton from '../components/common/PrimaryButton';
@@ -57,9 +59,31 @@ import { CosmeticTheme, ProfileFrame, ProfileTitle, LibraryDecoration, CurrencyT
 const { width } = Dimensions.get('window');
 const CARD_GAP = 10;
 const CARD_WIDTH = (width - 40 - CARD_GAP) / 2;
+const CARD_PADDING = 12;
+const CARD_BORDER = 1.5;
+/** Inner content width of a card (inside its border). */
+const CARD_INNER_WIDTH = CARD_WIDTH - CARD_BORDER * 2;
+
 // Theme previews bleed edge-to-edge across the card (only the 1.5px border
 // insets them), rendered square-cornered and clipped by the card's radius.
-const THEME_PREVIEW_WIDTH = CARD_WIDTH - 3;
+// ThemePreview keeps a 160:96 aspect, so on narrow phones a full-bleed width
+// yields <100px of height — we therefore render it at whatever width the
+// minimum height demands and let the bleed container clip the overflow, so
+// the vignette always reaches both card edges AND stays >= 100px tall.
+const THEME_PREVIEW_MIN_HEIGHT = 104;
+const THEME_PREVIEW_WIDTH = Math.round(
+  Math.max(CARD_INNER_WIDTH, (THEME_PREVIEW_MIN_HEIGHT * 160) / 96),
+);
+const THEME_PREVIEW_HEIGHT = Math.max(
+  THEME_PREVIEW_MIN_HEIGHT,
+  Math.round((THEME_PREVIEW_WIDTH * 96) / 160),
+);
+
+// Frame previews are the product on the Frames tab — the ring fills the card
+// (inner width minus the card padding) instead of floating at thumbnail size.
+const FRAME_PREVIEW_SIZE = Math.round(
+  Math.min(CARD_INNER_WIDTH - CARD_PADDING * 2, 136),
+);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -109,36 +133,141 @@ const CURRENCY_ICONS: Record<string, string> = {
   libraryPoints: '\u{1F4DA}',
 };
 
+type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+interface RarityTreatment {
+  /** 3-stop backplate gradient (top tint / body / base tint). */
+  body: [string, string, string];
+  borderColor: string;
+  borderWidth: number;
+  /** Outer glow — null for tiers that stay flat. */
+  glow: ViewStyle | null;
+  /** Legendary-only corner sunburst. */
+  sunburst: boolean;
+}
+
+/**
+ * Tiered card treatment — rarity must be legible from the CARD, not just from
+ * a text pill. Common stays a flat surface; each higher tier adds a tinted
+ * gradient backplate, a stronger rarity border, and (epic+) an outer glow,
+ * with legendary topped by a faint corner sunburst.
+ */
+function rarityTreatment(rarity: Rarity, color: string): RarityTreatment {
+  switch (rarity) {
+    case 'legendary':
+      return {
+        body: [color + '3D', 'rgba(44,24,8,0.93)', color + '20'],
+        borderColor: color + 'CC',
+        borderWidth: 2,
+        glow: {
+          shadowColor: color,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.75,
+          shadowRadius: 20,
+          elevation: 16,
+        },
+        sunburst: true,
+      };
+    case 'epic':
+      return {
+        body: [color + '30', 'rgba(33,12,54,0.94)', color + '18'],
+        borderColor: color + 'AA',
+        borderWidth: 1.75,
+        glow: {
+          shadowColor: color,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.55,
+          shadowRadius: 14,
+          elevation: 12,
+        },
+        sunburst: false,
+      };
+    case 'rare':
+      return {
+        body: [color + '20', 'rgba(15,26,45,0.95)', color + '10'],
+        borderColor: color + '77',
+        borderWidth: 1,
+        glow: null,
+        sunburst: false,
+      };
+    default:
+      // Common — flat surface, no tint, no glow.
+      return {
+        body: ['rgba(26,10,46,0.94)', 'rgba(26,10,46,0.94)', 'rgba(21,8,39,0.96)'],
+        borderColor: COLORS.borderSubtle,
+        borderWidth: 1,
+        glow: null,
+        sunburst: false,
+      };
+  }
+}
+
+/** Faint radiating corner sunburst — legendary tier only. */
+function CornerSunburst({ color }: { color: string }) {
+  const rays = useMemo(() => {
+    const out: string[] = [];
+    const R = 132;
+    for (let i = 0; i < 9; i++) {
+      const a0 = ((96 + i * 10.5) * Math.PI) / 180;
+      const a1 = a0 + (4.8 * Math.PI) / 180;
+      const p = (a: number) =>
+        `${(100 + R * Math.cos(a)).toFixed(1)} ${(R * Math.sin(a)).toFixed(1)}`;
+      out.push(`M100 0 L${p(a0)} L${p(a1)} Z`);
+    }
+    return out;
+  }, []);
+  return (
+    <View style={styles.cornerSunburst} pointerEvents="none">
+      <Svg width={104} height={104} viewBox="0 0 100 100">
+        <Circle cx={100} cy={0} r={56} fill={color} opacity={0.1} />
+        {rays.map((d, i) => (
+          <Path key={`ray${i}`} d={d} fill={color} opacity={i % 2 === 0 ? 0.13 : 0.06} />
+        ))}
+      </Svg>
+    </View>
+  );
+}
+
 // ── Frame art preview ────────────────────────────────────────────────────────
 
 /**
  * Placeholder avatar for frame previews — a miniature synthwave portrait
  * vignette (sunset disc over a neon grid floor with a neutral head-and-
- * shoulders silhouette) so frames read as framing a PICTURE. Deliberately
- * muted so the frame itself stays the hero.
+ * shoulders silhouette) so frames read as framing a PICTURE.
+ *
+ * The whole vignette is keyed to the FRAME's own accent (bronze frames get a
+ * warm-amber portrait, ocean frames a cyan one), so no two frame cards read
+ * as the identical dark bust. Still deliberately muted: the ring is the hero.
  */
-function PortraitVignette({ size }: { size: number }) {
+function PortraitVignette({ size, accent = '#ff2d95' }: { size: number; accent?: string }) {
   const ids = useMemo(() => {
     const base = gradId('frameport');
     return { sky: `${base}-sky`, sun: `${base}-sun`, sil: `${base}-sil`, clip: `${base}-clip` };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const gridStroke = 'rgba(255,45,149,0.30)';
+  // Accent-derived palette: deep sky, lit sun, silhouette, rim light.
+  const skyTop = shade(accent, -160);
+  const skyMid = shade(accent, -118);
+  const skyBase = shade(accent, -190);
+  const sunHi = shade(accent, 86);
+  const silTop = shade(accent, -128);
+  const silBase = shade(accent, -172);
+  const rimLight = shade(accent, 110);
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
       <Defs>
         <SvgGradient id={ids.sky} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#150a2b" />
-          <Stop offset="0.55" stopColor="#2b1046" />
-          <Stop offset="1" stopColor="#0a0218" />
+          <Stop offset="0" stopColor={skyTop} />
+          <Stop offset="0.55" stopColor={skyMid} />
+          <Stop offset="1" stopColor={skyBase} />
         </SvgGradient>
         <SvgGradient id={ids.sun} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#ffd76a" />
-          <Stop offset="1" stopColor="#ff2d95" />
+          <Stop offset="0" stopColor={sunHi} />
+          <Stop offset="1" stopColor={accent} />
         </SvgGradient>
         <SvgGradient id={ids.sil} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#3b2364" />
-          <Stop offset="1" stopColor="#170930" />
+          <Stop offset="0" stopColor={silTop} />
+          <Stop offset="1" stopColor={silBase} />
         </SvgGradient>
         <ClipPath id={ids.clip}>
           <Circle cx={50} cy={50} r={50} />
@@ -150,20 +279,26 @@ function PortraitVignette({ size }: { size: number }) {
         <Circle cx={50} cy={52} r={22} fill={`url(#${ids.sun})`} opacity={0.6} />
         <Rect x={26} y={46} width={48} height={1.6} fill="#1c0c36" opacity={0.75} />
         <Rect x={26} y={51.5} width={48} height={2.2} fill="#1c0c36" opacity={0.75} />
-        <Rect x={26} y={58} width={48} height={2.8} fill="#1c0c36" opacity={0.75} />
+        <Rect x={26} y={58} width={48} height={2.8} fill={skyBase} opacity={0.8} />
         {/* Horizon + perspective grid floor */}
-        <Path d="M0 62 H100" stroke="#ff2d95" strokeWidth={1} opacity={0.5} />
-        <Path d="M0 68 H100" stroke={gridStroke} strokeWidth={0.8} />
-        <Path d="M0 76 H100" stroke={gridStroke} strokeWidth={0.8} />
-        <Path d="M0 87 H100" stroke={gridStroke} strokeWidth={0.8} />
+        <Path d="M0 62 H100" stroke={accent} strokeWidth={1} opacity={0.55} />
+        <Path d="M0 68 H100" stroke={accent} strokeWidth={0.8} opacity={0.3} />
+        <Path d="M0 76 H100" stroke={accent} strokeWidth={0.8} opacity={0.3} />
+        <Path d="M0 87 H100" stroke={accent} strokeWidth={0.8} opacity={0.3} />
         {[14, 32, 68, 86].map((x) => (
-          <Path key={`v${x}`} d={`M50 62 L${x} 100`} stroke={gridStroke} strokeWidth={0.8} />
+          <Path
+            key={`v${x}`}
+            d={`M50 62 L${x} 100`}
+            stroke={accent}
+            strokeWidth={0.8}
+            opacity={0.3}
+          />
         ))}
         {/* Neutral head-and-shoulders silhouette */}
         <Circle cx={50} cy={42} r={14.5} fill={`url(#${ids.sil})`} />
         <Path d="M21 100 C23 74 34 63 50 63 C66 63 77 74 79 100 Z" fill={`url(#${ids.sil})`} />
         {/* Faint rim light so the silhouette reads against the sun */}
-        <Path d="M38.5 34.5 A14.5 14.5 0 0 1 61.5 34.5" stroke="#ffb3d6" strokeWidth={1.1} opacity={0.35} fill="none" />
+        <Path d="M38.5 34.5 A14.5 14.5 0 0 1 61.5 34.5" stroke={rimLight} strokeWidth={1.1} opacity={0.4} fill="none" />
         {/* Soft top sheen + bottom vignette */}
         <Rect x={0} y={0} width={100} height={26} fill="#ffffff" opacity={0.04} />
         <Rect x={0} y={84} width={100} height={16} fill="#05000f" opacity={0.35} />
@@ -181,7 +316,7 @@ function PortraitVignette({ size }: { size: number }) {
  */
 function FramePreview({
   frameId,
-  size = 76,
+  size = FRAME_PREVIEW_SIZE,
   dimmed = false,
 }: {
   frameId: string;
@@ -191,6 +326,9 @@ function FramePreview({
   // Avatar disc at ~88% of size so the frame band seats on its rim
   // (same ratio ProfileScreen uses: 88px disc in a 100px frame).
   const discSize = Math.round(size * 0.88);
+  // The portrait borrows the frame art's own accent so each ring frames a
+  // picture in its own hue rather than the same dark bust every time.
+  const accent = useMemo(() => resolveFrameArt(frameId).accent, [frameId]);
   return (
     <View style={dimmed && { opacity: 0.55 }}>
       <ProfileFrameArt frameId={frameId} size={size}>
@@ -203,7 +341,7 @@ function FramePreview({
             backgroundColor: 'rgba(10,0,21,0.92)',
           }}
         >
-          <PortraitVignette size={discSize} />
+          <PortraitVignette size={discSize} accent={accent} />
         </View>
       </ProfileFrameArt>
     </View>
@@ -458,16 +596,22 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
     const hasCost = !!(item.costCurrency && item.costAmount);
     const affordable = hasCost && !isOwned ? canAffordItem(item) : true;
     const isThemeCard = item.tabType === 'themes' && !!item.preview;
+    const isFrameCard = item.tabType === 'frames' && !item.icon;
+    const treat = rarityTreatment(item.rarity, rarityColor);
 
     return (
       <Pressable
         key={item.id}
         style={({ pressed }) => [
           styles.card,
-          { borderColor: rarityColor + '55' },
+          { borderColor: treat.borderColor, borderWidth: treat.borderWidth },
           isEquipped
-            ? { borderColor: COLORS.accent + '88', ...SHADOWS.glow(COLORS.accent) }
-            : SHADOWS.glow(rarityColor),
+            ? {
+                borderColor: COLORS.accent + '99',
+                borderWidth: Math.max(treat.borderWidth, 1.75),
+                ...SHADOWS.glow(COLORS.accent),
+              }
+            : treat.glow,
           pressed && styles.pressedScale,
         ]}
         onPress={() => setSelectedItem(item)}
@@ -476,9 +620,10 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
           isEquipped ? ', equipped' : isOwned ? ', owned' : ''
         }`}
       >
-        {/* Rarity-tinted body gradient */}
+        {/* Tiered rarity backplate — common flat, higher tiers tinted */}
         <LinearGradient
-          colors={[rarityColor + '16', 'rgba(26,10,46,0.94)'] as [string, string]}
+          colors={treat.body}
+          locations={[0, 0.55, 1]}
           style={StyleSheet.absoluteFill}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
@@ -490,6 +635,9 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
             {renderThemePreview(item.id, item.preview!, THEME_PREVIEW_WIDTH, 0)}
           </View>
         )}
+
+        {/* Legendary corner sunburst */}
+        {treat.sunburst && <CornerSunburst color={rarityColor} />}
 
         {/* Rarity top edge */}
         <LinearGradient
@@ -514,11 +662,11 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
 
         {/* Preview area (non-theme tabs) */}
         {!isThemeCard && (
-          <View style={styles.cardPreviewArea}>
+          <View style={[styles.cardPreviewArea, isFrameCard && styles.cardPreviewAreaFrame]}>
             {item.icon ? (
               <IconMedallion glyph={item.icon} size={48} accent={rarityColor} />
             ) : item.tabType === 'frames' ? (
-              <FramePreview frameId={item.id} size={76} dimmed={!isOwned} />
+              <FramePreview frameId={item.id} dimmed={!isOwned} />
             ) : (
               <IconMedallion
                 glyph={item.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
@@ -635,7 +783,11 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
               ) : selectedItem.icon ? (
                 <IconMedallion glyph={selectedItem.icon} size={80} accent={rarityColor} />
               ) : selectedItem.tabType === 'frames' ? (
-                <FramePreview frameId={selectedItem.id} size={120} dimmed={!isOwned} />
+                <FramePreview
+                  frameId={selectedItem.id}
+                  size={Math.min(width - 140, 176)}
+                  dimmed={!isOwned}
+                />
               ) : (
                 <IconMedallion
                   glyph={selectedItem.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
@@ -848,10 +1000,18 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     borderRadius: RADIUS.xl,
-    padding: 12,
-    borderWidth: 1.5,
+    padding: CARD_PADDING,
+    borderWidth: CARD_BORDER,
     minHeight: 170,
     overflow: 'hidden',
+  },
+  // Legendary corner sunburst, anchored to the card's top-right corner.
+  cornerSunburst: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 104,
+    height: 104,
   },
   rarityTopEdge: {
     position: 'absolute',
@@ -886,12 +1046,19 @@ const styles = StyleSheet.create({
 
   // Full-bleed theme vignette — escapes the card padding so the theme's
   // world fills the card edge-to-edge; card overflow clips the top corners.
+  // Full-bleed theme vignette — escapes the card padding AND the border inset
+  // so the theme's world reaches both card edges with no dark margin. The
+  // preview is rendered at >= the container width (see THEME_PREVIEW_WIDTH),
+  // centered, and any overflow is clipped here rather than leaving a gap.
   themeBleed: {
-    marginTop: -12,
-    marginHorizontal: -12,
+    marginTop: -CARD_PADDING,
+    marginHorizontal: -CARD_PADDING,
     marginBottom: 10,
-    borderTopLeftRadius: RADIUS.xl - 1.5,
-    borderTopRightRadius: RADIUS.xl - 1.5,
+    height: THEME_PREVIEW_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopLeftRadius: RADIUS.xl - CARD_BORDER,
+    borderTopRightRadius: RADIUS.xl - CARD_BORDER,
     overflow: 'hidden',
   },
 
@@ -901,6 +1068,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
+  },
+  // Frames tab — the ring IS the product, so it fills the card's padding box.
+  cardPreviewAreaFrame: {
+    minHeight: FRAME_PREVIEW_SIZE,
+    marginTop: 2,
+    marginBottom: 10,
   },
 
   // Card name

@@ -68,6 +68,23 @@ import {
   CoinSmallIcon, CoinStackIcon, GemClusterIcon, GemHoardIcon, GemSingleIcon,
   HintBulbRewardIcon,
 } from './iconsRewards';
+import {
+  StampAcornIcon, StampAmberGemIcon, StampAppleIcon, StampAuroraIcon,
+  StampAutumnLeafIcon, StampBeachBallIcon, StampBlossomBranchIcon, StampButterflyIcon,
+  StampCampfireIcon, StampCandleIcon, StampCocoaIcon, StampCoralIcon,
+  StampCornIcon, StampCrescentMoonIcon, StampCrownIcon, StampDewdropIcon,
+  StampEvergreenSnowIcon, StampFernLeafIcon, StampFireflyJarIcon,
+  StampFireworksIcon, StampFlowerCrownIcon, StampFrozenLakeIcon,
+  StampGiftIcon, StampHarvestMoonIcon, StampHollyIcon, StampHoneybeeIcon,
+  StampIceCreamIcon, StampIceCrystalIcon, StampKiteIcon, StampLemonadeIcon,
+  StampMistIcon, StampMittenIcon, StampMushroomIcon, StampOwlIcon,
+  StampPalmTreeIcon, StampParasolIcon, StampPawPrintIcon, StampPumpkinIcon,
+  StampRainCloudIcon, StampSailboatIcon, StampSandcastleIcon,
+  StampSeedlingIcon, StampSledIcon, StampSnowflakeIcon, StampSnowmanIcon,
+  StampSongbirdIcon, StampStarTrailIcon, StampSunRaysIcon, StampSunflowerIcon,
+  StampSunriseIcon, StampSurfboardIcon, StampTrophyIcon, StampUmbrellaIcon,
+  StampWaterfallIcon, StampWaveIcon,
+} from './iconsStamps';
 
 export type GameIconName = keyof typeof REGISTRY;
 
@@ -134,6 +151,35 @@ const REGISTRY = {
   gemSingle: GemSingleIcon, gemCluster: GemClusterIcon, gemHoard: GemHoardIcon,
   hintBulbReward: HintBulbRewardIcon, boosterCrate: BoosterCrateIcon,
   chestBronze: ChestBronzeIcon, chestGold: ChestGoldIcon,
+  // seasonal stamp motifs (iconsStamps) — art matched to each stamp's NAME
+  stampBlossom: StampBlossomBranchIcon, stampSunflower: StampSunflowerIcon,
+  stampFlowerCrown: StampFlowerCrownIcon, stampSeedling: StampSeedlingIcon,
+  stampFern: StampFernLeafIcon, stampButterfly: StampButterflyIcon,
+  stampBee: StampHoneybeeIcon, stampSongbird: StampSongbirdIcon,
+  stampDewdrop: StampDewdropIcon, stampRainCloud: StampRainCloudIcon,
+  stampUmbrella: StampUmbrellaIcon, stampPaw: StampPawPrintIcon,
+  stampSunrise: StampSunriseIcon, stampKite: StampKiteIcon,
+  stampCrown: StampCrownIcon, stampTrophy: StampTrophyIcon,
+  stampCampfire: StampCampfireIcon, stampSun: StampSunRaysIcon,
+  stampParasol: StampParasolIcon, stampWave: StampWaveIcon,
+  stampBeachBall: StampBeachBallIcon, stampWaterfall: StampWaterfallIcon,
+  stampIceCream: StampIceCreamIcon, stampStarTrail: StampStarTrailIcon,
+  stampFireflyJar: StampFireflyJarIcon, stampPalm: StampPalmTreeIcon,
+  stampSandcastle: StampSandcastleIcon, stampSailboat: StampSailboatIcon,
+  stampCoral: StampCoralIcon, stampSurfboard: StampSurfboardIcon,
+  stampLemonade: StampLemonadeIcon, stampAutumnLeaf: StampAutumnLeafIcon,
+  stampPumpkin: StampPumpkinIcon, stampCorn: StampCornIcon,
+  stampCandle: StampCandleIcon, stampCocoa: StampCocoaIcon,
+  stampMist: StampMistIcon, stampApple: StampAppleIcon,
+  stampAmber: StampAmberGemIcon, stampMushroom: StampMushroomIcon,
+  stampAcorn: StampAcornIcon, stampOwl: StampOwlIcon,
+  stampHarvestMoon: StampHarvestMoonIcon, stampSnowflake: StampSnowflakeIcon,
+  stampGift: StampGiftIcon, stampIceCrystal: StampIceCrystalIcon,
+  stampMitten: StampMittenIcon, stampCrescentMoon: StampCrescentMoonIcon,
+  stampSled: StampSledIcon, stampAurora: StampAuroraIcon,
+  stampSnowman: StampSnowmanIcon, stampEvergreen: StampEvergreenSnowIcon,
+  stampHolly: StampHollyIcon, stampFrozenLake: StampFrozenLakeIcon,
+  stampFireworks: StampFireworksIcon,
 } as const;
 
 /**
