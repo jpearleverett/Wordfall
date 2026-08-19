@@ -598,8 +598,9 @@ const RARITY_FRAME: Record<
 
 /**
  * Reward render sitting directly on the card — no dark medallion well.
- * A soft glow disc floats behind the art so it reads as lit and
- * dimensional; the illustrations carry their own grounded shadows.
+ * A soft accent-tinted well disc with a hairline ring floats behind the
+ * art so it reads as lit and dimensional; the illustrations carry their
+ * own grounded shadows.
  * Deliberately NEVER dimmed: locked rewards stay full-color and covetable
  * (only the card shell dims — blind-panel "identical dark coin dot" fix).
  */
@@ -630,7 +631,9 @@ function RewardArt({
           width: size * 0.92,
           height: size * 0.92,
           borderRadius: (size * 0.92) / 2,
-          backgroundColor: halo + '14',
+          backgroundColor: halo + '26',
+          borderWidth: 1,
+          borderColor: halo + '59',
           shadowColor: halo,
           shadowOffset: { width: 0, height: 0 },
           shadowOpacity: 0.55,
@@ -683,7 +686,6 @@ function SvgMedallion({
           shadowRadius: size * 0.22,
           elevation: muted ? 2 : 6,
         },
-        muted && { opacity: 0.55 },
         style,
       ]}
     >
@@ -693,10 +695,9 @@ function SvgMedallion({
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
-      {/* Icon-only dim on locked tiers so owned (unlocked) medallions pop. */}
-      <View style={muted ? { opacity: 0.6 } : undefined}>
-        <GameIcon glyph={glyph} name={name} size={size * 0.58} />
-      </View>
+      {/* Icon stays full-brightness even when muted — locked reads via the
+          greyed shell chrome, never by dimming the artwork. */}
+      <GameIcon glyph={glyph} name={name} size={size * 0.58} />
     </View>
   );
 }
@@ -721,7 +722,7 @@ interface DrawnCrownProps {
   size?: number;
   /** Render just the crown, no squircle shell. */
   bare?: boolean;
-  /** Dims for locked states (mirrors IconMedallion's muted). */
+  /** Greys the shell chrome for locked states — the crown art stays lit. */
   muted?: boolean;
   style?: ViewStyle;
 }
@@ -868,7 +869,6 @@ const DrawnCrown = memo(function DrawnCrown({
           shadowRadius: size * 0.22,
           elevation: muted ? 2 : 6,
         },
-        muted && { opacity: 0.55 },
         style,
       ]}
     >
@@ -1053,16 +1053,17 @@ const LOCK_STEP: Record<
     fillOpacity: number;
     borderAlpha: number;
     glowFactor: number;
-    artOpacity: number;
     labelColor: string;
     showPadlock: boolean;
   }
 > = {
-  open: { fillOpacity: 1, borderAlpha: 1, glowFactor: 1, artOpacity: 1, labelColor: COLORS.textPrimary, showPadlock: false },
-  next: { fillOpacity: 1, borderAlpha: 1, glowFactor: 0.9, artOpacity: 1, labelColor: COLORS.textPrimary, showPadlock: false },
-  near: { fillOpacity: 0.82, borderAlpha: 0.72, glowFactor: 0.5, artOpacity: 0.97, labelColor: COLORS.textSecondary, showPadlock: true },
-  far: { fillOpacity: 0.58, borderAlpha: 0.44, glowFactor: 0.22, artOpacity: 0.86, labelColor: COLORS.textMuted, showPadlock: true },
-  distant: { fillOpacity: 0.38, borderAlpha: 0.26, glowFactor: 0.08, artOpacity: 0.72, labelColor: COLORS.textMuted, showPadlock: true },
+  // Reward ART never dims with depth — only the card shell (fill, border,
+  // glow) recedes, so locked rewards stay full-color and covetable.
+  open: { fillOpacity: 1, borderAlpha: 1, glowFactor: 1, labelColor: COLORS.textPrimary, showPadlock: false },
+  next: { fillOpacity: 1, borderAlpha: 1, glowFactor: 0.9, labelColor: COLORS.textPrimary, showPadlock: false },
+  near: { fillOpacity: 0.82, borderAlpha: 0.72, glowFactor: 0.5, labelColor: COLORS.textSecondary, showPadlock: true },
+  far: { fillOpacity: 0.58, borderAlpha: 0.44, glowFactor: 0.22, labelColor: COLORS.textMuted, showPadlock: true },
+  distant: { fillOpacity: 0.38, borderAlpha: 0.26, glowFactor: 0.08, labelColor: COLORS.textMuted, showPadlock: true },
 };
 
 /** Scale the alpha of an `rgba(...)` string (rarity frame borders). */
@@ -1232,7 +1233,6 @@ const LaneCard = memo(function LaneCard({
         style={[
           styles.rewardMedallionWrap,
           spec.feature && styles.rewardMedallionWrapFeature,
-          step.artOpacity < 1 && { opacity: step.artOpacity },
         ]}
       >
         {landmark ? (
@@ -2048,8 +2048,8 @@ const styles = StyleSheet.create({
     opacity: 0.62,
   },
   // Locked treatment is computed per card from LOCK_STEP (border alpha, fill
-  // opacity, glow, art opacity) — there is no single "locked" style any more,
-  // which is what stops the ladder reading as one uniform wall.
+  // opacity, glow) — there is no single "locked" style any more, which is
+  // what stops the ladder reading as one uniform wall.
   laneCardFill: {
     borderRadius: 18,
   },

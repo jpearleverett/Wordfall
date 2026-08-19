@@ -968,7 +968,7 @@ export function PuzzleComplete({
                     />
                     <View style={styles.rewardIconWrap}>
                       <View style={[styles.rewardIconHalo, { backgroundColor: COLORS.goldGlow, shadowColor: COLORS.gold }]} />
-                      <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.rewardIconImage} resizeMode="contain" />
+                      <GameIcon name="coin" size={20} />
                     </View>
                     <Text style={styles.rewardText}>+{totalCoinsAwarded > 0 ? totalCoinsAwarded : coinReward} coins</Text>
                   </LinearGradient>
@@ -987,7 +987,7 @@ export function PuzzleComplete({
                       />
                       <View style={styles.rewardIconWrap}>
                         <View style={[styles.rewardIconHalo, { backgroundColor: COLORS.purpleGlow, shadowColor: COLORS.purple }]} />
-                        <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImage} resizeMode="contain" />
+                        <GameIcon name="gem" size={20} />
                       </View>
                       <Text style={styles.rewardTextGold}>+{totalGemsAwarded > 0 ? totalGemsAwarded : perfectClearGems()} gems</Text>
                     </LinearGradient>

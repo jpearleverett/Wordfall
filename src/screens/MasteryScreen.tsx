@@ -80,7 +80,6 @@ function SvgMedallion({
           shadowRadius: size * 0.22,
           elevation: muted ? 2 : 6,
         },
-        muted && { opacity: 0.55 },
         style,
       ]}
     >
@@ -90,7 +89,7 @@ function SvgMedallion({
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
-      <GameIcon glyph={glyph} name={name} size={size * 0.58} />
+      <GameIcon glyph={glyph} name={name} size={size * 0.62} />
     </View>
   );
 }
@@ -109,7 +108,7 @@ interface DrawnCrownProps {
   size?: number;
   /** Render just the crown, no squircle shell. */
   bare?: boolean;
-  /** Dims for locked states (mirrors IconMedallion's muted). */
+  /** Greys the shell chrome for locked states — the crown art stays lit. */
   muted?: boolean;
   style?: ViewStyle;
 }
@@ -256,7 +255,6 @@ const DrawnCrown = memo(function DrawnCrown({
           shadowRadius: size * 0.22,
           elevation: muted ? 2 : 6,
         },
-        muted && { opacity: 0.55 },
         style,
       ]}
     >
@@ -518,7 +516,7 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
   const laneAccent = premiumLane ? COLORS.purple : COLORS.teal;
   const premiumLocked = premiumLane && !premiumOwned;
   const chips = useMemo(() => buildRewardChips(reward), [reward]);
-  const chipSize = milestone ? 30 : 26;
+  const chipSize = milestone ? 34 : 30;
 
   return (
     <View
@@ -536,12 +534,12 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
         colors={
           premiumLane
             ? premiumLocked
-              ? ['rgba(112,66,178,0.95)', 'rgba(44,22,80,0.97)']
+              ? ['rgba(74,46,118,0.95)', 'rgba(30,15,58,0.97)']
               : ['rgba(98,52,160,0.95)', 'rgba(26,9,50,0.98)']
             : milestone
               ? ['rgba(255,184,0,0.13)', 'rgba(12,4,28,0.96)']
               : !unlocked
-                ? ['rgba(0,245,212,0.08)', 'rgba(30,16,58,0.96)']
+                ? ['rgba(255,255,255,0.04)', 'rgba(16,9,32,0.97)']
                 : ['rgba(0,245,212,0.10)', 'rgba(12,4,28,0.96)']
         }
         start={{ x: 0.5, y: 0 }}
@@ -573,9 +571,9 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
         </View>
       )}
 
-      {/* Locked lanes dim CONTENT to ~65-70%, not the whole card — reward
-          icons and amounts stay readable behind the padlock. */}
-      <View style={[styles.chipColumn, (!unlocked || premiumLocked) && styles.chipColumnLocked]}>
+      {/* Reward art NEVER dims — locked reads via the lock badge and the
+          desaturated card fill, so icons stay full-color and covetable. */}
+      <View style={styles.chipColumn}>
         {chips.map((chip, i) => (
           <View key={i} style={styles.chipRow}>
             <View
@@ -583,7 +581,7 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
                 styles.chipRing,
                 {
                   borderColor: chip.accent + '59',
-                  backgroundColor: chip.accent + '14',
+                  backgroundColor: chip.accent + '26',
                   borderRadius: (chipSize + 6) / 2,
                 },
                 milestone && styles.chipRingMilestone,
@@ -1174,10 +1172,11 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 8,
   },
-  // Locked lanes keep FULL card opacity (dim-the-card read as unfinished);
-  // only the reward content dims, via chipColumnLocked below.
+  // Locked lanes: darker, desaturated CARD shell — the reward art itself
+  // never dims (blind-panel "muddy low-contrast reward orbs" fix).
   laneCardLocked: {
     borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(9,4,20,0.97)',
   },
   laneCardFill: {
     borderRadius: 18,
@@ -1231,11 +1230,6 @@ const styles = StyleSheet.create({
   },
   chipColumn: {
     gap: 6,
-  },
-  // Locked reward content sits at ~68% — dimmed but fully readable
-  // (was a compounded ~33% wash that judged as unfinished).
-  chipColumnLocked: {
-    opacity: 0.68,
   },
   chipRow: {
     flexDirection: 'row',

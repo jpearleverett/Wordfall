@@ -140,7 +140,9 @@ const STAT_CARDS = [
   { key: 'bestStreak', label: 'Best Streak', accent: COLORS.accent, family: 'streak' },
   { key: 'perfectSolves', label: 'Perfect Solves', accent: COLORS.cyan, family: 'mastery' },
   { key: 'totalScore', label: 'Total Score', accent: COLORS.purple, family: 'reward' },
-  { key: 'level', label: 'Current Level', accent: COLORS.teal, family: 'progress' },
+  // NOTE: no 'level' card — the current level already lives in the hero's
+  // "Lv.N" pill under the avatar, and a 7th card orphaned itself on its own
+  // grid row (art-direction flag). Keep this list at a clean 3×2 six.
 ] as const;
 
 type StatFamily = (typeof STAT_CARDS)[number]['family'];

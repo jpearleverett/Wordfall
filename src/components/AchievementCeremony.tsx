@@ -7,6 +7,7 @@ import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import { LOCAL_IMAGES } from '../utils/localAssets';
+import GameIcon from './icons/GameIcon';
 
 interface AchievementCeremonyProps {
   icon: string;
@@ -80,12 +81,12 @@ export function AchievementCeremony({
 
           <View style={styles.rewardRow}>
             <View style={styles.rewardChip}>
-              <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.rewardIconImg} resizeMode="contain" />
+              <GameIcon name="coin" size={18} />
               <Text style={styles.rewardAmount}>+{reward.coins}</Text>
             </View>
             {reward.gems > 0 && (
               <View style={[styles.rewardChip, styles.rewardChipGems]}>
-                <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImg} resizeMode="contain" />
+                <GameIcon name="gem" size={18} />
                 <Text style={[styles.rewardAmount, { color: COLORS.accent }]}>+{reward.gems}</Text>
               </View>
             )}

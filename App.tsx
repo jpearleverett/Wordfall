@@ -6,6 +6,7 @@ import {
   Animated,
   Easing,
   InteractionManager,
+  Platform,
   Pressable,
   SafeAreaView,
   StatusBar,
@@ -1971,6 +1972,15 @@ function AppContent() {
   const [consentAccepted, setConsentAccepted] = useState(false);
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
   const routeNameRef = useRef<string | undefined>();
+
+  // Web-only test hook: the browser build (scripts/build-web.sh) is a QA
+  // surface, not a shipping platform — expose the nav ref so screenshot
+  // tooling can drive screens directly.
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      (globalThis as any).__WORDFALL_NAV = navigationRef;
+    }
+  }, []);
 
   // Check ToS / Privacy Policy acceptance on mount.
   useEffect(() => {

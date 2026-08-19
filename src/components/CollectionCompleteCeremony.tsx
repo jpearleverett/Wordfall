@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
-import { LOCAL_IMAGES } from '../utils/localAssets';
+import GameIcon from './icons/GameIcon';
 
 interface CollectionCompleteCeremonyProps {
   collectionName: string;
@@ -56,12 +56,12 @@ export function CollectionCompleteCeremony({
 
           <View style={styles.rewardRow}>
             <View style={styles.rewardChip}>
-              <Image source={LOCAL_IMAGES.iconCoinGold} style={styles.rewardIconImg} resizeMode="contain" />
+              <GameIcon name="coin" size={18} />
               <Text style={styles.rewardAmount}>+{reward.coins}</Text>
             </View>
             {reward.gems > 0 && (
               <View style={styles.rewardChip}>
-                <Image source={LOCAL_IMAGES.iconGemDiamond} style={styles.rewardIconImg} resizeMode="contain" />
+                <GameIcon name="gem" size={18} />
                 <Text style={[styles.rewardAmount, { color: COLORS.accent }]}>+{reward.gems}</Text>
               </View>
             )}

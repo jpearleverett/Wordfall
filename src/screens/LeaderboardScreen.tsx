@@ -229,24 +229,25 @@ function RankMedallion({ rank, size = 34 }: { rank: number; size?: number }) {
   );
 }
 
-/** Per-player hue pool — deterministic pick via name hash so rows differ. */
-const AVATAR_HUES = [
-  COLORS.purple,
-  COLORS.cyan,
-  COLORS.teal,
-  COLORS.gold,
-  COLORS.orange,
-  COLORS.green,
-  COLORS.accentLight,
-  COLORS.purpleLight,
-] as const;
+/**
+ * Six neon two-tone ring pairs — deterministic pick via name hash so each
+ * player keeps a stable, designed-looking gradient instead of a flat tint.
+ */
+const AVATAR_HUE_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  [COLORS.purple, COLORS.cyan],
+  [COLORS.cyan, COLORS.teal],
+  [COLORS.gold, COLORS.orange],
+  [COLORS.green, COLORS.teal],
+  [COLORS.accentLight, COLORS.purpleLight],
+  [COLORS.orange, COLORS.purple],
+];
 
-function nameHue(name: string): string {
+function nameHuePair(name: string): readonly [string, string] {
   let h = 5381;
   for (let i = 0; i < name.length; i++) {
     h = ((h * 33) ^ name.charCodeAt(i)) >>> 0;
   }
-  return AVATAR_HUES[h % AVATAR_HUES.length];
+  return AVATAR_HUE_PAIRS[h % AVATAR_HUE_PAIRS.length];
 }
 
 /**
@@ -266,9 +267,12 @@ function GlassAvatar({
   highlighted?: boolean;
   rim?: readonly [string, string, string];
 }) {
-  const hue = highlighted ? COLORS.accent : nameHue(name);
+  const [hueA, hueB] = highlighted
+    ? ([COLORS.accentLight, COLORS.accent] as const)
+    : nameHuePair(name);
+  const hue = highlighted ? COLORS.accent : hueA;
   const ringColors: readonly [string, string, string] =
-    rim ?? ([hue, hue + '73', hue + 'D9'] as const);
+    rim ?? ([hueA, hueB, hueA + 'D9'] as const);
   const pad = 1.5;
   return (
     <View
@@ -300,7 +304,7 @@ function GlassAvatar({
           }}
         >
           <LinearGradient
-            colors={[hue + '8C', hue + '2E', 'rgba(8, 2, 22, 0.94)']}
+            colors={[hueA + '8C', hueB + '2E', 'rgba(8, 2, 22, 0.94)']}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={StyleSheet.absoluteFillObject}
@@ -601,7 +605,7 @@ function SegmentedNeonTabs({
     }).start();
   }, [activeIndex, reduceMotion, anim]);
 
-  const pad = 4;
+  const pad = compact ? 2 : 3;
   const segWidth = trackWidth > 0 ? (trackWidth - pad * 2) / tabs.length : 0;
   const maxIndex = Math.max(1, tabs.length - 1);
   const translateX = anim.interpolate({
@@ -687,31 +691,30 @@ const segStyles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: COLORS.surfaceGlass,
     borderRadius: RADIUS.full,
-    padding: 4,
-    borderWidth: 1,
+    padding: 3,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.borderSubtle,
-    ...SHADOWS.soft,
   },
   trackCompact: {
-    padding: 3,
+    padding: 2,
   },
   indicator: {
     position: 'absolute',
-    top: 4,
-    bottom: 4,
-    left: 4,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  indicatorCompact: {
     top: 3,
     bottom: 3,
     left: 3,
+    borderRadius: RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  indicatorCompact: {
+    top: 2,
+    bottom: 2,
+    left: 2,
   },
   indicatorUnderline: {
     position: 'absolute',
@@ -723,26 +726,26 @@ const segStyles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    paddingVertical: 9,
+    paddingVertical: 6,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: RADIUS.full,
   },
   segmentCompact: {
-    paddingVertical: 7,
+    paddingVertical: 5,
   },
   segmentPressed: {
     opacity: 0.7,
   },
   segmentText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: FONTS.display,
-    letterSpacing: 1.2,
+    letterSpacing: 1.1,
     color: COLORS.textMuted,
   },
   segmentTextCompact: {
-    fontSize: 11,
-    letterSpacing: 1,
+    fontSize: 10,
+    letterSpacing: 0.9,
   },
 });
 
@@ -1276,13 +1279,15 @@ const LeaderboardScreen: React.FC<
             end={{ x: 1, y: 1 }}
             style={styles.dailyDateBanner}
           >
-            <GlyphMedallion size={38} accent={COLORS.gold}>
-              <SunGlyph size={20} />
+            <GlyphMedallion size={26} accent={COLORS.gold}>
+              <SunGlyph size={14} />
             </GlyphMedallion>
-            <View>
-              <Text style={styles.dailyDateTitle}>Daily Challenge</Text>
-              <Text style={styles.dailyDateText}>{formatTodayDate()}</Text>
-            </View>
+            <Text style={styles.dailyDateTitle} numberOfLines={1}>
+              Daily Challenge
+            </Text>
+            <Text style={styles.dailyDateText} numberOfLines={1}>
+              {formatTodayDate()}
+            </Text>
             {!playerCompletedDaily && (
               <View style={styles.dailyNotCompleted}>
                 <LinearGradient
@@ -1298,124 +1303,129 @@ const LeaderboardScreen: React.FC<
           </LinearGradient>
         )}
 
-        {/* Friend Code + Add Friend */}
-        <View style={styles.friendCodeBar}>
-          <LinearGradient
-            pointerEvents="none"
-            colors={[COLORS.accent + '14', 'rgba(255,255,255,0.02)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-          <View style={styles.friendCodeLeft}>
-            <Text style={styles.friendCodeLabel}>Your Code:</Text>
-            <Text style={styles.friendCodeValue}>{myFriendCode}</Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [styles.addFriendButton, pressed && styles.chipPressed]}
-            onPress={() => setShowAddFriend(!showAddFriend)}
-            accessibilityRole="button"
-            accessibilityLabel={showAddFriend ? 'Cancel adding friend' : 'Add friend'}
-          >
+        {/* Friend Code + Add Friend — surfaced only on the Friends scope so
+            the Global view keeps a clear runway to the podium */}
+        {scope === 'friends' && (
+          <>
+          <View style={styles.friendCodeBar}>
             <LinearGradient
               pointerEvents="none"
-              colors={[COLORS.accent + '4D', COLORS.accent + '12']}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
+              colors={[COLORS.accent + '14', 'rgba(255,255,255,0.02)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFillObject}
             />
-            <Text style={styles.addFriendButtonText}>
-              {showAddFriend ? 'Cancel' : '+ Add Friend'}
-            </Text>
-          </Pressable>
-        </View>
+            <View style={styles.friendCodeLeft}>
+              <Text style={styles.friendCodeLabel}>Your Code:</Text>
+              <Text style={styles.friendCodeValue}>{myFriendCode}</Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.addFriendButton, pressed && styles.chipPressed]}
+              onPress={() => setShowAddFriend(!showAddFriend)}
+              accessibilityRole="button"
+              accessibilityLabel={showAddFriend ? 'Cancel adding friend' : 'Add friend'}
+            >
+              <LinearGradient
+                pointerEvents="none"
+                colors={[COLORS.accent + '4D', COLORS.accent + '12']}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <Text style={styles.addFriendButtonText}>
+                {showAddFriend ? 'Cancel' : '+ Add Friend'}
+              </Text>
+            </Pressable>
+          </View>
 
-        {showAddFriend && (
-          <>
-            <View style={styles.searchModeTabs}>
-              <SegmentedNeonTabs
-                tabs={[
-                  { key: 'code', label: 'By Code' },
-                  { key: 'name', label: 'By Name' },
-                ]}
-                activeKey={searchMode}
-                onSelect={(key) => {
-                  setSearchMode(key as 'code' | 'name');
-                  setNameSearchResults([]);
-                  setAddFriendInput('');
-                }}
-                accent={COLORS.purple}
-                compact
-              />
-            </View>
-            <View style={styles.addFriendRow}>
-              <TextInput
-                style={[
-                  styles.addFriendInput,
-                  addFriendFocused && styles.addFriendInputFocused,
-                ]}
-                placeholder={searchMode === 'code' ? 'Enter friend code...' : 'Search by display name...'}
-                placeholderTextColor={COLORS.textMuted}
-                value={addFriendInput}
-                onChangeText={setAddFriendInput}
-                onFocus={() => setAddFriendFocused(true)}
-                onBlur={() => setAddFriendFocused(false)}
-                autoCapitalize={searchMode === 'code' ? 'characters' : 'none'}
-                maxLength={searchMode === 'code' ? 12 : 40}
-              />
-              <Pressable
-                style={({ pressed }) => [
-                  styles.addFriendSubmit,
-                  SHADOWS.glow(COLORS.accent),
-                  addingFriend && { opacity: 0.5 },
-                  pressed && !addingFriend && styles.chipPressed,
-                ]}
-                onPress={handleAddFriend}
-                disabled={addingFriend}
-                accessibilityRole="button"
-                accessibilityLabel={searchMode === 'code' ? 'Send friend request' : 'Search by name'}
-              >
-                <LinearGradient
-                  colors={[...GRADIENTS.button.primary] as [string, string, string]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.addFriendSubmitFill}
-                >
-                  {addingFriend ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.addFriendSubmitText}>
-                      {searchMode === 'code' ? 'SEND' : 'SEARCH'}
-                    </Text>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            </View>
-            {searchMode === 'name' && nameSearchResults.length > 0 && (
-              <View style={styles.searchResultsCard}>
-                {nameSearchResults.map((r) => (
-                  <View key={r.userId} style={styles.searchResultRow}>
-                    <Text style={styles.searchResultName} numberOfLines={1}>{r.displayName}</Text>
-                    <Pressable
-                      style={({ pressed }) => [styles.searchResultBtn, pressed && styles.chipPressed]}
-                      onPress={() => handleSendRequestToSearchResult(r.userId, r.displayName)}
-                      disabled={addingFriend}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Add ${r.displayName}`}
-                    >
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={[COLORS.accent + '3D', COLORS.accent + '10']}
-                        start={{ x: 0.5, y: 0 }}
-                        end={{ x: 0.5, y: 1 }}
-                        style={StyleSheet.absoluteFillObject}
-                      />
-                      <Text style={styles.searchResultBtnText}>Add</Text>
-                    </Pressable>
-                  </View>
-                ))}
+          {showAddFriend && (
+            <>
+              <View style={styles.searchModeTabs}>
+                <SegmentedNeonTabs
+                  tabs={[
+                    { key: 'code', label: 'By Code' },
+                    { key: 'name', label: 'By Name' },
+                  ]}
+                  activeKey={searchMode}
+                  onSelect={(key) => {
+                    setSearchMode(key as 'code' | 'name');
+                    setNameSearchResults([]);
+                    setAddFriendInput('');
+                  }}
+                  accent={COLORS.purple}
+                  compact
+                />
               </View>
-            )}
+              <View style={styles.addFriendRow}>
+                <TextInput
+                  style={[
+                    styles.addFriendInput,
+                    addFriendFocused && styles.addFriendInputFocused,
+                  ]}
+                  placeholder={searchMode === 'code' ? 'Enter friend code...' : 'Search by display name...'}
+                  placeholderTextColor={COLORS.textMuted}
+                  value={addFriendInput}
+                  onChangeText={setAddFriendInput}
+                  onFocus={() => setAddFriendFocused(true)}
+                  onBlur={() => setAddFriendFocused(false)}
+                  autoCapitalize={searchMode === 'code' ? 'characters' : 'none'}
+                  maxLength={searchMode === 'code' ? 12 : 40}
+                />
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.addFriendSubmit,
+                    SHADOWS.glow(COLORS.accent),
+                    addingFriend && { opacity: 0.5 },
+                    pressed && !addingFriend && styles.chipPressed,
+                  ]}
+                  onPress={handleAddFriend}
+                  disabled={addingFriend}
+                  accessibilityRole="button"
+                  accessibilityLabel={searchMode === 'code' ? 'Send friend request' : 'Search by name'}
+                >
+                  <LinearGradient
+                    colors={[...GRADIENTS.button.primary] as [string, string, string]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.addFriendSubmitFill}
+                  >
+                    {addingFriend ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.addFriendSubmitText}>
+                        {searchMode === 'code' ? 'SEND' : 'SEARCH'}
+                      </Text>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+              </View>
+              {searchMode === 'name' && nameSearchResults.length > 0 && (
+                <View style={styles.searchResultsCard}>
+                  {nameSearchResults.map((r) => (
+                    <View key={r.userId} style={styles.searchResultRow}>
+                      <Text style={styles.searchResultName} numberOfLines={1}>{r.displayName}</Text>
+                      <Pressable
+                        style={({ pressed }) => [styles.searchResultBtn, pressed && styles.chipPressed]}
+                        onPress={() => handleSendRequestToSearchResult(r.userId, r.displayName)}
+                        disabled={addingFriend}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add ${r.displayName}`}
+                      >
+                        <LinearGradient
+                          pointerEvents="none"
+                          colors={[COLORS.accent + '3D', COLORS.accent + '10']}
+                          start={{ x: 0.5, y: 0 }}
+                          end={{ x: 0.5, y: 1 }}
+                          style={StyleSheet.absoluteFillObject}
+                        />
+                        <Text style={styles.searchResultBtnText}>Add</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
           </>
         )}
 
@@ -1549,26 +1559,24 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   tabGap: {
-    height: 8,
+    height: 6,
   },
+  // Slim single-line row (was a tall two-line card) — keeps the runway to
+  // the podium short.
   dailyDateBanner: {
-    borderRadius: RADIUS.xl,
-    padding: 12,
+    borderRadius: RADIUS.full,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 10,
-    borderWidth: 1,
+    gap: 8,
+    marginTop: 8,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,210,77,0.22)',
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    elevation: 4,
   },
   dailyDateTitle: {
     color: COLORS.gold,
-    fontSize: 15,
+    fontSize: 13,
     fontFamily: FONTS.display,
     letterSpacing: 0.5,
     textShadowColor: COLORS.goldGlow,
@@ -1576,10 +1584,10 @@ const styles = StyleSheet.create({
     textShadowRadius: 8,
   },
   dailyDateText: {
+    flex: 1,
     color: COLORS.textSecondary,
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: FONTS.bodyMedium,
-    marginTop: 2,
   },
   dailyNotCompleted: {
     marginLeft: 'auto',

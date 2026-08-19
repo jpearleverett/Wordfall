@@ -11,7 +11,11 @@ import { parseRemoteChapters } from '../utils/chapterSchema';
  * — while giving each wing a recognizable dominant hue.
  */
 export const WING_PALETTES: Record<string, { bg: string; surface: string; accent: string }> = {
-  nature:    { bg: '#04110b', surface: '#0a2a1a', accent: '#124a2e' },
+  // Nature leans teal-cyan rather than forest green — cyan is native to the
+  // synthwave chrome (magenta/violet/cyan), so nature boards share a family
+  // with the shell. Round-2 blind review still read the previous emerald as
+  // "green board clashes with purple chrome".
+  nature:    { bg: '#031014', surface: '#082832', accent: '#0e4a54' },
   science:   { bg: '#050814', surface: '#0d1930', accent: '#1e3a6f' },
   mythology: { bg: '#120818', surface: '#2a1030', accent: '#4d1e52' },
   ocean:     { bg: '#020a14', surface: '#051f3a', accent: '#0a3d66' },
@@ -36,11 +40,11 @@ export const WING_PALETTES: Record<string, { bg: string; surface: string; accent
 // base stop for depth but lifts the top stops into a vivid, jewel-toned
 // range so white letters pop and the board reads as candy, not concrete.
 export const WING_TILE_RAMPS: Record<string, [string, string, string, string, string]> = {
-  // Nature sits in emerald-teal rather than pure green: teal shares a
-  // family with the app's cyan/purple synthwave chrome, so nature boards
-  // harmonize with the shell instead of clashing (repeated blind-review
-  // note: "green board fights purple frame").
-  nature:    ['#35b892', '#2a9c7a', '#1f7d61', '#155d48', '#0c3d2f'],
+  // Nature sits fully in teal-cyan: cyan is one of the shell's three chrome
+  // hues (magenta/violet/cyan), so nature boards read as part of the same
+  // world. Two blind-review rounds flagged every greener version of this
+  // ramp as "green board fights purple frame".
+  nature:    ['#2fbcae', '#259e95', '#1b7f7a', '#125e5e', '#0a3c40'],
   science:   ['#5b8fe8', '#4674cc', '#345da8', '#244480', '#162c54'],
   mythology: ['#a04cc0', '#8438a4', '#682a85', '#4d1e64', '#321342'],
   ocean:     ['#42a5dd', '#3186b8', '#236a94', '#164d6e', '#0c3148'],

@@ -800,18 +800,26 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
           {accessible && (
             <View style={[styles.bannerEdge, SHADOWS.neonEdge(COLORS.gold)]} />
           )}
-          <DrawnMedallion
-            accent={accessible ? accent : COLORS.gold}
-            size={52}
-            shape="squircle"
-            muted={!accessible}
+          {/* Same plate-free glow-ring treatment as the grid cards. */}
+          <View
+            style={[
+              styles.iconHalo,
+              styles.iconHaloBanner,
+              accessible
+                ? {
+                    backgroundColor: accent + '1F',
+                    borderColor: accent + '4D',
+                    shadowColor: accent,
+                  }
+                : styles.iconHaloLocked,
+            ]}
           >
             {accessible ? (
-              <ModeGlyph modeId={mode.id} accent={accent} size={26} />
+              <ModeGlyph modeId={mode.id} accent={accent} size={34} />
             ) : (
               <LockGlyph size={22} accent={COLORS.gold} />
             )}
-          </DrawnMedallion>
+          </View>
           <View style={styles.bannerBody}>
             <Text style={styles.bannerEyebrow}>
               {mode.id === 'daily' ? 'DAILY EVENT' : 'WEEKLY EVENT'}
@@ -887,19 +895,26 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
           />
         )}
         <View style={styles.cardContent}>
-          <DrawnMedallion
-            accent={accessible ? accent : COLORS.gold}
-            size={48}
-            shape="squircle"
-            muted={!accessible}
-            style={styles.medallion}
+          {/* Mode art rendered LARGE in a soft accent glow ring — no squircle
+              plate, so the glyph reads as game art rather than an app icon. */}
+          <View
+            style={[
+              styles.iconHalo,
+              accessible
+                ? {
+                    backgroundColor: accent + '1F',
+                    borderColor: accent + '4D',
+                    shadowColor: accent,
+                  }
+                : styles.iconHaloLocked,
+            ]}
           >
             {accessible ? (
-              <ModeGlyph modeId={mode.id} accent={accent} size={24} />
+              <ModeGlyph modeId={mode.id} accent={accent} size={44} />
             ) : (
-              <LockGlyph size={22} accent={COLORS.gold} />
+              <LockGlyph size={24} accent={COLORS.gold} />
             )}
-          </DrawnMedallion>
+          </View>
           <Text style={[styles.cardName, !accessible && styles.textLocked]}>
             {mode.name}
           </Text>
@@ -1074,7 +1089,11 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     borderRadius: RADIUS.xl,
     overflow: 'hidden',
-    minHeight: 184,
+    // FIXED height (not minHeight): every grid card renders identical, sized
+    // to the tallest content case (halo icon + title + 2-line desc + stat
+    // chip). Kills the per-row height drift that left the Classic card
+    // taller than its siblings with dead space under short descriptions.
+    height: 188,
     borderWidth: 1.5,
   },
   cardLocked: {
@@ -1102,13 +1121,39 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: RADIUS.sm,
   },
   cardContent: {
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
   },
-  medallion: {
-    marginBottom: 10,
+  // Soft accent glow ring hosting the mode glyph directly — replaces the old
+  // squircle medallion plate so the art reads as game art, not an app icon.
+  iconHalo: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    marginBottom: 8,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  iconHaloBanner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginBottom: 0,
+  },
+  iconHaloLocked: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(255,255,255,0.14)',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    elevation: 2,
   },
   cardName: {
     fontSize: 15,
@@ -1116,7 +1161,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     textAlign: 'center',
     letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: 4,
     textShadowColor: 'rgba(255,255,255,0.12)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 4,

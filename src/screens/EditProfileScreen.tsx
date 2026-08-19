@@ -5,6 +5,7 @@ import {
   StyleSheet,
   FlatList,
   Pressable,
+  Dimensions,
 } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -48,9 +49,16 @@ const RARITY_COLORS: Record<string, string> = {
   legendary: COLORS.rarityLegendary,
 };
 
-const FRAME_CARD_SIZE = 128;
-const THEME_CARD_SIZE = 136;
 const LIST_GAP = 12;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+/**
+ * Frame cards are sized so ~2.5 cards fit the viewport: two full cards plus a
+ * clean half-card "peek" — the industry affordance that says "this row
+ * scrolls" — instead of a third card harshly clipped at an arbitrary point.
+ * Viewport = screen minus the scaffold's 16px content padding per side.
+ */
+const FRAME_CARD_SIZE = Math.round((SCREEN_WIDTH - 32 - 2 * LIST_GAP) / 2.5);
+const THEME_CARD_SIZE = 136;
 
 /** Small accent check bubble marking the equipped cosmetic. */
 const CheckBadge: React.FC<{ color?: string }> = ({ color = COLORS.accent }) => (
@@ -600,6 +608,37 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           end={{ x: 0.5, y: 0.65 }}
         />
         <View style={styles.previewBody}>
+          {/* Avatar stage — soft radial rings behind the disc so the hero
+              area reads as designed set-dressing, not empty padding. The
+              rings borrow the equipped frame's rarity color at low alpha and
+              are clipped by the card shell (previewClip). */}
+          <View style={styles.avatarStage}>
+            <View style={styles.avatarBackdrop} pointerEvents="none">
+              <View
+                style={[
+                  styles.backdropRing,
+                  styles.backdropRingOuter,
+                  { borderColor: frameRarityColor + '14' },
+                ]}
+              />
+              <View
+                style={[
+                  styles.backdropRing,
+                  styles.backdropRingMid,
+                  { borderColor: frameRarityColor + '24' },
+                ]}
+              />
+              <View
+                style={[
+                  styles.backdropRing,
+                  styles.backdropRingInner,
+                  {
+                    borderColor: frameRarityColor + '38',
+                    backgroundColor: frameRarityColor + '0D',
+                  },
+                ]}
+              />
+            </View>
           <Animated.View
             style={[
               styles.avatarRing,
@@ -645,6 +684,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
               <View style={styles.avatarShine} pointerEvents="none" />
             </View>
           </Animated.View>
+          </View>
           <View style={styles.levelBadge}>
             <LinearGradient
               colors={[
@@ -685,7 +725,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
         keyExtractor={(item) => item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.horizontalList}
+        contentContainerStyle={[styles.horizontalList, styles.framesListTail]}
         snapToInterval={FRAME_CARD_SIZE + LIST_GAP}
         snapToAlignment="start"
         decelerationRate="fast"
@@ -798,7 +838,39 @@ const styles = StyleSheet.create({
   previewBody: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 30,
+    // Tightened ~25% (30 → 22): the backdrop rings now dress the space, so
+    // the hero no longer needs padding to justify its footprint.
+    paddingVertical: 22,
+  },
+  // Avatar stage + decorative backdrop rings (behind the avatar circle).
+  avatarStage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backdropRing: {
+    position: 'absolute',
+    borderWidth: 1,
+  },
+  backdropRingOuter: {
+    width: 216,
+    height: 216,
+    borderRadius: 108,
+  },
+  backdropRingMid: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+  },
+  backdropRingInner: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 1.5,
   },
   // Equipped-theme gradient bleeding from the card's top edge.
   previewThemeBleed: {
@@ -949,6 +1021,11 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     paddingVertical: 6,
     gap: LIST_GAP,
+  },
+  // Extra tail room for the frames carousel so its last card snaps fully
+  // clear of the screen edge instead of resting against it.
+  framesListTail: {
+    paddingRight: 32,
   },
   cardPressed: {
     opacity: 0.8,
