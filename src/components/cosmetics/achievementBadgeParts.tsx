@@ -20,7 +20,6 @@
 import React, { useMemo } from 'react';
 import { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import { DuoGrad, gradId, shade } from '../icons/IconBase';
-import { star5 } from './frameArtParts';
 
 export const ABVB = '0 0 100 100';
 
@@ -114,39 +113,22 @@ export function BadgeGlow({ accent }: { accent: string }) {
   );
 }
 
-const STAR_ROWS: Record<number, number[]> = { 1: [50], 2: [43, 57], 3: [37.5, 50, 62.5] };
-
-/** Faceted ice gem set into the ribbon — the GOLD tier's centerpiece. */
-function RibbonGem() {
-  return (
-    <>
-      <Path d="M50 80.4 L56 84.8 L50 91.8 L44 84.8 Z" fill="#8fe6ff" stroke="#0e5f78" strokeWidth={1.2} strokeLinejoin="round" />
-      <Path d="M50 80.4 L56 84.8 L50 86.2 Z" fill="#e4f9ff" opacity={0.95} />
-      <Path d="M44 84.8 L50 86.2 L50 91.8 Z" fill="#4fc4ea" opacity={0.85} />
-      <Path d="M46.4 84.4 L49 82.2" stroke="#ffffff" strokeWidth={1.1} strokeLinecap="round" opacity={0.9} />
-    </>
-  );
-}
-
 /**
- * Dovetailed ribbon banner across the base; `stars` (0–3) marks the tier and
- * `gem` swaps the center star for a set gem (gold tier).
+ * Dovetailed ribbon banner across the base — the CIRCLE silhouette's dressing
+ * (see `SHAPE_DRESSING`; the other five forms wear a swallowtail, sprigs, a
+ * nameplate, a sash or a scroll). Cloth only: the tier readout is drawn over
+ * it by `TierPips`, so every base shares one pip implementation.
  */
 export function RibbonBanner({
   metal,
   cloth,
-  stars,
-  gem,
 }: {
   metal: BadgeMetal;
   cloth: string;
-  stars: number;
-  gem?: boolean;
 }) {
   const id = useMemo(() => gradId('abRib'), []);
   const m = METALS[metal];
   const edge = shade(cloth, -62);
-  const positions = (STAR_ROWS[stars] ?? []).filter((x) => !(gem && x === 50));
   return (
     <>
       <DuoGrad id={id} from={shade(cloth, 26)} to={shade(cloth, -30)} />
@@ -160,10 +142,6 @@ export function RibbonBanner({
       <Path d="M21 78.5 H79 V93.6 Q50 99.2 21 93.6 Z" fill={`url(#${id})`} stroke={edge} strokeWidth={1.4} strokeLinejoin="round" />
       <Path d="M23.5 81 H76.5" stroke={m.light} strokeWidth={1} opacity={0.75} />
       <Path d="M23.5 91.6 Q50 96.8 76.5 91.6" stroke={m.light} strokeWidth={1} opacity={0.55} fill="none" />
-      {positions.map((x) => (
-        <Path key={x} d={star5(x, 86.2, 4.8, 2)} fill={m.light} stroke={m.rimC} strokeWidth={0.9} strokeLinejoin="round" />
-      ))}
-      {gem && <RibbonGem />}
     </>
   );
 }

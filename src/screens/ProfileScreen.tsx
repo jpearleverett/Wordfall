@@ -679,35 +679,39 @@ function PrestigeTierMark({ level, size = 24 }: { level: number; size?: number }
   const tier = Math.max(1, Math.min(PRESTIGE_LEVELS.length, level));
   const metal = PRESTIGE_TIER_COLORS[tier] ?? COLORS.gold;
   const id = useMemo(() => gradId('prestigeTier'), []);
-  const laurel = shade(metal, -14);
+  // The mark now sits on a LIGHT gilded disc (PrestigeMedallion), so it reads
+  // as struck relief: a warm ink outline carries the silhouette at any tier
+  // metal, and the star body keeps a bright-to-mid ramp inside it. Drawing the
+  // laurel/pips in the metal itself was what made bronze vanish.
+  const INK = '#3a2007';
   const pipSpan = tier * 2.6 + (tier - 1) * 0.9;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <DuoGrad id={id} from={shade(metal, 62)} to={shade(metal, -38)} />
-      <Path d="M7.1 19.6 C4.2 16.9 3.3 12.2 5.5 8.2" stroke={laurel} strokeWidth={1.3} strokeLinecap="round" fill="none" />
-      <Path d="M16.9 19.6 C19.8 16.9 20.7 12.2 18.5 8.2" stroke={laurel} strokeWidth={1.3} strokeLinecap="round" fill="none" />
+      <DuoGrad id={id} from={shade(metal, 70)} to={shade(metal, -30)} />
+      <Path d="M7.1 19.6 C4.2 16.9 3.3 12.2 5.5 8.2" stroke={INK} strokeWidth={1.4} strokeLinecap="round" fill="none" />
+      <Path d="M16.9 19.6 C19.8 16.9 20.7 12.2 18.5 8.2" stroke={INK} strokeWidth={1.4} strokeLinecap="round" fill="none" />
       {LAUREL_LEAVES.map(([x, y], i) => (
         <React.Fragment key={i}>
-          <Circle cx={x} cy={y} r={1.15} fill={metal} />
-          <Circle cx={24 - x} cy={y} r={1.15} fill={metal} />
+          <Circle cx={x} cy={y} r={1.2} fill={shade(metal, -26)} stroke={INK} strokeWidth={0.5} />
+          <Circle cx={24 - x} cy={y} r={1.2} fill={shade(metal, -26)} stroke={INK} strokeWidth={0.5} />
         </React.Fragment>
       ))}
       <Path
         d="M12 4.4 L13.41 8.26 L17.52 8.41 L14.28 10.94 L15.41 14.89 L12 12.6 L8.59 14.89 L9.72 10.94 L6.48 8.41 L10.59 8.26 Z"
         fill={`url(#${id})`}
-        stroke={shade(metal, -78)}
-        strokeWidth={0.7}
+        stroke={INK}
+        strokeWidth={1}
         strokeLinejoin="round"
       />
-      <Circle cx={10.9} cy={7.6} r={0.9} fill="rgba(255,255,255,0.55)" />
+      <Circle cx={10.9} cy={7.6} r={0.9} fill="rgba(255,255,255,0.75)" />
       {Array.from({ length: tier }, (_, i) => {
         const sx = 12 - pipSpan / 2 + i * 3.5;
         return (
           <Path
             key={i}
             d={`M${sx} 19.4 l1.3 1.6 l1.3 -1.6`}
-            stroke={metal}
-            strokeWidth={1.3}
+            stroke={INK}
+            strokeWidth={1.5}
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
@@ -719,9 +723,104 @@ function PrestigeTierMark({ level, size = 24 }: { level: number; size?: number }
 }
 
 /**
+ * PrestigeMedallion — the marquee unlockable's shell. DrawnMedallion's
+ * near-black gem body (rgba(8,2,22,.92)) turned the prestige emblem into an
+ * empty circle on the gilded card, so this variant swaps in a struck-gold
+ * disc: cream→amber→bronze fill, a thin bright inner rim that separates the
+ * medallion from the card behind it, and the tier metal kept for the outer
+ * ring + glow so Bronze…Legendary still read apart.
+ */
+function PrestigeMedallion({
+  size = 62,
+  metal = COLORS.gold,
+  style,
+  children,
+}: {
+  size?: number;
+  metal?: string;
+  style?: object;
+  children: React.ReactNode;
+}) {
+  const inset = Math.max(2, size * 0.055);
+  return (
+    <View
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 2,
+          borderColor: shade(metal, 34),
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          backgroundColor: '#e8bd63',
+          shadowColor: metal,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.75,
+          shadowRadius: size * 0.28,
+          elevation: 8,
+        },
+        style ?? null,
+      ]}
+    >
+      <LinearGradient
+        colors={['#fff4d2', '#f0c574', '#b87a2c']}
+        locations={[0, 0.52, 1]}
+        start={{ x: 0.3, y: 0 }}
+        end={{ x: 0.7, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      {/* Thin bright inner rim — the separation line from the gilded card. */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: inset,
+          left: inset,
+          right: inset,
+          bottom: inset,
+          borderRadius: (size - inset * 2) / 2,
+          borderWidth: 1,
+          borderColor: 'rgba(255,252,240,0.92)',
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: size * 0.09,
+          left: size * 0.24,
+          right: size * 0.24,
+          height: size * 0.12,
+          borderRadius: size * 0.06,
+          backgroundColor: 'rgba(255,255,255,0.5)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
+
+/**
  * Iconized prestige benefits — replaces the old dot-separated paragraph on
  * the prestige CTA with three compact, scannable rows.
  */
+/**
+ * Achievement plate fill. GRADIENTS.surfaceCard (rgba(45,20,82,.88) →
+ * rgba(26,10,46,.92)) sat within a few percent of the nebula background, which
+ * is what collapsed the badge grid to near-zero contrast; these are opaque and
+ * markedly lighter so each card reads as a plate.
+ */
+const ACHIEVEMENT_PLATE = ['#41246e', '#31174f', '#251038'] as const;
+
+/** Faint tier tint layered over the plate on earned cards. */
+const ACHIEVEMENT_TIER_WASH: Record<string, readonly [string, string]> = {
+  bronze: ['rgba(212,137,58,0.26)', 'rgba(212,137,58,0.05)'],
+  silver: ['rgba(208,216,232,0.24)', 'rgba(208,216,232,0.04)'],
+  gold: ['rgba(255,184,0,0.28)', 'rgba(255,184,0,0.05)'],
+};
+
 const PRESTIGE_BENEFITS: Array<{ icon: GameIconName; label: string }> = [
   { icon: 'undo', label: 'Reset to Level 1' },
   { icon: 'crown', label: 'Keep all cosmetics' },
@@ -1100,9 +1199,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               />
-              <DrawnMedallion accent={PRESTIGE_TIER_COLORS[prestigeLevel] ?? COLORS.gold} size={40}>
+              <PrestigeMedallion metal={PRESTIGE_TIER_COLORS[prestigeLevel] ?? COLORS.gold} size={40}>
                 <PrestigeTierMark level={prestigeLevel} size={26} />
-              </DrawnMedallion>
+              </PrestigeMedallion>
               <View style={{ flex: 1 }}>
                 <Text style={styles.prestigeBadgeLabel}>{prestigeDef.label}</Text>
                 <Text style={styles.prestigeBadgeMultiplier}>
@@ -1170,9 +1269,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 end={{ x: 0.5, y: 1 }}
                 pointerEvents="none"
               />
-              <DrawnMedallion accent={COLORS.gold} size={62}>
+              <PrestigeMedallion metal={COLORS.gold} size={62}>
                 <PrestigeTierMark level={nextPrestige} size={44} />
-              </DrawnMedallion>
+              </PrestigeMedallion>
               <View style={styles.prestigeCardBody}>
                 <Text style={styles.prestigeCardHeadline}>PRESTIGE</Text>
                 {PRESTIGE_BENEFITS.map((benefit) => (
@@ -1231,17 +1330,38 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               style={[
                 styles.achievementCard,
                 highestTier
-                  ? { borderColor: tierColor + '66', shadowColor: tierColor, shadowOpacity: 0.35 }
+                  ? { borderColor: tierColor + 'AA', shadowColor: tierColor, shadowOpacity: 0.45 }
                   : null,
               ]}
               accessibilityRole="text"
               accessibilityLabel={`Achievement: ${achievement.name}, ${highestTier ? highestTier + ' tier earned' : 'not yet earned'}`}
             >
+              {/* Plate body — lifted well clear of the nebula background so the
+                  card reads as a plate holding a trophy, not a hole in the bg. */}
               <LinearGradient
-                colors={[...GRADIENTS.surfaceCard]}
+                colors={ACHIEVEMENT_PLATE}
                 style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
+              />
+              {/* Earned cards take a faint tier wash, so the wall shows
+                  bronze/silver/gold progress at a glance. */}
+              {highestTier ? (
+                <LinearGradient
+                  colors={ACHIEVEMENT_TIER_WASH[highestTier] ?? ACHIEVEMENT_TIER_WASH.bronze}
+                  style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  pointerEvents="none"
+                />
+              ) : null}
+              {/* Soft inner top-light — the plate's lit edge. */}
+              <LinearGradient
+                colors={['rgba(255,255,255,0.20)', 'rgba(255,255,255,0)']}
+                style={styles.achievementTopLight}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                pointerEvents="none"
               />
               <View style={styles.achievementBadgeWrap}>
                 <AchievementBadge
@@ -1620,13 +1740,24 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 6,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.26)',
     shadowColor: COLORS.purple,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
     shadowRadius: 10,
-    elevation: 4,
+    elevation: 5,
+  },
+  // Lit top edge of the plate — a short gradient band, not a full overlay, so
+  // the badge art below keeps its own value range.
+  achievementTopLight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 26,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
   },
   achievementBadgeWrap: {
     marginBottom: 4,

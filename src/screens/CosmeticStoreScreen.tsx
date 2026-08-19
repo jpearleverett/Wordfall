@@ -19,6 +19,10 @@ import IconMedallion from '../components/common/IconMedallion';
 import ThemePreview from '../components/cosmetics/ThemePreview';
 import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
 import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
+import {
+  AVATAR_VARIANT_ORDER,
+  hashAvatarSeed,
+} from '../components/cosmetics/avatarVariants';
 import GameIcon from '../components/icons/GameIcon';
 import { useEconomy } from '../contexts/EconomyContext';
 import PrimaryButton from '../components/common/PrimaryButton';
@@ -93,6 +97,13 @@ interface NormalizedItem {
   source?: string;
   preview?: CosmeticTheme['colors'];
   tabType: TabId;
+  /**
+   * Position in the rendered list for this tab. Portrait variants key off it
+   * (not off an id hash) so ADJACENT cards can never land on the same figure —
+   * hashing clumped the first screenful of frames onto one avatar, which read
+   * as "every frame is the same picture with a different ring".
+   */
+  listIndex: number;
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -227,12 +238,31 @@ function CornerSunburst({ color }: { color: string }) {
  * store cards show the actual frame framing a picture. Locked/unowned
  * cards render it dimmed via `dimmed`.
  */
+/**
+ * Pick the portrait variant for a frame card. Keyed on the card's INDEX in the
+ * rendered list, stepped by the four-variant rotation, so cards 0..3 are always
+ * four different characters and no two neighbours (row-wise or column-wise in a
+ * 2-up grid) repeat. The id only breaks ties when no index is available (the
+ * detail modal for an item that isn't in the current list), where it falls back
+ * to the catalog's own hash.
+ */
+function portraitVariantFor(frameId: string, index?: number): string {
+  const order = AVATAR_VARIANT_ORDER;
+  if (index === undefined || index < 0) {
+    return order[hashAvatarSeed(frameId) % order.length];
+  }
+  return order[index % order.length];
+}
+
 function FramePreview({
   frameId,
+  portraitIndex,
   size = FRAME_PREVIEW_SIZE,
   dimmed = false,
 }: {
   frameId: string;
+  /** Index of this frame in the rendered list — drives the portrait variant. */
+  portraitIndex?: number;
   size?: number;
   dimmed?: boolean;
 }) {
@@ -242,6 +272,10 @@ function FramePreview({
   // The portrait borrows the frame art's own accent so each ring frames a
   // picture in its own hue rather than the same dark bust every time.
   const accent = useMemo(() => resolveFrameArt(frameId).accent, [frameId]);
+  const variant = useMemo(
+    () => portraitVariantFor(frameId, portraitIndex),
+    [frameId, portraitIndex],
+  );
   return (
     <View style={dimmed && { opacity: 0.55 }}>
       <ProfileFrameArt frameId={frameId} size={size}>
@@ -254,9 +288,10 @@ function FramePreview({
             backgroundColor: 'rgba(10,0,21,0.92)',
           }}
         >
-          {/* Illustrated Word Architect portrait, variant keyed by frame id
-              so no two frame cards enclose the same figure. */}
-          <AvatarPortrait size={discSize} accent={accent} variant={frameId} />
+          {/* Illustrated Word Architect portrait, variant keyed by the card's
+              list position so adjacent frame cards never enclose the same
+              figure (an id hash clumped the first visible cards). */}
+          <AvatarPortrait size={discSize} accent={accent} variant={variant} />
         </View>
       </ProfileFrameArt>
     </View>
@@ -270,11 +305,16 @@ function normalizeThemes(
   unlockedCosmetics: string[],
   equippedTheme: string,
 ): NormalizedItem[] {
-  return themes.map((t) => ({
+  return themes.map((t, i) => ({
     id: t.id,
     name: t.name,
     description: t.description,
-    rarity: 'rare' as const,
+    // Real per-theme tier from the catalog. This used to be hardcoded 'rare',
+    // so every visible theme card wore the same chip and the rarity ladder
+    // communicated no tiering at all — it also fed rarityTreatment(), meaning
+    // the backplate/glow/sunburst were flat across the whole tab.
+    rarity: t.rarity,
+    listIndex: i,
     owned: t.id === 'default' || unlockedCosmetics.includes(t.id),
     equipped: equippedTheme === t.id,
     costCurrency: t.cost?.currency,
@@ -289,11 +329,12 @@ function normalizeFrames(
   unlockedCosmetics: string[],
   equippedFrame: string,
 ): NormalizedItem[] {
-  return frames.map((f) => ({
+  return frames.map((f, i) => ({
     id: f.id,
     name: f.name,
     description: f.source,
     rarity: f.rarity,
+    listIndex: i,
     owned: f.id === 'default' || unlockedCosmetics.includes(f.id),
     equipped: equippedFrame === f.id,
     source: f.source,
@@ -306,11 +347,12 @@ function normalizeTitles(
   unlockedCosmetics: string[],
   equippedTitle: string,
 ): NormalizedItem[] {
-  return titles.map((t) => ({
+  return titles.map((t, i) => ({
     id: t.id,
     name: t.title,
     description: t.source,
     rarity: 'common' as const,
+    listIndex: i,
     owned: t.id === 'title_newcomer' || unlockedCosmetics.includes(t.id),
     equipped: equippedTitle === t.id,
     source: t.source,
@@ -322,12 +364,13 @@ function normalizeDecorations(
   decorations: LibraryDecoration[],
   unlockedCosmetics: string[],
 ): NormalizedItem[] {
-  return decorations.map((d) => ({
+  return decorations.map((d, i) => ({
     id: d.id,
     name: d.name,
     description: d.description,
     icon: d.icon,
     rarity: d.rarity,
+    listIndex: i,
     owned: unlockedCosmetics.includes(d.id),
     equipped: false,
     costCurrency: d.cost?.currency,
@@ -581,7 +624,11 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
             {item.icon ? (
               <IconMedallion glyph={item.icon} size={48} accent={rarityColor} />
             ) : item.tabType === 'frames' ? (
-              <FramePreview frameId={item.id} dimmed={!isOwned} />
+              <FramePreview
+                frameId={item.id}
+                portraitIndex={item.listIndex}
+                dimmed={!isOwned}
+              />
             ) : (
               <IconMedallion
                 glyph={item.tabType === 'titles' ? '\u{1F3F7}\uFE0F' : '\u{2728}'}
@@ -700,6 +747,7 @@ const CosmeticStoreScreen: React.FC<CosmeticStoreScreenProps> = ({ navigation })
               ) : selectedItem.tabType === 'frames' ? (
                 <FramePreview
                   frameId={selectedItem.id}
+                  portraitIndex={selectedItem.listIndex}
                   size={Math.min(width - 140, 176)}
                   dimmed={!isOwned}
                 />

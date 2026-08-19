@@ -14,6 +14,8 @@ import {
   ACHIEVEMENT_BADGE_ART,
   ACHIEVEMENT_FAMILY_ACCENTS,
   BADGE_SHAPES,
+  SHAPE_DRESSING,
+  TIER_PIPS,
   DEFAULT_BADGE_ART,
   EMBLEM_RADIUS,
   MAX_PER_SHAPE,
@@ -104,6 +106,21 @@ describe('achievementBadge art catalog', () => {
     }
     // The ramp preserves tonal structure: lit input maps brighter than shadow input.
     litTints.forEach((lit, i) => expect(lit).not.toBe(shadowTints[i]));
+  });
+
+  it('dresses every silhouette differently — no shared ribbon template', () => {
+    // The panel's complaint was that the FORMS varied but the dressing did
+    // not. Every form must be dressed, and no two forms may share a base.
+    const dressings = BADGE_SHAPES.map((shape) => SHAPE_DRESSING[shape]);
+    for (const dressing of dressings) expect(dressing).toBeTruthy();
+    expect(new Set(dressings).size).toBe(BADGE_SHAPES.length);
+  });
+
+  it('makes the pip row a tier readout — 1 / 2 / 3, not always three', () => {
+    expect(TIER_PIPS.bronze).toBe(1);
+    expect(TIER_PIPS.silver).toBe(2);
+    expect(TIER_PIPS.gold).toBe(3);
+    expect(new Set(Object.values(TIER_PIPS)).size).toBe(3);
   });
 
   it('falls back to a valid default for unknown ids', () => {

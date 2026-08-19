@@ -55,6 +55,52 @@ export type AchievementEmblem =
  */
 export type BadgeShape = 'circle' | 'shield' | 'rosette' | 'hex' | 'laurel' | 'crest';
 
+/**
+ * Base dressing worn under each silhouette. The blind panel's second sameness
+ * complaint was that the FORMS varied but the DRESSING did not — every badge
+ * wore the same dovetailed ribbon with the same three star pips. So the
+ * dressing is keyed off the silhouette family, one style per form:
+ *
+ * - `banner`      straight dovetailed cloth banner (round medallion)
+ * - `swallowtail` V-cut swallowtail ribbon with flared tails (heater shield)
+ * - `sprig`       crossed laurel sprigs, no cloth at all (scalloped rosette)
+ * - `nameplate`   engraved metal plaque with screws, no cloth (hex plaque)
+ * - `sash`        diagonal draped sash sweeping the base (laurel disc)
+ * - `scroll`      curled parchment scroll with rolled ends (crest)
+ */
+export type BadgeDressing =
+  | 'banner'
+  | 'swallowtail'
+  | 'sprig'
+  | 'nameplate'
+  | 'sash'
+  | 'scroll';
+
+/** One dressing per silhouette — no two forms wear the same base. */
+export const SHAPE_DRESSING: Record<BadgeShape, BadgeDressing> = {
+  circle: 'banner',
+  shield: 'swallowtail',
+  rosette: 'sprig',
+  hex: 'nameplate',
+  laurel: 'sash',
+  crest: 'scroll',
+};
+
+/** Tier reached on an earned badge. */
+export type AchievementTierLevel = 'bronze' | 'silver' | 'gold';
+
+/**
+ * Pip count per tier — the row is a TIER READOUT, not decoration, so bronze
+ * shows a single boss, silver a pair of stars, and gold three marks whose
+ * centre is a set gem (see `TierPips`). It used to be three pips at every
+ * tier, which made the readout meaningless and the wall repetitive.
+ */
+export const TIER_PIPS: Record<AchievementTierLevel, number> = {
+  bronze: 1,
+  silver: 2,
+  gold: 3,
+};
+
 /** Every silhouette on the wall, in "flattest → most ornate" order. */
 export const BADGE_SHAPES: readonly BadgeShape[] = [
   'circle',

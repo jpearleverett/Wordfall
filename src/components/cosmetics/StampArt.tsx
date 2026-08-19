@@ -16,6 +16,10 @@
  *    frost → ice, blossom → pink …), so a sheet of nine shows nine colors.
  *    The perforated paper border stays neutral parchment so the wash reads
  *    as the printed area, not as a tinted card.
+ *  - The foil sheen is per-stamp, not per-template (`stampSheen`): angle,
+ *    band width, centre offset and opacity all derive from the sheet index,
+ *    and ~1 stamp in 3 prints MATTE with no streak at all — the panel's
+ *    "identical diagonal gloss streak in the same position" complaint.
  *  - Rarity tiers dress the frame: `rare` adds a foil-gradient inner frame
  *    plus corner rosettes, `epic` adds a serrated gold outer edge and two
  *    sparkles. `stampRarity(index, total)` derives the tier by sheet
@@ -43,6 +47,7 @@ import { gradId, shade } from '../icons/IconBase';
 import GameIcon from '../icons/GameIcon';
 import type { GameIconName } from '../icons/GameIcon';
 import { stampIconName } from '../icons/iconsStamps';
+import { sheenVector, stampSheen, stampSheenIndex } from './stampSheen';
 
 /** Neutral parchment papers — variety lives in the panel wash, not here. */
 export const STAMP_PAPERS = ['#f3ece0', '#efe8dc', '#f2ebe2', '#ece6da'];
@@ -200,6 +205,12 @@ export interface StampArtProps {
   value?: string;
   /** Frame dressing tier — see `stampRarity(index, total)`. */
   rarity?: StampRarity;
+  /**
+   * Sheet position. Drives the foil sheen (angle / width / offset / opacity,
+   * or matte paper on ~1 in 3) so no two neighbouring stamps carry the same
+   * gloss streak. Falls back to a hash of `stampId` when omitted.
+   */
+  index?: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -212,6 +223,7 @@ export default function StampArt({
   paperTint = STAMP_PAPERS[0],
   value = '1',
   rarity = 'common',
+  index,
   style,
 }: StampArtProps) {
   const ids = useMemo(
@@ -233,6 +245,9 @@ export default function StampArt({
   const iconTop = h * (PANEL_CY / 120) - iconSize / 2;
   const rare = rarity === 'rare' || rarity === 'epic';
   const epic = rarity === 'epic';
+  // Per-position foil streak — null on the matte stamps.
+  const sheen = useMemo(() => stampSheen(stampSheenIndex(index, stampId)), [index, stampId]);
+  const sheenDir = sheen ? sheenVector(sheen.angle) : null;
 
   return (
     <View style={[{ width: size, height: h }, style]} pointerEvents="none">
@@ -265,11 +280,31 @@ export default function StampArt({
             <Stop offset="0.7" stopColor="#fff3c0" />
             <Stop offset="1" stopColor="#a97a12" />
           </LinearGradient>
-          <LinearGradient id={ids.sheen} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0.36" stopColor="#ffffff" stopOpacity="0" />
-            <Stop offset="0.5" stopColor="#ffffff" stopOpacity="0.16" />
-            <Stop offset="0.64" stopColor="#ffffff" stopOpacity="0" />
-          </LinearGradient>
+          {sheen && sheenDir && (
+            <LinearGradient
+              id={ids.sheen}
+              x1={String(sheenDir.x1)}
+              y1={String(sheenDir.y1)}
+              x2={String(sheenDir.x2)}
+              y2={String(sheenDir.y2)}
+            >
+              <Stop
+                offset={String(Math.max(0, sheen.center - sheen.width))}
+                stopColor="#ffffff"
+                stopOpacity="0"
+              />
+              <Stop
+                offset={String(sheen.center)}
+                stopColor="#ffffff"
+                stopOpacity={String(sheen.opacity)}
+              />
+              <Stop
+                offset={String(Math.min(1, sheen.center + sheen.width))}
+                stopColor="#ffffff"
+                stopOpacity="0"
+              />
+            </LinearGradient>
+          )}
         </Defs>
 
         {/* Drop shadow so the die-cut paper lifts off the card. */}
@@ -370,8 +405,9 @@ export default function StampArt({
               {`${value}¢`}
             </SvgText>
 
-            {/* Diagonal foil sheen across the whole stamp. */}
-            <Path d={STAMP_OUTLINE} fill={`url(#${ids.sheen})`} />
+            {/* Foil sheen, angled + placed by sheet position; matte stamps
+                (~1 in 3) skip it entirely so the sheet has paper variety. */}
+            {sheen && <Path d={STAMP_OUTLINE} fill={`url(#${ids.sheen})`} />}
 
             {/* Rotated ink postmark overlapping the top-right corner. */}
             <G rotation={-16} origin="82, 19">

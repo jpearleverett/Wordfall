@@ -51,27 +51,30 @@ import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 import { getDecorationIconName } from '../data/library';
 
 /**
- * Reward → illustration-grade render (iconsRewards), keyed on BOTH the
+ * Reward → illustration-grade render + physical size, keyed on BOTH the
  * amount and the tier band.
  *
- * Blind-panel fix: amount alone gave the whole 50-tier ladder four recolored
- * gem clusters and two identical coins, so tier 45 looked exactly like tier
- * 9. The band is the second axis — the SAME amount is drawn richer the later
- * it is won:
+ * Blind-panel fix, pass 2. Pass 1 varied art by BAND only, which is invisible
+ * on the first screenful: tiers 1–10 are all band "early", so 55 / 70 / 240
+ * coins drew the same two glyphs at the same size. Every band now runs its
+ * OWN four-step denomination ramp, and the band only chooses where on the
+ * shared richness ladder that ramp starts:
  *
- *   band       coins                       gems
- *   1–15       lone coin → stack           lone gem → pink trio
- *   16–35      leather pouch → coin pile   aqua cluster → topaz trio
- *   36–50      coin pile → spilling chest  amethyst geode → gem hoard
+ *   ladder  coin: coin → coin+2 loose → stack → pouch → pile → spilling chest
+ *           gem:  gem → pair → pink trio → aqua shelf → topaz plinth → geode → hoard
+ *   early   starts at rung 0   (45/55 → coin, 70/90 → loose trio, 240 → stack, 400 → pouch)
+ *   mid     starts at rung 1/2 (105 → loose trio … 600 → pile)
+ *   late    starts at rung 2/3 (190 → stack … 800 → spilling chest)
  *
- * Mystery boxes escalate bronze → gold chest on the same axis. Hints get the
- * glowing bulb, boosters the sigil crate, rare tiles the crystal. Decoration
- * cosmetics resolve through the decoration icon table so a mapped id shows
- * its own art, with the banner as the season-decoration default. Returns
- * undefined only for cosmetic kinds whose catalog emoji already resolves to
- * distinct art.
+ * `step` (0–3, the position within the band's ramp) is ALSO the size step, so
+ * a 240-coin tile is physically bigger than a 55-coin tile — see ART_SIZE.
+ *
+ * Feature rewards (cosmetic / decoration / rare tile / booster / mystery box)
+ * bypass the ramp: they always draw at hero size on a taller full-bleed card,
+ * so an item never reads at the weight of a small coin drop.
  */
 type TierBand = 'early' | 'mid' | 'late';
+type DenomStep = 0 | 1 | 2 | 3;
 
 function tierBand(tier: number): TierBand {
   if (tier <= 15) return 'early';
@@ -79,30 +82,167 @@ function tierBand(tier: number): TierBand {
   return 'late';
 }
 
-function rewardIconName(reward: PassReward, tier: number): GameIconName | undefined {
+/** Per-band cut points; each band spans the amounts that band actually pays. */
+const COIN_CUTS: Record<TierBand, readonly [number, number, number]> = {
+  early: [60, 200, 350],
+  mid: [120, 160, 500],
+  late: [200, 230, 500],
+};
+const GEM_CUTS: Record<TierBand, readonly [number, number, number]> = {
+  // 10/12 split so the adjacent premium tiers 12 (12 gems) and 13 (11 gems)
+  // land on different renders instead of two identical pairs.
+  early: [10, 12, 16],
+  mid: [14, 19, 24],
+  late: [24, 28, 31],
+};
+const HINT_CUTS: readonly [number, number, number] = [2, 6, 10];
+
+/**
+ * SIZE cuts are GLOBAL, not per band — the icon ramp restarts each band so
+ * every band has four looks, but physical size must stay monotone in value
+ * across the whole ladder or a 105-coin tier-16 tile would render smaller
+ * than a 90-coin tier-13 one.
+ */
+const COIN_SIZE_CUTS: readonly [number, number, number] = [80, 180, 400];
+const GEM_SIZE_CUTS: readonly [number, number, number] = [10, 18, 26];
+const HINT_SIZE_CUTS: readonly [number, number, number] = [2, 6, 10];
+
+function denomStep(amount: number, cuts: readonly [number, number, number]): DenomStep {
+  if (amount >= cuts[2]) return 3;
+  if (amount >= cuts[1]) return 2;
+  if (amount >= cuts[0]) return 1;
+  return 0;
+}
+
+/**
+ * "Season Decoration" is minted for ten different tiers under ids
+ * (`season_deco_N`) that the decoration icon table does not map, so they all
+ * fell through to one banner render. Rotate them over a grandeur-ordered set
+ * instead, so tiers 3 / 7 / 11 are three different objects.
+ */
+const SEASON_DECOR_ROTATION: readonly GameIconName[] = [
+  'fernPot', 'lampBrass', 'bookendOak', 'bannerDecor', 'candleDecor', 'paperLantern',
+  'goldenShelf', 'clockPendulum', 'chandelierDecor', 'crystalDisplay', 'statueThinker',
+  'seasonThrone',
+];
+
+/** Named season cosmetics that deserve bespoke art rather than a rotation slot. */
+const SEASON_COSMETIC_ICONS: Record<string, GameIconName> = {
+  deco_season_master: 'wordThrone',
+};
+
+/** Shared richness ladders — index = band base + denomination step. */
+const COIN_LADDER: readonly GameIconName[] = [
+  'coinSmall', 'coinTrioLoose', 'coinStack', 'coinPouch', 'coinPile', 'coinChestSpill',
+];
+const GEM_LADDER: readonly GameIconName[] = [
+  'gemSingle', 'gemPair', 'gemCluster', 'gemCyan', 'gemGoldTrio', 'gemViolet', 'gemHoard',
+];
+const COIN_BASE: Record<TierBand, number> = { early: 0, mid: 1, late: 2 };
+const GEM_BASE: Record<TierBand, number> = { early: 0, mid: 2, late: 3 };
+
+function rung(ladder: readonly GameIconName[], base: number, step: DenomStep): GameIconName {
+  return ladder[Math.min(base + step, ladder.length - 1)];
+}
+
+/** Reward kinds that are ITEMS, not currency — hero art + taller card. */
+function isFeatureReward(reward: PassReward): boolean {
+  return (
+    reward.type === 'cosmetic' ||
+    reward.type === 'rare_tile' ||
+    reward.type === 'booster' ||
+    reward.type === 'mystery_box'
+  );
+}
+
+interface RewardArtSpec {
+  name?: GameIconName;
+  /** Global value step (0–3) → one of four art sizes. */
+  sizeStep: DenomStep;
+  feature: boolean;
+  /** Eyebrow above the label on feature cards ("RARE TILE", "DECORATION"…). */
+  tag?: string;
+}
+
+function decorationIcon(cosmeticId: string, tier: number): GameIconName {
+  const bespoke = SEASON_COSMETIC_ICONS[cosmeticId];
+  if (bespoke) return bespoke;
+  const resolved = getDecorationIconName(cosmeticId);
+  if (resolved !== 'chest') return resolved;
+  return SEASON_DECOR_ROTATION[Math.floor(tier / 4) % SEASON_DECOR_ROTATION.length];
+}
+
+function rewardArtSpec(reward: PassReward, tier: number): RewardArtSpec {
   const amount = reward.amount ?? 0;
   const band = tierBand(tier);
   if (reward.type === 'coins') {
-    if (band === 'early') return amount >= 200 ? 'coinStack' : 'coinSmall';
-    if (band === 'mid') return amount >= 300 ? 'coinPile' : 'coinPouch';
-    return amount >= 200 ? 'coinChestSpill' : 'coinPile';
+    const step = denomStep(amount, COIN_CUTS[band]);
+    return {
+      name: rung(COIN_LADDER, COIN_BASE[band], step),
+      sizeStep: denomStep(amount, COIN_SIZE_CUTS),
+      feature: false,
+    };
   }
   if (reward.type === 'gems') {
-    if (band === 'early') return amount >= 15 ? 'gemCluster' : 'gemSingle';
-    if (band === 'mid') return amount >= 20 ? 'gemGoldTrio' : 'gemCyan';
-    return amount >= 25 ? 'gemHoard' : 'gemViolet';
+    const step = denomStep(amount, GEM_CUTS[band]);
+    return {
+      name: rung(GEM_LADDER, GEM_BASE[band], step),
+      sizeStep: denomStep(amount, GEM_SIZE_CUTS),
+      feature: false,
+    };
   }
-  if (reward.type === 'hints') return 'hintBulbReward';
-  if (reward.type === 'booster') return 'boosterCrate';
+  if (reward.type === 'hints') {
+    const step = denomStep(amount, HINT_CUTS);
+    return {
+      name: step === 0 ? 'hintBulbReward' : 'hintBulbTrio',
+      sizeStep: denomStep(amount, HINT_SIZE_CUTS),
+      feature: false,
+    };
+  }
+  if (reward.type === 'booster') {
+    return {
+      name: amount >= 2 ? 'boosterCrateDuo' : 'boosterCrate',
+      sizeStep: 3,
+      feature: true,
+      tag: amount >= 2 ? 'BOOSTERS' : 'BOOSTER',
+    };
+  }
   if (reward.type === 'mystery_box') {
-    return amount >= 2 || band === 'late' ? 'chestGold' : 'chestBronze';
+    return {
+      name: amount >= 2 || band === 'late' ? 'chestGold' : 'chestBronze',
+      sizeStep: 3,
+      feature: true,
+      tag: 'MYSTERY',
+    };
   }
-  if (reward.type === 'rare_tile') return 'cascadeCrystal';
-  if (reward.type === 'cosmetic' && reward.cosmeticId && /(^|_)deco/.test(reward.cosmeticId)) {
-    const resolved = getDecorationIconName(reward.cosmeticId);
-    return resolved === 'chest' ? 'bannerDecor' : resolved;
+  if (reward.type === 'rare_tile') {
+    return { name: 'cascadeCrystal', sizeStep: 3, feature: true, tag: 'RARE TILE' };
   }
-  return undefined;
+  // Cosmetics: decorations resolve through the decoration icon table, then
+  // through the season rotation for the unmapped `season_deco_N` ids; other
+  // cosmetic kinds fall back to the catalog emoji (medal / crown), which
+  // already resolves to distinct art.
+  const decoration = reward.cosmeticId ? /(^|_)deco/.test(reward.cosmeticId) : false;
+  return {
+    name: decoration && reward.cosmeticId
+      ? decorationIcon(reward.cosmeticId, tier)
+      : undefined,
+    sizeStep: 3,
+    feature: true,
+    tag: decoration ? 'DECORATION' : 'COSMETIC',
+  };
+}
+
+/**
+ * Four value sizes for currency art + one hero size for items. This is the
+ * lever the panel asked for: size tracks VALUE, so the ladder escalates
+ * physically and not just chromatically.
+ */
+const ART_SIZE: readonly [number, number, number, number] = [46, 56, 66, 76];
+const HERO_ART_SIZE = 84;
+
+function rewardArtSize(spec: RewardArtSpec): number {
+  return spec.feature ? HERO_ART_SIZE : ART_SIZE[spec.sizeStep];
 }
 
 // ─── Season theming ────────────────────────────────────────────────────────
@@ -406,10 +546,10 @@ function rewardRarity(reward: PassReward, tier: number): RewardRarity {
 }
 
 /**
- * Frame recipe per rarity: border weight/colour, card fill gradient, outer
- * glow strength and reward-art scale. Art grows with rarity so the biggest
- * payouts physically dominate the card (the freed space from the deleted
- * per-card LOCKED pill goes straight into the illustration).
+ * Frame recipe per rarity: border weight/colour, card fill gradient and outer
+ * glow strength. Art SIZE deliberately no longer lives here — rarity is a
+ * four-value axis while payouts span 45 → 800 coins, so size is driven by
+ * `rewardArtSize` (value) and the frame only supplies the chrome.
  */
 const RARITY_FRAME: Record<
   RewardRarity,
@@ -420,7 +560,6 @@ const RARITY_FRAME: Record<
     fill: readonly [string, string];
     glowOpacity: number;
     glowRadius: number;
-    artSize: number;
   }
 > = {
   common: {
@@ -430,7 +569,6 @@ const RARITY_FRAME: Record<
     fill: ['rgba(38,17,70,0.88)', 'rgba(19,7,36,0.96)'],
     glowOpacity: 0,
     glowRadius: 0,
-    artSize: 58,
   },
   uncommon: {
     accent: COLORS.cyan,
@@ -439,7 +577,6 @@ const RARITY_FRAME: Record<
     fill: ['rgba(0,120,155,0.26)', 'rgba(19,7,38,0.96)'],
     glowOpacity: 0.24,
     glowRadius: 9,
-    artSize: 60,
   },
   rare: {
     accent: COLORS.purple,
@@ -448,7 +585,6 @@ const RARITY_FRAME: Record<
     fill: ['rgba(142,44,205,0.44)', 'rgba(29,8,56,0.97)'],
     glowOpacity: 0.42,
     glowRadius: 12,
-    artSize: 62,
   },
   legendary: {
     accent: COLORS.gold,
@@ -457,7 +593,6 @@ const RARITY_FRAME: Record<
     fill: ['rgba(255,170,24,0.32)', 'rgba(46,17,44,0.97)'],
     glowOpacity: 0.58,
     glowRadius: 14,
-    artSize: 64,
   },
 };
 
@@ -978,6 +1113,9 @@ const LaneCard = memo(function LaneCard({
   const rarity = rewardRarity(reward, tier);
   const frame = RARITY_FRAME[rarity];
   const laneAccent = frame.accent;
+  // Art identity + physical size, both driven by what the reward is WORTH.
+  const spec = rewardArtSpec(reward, tier);
+  const artSize = rewardArtSize(spec);
   // Lock strength scales with distance (see LOCK_STEP). A reached-but-
   // premium-gated card sits at 'near' so the gold lane reads as bought-not-
   // earned rather than as unreachable.
@@ -1010,6 +1148,10 @@ const LaneCard = memo(function LaneCard({
       }
       style={[
         styles.laneCard,
+        // Items get a taller shell with a full-bleed art area on top, so a
+        // decoration / rare tile / booster / mystery box can never read at
+        // the same weight as a 55-coin drop.
+        spec.feature && styles.laneCardFeature,
         {
           backgroundColor: theme.panel,
           borderColor: fadeRgba(frame.border, step.borderAlpha),
@@ -1032,6 +1174,24 @@ const LaneCard = memo(function LaneCard({
           { opacity: step.fillOpacity },
         ]}
       />
+      {/* Full-bleed art plate for item rewards — the illustration sits in its
+          own lit stage that runs edge to edge, currency art sits on the flat
+          card. That difference is the primary weight cue. */}
+      {spec.feature && (
+        <>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[frame.accent + '33', frame.accent + '0F', 'rgba(0,0,0,0)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={[styles.featureArtWell, { opacity: step.fillOpacity }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.featureWellEdge, { backgroundColor: fadeRgba(frame.border, step.borderAlpha) }]}
+          />
+        </>
+      )}
       {upNext && (
         <View
           pointerEvents="none"
@@ -1071,6 +1231,7 @@ const LaneCard = memo(function LaneCard({
       <View
         style={[
           styles.rewardMedallionWrap,
+          spec.feature && styles.rewardMedallionWrapFeature,
           step.artOpacity < 1 && { opacity: step.artOpacity },
         ]}
       >
@@ -1079,8 +1240,8 @@ const LaneCard = memo(function LaneCard({
             <View style={[styles.gildedRingInner, muted && styles.gildedRingInnerMuted]}>
               <RewardArt
                 glyph={reward.icon}
-                name={rewardIconName(reward, tier)}
-                size={frame.artSize - 8}
+                name={spec.name}
+                size={artSize - 10}
                 glow={COLORS.gold}
               />
             </View>
@@ -1088,8 +1249,8 @@ const LaneCard = memo(function LaneCard({
         ) : (
           <RewardArt
             glyph={reward.icon}
-            name={rewardIconName(reward, tier)}
-            size={frame.artSize}
+            name={spec.name}
+            size={artSize}
             glow={laneAccent}
           />
         )}
@@ -1108,7 +1269,25 @@ const LaneCard = memo(function LaneCard({
           </View>
         )}
       </View>
-      <Text style={[styles.rewardLabel, { color: step.labelColor }]} numberOfLines={2}>
+      {spec.tag && (
+        <Text
+          style={[
+            styles.featureTag,
+            { color: frame.accent, opacity: depth === 'distant' ? 0.6 : 1 },
+          ]}
+          numberOfLines={1}
+        >
+          {spec.tag}
+        </Text>
+      )}
+      <Text
+        style={[
+          styles.rewardLabel,
+          spec.feature && styles.rewardLabelFeature,
+          { color: step.labelColor },
+        ]}
+        numberOfLines={2}
+      >
         {reward.label}
       </Text>
 
@@ -1833,6 +2012,38 @@ const styles = StyleSheet.create({
     // instead of blending into the floor grid behind it.
     backgroundColor: 'rgba(12,4,28,0.96)',
   },
+  // Item rewards (cosmetic / decoration / rare tile / booster / mystery box)
+  // stand ~40pt taller with hero art in a full-bleed plate. Rows use
+  // alignItems:'stretch', so the partner lane matches height and the ladder
+  // still reads as a grid — it just has two card WEIGHTS instead of one.
+  laneCardFeature: {
+    minHeight: 168,
+    paddingTop: 18,
+    paddingBottom: 12,
+  },
+  featureArtWell: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 112,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+  },
+  featureWellEdge: {
+    position: 'absolute',
+    top: 112,
+    left: 12,
+    right: 12,
+    height: 1,
+  },
+  featureTag: {
+    fontFamily: FONTS.display,
+    fontSize: 8,
+    letterSpacing: 2,
+    marginTop: 4,
+    marginBottom: 1,
+  },
   laneCardClaimed: {
     opacity: 0.62,
   },
@@ -1883,6 +2094,11 @@ const styles = StyleSheet.create({
   },
   rewardMedallionWrap: {
     marginBottom: 6,
+  },
+  // Hero art sits inside the full-bleed plate; the extra bottom margin keeps
+  // the plate's hairline clear of the type tag underneath it.
+  rewardMedallionWrapFeature: {
+    marginBottom: 10,
   },
   // Gilded double ring wrapping landmark-tier reward art (10/20/30/40/50).
   gildedRing: {
@@ -1951,6 +2167,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 15,
     marginTop: 2,
+  },
+  rewardLabelFeature: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    marginTop: 0,
   },
   claimButton: {
     alignSelf: 'stretch',

@@ -1334,6 +1334,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                 paperTint={STAMP_PAPERS[stampIdx % STAMP_PAPERS.length]}
                 value={String(stampIdx + 1)}
                 rarity={stampRarity(stampIdx, stamps.length)}
+                index={stampIdx}
                 style={styles.stampMedallion}
               />
               <Text

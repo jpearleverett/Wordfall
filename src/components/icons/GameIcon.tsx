@@ -67,7 +67,8 @@ import {
   BoosterCrateIcon, ChestBronzeIcon, ChestGoldIcon, CoinChestSpillIcon,
   CoinPileIcon, CoinPouchIcon, CoinSmallIcon, CoinStackIcon, GemClusterIcon,
   GemCyanIcon, GemGoldTrioIcon, GemHoardIcon, GemSingleIcon, GemVioletIcon,
-  HintBulbRewardIcon,
+  HintBulbRewardIcon, BoosterCrateDuoIcon, CoinTrioLooseIcon, GemPairIcon,
+  HintBulbTrioIcon,
 } from './iconsRewards';
 import {
   StampAcornIcon, StampAmberGemIcon, StampAppleIcon, StampAuroraIcon,
@@ -155,6 +156,9 @@ const REGISTRY = {
   gemCyan: GemCyanIcon, gemGoldTrio: GemGoldTrioIcon, gemViolet: GemVioletIcon,
   hintBulbReward: HintBulbRewardIcon, boosterCrate: BoosterCrateIcon,
   chestBronze: ChestBronzeIcon, chestGold: ChestGoldIcon,
+  // denomination in-between steps (single → PAIR/LOOSE TRIO → stack/cluster)
+  coinTrioLoose: CoinTrioLooseIcon, gemPair: GemPairIcon,
+  boosterCrateDuo: BoosterCrateDuoIcon, hintBulbTrio: HintBulbTrioIcon,
   // seasonal stamp motifs (iconsStamps) — art matched to each stamp's NAME
   stampBlossom: StampBlossomBranchIcon, stampSunflower: StampSunflowerIcon,
   stampFlowerCrown: StampFlowerCrownIcon, stampSeedling: StampSeedlingIcon,

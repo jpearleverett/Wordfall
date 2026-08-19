@@ -688,3 +688,200 @@ export function ChestGoldIcon({ size = 24, accent = GOLD }: IconProps) {
     </Svg>
   );
 }
+
+/**
+ * One upright coin with two loose coins scattered at its foot — the step
+ * BETWEEN a lone coin and a tidy stack. Deliberately an asymmetric, casual
+ * silhouette so a mid-small payout can never read as a resized single coin.
+ */
+export function CoinTrioLooseIcon({ size = 24, accent = GOLD }: IconProps) {
+  const face = useMemo(() => gradId('ctlF'), []);
+  const top = useMemo(() => gradId('ctlT'), []);
+  const side = useMemo(() => gradId('ctlS'), []);
+  const glow = useMemo(() => gradId('ctlG'), []);
+  const edge = rim(accent);
+  const ring = shade(accent, -26);
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={face} from={shade(accent, 58)} to={shade(accent, -46)} />
+      <DuoGrad id={top} from={shade(accent, 62)} to={shade(accent, 4)} />
+      <DuoGrad id={side} from={shade(accent, -8)} to={shade(accent, -52)} />
+      <GlowGrad id={glow} color="#ffd24d" />
+      <Ground rx={7.6} cy={21.5} ry={1.25} />
+      <Ellipse cx="12" cy="13.2" rx="9.8" ry="7.4" fill={`url(#${glow})`} opacity="0.5" />
+      {/* two loose coins lying flat at the foot */}
+      <CoinCyl cx={6.1} y={17.5} rx={3.7} h={1.6} top={`url(#${top})`} side={`url(#${side})`} edge={edge} ring={ring} />
+      <CoinCyl cx={17.6} y={18.1} rx={3.4} h={1.5} top={`url(#${top})`} side={`url(#${side})`} edge={edge} ring={ring} />
+      {/* upright coin leaning back, face-on */}
+      <G transform="rotate(-9 12 10.6)">
+        <Circle cx="12" cy="10.6" r="6.5" fill={`url(#${face})`} stroke={edge} strokeWidth="1.05" />
+        <G stroke={shade(accent, -30)} strokeWidth="0.5" strokeLinecap="round" opacity="0.8">
+          <Path d="M12 4.9v.9M12 15.4v.9M5.5 10.6h.9M17.6 10.6h.9M7.6 6.2l.65.65M15.75 12.95l.65.65M16.4 6.2l-.65.65M8.25 12.95l-.65.65" />
+        </G>
+        <Circle cx="12" cy="10.6" r="4.6" fill={shade(accent, 8)} opacity="0.35" />
+        <Circle cx="12" cy="10.6" r="4.6" fill="none" stroke={shade(accent, -34)} strokeWidth="0.65" />
+        <Path
+          d="M12 7.7l.9 1.8 2 .3-1.45 1.4.34 2L12 12.25l-1.79.95.34-2L9.1 9.8l2-.3Z"
+          fill={shade(accent, 34)}
+          stroke={shade(accent, -38)}
+          strokeWidth="0.45"
+          strokeLinejoin="round"
+        />
+        <Path d="M7.5 8c.85-1.75 2.2-2.75 4-3.1" fill="none" stroke={HILITE} strokeWidth="0.9" strokeLinecap="round" />
+      </G>
+      <Spark x={19.4} y={6.4} s={1} />
+      <Spark x={4.4} y={7.6} s={0.7} o={0.7} />
+    </Svg>
+  );
+}
+
+/**
+ * Two stones raised on a low stone plinth — the step BETWEEN a lone gem and
+ * a three-gem cluster. Paired silhouette (tall + short, two hues) so a
+ * two-step payout is legible at a glance without counting facets.
+ */
+export function GemPairIcon({ size = 24, accent = GEM_PINK }: IconProps) {
+  const main = useMemo(() => gradId('gprM'), []);
+  const alt = useMemo(() => gradId('gprA'), []);
+  const base = useMemo(() => gradId('gprB'), []);
+  const glow = useMemo(() => gradId('gprG'), []);
+  const STONE = '#3c2a58';
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={main} from={shade(accent, 60)} to={shade(accent, -46)} />
+      <DuoGrad id={alt} from={shade(GEM_CYAN, 58)} to={shade(GEM_CYAN, -48)} />
+      <DuoGrad id={base} from={shade(STONE, 30)} to={shade(STONE, -34)} />
+      <GlowGrad id={glow} color={shade(accent, 66)} />
+      <Ground rx={7.8} cy={21.6} ry={1.2} />
+      <Ellipse cx="12" cy="12.8" rx="9.6" ry="7.6" fill={`url(#${glow})`} opacity="0.55" />
+      {/* stone plinth */}
+      <Path
+        d="M4.4 20.6l1.9-2.7h11.4l1.9 2.7Z"
+        fill={`url(#${base})`}
+        stroke={rim(STONE)}
+        strokeWidth="0.85"
+        strokeLinejoin="round"
+      />
+      <Path d="M7.1 19.4h5.2" stroke={shade(STONE, 34)} strokeWidth="0.55" strokeLinecap="round" opacity="0.7" />
+      {/* tall stone + short partner */}
+      <MiniGem cx={9.3} y={6.6} w={8.6} h={11.2} fill={`url(#${main})`} edge={rim(accent)} dark={shade(accent, -44)} lite={shade(accent, 56)} />
+      <MiniGem cx={16.6} y={10.9} w={6.2} h={7} fill={`url(#${alt})`} edge={rim(GEM_CYAN)} dark={shade(GEM_CYAN, -44)} lite={shade(GEM_CYAN, 54)} />
+      <Spark x={17.9} y={5} s={1.05} />
+      <Spark x={4.5} y={9.6} s={0.72} o={0.72} />
+    </Svg>
+  );
+}
+
+/**
+ * Two stacked crates — the multi-booster payout. A second body (not a bigger
+ * one) so "2 Boosters" can never read as a resized "1 Booster".
+ */
+export function BoosterCrateDuoIcon({ size = 24, accent = '#ffd24d' }: IconProps) {
+  const front = useMemo(() => gradId('bcdF'), []);
+  const back = useMemo(() => gradId('bcdK'), []);
+  const bolt = useMemo(() => gradId('bcdL'), []);
+  const glow = useMemo(() => gradId('bcdG'), []);
+  const IRON = '#8a8fa8';
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={front} from={shade(WOOD, 34)} to={shade(WOOD, -34)} />
+      <DuoGrad id={back} from={shade(WOOD, 6)} to={shade(WOOD, -52)} />
+      <DuoGrad id={bolt} from={shade(accent, 24)} to={shade(accent, -52)} />
+      <GlowGrad id={glow} color="#ffd24d" />
+      <Ground rx={8.8} cy={21.6} ry={1.3} />
+      {/* back crate — smaller, cooler, set behind and to the left */}
+      <Rect x="2.3" y="9.9" width="9.6" height="8.4" rx="1" fill={`url(#${back})`} stroke={rim(WOOD)} strokeWidth="0.9" />
+      <Rect x="1.8" y="8.5" width="10.6" height="2" rx="0.7" fill={shade(WOOD, -4)} stroke={rim(WOOD)} strokeWidth="0.8" />
+      <Path d="M2.5 13.6h9.2" stroke={shade(WOOD, -34)} strokeWidth="0.55" />
+      <Path d="M3.3 9.3h3.1" stroke={shade(WOOD, 26)} strokeWidth="0.5" strokeLinecap="round" />
+      {/* front crate */}
+      <Rect x="9.2" y="11.5" width="12.4" height="8.9" rx="1.1" fill={`url(#${front})`} stroke={rim(WOOD)} strokeWidth="1" />
+      <Rect x="8.6" y="9.8" width="13.6" height="2.2" rx="0.8" fill={shade(WOOD, 16)} stroke={rim(WOOD)} strokeWidth="0.9" />
+      <Path d="M9.4 15.7h12" stroke={shade(WOOD, -28)} strokeWidth="0.6" />
+      <Path d="M9.8 10.5h3.6M15.4 19.2h4.4" fill="none" stroke={shade(WOOD, 24)} strokeWidth="0.5" strokeLinecap="round" />
+      <Path
+        d="M9.2 13.6v-1.4l1.5-.1M21.6 13.6v-1.4l-1.5-.1M9.2 18.4v1.5l1.5.1M21.6 18.4v1.5l-1.5.1"
+        fill="none"
+        stroke={IRON}
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+      {/* bolt sigil on the front crate */}
+      <Circle cx="15.4" cy="16" r="3.9" fill={`url(#${glow})`} opacity="0.7" />
+      <Circle cx="15.4" cy="16" r="3.2" fill="rgba(16,6,30,0.6)" stroke="#ffd24d" strokeWidth="0.7" />
+      <Path
+        d="M16.3 13.7l-2.2 2.8h1.5l-1 2.5 2.4-3.1h-1.5Z"
+        fill={`url(#${bolt})`}
+        stroke="#c8871a"
+        strokeWidth="0.5"
+        strokeLinejoin="round"
+      />
+      <Spark x={19.6} y={5.4} s={0.95} />
+      <Spark x={4.6} y={5.6} s={0.65} o={0.7} />
+    </Svg>
+  );
+}
+
+/** One bulb + two smaller bulbs on a brass rail — the multi-hint pack. */
+export function HintBulbTrioIcon({ size = 24, accent = '#ffd24d' }: IconProps) {
+  const glass = useMemo(() => gradId('hbtB'), []);
+  const brass = useMemo(() => gradId('hbtM'), []);
+  const glow = useMemo(() => gradId('hbtG'), []);
+  const g = `url(#${glass})`;
+  const m = `url(#${brass})`;
+  const bulb = (cx: number, cy: number, r: number) => (
+    <G>
+      <Circle cx={cx} cy={cy} r={r} fill={g} stroke="#c8871a" strokeWidth="0.8" />
+      <Path
+        d={`M${cx - r * 0.42} ${cy + r * 0.56}l${r * 0.34} -${r * 0.42} ${r * 0.28} ${r * 0.34} ${r * 0.26} -${r * 0.34} ${r * 0.34} ${r * 0.42}`}
+        fill="none"
+        stroke="#a85c10"
+        strokeWidth="0.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d={`M${cx - r * 0.6} ${cy - r * 0.3}c.4-.7 1-1.1 1.9-1.3`}
+        fill="none"
+        stroke={HILITE}
+        strokeWidth="0.8"
+        strokeLinecap="round"
+      />
+      <Rect
+        x={cx - r * 0.46}
+        y={cy + r * 0.82}
+        width={r * 0.92}
+        height={r * 0.7}
+        rx={r * 0.2}
+        fill={m}
+        stroke={rim(BRASS)}
+        strokeWidth="0.65"
+      />
+    </G>
+  );
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={glass} from={shade(accent, 56)} to={shade(accent, -22)} />
+      <DuoGrad id={brass} from={shade(BRASS, 46)} to={shade(BRASS, -46)} />
+      <GlowGrad id={glow} color="#ffe89a" />
+      <Ground rx={8.6} cy={21.6} ry={1.3} />
+      <Ellipse cx="12" cy="11" rx="10.2" ry="8.2" fill={`url(#${glow})`} opacity="0.75" />
+      {/* rays off the tall bulb */}
+      <Path
+        d="M12 1.1v1.6M6.4 3.4l1.1 1.15M17.6 3.4l-1.1 1.15"
+        stroke={shade(accent, 26)}
+        strokeWidth="0.85"
+        strokeLinecap="round"
+        opacity="0.9"
+      />
+      {/* brass display rail */}
+      <Rect x="3.3" y="18.3" width="17.4" height="2.4" rx="0.85" fill={m} stroke={rim(BRASS)} strokeWidth="0.85" />
+      <Path d="M4.5 19.3h4.9" stroke={shade(BRASS, 48)} strokeWidth="0.5" strokeLinecap="round" />
+      {bulb(5.5, 13.2, 3.2)}
+      {bulb(18.5, 13.6, 3)}
+      {bulb(12, 8.6, 4.7)}
+      <Spark x={19.8} y={6} s={0.95} />
+      <Spark x={4.4} y={7} s={0.68} o={0.7} />
+    </Svg>
+  );
+}
