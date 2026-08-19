@@ -215,6 +215,111 @@ const ClearGhostLayer = React.memo(forwardRef<GhostLayerHandle, { cellSize: numb
   },
 ));
 
+// ── Idle tile glint ─────────────────────────────────────────────────────────
+// Ambient sparkle: every 2.8–4.2s (randomized) one random occupied cell gets
+// a 650ms four-point glint that scales 0 → 1 → 0 while fading. Pure
+// decoration — pointerEvents none, never mounted under reduce motion (the
+// parent gates it), native-driven transform/opacity only. Cell coordinates
+// come from the same cellBounds array the hit-test and ghost layer use, with
+// the same + CELL_GAP / 2 inset GhostTile applies.
+
+interface GlintSpec {
+  key: number;
+  x: number;
+  y: number;
+}
+
+const GLINT_DURATION_MS = 650;
+const GLINT_MIN_GAP_MS = 2800;
+const GLINT_GAP_JITTER_MS = 1400;
+
+const GlintStar = React.memo(function GlintStar({ glint, cellSize }: { glint: GlintSpec; cellSize: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    anim.setValue(0);
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: GLINT_DURATION_MS,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [glint.key]);
+
+  const starSize = Math.max(14, cellSize * 0.55);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: glint.x + CELL_GAP / 2 + (cellSize - starSize) / 2,
+        top: glint.y + CELL_GAP / 2 + (cellSize - starSize) / 2,
+        width: starSize,
+        height: starSize,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: anim.interpolate({ inputRange: [0, 0.35, 0.65, 1], outputRange: [0, 1, 1, 0] }),
+        transform: [{ scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 0] }) }],
+      }}
+    >
+      {/* Vertical + horizontal rays plus a rotated square core = 4-point star. */}
+      <View style={{ position: 'absolute', width: 2, height: starSize, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.95)' }} />
+      <View style={{ position: 'absolute', width: starSize, height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.95)' }} />
+      <View style={{
+        position: 'absolute',
+        width: starSize * 0.28,
+        height: starSize * 0.28,
+        backgroundColor: '#ffffff',
+        transform: [{ rotate: '45deg' }],
+      }} />
+    </Animated.View>
+  );
+});
+
+const IdleGlintLayer = React.memo(function IdleGlintLayer({
+  cellBounds,
+  cellSize,
+}: {
+  cellBounds: { x: number; y: number }[];
+  cellSize: number;
+}) {
+  const [glint, setGlint] = useState<GlintSpec | null>(null);
+  // Bounds live in a ref so the rescheduling timer chain never restarts on
+  // grid changes — it just reads the freshest occupied-cell list at fire time.
+  const boundsRef = useRef(cellBounds);
+  boundsRef.current = cellBounds;
+  const counterRef = useRef(0);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        if (cancelled) return;
+        const bounds = boundsRef.current;
+        if (bounds.length > 0) {
+          const b = bounds[Math.floor(Math.random() * bounds.length)];
+          counterRef.current += 1;
+          setGlint({ key: counterRef.current, x: b.x, y: b.y });
+        }
+        schedule();
+      }, GLINT_MIN_GAP_MS + Math.random() * GLINT_GAP_JITTER_MS);
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
+  if (!glint) return null;
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <GlintStar glint={glint} cellSize={cellSize} />
+    </View>
+  );
+});
+
 function GameGridImpl({
   grid,
   selectedCells,
@@ -503,7 +608,10 @@ function GameGridImpl({
       // Distance-scaled fall time (√d, like real gravity) with an
       // accelerating ease-in, then a small directional rebound whose
       // size scales with impact distance. Reads as: drop, thud, settle.
-      const fallDur = Math.min(620, 185 + 150 * Math.sqrt(rowsFallen));
+      // Floor 185 → 260, cap 620 → 720 (blind motion review round 2: "the
+      // fall resolves between frames" — one-row falls finished inside a
+      // single 250ms sample window, so short falls read as teleports).
+      const fallDur = Math.min(720, 260 + 160 * Math.sqrt(rowsFallen));
       const bounceMag = Math.min(9, dist * 0.055);
       const bx = f.dx === 0 ? 0 : Math.sign(f.dx) * bounceMag;
       const by = f.dy === 0 ? 0 : Math.sign(f.dy) * bounceMag;
@@ -958,6 +1066,13 @@ function GameGridImpl({
               ))}
             </View>
           </GestureDetector>
+
+          {/* Ambient idle glint — a periodic one-shot sparkle on a random
+              occupied tile so an untouched board still shimmers. Unmounted
+              entirely under reduce motion (no timer, no loop). */}
+          {!reduceMotion && (
+            <IdleGlintLayer cellBounds={cellBounds} cellSize={cellSize} />
+          )}
 
           {/* Gravity direction arrow indicator */}
           {gravityDirection && gravityDirection !== 'down' && (

@@ -374,16 +374,17 @@ const EMPTY_STRING_LIST: string[] = [];
 function WordClearParticle({ delay, startX, startY }: { delay: number; startX: number; startY: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   const angle = useRef(Math.random() * Math.PI * 2).current;
-  // Travel + size lifted ~40% (blind motion review: "clears lack particles" —
-  // they existed but were too small/brief to register at a glance).
-  const distance = useRef(55 + Math.random() * 85).current;
-  const size = useRef(6 + Math.random() * 8).current;
+  // Travel + size lifted again (blind motion review round 2: "particle
+  // energy is sparse" — bigger, brighter, farther so bursts still register
+  // at 250ms frame sampling).
+  const distance = useRef(65 + Math.random() * 85).current;
+  const size = useRef(8 + Math.random() * 8).current;
   const color = useRef(PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)]).current;
 
   useEffect(() => {
     Animated.sequence([
       Animated.delay(delay),
-      Animated.timing(anim, { toValue: 1, duration: 560, useNativeDriver: true }),
+      Animated.timing(anim, { toValue: 1, duration: 620, useNativeDriver: true }),
     ]).start();
   }, []);
 
@@ -396,13 +397,72 @@ function WordClearParticle({ delay, startX, startY }: { delay: number; startX: n
       height: size,
       borderRadius: size / 2,
       backgroundColor: color,
-      opacity: anim.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
+      alignItems: 'center',
+      justifyContent: 'center',
+      // Colored glow halo so the mote reads mid-flight, not just at spawn.
+      shadowColor: color,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.9,
+      shadowRadius: 6,
+      opacity: anim.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 1, 0] }),
       transform: [
         { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * distance] }) },
         { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * distance] }) },
-        { scale: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.3, 1.2, 0.2] }) },
+        { scale: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.4, 1.25, 0.25] }) },
       ],
-    }} />
+    }}>
+      {/* Hot white core — brighter center makes each mote read as a spark. */}
+      <View style={{
+        width: size * 0.45,
+        height: size * 0.45,
+        borderRadius: size * 0.225,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+      }} />
+    </Animated.View>
+  );
+}
+
+// Radial flash ring — ONE expanding circle at the centroid of a cleared
+// word, spawned alongside the bloom particles. Scales 0.3 → 1.8 while
+// fading 0.85 → 0 over 500ms (ease-out) so the clear moment reads as a
+// shockwave even at coarse frame sampling. Decorative only; rendered inside
+// the pointerEvents="none" particle layer, and only reached through the
+// same reduce-motion-gated dispatch sites as spawnTileBloom.
+const RING_BASE_SIZE = 120;
+const RING_DURATION_MS = 500;
+
+function ClearFlashRing({ x, y }: { x: number; y: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: RING_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: x - RING_BASE_SIZE / 2,
+        top: y - RING_BASE_SIZE / 2,
+        width: RING_BASE_SIZE,
+        height: RING_BASE_SIZE,
+        borderRadius: RING_BASE_SIZE / 2,
+        borderWidth: 3,
+        borderColor: 'rgba(255,236,160,0.95)',
+        shadowColor: '#ffd700',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 10,
+        opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 0] }),
+        transform: [
+          { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.8] }) },
+        ],
+      }}
+    />
   );
 }
 
@@ -417,9 +477,17 @@ interface ClearParticleEntry {
   y: number;
 }
 
+interface ClearRingEntry {
+  id: string;
+  x: number;
+  y: number;
+}
+
 export interface ClearParticleLayerHandle {
   push(entries: ClearParticleEntry[]): void;
   removeIds(ids: string[]): void;
+  /** Word-clear flash ring; self-removes after its 500ms animation. */
+  pushRing(entry: ClearRingEntry): void;
 }
 
 interface ClearParticleLayerProps {
@@ -429,6 +497,13 @@ interface ClearParticleLayerProps {
 const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticleLayerProps>(
   function ClearParticleLayerImpl({ style }, ref) {
     const [queue, setQueue] = useState<ClearParticleEntry[]>([]);
+    const [rings, setRings] = useState<ClearRingEntry[]>([]);
+    const ringTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+    useEffect(() => () => {
+      ringTimersRef.current.forEach(clearTimeout);
+      ringTimersRef.current.clear();
+    }, []);
 
     useImperativeHandle(ref, () => ({
       push(entries) {
@@ -440,12 +515,23 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
         const idSet = new Set(ids);
         setQueue(prev => prev.filter(q => !idSet.has(q.id)));
       },
+      pushRing(entry) {
+        setRings(prev => [...prev, entry]);
+        const t = setTimeout(() => {
+          ringTimersRef.current.delete(t);
+          setRings(prev => prev.filter(r => r.id !== entry.id));
+        }, RING_DURATION_MS + 60);
+        ringTimersRef.current.add(t);
+      },
     }), []);
 
-    if (queue.length === 0) return null;
+    if (queue.length === 0 && rings.length === 0) return null;
 
     return (
       <View style={style} pointerEvents="none">
+        {rings.map(r => (
+          <ClearFlashRing key={r.id} x={r.x} y={r.y} />
+        ))}
         {queue.map((p, i) => (
           <WordClearParticle
             key={p.id}
@@ -1095,7 +1181,8 @@ function GameScreenImpl({
 
   // Hard cap on simultaneously-rendered bloom particles. Keeps the queue
   // bounded so a 10-letter word with perTile=2 can't balloon past this limit.
-  const MAX_BLOOM_PARTICLES = 24;
+  // 24 → 36 (blind motion review round 2: "particle energy is sparse").
+  const MAX_BLOOM_PARTICLES = 36;
 
   // Map a grid (row, col) to pixel-space coordinates inside the particle
   // container (which is `absoluteFillObject` inside `gridArea`). Mirrors the
@@ -1164,6 +1251,31 @@ function GameScreenImpl({
       });
     },
     [cellPositionToScreen, trackTimeout],
+  );
+
+  // One expanding flash ring at the centroid of the cleared cells — a single
+  // "shockwave" beat under the particle burst so the clear moment reads even
+  // between coarse sample frames. Shares spawnTileBloom's Remote Config
+  // kill-switch; reduce-motion gating happens at the dispatch sites, exactly
+  // like spawnTileBloom's calls.
+  const spawnClearRing = useCallback(
+    (cells: CellPosition[]) => {
+      if (cells.length === 0) return;
+      if (!getRemoteBoolean('tileBloomEnabled')) return;
+      let sx = 0;
+      let sy = 0;
+      for (const cell of cells) {
+        const { x, y } = cellPositionToScreen(cell.row, cell.col);
+        sx += x;
+        sy += y;
+      }
+      particleLayerRef.current?.pushRing({
+        id: `ring-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+        x: sx / cells.length,
+        y: sy / cells.length,
+      });
+    },
+    [cellPositionToScreen],
   );
 
   // #5 reduceMotion support
@@ -1494,6 +1606,7 @@ function GameScreenImpl({
           const bigCells = lastSubmittedCellsRef.current;
           if (bigCells.length > 0) {
             spawnTileBloom(bigCells);
+            spawnClearRing(bigCells);
             // Second batch for extra celebratory impact
             trackTimeout(() => spawnTileBloom(bigCells), 250);
           } else {
@@ -1532,6 +1645,7 @@ function GameScreenImpl({
         const cells = lastSubmittedCellsRef.current;
         if (cells.length > 0) {
           spawnTileBloom(cells);
+          spawnClearRing(cells);
         } else {
           const fallbackId = `chain-${Date.now()}`;
           const entry: ClearParticleEntry = { id: fallbackId, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };

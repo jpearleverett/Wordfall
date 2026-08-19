@@ -133,7 +133,7 @@ const RootStack = createStackNavigator();
 // still keeps covered screens from burning frames.
 //
 // Push = spring (stiffness 180 / damping 22, clamped — no overshoot blur)
-// tuned to the in-game ceremony settle feel; pop = 220ms cubic-out so
+// tuned to the in-game ceremony settle feel; pop = 320ms cubic-out so
 // back-nav feels snappier than forward-nav. React Navigation itself honors
 // the OS reduce-motion flag for stack transitions.
 type StackTransitionSpec = NonNullable<StackNavigationOptions['transitionSpec']>;
@@ -155,7 +155,9 @@ const springOpenSpec: StackTransitionSpec['open'] = {
 const timingCloseSpec: StackTransitionSpec['close'] = {
   animation: 'timing',
   config: {
-    duration: 220,
+    // 220 → 320ms: at coarse frame sampling the 220ms pop landed between
+    // frames and read as a hard cut (blind motion review, round 2).
+    duration: 320,
     easing: Easing.out(Easing.cubic),
   },
 };

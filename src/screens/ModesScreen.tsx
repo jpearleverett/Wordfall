@@ -23,6 +23,7 @@ import {
 import { COLORS, GRADIENTS, FONTS, RADIUS, SHADOWS, MODE_CONFIGS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import NeonProgressBar from '../components/common/NeonProgressBar';
+import ScreenEntrance from '../components/ScreenEntrance';
 import { ModeConfig } from '../types';
 import {
   usePlayerStore,
@@ -49,6 +50,37 @@ const MODES = Object.values(MODE_CONFIGS)
     unlockLevel: mode.unlockLevel,
   }))
   .sort((a, b) => a.unlockLevel - b.unlockLevel);
+
+/**
+ * Tab-focus entrance cascade slots (index 0 = the coach banner / header
+ * area). Banner cards (classic / daily / weekly) occupy a full visual row;
+ * grid cards pair up two-per-row, so both cards of a row share a slot and
+ * rows cascade top-to-bottom on every tab focus.
+ */
+const ENTRANCE_ROW: number[] = (() => {
+  const rows: number[] = [];
+  let row = 1;
+  let col = 0;
+  for (const mode of MODES) {
+    const fullWidth = mode.id === 'classic' || mode.id === 'daily' || mode.id === 'weekly';
+    if (fullWidth) {
+      if (col > 0) {
+        row += 1;
+        col = 0;
+      }
+      rows.push(row);
+      row += 1;
+    } else {
+      rows.push(row);
+      col += 1;
+      if (col === 2) {
+        col = 0;
+        row += 1;
+      }
+    }
+  }
+  return rows;
+})();
 
 // ─── Drawn glyph kit — layered Views/gradients, no emoji (same technique as
 // LeaderboardScreen's GlyphMedallion / ClubScreen's ShieldCrest family). ────
@@ -802,6 +834,7 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
           It pushes the grid down instead of floating over it (the old
           absolutely-positioned Tooltip occluded the mode cards). */}
       {showTooltip && (
+        <ScreenEntrance index={0}>
         <Pressable
           onPress={() => {
             setShowTooltip(false);
@@ -833,13 +866,18 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
             <Text style={styles.coachDismissText}>{'✕'}</Text>
           </View>
         </Pressable>
+        </ScreenEntrance>
       )}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.grid}
         showsVerticalScrollIndicator={false}
       >
-        {MODES.map(renderModeCard)}
+        {MODES.map((mode, i) => (
+          <ScreenEntrance key={mode.id} index={ENTRANCE_ROW[i]}>
+            {renderModeCard(mode)}
+          </ScreenEntrance>
+        ))}
       </ScrollView>
     </ScreenScaffold>
   );

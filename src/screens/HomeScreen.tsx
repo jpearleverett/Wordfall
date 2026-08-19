@@ -57,6 +57,7 @@ import { getNextMilestone } from '../data/onboardingMilestones';
 import DailyRewardTimers from '../components/DailyRewardTimers';
 import { getNextGoal } from '../data/nextGoal';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface DailyMissionDisplay {
   id: string;
@@ -153,28 +154,166 @@ const WORDMARK_TILES: Array<{ letter: string; colors: [string, string]; drop: nu
   { letter: 'L', colors: ['#22b8f0', '#1585c2'], drop: 11, tilt: '3deg' },
 ];
 
-function WordfallWordmark() {
+// One wordmark tile with a gentle staggered vertical bob (±2.5px, ~2.2s
+// period, 110ms stagger per letter) so a wave ripples through WORDFALL
+// while Home idles. Loop is skipped entirely when `animate` is false
+// (reduce-motion or screen blurred) — the tile then sits at its authored
+// resting drop, identical to the old static render.
+function WordmarkTile({ tile, index, animate }: {
+  tile: (typeof WORDMARK_TILES)[number];
+  index: number;
+  animate: boolean;
+}) {
+  const bob = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!animate) return;
+    const seq = Animated.sequence([
+      Animated.delay(index * 110),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(bob, { toValue: 1, duration: 550, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(bob, { toValue: -1, duration: 1100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(bob, { toValue: 0, duration: 550, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ]),
+      ),
+    ]);
+    seq.start();
+    return () => {
+      seq.stop();
+      bob.setValue(0);
+    };
+  }, [animate, bob, index]);
+
+  return (
+    <View
+      style={[
+        styles.wordmarkTileWrap,
+        { transform: [{ translateY: tile.drop }, { rotate: tile.tilt }] },
+      ]}
+    >
+      <Animated.View
+        style={{
+          transform: [
+            { translateY: bob.interpolate({ inputRange: [-1, 1], outputRange: [2.5, -2.5] }) },
+          ],
+        }}
+      >
+        <LinearGradient
+          colors={tile.colors}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.8, y: 1 }}
+          style={[styles.wordmarkTile, { shadowColor: tile.colors[0] }]}
+        >
+          <View style={styles.wordmarkTileSheen} pointerEvents="none" />
+          <Text style={styles.wordmarkLetter}>{tile.letter}</Text>
+        </LinearGradient>
+      </Animated.View>
+    </View>
+  );
+}
+
+function WordfallWordmark({ animate }: { animate: boolean }) {
   return (
     <View style={styles.wordmarkRow} accessibilityRole="header" accessibilityLabel="Wordfall">
       {WORDMARK_TILES.map((tile, i) => (
-        <View
-          key={`${tile.letter}${i}`}
-          style={[
-            styles.wordmarkTileWrap,
-            { transform: [{ translateY: tile.drop }, { rotate: tile.tilt }] },
-          ]}
-        >
-          <LinearGradient
-            colors={tile.colors}
-            start={{ x: 0.2, y: 0 }}
-            end={{ x: 0.8, y: 1 }}
-            style={[styles.wordmarkTile, { shadowColor: tile.colors[0] }]}
-          >
-            <View style={styles.wordmarkTileSheen} pointerEvents="none" />
-            <Text style={styles.wordmarkLetter}>{tile.letter}</Text>
-          </LinearGradient>
-        </View>
+        <WordmarkTile key={`${tile.letter}${i}`} tile={tile} index={i} animate={animate} />
       ))}
+    </View>
+  );
+}
+
+// Ambient floating motes — soft lavender dots drifting slowly upward over
+// the home background while fading in/out (blind motion review scored the
+// idle home 2.9/10: "sits completely still"). Fixed spec table à la
+// PuzzleComplete's SETTLE_SPARKS: randomized-feeling but deterministic
+// positions/sizes/delays/durations. Rendered only when ambient motion is
+// active (focused + no reduce-motion), always pointerEvents="none".
+const AMBIENT_MOTES = [
+  { left: '8%', top: '78%', size: 4, delay: 0, dur: 6200, drift: 44 },
+  { left: '22%', top: '90%', size: 3, delay: 1800, dur: 7400, drift: 50 },
+  { left: '34%', top: '70%', size: 5, delay: 3200, dur: 5600, drift: 36 },
+  { left: '48%', top: '84%', size: 3, delay: 900, dur: 8200, drift: 48 },
+  { left: '60%', top: '64%', size: 4, delay: 2600, dur: 6800, drift: 40 },
+  { left: '72%', top: '88%', size: 6, delay: 400, dur: 5200, drift: 34 },
+  { left: '84%', top: '74%', size: 3, delay: 3800, dur: 8800, drift: 46 },
+  { left: '92%', top: '58%', size: 4, delay: 1400, dur: 7000, drift: 38 },
+  { left: '14%', top: '52%', size: 5, delay: 2200, dur: 6000, drift: 42 },
+] as const;
+
+function AmbientMote({ left, top, size, delay, dur, drift }: (typeof AMBIENT_MOTES)[number]) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      anim.setValue(0);
+    };
+  }, [anim, delay, dur]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: 'rgba(224,195,255,0.95)',
+        opacity: anim.interpolate({ inputRange: [0, 0.2, 0.75, 1], outputRange: [0, 0.6, 0.3, 0] }),
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -drift] }) }],
+      }}
+    />
+  );
+}
+
+// Diagonal light band that sweeps across the Play CTA (~900ms sweep, then
+// ~1.7s rest → 2.6s cycle). Lives inside its own absolute-fill clipping
+// layer so the band never escapes the button's rounded rect, and never
+// intercepts touches. Unmounted entirely under reduce-motion / blur.
+function PlayCtaSweep({ active }: { active: boolean }) {
+  const sweep = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!active) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(sweep, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.delay(1700),
+        Animated.timing(sweep, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      sweep.setValue(0);
+    };
+  }, [active, sweep]);
+
+  if (!active) return null;
+  return (
+    <View pointerEvents="none" style={styles.playButtonSweepClip}>
+      <Animated.View
+        style={[
+          styles.playButtonSweepBand,
+          {
+            transform: [
+              { translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-180, 560] }) },
+              { rotate: '18deg' },
+            ],
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -321,6 +460,49 @@ export function HomeScreen({
   // GameScreen for the whole session (AmbientBackdrop gates for the same
   // reason).
   const isFocused = useIsFocused();
+
+  // Ambient idle motion (Aug 2026 blind-motion review: home sat completely
+  // still). Every loop below is gated on focus (freezeOnBlur doesn't stop
+  // native-driver loops) AND on reduce-motion — vestibular-sensitive players
+  // get the settled static screen with no loops at all.
+  const reduceMotion = useReduceMotion();
+  const ambientActive = isFocused && !reduceMotion;
+
+  // Play CTA breathing pulse: scale 1.0 ↔ 1.035 over a 1.6s ease-in-out
+  // cycle. The same value drives the CTA's halo-glow opacity (0.15 ↔ 0.45)
+  // so glow and scale breathe together off one native-driver value.
+  const playPulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!ambientActive) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(playPulse, { toValue: 1.035, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(playPulse, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      playPulse.setValue(1);
+    };
+  }, [ambientActive, playPulse]);
+
+  // Streak flame flicker: subtle 1.0 ↔ 1.06 scale, ~1.1s cycle.
+  const flamePulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!ambientActive) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flamePulse, { toValue: 1.06, duration: 550, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(flamePulse, { toValue: 1, duration: 550, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      flamePulse.setValue(1);
+    };
+  }, [ambientActive, flamePulse]);
 
   // Pulse animation for wheel button when spins available
   useEffect(() => {
@@ -517,6 +699,16 @@ export function HomeScreen({
   return (
     <View style={styles.container}>
       <VideoBackground source={LOCAL_VIDEOS.bgHomescreen} opacity={0.6} overlayColor="rgba(10,14,39,0.4)" />
+      {/* Ambient floating motes — above the video, below all content, never
+          touchable. Mounted only while focused + motion allowed so blurred
+          screens and reduce-motion users pay zero cost. */}
+      {ambientActive && (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          {AMBIENT_MOTES.map((mote, i) => (
+            <AmbientMote key={i} {...mote} />
+          ))}
+        </View>
+      )}
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         {onOpenSettings && (
@@ -599,7 +791,7 @@ export function HomeScreen({
             <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowMid]} />
             <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowInner]} />
             <View style={styles.heroLogoGlow}>
-              <WordfallWordmark />
+              <WordfallWordmark animate={ambientActive} />
             </View>
           </View>
           <View style={styles.statsRow}>
@@ -617,7 +809,14 @@ export function HomeScreen({
                 >
                   {stat.icon && (
                     <View style={[styles.statIconWell, { backgroundColor: stat.tint + '24', borderColor: stat.tint + '55' }]}>
-                      <GameIcon name={stat.icon} size={24} />
+                      {stat.icon === 'flame' ? (
+                        // Streak flame gets a subtle scale flicker while idle.
+                        <Animated.View style={{ transform: [{ scale: flamePulse }] }}>
+                          <GameIcon name={stat.icon} size={24} />
+                        </Animated.View>
+                      ) : (
+                        <GameIcon name={stat.icon} size={24} />
+                      )}
                     </View>
                   )}
                   <Text style={styles.heroStatValue}>{stat.value}</Text>
@@ -633,7 +832,17 @@ export function HomeScreen({
             accessibilityRole="button"
             accessibilityLabel={`Play level ${progress.currentLevel}`}
           >
-            <View style={styles.playButtonWrapper}>
+            <Animated.View style={[styles.playButtonWrapper, { transform: [{ scale: playPulse }] }]}>
+              {/* Breathing halo behind the CTA — opacity rides the same
+                  pulse value as the scale, so glow swells as the button
+                  does. Decorative only. */}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.playButtonGlow,
+                  { opacity: playPulse.interpolate({ inputRange: [1, 1.035], outputRange: [0.15, 0.45] }) },
+                ]}
+              />
               {/* Flat premium magenta→purple fill — same family as the bento
                   cards, elevated by a single outer magenta glow. Replaces the
                   glossy chrome-glass image asset (judge flaw: specular band
@@ -650,6 +859,8 @@ export function HomeScreen({
                   hairline lit top edge gives the CTA dimension without
                   reintroducing the glass band. */}
               <View pointerEvents="none" style={styles.playButtonSheen} />
+              {/* Diagonal light band sweeping the CTA every ~2.6s. */}
+              <PlayCtaSweep active={ambientActive} />
               <View style={styles.playButtonOverlay}>
                 <View>
                   <Text style={styles.playButtonLabel}>{playerStage === 'new' ? 'Start playing' : 'Continue journey'}</Text>
@@ -657,7 +868,7 @@ export function HomeScreen({
                 </View>
                 <Text style={styles.playButtonArrow}>→</Text>
               </View>
-            </View>
+            </Animated.View>
           </Pressable>
 
           {/* Daily challenge - show after first puzzle completion */}
@@ -1706,6 +1917,32 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.30)',
+  },
+  // Breathing halo behind the Play CTA (opacity animated with the pulse).
+  playButtonGlow: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    borderRadius: 32,
+    backgroundColor: COLORS.pink,
+  },
+  // Clips the animated sweep band to the CTA's rounded rect. Kept as its
+  // own layer (rather than overflow:hidden on the wrapper) so the wrapper's
+  // outer glow shadow survives on Android.
+  playButtonSweepClip: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  playButtonSweepBand: {
+    position: 'absolute',
+    top: -50,
+    bottom: -50,
+    left: 0,
+    width: 70,
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   playButtonOverlay: {
     ...StyleSheet.absoluteFillObject,
