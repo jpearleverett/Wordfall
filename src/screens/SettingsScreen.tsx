@@ -16,7 +16,6 @@ import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
 import PrimaryButton from '../components/common/PrimaryButton';
-import NeonProgressBar from '../components/common/NeonProgressBar';
 import { bentoPanel, bentoDividerColor, type BentoAccent } from '../styles/bentoPanel';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -76,6 +75,20 @@ function withAlpha(color: string, alphaHex: string): string {
   return /^#[0-9a-fA-F]{6}$/.test(color) ? color + alphaHex : color;
 }
 
+/**
+ * Quiet accent glow — half the strength of SHADOWS.glow. The round-2 art
+ * review flagged this screen for "cyan glow overload": every row, chip, and
+ * badge carried a full-strength halo, so nothing read as emphasized. Selected
+ * / active states now use this; only danger surfaces keep a stronger accent.
+ */
+const softGlow = (color: string) => ({
+  shadowColor: color,
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 6,
+  elevation: 4,
+});
+
 // ─── Drawn glyph kit — layered Views/gradients, no emoji (same technique as
 // ModesScreen's ModeGlyph family / LeaderboardScreen's GlyphMedallion). ─────
 
@@ -111,9 +124,9 @@ function DrawnMedallion({
           backgroundColor: 'rgba(8, 2, 22, 0.92)',
           shadowColor: accent,
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.55,
-          shadowRadius: size * 0.22,
-          elevation: 6,
+          shadowOpacity: 0.28,
+          shadowRadius: size * 0.11,
+          elevation: 3,
         },
         style ?? null,
       ]}
@@ -948,7 +961,7 @@ const Panel: React.FC<{ accent: BentoAccent; style?: ViewStyle; children: React.
   style,
   children,
 }) => (
-  <View style={[bentoPanel(accent, { padding: 0 }), styles.panelClip, style]}>
+  <View style={[bentoPanel(accent, { padding: 0 }), styles.panelClip, styles.panelGlowTrim, style]}>
     <LinearGradient
       colors={[...GRADIENTS.surfaceCard]}
       style={StyleSheet.absoluteFill}
@@ -974,7 +987,7 @@ const StepButton: React.FC<{
     onPress={onPress}
     accessibilityRole="button"
     accessibilityLabel={accessibilityLabel}
-    hitSlop={6}
+    hitSlop={10}
     style={({ pressed }) => [
       styles.stepBtn,
       { borderColor: withAlpha(accent, '66'), shadowColor: accent },
@@ -1207,8 +1220,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     );
   };
 
+  // One compact line per channel: icon well + short label, then −[bar]+ with
+  // the steppers paired tight on the bar ends (they are the ONLY input — the
+  // bar itself is display-only), then the % readout in a quiet numeric chip.
   const renderVolumeControl = (
     label: string,
+    displayLabel: string,
     settingKey: string,
     rawValue: number,
     glyph: React.ReactNode,
@@ -1216,17 +1233,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     const pct = toPercent(rawValue);
     return (
       <View
-        style={styles.volumeBlock}
+        style={styles.volumeRow}
         accessibilityRole="adjustable"
         accessibilityLabel={`${label}: ${pct} percent`}
         accessibilityValue={{ min: 0, max: 100, now: pct }}
       >
-        <View style={styles.volumeHeaderRow}>
-          <View style={styles.rowLeft}>
-            <DrawnMedallion size={34} accent={COLORS.cyan}>{glyph}</DrawnMedallion>
-            <Text style={styles.settingLabel}>{label}</Text>
-          </View>
-          <Text style={styles.volumePct}>{pct}%</Text>
+        <View style={[styles.rowLeft, styles.volumeLabelBlock]}>
+          <DrawnMedallion size={28} accent={COLORS.cyan}>{glyph}</DrawnMedallion>
+          <Text style={styles.settingLabel} numberOfLines={1}>{displayLabel}</Text>
         </View>
         <View style={styles.volumeControls}>
           <StepButton
@@ -1236,7 +1250,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             accessibilityLabel={`Decrease ${label}`}
           />
           <View style={styles.volumeTrack}>
-            <NeonProgressBar progress={pct / 100} color={COLORS.cyan} height={10} />
+            <View style={[styles.volumeFill, { width: `${pct}%` }]} />
+            <View style={[styles.volumeThumb, { left: `${pct}%` }]} />
           </View>
           <StepButton
             glyph="+"
@@ -1244,6 +1259,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             onPress={() => handleVolumeChange(settingKey, rawValue, 10)}
             accessibilityLabel={`Increase ${label}`}
           />
+        </View>
+        <View style={styles.volumePctChip}>
+          <Text style={styles.volumePctText}>{pct}%</Text>
         </View>
       </View>
     );
@@ -1258,7 +1276,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   ) => (
     <View style={styles.settingRow}>
       <View style={styles.rowLeft}>
-        <DrawnMedallion size={34} accent={accent}>{glyph}</DrawnMedallion>
+        <DrawnMedallion size={28} accent={accent}>{glyph}</DrawnMedallion>
         <Text style={styles.settingLabel}>{label}</Text>
       </View>
       <Pressable
@@ -1298,7 +1316,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         opts.selected && {
           borderColor: opts.accent,
           backgroundColor: withAlpha(opts.accent, '26'),
-          ...SHADOWS.glow(opts.accent),
+          ...softGlow(opts.accent),
         },
         pressed && styles.chipPressed,
       ]}
@@ -1369,19 +1387,19 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* Sound */}
       <SectionHeader label="SOUND" accent={COLORS.cyan} />
       <Panel accent="cyan">
-        {renderVolumeControl('SFX Volume', 'sfxVolume', sfxVolume, <SpeakerGlyph size={19} accent={COLORS.cyan} />)}
+        {renderVolumeControl('SFX Volume', 'SFX', 'sfxVolume', sfxVolume, <SpeakerGlyph size={16} accent={COLORS.cyan} />)}
         <Divider accent="cyan" />
-        {renderVolumeControl('Music Volume', 'musicVolume', musicVolume, <NoteGlyph size={19} accent={COLORS.cyan} />)}
+        {renderVolumeControl('Music Volume', 'Music', 'musicVolume', musicVolume, <NoteGlyph size={16} accent={COLORS.cyan} />)}
         <Divider accent="cyan" />
-        {renderVolumeControl('Ceremony Volume', 'ceremonyVolume', ceremonyVolume, <StarBurstGlyph size={19} accent={COLORS.cyan} />)}
+        {renderVolumeControl('Ceremony Volume', 'Ceremony', 'ceremonyVolume', ceremonyVolume, <StarBurstGlyph size={16} accent={COLORS.cyan} />)}
       </Panel>
 
       {/* Gameplay */}
       <SectionHeader label="GAMEPLAY" accent={COLORS.pink} />
       <Panel accent="pink">
-        {renderToggle('Haptics', hapticsEnabled, 'hapticsEnabled', <PhoneVibeGlyph size={19} accent={COLORS.pink} />, COLORS.pink)}
+        {renderToggle('Haptics', hapticsEnabled, 'hapticsEnabled', <PhoneVibeGlyph size={16} accent={COLORS.pink} />, COLORS.pink)}
         <Divider accent="pink" />
-        {renderToggle('Notifications', notificationsEnabled, 'notificationsEnabled', <BellGlyph size={19} accent={COLORS.pink} />, COLORS.pink)}
+        {renderToggle('Notifications', notificationsEnabled, 'notificationsEnabled', <BellGlyph size={16} accent={COLORS.pink} />, COLORS.pink)}
       </Panel>
 
       {/* Accessibility */}
@@ -1389,8 +1407,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <Panel accent="purple">
         <View style={styles.panelIntro}>
           <View style={styles.rowLeft}>
-            <DrawnMedallion size={34} accent={COLORS.purple}>
-              <EyeGlyph size={19} accent={COLORS.purple} />
+            <DrawnMedallion size={28} accent={COLORS.purple}>
+              <EyeGlyph size={16} accent={COLORS.purple} />
             </DrawnMedallion>
             <Text style={styles.settingLabel}>Colorblind Mode</Text>
           </View>
@@ -1417,8 +1435,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <Panel accent="cyan">
         <View style={styles.panelIntro}>
           <View style={styles.rowLeft}>
-            <DrawnMedallion size={34} accent={COLORS.cyan}>
-              <SpeechBubbleGlyph size={19} accent={COLORS.cyan} />
+            <DrawnMedallion size={28} accent={COLORS.cyan}>
+              <SpeechBubbleGlyph size={16} accent={COLORS.cyan} />
             </DrawnMedallion>
             <Text style={styles.panelIntroText}>UI language. Puzzles remain English.</Text>
           </View>
@@ -1474,8 +1492,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     : 'Signed in'
               }
             >
-              <DrawnMedallion size={34} accent={COLORS.gold}>
-                <PersonGlyph size={19} accent={COLORS.gold} />
+              <DrawnMedallion size={28} accent={COLORS.gold}>
+                <PersonGlyph size={16} accent={COLORS.gold} />
               </DrawnMedallion>
               <Text style={styles.settingLabel}>
                 {linkedEmail ? 'Google Account' : 'Account'}
@@ -1510,8 +1528,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               accessibilityState={{ busy: signingOut }}
               disabled={signingOut}
             >
-              <DrawnMedallion size={34} accent={COLORS.coral}>
-                <DoorGlyph size={19} accent={COLORS.coral} />
+              <DrawnMedallion size={28} accent={COLORS.coral}>
+                <DoorGlyph size={16} accent={COLORS.coral} />
               </DrawnMedallion>
               <Text style={[styles.settingLabel, { color: COLORS.coral, flex: 1 }]}>
                 Sign Out
@@ -1532,8 +1550,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             accessibilityState={{ busy: signingIn }}
             disabled={signingIn}
           >
-            <DrawnMedallion size={34} accent={COLORS.accent}>
-              <PersonGlyph size={19} accent={COLORS.accent} />
+            <DrawnMedallion size={28} accent={COLORS.accent}>
+              <PersonGlyph size={16} accent={COLORS.accent} />
             </DrawnMedallion>
             <Text style={[styles.settingLabel, { color: COLORS.accent, flex: 1 }]}>
               {signingIn ? 'Signing in…' : 'Sign In with Google'}
@@ -1557,8 +1575,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           disabled={restoring}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <DrawnMedallion size={34} accent={COLORS.gold}>
-            <TagGlyph size={19} accent={COLORS.gold} />
+          <DrawnMedallion size={28} accent={COLORS.gold}>
+            <TagGlyph size={16} accent={COLORS.gold} />
           </DrawnMedallion>
           <Text style={[styles.settingLabel, { color: COLORS.accent, flex: 1 }]}>
             {restoring ? `${t('common.loading')}` : t('settings.restorePurchases')}
@@ -1581,8 +1599,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
               accessibilityHint="Opens the Google Play subscription management page."
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <DrawnMedallion size={34} accent={COLORS.gold}>
-                <CardGlyph size={19} accent={COLORS.gold} />
+              <DrawnMedallion size={28} accent={COLORS.gold}>
+                <CardGlyph size={16} accent={COLORS.gold} />
               </DrawnMedallion>
               <Text style={[styles.settingLabel, { flex: 1 }]}>Manage Subscription</Text>
               <Text style={styles.chevron}>{'›'}</Text>
@@ -1608,8 +1626,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <Panel accent="gold">
         <View style={styles.settingRow}>
           <View style={styles.rowLeft}>
-            <DrawnMedallion size={34} accent={COLORS.gold}>
-              <ShieldGlyph size={19} accent={COLORS.gold} />
+            <DrawnMedallion size={28} accent={COLORS.gold}>
+              <ShieldGlyph size={16} accent={COLORS.gold} />
             </DrawnMedallion>
             <Text style={styles.settingLabel}>Ad Removal</Text>
           </View>
@@ -1632,8 +1650,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <Divider accent="gold" />
         <View style={styles.settingRow}>
           <View style={styles.rowLeft}>
-            <DrawnMedallion size={34} accent={COLORS.gold}>
-              <CrownGlyph size={19} accent={COLORS.gold} />
+            <DrawnMedallion size={28} accent={COLORS.gold}>
+              <CrownGlyph size={16} accent={COLORS.gold} />
             </DrawnMedallion>
             <Text style={styles.settingLabel}>Premium Pass</Text>
           </View>
@@ -1658,12 +1676,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* Parental Controls */}
       <SectionHeader label="PARENTAL CONTROLS" accent={COLORS.purple} />
       <Panel accent="purple">
-        {renderToggle('Spending Limit', settings?.spendingLimitEnabled ?? false, 'spendingLimitEnabled', <ShieldGlyph size={19} accent={COLORS.purple} />, COLORS.purple)}
+        {renderToggle('Spending Limit', settings?.spendingLimitEnabled ?? false, 'spendingLimitEnabled', <ShieldGlyph size={16} accent={COLORS.purple} />, COLORS.purple)}
         <Divider accent="purple" />
         <View style={styles.settingRow}>
           <View style={styles.rowLeft}>
-            <DrawnMedallion size={34} accent={COLORS.purple}>
-              <CoinGlyph size={19} />
+            <DrawnMedallion size={28} accent={COLORS.purple}>
+              <CoinGlyph size={16} />
             </DrawnMedallion>
             <Text style={styles.settingLabel}>Monthly Limit</Text>
           </View>
@@ -1686,7 +1704,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </View>
         </View>
         <Divider accent="purple" />
-        {renderToggle('Require PIN for Purchases', settings?.requirePurchasePin ?? false, 'requirePurchasePin', <LockGlyph size={19} accent={COLORS.purple} />, COLORS.purple)}
+        {renderToggle('Require PIN for Purchases', settings?.requirePurchasePin ?? false, 'requirePurchasePin', <LockGlyph size={16} accent={COLORS.purple} />, COLORS.purple)}
       </Panel>
 
       {/* Privacy */}
@@ -1696,7 +1714,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           'Analytics',
           settings?.analyticsEnabled ?? true,
           'analyticsEnabled',
-          <BarsGlyph size={19} accent={COLORS.cyan} />,
+          <BarsGlyph size={16} accent={COLORS.cyan} />,
           COLORS.cyan,
         )}
         <Divider accent="cyan" />
@@ -1704,7 +1722,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           'Personalized Ads',
           settings?.personalizedAdsEnabled ?? true,
           'personalizedAdsEnabled',
-          <TargetGlyph size={19} accent={COLORS.cyan} />,
+          <TargetGlyph size={16} accent={COLORS.cyan} />,
           COLORS.cyan,
         )}
       </Panel>
@@ -1714,8 +1732,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <Panel accent="purple">
         <View style={styles.settingRow}>
           <View style={styles.rowLeft}>
-            <DrawnMedallion size={34} accent={COLORS.purple}>
-              <InfoGlyph size={19} accent={COLORS.purple} />
+            <DrawnMedallion size={28} accent={COLORS.purple}>
+              <InfoGlyph size={16} accent={COLORS.purple} />
             </DrawnMedallion>
             <Text style={styles.settingLabel}>Version</Text>
           </View>
@@ -1729,8 +1747,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           onPress={() => openUrlSafe(PRIVACY_POLICY_URL, 'Privacy Policy')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <DrawnMedallion size={34} accent={COLORS.purple}>
-            <DocGlyph size={19} accent={COLORS.purple} />
+          <DrawnMedallion size={28} accent={COLORS.purple}>
+            <DocGlyph size={16} accent={COLORS.purple} />
           </DrawnMedallion>
           <Text style={[styles.settingLabel, { flex: 1 }]}>Privacy Policy</Text>
           <Text style={styles.chevron}>{'›'}</Text>
@@ -1743,8 +1761,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           onPress={() => openUrlSafe(TERMS_OF_SERVICE_URL, 'Terms of Service')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <DrawnMedallion size={34} accent={COLORS.purple}>
-            <DocGlyph size={19} accent={COLORS.purple} />
+          <DrawnMedallion size={28} accent={COLORS.purple}>
+            <DocGlyph size={16} accent={COLORS.purple} />
           </DrawnMedallion>
           <Text style={[styles.settingLabel, { flex: 1 }]}>Terms of Service</Text>
           <Text style={styles.chevron}>{'›'}</Text>
@@ -1762,8 +1780,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           }
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <DrawnMedallion size={34} accent={COLORS.purple}>
-            <EnvelopeGlyph size={19} accent={COLORS.purple} />
+          <DrawnMedallion size={28} accent={COLORS.purple}>
+            <EnvelopeGlyph size={16} accent={COLORS.purple} />
           </DrawnMedallion>
           <Text style={[styles.settingLabel, { flex: 1 }]}>Contact Support</Text>
           <Text style={styles.chevron}>{'›'}</Text>
@@ -1802,6 +1820,13 @@ const styles = StyleSheet.create({
   panelClip: {
     overflow: 'hidden',
   },
+  // Halves bentoPanel's ambient accent glow — section cards should sit quiet
+  // behind their content; the accent lives in the header tick + borders.
+  panelGlowTrim: {
+    shadowOpacity: 0.11,
+    shadowRadius: 7,
+    elevation: 3,
+  },
 
   // Hero status strip
   heroStrip: {
@@ -1818,9 +1843,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(12,4,28,0.94)',
     shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 6,
+    shadowOpacity: 0.11,
+    shadowRadius: 7,
+    elevation: 3,
   },
   heroInfo: {
     flex: 1,
@@ -1872,9 +1897,12 @@ const styles = StyleSheet.create({
   heroPillTextGold: {
     color: COLORS.goldLight,
   },
+  // Hairline, inset past the icon well (14 pad + 28 well + 12 gap) so the
+  // rules align with the label column — one divider rhythm for every section.
   divider: {
-    height: 1,
-    marginHorizontal: 14,
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 54,
+    marginRight: 14,
   },
   rowLeft: {
     flexDirection: 'row',
@@ -1886,8 +1914,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: 52,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     gap: 12,
   },
   settingLabel: {
@@ -1903,37 +1932,72 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
 
-  // Volume control
-  volumeBlock: {
+  // Volume control — single compact line per channel.
+  volumeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 52,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     gap: 10,
   },
-  volumeHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  volumePct: {
-    fontSize: 14,
-    fontFamily: FONTS.display,
-    color: COLORS.cyan,
-    letterSpacing: 1,
-    textShadowColor: COLORS.cyanGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+  // Fixed label column so the three bars align vertically down the card.
+  volumeLabelBlock: {
+    width: 118,
+    flexShrink: 0,
   },
   volumeControls: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 6,
   },
   volumeTrack: {
     flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+  },
+  volumeFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 3,
+    backgroundColor: COLORS.cyan,
+  },
+  volumeThumb: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    marginLeft: -8,
+    borderRadius: 8,
+    backgroundColor: COLORS.cyan,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.92)',
+    ...SHADOWS.soft,
+  },
+  volumePctChip: {
+    minWidth: 44,
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  volumePctText: {
+    fontSize: 11,
+    fontFamily: FONTS.bodySemiBold,
+    fontVariant: ['tabular-nums'],
+    color: COLORS.cyan,
+    letterSpacing: 0.5,
   },
   stepBtn: {
-    width: 38,
-    height: 38,
+    width: 24,
+    height: 24,
     borderRadius: RADIUS.full,
     borderWidth: 1,
     backgroundColor: 'rgba(20, 8, 40, 0.55)',
@@ -1941,17 +2005,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.22,
+    shadowRadius: 4,
+    elevation: 2,
   },
   stepBtnPressed: {
     transform: [{ scale: 0.9 }],
     opacity: 0.85,
   },
   stepBtnText: {
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 17,
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
   },
@@ -1961,21 +2025,22 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   stepperValue: {
-    minWidth: 52,
+    minWidth: 48,
     textAlign: 'center',
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: FONTS.display,
     color: COLORS.gold,
     letterSpacing: 0.5,
+    fontVariant: ['tabular-nums'],
     textShadowColor: COLORS.goldGlow,
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    textShadowRadius: 4,
   },
 
-  // Toggle
+  // Toggle — sized to sit level with the 24px steppers and 28px icon wells.
   toggle: {
-    width: 52,
-    height: 30,
+    width: 46,
+    height: 26,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.cellDefault,
     padding: 2,
@@ -1986,16 +2051,16 @@ const styles = StyleSheet.create({
   toggleOn: {
     backgroundColor: COLORS.accent,
     borderColor: COLORS.borderAccent,
-    ...SHADOWS.glow(COLORS.accent),
+    ...softGlow(COLORS.accent),
   },
   togglePressed: {
     opacity: 0.85,
     transform: [{ scale: 0.95 }],
   },
   toggleThumb: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: COLORS.textSecondary,
   },
   toggleThumbOn: {
@@ -2062,8 +2127,9 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 52,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     gap: 12,
   },
   rowPressed: {
@@ -2090,7 +2156,7 @@ const styles = StyleSheet.create({
   statusActive: {
     backgroundColor: withAlpha(COLORS.green, '25'),
     borderColor: withAlpha(COLORS.green, '40'),
-    ...SHADOWS.glow(COLORS.green),
+    ...softGlow(COLORS.green),
   },
   statusInactive: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -2104,20 +2170,22 @@ const styles = StyleSheet.create({
     color: COLORS.green,
     textShadowColor: COLORS.greenGlow,
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
+    textShadowRadius: 2,
   },
   statusTextInactive: {
     color: COLORS.textMuted,
   },
 
   // Danger zone
+  // Danger keeps its coral identity, but on a soft drop shadow — the glow
+  // budget is reserved for the destructive PrimaryButton inside it.
   dangerPanel: {
     borderRadius: 18,
     borderWidth: 1,
     borderColor: withAlpha(COLORS.coral, '40'),
     overflow: 'hidden',
     marginBottom: 14,
-    ...SHADOWS.glow(COLORS.coral),
+    ...SHADOWS.soft,
   },
   dangerBody: {
     padding: 18,

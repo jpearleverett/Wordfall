@@ -16,13 +16,13 @@ import {
   Animated,
   Easing,
   Alert,
+  Pressable,
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, RADIUS, SHADOWS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
-import PrimaryButton from '../components/common/PrimaryButton';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import { bentoPanel } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -39,6 +39,18 @@ import {
 import { CollectionReward } from '../types';
 import { useCommerce } from '../hooks/useCommerce';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
+import {
+  coinArtName,
+  gemArtName,
+  hintArtName,
+  milestoneChestName,
+  PREMIUM_CTA_GRADIENT,
+  PREMIUM_ACCENT,
+  PREMIUM_TEXT,
+  PREMIUM_TEXT_GLOW,
+  PREMIUM_INNER_BORDER,
+  PREMIUM_GLOW,
+} from '../utils/rewardArt';
 
 /**
  * IconMedallion's shell (accent ring + glow + body gradient) hosting a
@@ -355,16 +367,31 @@ interface RewardChip {
   accent: string;
 }
 
-function buildRewardChips(reward: CollectionReward): RewardChip[] {
+function buildRewardChips(
+  reward: CollectionReward,
+  lane: 'free' | 'premium',
+  milestone: boolean,
+): RewardChip[] {
   const chips: RewardChip[] = [];
+  // Every-5th-tier bundle leads with a chest so milestones read as hauls,
+  // not another identical currency row (blind-panel "thin reward-art
+  // variety" fix). Bronze on the free lane, gold on premium.
+  if (milestone) {
+    chips.push({
+      icon: milestoneChestName(lane),
+      label: 'Bundle',
+      accent: lane === 'premium' ? COLORS.gold : COLORS.orange,
+    });
+  }
+  // Currency art escalates with amount: coin → stack → pile → spilling chest.
   if (reward.coins > 0) {
-    chips.push({ icon: 'coin', label: `${reward.coins}`, accent: COLORS.gold });
+    chips.push({ icon: coinArtName(reward.coins), label: `${reward.coins}`, accent: COLORS.gold });
   }
   if (reward.gems > 0) {
-    chips.push({ icon: 'gem', label: `${reward.gems}`, accent: COLORS.cyan });
+    chips.push({ icon: gemArtName(reward.gems), label: `${reward.gems}`, accent: COLORS.cyan });
   }
   if (reward.hintTokens > 0) {
-    chips.push({ icon: 'hint', label: `${reward.hintTokens}`, accent: COLORS.orange });
+    chips.push({ icon: hintArtName(reward.hintTokens), label: `${reward.hintTokens}`, accent: COLORS.orange });
   }
   if (reward.badge) {
     chips.push({ icon: 'medal', label: 'Badge', accent: COLORS.purple });
@@ -515,7 +542,10 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
   const premiumLane = lane === 'premium';
   const laneAccent = premiumLane ? COLORS.purple : COLORS.teal;
   const premiumLocked = premiumLane && !premiumOwned;
-  const chips = useMemo(() => buildRewardChips(reward), [reward]);
+  const chips = useMemo(
+    () => buildRewardChips(reward, lane, milestone),
+    [reward, lane, milestone],
+  );
   const chipSize = milestone ? 34 : 30;
 
   return (
@@ -557,7 +587,7 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
       {premiumLane && (
         <View style={styles.premiumRibbon}>
           <LinearGradient
-            colors={[...GRADIENTS.button.gold]}
+            colors={[...PREMIUM_CTA_GRADIENT]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={StyleSheet.absoluteFillObject}
@@ -567,7 +597,7 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
       )}
       {premiumLocked && (
         <View style={[styles.lockOverlay, styles.lockBadge]}>
-          <DrawnLock size={13} accent={COLORS.gold} />
+          <DrawnLock size={13} accent={PREMIUM_ACCENT} />
         </View>
       )}
 
@@ -669,6 +699,7 @@ const MasteryTierRow = memo(function MasteryTierRow({
               reward={free}
               unlocked={unlocked}
               premiumOwned={premiumOwned}
+              milestone
             />
             <View style={styles.showcaseLaneGap} />
             <MasteryLaneCard
@@ -676,6 +707,7 @@ const MasteryTierRow = memo(function MasteryTierRow({
               reward={premium}
               unlocked={unlocked}
               premiumOwned={premiumOwned}
+              milestone
             />
           </View>
         </View>
@@ -724,6 +756,59 @@ const MasteryTierRow = memo(function MasteryTierRow({
     </View>
   );
 });
+
+// ─── Premium CTA — synthwave-harmonized gold ───────────────────────────────
+// Blind-panel fix: PrimaryButton's flat saturated gold clashed with the
+// magenta/violet scheme. Premium purchase CTAs use a warm amber → coral →
+// magenta-leaning gradient, thin white-alpha inner border, and a softer
+// glow so the gold sits INSIDE the neon palette instead of on top of it.
+
+function PremiumCTAButton({
+  label,
+  onPress,
+  disabled = false,
+  accessibilityLabel,
+  style,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+  style?: ViewStyle;
+}) {
+  return (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled }}
+      style={({ pressed }) => [
+        !disabled && PREMIUM_GLOW,
+        pressed && !disabled && styles.premiumCtaPressed,
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={
+          disabled
+            ? [COLORS.buttonDisabled, COLORS.buttonDisabled]
+            : [...PREMIUM_CTA_GRADIENT]
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.premiumCtaSurface}
+      >
+        <Text
+          style={[styles.premiumCtaLabel, disabled && { color: COLORS.textDisabled }]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </LinearGradient>
+    </Pressable>
+  );
+}
 
 // ─── Screen ────────────────────────────────────────────────────────────────
 
@@ -842,7 +927,7 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
       {!isPremium && (
         <View style={styles.upsellPanel}>
           <LinearGradient
-            colors={['rgba(255,184,0,0.16)', 'rgba(26,10,46,0.94)']}
+            colors={['rgba(255,138,92,0.14)', 'rgba(26,10,46,0.94)']}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={[StyleSheet.absoluteFillObject, styles.panelFill]}
@@ -857,11 +942,8 @@ const MasteryScreen: React.FC<MasteryScreenProps> = ({ onBack }) => {
               )}
             </View>
           </View>
-          <PrimaryButton
+          <PremiumCTAButton
             label={purchasingPass ? 'PROCESSING…' : 'UNLOCK PREMIUM — $4.99'}
-            variant="gold"
-            size="large"
-            fullWidth
             disabled={purchasingPass}
             onPress={handleBuyPremium}
             accessibilityLabel="Buy premium mastery pass for $4.99"
@@ -940,6 +1022,9 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginLeft: 6,
   },
+  // Premium chrome runs the warm amber→coral family (see utils/rewardArt)
+  // so gold accents harmonize with the magenta/violet scheme instead of
+  // clashing against it.
   premiumPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -947,13 +1032,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(255,184,0,0.18)',
+    backgroundColor: 'rgba(255,138,92,0.16)',
     borderWidth: 1,
-    borderColor: COLORS.gold + '80',
-    ...SHADOWS.glow(COLORS.gold),
+    borderColor: PREMIUM_ACCENT + '80',
+    ...PREMIUM_GLOW,
   },
   premiumPillText: {
-    color: COLORS.gold,
+    color: PREMIUM_TEXT,
     fontSize: 11,
     fontFamily: FONTS.display,
     letterSpacing: 1,
@@ -998,6 +1083,9 @@ const styles = StyleSheet.create({
   upsellPanel: {
     ...bentoPanel('gold', { padding: 16 }),
     backgroundColor: 'rgba(12,4,28,0.94)',
+    // Warm the bento gold shell into the amber→coral premium family.
+    borderColor: 'rgba(255,138,92,0.26)',
+    shadowColor: PREMIUM_ACCENT,
   },
   upsellRow: {
     flexDirection: 'row',
@@ -1011,9 +1099,9 @@ const styles = StyleSheet.create({
   upsellTitle: {
     fontFamily: FONTS.display,
     fontSize: 18,
-    color: COLORS.gold,
+    color: PREMIUM_TEXT,
     letterSpacing: 2.5,
-    textShadowColor: COLORS.goldGlow,
+    textShadowColor: PREMIUM_TEXT_GLOW,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
   },
@@ -1032,6 +1120,28 @@ const styles = StyleSheet.create({
   },
   upsellButton: {
     marginTop: 2,
+  },
+
+  // ── Premium CTA (amber→coral, thin white-alpha inner border) ─────────
+  premiumCtaPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  premiumCtaSurface: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.xl,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: PREMIUM_INNER_BORDER,
+  },
+  premiumCtaLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 16,
+    letterSpacing: 2,
+    color: COLORS.bg,
+    textAlign: 'center',
   },
 
   // ── Lane tags ────────────────────────────────────────────────────────
@@ -1137,9 +1247,9 @@ const styles = StyleSheet.create({
   },
   laneCardPremium: {
     borderWidth: 1.5,
-    borderColor: 'rgba(255,196,32,0.50)',
+    borderColor: 'rgba(255,154,110,0.50)',
     backgroundColor: 'rgba(28,11,54,0.97)',
-    shadowColor: COLORS.gold,
+    shadowColor: PREMIUM_ACCENT,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.26,
     shadowRadius: 12,
@@ -1157,7 +1267,7 @@ const styles = StyleSheet.create({
   },
   laneCardMilestonePremium: {
     minHeight: 128,
-    borderColor: 'rgba(255,196,32,0.70)',
+    borderColor: 'rgba(255,154,110,0.70)',
   },
   // Subtle alternating depth on even tiers.
   laneCardAlt: {
@@ -1198,7 +1308,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: RADIUS.full,
     overflow: 'hidden',
-    ...SHADOWS.glow(COLORS.gold),
+    borderWidth: 1,
+    borderColor: PREMIUM_INNER_BORDER,
+    ...PREMIUM_GLOW,
   },
   premiumRibbonText: {
     fontFamily: FONTS.display,
@@ -1218,11 +1330,11 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.gold + '8C',
+    borderColor: PREMIUM_ACCENT + '8C',
     backgroundColor: 'rgba(12,4,28,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
-    ...SHADOWS.glow(COLORS.gold),
+    ...PREMIUM_GLOW,
     zIndex: 2,
   },
   bottomSpacer: {

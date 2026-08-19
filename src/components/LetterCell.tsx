@@ -54,7 +54,9 @@ export const TilePaletteContext = createContext<[string, string, string, string,
 const HIGHLIGHT_VALID: [string, string] = ['rgba(200,255,230,0.65)', 'rgba(0,255,135,0.0)'];
 const HIGHLIGHT_SELECTED_HINT: [string, string] = ['rgba(255,245,200,0.65)', 'rgba(255,184,0,0.0)'];
 const HIGHLIGHT_SELECTED: [string, string] = ['rgba(255,210,240,0.60)', 'rgba(255,45,149,0.0)'];
-const HIGHLIGHT_DEFAULT: [string, string] = ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.0)'];
+// Lifted 0.22 → 0.34 (round-2 blind review: "flat gradient tiles lack
+// material depth") — the stronger cap highlight is what sells the candy read.
+const HIGHLIGHT_DEFAULT: [string, string] = ['rgba(255,255,255,0.34)', 'rgba(255,255,255,0.0)'];
 
 const DEFAULT_BORDER_COLOR = 'rgba(200, 77, 255, 0.40)';
 
@@ -392,10 +394,10 @@ export const LetterCell = React.memo(function LetterCell({
             ...StyleSheet.absoluteFillObject,
             borderRadius: insetBR,
             borderWidth: 1.5,
-            borderTopColor: 'rgba(255,255,255,0.30)',
-            borderLeftColor: 'rgba(255,255,255,0.16)',
-            borderRightColor: 'rgba(0,0,0,0.28)',
-            borderBottomColor: 'rgba(0,0,0,0.40)',
+            borderTopColor: 'rgba(255,255,255,0.40)',
+            borderLeftColor: 'rgba(255,255,255,0.20)',
+            borderRightColor: 'rgba(0,0,0,0.32)',
+            borderBottomColor: 'rgba(0,0,0,0.46)',
           }}
         />
 
@@ -410,7 +412,7 @@ export const LetterCell = React.memo(function LetterCell({
             borderRadius: size * 0.025,
             backgroundColor: raisedTile
               ? 'rgba(255,255,255,0.45)'
-              : 'rgba(255,255,255,0.16)',
+              : 'rgba(255,255,255,0.26)',
           }}
         />
 

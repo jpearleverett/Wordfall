@@ -120,16 +120,16 @@ const GameplayMascot: React.FC<GameplayMascotProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // Absolute-positioned at the right screen edge, half-tucked off-screen so
-  // Folio reads as deliberately "peeking in" at the board rather than a
-  // stray badge floating over the tiles (round-1 blind review: "floating
-  // owl badge looks accidental"). Tune once a real sprite arrives.
+  // Anchored in the quiet strip below the booster tray, clear of the board
+  // and the tray. Two blind-review rounds read every position that touched
+  // the board as "a stray sprite floating over tiles" — down here Folio
+  // reads as a companion sitting at the table edge. Tune once a real sprite
+  // arrives.
   container: {
     position: 'absolute',
-    bottom: 180,
-    right: -16,
+    bottom: 10,
+    left: 14,
     zIndex: 20,
-    transform: [{ rotate: '-14deg' }],
   },
   bubble: {
     width: 44,

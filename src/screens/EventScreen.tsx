@@ -13,6 +13,7 @@ import SectionHeader from '../components/common/SectionHeader';
 import PrimaryButton from '../components/common/PrimaryButton';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import EventLeaderboardCard from '../components/events/EventLeaderboardCard';
+import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 import { useAuth } from '../contexts/AuthContext';
 import { getCurrentEvent } from '../data/events';
 import { EventExclusiveReward } from '../types';
@@ -27,6 +28,105 @@ import {
 
 /** Thousands-separated display numbers — "1,000,000", never "1000000". */
 const fmt = (n: number): string => n.toLocaleString('en-US');
+
+// ─── Glow discipline (round-2 blind review: "everything drowns in uniform
+// neon glow"). Card glows on this screen run ~40% dimmer than the shared
+// SHADOWS.glow / SHADOWS.neonGlow so neon reads as an accent, not a wash.
+// The ONE full-strength hero glow left is the primary event card's. ─────────
+const softGlow = (color: string) => ({
+  shadowColor: color,
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3, // SHADOWS.glow: 0.5
+  shadowRadius: 7, //    SHADOWS.glow: 12
+  elevation: 6,
+});
+const softNeonGlow = (color: string) => ({
+  shadowColor: color,
+  shadowOffset: { width: 0, height: 0 },
+  shadowOpacity: 0.42, // SHADOWS.neonGlow: 0.7
+  shadowRadius: 14, //    SHADOWS.neonGlow: 24
+  elevation: 8,
+});
+
+// ─── Tier metal kit — each milestone tier gets a metallic identity (ring +
+// two-stop metal gradient) with an escalating bespoke prize illustration
+// from the GameIcon reward registry rendered full-brightness inside. ────────
+type TierMetal = { top: string; bottom: string; ring: string };
+const TIER_METALS: Record<string, TierMetal> = {
+  bronze: { top: '#cd8a4e', bottom: '#6e4322', ring: '#e8b078' },
+  silver: { top: '#c9d4e0', bottom: '#67748a', ring: '#e4ebf3' },
+  gold: { top: '#ffd700', bottom: '#8f6a00', ring: '#ffe97a' },
+  diamond: { top: '#7fe3f0', bottom: '#2a7e93', ring: '#b5f2fb' },
+};
+/** Prize art escalates up the ladder: coins → gems → chest → trophy. */
+const TIER_PRIZE_ICONS: Record<string, GameIconName> = {
+  bronze: 'coinPile',
+  silver: 'gemCluster',
+  gold: 'chestGold',
+  diamond: 'trophy',
+};
+const TIER_FALLBACK_ICONS: GameIconName[] = ['coinPile', 'gemCluster', 'chestGold', 'trophy'];
+const getTierMetal = (tier: string, idx: number): TierMetal =>
+  TIER_METALS[tier] ?? Object.values(TIER_METALS)[Math.min(idx, 3)];
+const getTierPrizeIcon = (tier: string, idx: number): GameIconName =>
+  TIER_PRIZE_ICONS[tier] ?? TIER_FALLBACK_ICONS[Math.min(idx, 3)];
+
+/**
+ * TierMedallion — metallic milestone coin: metal ring, two-stop vertical
+ * metal-gradient fill, top sheen, prize icon full-brightness inside. Locked
+ * tiers stay full-color (locked reads via the lock badge + dimmed card).
+ */
+function TierMedallion({
+  size = 40,
+  metal,
+  muted = false,
+  children,
+}: {
+  size?: number;
+  metal: TierMetal;
+  muted?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 1.5,
+        borderColor: muted ? metal.ring + '73' : metal.ring + 'CC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        backgroundColor: metal.bottom,
+        shadowColor: muted ? '#000' : metal.top,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: muted ? 0.12 : 0.33,
+        shadowRadius: size * 0.13,
+        elevation: muted ? 1 : 4,
+      }}
+    >
+      <LinearGradient
+        colors={[metal.top, metal.bottom]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.06,
+          left: size * 0.16,
+          right: size * 0.16,
+          height: size * 0.16,
+          borderRadius: size * 0.08,
+          backgroundColor: 'rgba(255,255,255,0.28)',
+        }}
+      />
+      {children}
+    </View>
+  );
+}
 
 // ─── Drawn glyph kit — layered Views/gradients, no emoji (same technique as
 // LeaderboardScreen's GlyphMedallion / ClubScreen's ShieldCrest family). ────
@@ -63,9 +163,9 @@ function DrawnMedallion({
           backgroundColor: 'rgba(8, 2, 22, 0.92)',
           shadowColor: muted ? '#000' : accent,
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: muted ? 0.2 : 0.55,
-          shadowRadius: size * 0.22,
-          elevation: muted ? 2 : 6,
+          shadowOpacity: muted ? 0.12 : 0.33,
+          shadowRadius: size * 0.13,
+          elevation: muted ? 2 : 4,
         },
         style ?? null,
       ]}
@@ -591,42 +691,6 @@ function EventIconGlyph({ icon, accent, size }: { icon?: string; accent: string;
 }
 
 /**
- * Self-contained 1Hz countdown leaf (same pattern as ShopScreen's
- * LiveCountdownText). Owning the interval here means the tick re-renders one
- * Text node instead of re-running the entire ~950-line EventScreen body every
- * second for the lifetime of the screen.
- */
-const EventCountdownText = React.memo(function EventCountdownText({
-  endTime,
-  style,
-}: {
-  endTime: number;
-  style: object;
-}) {
-  const format = useCallback(() => {
-    const remaining = Math.max(0, endTime - Date.now());
-    const days = Math.floor(remaining / 86400000);
-    const hours = Math.floor((remaining % 86400000) / 3600000);
-    const minutes = Math.floor((remaining % 3600000) / 60000);
-    const seconds = Math.floor((remaining % 60000) / 1000);
-    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-    return `${hours.toString().padStart(2, '0')}:${minutes
-      .toString()
-      .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  }, [endTime]);
-
-  const [text, setText] = useState(() => format());
-
-  useEffect(() => {
-    setText(format());
-    const interval = setInterval(() => setText(format()), 1000);
-    return () => clearInterval(interval);
-  }, [format]);
-
-  return <Text style={style}>Ends in {text}</Text>;
-});
-
-/**
  * Event progress bar with milestone markers. Wraps the shared NeonProgressBar
  * and overlays one marker dot per reward tier at its threshold position so
  * the player can see exactly where the next payoff sits on the track.
@@ -660,11 +724,11 @@ const MilestoneProgress = React.memo(function MilestoneProgress({
                   ? {
                       backgroundColor: color,
                       borderColor: '#fff',
-                      ...SHADOWS.neonGlow(color),
+                      ...softNeonGlow(color),
                     }
                   : // Unreached markers stay alive at 0%: accent-tinted ring
                     // with an ember dot instead of a flat grey disc.
-                    { borderColor: color + '88', ...SHADOWS.glow(color) },
+                    { borderColor: color + '88', ...softGlow(color) },
               ]}
             >
               {!reached && (
@@ -709,7 +773,6 @@ const EventScreen: React.FC<EventScreenProps> = ({
 
   // Get the primary event (main or first active)
   const primaryEvent = activeEvents.find(e => e.type === 'main') || activeEvents[0];
-  const endTime = primaryEvent?.endTime ?? (event?.endTime ?? Date.now() + 5 * 24 * 60 * 60 * 1000);
 
   // Claim a reward tier
   const handleClaimReward = useCallback((eventId: string, tier: string) => {
@@ -770,21 +833,6 @@ const EventScreen: React.FC<EventScreenProps> = ({
   // Multiplier display
   const multipliers = eventManager.getEventMultipliers();
   const hasActiveMultipliers = multipliers.coins > 1 || multipliers.xp > 1 || multipliers.rareTileChance > 1;
-
-  /** Reward-specific glyph for a tier's PRIMARY payout — locked tiers show
-   *  the actual reward full-color instead of an identical padlock everywhere. */
-  const getTierRewardGlyph = (
-    rewards: { coins?: number; gems?: number; hintTokens?: number; badge?: string; decoration?: string },
-    accent: string,
-    size: number,
-  ): React.ReactNode => {
-    if (rewards.badge) return <TrophyGlyph size={size} accent={COLORS.gold} />;
-    if (rewards.decoration) return <StarBurstGlyph size={size} accent={accent} />;
-    if (rewards.gems) return <DiamondGlyph size={size} accent={COLORS.cyan} />;
-    if (rewards.coins) return <CoinGlyph size={size} />;
-    if (rewards.hintTokens) return <BoltGlyph size={size} accent={accent} />;
-    return <GiftGlyph size={size} />;
-  };
 
   const getRewardTypeGlyph = (type: string, accent: string, size: number): React.ReactNode => {
     switch (type) {
@@ -855,11 +903,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
   return (
     <ScreenScaffold
       title="EVENTS"
-      eyebrow={
-        primaryEvent
-          ? `ENDS IN ${formatCountdown(endTime).toUpperCase()}`
-          : 'LIVE CHALLENGES'
-      }
+      eyebrow="LIVE CHALLENGES"
       accent={headerAccent}
       backdrop="event"
     >
@@ -1050,19 +1094,25 @@ const EventScreen: React.FC<EventScreenProps> = ({
                             borderRadius: haloSize / 2,
                             borderColor: tierAccent + (reward.reached ? '66' : isNext ? '55' : '59'),
                             backgroundColor: tierAccent + '26',
-                            ...(reward.reached || isNext ? SHADOWS.glow(tierAccent) : null),
+                            ...(reward.reached || isNext ? softGlow(tierAccent) : null),
                           },
                         ]}
                       >
-                        <DrawnMedallion size={medSize} accent={tierAccent} muted={isFar}>
-                          {reward.claimed ? (
-                            <CheckGlyph size={medSize * 0.6} accent={COLORS.green} />
-                          ) : reward.reached ? (
-                            <GiftGlyph size={medSize * 0.6} />
-                          ) : (
-                            getTierRewardGlyph(reward.rewards, tierAccent, medSize * 0.6)
-                          )}
-                        </DrawnMedallion>
+                        <TierMedallion
+                          size={medSize}
+                          metal={getTierMetal(reward.tier, tierIdx)}
+                          muted={isFar}
+                        >
+                          <GameIcon
+                            name={getTierPrizeIcon(reward.tier, tierIdx)}
+                            size={medSize * 0.62}
+                          />
+                        </TierMedallion>
+                        {reward.claimed && (
+                          <View style={[styles.tierLockBadge, { borderColor: COLORS.green + '8C' }]}>
+                            <CheckGlyph size={10} accent={COLORS.green} />
+                          </View>
+                        )}
                         {!reward.reached && (
                           <View style={styles.tierLockBadge}>
                             <LockGlyph size={10} accent={COLORS.gold} />
@@ -1205,14 +1255,9 @@ const EventScreen: React.FC<EventScreenProps> = ({
                 />
               </>
             ) : (
-              <>
-                <View style={styles.exclusiveTimerRow}>
-                  <EventCountdownText endTime={endTime} style={styles.exclusiveTimerText} />
-                </View>
-                <Text style={styles.exclusiveHint}>
-                  Reach the Gold tier to unlock this exclusive reward!
-                </Text>
-              </>
+              <Text style={styles.exclusiveHint}>
+                Reach Gold tier to unlock this exclusive reward
+              </Text>
             )}
           </LinearGradient>
         )}
@@ -1292,7 +1337,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.gold + '40',
     backgroundColor: COLORS.surface,
     overflow: 'hidden',
-    ...SHADOWS.glow(COLORS.gold),
+    ...softGlow(COLORS.gold),
   },
   multiplierMedallion: {
     marginRight: 12,
@@ -1486,7 +1531,7 @@ const styles = StyleSheet.create({
   },
   rewardTierCardClaimable: {
     borderColor: COLORS.gold + '77',
-    ...SHADOWS.glow(COLORS.gold),
+    ...softGlow(COLORS.gold),
   },
   rewardTierCardClaimed: {
     opacity: 0.9,
@@ -1604,7 +1649,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.gold + '50',
     overflow: 'hidden',
     backgroundColor: COLORS.surface,
-    ...SHADOWS.glow(COLORS.gold),
+    ...softGlow(COLORS.gold),
   },
   exclusiveGlow: {
     position: 'absolute',
@@ -1676,28 +1721,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textSecondary,
   },
-  exclusiveTimerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: COLORS.gold + '40',
-    backgroundColor: COLORS.gold + '14',
-  },
-  exclusiveTimerText: {
-    fontSize: 13,
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.gold,
-    fontVariant: ['tabular-nums'],
-    textShadowColor: COLORS.gold + '40',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
-  },
   exclusiveHint: {
     fontSize: 11,
     color: COLORS.textMuted,
@@ -1743,7 +1766,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.gold + '40',
     overflow: 'hidden',
     backgroundColor: COLORS.surface,
-    ...SHADOWS.glow(COLORS.gold),
+    ...softGlow(COLORS.gold),
   },
   shopMedallion: {
     marginRight: 14,

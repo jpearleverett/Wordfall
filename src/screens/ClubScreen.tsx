@@ -141,7 +141,7 @@ function CrestMedallion({
         padding: 2,
         shadowColor: ring ? ring[1] : accent,
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.55,
+        shadowOpacity: 0.3,
         shadowRadius: size * 0.22,
         elevation: 8,
       }}
@@ -329,7 +329,7 @@ function GlyphMedallion({
           backgroundColor: 'rgba(8, 2, 22, 0.92)',
           shadowColor: muted ? '#000' : accent,
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: muted ? 0.2 : 0.55,
+          shadowOpacity: muted ? 0.2 : 0.3,
           shadowRadius: size * 0.22,
           elevation: muted ? 2 : 6,
         },
@@ -358,47 +358,6 @@ function GlyphMedallion({
         }}
       />
       {children}
-    </View>
-  );
-}
-
-/** Drawn 8-point star burst — two crossed gradient squares + hot core. */
-function StarBurstGlyph({ size = 18 }: { size?: number }) {
-  const sq = size * 0.68;
-  const square = {
-    position: 'absolute' as const,
-    width: sq,
-    height: sq,
-    borderRadius: sq * 0.18,
-    overflow: 'hidden' as const,
-  };
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={[square, { transform: [{ rotate: '45deg' }] }]}>
-        <LinearGradient
-          colors={[COLORS.goldLight, COLORS.gold]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      <View style={square}>
-        <LinearGradient
-          colors={[COLORS.goldLight, COLORS.gold]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      <View
-        style={{
-          position: 'absolute',
-          width: sq * 0.34,
-          height: sq * 0.34,
-          borderRadius: sq * 0.17,
-          backgroundColor: 'rgba(255,255,255,0.6)',
-        }}
-      />
     </View>
   );
 }
@@ -573,211 +532,199 @@ function TileGridGlyph({ size = 20, accent = COLORS.accent }: { size?: number; a
 }
 
 /**
- * ShieldCrest — designed club crest drawn entirely from Views/gradients:
- * metallic-rim shield silhouette (rounded top block + rotated-diamond point),
- * dark gem inner field with glass highlight and rivets, gold star spark over
- * a display-font W emblem, and small gold wing accents. Replaces the emoji
- * shield-on-disc the art review flagged.
+ * ShieldCrest — layered club emblem built from stacked gradient Views: a
+ * soft accent halo, gold metallic rim, dark inner-border groove, metallic
+ * purple face with a glass highlight, a small crown docked over the rim,
+ * and ONE of the game's letter tiles (selected-tile gradient, rounded
+ * display W) centered on the face. Replaces the outlined shield + side
+ * circles the round-2 art review flagged as a crude vector.
  */
 function ShieldCrest({ size = 92, muted = false }: { size?: number; muted?: boolean }) {
-  const w = size * 0.76;
-  const topH = size * 0.48;
-  const topR = size * 0.12;
-  const inset = size * 0.045;
-  const diag = w / Math.SQRT2;
-  const diagIn = (w - inset * 2) / Math.SQRT2;
-  // A rotated square's visual bounding box is side * sqrt(2) = w, so the
-  // point reaches w / 2 below the block bottom.
-  const height = topH + w / 2 + size * 0.02;
-  const rim = [COLORS.accentLight, COLORS.accent, COLORS.purple] as const;
-  const field = ['rgba(58,26,102,0.98)', 'rgba(12,4,28,0.99)'] as const;
-  const wing = (side: 'left' | 'right', idx: number) => {
-    const len = size * (0.3 - idx * 0.07);
-    const rot = (side === 'left' ? -1 : 1) * (14 + idx * 10);
+  const w = size * 0.82;
+  const topH = size * 0.5;
+  const topR = size * 0.14;
+  const rimT = size * 0.05; // metallic rim thickness
+  const grooveT = rimT + size * 0.024; // rim + inner-border groove
+  const crownH = size * 0.27;
+  const shieldTop = crownH * 0.55; // crown overlaps the rim by ~45%
+  const shieldH = topH + w / 2;
+  const height = shieldTop + shieldH + size * 0.03;
+  const groove = 'rgba(14,5,30,0.97)';
+  const face = ['#7040ae', '#341560', '#4b2280'] as const;
+  const tile = size * 0.4;
+  const tileTop = shieldTop + shieldH * 0.46 - tile / 2;
+
+  /** One shield-silhouette layer: rounded top block + rotated diamond point. */
+  const layer = (
+    inset: number,
+    fill: string | readonly string[],
+    children?: React.ReactNode
+  ) => {
+    const lw = w - inset * 2;
+    const side = lw / Math.SQRT2;
+    const solid = typeof fill === 'string';
+    const gradient = solid
+      ? null
+      : ([...fill] as [string, string, ...string[]]);
+    const blockStyle = {
+      position: 'absolute' as const,
+      top: shieldTop + inset,
+      width: lw,
+      height: topH - inset + 1,
+      borderTopLeftRadius: Math.max(topR - inset * 0.7, 3),
+      borderTopRightRadius: Math.max(topR - inset * 0.7, 3),
+      overflow: 'hidden' as const,
+      backgroundColor: solid ? fill : undefined,
+    };
+    const pointStyle = {
+      position: 'absolute' as const,
+      top: shieldTop + topH - side / 2,
+      width: side,
+      height: side,
+      borderRadius: Math.max(size * 0.06 - inset * 0.5, 2),
+      overflow: 'hidden' as const,
+      transform: [{ rotate: '45deg' }],
+      backgroundColor: solid ? fill : undefined,
+    };
     return (
-      <View
-        key={`${side}${idx}`}
-        style={{
-          position: 'absolute',
-          top: size * (0.16 + idx * 0.13),
-          ...(side === 'left' ? { left: -size * 0.1 } : { right: -size * 0.1 }),
-          width: len,
-          height: size * 0.055,
-          borderRadius: size * 0.03,
-          overflow: 'hidden',
-          transform: [{ rotate: `${rot}deg` }],
-        }}
-      >
-        <LinearGradient
-          colors={[COLORS.goldLight, COLORS.gold + '66']}
-          start={side === 'left' ? { x: 1, y: 0.5 } : { x: 0, y: 0.5 }}
-          end={side === 'left' ? { x: 0, y: 0.5 } : { x: 1, y: 0.5 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
+      <>
+        <View style={pointStyle}>
+          {gradient && (
+            <LinearGradient
+              colors={gradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          )}
+        </View>
+        <View style={blockStyle}>
+          {gradient && (
+            <LinearGradient
+              colors={gradient}
+              start={{ x: 0.2, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          )}
+          {children}
+        </View>
+      </>
     );
   };
+
   return (
     <View
       style={{
-        width: size * 1.2,
-        height: height,
+        width: size,
+        height,
         alignItems: 'center',
         opacity: muted ? 0.55 : 1,
         shadowColor: COLORS.accent,
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: muted ? 0.2 : 0.6,
+        shadowOpacity: muted ? 0.2 : 0.3,
         shadowRadius: size * 0.2,
-        elevation: muted ? 2 : 9,
+        elevation: muted ? 2 : 6,
       }}
     >
-      {wing('left', 0)}
-      {wing('left', 1)}
-      {wing('left', 2)}
-      {wing('right', 0)}
-      {wing('right', 1)}
-      {wing('right', 2)}
-      {/* Metallic rim: top block */}
+      {/* Soft halo behind the emblem */}
       <View
         style={{
           position: 'absolute',
-          top: 0,
-          width: w,
-          height: topH + 1,
-          borderTopLeftRadius: topR,
-          borderTopRightRadius: topR,
-          overflow: 'hidden',
+          top: shieldTop + shieldH / 2 - size * 0.55,
+          width: size * 1.1,
+          height: size * 1.1,
+          borderRadius: size * 0.55,
+          backgroundColor: COLORS.accent + '14',
         }}
-      >
-        <LinearGradient
-          colors={[...rim]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      {/* Metallic rim: shield point */}
+      />
       <View
         style={{
           position: 'absolute',
-          top: topH - diag / 2,
-          width: diag,
-          height: diag,
-          borderRadius: size * 0.07,
-          overflow: 'hidden',
-          transform: [{ rotate: '45deg' }],
+          top: shieldTop + shieldH / 2 - size * 0.4,
+          width: size * 0.8,
+          height: size * 0.8,
+          borderRadius: size * 0.4,
+          backgroundColor: COLORS.purple + '1F',
         }}
-      >
-        <LinearGradient
-          colors={[...rim]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-      {/* Inner dark field: top block */}
-      <View
-        style={{
-          position: 'absolute',
-          top: inset,
-          width: w - inset * 2,
-          height: topH - inset + 1,
-          borderTopLeftRadius: topR * 0.72,
-          borderTopRightRadius: topR * 0.72,
-          overflow: 'hidden',
-        }}
-      >
-        <LinearGradient
-          colors={[...field]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        {/* Glass highlight */}
+      />
+      {/* Metallic rim → inner-border groove → metallic face */}
+      {layer(0, TIER_METAL.gold)}
+      {layer(rimT, groove)}
+      {layer(
+        grooveT,
+        face,
         <View
           style={{
             position: 'absolute',
             top: size * 0.035,
-            left: w * 0.16,
-            right: w * 0.16,
-            height: size * 0.09,
+            left: w * 0.14,
+            right: w * 0.14,
+            height: size * 0.085,
             borderRadius: size * 0.05,
-            backgroundColor: 'rgba(255,255,255,0.13)',
+            backgroundColor: 'rgba(255,255,255,0.14)',
           }}
         />
-        {/* Rivets */}
-        <View
-          style={{
-            position: 'absolute',
-            top: size * 0.05,
-            left: w * 0.06,
-            width: size * 0.045,
-            height: size * 0.045,
-            borderRadius: size * 0.03,
-            backgroundColor: 'rgba(255,255,255,0.35)',
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            top: size * 0.05,
-            right: w * 0.06,
-            width: size * 0.045,
-            height: size * 0.045,
-            borderRadius: size * 0.03,
-            backgroundColor: 'rgba(255,255,255,0.35)',
-          }}
-        />
-      </View>
-      {/* Inner dark field: point */}
+      )}
+      {/* One of the game's letter tiles, centered on the face */}
       <View
         style={{
           position: 'absolute',
-          top: topH - diagIn / 2,
-          width: diagIn,
-          height: diagIn,
-          borderRadius: size * 0.05,
+          top: tileTop,
+          width: tile,
+          height: tile,
+          borderRadius: tile * 0.26,
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.4)',
           overflow: 'hidden',
-          transform: [{ rotate: '45deg' }],
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: COLORS.accent,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.3,
+          shadowRadius: tile * 0.2,
+          elevation: 4,
         }}
       >
         <LinearGradient
-          colors={[...field]}
+          colors={[...GRADIENTS.tile.selected]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFillObject}
         />
-      </View>
-      {/* Emblem: gold spark over display-font W */}
-      <View
-        style={{
-          position: 'absolute',
-          top: size * 0.1,
-          width: w,
-          alignItems: 'center',
-        }}
-      >
-        <StarBurstGlyph size={size * 0.17} />
+        <View
+          style={{
+            position: 'absolute',
+            top: tile * 0.07,
+            left: tile * 0.12,
+            right: tile * 0.12,
+            height: tile * 0.2,
+            borderRadius: tile * 0.1,
+            backgroundColor: 'rgba(255,255,255,0.22)',
+          }}
+        />
         <Text
           style={{
-            fontFamily: FONTS.display,
-            fontSize: size * 0.34,
-            lineHeight: size * 0.42,
-            color: COLORS.textPrimary,
-            textShadowColor: COLORS.accentGlow,
-            textShadowOffset: { width: 0, height: 0 },
-            textShadowRadius: size * 0.1,
-            marginTop: size * 0.015,
+            fontFamily: FONTS.displayRounded,
+            fontSize: tile * 0.58,
+            color: '#ffffff',
+            textShadowColor: 'rgba(0,0,0,0.35)',
+            textShadowOffset: { width: 0, height: 1 },
+            textShadowRadius: 2,
           }}
         >
           W
         </Text>
       </View>
+      {/* Crown docked over the rim */}
+      <View style={{ position: 'absolute', top: 0 }}>
+        <GameIcon name="crown" size={crownH} accent={COLORS.gold} />
+      </View>
     </View>
   );
 }
 
-/** Hero benefit bullet: small drawn-glyph medallion + copy. */
+/** Hero benefit bullet: icon in a tinted circular well (Home stat-card style) + copy. */
 function BenefitRow({
   icon,
   accent,
@@ -789,9 +736,14 @@ function BenefitRow({
 }) {
   return (
     <View style={clubPrimStyles.benefitRow}>
-      <GlyphMedallion size={34} accent={accent}>
+      <View
+        style={[
+          clubPrimStyles.benefitWell,
+          { backgroundColor: accent + '24', borderColor: accent + '55' },
+        ]}
+      >
         {icon}
-      </GlyphMedallion>
+      </View>
       <Text style={clubPrimStyles.benefitText}>{text}</Text>
     </View>
   );
@@ -815,6 +767,14 @@ const clubPrimStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     marginTop: 10,
+  },
+  benefitWell: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   benefitText: {
     flex: 1,
@@ -1355,14 +1315,10 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           style={StyleSheet.absoluteFillObject}
         />
 
-        {/* Crest medallion cluster */}
+        {/* Crest emblem cluster: shield + satellite chips docked at 45° */}
         <View style={styles.crestCluster}>
-          <GlyphMedallion size={44} accent={COLORS.gold} style={styles.crestSideLeft}>
-            <StarBurstGlyph size={22} />
-          </GlyphMedallion>
           <Animated.View
             style={{
-              zIndex: 2,
               transform: [
                 {
                   scale: crestPulse.interpolate({
@@ -1375,8 +1331,11 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
           >
             <ShieldCrest size={96} />
           </Animated.View>
-          <GlyphMedallion size={44} accent={COLORS.cyan} style={styles.crestSideRight}>
-            <ChatBubbleGlyph size={20} accent={COLORS.cyan} />
+          <GlyphMedallion size={40} accent={COLORS.gold} style={styles.crestSideLeft}>
+            <GameIcon name="gift" size={19} accent={COLORS.gold} />
+          </GlyphMedallion>
+          <GlyphMedallion size={40} accent={COLORS.cyan} style={styles.crestSideRight}>
+            <GameIcon name="chat" size={19} accent={COLORS.cyan} />
           </GlyphMedallion>
         </View>
 
@@ -1387,9 +1346,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </Text>
 
         <View style={styles.benefitList}>
-          <BenefitRow icon={<GameIcon name="gift" size={18} accent={COLORS.gold} />} accent={COLORS.gold} text="Send and receive booster gifts with clubmates" />
-          <BenefitRow icon={<GameIcon name="trophy" size={18} accent={COLORS.cyan} />} accent={COLORS.cyan} text="Climb the weekly club rankings as a team" />
-          <BenefitRow icon={<GameIcon name="chat" size={18} accent={COLORS.purpleLight} />} accent={COLORS.purple} text="Chat, react, and clear shared goals together" />
+          <BenefitRow icon={<GameIcon name="gift" size={18} accent={COLORS.accent} />} accent={COLORS.accent} text="Send and receive booster gifts with clubmates" />
+          <BenefitRow icon={<GameIcon name="trophy" size={18} accent={COLORS.gold} />} accent={COLORS.gold} text="Climb the weekly club rankings as a team" />
+          <BenefitRow icon={<GameIcon name="chat" size={18} accent={COLORS.cyan} />} accent={COLORS.cyan} text="Chat, react, and clear shared goals together" />
         </View>
       </View>
 
@@ -1543,6 +1502,12 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
             accessibilityRole="button"
             accessibilityLabel="Create new club"
           >
+            <LinearGradient
+              colors={[...GRADIENTS.surfaceCard] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
             <GlyphMedallion size={36} accent={COLORS.accent}>
               <Text style={styles.plusGlyph}>+</Text>
             </GlyphMedallion>
@@ -1980,24 +1945,28 @@ const styles = StyleSheet.create({
     paddingBottom: 150,
   },
   heroPanel: {
-    ...bentoPanel('pink', { padding: 20, borderRadius: RADIUS.xxl }),
+    ...bentoPanel('pink', { padding: 20, borderRadius: RADIUS.xxl, marginBottom: 10 }),
     alignItems: 'center',
     overflow: 'hidden',
     backgroundColor: COLORS.surfaceGlass,
   },
   crestCluster: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 6,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   crestSideLeft: {
-    marginRight: -12,
-    marginBottom: 4,
+    position: 'absolute',
+    left: -26,
+    bottom: 16,
+    zIndex: 3,
   },
   crestSideRight: {
-    marginLeft: -12,
-    marginBottom: 4,
+    position: 'absolute',
+    right: -26,
+    bottom: 16,
+    zIndex: 3,
   },
   noClubTitle: {
     fontSize: 22,
@@ -2024,7 +1993,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   searchSection: {
-    marginBottom: 10,
+    // SectionHeader carries its own 22pt top margin; pull each band up so the
+    // no-club scroll reads as one composed pitch instead of floating islands.
+    marginTop: -7,
+    marginBottom: 6,
   },
   searchBar: {
     flexDirection: 'row',
@@ -2162,7 +2134,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   createSection: {
-    marginBottom: 24,
+    marginTop: -7,
+    marginBottom: 16,
   },
   createButton: {
     flexDirection: 'row',
@@ -2171,9 +2144,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceGlass,
     borderRadius: RADIUS.xl,
     paddingVertical: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.accent + '40',
-    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: 'rgba(255,45,149,0.28)',
+    overflow: 'hidden',
     gap: 12,
     ...SHADOWS.soft,
   },

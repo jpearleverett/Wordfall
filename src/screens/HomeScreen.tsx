@@ -1525,8 +1525,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   heroCard: {
-    padding: 24,
-    marginBottom: 14,
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 14,
+    marginBottom: 10,
   },
   heroLogoGlow: {
     // iOS-only: CoreAnimation traces the logo's transparent pixels, so the
