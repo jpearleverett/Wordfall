@@ -11,18 +11,9 @@ import {
   ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, {
-  Circle,
-  ClipPath,
-  Defs,
-  G,
-  LinearGradient as SvgGradient,
-  Path,
-  Rect,
-  Stop,
-} from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
-import { gradId, shade } from '../components/icons/IconBase';
+import AvatarPortrait from '../components/cosmetics/AvatarPortrait';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import IconMedallion from '../components/common/IconMedallion';
 import ThemePreview from '../components/cosmetics/ThemePreview';
@@ -231,84 +222,6 @@ function CornerSunburst({ color }: { color: string }) {
 // ── Frame art preview ────────────────────────────────────────────────────────
 
 /**
- * Placeholder avatar for frame previews — a miniature synthwave portrait
- * vignette (sunset disc over a neon grid floor with a neutral head-and-
- * shoulders silhouette) so frames read as framing a PICTURE.
- *
- * The whole vignette is keyed to the FRAME's own accent (bronze frames get a
- * warm-amber portrait, ocean frames a cyan one), so no two frame cards read
- * as the identical dark bust. Still deliberately muted: the ring is the hero.
- */
-function PortraitVignette({ size, accent = '#ff2d95' }: { size: number; accent?: string }) {
-  const ids = useMemo(() => {
-    const base = gradId('frameport');
-    return { sky: `${base}-sky`, sun: `${base}-sun`, sil: `${base}-sil`, clip: `${base}-clip` };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // Accent-derived palette: deep sky, lit sun, silhouette, rim light.
-  const skyTop = shade(accent, -160);
-  const skyMid = shade(accent, -118);
-  const skyBase = shade(accent, -190);
-  const sunHi = shade(accent, 86);
-  const silTop = shade(accent, -128);
-  const silBase = shade(accent, -172);
-  const rimLight = shade(accent, 110);
-  return (
-    <Svg width={size} height={size} viewBox="0 0 100 100">
-      <Defs>
-        <SvgGradient id={ids.sky} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={skyTop} />
-          <Stop offset="0.55" stopColor={skyMid} />
-          <Stop offset="1" stopColor={skyBase} />
-        </SvgGradient>
-        <SvgGradient id={ids.sun} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={sunHi} />
-          <Stop offset="1" stopColor={accent} />
-        </SvgGradient>
-        <SvgGradient id={ids.sil} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={silTop} />
-          <Stop offset="1" stopColor={silBase} />
-        </SvgGradient>
-        <ClipPath id={ids.clip}>
-          <Circle cx={50} cy={50} r={50} />
-        </ClipPath>
-      </Defs>
-      <G clipPath={`url(#${ids.clip})`}>
-        <Rect x={0} y={0} width={100} height={100} fill={`url(#${ids.sky})`} />
-        {/* Sunset disc with scanline slits */}
-        <Circle cx={50} cy={52} r={22} fill={`url(#${ids.sun})`} opacity={0.6} />
-        <Rect x={26} y={46} width={48} height={1.6} fill="#1c0c36" opacity={0.75} />
-        <Rect x={26} y={51.5} width={48} height={2.2} fill="#1c0c36" opacity={0.75} />
-        <Rect x={26} y={58} width={48} height={2.8} fill={skyBase} opacity={0.8} />
-        {/* Horizon + perspective grid floor */}
-        <Path d="M0 62 H100" stroke={accent} strokeWidth={1} opacity={0.55} />
-        <Path d="M0 68 H100" stroke={accent} strokeWidth={0.8} opacity={0.3} />
-        <Path d="M0 76 H100" stroke={accent} strokeWidth={0.8} opacity={0.3} />
-        <Path d="M0 87 H100" stroke={accent} strokeWidth={0.8} opacity={0.3} />
-        {[14, 32, 68, 86].map((x) => (
-          <Path
-            key={`v${x}`}
-            d={`M50 62 L${x} 100`}
-            stroke={accent}
-            strokeWidth={0.8}
-            opacity={0.3}
-          />
-        ))}
-        {/* Neutral head-and-shoulders silhouette */}
-        <Circle cx={50} cy={42} r={14.5} fill={`url(#${ids.sil})`} />
-        <Path d="M21 100 C23 74 34 63 50 63 C66 63 77 74 79 100 Z" fill={`url(#${ids.sil})`} />
-        {/* Faint rim light so the silhouette reads against the sun */}
-        <Path d="M38.5 34.5 A14.5 14.5 0 0 1 61.5 34.5" stroke={rimLight} strokeWidth={1.1} opacity={0.4} fill="none" />
-        {/* Soft top sheen + bottom vignette */}
-        <Rect x={0} y={0} width={100} height={26} fill="#ffffff" opacity={0.04} />
-        <Rect x={0} y={84} width={100} height={16} fill="#05000f" opacity={0.35} />
-      </G>
-      <Circle cx={50} cy={50} r={49.2} stroke="rgba(255,255,255,0.08)" strokeWidth={1} fill="none" />
-    </Svg>
-  );
-}
-
-/**
  * Real frame art preview — ProfileFrameArt's bespoke SVG ring wrapped around
  * a mini portrait vignette (matching ProfileScreen's avatar footprint), so
  * store cards show the actual frame framing a picture. Locked/unowned
@@ -341,7 +254,9 @@ function FramePreview({
             backgroundColor: 'rgba(10,0,21,0.92)',
           }}
         >
-          <PortraitVignette size={discSize} accent={accent} />
+          {/* Illustrated Word Architect portrait, variant keyed by frame id
+              so no two frame cards enclose the same figure. */}
+          <AvatarPortrait size={discSize} accent={accent} variant={frameId} />
         </View>
       </ProfileFrameArt>
     </View>

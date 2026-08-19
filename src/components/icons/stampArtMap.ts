@@ -41,7 +41,7 @@ export const STAMP_ICON_BY_ID: Record<string, GameIconName> = {
   su26_3: 'stampWave',         // Ocean Wave
   su26_4: 'stampIceCream',     // Ice Cream
   su26_5: 'stampStarTrail',    // Stargazer
-  su26_6: 'stampSun',          // Summer Heat
+  su26_6: 'stampHeatwave',     // Summer Heat (never a second plain sun disc)
   su26_7: 'stampPalm',         // Tropical
   su26_8: 'stampCrown',        // Summer King
   su26_9: 'stampSandcastle',   // Sandcastle

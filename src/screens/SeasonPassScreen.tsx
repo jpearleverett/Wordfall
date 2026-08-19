@@ -24,6 +24,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
 import { COLORS, FONTS, GRADIENTS, RADIUS, SHADOWS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
@@ -50,26 +51,52 @@ import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 import { getDecorationIconName } from '../data/library';
 
 /**
- * Reward → illustration-grade render (iconsRewards). Amounts escalate the
- * art so the ladder visibly pays more as it climbs: coins go single coin →
- * stack → pile, gems go single → cluster → hoard, mystery boxes go bronze
- * chest → gold chest. Hints get the glowing bulb, boosters the sigil crate,
- * rare tiles the crystal. Decoration cosmetics resolve through the
- * decoration icon table so a mapped id shows its own art, with the banner
- * as the season-decoration default. Returns undefined only for cosmetic
- * kinds whose catalog emoji already resolves to distinct art.
+ * Reward → illustration-grade render (iconsRewards), keyed on BOTH the
+ * amount and the tier band.
+ *
+ * Blind-panel fix: amount alone gave the whole 50-tier ladder four recolored
+ * gem clusters and two identical coins, so tier 45 looked exactly like tier
+ * 9. The band is the second axis — the SAME amount is drawn richer the later
+ * it is won:
+ *
+ *   band       coins                       gems
+ *   1–15       lone coin → stack           lone gem → pink trio
+ *   16–35      leather pouch → coin pile   aqua cluster → topaz trio
+ *   36–50      coin pile → spilling chest  amethyst geode → gem hoard
+ *
+ * Mystery boxes escalate bronze → gold chest on the same axis. Hints get the
+ * glowing bulb, boosters the sigil crate, rare tiles the crystal. Decoration
+ * cosmetics resolve through the decoration icon table so a mapped id shows
+ * its own art, with the banner as the season-decoration default. Returns
+ * undefined only for cosmetic kinds whose catalog emoji already resolves to
+ * distinct art.
  */
-function rewardIconName(reward: PassReward): GameIconName | undefined {
+type TierBand = 'early' | 'mid' | 'late';
+
+function tierBand(tier: number): TierBand {
+  if (tier <= 15) return 'early';
+  if (tier <= 35) return 'mid';
+  return 'late';
+}
+
+function rewardIconName(reward: PassReward, tier: number): GameIconName | undefined {
   const amount = reward.amount ?? 0;
+  const band = tierBand(tier);
   if (reward.type === 'coins') {
-    return amount < 100 ? 'coinSmall' : amount <= 300 ? 'coinStack' : 'coinPile';
+    if (band === 'early') return amount >= 200 ? 'coinStack' : 'coinSmall';
+    if (band === 'mid') return amount >= 300 ? 'coinPile' : 'coinPouch';
+    return amount >= 200 ? 'coinChestSpill' : 'coinPile';
   }
   if (reward.type === 'gems') {
-    return amount < 10 ? 'gemSingle' : amount <= 25 ? 'gemCluster' : 'gemHoard';
+    if (band === 'early') return amount >= 15 ? 'gemCluster' : 'gemSingle';
+    if (band === 'mid') return amount >= 20 ? 'gemGoldTrio' : 'gemCyan';
+    return amount >= 25 ? 'gemHoard' : 'gemViolet';
   }
   if (reward.type === 'hints') return 'hintBulbReward';
   if (reward.type === 'booster') return 'boosterCrate';
-  if (reward.type === 'mystery_box') return amount >= 2 ? 'chestGold' : 'chestBronze';
+  if (reward.type === 'mystery_box') {
+    return amount >= 2 || band === 'late' ? 'chestGold' : 'chestBronze';
+  }
   if (reward.type === 'rare_tile') return 'cascadeCrystal';
   if (reward.type === 'cosmetic' && reward.cosmeticId && /(^|_)deco/.test(reward.cosmeticId)) {
     const resolved = getDecorationIconName(reward.cosmeticId);
@@ -77,6 +104,278 @@ function rewardIconName(reward: PassReward): GameIconName | undefined {
   }
   return undefined;
 }
+
+// ─── Season theming ────────────────────────────────────────────────────────
+// Blind-panel fix: the pass shipped "Season 8: Ocean Depths" over the stock
+// magenta synthwave grid with zero ocean motifs. The season now paints its
+// own wash + accents + motif field, and any future season themes itself by
+// keyword — unknown seasons fall through to the synthwave default.
+
+type MotifKind = 'bubbles' | 'stars' | 'leaves' | 'shards' | 'rays' | 'petals' | 'none';
+
+interface SeasonTheme {
+  key: string;
+  /** Screen accent: header glow/hairline, XP bar, spine, FREE lane tag. */
+  accent: string;
+  /** Softer partner hue for lane tag fills and motif ink. */
+  accentSoft: string;
+  /** Full-bleed wash painted over the shared ambient backdrop. */
+  wash: readonly [string, string, string];
+  /** Opaque base under panels and lane cards, so chrome matches the wash. */
+  panel: string;
+  motif: MotifKind;
+  /** Tall bottom-anchored fronds (kelp / ferns) behind the ladder. */
+  fronds: boolean;
+}
+
+const SYNTHWAVE_THEME: SeasonTheme = {
+  key: 'synthwave',
+  accent: COLORS.gold,
+  accentSoft: COLORS.purpleLight,
+  wash: ['rgba(20,4,40,0.55)', 'rgba(12,2,28,0.30)', 'rgba(8,0,20,0.72)'],
+  panel: 'rgba(12,4,28,0.95)',
+  motif: 'none',
+  fronds: false,
+};
+
+const SEASON_THEMES: Record<string, SeasonTheme> = {
+  ocean: {
+    key: 'ocean',
+    accent: '#35e0e8',
+    accentSoft: '#4fb9ff',
+    wash: ['rgba(4,44,62,0.88)', 'rgba(3,26,44,0.72)', 'rgba(1,10,22,0.94)'],
+    panel: 'rgba(4,27,40,0.95)',
+    motif: 'bubbles',
+    fronds: true,
+  },
+  celestial: {
+    key: 'celestial',
+    accent: '#9d8bff',
+    accentSoft: '#65d9ff',
+    wash: ['rgba(14,10,52,0.86)', 'rgba(9,6,36,0.66)', 'rgba(3,2,16,0.94)'],
+    panel: 'rgba(11,9,38,0.95)',
+    motif: 'stars',
+    fronds: false,
+  },
+  forest: {
+    key: 'forest',
+    accent: '#57e58f',
+    accentSoft: '#b7e05a',
+    wash: ['rgba(6,42,28,0.86)', 'rgba(5,28,20,0.68)', 'rgba(2,14,10,0.94)'],
+    panel: 'rgba(5,27,20,0.95)',
+    motif: 'leaves',
+    fronds: true,
+  },
+  crystal: {
+    key: 'crystal',
+    accent: '#7fd8ff',
+    accentSoft: '#c39dff',
+    wash: ['rgba(16,26,58,0.86)', 'rgba(12,16,44,0.66)', 'rgba(4,6,22,0.94)'],
+    panel: 'rgba(11,17,40,0.95)',
+    motif: 'shards',
+    fronds: false,
+  },
+  solar: {
+    key: 'solar',
+    accent: '#ffb347',
+    accentSoft: '#ff6f5e',
+    wash: ['rgba(58,20,6,0.84)', 'rgba(38,12,10,0.64)', 'rgba(16,4,10,0.94)'],
+    panel: 'rgba(33,12,10,0.95)',
+    motif: 'rays',
+    fronds: false,
+  },
+  garden: {
+    key: 'garden',
+    accent: '#ff87c6',
+    accentSoft: '#9ce86f',
+    wash: ['rgba(48,12,44,0.84)', 'rgba(30,10,34,0.64)', 'rgba(12,3,18,0.94)'],
+    panel: 'rgba(30,9,30,0.95)',
+    motif: 'petals',
+    fronds: true,
+  },
+};
+
+/** Keyword → theme key, so a renamed season still themes itself. */
+const THEME_KEYWORDS: readonly (readonly [RegExp, string])[] = [
+  [/ocean|sea|tide|abyss|reef|deep|aqua|marine/i, 'ocean'],
+  [/celest|cosmic|star|voyage|nebula|astral|lunar/i, 'celestial'],
+  [/forest|wood|grove|jungle|leaf|verdant/i, 'forest'],
+  [/crystal|cavern|glacier|frost|ice|prism/i, 'crystal'],
+  [/solar|sun|flare|ember|inferno|desert/i, 'solar'],
+  [/garden|bloom|petal|mystic|blossom|orchard/i, 'garden'],
+];
+
+/**
+ * Resolve a season to its palette. Matches the season's own `theme` id
+ * first, then keywords in its display name; unknown seasons keep the
+ * synthwave default rather than mis-theming.
+ */
+function getSeasonTheme(season: { theme?: string; name?: string }): SeasonTheme {
+  const id = (season.theme ?? '').toLowerCase();
+  if (SEASON_THEMES[id]) return SEASON_THEMES[id];
+  const haystack = `${season.theme ?? ''} ${season.name ?? ''}`;
+  for (const [pattern, key] of THEME_KEYWORDS) {
+    if (pattern.test(haystack)) return SEASON_THEMES[key];
+  }
+  return SYNTHWAVE_THEME;
+}
+
+// Deterministic motif field: positions are % of the ladder viewport so the
+// same 10 marks land identically on every device (no random jitter between
+// renders, and nothing to lay out).
+const MOTIF_SPOTS: readonly { l: number; t: number; s: number; o: number }[] = [
+  { l: 5, t: 7, s: 26, o: 0.20 },
+  { l: 79, t: 4, s: 17, o: 0.16 },
+  { l: 46, t: 15, s: 11, o: 0.14 },
+  { l: 88, t: 24, s: 24, o: 0.15 },
+  { l: 12, t: 33, s: 14, o: 0.17 },
+  { l: 68, t: 44, s: 20, o: 0.13 },
+  { l: 27, t: 55, s: 10, o: 0.15 },
+  { l: 91, t: 63, s: 15, o: 0.14 },
+  { l: 7, t: 74, s: 22, o: 0.16 },
+  { l: 57, t: 86, s: 13, o: 0.13 },
+];
+
+/** One motif mark's shape — bubble, star, leaf, shard, ray or petal. */
+function motifStyle(kind: MotifKind, size: number, color: string): ViewStyle {
+  const base: ViewStyle = {
+    width: size,
+    height: size,
+    borderWidth: 1.2,
+    borderColor: color + '77',
+    backgroundColor: color + '12',
+  };
+  switch (kind) {
+    case 'bubbles':
+      return { ...base, borderRadius: size / 2 };
+    case 'stars':
+      return { ...base, borderRadius: size * 0.18, transform: [{ rotate: '45deg' }] };
+    case 'leaves':
+      return {
+        ...base,
+        height: size * 0.52,
+        borderTopLeftRadius: size,
+        borderBottomRightRadius: size,
+        borderTopRightRadius: 2,
+        borderBottomLeftRadius: 2,
+        transform: [{ rotate: '-24deg' }],
+      };
+    case 'shards':
+      return {
+        ...base,
+        width: size * 0.34,
+        height: size * 1.2,
+        borderRadius: size * 0.1,
+        transform: [{ rotate: '18deg' }],
+      };
+    case 'rays':
+      return {
+        ...base,
+        width: size * 0.18,
+        height: size * 2,
+        borderRadius: size,
+        transform: [{ rotate: '22deg' }],
+      };
+    case 'petals':
+      return {
+        ...base,
+        height: size * 0.7,
+        borderTopLeftRadius: size,
+        borderTopRightRadius: size,
+        borderBottomLeftRadius: size,
+        borderBottomRightRadius: 3,
+        transform: [{ rotate: '-16deg' }],
+      };
+    default:
+      return { ...base, opacity: 0 };
+  }
+}
+
+/**
+ * Season motif field behind the ladder — drifting bubbles + kelp for Ocean
+ * Depths, stars for Celestial, leaves for Forest, and so on. Purely
+ * decorative: pointerEvents none, one shared native-driver drift, and no
+ * animation at all under reduce-motion.
+ */
+const SeasonMotifLayer = memo(function SeasonMotifLayer({
+  theme,
+  reduceMotion,
+}: {
+  theme: SeasonTheme;
+  reduceMotion: boolean;
+}) {
+  const drift = useRef(new Animated.Value(0)).current;
+  const animate = !reduceMotion && theme.motif !== 'none';
+
+  useEffect(() => {
+    if (!animate) {
+      drift.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(drift, {
+          toValue: 1,
+          duration: 7200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(drift, {
+          toValue: 0,
+          duration: 7200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [animate, drift]);
+
+  if (theme.motif === 'none') return null;
+
+  const rise = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -16] });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFillObject, { transform: [{ translateY: rise }] }]}
+    >
+      {theme.fronds && (
+        <Svg
+          width="100%"
+          height={260}
+          viewBox="0 0 120 260"
+          preserveAspectRatio="none"
+          style={styles.frondLayer}
+        >
+          {['M10 262c-8-48 12-74-2-124c-8-30 8-52 0-84', 'M110 262c8-42-12-66 2-112c8-28-6-46 2-78',
+            'M84 262c5-34-9-52 2-86'].map((d, i) => (
+            <Path
+              key={d}
+              d={d}
+              fill="none"
+              stroke={theme.accentSoft}
+              strokeWidth={i === 2 ? 2 : 3}
+              strokeLinecap="round"
+              opacity={i === 2 ? 0.1 : 0.15}
+            />
+          ))}
+        </Svg>
+      )}
+      {MOTIF_SPOTS.map((spot) => (
+        <View
+          key={`${spot.l}-${spot.t}`}
+          style={[
+            styles.motifMark,
+            { left: `${spot.l}%`, top: `${spot.t}%`, opacity: spot.o },
+            motifStyle(theme.motif, spot.s, theme.accent),
+          ]}
+        />
+      ))}
+    </Animated.View>
+  );
+});
 
 /**
  * Reward rarity — driven by what the reward is WORTH, not by which lane it
@@ -596,6 +895,53 @@ const TierNode = memo(function TierNode({
   );
 });
 
+// ─── Graduated locking ─────────────────────────────────────────────────────
+// Blind-panel fix: every locked tile used to dim by the same amount and wear
+// the same padlock, so 40 rows read as one grey wall. Lock strength is now a
+// function of DISTANCE from the player: the next tier is fully lit under an
+// "up next" ring and wears no padlock at all, the next few fade a little, and
+// the far end of the ladder recedes.
+
+type LockDepth = 'open' | 'next' | 'near' | 'far' | 'distant';
+
+function lockDepth(distance: number): LockDepth {
+  if (distance <= 0) return 'open';
+  if (distance === 1) return 'next';
+  if (distance <= 3) return 'near';
+  if (distance <= 8) return 'far';
+  return 'distant';
+}
+
+const LOCK_STEP: Record<
+  LockDepth,
+  {
+    fillOpacity: number;
+    borderAlpha: number;
+    glowFactor: number;
+    artOpacity: number;
+    labelColor: string;
+    showPadlock: boolean;
+  }
+> = {
+  open: { fillOpacity: 1, borderAlpha: 1, glowFactor: 1, artOpacity: 1, labelColor: COLORS.textPrimary, showPadlock: false },
+  next: { fillOpacity: 1, borderAlpha: 1, glowFactor: 0.9, artOpacity: 1, labelColor: COLORS.textPrimary, showPadlock: false },
+  near: { fillOpacity: 0.82, borderAlpha: 0.72, glowFactor: 0.5, artOpacity: 0.97, labelColor: COLORS.textSecondary, showPadlock: true },
+  far: { fillOpacity: 0.58, borderAlpha: 0.44, glowFactor: 0.22, artOpacity: 0.86, labelColor: COLORS.textMuted, showPadlock: true },
+  distant: { fillOpacity: 0.38, borderAlpha: 0.26, glowFactor: 0.08, artOpacity: 0.72, labelColor: COLORS.textMuted, showPadlock: true },
+};
+
+/** Scale the alpha of an `rgba(...)` string (rarity frame borders). */
+function fadeRgba(color: string, factor: number): string {
+  if (factor >= 1) return color;
+  const m = /^rgba?\(([^)]+)\)$/.exec(color);
+  if (!m) return color;
+  const parts = m[1].split(',').map((p) => p.trim());
+  if (parts.length < 3) return color;
+  const alpha = parts.length > 3 ? parseFloat(parts[3]) : 1;
+  const next = Math.max(0, Math.min(1, alpha * factor));
+  return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${next.toFixed(3)})`;
+}
+
 // ─── Lane reward card (free / premium) ─────────────────────────────────────
 
 interface LaneCardProps {
@@ -605,6 +951,10 @@ interface LaneCardProps {
   reached: boolean;
   claimed: boolean;
   isPremiumUser: boolean;
+  /** Tiers between the player and this one (<= 0 once reached). */
+  distance: number;
+  /** Season palette — drives the "up next" ring and the card base tint. */
+  theme: SeasonTheme;
   onClaim: (tier: number, lane: 'free' | 'premium') => void;
 }
 
@@ -615,22 +965,34 @@ const LaneCard = memo(function LaneCard({
   reached,
   claimed,
   isPremiumUser,
+  distance,
+  theme,
   onClaim,
 }: LaneCardProps) {
   const premiumLane = lane === 'premium';
   const premiumLocked = premiumLane && !isPremiumUser;
   const claimable = reached && !claimed && (!premiumLane || isPremiumUser);
-  const muted = !reached || premiumLocked;
   // Landmark tiers (10/20/30/40/50) get a gilded double-ring medallion so
   // the ladder reads as having milestone payoffs at a glance.
   const landmark = tier % 10 === 0;
   const rarity = rewardRarity(reward, tier);
   const frame = RARITY_FRAME[rarity];
   const laneAccent = frame.accent;
-  // Locked = padlock chip on the medallion corner + dimmed shell. There is
-  // no per-card LOCKED pill any more (blind-panel: ~10 identical grey pills
-  // per screen flattened the whole ladder).
-  const showLock = !reached || premiumLocked;
+  // Lock strength scales with distance (see LOCK_STEP). A reached-but-
+  // premium-gated card sits at 'near' so the gold lane reads as bought-not-
+  // earned rather than as unreachable.
+  const depth: LockDepth = reached
+    ? premiumLocked
+      ? 'near'
+      : 'open'
+    : lockDepth(distance);
+  const step = LOCK_STEP[depth];
+  const muted = depth !== 'open';
+  const upNext = depth === 'next' && !premiumLocked;
+  // Locked = padlock chip on the medallion corner. The NEXT tier deliberately
+  // wears no padlock — it gets the "up next" ring instead, which is what
+  // breaks the uniform wall of locks.
+  const showLock = step.showPadlock || premiumLocked;
 
   const handlePress = useCallback(() => onClaim(tier, lane), [onClaim, tier, lane]);
 
@@ -649,14 +1011,14 @@ const LaneCard = memo(function LaneCard({
       style={[
         styles.laneCard,
         {
-          borderColor: frame.border,
+          backgroundColor: theme.panel,
+          borderColor: fadeRgba(frame.border, step.borderAlpha),
           borderWidth: frame.borderWidth,
           shadowColor: frame.accent,
-          shadowOpacity: muted ? frame.glowOpacity * 0.3 : frame.glowOpacity,
+          shadowOpacity: frame.glowOpacity * step.glowFactor,
           shadowRadius: frame.glowRadius,
-          elevation: frame.glowOpacity > 0.35 ? 6 : 3,
+          elevation: frame.glowOpacity > 0.35 && depth === 'open' ? 6 : 3,
         },
-        muted && styles.laneCardLockedShell,
         claimed && styles.laneCardClaimed,
       ]}
     >
@@ -667,9 +1029,15 @@ const LaneCard = memo(function LaneCard({
         style={[
           StyleSheet.absoluteFillObject,
           styles.laneCardFill,
-          muted && styles.laneCardFillDim,
+          { opacity: step.fillOpacity },
         ]}
       />
+      {upNext && (
+        <View
+          pointerEvents="none"
+          style={[styles.upNextRing, { borderColor: theme.accent + 'AA', shadowColor: theme.accent }]}
+        />
+      )}
       {/* Faint warm wash keeps the premium lane a touch richer than free,
           without competing with the rarity frame for the border read. */}
       {premiumLane && (
@@ -700,13 +1068,18 @@ const LaneCard = memo(function LaneCard({
         </View>
       )}
 
-      <View style={styles.rewardMedallionWrap}>
+      <View
+        style={[
+          styles.rewardMedallionWrap,
+          step.artOpacity < 1 && { opacity: step.artOpacity },
+        ]}
+      >
         {landmark ? (
           <View style={[styles.gildedRing, muted && styles.gildedRingMuted]}>
             <View style={[styles.gildedRingInner, muted && styles.gildedRingInnerMuted]}>
               <RewardArt
                 glyph={reward.icon}
-                name={rewardIconName(reward)}
+                name={rewardIconName(reward, tier)}
                 size={frame.artSize - 8}
                 glow={COLORS.gold}
               />
@@ -715,7 +1088,7 @@ const LaneCard = memo(function LaneCard({
         ) : (
           <RewardArt
             glyph={reward.icon}
-            name={rewardIconName(reward)}
+            name={rewardIconName(reward, tier)}
             size={frame.artSize}
             glow={laneAccent}
           />
@@ -735,10 +1108,7 @@ const LaneCard = memo(function LaneCard({
           </View>
         )}
       </View>
-      <Text
-        style={[styles.rewardLabel, muted && styles.rewardLabelMuted]}
-        numberOfLines={2}
-      >
+      <Text style={[styles.rewardLabel, { color: step.labelColor }]} numberOfLines={2}>
         {reward.label}
       </Text>
 
@@ -766,6 +1136,8 @@ interface SeasonTierRowProps {
   premiumClaimed: boolean;
   isPremiumUser: boolean;
   isCurrent: boolean;
+  distance: number;
+  theme: SeasonTheme;
   reduceMotion: boolean;
   onClaim: (tier: number, lane: 'free' | 'premium') => void;
 }
@@ -778,6 +1150,8 @@ const SeasonTierRow = memo(function SeasonTierRow({
   premiumClaimed,
   isPremiumUser,
   isCurrent,
+  distance,
+  theme,
   reduceMotion,
   onClaim,
 }: SeasonTierRowProps) {
@@ -793,7 +1167,13 @@ const SeasonTierRow = memo(function SeasonTierRow({
         <View style={styles.showcaseSpineStub}>
           <View style={[styles.spineSeg, reached && styles.spineSegOn]} />
         </View>
-        <View style={[styles.showcaseCard, reached && styles.showcaseCardReached]}>
+        <View
+          style={[
+            styles.showcaseCard,
+            { backgroundColor: theme.panel },
+            reached && styles.showcaseCardReached,
+          ]}
+        >
           <LinearGradient
             colors={['rgba(200,77,255,0.22)', 'rgba(26,10,46,0.96)']}
             start={{ x: 0.5, y: 0 }}
@@ -818,6 +1198,8 @@ const SeasonTierRow = memo(function SeasonTierRow({
               reached={reached}
               claimed={freeClaimed}
               isPremiumUser={isPremiumUser}
+              distance={distance}
+              theme={theme}
               onClaim={onClaim}
             />
             <View style={styles.showcaseLaneGap} />
@@ -828,6 +1210,8 @@ const SeasonTierRow = memo(function SeasonTierRow({
               reached={reached}
               claimed={premiumClaimed}
               isPremiumUser={isPremiumUser}
+              distance={distance}
+              theme={theme}
               onClaim={onClaim}
             />
           </View>
@@ -845,6 +1229,8 @@ const SeasonTierRow = memo(function SeasonTierRow({
         reached={reached}
         claimed={freeClaimed}
         isPremiumUser={isPremiumUser}
+        distance={distance}
+        theme={theme}
         onClaim={onClaim}
       />
       <View style={styles.spineCol}>
@@ -852,6 +1238,7 @@ const SeasonTierRow = memo(function SeasonTierRow({
           style={[
             styles.spineSeg,
             reached && styles.spineSegOn,
+            reached && { backgroundColor: theme.accent, shadowColor: theme.accent },
             tier === 1 && styles.spineSegHidden,
           ]}
         />
@@ -864,7 +1251,13 @@ const SeasonTierRow = memo(function SeasonTierRow({
           pulseActive={claimablePulse}
           reduceMotion={reduceMotion}
         />
-        <View style={[styles.spineSeg, nextReached && styles.spineSegOn]} />
+        <View
+          style={[
+            styles.spineSeg,
+            nextReached && styles.spineSegOn,
+            nextReached && { backgroundColor: theme.accent, shadowColor: theme.accent },
+          ]}
+        />
       </View>
       <LaneCard
         tier={tier}
@@ -873,6 +1266,8 @@ const SeasonTierRow = memo(function SeasonTierRow({
         reached={reached}
         claimed={premiumClaimed}
         isPremiumUser={isPremiumUser}
+        distance={distance}
+        theme={theme}
         onClaim={onClaim}
       />
     </View>
@@ -890,6 +1285,9 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
 
   const [purchasing, setPurchasing] = useState(false);
   const season = useMemo(() => getCurrentSeason(), []);
+  // The season paints the screen: wash, motif field, header accent, XP bar,
+  // spine and the free-lane tag all come from its own palette.
+  const theme = useMemo(() => getSeasonTheme(season), [season]);
 
   const state: SeasonPassState = pass ?? {
     seasonId: season.id,
@@ -985,6 +1383,8 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
         premiumClaimed={state.claimedPremiumTiers.includes(tier)}
         isPremiumUser={state.isPremium}
         isCurrent={tier === Math.min(state.currentTier + 1, MAX_SEASON_TIER)}
+        distance={tier - state.currentTier}
+        theme={theme}
         reduceMotion={reduceMotion}
         onClaim={handleClaim}
       />
@@ -994,6 +1394,7 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
       state.claimedFreeTiers,
       state.claimedPremiumTiers,
       state.isPremium,
+      theme,
       reduceMotion,
       handleClaim,
     ],
@@ -1002,7 +1403,7 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
   const listHeader = (
     <View>
       {/* Tier progress hero */}
-      <View style={styles.progressPanel}>
+      <View style={[styles.progressPanel, { backgroundColor: theme.panel }]}>
         <LinearGradient
           colors={[...GRADIENTS.surfaceCard]}
           start={{ x: 0.5, y: 0 }}
@@ -1042,7 +1443,7 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
         </View>
         <NeonProgressBar
           progress={progress.percent / 100}
-          color={COLORS.purple}
+          color={theme.accent}
           height={12}
         />
         {state.isPremium && (
@@ -1054,7 +1455,7 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
 
       {/* Premium upsell hero */}
       {!state.isPremium && (
-        <View style={styles.upsellPanel}>
+        <View style={[styles.upsellPanel, { backgroundColor: theme.panel }]}>
           <LinearGradient
             colors={['rgba(255,184,0,0.16)', 'rgba(26,10,46,0.94)']}
             start={{ x: 0.5, y: 0 }}
@@ -1098,8 +1499,14 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
         accent={COLORS.gold}
       />
       <View style={styles.laneTagsRow}>
-        <View style={[styles.laneTag, styles.laneTagFree]}>
-          <Text style={[styles.laneTagText, { color: COLORS.cyan }]}>FREE</Text>
+        <View
+          style={[
+            styles.laneTag,
+            styles.laneTagFree,
+            { borderColor: theme.accent + '55', backgroundColor: theme.accent + '16' },
+          ]}
+        >
+          <Text style={[styles.laneTagText, { color: theme.accent }]}>FREE</Text>
         </View>
         <View style={styles.laneTagSpacer} />
         <View style={[styles.laneTag, styles.laneTagPremium]}>
@@ -1114,27 +1521,40 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
       title="SEASON PASS"
       eyebrow={seasonEyebrow}
       subtitle={seasonTheme}
-      accent={COLORS.gold}
+      accent={theme.accent}
       backdrop="event"
       onBack={onBack}
       scroll={false}
     >
-      {/* Virtualized ladder: only ~8 of the 50 tier rows mount at open
-          instead of all ~700 views, and claims re-render windows, not the
-          whole ladder. */}
-      <FlatList
-        data={TIER_NUMBERS}
-        keyExtractor={keyExtractorTier}
-        renderItem={renderItem}
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={8}
-        maxToRenderPerBatch={8}
-        windowSize={7}
-        ListHeaderComponent={listHeader}
-        ListFooterComponent={LADDER_FOOTER}
-      />
+      {/* Season wash over the shared (magenta) ambient backdrop + the
+          season's own motif field, both behind the ladder. */}
+      <View style={styles.ladderBody}>
+        <LinearGradient
+          pointerEvents="none"
+          colors={[...theme.wash]}
+          locations={[0, 0.45, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <SeasonMotifLayer theme={theme} reduceMotion={reduceMotion} />
+        {/* Virtualized ladder: only ~8 of the 50 tier rows mount at open
+            instead of all ~700 views, and claims re-render windows, not the
+            whole ladder. */}
+        <FlatList
+          data={TIER_NUMBERS}
+          keyExtractor={keyExtractorTier}
+          renderItem={renderItem}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={LADDER_FOOTER}
+        />
+      </View>
     </ScreenScaffold>
   );
 };
@@ -1143,6 +1563,11 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 12 },
   panelFill: { borderRadius: 18 },
+
+  // ── Season theming ───────────────────────────────────────────────────
+  ladderBody: { flex: 1 },
+  motifMark: { position: 'absolute' },
+  frondLayer: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 
   // ── Progress hero ────────────────────────────────────────────────────
   progressPanel: {
@@ -1411,18 +1836,25 @@ const styles = StyleSheet.create({
   laneCardClaimed: {
     opacity: 0.62,
   },
-  // Locked treatment: dim the SHELL only (border + fill + shadow) — the
-  // reward render stays full-color so it still looks covetable.
-  laneCardLockedShell: {
-    borderColor: 'rgba(255,255,255,0.12)',
-    shadowOpacity: 0.1,
-    elevation: 2,
-  },
+  // Locked treatment is computed per card from LOCK_STEP (border alpha, fill
+  // opacity, glow, art opacity) — there is no single "locked" style any more,
+  // which is what stops the ladder reading as one uniform wall.
   laneCardFill: {
     borderRadius: 18,
   },
-  laneCardFillDim: {
-    opacity: 0.55,
+  // "Up next" ring — the single tier the player is working toward.
+  upNextRing: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 9,
+    elevation: 5,
   },
   holoStrip: {
     position: 'absolute',
@@ -1519,9 +1951,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 15,
     marginTop: 2,
-  },
-  rewardLabelMuted: {
-    color: COLORS.textMuted,
   },
   claimButton: {
     alignSelf: 'stretch',

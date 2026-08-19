@@ -27,7 +27,7 @@ import {
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { ATLAS_PAGES, SEASONAL_ALBUMS, getCurrentSeasonAlbum } from '../data/collections';
 import GameIcon from '../components/icons/GameIcon';
-import StampArt, { STAMP_PAPERS } from '../components/cosmetics/StampArt';
+import StampArt, { STAMP_PAPERS, stampRarity } from '../components/cosmetics/StampArt';
 
 const { width } = Dimensions.get('window');
 const TILE_SIZE = (width - 80) / 7;
@@ -1319,10 +1319,11 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                   end={{ x: 0, y: 1 }}
                 />
               )}
-              {/* Illustrated postage stamp — perforated die-cut paper with the
-                  stamp's own full-color artwork (blind-panel fix: identical
-                  dark squares read as settings icons, not prizes). Paper tint
-                  rotates per index so the sheet reads as a real album page. */}
+              {/* Illustrated postage stamp — perforated die-cut paper with a
+                  big full-color picture panel washed in the motif's own color
+                  family, an engraved denomination, and a rarity-dressed frame
+                  (every 5th rare, the album's last epic). Paper tint rotates
+                  per index so the sheet reads as a real album page. */}
               <StampArt
                 stampId={stamp.id}
                 icon={stamp.icon}
@@ -1332,6 +1333,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                 size={STAMP_SIZE}
                 paperTint={STAMP_PAPERS[stampIdx % STAMP_PAPERS.length]}
                 value={String(stampIdx + 1)}
+                rarity={stampRarity(stampIdx, stamps.length)}
                 style={styles.stampMedallion}
               />
               <Text

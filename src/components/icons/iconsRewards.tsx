@@ -19,6 +19,10 @@ const GEM_PINK = '#e84fd0';
 const GEM_CYAN = '#31c8e8';
 const GEM_PURPLE = '#a86ae8';
 const GEM_TEAL = '#3fe8a0';
+const GEM_ICE = '#8fe6ff';
+const GEM_TOPAZ = '#ffc24d';
+const GEM_VIOLET = '#8b3fe0';
+const LEATHER = '#8a5636';
 
 /** Tiny 4-point sparkle centered on (x, y). */
 function Spark({ x, y, s = 1, o = 0.9 }: { x: number; y: number; s?: number; o?: number }) {
@@ -205,6 +209,114 @@ export function CoinPileIcon({ size = 24, accent = GOLD }: IconProps) {
   );
 }
 
+/**
+ * Cinched leather pouch with coins brimming out of the neck — the
+ * mid-ladder coin payout. Bag silhouette, not another coin stack, so a
+ * mid-tier coin reward can never read as a resized early one.
+ */
+export function CoinPouchIcon({ size = 24, accent = GOLD }: IconProps) {
+  const hide = useMemo(() => gradId('cpuB'), []);
+  const top = useMemo(() => gradId('cpuT'), []);
+  const side = useMemo(() => gradId('cpuS'), []);
+  const glow = useMemo(() => gradId('cpuG'), []);
+  const edge = rim(accent);
+  const ring = shade(accent, -26);
+  const CORD = '#e0b25a';
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={hide} from={shade(LEATHER, 34)} to={shade(LEATHER, -44)} />
+      <DuoGrad id={top} from={shade(accent, 62)} to={shade(accent, 4)} />
+      <DuoGrad id={side} from={shade(accent, -8)} to={shade(accent, -52)} />
+      <GlowGrad id={glow} color="#ffd24d" />
+      <Ground rx={8.2} cy={21.6} ry={1.3} />
+      <Ellipse cx="12" cy="9.4" rx="8.6" ry="6.4" fill={`url(#${glow})`} opacity="0.5" />
+      {/* coins brimming out of the neck */}
+      <CoinCyl cx={9.4} y={6.6} rx={3} h={1.4} top={`url(#${top})`} side={`url(#${side})`} edge={edge} ring={ring} />
+      <CoinCyl cx={14.6} y={6.9} rx={3} h={1.4} top={`url(#${top})`} side={`url(#${side})`} edge={edge} ring={ring} />
+      <CoinCyl cx={12} y={4.9} rx={3.2} h={1.5} top={`url(#${top})`} side={`url(#${side})`} edge={edge} ring={ring} />
+      {/* pouch body */}
+      <Path
+        d="M8.5 10.6c-2 1.5-3.2 3.6-3.2 5.6 0 2.8 2.8 4.6 6.7 4.6s6.7-1.8 6.7-4.6c0-2-1.2-4.1-3.2-5.6Z"
+        fill={`url(#${hide})`}
+        stroke={rim(LEATHER)}
+        strokeWidth="1"
+        strokeLinejoin="round"
+      />
+      {/* neck + drawstring */}
+      <Path d="M8.4 8.9h7.2l-.6 2.1H9Z" fill={shade(LEATHER, -14)} stroke={rim(LEATHER)} strokeWidth="0.85" strokeLinejoin="round" />
+      <Path d="M7.9 9.8h8.2" stroke={CORD} strokeWidth="1.1" strokeLinecap="round" />
+      <Path d="M7.9 9.8l-1.5 1.8M16.1 9.8l1.5 1.8" stroke={CORD} strokeWidth="0.8" strokeLinecap="round" />
+      {/* stamped coin sigil on the hide */}
+      <Circle cx="12" cy="15.9" r="2.9" fill="none" stroke={shade(accent, -10)} strokeWidth="0.75" opacity="0.85" />
+      <Path
+        d="M12 13.7l.72 1.45 1.6.24-1.16 1.13.27 1.6L12 17.36l-1.43.76.27-1.6-1.16-1.13 1.6-.24Z"
+        fill={shade(accent, 20)}
+        stroke={shade(accent, -40)}
+        strokeWidth="0.45"
+        strokeLinejoin="round"
+      />
+      <Path d="M7.4 13.4c.5-1.1 1.2-2 2.2-2.7" fill="none" stroke={HILITE_SOFT} strokeWidth="0.85" strokeLinecap="round" />
+      <Spark x={18.8} y={5.4} s={1} />
+      <Spark x={5.2} y={5} s={0.7} o={0.7} />
+    </Svg>
+  );
+}
+
+/**
+ * Open treasure chest overflowing with coins down the front lip — the
+ * top-band coin payout. Reads as a hoard you broke into, not a tidy stack.
+ */
+export function CoinChestSpillIcon({ size = 24, accent = GOLD }: IconProps) {
+  const wood = useMemo(() => gradId('ccsW'), []);
+  const met = useMemo(() => gradId('ccsM'), []);
+  const top = useMemo(() => gradId('ccsT'), []);
+  const side = useMemo(() => gradId('ccsS'), []);
+  const glow = useMemo(() => gradId('ccsG'), []);
+  const MAHOG = '#9a4630';
+  const edge = rim(accent);
+  const ring = shade(accent, -26);
+  const t = `url(#${top})`;
+  const s = `url(#${side})`;
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={wood} from={shade(MAHOG, 32)} to={shade(MAHOG, -40)} />
+      <DuoGrad id={met} from="#ffe066" to={shade(accent, -34)} />
+      <DuoGrad id={top} from={shade(accent, 62)} to={shade(accent, 4)} />
+      <DuoGrad id={side} from={shade(accent, -8)} to={shade(accent, -52)} />
+      <GlowGrad id={glow} color="#ffd24d" />
+      <Ground rx={9} cy={21.7} ry={1.3} />
+      <Ellipse cx="12" cy="11.4" rx="10.4" ry="8.4" fill={`url(#${glow})`} opacity="0.7" />
+      {/* thrown-back lid */}
+      <G transform="rotate(-13 12 8)">
+        <Path
+          d="M5.2 8.7V7.4c0-2.6 3-4.4 6.8-4.4s6.8 1.8 6.8 4.4v1.3Z"
+          fill={`url(#${wood})`}
+          stroke={rim(MAHOG)}
+          strokeWidth="0.95"
+          strokeLinejoin="round"
+        />
+        <Rect x="4.9" y="8.4" width="14.2" height="1.5" rx="0.5" fill={`url(#${met})`} stroke={rim(accent)} strokeWidth="0.7" />
+        <Path d="M8.4 4.2c-1.3.8-2.1 1.9-2.3 3.2" fill="none" stroke={HILITE_SOFT} strokeWidth="0.75" strokeLinecap="round" />
+      </G>
+      {/* chest body + dark interior */}
+      <Rect x="4.4" y="12.8" width="15.2" height="7.6" rx="1.2" fill={`url(#${wood})`} stroke={rim(MAHOG)} strokeWidth="1" />
+      <Ellipse cx="12" cy="13" rx="7" ry="1.9" fill="#1c0a1f" opacity="0.85" />
+      <Rect x="4" y="15.4" width="16" height="1.7" rx="0.55" fill={`url(#${met})`} stroke={rim(accent)} strokeWidth="0.7" />
+      {/* coins heaped in the mouth */}
+      <CoinCyl cx={8.3} y={12.1} rx={3.1} h={1.4} top={t} side={s} edge={edge} ring={ring} />
+      <CoinCyl cx={15.7} y={12.2} rx={3.1} h={1.4} top={t} side={s} edge={edge} ring={ring} />
+      <CoinCyl cx={12} y={10.7} rx={3.4} h={1.5} top={t} side={s} edge={edge} ring={ring} />
+      {/* spill over the front lip */}
+      <CoinCyl cx={5.4} y={18.5} rx={2.7} h={1.3} top={t} side={s} edge={edge} ring={ring} />
+      <CoinCyl cx={18.7} y={18.8} rx={2.5} h={1.2} top={t} side={s} edge={edge} ring={ring} />
+      <CoinCyl cx={8} y={19.6} rx={2.7} h={1.3} top={t} side={s} edge={edge} ring={ring} />
+      <Spark x={18.6} y={4.6} s={1.15} />
+      <Spark x={4.6} y={6.4} s={0.8} o={0.8} />
+      <Spark x={20.8} y={12.2} s={0.7} o={0.7} />
+    </Svg>
+  );
+}
+
 /** Single faceted gem — brilliant cut with lit table and glints. */
 export function GemSingleIcon({ size = 24, accent = GEM_PINK }: IconProps) {
   const body = useMemo(() => gradId('gsgB'), []);
@@ -301,6 +413,112 @@ export function GemHoardIcon({ size = 24, accent = GEM_PINK }: IconProps) {
       <Spark x={16.6} y={3.9} s={1.1} />
       <Spark x={4.4} y={8} s={0.75} o={0.75} />
       <Spark x={20.6} y={8.9} s={0.65} o={0.7} />
+    </Svg>
+  );
+}
+
+/**
+ * Four aquamarine stones on an ice shelf — the mid-ladder gem cluster.
+ * Deliberately a DIFFERENT silhouette + hue family from GemCluster (pink
+ * trio) so a mid-tier gem payout never reads as a recolored early one.
+ */
+export function GemCyanIcon({ size = 24, accent = GEM_CYAN }: IconProps) {
+  const main = useMemo(() => gradId('gcyM'), []);
+  const pale = useMemo(() => gradId('gcyP'), []);
+  const ice = useMemo(() => gradId('gcyI'), []);
+  const glow = useMemo(() => gradId('gcyG'), []);
+  const SHELF = '#2a6f92';
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={main} from={shade(accent, 62)} to={shade(accent, -46)} />
+      <DuoGrad id={pale} from={shade(GEM_ICE, 34)} to={shade(GEM_ICE, -62)} />
+      <DuoGrad id={ice} from={shade(SHELF, 30)} to={shade(SHELF, -40)} />
+      <GlowGrad id={glow} color={shade(accent, 66)} />
+      <Ground rx={8.4} cy={21.7} ry={1.25} />
+      <Ellipse cx="12" cy="12.6" rx="10" ry="8" fill={`url(#${glow})`} opacity="0.55" />
+      {/* ice shelf the cluster grows out of */}
+      <Path
+        d="M3.5 20.7l2.5-3.4h12l2.5 3.4Z"
+        fill={`url(#${ice})`}
+        stroke={rim(SHELF)}
+        strokeWidth="0.85"
+        strokeLinejoin="round"
+      />
+      <Path d="M6.7 18.5h6.2" stroke={shade(GEM_ICE, -6)} strokeWidth="0.55" strokeLinecap="round" opacity="0.65" />
+      {/* flanking stones */}
+      <MiniGem cx={6.1} y={10.2} w={6} h={7.2} fill={`url(#${pale})`} edge={rim(GEM_ICE)} dark={shade(GEM_ICE, -62)} lite="#ffffff" />
+      <MiniGem cx={17.9} y={10.6} w={5.8} h={6.8} fill={`url(#${main})`} edge={rim(accent)} dark={shade(accent, -44)} lite={shade(accent, 55)} />
+      {/* crown spire */}
+      <MiniGem cx={12} y={4.9} w={10} h={12.6} fill={`url(#${main})`} edge={rim(accent)} dark={shade(accent, -44)} lite={shade(accent, 58)} />
+      {/* front chip */}
+      <MiniGem cx={12} y={14.4} w={5} h={5.8} fill={`url(#${pale})`} edge={rim(GEM_ICE)} dark={shade(GEM_ICE, -62)} lite="#ffffff" />
+      <Spark x={17.2} y={4.2} s={1.05} />
+      <Spark x={4.6} y={7.6} s={0.75} o={0.75} />
+      <Spark x={20.4} y={8.4} s={0.65} o={0.7} />
+    </Svg>
+  );
+}
+
+/** Three topaz stones raised on a gold plinth — the mid-ladder gem prize. */
+export function GemGoldTrioIcon({ size = 24, accent = GEM_TOPAZ }: IconProps) {
+  const stone = useMemo(() => gradId('ggtS'), []);
+  const plinth = useMemo(() => gradId('ggtP'), []);
+  const glow = useMemo(() => gradId('ggtG'), []);
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={stone} from={shade(accent, 60)} to={shade(accent, -48)} />
+      <DuoGrad id={plinth} from={shade(GOLD, 52)} to={shade(GOLD, -50)} />
+      <GlowGrad id={glow} color={shade(accent, 60)} />
+      <Ground rx={8.8} cy={21.7} ry={1.3} />
+      <Ellipse cx="12" cy="12.2" rx="10.2" ry="8.2" fill={`url(#${glow})`} opacity="0.55" />
+      {/* plinth base + cap */}
+      <Rect x="3.4" y="18.1" width="17.2" height="2.6" rx="0.8" fill={`url(#${plinth})`} stroke={rim(GOLD)} strokeWidth="0.85" />
+      <Rect x="4.9" y="16.5" width="14.2" height="1.8" rx="0.6" fill={shade(GOLD, 22)} stroke={rim(GOLD)} strokeWidth="0.7" />
+      <Path d="M5.6 19.2h5.2" stroke={shade(GOLD, 52)} strokeWidth="0.5" strokeLinecap="round" />
+      {/* trio */}
+      <MiniGem cx={6.5} y={9.9} w={6} h={6.9} fill={`url(#${stone})`} edge={rim(accent)} dark={shade(accent, -46)} lite={shade(accent, 52)} />
+      <MiniGem cx={17.5} y={10.1} w={5.8} h={6.7} fill={`url(#${stone})`} edge={rim(accent)} dark={shade(accent, -46)} lite={shade(accent, 52)} />
+      <MiniGem cx={12} y={4.4} w={9.6} h={12.4} fill={`url(#${stone})`} edge={rim(accent)} dark={shade(accent, -46)} lite={shade(accent, 58)} />
+      <Spark x={17.8} y={3.6} s={1.1} />
+      <Spark x={4.4} y={6.6} s={0.75} o={0.75} />
+      <Spark x={20.6} y={14.6} s={0.65} o={0.7} />
+    </Svg>
+  );
+}
+
+/** Amethyst geode cracked open, five violet stones inside — late-ladder hoard. */
+export function GemVioletIcon({ size = 24, accent = GEM_VIOLET }: IconProps) {
+  const crown = useMemo(() => gradId('gvlC'), []);
+  const side = useMemo(() => gradId('gvlS'), []);
+  const shell = useMemo(() => gradId('gvlH'), []);
+  const glow = useMemo(() => gradId('gvlG'), []);
+  const ROCK = '#3b2a55';
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <DuoGrad id={crown} from={shade(accent, 64)} to={shade(accent, -46)} />
+      <DuoGrad id={side} from={shade(GEM_PURPLE, 56)} to={shade(GEM_PURPLE, -48)} />
+      <DuoGrad id={shell} from={shade(ROCK, 26)} to={shade(ROCK, -26)} />
+      <GlowGrad id={glow} color={shade(accent, 72)} />
+      <Ground rx={9} cy={21.7} ry={1.3} />
+      <Ellipse cx="12" cy="12.6" rx="10.4" ry="8.4" fill={`url(#${glow})`} opacity="0.6" />
+      {/* geode shell + hollow */}
+      <Path d="M2.9 20.7a9.1 9.1 0 0 1 18.2 0Z" fill={`url(#${shell})`} stroke={rim(ROCK)} strokeWidth="1" strokeLinejoin="round" />
+      <Path d="M4.9 20.7a7.1 7.1 0 0 1 14.2 0Z" fill="#1a0d31" opacity="0.92" />
+      {/* crystal teeth on the inner rim */}
+      <Path
+        d="M6 18.6l.85-1.6.85 1.6ZM8.5 16.5l.8-1.7.8 1.7ZM14 16.3l.85-1.7.85 1.7ZM16.4 18.4l.8-1.6.8 1.6Z"
+        fill={shade(accent, 46)}
+        opacity="0.75"
+      />
+      {/* hoard */}
+      <MiniGem cx={8.1} y={13.4} w={5.2} h={6.6} fill={`url(#${side})`} edge={rim(GEM_PURPLE)} dark={shade(GEM_PURPLE, -46)} lite={shade(GEM_PURPLE, 52)} />
+      <MiniGem cx={15.9} y={13.7} w={5} h={6.3} fill={`url(#${side})`} edge={rim(GEM_PURPLE)} dark={shade(GEM_PURPLE, -46)} lite={shade(GEM_PURPLE, 52)} />
+      <MiniGem cx={12} y={8.4} w={8.6} h={11.4} fill={`url(#${crown})`} edge={rim(accent)} dark={shade(accent, -46)} lite={shade(accent, 58)} />
+      <MiniGem cx={10.1} y={16.9} w={3.8} h={3.8} fill={`url(#${crown})`} edge={rim(accent)} dark={shade(accent, -46)} lite={shade(accent, 52)} />
+      <MiniGem cx={14} y={17.1} w={3.6} h={3.6} fill={`url(#${side})`} edge={rim(GEM_PURPLE)} dark={shade(GEM_PURPLE, -46)} lite={shade(GEM_PURPLE, 52)} />
+      <Spark x={17.6} y={5.2} s={1.15} />
+      <Spark x={4.2} y={9} s={0.8} o={0.8} />
+      <Spark x={20.6} y={10.4} s={0.7} o={0.7} />
     </Svg>
   );
 }

@@ -456,6 +456,49 @@ export function StampSunRaysIcon({ size = 24, accent = '#f5b024' }: IconProps) {
   );
 }
 
+/**
+ * Heatwave: a thermometer topped out in cracked, sun-baked ground with heat
+ * shimmer rising off it. Deliberately shares NO shape language with
+ * StampSunRaysIcon — 'Sunshine' and 'Summer Heat' used to render the same
+ * plain sun disc, which the art panel read as one stamp printed twice.
+ */
+export function StampHeatwaveIcon({ size = 24, accent = '#e2483a' }: IconProps) {
+  const body = useMemo(() => gradId('stHwv'), []);
+  const glow = useMemo(() => gradId('stHwvG'), []);
+  const EARTH = '#c8944e';
+  const GLASS = '#eef3fa';
+  return (
+    <Svg width={size} height={size} viewBox={VB}>
+      <BodyGrad id={body} color={accent} />
+      <GlowGrad id={glow} color="#ffb347" />
+      <Ground rx={7.2} cy={21.6} />
+      <Circle cx="12" cy="11.4" r="11" fill={`url(#${glow})`} opacity="0.42" />
+      {/* Heat shimmer rolling off to the right. */}
+      <G fill="none" stroke="#f2a02c" strokeWidth="1.1" strokeLinecap="round">
+        <Path d="M14.4 5.4c.9-1 1.9-1 2.8 0s1.9 1 2.8 0" opacity="0.9" />
+        <Path d="M14.4 8.8c.9-1 1.9-1 2.8 0s1.9 1 2.8 0" opacity="0.7" />
+        <Path d="M14.4 12.2c.9-1 1.9-1 2.8 0s1.9 1 2.8 0" opacity="0.5" />
+      </G>
+      {/* Cracked, baked ground. */}
+      <Path d="M2.2 18.1c2.9-1 6.2-1.5 9.8-1.5s6.9.5 9.8 1.5v3.3H2.2Z" fill={EARTH} stroke={rim(EARTH)} strokeWidth="0.85" strokeLinejoin="round" />
+      <G fill="none" stroke={shade(EARTH, -54)} strokeWidth="0.6" strokeLinecap="round">
+        <Path d="M4.6 18.6l1.1 1.4-.7 1.3M14.2 18.2l-.9 1.6 1.1 1.1M18.4 19.2l1.3 1.2M11 20.2h1.8" />
+      </G>
+      <Path d="M3.4 18.9c1.8-.5 3.6-.8 5.4-.9" stroke={shade(EARTH, 34)} strokeWidth="0.55" strokeLinecap="round" fill="none" />
+      {/* Thermometer: glass tube, topped-out mercury, bulb sunk in the earth. */}
+      <Path d="M8.2 4.4a1.5 1.5 0 0 1 3 0v10.2a1.5 1.5 0 0 1-3 0Z" fill={GLASS} stroke="#8ea3ba" strokeWidth="0.85" strokeLinejoin="round" />
+      <Circle cx="9.7" cy="17.3" r="3.2" fill={`url(#${body})`} stroke={rim(accent)} strokeWidth="0.95" />
+      <Path d="M9 5.6h1.4v11.2H9Z" fill={`url(#${body})`} />
+      <G fill="none" stroke="#5f7085" strokeWidth="0.6" strokeLinecap="round">
+        <Path d="M11.4 7.2h1.5M11.4 9.4h1.1M11.4 11.6h1.5M11.4 13.8h1.1" />
+      </G>
+      <Path d="M8.9 5.2v9.4" stroke={HILITE} strokeWidth="0.7" strokeLinecap="round" fill="none" />
+      <Path d="M7.8 15.8c-.4.7-.5 1.4-.3 2.1" stroke={HILITE_SOFT} strokeWidth="0.7" strokeLinecap="round" fill="none" />
+      <Circle cx="8.6" cy="16.3" r="0.6" fill="#ffffff" opacity="0.55" />
+    </Svg>
+  );
+}
+
 /** Beach parasol: striped canopy planted in sand beside a folded towel. */
 export function StampParasolIcon({ size = 24, accent = '#e0554f' }: IconProps) {
   const body = useMemo(() => gradId('stPrs'), []);

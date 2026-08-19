@@ -54,7 +54,8 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
 import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
 import { AchievementBadge } from '../components/cosmetics/AchievementBadge';
-import Svg, { Circle, Ellipse, Line, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
+import AvatarPortrait from '../components/cosmetics/AvatarPortrait';
 import { DuoGrad, gradId, shade } from '../components/icons/IconBase';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 import {
@@ -727,104 +728,6 @@ const PRESTIGE_BENEFITS: Array<{ icon: GameIconName; label: string }> = [
   { icon: 'bolt', label: 'Permanent bonuses' },
 ];
 
-/**
- * AvatarPortraitArt — the default identity art filling the whole avatar disc:
- * a hooded character bust silhouetted against a sunset horizon with a
- * perspective grid floor, rim-lit along its edge in the equipped frame's
- * accent. This is the HERO of the avatar (the player's initial is demoted to
- * a small monogram chip), so it renders edge-to-edge in the 88-unit disc.
- * Static — no animation; the ring's legendary pulse wraps it unchanged.
- */
-function AvatarPortraitArt({
-  size,
-  accent,
-  rimColor,
-}: {
-  size: number;
-  accent: string;
-  rimColor: string;
-}) {
-  const sunId = useMemo(() => gradId('avatarSun'), []);
-  const bustId = useMemo(() => gradId('avatarBust'), []);
-  // 88-unit viewBox matches the avatarCircle; horizon sits low at y=58.
-  const H = 58;
-  const VERTICALS = [-20, 2, 23, 44, 65, 86, 108];
-  const HORIZONTALS: Array<[number, number]> = [
-    [62.5, 0.16],
-    [68, 0.14],
-    [75, 0.12],
-    [84, 0.1],
-  ];
-  // Head + shoulders silhouette. Shoulders run off the bottom edge so the
-  // bust reads as a cropped portrait rather than a floating token.
-  const SHOULDERS = 'M6 89 C6 72 22 63.5 44 63.5 C66 63.5 82 72 82 89 Z';
-  const HOOD = 'M28.5 43 C28.5 26.5 59.5 26.5 59.5 43 C59.5 34 53 29.5 44 29.5 C35 29.5 28.5 34 28.5 43 Z';
-  return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 0 88 88"
-      style={StyleSheet.absoluteFill}
-      pointerEvents="none"
-    >
-      <DuoGrad id={sunId} from={COLORS.goldLight} to={accent} />
-      <DuoGrad id={bustId} from="rgba(24,8,48,0.94)" to="rgba(6,1,18,0.98)" />
-      {/* Sun disc sinking behind the horizon — the bust's back light */}
-      <Circle cx={44} cy={48} r={22} fill={`url(#${sunId})`} opacity={0.55} />
-      {/* Classic synthwave slit bands across the sun's lower half */}
-      <Rect x={20} y={48.5} width={48} height={1.8} fill="rgba(10,0,21,0.5)" />
-      <Rect x={20} y={53} width={48} height={2.2} fill="rgba(10,0,21,0.55)" />
-      {/* Translucent ground plane dims the sun below the horizon */}
-      <Rect x={0} y={H} width={88} height={88 - H} fill="rgba(10,0,21,0.5)" />
-      {/* Horizon glow line in the theme accent */}
-      <Line x1={0} y1={H} x2={88} y2={H} stroke={accent} strokeWidth={1} opacity={0.5} />
-      {/* Faint perspective grid floor converging on the sun's center */}
-      {VERTICALS.map((x) => (
-        <Line key={`v${x}`} x1={44} y1={H} x2={x} y2={88} stroke={COLORS.cyan} strokeWidth={0.8} opacity={0.15} />
-      ))}
-      {HORIZONTALS.map(([y, o]) => (
-        <Line key={`h${y}`} x1={0} y1={y} x2={88} y2={y} stroke={COLORS.cyan} strokeWidth={0.8} opacity={o} />
-      ))}
-      {/* ── Character bust ── */}
-      {/* Neck, tucked under the head and over the shoulders */}
-      <Rect x={38} y={48} width={12} height={18} rx={5} fill={`url(#${bustId})`} />
-      <Path d={SHOULDERS} fill={`url(#${bustId})`} stroke={rimColor} strokeWidth={1.5} strokeOpacity={0.75} />
-      {/* Head */}
-      <Ellipse cx={44} cy={38} rx={13.5} ry={15} fill={`url(#${bustId})`} stroke={rimColor} strokeWidth={1.5} strokeOpacity={0.8} />
-      {/* Hood crest over the crown — silhouette reads as a character, not a dot */}
-      <Path d={HOOD} fill="rgba(4,0,14,0.95)" stroke={rimColor} strokeWidth={1.2} strokeOpacity={0.55} />
-      {/* Bright rim light where the sun wraps the left edge of head + shoulder */}
-      <Path
-        d="M33.5 27.5 C27.5 32 27 43 32 50.5"
-        stroke={accent}
-        strokeWidth={2}
-        strokeOpacity={0.85}
-        strokeLinecap="round"
-        fill="none"
-      />
-      <Path
-        d="M20 70.5 C24 66.5 30 64.5 37 63.8"
-        stroke={accent}
-        strokeWidth={1.6}
-        strokeOpacity={0.5}
-        strokeLinecap="round"
-        fill="none"
-      />
-      {/* Cooler counter-rim on the right edge so the bust reads volumetric */}
-      <Path
-        d="M55.5 29 C60.5 34 60.5 44 56.5 50"
-        stroke={COLORS.cyan}
-        strokeWidth={1.4}
-        strokeOpacity={0.45}
-        strokeLinecap="round"
-        fill="none"
-      />
-      {/* Faint visor glint — a single eye-line spark of life */}
-      <Rect x={37} y={38.5} width={14} height={2} rx={1} fill={accent} opacity={0.22} />
-    </Svg>
-  );
-}
-
 const ProfileScreen: React.FC<ProfileScreenProps> = ({
   player: playerProp,
   onEditProfile: onEditProfileProp,
@@ -978,6 +881,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         return COLORS.rarityCommon;
     }
   }, [equippedFrame.rarity]);
+  // The portrait backdrop borrows the equipped frame's own art accent (the
+  // same hue its ring is drawn in) so avatar and ring read as one object.
+  const equippedFrameAccent = useMemo(
+    () => resolveFrameArt(equippedFrameId).accent,
+    [equippedFrameId],
+  );
   // Bespoke SVG ring art for the equipped frame; its accent drives the glow
   // shadow so a flame frame glows ember-orange, a circuit frame cyan, etc.
   const frameArt = useMemo(() => resolveFrameArt(equippedFrameId), [equippedFrameId]);
@@ -1116,13 +1025,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               start={{ x: 0.5, y: 0.45 }}
               end={{ x: 0.5, y: 1 }}
             />
-            {/* Rim-lit character bust against a synthwave sunset — the hero
-                of the disc (no custom avatar upload support yet, so this is
-                the default identity art). Fills the disc edge to edge. */}
-            <AvatarPortraitArt
+            {/* Illustrated Word Architect portrait — the hero of the disc
+                (no custom avatar upload yet, so this is the default identity
+                art). Fills the disc edge to edge, backdrop tinted by the
+                equipped frame's accent and rim-lit in its rarity metal. The
+                variant is keyed to the equipped FRAME, so the character the
+                player saw on the store card is the one they now wear. */}
+            <AvatarPortrait
               size={88}
-              accent={equippedTheme.colors.accent}
+              accent={equippedFrameAccent}
+              variant={equippedFrameId}
               rimColor={frameBorderColor}
+              style={StyleSheet.absoluteFill}
             />
             {/* Glass top shine */}
             <View style={styles.avatarShine} pointerEvents="none" />

@@ -64,8 +64,9 @@ import {
   PiggyJarIcon, VipLaurelIcon, VipTrophyIcon,
 } from './iconsDecor6';
 import {
-  BoosterCrateIcon, ChestBronzeIcon, ChestGoldIcon, CoinPileIcon,
-  CoinSmallIcon, CoinStackIcon, GemClusterIcon, GemHoardIcon, GemSingleIcon,
+  BoosterCrateIcon, ChestBronzeIcon, ChestGoldIcon, CoinChestSpillIcon,
+  CoinPileIcon, CoinPouchIcon, CoinSmallIcon, CoinStackIcon, GemClusterIcon,
+  GemCyanIcon, GemGoldTrioIcon, GemHoardIcon, GemSingleIcon, GemVioletIcon,
   HintBulbRewardIcon,
 } from './iconsRewards';
 import {
@@ -75,7 +76,8 @@ import {
   StampCornIcon, StampCrescentMoonIcon, StampCrownIcon, StampDewdropIcon,
   StampEvergreenSnowIcon, StampFernLeafIcon, StampFireflyJarIcon,
   StampFireworksIcon, StampFlowerCrownIcon, StampFrozenLakeIcon,
-  StampGiftIcon, StampHarvestMoonIcon, StampHollyIcon, StampHoneybeeIcon,
+  StampGiftIcon, StampHarvestMoonIcon, StampHeatwaveIcon, StampHollyIcon,
+  StampHoneybeeIcon,
   StampIceCreamIcon, StampIceCrystalIcon, StampKiteIcon, StampLemonadeIcon,
   StampMistIcon, StampMittenIcon, StampMushroomIcon, StampOwlIcon,
   StampPalmTreeIcon, StampParasolIcon, StampPawPrintIcon, StampPumpkinIcon,
@@ -148,7 +150,9 @@ const REGISTRY = {
   vipLaurel: VipLaurelIcon, vipTrophy: VipTrophyIcon,
   // reward renders — escalating currency + loot art (iconsRewards)
   coinSmall: CoinSmallIcon, coinStack: CoinStackIcon, coinPile: CoinPileIcon,
+  coinPouch: CoinPouchIcon, coinChestSpill: CoinChestSpillIcon,
   gemSingle: GemSingleIcon, gemCluster: GemClusterIcon, gemHoard: GemHoardIcon,
+  gemCyan: GemCyanIcon, gemGoldTrio: GemGoldTrioIcon, gemViolet: GemVioletIcon,
   hintBulbReward: HintBulbRewardIcon, boosterCrate: BoosterCrateIcon,
   chestBronze: ChestBronzeIcon, chestGold: ChestGoldIcon,
   // seasonal stamp motifs (iconsStamps) — art matched to each stamp's NAME
@@ -161,6 +165,7 @@ const REGISTRY = {
   stampSunrise: StampSunriseIcon, stampKite: StampKiteIcon,
   stampCrown: StampCrownIcon, stampTrophy: StampTrophyIcon,
   stampCampfire: StampCampfireIcon, stampSun: StampSunRaysIcon,
+  stampHeatwave: StampHeatwaveIcon,
   stampParasol: StampParasolIcon, stampWave: StampWaveIcon,
   stampBeachBall: StampBeachBallIcon, stampWaterfall: StampWaterfallIcon,
   stampIceCream: StampIceCreamIcon, stampStarTrail: StampStarTrailIcon,
