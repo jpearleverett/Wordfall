@@ -161,8 +161,14 @@ export function UndoIcon({ size = 24, accent = '#00e5ff' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox={VB}>
       <BodyGrad id={id} color={accent} />
-      <Path d="M12.6 5a8 8 0 0 1 0 16 8 8 0 0 1-7.4-4.9" fill="none" stroke={`url(#${id})`} strokeWidth="2.6" strokeLinecap="round" />
-      <Polygon points="12.9,1.2 6.4,5 12.9,8.8" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1" strokeLinejoin="round" />
+      {/* fat dark contour underlay, juicy gradient stroke on top */}
+      <Path d="M12.6 5a8 8 0 0 1 0 16 8 8 0 0 1-7.4-4.9" fill="none" stroke={outline(accent)} strokeWidth="5.4" strokeLinecap="round" />
+      <Path d="M12.6 5a8 8 0 0 1 0 16 8 8 0 0 1-7.4-4.9" fill="none" stroke={`url(#${id})`} strokeWidth="2.8" strokeLinecap="round" />
+      <Polygon points="13.4,0.8 5.8,5 13.4,9.2" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="1.9" strokeLinejoin="round" />
+      {/* bottom bounce light along the lower arc */}
+      <Path d="M8.6 19.9c2.6 1.1 5.2.9 7.6-.7" fill="none" stroke={shade(accent, 44)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={17.4} cy={7.6} rx={1.7} ry={1} rot={38} o={0.5} />
+      <Gleam cx={19.6} cy={9.8} r={0.65} />
     </Svg>
   );
 }
@@ -172,9 +178,15 @@ export function ShuffleIcon({ size = 24, accent = '#ff7a1a' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox={VB}>
       <BodyGrad id={id} color={accent} />
-      <Path d="M3 7.4h3.4c4.8 0 6.4 9.2 11.2 9.2H20M3 16.6h3.4c1.9 0 3.2-1.4 4.3-3M20 7.4h-2.4c-1.9 0-3.2 1.4-4.3 3" fill="none" stroke={`url(#${id})`} strokeWidth="2.3" strokeLinecap="round" />
-      <Polygon points="18.6,4.6 22.6,7.4 18.6,10.2" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="0.9" strokeLinejoin="round" />
-      <Polygon points="18.6,13.8 22.6,16.6 18.6,19.4" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="0.9" strokeLinejoin="round" />
+      {/* fat dark contour underlay */}
+      <Path d="M3 7.4h3.4c4.8 0 6.4 9.2 11.2 9.2H20M3 16.6h3.4c1.9 0 3.2-1.4 4.3-3M20 7.4h-2.4c-1.9 0-3.2 1.4-4.3 3" fill="none" stroke={outline(accent)} strokeWidth="4.7" strokeLinecap="round" />
+      <Path d="M3 7.4h3.4c4.8 0 6.4 9.2 11.2 9.2H20M3 16.6h3.4c1.9 0 3.2-1.4 4.3-3M20 7.4h-2.4c-1.9 0-3.2 1.4-4.3 3" fill="none" stroke={`url(#${id})`} strokeWidth="2.4" strokeLinecap="round" />
+      <Polygon points="18.4,4.2 23 7.4 18.4,10.6" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="1.8" strokeLinejoin="round" />
+      <Polygon points="18.4,13.4 23 16.6 18.4,19.8" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="1.8" strokeLinejoin="round" />
+      {/* bounce light riding the lower swoop */}
+      <Path d="M8.8 15.9c1.4 1 2.9 1.6 4.6 1.7" fill="none" stroke={shade(accent, 44)} strokeWidth="1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={5.6} cy={7.1} rx={1.6} ry={0.9} rot={-8} o={0.5} />
+      <Gleam cx={9.2} cy={5.9} r={0.6} />
     </Svg>
   );
 }
@@ -183,10 +195,15 @@ export function EyeIcon({ size = 24, accent = '#00f5d4' }: IconProps) {
   const id = useMemo(() => gradId('eye'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Path d="M2 12c2.6-4.6 6-6.9 10-6.9S19.4 7.4 22 12c-2.6 4.6-6 6.9-10 6.9S4.6 16.6 2 12Z" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" strokeLinejoin="round" />
-      <Circle cx="12" cy="12" r="3.9" fill={shade(accent, -78)} stroke={rim(accent)} strokeWidth="1" />
-      <Circle cx="13.3" cy="10.7" r="1.2" fill={HILITE} />
+      <RadialGrad id={id} color={accent} cx={0.4} cy={0.3} />
+      <Path d="M2 12c2.6-4.6 6-6.9 10-6.9S19.4 7.4 22 12c-2.6 4.6-6 6.9-10 6.9S4.6 16.6 2 12Z" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="2" strokeLinejoin="round" />
+      {/* bottom bounce light along the lower lid */}
+      <Path d="M6.4 15.4c1.7 1.5 3.6 2.3 5.6 2.3s3.9-.8 5.6-2.3" fill="none" stroke={shade(accent, 44)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Circle cx="12" cy="12" r="4.1" fill={shade(accent, -78)} stroke={outline(accent)} strokeWidth="1.3" />
+      <Circle cx="12" cy="12" r="1.9" fill={shade(accent, -104)} />
+      <Gloss cx={7.2} cy={8.9} rx={2.2} ry={1.2} rot={-20} o={0.42} />
+      <Circle cx="13.5" cy="10.5" r="1.15" fill="#ffffff" opacity={0.9} />
+      <Gleam cx={10.4} cy={13.4} r={0.5} />
     </Svg>
   );
 }
@@ -196,7 +213,13 @@ export function CheckIcon({ size = 24, accent = '#00e676' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox={VB}>
       <BodyGrad id={id} color={accent} />
-      <Path d="M4 13.2 9.4 18.6 20 6.4" fill="none" stroke={`url(#${id})`} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+      {/* fat contour under, juicy gradient over */}
+      <Path d="M4 13.2 9.4 18.6 20 6.4" fill="none" stroke={outline(accent)} strokeWidth="6.6" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M4 13.2 9.4 18.6 20 6.4" fill="none" stroke={`url(#${id})`} strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" />
+      {/* bounce light hugging the lower edge of the long stroke */}
+      <Path d="M10.4 16.6 18.6 7.2" fill="none" stroke={shade(accent, 46)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={6.1} cy={13.5} rx={1.5} ry={0.9} rot={42} o={0.55} />
+      <Gleam cx={18.9} cy={5.6} r={0.65} />
     </Svg>
   );
 }
@@ -206,7 +229,13 @@ export function CrossIcon({ size = 24, accent = '#ff4466' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox={VB}>
       <BodyGrad id={id} color={accent} />
-      <Path d="M6 6l12 12M18 6 6 18" stroke={`url(#${id})`} strokeWidth="3.2" strokeLinecap="round" />
+      {/* fat contour under, juicy gradient over */}
+      <Path d="M6 6l12 12M18 6 6 18" stroke={outline(accent)} strokeWidth="6.4" strokeLinecap="round" />
+      <Path d="M6 6l12 12M18 6 6 18" stroke={`url(#${id})`} strokeWidth="3.4" strokeLinecap="round" />
+      {/* bounce light on the lower-left arm */}
+      <Path d="M8.2 17.2l3-3" stroke={shade(accent, 46)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={7.2} cy={6.9} rx={1.5} ry={0.9} rot={45} o={0.55} />
+      <Gleam cx={17.4} cy={4.9} r={0.65} />
     </Svg>
   );
 }
@@ -215,11 +244,18 @@ export function LockIcon({ size = 24, accent = '#c9d2e8' }: IconProps) {
   const id = useMemo(() => gradId('lock'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Path d="M7.4 10V7.6a4.6 4.6 0 0 1 9.2 0V10" fill="none" stroke={shade(accent, -20)} strokeWidth="2.4" />
-      <Rect x="4.8" y="9.8" width="14.4" height="11" rx="2.6" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" />
-      <Circle cx="12" cy="14.6" r="1.7" fill={shade(accent, -80)} />
-      <Path d="M12 15.6v2.6" stroke={shade(accent, -80)} strokeWidth="1.7" strokeLinecap="round" />
+      <RadialGrad id={id} color={accent} cx={0.36} cy={0.3} />
+      {/* shackle: dark contour under, lit metal over */}
+      <Path d="M7.4 10V7.6a4.6 4.6 0 0 1 9.2 0V10" fill="none" stroke={outline(accent)} strokeWidth="4.6" />
+      <Path d="M7.4 10V7.6a4.6 4.6 0 0 1 9.2 0V10" fill="none" stroke={shade(accent, 4)} strokeWidth="2.3" />
+      <Path d="M8.6 8.2a3.4 3.4 0 0 1 3.4-3.5" fill="none" stroke={shade(accent, 66)} strokeWidth="1" strokeLinecap="round" />
+      <Rect x="4.8" y="9.8" width="14.4" height="11" rx="2.8" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="2" />
+      {/* bottom bounce light */}
+      <Path d="M7 19.2c1.6.6 3.2.9 5 .9s3.4-.3 5-.9" fill="none" stroke={shade(accent, 44)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Circle cx="12" cy="14.5" r="1.8" fill={shade(accent, -84)} />
+      <Path d="M12 15.5v2.7" stroke={shade(accent, -84)} strokeWidth="1.8" strokeLinecap="round" />
+      <Gloss cx={8.4} cy={12.3} rx={2.3} ry={1.4} rot={-18} o={0.42} />
+      <Gleam cx={15.9} cy={11.9} r={0.65} />
     </Svg>
   );
 }
@@ -295,11 +331,17 @@ export function WheelIcon({ size = 24, accent = '#c84dff' }: IconProps) {
   const id = useMemo(() => gradId('wheel'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Circle cx="12" cy="12.6" r="9" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" />
-      <Path d="M12 3.6v18M3 12.6h18M5.6 6.2l12.8 12.8M18.4 6.2 5.6 19" stroke={shade(accent, -52)} strokeWidth="1.2" />
-      <Circle cx="12" cy="12.6" r="2.6" fill="#ffd24d" stroke={rim(accent)} strokeWidth="1.1" />
-      <Polygon points="12,0.4 14,3.4 10,3.4" fill="#ffd24d" stroke={rim(accent)} strokeWidth="0.9" strokeLinejoin="round" />
+      <RadialGrad id={id} color={accent} />
+      <Circle cx="12" cy="12.6" r="9" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="2" />
+      <Path d="M12 3.6v18M3 12.6h18M5.6 6.2l12.8 12.8M18.4 6.2 5.6 19" stroke={shade(accent, -56)} strokeWidth="1.3" />
+      <Circle cx="12" cy="12.6" r="6.4" fill="none" stroke={shade(accent, -44)} strokeWidth="0.9" opacity={0.7} />
+      {/* bottom bounce light on the rim */}
+      <Path d="M7.4 19.4c1.4 1 2.9 1.6 4.6 1.6s3.2-.6 4.6-1.6" fill="none" stroke={shade(accent, 44)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Circle cx="12" cy="12.6" r="2.7" fill="#ffd24d" stroke={outline('#ffd24d')} strokeWidth="1.4" />
+      <Circle cx="11.2" cy="11.8" r="0.7" fill="#ffffff" opacity={0.85} />
+      <Polygon points="12,0.3 14.2,3.5 9.8,3.5" fill="#ffd24d" stroke={outline('#ffd24d')} strokeWidth="1.4" strokeLinejoin="round" />
+      <Gloss cx={8.2} cy={7.7} rx={2.5} ry={1.5} rot={-24} o={0.4} />
+      <Gleam cx={14.9} cy={6.3} r={0.65} />
     </Svg>
   );
 }
@@ -308,13 +350,19 @@ export function DiceIcon({ size = 24, accent = '#00e5ff' }: IconProps) {
   const id = useMemo(() => gradId('dice'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Rect x="3.4" y="3.4" width="17.2" height="17.2" rx="4" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" />
-      <Circle cx="8.2" cy="8.2" r="1.6" fill={shade(accent, -80)} />
-      <Circle cx="15.8" cy="8.2" r="1.6" fill={shade(accent, -80)} />
-      <Circle cx="12" cy="12" r="1.6" fill={shade(accent, -80)} />
-      <Circle cx="8.2" cy="15.8" r="1.6" fill={shade(accent, -80)} />
-      <Circle cx="15.8" cy="15.8" r="1.6" fill={shade(accent, -80)} />
+      <RadialGrad id={id} color={accent} cx={0.34} cy={0.28} />
+      <Rect x="3.4" y="3.4" width="17.2" height="17.2" rx="4.4" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="2" />
+      {/* bottom bounce light */}
+      <Path d="M6.6 19.5c1.7.5 3.5.7 5.4.7s3.7-.2 5.4-.7" fill="none" stroke={shade(accent, 44)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Circle cx="8.2" cy="8.2" r="1.7" fill={shade(accent, -84)} />
+      <Circle cx="15.8" cy="8.2" r="1.7" fill={shade(accent, -84)} />
+      <Circle cx="12" cy="12" r="1.7" fill={shade(accent, -84)} />
+      <Circle cx="8.2" cy="15.8" r="1.7" fill={shade(accent, -84)} />
+      <Circle cx="15.8" cy="15.8" r="1.7" fill={shade(accent, -84)} />
+      <Circle cx="7.7" cy="7.7" r="0.5" fill="#ffffff" opacity={0.55} />
+      <Circle cx="15.3" cy="7.7" r="0.5" fill="#ffffff" opacity={0.55} />
+      <Gloss cx={7.6} cy={5.6} rx={2.4} ry={1.2} rot={-14} o={0.42} />
+      <Gleam cx={12.6} cy={4.7} r={0.65} />
     </Svg>
   );
 }
@@ -323,25 +371,49 @@ export function CloverIcon({ size = 24, accent = '#35b892' }: IconProps) {
   const id = useMemo(() => gradId('clover'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <G stroke={rim(accent)} strokeWidth="1.1">
-        <Circle cx="8.4" cy="8.4" r="4" fill={`url(#${id})`} />
-        <Circle cx="15.6" cy="8.4" r="4" fill={`url(#${id})`} />
-        <Circle cx="8.4" cy="15" r="4" fill={`url(#${id})`} />
-        <Circle cx="15.6" cy="15" r="4" fill={`url(#${id})`} />
+      <RadialGrad id={id} color={accent} cx={0.36} cy={0.32} />
+      {/* stem first so the leaves sit over its root */}
+      <Path d="M12 12.6c.4 3.4 1.4 5.8 3.6 8.2" fill="none" stroke={outline(accent)} strokeWidth="3.6" strokeLinecap="round" />
+      <Path d="M12 12.6c.4 3.4 1.4 5.8 3.6 8.2" fill="none" stroke={shade(accent, -30)} strokeWidth="1.7" strokeLinecap="round" />
+      <G stroke={outline(accent)} strokeWidth="1.8">
+        <Circle cx="8.4" cy="8.4" r="4.1" fill={`url(#${id})`} />
+        <Circle cx="15.6" cy="8.4" r="4.1" fill={`url(#${id})`} />
+        <Circle cx="8.4" cy="15" r="4.1" fill={`url(#${id})`} />
+        <Circle cx="15.6" cy="15" r="4.1" fill={`url(#${id})`} />
       </G>
-      <Path d="M12 12.6c.4 3.4 1.4 5.8 3.6 8" fill="none" stroke={shade(accent, -55)} strokeWidth="1.6" strokeLinecap="round" />
+      {/* leaf creases + bottom bounce light */}
+      <Path d="M8.4 6.2v4.4M13.4 8.4h4.4" fill="none" stroke={shade(accent, -46)} strokeWidth="0.8" strokeLinecap="round" opacity={0.7} />
+      <Path d="M5.9 17.4c1.4 1.1 3.1 1.4 4.8.9M13.1 18.3c1.7.5 3.4.2 4.8-.9" fill="none" stroke={shade(accent, 46)} strokeWidth="1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={7} cy={6.7} rx={2} ry={1.2} rot={-24} o={0.45} />
+      <Gleam cx={14.3} cy={5.6} r={0.65} />
     </Svg>
   );
 }
 
 export function HourglassIcon({ size = 24, accent = '#ffd24d' }: IconProps) {
   const id = useMemo(() => gradId('hour'), []);
+  const frame = useMemo(() => gradId('hourfr'), []);
+  const FRAME = '#c98b3f';
   return (
     <Svg width={size} height={size} viewBox={VB}>
       <BodyGrad id={id} color={accent} />
-      <Path d="M6 3h12M6 21h12M7.4 3c0 4 1.8 6.4 4.6 9-2.8 2.6-4.6 5-4.6 9M16.6 3c0 4-1.8 6.4-4.6 9 2.8 2.6 4.6 5 4.6 9" fill="none" stroke={shade(accent, -35)} strokeWidth="1.8" strokeLinecap="round" />
-      <Path d="M9.4 6.2h5.2L12 9.6ZM12 15l2.8 4.2H9.2Z" fill={`url(#${id})`} />
+      <DuoGrad id={frame} from={shade(FRAME, 46)} to={shade(FRAME, -40)} />
+      {/* glass bulbs — cool translucent body with fat contour */}
+      <Path d="M6.6 4.6h10.8c0 3.4-1.6 5.5-4.2 7.4 2.6 1.9 4.2 4 4.2 7.4H6.6c0-3.4 1.6-5.5 4.2-7.4-2.6-1.9-4.2-4-4.2-7.4Z" fill="rgba(190,235,255,0.2)" stroke={outline(accent)} strokeWidth="1.9" strokeLinejoin="round" />
+      {/* sand: drained top wedge, stream, heaped bottom pile */}
+      <Path d="M9.8 6.4h4.4L12 9.4Z" fill={`url(#${id})`} stroke={shade(accent, -62)} strokeWidth="0.7" strokeLinejoin="round" />
+      <Path d="M12 11.6v5.2" stroke={shade(accent, -8)} strokeWidth="1.1" strokeLinecap="round" />
+      <Path d="M12 13.4c2.9 1 4.5 2.7 4.9 5.2H7.1c.4-2.5 2-4.2 4.9-5.2Z" fill={`url(#${id})`} stroke={shade(accent, -62)} strokeWidth="0.7" strokeLinejoin="round" />
+      {/* glass sheen + bottom bounce light */}
+      <Path d="M8.1 6.2c.1 2.2.9 3.9 2.4 5.4" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1" strokeLinecap="round" />
+      <Path d="M9 17.7c1.9.6 4.1.6 6 0" fill="none" stroke={shade(accent, 48)} strokeWidth="1" strokeLinecap="round" opacity={0.85} />
+      {/* wooden caps with fat contour */}
+      <Rect x="4.6" y="2.4" width="14.8" height="2.6" rx="1.2" fill={`url(#${frame})`} stroke={outline(FRAME)} strokeWidth="1.8" />
+      <Rect x="4.6" y="19" width="14.8" height="2.6" rx="1.2" fill={`url(#${frame})`} stroke={outline(FRAME)} strokeWidth="1.8" />
+      <Path d="M6.2 3.3h4.2" stroke={shade(FRAME, 62)} strokeWidth="0.8" strokeLinecap="round" />
+      <Path d="M6.2 19.9h4.2" stroke={shade(FRAME, 52)} strokeWidth="0.8" strokeLinecap="round" />
+      <Gloss cx={9.1} cy={7.3} rx={1.6} ry={1} rot={-26} o={0.4} />
+      <Gleam cx={14.3} cy={6.1} r={0.6} />
     </Svg>
   );
 }
@@ -350,10 +422,16 @@ export function TargetIcon({ size = 24, accent = '#ff4466' }: IconProps) {
   const id = useMemo(() => gradId('target'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Circle cx="12" cy="12" r="9.2" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" />
-      <Circle cx="12" cy="12" r="5.9" fill="#f5f0ff" stroke={rim(accent)} strokeWidth="1" />
-      <Circle cx="12" cy="12" r="2.7" fill={shade(accent, 10)} stroke={rim(accent)} strokeWidth="1" />
+      <RadialGrad id={id} color={accent} />
+      <Circle cx="12" cy="12" r="9.2" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="2" />
+      <Circle cx="12" cy="12" r="5.9" fill="#f5f0ff" stroke={outline(accent)} strokeWidth="1.3" />
+      <Path d="M7.7 14.6a5.9 5.9 0 0 0 2.4 2.6" fill="none" stroke="#cfc4e8" strokeWidth="1.1" strokeLinecap="round" />
+      <Circle cx="12" cy="12" r="2.8" fill={shade(accent, 6)} stroke={outline(accent)} strokeWidth="1.3" />
+      <Circle cx="11.2" cy="11.1" r="0.7" fill="#ffffff" opacity={0.85} />
+      {/* bottom bounce light on the outer ring */}
+      <Path d="M7.2 18.9c1.4 1 3.1 1.6 4.8 1.6s3.4-.6 4.8-1.6" fill="none" stroke={shade(accent, 44)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={7.9} cy={7.2} rx={2.4} ry={1.4} rot={-26} o={0.42} />
+      <Gleam cx={14.7} cy={5.8} r={0.65} />
     </Svg>
   );
 }
@@ -362,11 +440,19 @@ export function CalendarIcon({ size = 24, accent = '#00e5ff' }: IconProps) {
   const id = useMemo(() => gradId('cal'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Rect x="3.4" y="5" width="17.2" height="16" rx="3" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" />
-      <Path d="M3.4 9.6h17.2" stroke={rim(accent)} strokeWidth="1.2" />
-      <Path d="M8 2.8v3.4M16 2.8v3.4" stroke={shade(accent, -40)} strokeWidth="2" strokeLinecap="round" />
-      <Path d="M9.4 14.4l2 2 3.4-3.8" fill="none" stroke={shade(accent, -78)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <RadialGrad id={id} color={accent} cx={0.36} cy={0.42} />
+      <Rect x="3.4" y="5" width="17.2" height="16" rx="3.2" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="2" />
+      {/* header band */}
+      <Path d="M3.4 8.2c0-1.8 1.4-3.2 3.2-3.2h10.8c1.8 0 3.2 1.4 3.2 3.2v1.6H3.4Z" fill={shade(accent, -34)} />
+      <Path d="M3.4 9.8h17.2" stroke={outline(accent)} strokeWidth="1.3" />
+      {/* binder rings punch through the fat contour */}
+      <Path d="M8 2.6v3.6M16 2.6v3.6" stroke={outline(accent)} strokeWidth="3.6" strokeLinecap="round" />
+      <Path d="M8 2.8v3.2M16 2.8v3.2" stroke={shade(accent, 26)} strokeWidth="1.7" strokeLinecap="round" />
+      {/* marked-day check + bottom bounce light */}
+      <Path d="M9.2 14.6l2.1 2.1 3.6-4" fill="none" stroke={shade(accent, -84)} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M6.4 19.6c1.8.5 3.7.8 5.6.8s3.8-.3 5.6-.8" fill="none" stroke={shade(accent, 44)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={7.8} cy={7} rx={2.4} ry={1} rot={-8} o={0.4} />
+      <Gleam cx={12.9} cy={11.7} r={0.6} />
     </Svg>
   );
 }
@@ -375,10 +461,17 @@ export function BellIcon({ size = 24, accent = '#ffd24d' }: IconProps) {
   const id = useMemo(() => gradId('bell'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Path d="M12 3a6 6 0 0 1 6 6c0 3.6.9 5.3 2.1 6.6H3.9C5.1 14.3 6 12.6 6 9a6 6 0 0 1 6-6Z" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" strokeLinejoin="round" />
-      <Path d="M9.6 18.6a2.5 2.5 0 0 0 4.8 0" fill="none" stroke={shade(accent, -30)} strokeWidth="1.8" strokeLinecap="round" />
-      <Circle cx="12" cy="2.8" r="1.1" fill={shade(accent, -20)} stroke={rim(accent)} strokeWidth="0.8" />
+      <RadialGrad id={id} color={accent} cx={0.4} cy={0.3} />
+      <Circle cx="12" cy="2.9" r="1.3" fill={shade(accent, -16)} stroke={outline(accent)} strokeWidth="1.4" />
+      <Path d="M12 3a6 6 0 0 1 6 6c0 3.6.9 5.3 2.1 6.6H3.9C5.1 14.3 6 12.6 6 9a6 6 0 0 1 6-6Z" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="2" strokeLinejoin="round" />
+      {/* skirt shadow + bottom bounce light along the lip */}
+      <Path d="M5.4 15.6h13.2" stroke={shade(accent, -52)} strokeWidth="1" strokeLinecap="round" opacity={0.8} />
+      <Path d="M6.1 14.2c1.8.5 3.7.7 5.9.7s4.1-.2 5.9-.7" fill="none" stroke={shade(accent, 44)} strokeWidth="1" strokeLinecap="round" opacity={0.85} />
+      {/* clapper with fat contour */}
+      <Path d="M9.6 18.4a2.5 2.5 0 0 0 4.8 0" fill="none" stroke={outline(accent)} strokeWidth="3.8" strokeLinecap="round" />
+      <Path d="M9.9 18.4a2.2 2.2 0 0 0 4.2 0" fill="none" stroke={shade(accent, 8)} strokeWidth="1.8" strokeLinecap="round" />
+      <Gloss cx={9} cy={6.7} rx={2.3} ry={1.5} rot={-24} o={0.45} />
+      <Gleam cx={13.7} cy={4.7} r={0.65} />
     </Svg>
   );
 }
@@ -388,8 +481,16 @@ export function KeyIcon({ size = 24, accent = '#ffb800' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox={VB}>
       <BodyGrad id={id} color={accent} />
-      <Circle cx="8" cy="8" r="5" fill="none" stroke={`url(#${id})`} strokeWidth="2.6" />
-      <Path d="M11.6 11.6 20 20M17 17l2.6-2.6M14.4 14.4l2.2-2.2" stroke={`url(#${id})`} strokeWidth="2.6" strokeLinecap="round" />
+      {/* fat contour underlay for bow + shaft + teeth */}
+      <Circle cx="8" cy="8" r="5" fill="none" stroke={outline(accent)} strokeWidth="5" />
+      <Path d="M11.6 11.6 20 20M17 17l2.6-2.6M14.4 14.4l2.2-2.2" stroke={outline(accent)} strokeWidth="5" strokeLinecap="round" />
+      <Circle cx="8" cy="8" r="5" fill="none" stroke={`url(#${id})`} strokeWidth="2.7" />
+      <Path d="M11.6 11.6 20 20M17 17l2.6-2.6M14.4 14.4l2.2-2.2" stroke={`url(#${id})`} strokeWidth="2.7" strokeLinecap="round" />
+      {/* lit inner edge of the bow + bounce light on the shaft */}
+      <Path d="M4.9 6.4A3.7 3.7 0 0 1 8 4.4" fill="none" stroke={shade(accent, 70)} strokeWidth="1" strokeLinecap="round" />
+      <Path d="M14.9 15.9l2.6 2.6" stroke={shade(accent, 44)} strokeWidth="1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={6.3} cy={5.1} rx={1.5} ry={0.9} rot={-38} o={0.5} />
+      <Gleam cx={10.6} cy={4.4} r={0.65} />
     </Svg>
   );
 }
@@ -399,7 +500,13 @@ export function InfinityIcon({ size = 24, accent = '#c84dff' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox={VB}>
       <BodyGrad id={id} color={accent} />
-      <Path d="M12 12c-2-2.8-3.4-4.2-5.4-4.2a4.2 4.2 0 0 0 0 8.4c2 0 3.4-1.4 5.4-4.2Zm0 0c2 2.8 3.4 4.2 5.4 4.2a4.2 4.2 0 0 0 0-8.4c-2 0-3.4 1.4-5.4 4.2Z" fill="none" stroke={`url(#${id})`} strokeWidth="2.4" strokeLinecap="round" />
+      {/* fat contour underlay, juicy gradient ribbon on top */}
+      <Path d="M12 12c-2-2.8-3.4-4.2-5.4-4.2a4.2 4.2 0 0 0 0 8.4c2 0 3.4-1.4 5.4-4.2Zm0 0c2 2.8 3.4 4.2 5.4 4.2a4.2 4.2 0 0 0 0-8.4c-2 0-3.4 1.4-5.4 4.2Z" fill="none" stroke={outline(accent)} strokeWidth="5" strokeLinecap="round" />
+      <Path d="M12 12c-2-2.8-3.4-4.2-5.4-4.2a4.2 4.2 0 0 0 0 8.4c2 0 3.4-1.4 5.4-4.2Zm0 0c2 2.8 3.4 4.2 5.4 4.2a4.2 4.2 0 0 0 0-8.4c-2 0-3.4 1.4-5.4 4.2Z" fill="none" stroke={`url(#${id})`} strokeWidth="2.6" strokeLinecap="round" />
+      {/* bounce light along the lower right loop */}
+      <Path d="M15.1 15.1c.7.6 1.5 1 2.5 1" fill="none" stroke={shade(accent, 46)} strokeWidth="1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={5.9} cy={8.9} rx={1.5} ry={0.9} rot={-30} o={0.55} />
+      <Gleam cx={17.3} cy={7.1} r={0.65} />
     </Svg>
   );
 }
@@ -408,10 +515,14 @@ export function TicketIcon({ size = 24, accent = '#ff7a1a' }: IconProps) {
   const id = useMemo(() => gradId('ticket'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Path d="M3 8c0-1.1.9-2 2-2h14a2 2 0 0 1 2 2v2.2a1.8 1.8 0 0 0 0 3.6V16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2.2a1.8 1.8 0 0 0 0-3.6Z" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" strokeLinejoin="round" />
-      <Path d="M14.6 6v12" stroke={shade(accent, -50)} strokeWidth="1.3" strokeDasharray="2 2.2" />
-      <Polygon points="8.6,9.2 9.5,11 11.4,11.2 10,12.5 10.4,14.4 8.6,13.4 6.8,14.4 7.2,12.5 5.8,11.2 7.7,11" fill={shade(accent, 62)} />
+      <RadialGrad id={id} color={accent} cx={0.34} cy={0.32} />
+      <Path d="M3 8c0-1.1.9-2 2-2h14a2 2 0 0 1 2 2v2.2a1.8 1.8 0 0 0 0 3.6V16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2.2a1.8 1.8 0 0 0 0-3.6Z" fill={`url(#${id})`} stroke={outline(accent)} strokeWidth="2" strokeLinejoin="round" />
+      <Path d="M14.6 6.6v10.8" stroke={shade(accent, -56)} strokeWidth="1.3" strokeDasharray="2 2.2" />
+      <Polygon points="8.6,8.9 9.6,10.9 11.8,11.1 10.2,12.6 10.7,14.7 8.6,13.6 6.5,14.7 7,12.6 5.4,11.1 7.6,10.9" fill={shade(accent, 66)} stroke={shade(accent, -50)} strokeWidth="0.6" strokeLinejoin="round" />
+      {/* bottom bounce light */}
+      <Path d="M5.4 16.8c2.1.4 4.3.6 6.6.6s4.5-.2 6.6-.6" fill="none" stroke={shade(accent, 44)} strokeWidth="1.1" strokeLinecap="round" opacity={0.85} />
+      <Gloss cx={7.6} cy={7.9} rx={2.3} ry={1.1} rot={-10} o={0.42} />
+      <Gleam cx={17.3} cy={8.1} r={0.65} />
     </Svg>
   );
 }

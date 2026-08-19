@@ -51,6 +51,32 @@ const RARITY_COLORS: Record<string, string> = {
   legendary: COLORS.rarityLegendary,
 };
 
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Blend two #rrggbb colors — `t` is the weight of `toward` (0 = pure `hex`).
+ * Only used to tune portrait BACKDROP accents; rings, frames and badges keep
+ * their true theme/rarity colors. Non-6-digit inputs pass through untouched.
+ */
+function mixHex(hex: string, toward: string, t: number): string {
+  if (!HEX6.test(hex) || !HEX6.test(toward)) return hex;
+  const a = parseInt(hex.slice(1), 16);
+  const b = parseInt(toward.slice(1), 16);
+  const ch = (shift: number) =>
+    Math.round(((a >> shift) & 0xff) * (1 - t) + ((b >> shift) & 0xff) * t);
+  return '#' + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0');
+}
+
+/**
+ * Hot red/orange theme accents make the hero portrait's synthwave backdrop
+ * read harsh against the dark screen, so every backdrop accent is pulled 50%
+ * toward the app violet. The frame ring around it keeps the TRUE rarity
+ * color — only the portrait's sky/sun tint softens.
+ */
+function softenAccent(hex: string): string {
+  return mixHex(hex, COLORS.purple, 0.5);
+}
+
 const LIST_GAP = 12;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 /**
@@ -448,11 +474,13 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                 />
                 {/* The player's own keeper portrait inside each ring — same
                     name seed as the hero, backdrop-tinted by the frame art's
-                    accent and rim-lit in its rarity metal, so every card
-                    previews "you, wearing this frame" instead of a monogram. */}
+                    accent (nudged toward the rarity color so frames that
+                    share an accent hex still get distinct backdrops) and
+                    rim-lit in its rarity metal, so every card previews "you,
+                    wearing this frame" instead of a monogram. */}
                 <AvatarPortrait
                   size={67}
-                  accent={resolveFrameArt(frame.id).accent}
+                  accent={mixHex(resolveFrameArt(frame.id).accent, rarityColor, 0.35)}
                   variant={playerName}
                   rimColor={rarityColor}
                   style={StyleSheet.absoluteFill}
@@ -655,11 +683,12 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                   other screens (leaderboard rows) show for this player, so the
                   hero reads as real identity art instead of a monogram
                   placeholder. The backdrop tints from the equipped THEME's
-                  accent and the rim light from the equipped frame's rarity,
-                  so both equip choices retint the preview live. */}
+                  accent (softened toward the app violet so hot-red themes
+                  don't clash) and the rim light from the equipped frame's
+                  rarity, so both equip choices retint the preview live. */}
               <AvatarPortrait
                 size={116}
-                accent={equippedThemeData.colors.accent}
+                accent={softenAccent(equippedThemeData.colors.accent)}
                 variant={playerName}
                 rimColor={frameRarityColor}
                 style={StyleSheet.absoluteFill}

@@ -644,6 +644,12 @@ export function HomeScreen({
                 end={{ x: 1, y: 1 }}
                 style={styles.playButtonSurface}
               />
+              {/* Soft top sheen — between the earlier chrome-glass (too
+                  specular) and the flat slab a later review called
+                  "sits flat": a 12% white wash over the upper third plus a
+                  hairline lit top edge gives the CTA dimension without
+                  reintroducing the glass band. */}
+              <View pointerEvents="none" style={styles.playButtonSheen} />
               <View style={styles.playButtonOverlay}>
                 <View>
                   <Text style={styles.playButtonLabel}>{playerStage === 'new' ? 'Start playing' : 'Continue journey'}</Text>
@@ -1688,6 +1694,18 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
+  },
+  playButtonSheen: {
+    position: 'absolute',
+    top: 1,
+    left: 1,
+    right: 1,
+    height: '38%',
+    borderTopLeftRadius: 23,
+    borderTopRightRadius: 23,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.30)',
   },
   playButtonOverlay: {
     ...StyleSheet.absoluteFillObject,

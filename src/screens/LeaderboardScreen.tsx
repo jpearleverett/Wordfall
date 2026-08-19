@@ -254,37 +254,54 @@ const AVATAR_HUE_PAIRS: ReadonlyArray<readonly [string, string]> = [
   [COLORS.orange, COLORS.purple],
 ];
 
-function nameHuePair(name: string): readonly [string, string] {
+function hashSeed(seed: string): number {
   let h = 5381;
-  for (let i = 0; i < name.length; i++) {
-    h = ((h * 33) ^ name.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = ((h * 33) ^ seed.charCodeAt(i)) >>> 0;
   }
-  return AVATAR_HUE_PAIRS[h % AVATAR_HUE_PAIRS.length];
+  return h;
+}
+
+/**
+ * Hue pair is salted DIFFERENTLY from the portrait pose seed (see
+ * `GlassAvatar`), so two names that collide onto the same pose still land on
+ * different ring colors instead of reading as a copy-pasted avatar.
+ */
+function nameHuePair(name: string): readonly [string, string] {
+  return AVATAR_HUE_PAIRS[hashSeed(name + '#hue') % AVATAR_HUE_PAIRS.length];
 }
 
 /**
  * GlassAvatar — illustrated player gem. The inner disc hosts the bespoke
  * `AvatarPortrait` keeper art, seeded deterministically by the player's name
  * (so a given name always shows the same character), backdrop-tinted by the
- * same per-player hue pair that colors the gradient ring. Podium rows pass
- * `rim` to wrap the gem in a metallic ring matching their rank metal, which
- * also feeds the portrait's rim light.
+ * same per-player hue pair that colors the gradient ring. Ranked rows pass
+ * `rank` so the pose seed mixes in a rank bucket — with only six poses and six
+ * hue pairs, adjacent rows otherwise collide onto identical pose+hue combos.
+ * Podium rows pass `rim` to wrap the gem in a metallic ring matching their
+ * rank metal, which also feeds the portrait's rim light.
  */
 function GlassAvatar({
   name,
   size = 36,
   highlighted = false,
+  rank,
   rim,
 }: {
   name: string;
   size?: number;
   highlighted?: boolean;
+  rank?: number;
   rim?: readonly [string, string, string];
 }) {
   const [hueA, hueB] = highlighted
     ? ([COLORS.accentLight, COLORS.accent] as const)
     : nameHuePair(name);
   const hue = highlighted ? COLORS.accent : hueA;
+  // The current user's gem stays seeded by name ALONE so their character is
+  // stable across every screen (EditProfile hero, sticky bar, list row).
+  const portraitSeed =
+    !highlighted && rank != null ? `${name}#${rank % 3}` : name;
   const ringColors: readonly [string, string, string] =
     rim ?? ([hueA, hueB, hueA + 'D9'] as const);
   const pad = 1.5;
@@ -323,7 +340,7 @@ function GlassAvatar({
           <AvatarPortrait
             size={inner}
             accent={hue}
-            variant={name}
+            variant={portraitSeed}
             rimColor={rim ? rim[0] : undefined}
           />
           {/* Glass sheen keeps the gem language over the art */}
@@ -796,7 +813,12 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
         <View style={styles.rankContainer}>
           <RankMedallion rank={entry.rank} size={30} />
         </View>
-        <GlassAvatar name={entry.name} size={36} highlighted={isCurrentUser} />
+        <GlassAvatar
+          name={entry.name}
+          size={36}
+          highlighted={isCurrentUser}
+          rank={entry.rank}
+        />
         <View style={styles.listInfo}>
           <Text
             style={[styles.listName, isCurrentUser && styles.listNameHighlight]}
@@ -1217,6 +1239,7 @@ const LeaderboardScreen: React.FC<
                   name={entry.name}
                   size={isFirst ? 56 : 44}
                   highlighted={isMe}
+                  rank={entry.rank}
                   rim={metal}
                 />
                 <Text style={styles.topName} numberOfLines={1}>

@@ -548,14 +548,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   letter: {
-    color: COLORS.textPrimary,
+    // Pure white, not the app's lavender textPrimary — on the chapter-tinted
+    // tile ramps the lavender read as "letters lack punch" (round-4 blind
+    // review). The dark halo below carries the contrast.
+    color: '#ffffff',
     fontFamily: 'SpaceGrotesk_700Bold',
     textAlign: 'center',
     letterSpacing: 0.4,
   },
   letterDefault: {
-    textShadowColor: 'rgba(0,0,0,0.85)',
-    textShadowRadius: 6,
+    textShadowColor: 'rgba(0,0,0,0.95)',
+    textShadowRadius: 7,
     textShadowOffset: { width: 0, height: 2 },
   },
   // Selected letters need a heavy dark halo — the gradient under them is

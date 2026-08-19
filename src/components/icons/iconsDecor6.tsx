@@ -8,7 +8,10 @@ import React, { useMemo } from 'react';
 import Svg, {
   Circle, Ellipse, G, Path, Rect,
 } from 'react-native-svg';
-import { IconProps, VB, BodyGrad, DuoGrad, gradId, rim, shade, HILITE, HILITE_SOFT } from './IconBase';
+import {
+  IconProps, VB, BodyGrad, DuoGrad, RadialGrad, Gloss, Gleam, gradId, rim, shade, outline,
+  HILITE, HILITE_SOFT,
+} from './IconBase';
 import { Ground, GlowGrad, BRASS } from './iconsDecor';
 
 /** Community star: gold star lifted by a ring of joined figures. */
@@ -137,49 +140,54 @@ export function OceanWaveIcon({ size = 24, accent = '#31a8e8' }: IconProps) {
 }
 
 /**
- * Piggy jar: the gem piggy bank as a drawn glass jar — gold coin-slot lid,
- * coins and a gem inside. Matches ShopScreen's JarGlyph material story so
- * the Home compact card and the shop card read as the same object.
+ * Piggy bank: unmistakable round pink pig facing the viewer — snout with two
+ * nostrils, tiny ears, stub legs, curly tail, and a gold coin half-inserted
+ * in the top slot. Rendered-loot recipe: fat contour, radial candy gradient,
+ * glossy specular blob, bottom bounce light. Reads at 44px.
  */
-export function PiggyJarIcon({ size = 24, accent = '#e84fd0' }: IconProps) {
-  const gold = useMemo(() => gradId('pigL'), []);
-  const gem = useMemo(() => gradId('pigJ'), []);
-  const glow = useMemo(() => gradId('pigG'), []);
-  const coin = (cx: number, cy: number, r: number, i: number) => (
-    <G key={i}>
-      <Circle cx={cx} cy={cy} r={r} fill="#f0c05a" stroke="#8a5c14" strokeWidth="0.6" />
-      <Circle cx={cx} cy={cy} r={r * 0.62} fill="none" stroke="#c8871a" strokeWidth="0.45" />
-    </G>
-  );
+export function PiggyJarIcon({ size = 24, accent = '#ff7bb8' }: IconProps) {
+  const body = useMemo(() => gradId('pigB'), []);
+  const coin = useMemo(() => gradId('pigC'), []);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <DuoGrad id={gold} from={shade(BRASS, 48)} to={shade(BRASS, -48)} />
-      <DuoGrad id={gem} from={shade(accent, 60)} to={shade(accent, -44)} />
-      <GlowGrad id={glow} color="#ffd24d" />
-      <Ground rx={6.6} cy={21.7} ry={1} />
-      <Ellipse cx="12" cy="14" rx="7.6" ry="6.4" fill={`url(#${glow})`} opacity="0.35" />
-      {/* lid with coin slot */}
-      <Rect x="7.6" y="3" width="8.8" height="2.6" rx="0.9" fill={`url(#${gold})`} stroke={rim(BRASS)} strokeWidth="0.8" />
-      <Rect x="10.2" y="3.9" width="3.6" height="0.85" rx="0.4" fill="#241238" />
-      <Path d="M8.4 3.7h2.6" stroke={shade(BRASS, 52)} strokeWidth="0.5" strokeLinecap="round" />
-      {/* coin dropping in */}
-      <G transform="rotate(-18 12 1.9)">
-        <Ellipse cx="12" cy="1.9" rx="1.5" ry="1.1" fill="#f0c05a" stroke="#8a5c14" strokeWidth="0.55" />
-        <Ellipse cx="12" cy="1.9" rx="0.9" ry="0.6" fill="none" stroke="#c8871a" strokeWidth="0.4" />
-      </G>
-      {/* glass body */}
-      <Path d="M7.9 5.6h8.2c1.3 1.5 2 3.3 2 5.5v6.1c0 2.1-1.4 3.5-3.5 3.5h-5.2c-2.1 0-3.5-1.4-3.5-3.5v-6.1c0-2.2.7-4 2-5.5Z" fill="rgba(190,235,255,0.14)" stroke="#9fd8e8" strokeWidth="0.95" strokeLinejoin="round" />
-      {/* treasure inside */}
-      {coin(9.4, 18.2, 1.5, 0)}
-      {coin(14.4, 18.4, 1.4, 1)}
-      {coin(11.9, 16.6, 1.5, 2)}
-      <Path d="M12 10.6l2.3 1.9-.9 3h-2.8l-.9-3Z" fill={`url(#${gem})`} stroke={rim(accent)} strokeWidth="0.7" strokeLinejoin="round" />
-      <Path d="M9.7 12.5h4.6M12 10.6l-.9 1.9.9 3 .9-3Z" fill="none" stroke={shade(accent, -48)} strokeWidth="0.45" strokeLinejoin="round" />
-      <Path d="M10.9 11.7l.7-.65" stroke="#ffffff" strokeWidth="0.6" strokeLinecap="round" />
-      {/* glass sheen + sparkle */}
-      <Path d="M7.5 8.1c-.6 2.9-.6 6.1 0 9.6" fill="none" stroke={HILITE_SOFT} strokeWidth="0.8" strokeLinecap="round" />
-      <Path d="M16.6 7.4c.4.9.7 1.9.8 2.9" fill="none" stroke={HILITE_SOFT} strokeWidth="0.6" strokeLinecap="round" />
-      <Path d="M15.9 12.4l.35.85.85.35-.85.35-.35.85-.35-.85-.85-.35.85-.35Z" fill="#ffffff" opacity="0.85" />
+      <RadialGrad id={body} color={accent} cx={0.38} cy={0.3} />
+      <DuoGrad id={coin} from={shade(BRASS, 58)} to={shade(BRASS, -34)} />
+      <Ground rx={7.2} cy={21.8} ry={1} />
+      {/* gold coin, bottom half inside the slot */}
+      <Circle cx="12" cy="4.1" r="2.3" fill={`url(#${coin})`} stroke={outline(BRASS)} strokeWidth="1.6" />
+      <Circle cx="12" cy="4.1" r="1.3" fill="none" stroke={shade(BRASS, -30)} strokeWidth="0.6" />
+      <Circle cx="11.2" cy="3.3" r="0.4" fill="#ffffff" opacity="0.85" />
+      {/* stub legs peeking under the belly */}
+      <Rect x="6.2" y="18.6" width="2.9" height="3" rx="1.2" fill={shade(accent, -30)} stroke={outline(accent)} strokeWidth="1.7" />
+      <Rect x="14.9" y="18.6" width="2.9" height="3" rx="1.2" fill={shade(accent, -30)} stroke={outline(accent)} strokeWidth="1.7" />
+      {/* tiny ears, rooted under the body */}
+      <Path d="M6.3 8.2 4.9 4.6l4 1.6Z" fill={shade(accent, -14)} stroke={outline(accent)} strokeWidth="1.7" strokeLinejoin="round" />
+      <Path d="M17.7 8.2l1.4-3.6-4 1.6Z" fill={shade(accent, -14)} stroke={outline(accent)} strokeWidth="1.7" strokeLinejoin="round" />
+      {/* curly tail */}
+      <Path d="M3.6 13.2c-1.5-.2-1.9-1.7-.8-2.3.8-.4 1.6.1 1.4.9" fill="none" stroke={outline(accent)} strokeWidth="2.6" strokeLinecap="round" />
+      <Path d="M3.6 13.2c-1.5-.2-1.9-1.7-.8-2.3.8-.4 1.6.1 1.4.9" fill="none" stroke={shade(accent, 8)} strokeWidth="1.1" strokeLinecap="round" />
+      {/* round pig body, fat contour */}
+      <Ellipse cx="12" cy="13.7" rx="8.5" ry="7.2" fill={`url(#${body})`} stroke={outline(accent)} strokeWidth="2" />
+      {/* coin slot on the crown */}
+      <Rect x="9.5" y="5.9" width="5" height="1.5" rx="0.7" fill={shade(accent, -96)} stroke={outline(accent)} strokeWidth="0.9" />
+      {/* bottom bounce light on the belly */}
+      <Path d="M8 19.6c1.3.6 2.6.9 4 .9s2.7-.3 4-.9" fill="none" stroke={shade(accent, 46)} strokeWidth="1.1" strokeLinecap="round" opacity="0.85" />
+      {/* eyes */}
+      <Circle cx="8.9" cy="11.5" r="1" fill="#2a1050" />
+      <Circle cx="15.1" cy="11.5" r="1" fill="#2a1050" />
+      <Circle cx="8.6" cy="11.2" r="0.35" fill="#ffffff" />
+      <Circle cx="14.8" cy="11.2" r="0.35" fill="#ffffff" />
+      {/* rosy cheeks */}
+      <Ellipse cx="6.9" cy="14" rx="1.1" ry="0.7" fill={shade(accent, 52)} opacity="0.7" />
+      <Ellipse cx="17.1" cy="14" rx="1.1" ry="0.7" fill={shade(accent, 52)} opacity="0.7" />
+      {/* forward-facing snout with two nostrils */}
+      <Ellipse cx="12" cy="14.7" rx="3.2" ry="2.5" fill={shade(accent, 34)} stroke={outline(accent)} strokeWidth="1.7" />
+      <Ellipse cx="10.9" cy="14.7" rx="0.55" ry="0.8" fill={shade(accent, -84)} />
+      <Ellipse cx="13.1" cy="14.7" rx="0.55" ry="0.8" fill={shade(accent, -84)} />
+      <Ellipse cx="11" cy="13.4" rx="1" ry="0.5" fill="#ffffff" opacity="0.45" />
+      {/* glossy specular blob + gleam dot */}
+      <Gloss cx={8.3} cy={9.6} rx={2.6} ry={1.6} rot={-22} o={0.45} />
+      <Gleam cx={14.9} cy={8.6} r={0.7} />
     </Svg>
   );
 }

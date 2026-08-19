@@ -30,6 +30,20 @@ export const LOCAL_IMAGES = {
 
   shelfBooster: require('../../assets/images/optimized/shelf-booster.webp'),
 
+  // Alpha-keyed rendered loot sprites — the original webp art baked a black
+  // background (it composited as "a thumbnail in a box"); these PNGs were
+  // derived by luminance-keying (alpha = max(RGB), unpremultiplied) so the
+  // rendered coin/diamond/crown art floats over any dark surface. Deployed
+  // at hero scale on the sell moments (shop flash sale, VIP, season pass).
+  lootCoin: require('../../assets/images/optimized/alpha/icon-coin-gold.png'),
+  lootGem: require('../../assets/images/optimized/alpha/icon-gem-diamond.png'),
+  lootCrown: require('../../assets/images/optimized/alpha/trophy-crown-element.png'),
+  lootCrystals: require('../../assets/images/optimized/alpha/crystal-gems-collection.png'),
+  lootSun: require('../../assets/images/optimized/alpha/neon-sun-element.png'),
+  lootBadgeFrame: require('../../assets/images/optimized/alpha/achievement-badge-frame.png'),
+  lootEnergyRing: require('../../assets/images/optimized/alpha/energy-ring-element.png'),
+  lootSparkles: require('../../assets/images/optimized/alpha/sparkle-sprites.png'),
+
   // PNG kept — logo renders at launch splash / branding surfaces; 259KB.
   wordfallLogo: require('../../assets/wordfalllogo.png'),
 
