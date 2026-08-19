@@ -53,7 +53,37 @@ import {
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
 import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
-import { AchievementBadge } from '../components/cosmetics/AchievementBadge';
+import {
+  AchievementEmblem,
+  AchievementTierLevel,
+  resolveAchievementBadgeArt,
+} from '../components/cosmetics/AchievementBadge';
+import { EMBLEM_RADIUS } from '../components/cosmetics/achievementBadgeCatalog';
+import { EmblemProps } from '../components/cosmetics/achievementBadgeParts';
+import { LockChip } from '../components/cosmetics/achievementBadgeShapes';
+import {
+  BoltClockEmblem,
+  BrainEmblem,
+  ChainEmblem,
+  FlameEmblem,
+  JigsawEmblem,
+  LensEmblem,
+  ScoreBarsEmblem,
+  SunriseEmblem,
+  TriStarEmblem,
+} from '../components/cosmetics/achievementEmblems1';
+import {
+  AtlasEmblem,
+  CompassEmblem,
+  CrownGemsEmblem,
+  GemTileEmblem,
+  OwlEmblem,
+  PeakEmblem,
+  StarClusterEmblem,
+  StopwatchEmblem,
+  TempleEmblem,
+  WingedShoeEmblem,
+} from '../components/cosmetics/achievementEmblems2';
 import Svg, {
   Circle,
   Defs,
@@ -1062,6 +1092,185 @@ const ACHIEVEMENT_TIER_WASH: Record<string, readonly [string, string]> = {
   gold: ['rgba(255,184,0,0.28)', 'rgba(255,184,0,0.05)'],
 };
 
+/**
+ * AchievementMedal — high-contrast rebuild of the trophy-wall art. Blind
+ * review read the old enamel-on-slate badge composition as muddy, monochrome
+ * and near-identical, so each medal is now a classic coin: a tier-metal ring
+ * around a FULL-BRIGHTNESS enamel face whose hue is hashed from the
+ * achievement id across the five synthwave primaries (gold / cyan / magenta /
+ * green / violet), with the achievement's bespoke emblem stamped on it in the
+ * face's own dark ink at full opacity. Locked medals communicate "locked" via
+ * COLOR, never dimming: slate ring, dark desaturated face with a subtle
+ * outline, the same emblem lifted to light slate (still a fully legible
+ * silhouette) plus a small padlock chip.
+ */
+const MEDAL_ACCENTS = [
+  COLORS.gold,
+  COLORS.cyan,
+  COLORS.pink,
+  COLORS.green,
+  COLORS.purple,
+] as const;
+
+/** djb2 hash of the achievement id → one of the five medal accents. */
+function medalAccent(achievementId: string): string {
+  let h = 5381;
+  for (let i = 0; i < achievementId.length; i++) {
+    h = ((h * 33) ^ achievementId.charCodeAt(i)) >>> 0;
+  }
+  return MEDAL_ACCENTS[h % MEDAL_ACCENTS.length];
+}
+
+const MEDAL_METALS: Record<AchievementTierLevel, string> = {
+  bronze: COLORS.tierBronze,
+  silver: COLORS.tierSilver,
+  gold: COLORS.tierGold,
+};
+
+/** Locked slates — desaturated against the purple nebula, never washed out. */
+const MEDAL_LOCKED_RING = '#4a5168';
+const MEDAL_LOCKED_FACE = '#242a3c';
+
+/** Bespoke emblem per achievement — same authored art the badges used. */
+const MEDAL_EMBLEMS: Record<AchievementEmblem, React.ComponentType<EmblemProps>> = {
+  lens: LensEmblem,
+  jigsaw: JigsawEmblem,
+  triStar: TriStarEmblem,
+  scoreBars: ScoreBarsEmblem,
+  boltClock: BoltClockEmblem,
+  brain: BrainEmblem,
+  chain: ChainEmblem,
+  flame: FlameEmblem,
+  sunrise: SunriseEmblem,
+  atlas: AtlasEmblem,
+  gemTile: GemTileEmblem,
+  temple: TempleEmblem,
+  crownGems: CrownGemsEmblem,
+  compass: CompassEmblem,
+  stopwatch: StopwatchEmblem,
+  peak: PeakEmblem,
+  starCluster: StarClusterEmblem,
+  owl: OwlEmblem,
+  wingedShoe: WingedShoeEmblem,
+};
+
+/** Radius the emblem art is scaled to inside the 100-box medal face. */
+const MEDAL_GLYPH_R = 29;
+
+/**
+ * Luminance ramp re-toning an emblem's authored palette onto a lo→hi ink
+ * pair: tonal structure survives, but every tone stays inside the ink band,
+ * so the glyph keeps guaranteed contrast against its face at FULL opacity.
+ */
+function medalInkRamp(lo: string, hi: string): (hex: string) => string {
+  const parse = (h: string): [number, number, number] => {
+    const n = parseInt(h.slice(1), 16);
+    return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+  };
+  const a = parse(lo);
+  const b = parse(hi);
+  return (hex: string) => {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+    const [r, g, bl] = parse(hex);
+    const l = (0.299 * r + 0.587 * g + 0.114 * bl) / 255;
+    const m = a.map((v, i) => Math.round(v + (b[i] - v) * l));
+    return `#${((m[0] << 16) | (m[1] << 8) | m[2]).toString(16).padStart(6, '0')}`;
+  };
+}
+
+const n2 = (v: number) => Math.round(v * 100) / 100;
+
+function AchievementMedal({
+  achievementId,
+  size,
+  earned,
+  tier,
+}: {
+  achievementId: string;
+  size: number;
+  earned: boolean;
+  tier?: AchievementTierLevel;
+}) {
+  const art = useMemo(() => resolveAchievementBadgeArt(achievementId), [achievementId]);
+  const accent = useMemo(() => medalAccent(achievementId), [achievementId]);
+  const Emblem = MEDAL_EMBLEMS[art.emblem];
+  const metal = earned ? MEDAL_METALS[tier ?? 'bronze'] : MEDAL_LOCKED_RING;
+  const ids = useMemo(() => {
+    const base = gradId('achMedal');
+    return { ring: `${base}-ring`, face: `${base}-face` };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const c = useMemo(
+    () =>
+      earned
+        ? medalInkRamp(shade(accent, -182), shade(accent, -106))
+        : medalInkRamp('#3d4459', '#aab2c9'),
+    [earned, accent],
+  );
+  const s = MEDAL_GLYPH_R / EMBLEM_RADIUS[art.emblem];
+  const faceStops: Array<[number, string]> = earned
+    ? [
+        [0, shade(accent, 66)],
+        [0.55, accent],
+        [1, shade(accent, -22)],
+      ]
+    : [
+        [0, shade(MEDAL_LOCKED_FACE, 18)],
+        [1, shade(MEDAL_LOCKED_FACE, -10)],
+      ];
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Defs>
+        <SvgLinearGradient id={ids.ring} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={shade(metal, 58)} />
+          <Stop offset="0.5" stopColor={metal} />
+          <Stop offset="1" stopColor={shade(metal, -62)} />
+        </SvgLinearGradient>
+        <SvgLinearGradient id={ids.face} x1="0" y1="0" x2="0" y2="1">
+          {faceStops.map(([offset, color]) => (
+            <Stop key={offset} offset={offset} stopColor={color} />
+          ))}
+        </SvgLinearGradient>
+      </Defs>
+      {/* Metal ring — hammered tier metal when earned, plain slate when not */}
+      <Circle
+        cx={50}
+        cy={50}
+        r={47}
+        fill={`url(#${ids.ring})`}
+        stroke={shade(metal, -92)}
+        strokeWidth={1.6}
+      />
+      <Circle
+        cx={50}
+        cy={50}
+        r={39.4}
+        fill="none"
+        stroke={shade(metal, 46)}
+        strokeWidth={1.2}
+        opacity={0.8}
+      />
+      {/* Enamel face — full-brightness accent when earned, dark desaturated
+          slate with a subtle outline when locked */}
+      <Circle
+        cx={50}
+        cy={50}
+        r={38}
+        fill={`url(#${ids.face})`}
+        stroke={earned ? shade(accent, -78) : 'rgba(255,255,255,0.16)'}
+        strokeWidth={earned ? 1.2 : 1}
+      />
+      {/* Bespoke emblem, stamped at full opacity (authored origin is 50,44) */}
+      <G transform={`translate(${n2(50 - 50 * s)} ${n2(50 - 44 * s)}) scale(${n2(s)})`}>
+        <Emblem c={c} />
+      </G>
+      {/* Top catchlight over the enamel */}
+      <Ellipse cx={50} cy={23} rx={22} ry={6.5} fill="#ffffff" opacity={0.16} />
+      {!earned && <LockChip />}
+    </Svg>
+  );
+}
+
 const PRESTIGE_BENEFITS: Array<{ icon: GameIconName; label: string }> = [
   { icon: 'undo', label: 'Reset to Level 1' },
   { icon: 'crown', label: 'Keep all cosmetics' },
@@ -1644,7 +1853,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 pointerEvents="none"
               />
               <View style={styles.achievementBadgeWrap}>
-                <AchievementBadge
+                <AchievementMedal
                   achievementId={achievement.id}
                   earned={!!highestTier}
                   tier={highestTier ?? undefined}

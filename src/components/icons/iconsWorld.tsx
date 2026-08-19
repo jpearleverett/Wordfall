@@ -3,8 +3,25 @@
  * as iconsCore (24×24 viewBox, gradient body, rim stroke, top highlight).
  */
 import React, { useMemo } from 'react';
-import Svg, { Circle, Ellipse, G, Path, Polygon, Rect } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { IconProps, VB, BodyGrad, DuoGrad, gradId, rim, shade, HILITE } from './IconBase';
+
+/**
+ * File-local multi-stop vertical gradient for "rendered" hero icons that
+ * need richer materials than the shared BodyGrad recipe. (IconBase is a
+ * shared file owned elsewhere — keep custom helpers local to this file.)
+ */
+function LocalGrad({ id, stops }: { id: string; stops: ReadonlyArray<readonly [string, string]> }) {
+  return (
+    <Defs>
+      <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+        {stops.map(([offset, color]) => (
+          <Stop key={offset} offset={offset} stopColor={color} />
+        ))}
+      </LinearGradient>
+    </Defs>
+  );
+}
 
 export function LeafIcon({ size = 24, accent = '#35b892' }: IconProps) {
   const id = useMemo(() => gradId('leaf'), []);
@@ -60,15 +77,32 @@ export function MountainIcon({ size = 24, accent = '#7c5cff' }: IconProps) {
 }
 
 export function SunIcon({ size = 24, accent = '#ffb800' }: IconProps) {
-  const id = useMemo(() => gradId('sun'), []);
+  const ray = useMemo(() => gradId('sunray'), []);
+  const ol = shade(accent, -120);
+  // Rounded triangular ray pointing up; rotated copies make the full corona.
+  const rayPath = 'M9.9 7.4 11 2.9q1-1.9 2 0l1.1 4.5q-2.1-.9-4.2 0Z';
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <G stroke={`url(#${id})`} strokeWidth="1.9" strokeLinecap="round">
-        <Path d="M12 1.6v3M12 19.4v3M1.6 12h3M19.4 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M19.4 4.6l-2.1 2.1M6.7 17.3l-2.1 2.1" />
+      <LocalGrad id={ray} stops={[['0', shade(accent, 85)], ['0.55', accent], ['1', shade(accent, -50)]]} />
+      <G fill={`url(#${ray})`} stroke={ol} strokeWidth="1.6" strokeLinejoin="round">
+        <Path d={rayPath} />
+        <Path d={rayPath} transform="rotate(45 12 12)" />
+        <Path d={rayPath} transform="rotate(90 12 12)" />
+        <Path d={rayPath} transform="rotate(135 12 12)" />
+        <Path d={rayPath} transform="rotate(180 12 12)" />
+        <Path d={rayPath} transform="rotate(225 12 12)" />
+        <Path d={rayPath} transform="rotate(270 12 12)" />
+        <Path d={rayPath} transform="rotate(315 12 12)" />
       </G>
-      <Circle cx="12" cy="12" r="5.1" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.3" />
-      <Path d="M9.4 10.2c.5-.8 1.3-1.4 2.2-1.6" stroke={HILITE} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+      {/* molten core: stacked circles light-to-deep, drifting toward the light */}
+      <Circle cx="12" cy="12" r="5.7" fill={shade(accent, -38)} stroke={ol} strokeWidth="2" />
+      <Circle cx="11.85" cy="11.85" r="4.6" fill={accent} />
+      <Circle cx="11.7" cy="11.7" r="3.5" fill={shade(accent, 48)} />
+      <Circle cx="11.6" cy="11.6" r="2.4" fill={shade(accent, 100)} />
+      <Circle cx="11.5" cy="11.5" r="1.3" fill="#fff8dc" />
+      {/* big specular blob + tiny sparkle */}
+      <Ellipse cx="9.8" cy="9.5" rx="2.3" ry="1.4" transform="rotate(-24 9.8 9.5)" fill="rgba(255,255,255,0.8)" />
+      <Path d="M15.3 3.2l.45.75.8.45-.8.45-.45.75-.45-.75-.8-.45.8-.45Z" fill="#fffdf0" />
     </Svg>
   );
 }
@@ -242,14 +276,26 @@ export function FrameIcon({ size = 24, accent = '#e8c07a' }: IconProps) {
 }
 
 export function GlobeIcon({ size = 24, accent = '#31a6e8' }: IconProps) {
-  const id = useMemo(() => gradId('globe'), []);
+  const sea = useMemo(() => gradId('globesea'), []);
+  const land = useMemo(() => gradId('globeland'), []);
+  const ol = shade(accent, -118);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Circle cx="12" cy="12" r="9.2" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" />
-      <Ellipse cx="12" cy="12" rx="4.2" ry="9.2" fill="none" stroke={shade(accent, -48)} strokeWidth="1.1" />
-      <Path d="M2.8 12h18.4M4.2 7.4h15.6M4.2 16.6h15.6" stroke={shade(accent, -48)} strokeWidth="1.1" />
-      <Path d="M6.2 6c1.1-1.2 2.5-2 4-2.4" stroke={HILITE} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+      <LocalGrad id={sea} stops={[['0', shade(accent, 58)], ['0.5', accent], ['1', shade(accent, -78)]]} />
+      <LocalGrad id={land} stops={[['0', '#b9f0a2'], ['1', '#4fbf74']]} />
+      {/* glossy deep-sea sphere, fat outline */}
+      <Circle cx="12" cy="12" r="9.3" fill={`url(#${sea})`} stroke={ol} strokeWidth="2" />
+      {/* lighter landmasses */}
+      <Path d="M6.1 8.4C6.5 6.1 8.6 4.8 10.9 5.2c2.2.4 3 2 2 3.6-.7 1-.4 2-1.4 2.9-1.3 1.2-3.6.8-4.6-.6-.7-.9-1-1.7-.8-2.7Z" fill={`url(#${land})`} stroke="rgba(9,64,96,0.4)" strokeWidth="0.9" />
+      <Path d="M15.1 10.5c1.4-1 3.4-.5 3.9 1 .4 1.3-.4 2.6-1.9 2.8-1.4.2-2.5-.7-2.4-2 0-.7.1-1.4.4-1.8Z" fill={`url(#${land})`} stroke="rgba(9,64,96,0.4)" strokeWidth="0.9" />
+      <Ellipse cx="10.3" cy="16.6" rx="1.5" ry="1.1" fill={`url(#${land})`} stroke="rgba(9,64,96,0.4)" strokeWidth="0.9" />
+      {/* thin latitude arc */}
+      <Path d="M4.3 14.1c2.4 2.5 13 2.5 15.4 0" fill="none" stroke={shade(accent, -52)} strokeOpacity="0.7" strokeWidth="1.1" strokeLinecap="round" />
+      {/* big specular blob */}
+      <Ellipse cx="8.6" cy="6.8" rx="3.4" ry="1.9" transform="rotate(-27 8.6 6.8)" fill="rgba(255,255,255,0.55)" />
+      {/* tiny orbiting sparkle + trailing mote */}
+      <Path d="M20.6 2.9l.4.7.75.4-.75.4-.4.7-.4-.7-.75-.4.75-.4Z" fill="#f2fbff" />
+      <Circle cx="3.2" cy="18.9" r="0.65" fill="rgba(242,251,255,0.85)" />
     </Svg>
   );
 }

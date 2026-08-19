@@ -13,12 +13,21 @@ import {
   Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, {
+  ClipPath,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Path,
+  Rect,
+  Stop,
+} from 'react-native-svg';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
 import IconMedallion from '../components/common/IconMedallion';
 import PrimaryButton from '../components/common/PrimaryButton';
 import GameIcon from '../components/icons/GameIcon';
+import { gradId } from '../components/icons/IconBase';
 import { bentoPanel } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
@@ -532,86 +541,42 @@ function TileGridGlyph({ size = 20, accent = COLORS.accent }: { size?: number; a
 }
 
 /**
- * ShieldCrest — layered club emblem built from stacked gradient Views: a
- * soft accent halo, gold metallic rim, dark inner-border groove, metallic
- * purple face with a glass highlight, a small crown docked over the rim,
- * and ONE of the game's letter tiles (selected-tile gradient, rounded
- * display W) centered on the face. Replaces the outlined shield + side
- * circles the round-2 art review flagged as a crude vector.
+ * ShieldCrest — the club emblem: soft accent halo, gold metallic rim, dark
+ * inner-border groove, metallic purple face with a glass highlight, a small
+ * crown docked over the rim, and ONE of the game's letter tiles
+ * (selected-tile gradient, rounded display W) centered on the face. The
+ * shield body is ONE SVG silhouette (the icon set's 24×24 heater-shield
+ * geometry) drawn at three insets — the previous stacked-View build
+ * (rounded-top block + rotated diamond point) let the diamond's square
+ * corners poke outside the silhouette on some renderers (round-3 art flag).
  */
 function ShieldCrest({ size = 92, muted = false }: { size?: number; muted?: boolean }) {
-  const w = size * 0.82;
-  const topH = size * 0.5;
-  const topR = size * 0.14;
-  const rimT = size * 0.05; // metallic rim thickness
-  const grooveT = rimT + size * 0.024; // rim + inner-border groove
   const crownH = size * 0.27;
   const shieldTop = crownH * 0.55; // crown overlaps the rim by ~45%
-  const shieldH = topH + w / 2;
+  const shieldH = size * 0.91;
+  const unit = shieldH / 20; // shield path spans y 2→22 of the 24×24 viewBox
+  const svgSize = unit * 24;
   const height = shieldTop + shieldH + size * 0.03;
   const groove = 'rgba(14,5,30,0.97)';
   const face = ['#7040ae', '#341560', '#4b2280'] as const;
   const tile = size * 0.4;
   const tileTop = shieldTop + shieldH * 0.46 - tile / 2;
+  const ids = useMemo(
+    () => ({
+      rim: gradId('crestRim'),
+      face: gradId('crestFace'),
+      clip: gradId('crestClip'),
+    }),
+    []
+  );
 
-  /** One shield-silhouette layer: rounded top block + rotated diamond point. */
-  const layer = (
-    inset: number,
-    fill: string | readonly string[],
-    children?: React.ReactNode
-  ) => {
-    const lw = w - inset * 2;
-    const side = lw / Math.SQRT2;
-    const solid = typeof fill === 'string';
-    const gradient = solid
-      ? null
-      : ([...fill] as [string, string, ...string[]]);
-    const blockStyle = {
-      position: 'absolute' as const,
-      top: shieldTop + inset,
-      width: lw,
-      height: topH - inset + 1,
-      borderTopLeftRadius: Math.max(topR - inset * 0.7, 3),
-      borderTopRightRadius: Math.max(topR - inset * 0.7, 3),
-      overflow: 'hidden' as const,
-      backgroundColor: solid ? fill : undefined,
-    };
-    const pointStyle = {
-      position: 'absolute' as const,
-      top: shieldTop + topH - side / 2,
-      width: side,
-      height: side,
-      borderRadius: Math.max(size * 0.06 - inset * 0.5, 2),
-      overflow: 'hidden' as const,
-      transform: [{ rotate: '45deg' }],
-      backgroundColor: solid ? fill : undefined,
-    };
-    return (
-      <>
-        <View style={pointStyle}>
-          {gradient && (
-            <LinearGradient
-              colors={gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
-            />
-          )}
-        </View>
-        <View style={blockStyle}>
-          {gradient && (
-            <LinearGradient
-              colors={gradient}
-              start={{ x: 0.2, y: 0 }}
-              end={{ x: 0.9, y: 1 }}
-              style={StyleSheet.absoluteFillObject}
-            />
-          )}
-          {children}
-        </View>
-      </>
-    );
-  };
+  // One shield silhouette at three insets: rim → groove → face (the insets
+  // match the old rimT / grooveT thicknesses, converted to viewBox units).
+  const rimD = 'M12 2 L20 5 V13 C20 18 16 21 12 22 C8 21 4 18 4 13 V5 Z';
+  const grooveD =
+    'M12 3.15 L18.95 5.75 V12.95 C18.95 17.3 15.5 19.9 12 20.85 C8.5 19.9 5.05 17.3 5.05 12.95 V5.75 Z';
+  const faceD =
+    'M12 3.7 L18.4 6.1 V12.9 C18.4 16.9 15.3 19.35 12 20.25 C8.7 19.35 5.6 16.9 5.6 12.9 V6.1 Z';
 
   return (
     <View
@@ -649,23 +614,60 @@ function ShieldCrest({ size = 92, muted = false }: { size?: number; muted?: bool
         }}
       />
       {/* Metallic rim → inner-border groove → metallic face */}
-      {layer(0, TIER_METAL.gold)}
-      {layer(rimT, groove)}
-      {layer(
-        grooveT,
-        face,
-        <View
-          style={{
-            position: 'absolute',
-            top: size * 0.035,
-            left: w * 0.14,
-            right: w * 0.14,
-            height: size * 0.085,
-            borderRadius: size * 0.05,
-            backgroundColor: 'rgba(255,255,255,0.14)',
-          }}
+      <Svg
+        width={svgSize}
+        height={svgSize}
+        viewBox="0 0 24 24"
+        style={{ position: 'absolute', top: shieldTop - unit * 2 }}
+      >
+        <Defs>
+          <SvgLinearGradient id={ids.rim} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={TIER_METAL.gold[0]} />
+            <Stop offset="0.5" stopColor={TIER_METAL.gold[1]} />
+            <Stop offset="1" stopColor={TIER_METAL.gold[2]} />
+          </SvgLinearGradient>
+          <SvgLinearGradient id={ids.face} x1="0.2" y1="0" x2="0.9" y2="1">
+            <Stop offset="0" stopColor={face[0]} />
+            <Stop offset="0.55" stopColor={face[1]} />
+            <Stop offset="1" stopColor={face[2]} />
+          </SvgLinearGradient>
+          <ClipPath id={ids.clip}>
+            <Path d={faceD} />
+          </ClipPath>
+        </Defs>
+        {/* Same-paint round-join strokes soften the corners (old borderRadius). */}
+        <Path
+          d={rimD}
+          fill={`url(#${ids.rim})`}
+          stroke={`url(#${ids.rim})`}
+          strokeWidth="1"
+          strokeLinejoin="round"
         />
-      )}
+        <Path
+          d={grooveD}
+          fill={groove}
+          stroke={groove}
+          strokeWidth="0.7"
+          strokeLinejoin="round"
+        />
+        <Path
+          d={faceD}
+          fill={`url(#${ids.face})`}
+          stroke={`url(#${ids.face})`}
+          strokeWidth="0.7"
+          strokeLinejoin="round"
+        />
+        {/* Glass top highlight, clipped to the face */}
+        <Rect
+          x="6"
+          y="4.4"
+          width="12"
+          height="1.9"
+          rx="0.95"
+          fill="rgba(255,255,255,0.14)"
+          clipPath={`url(#${ids.clip})`}
+        />
+      </Svg>
       {/* One of the game's letter tiles, centered on the face */}
       <View
         style={{
@@ -769,9 +771,9 @@ const clubPrimStyles = StyleSheet.create({
     marginTop: 10,
   },
   benefitWell: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1346,9 +1348,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </Text>
 
         <View style={styles.benefitList}>
-          <BenefitRow icon={<GameIcon name="gift" size={18} accent={COLORS.accent} />} accent={COLORS.accent} text="Send and receive booster gifts with clubmates" />
-          <BenefitRow icon={<GameIcon name="trophy" size={18} accent={COLORS.gold} />} accent={COLORS.gold} text="Climb the weekly club rankings as a team" />
-          <BenefitRow icon={<GameIcon name="chat" size={18} accent={COLORS.cyan} />} accent={COLORS.cyan} text="Chat, react, and clear shared goals together" />
+          <BenefitRow icon={<GameIcon name="gift" size={22} accent={COLORS.accent} />} accent={COLORS.accent} text="Send and receive booster gifts with clubmates" />
+          <BenefitRow icon={<GameIcon name="trophy" size={22} accent={COLORS.gold} />} accent={COLORS.gold} text="Climb the weekly club rankings as a team" />
+          <BenefitRow icon={<GameIcon name="chat" size={22} accent={COLORS.cyan} />} accent={COLORS.cyan} text="Chat, react, and clear shared goals together" />
         </View>
       </View>
 

@@ -2,8 +2,25 @@
  * Social / object / creature icons. Same 24×24 material recipe as iconsCore.
  */
 import React, { useMemo } from 'react';
-import Svg, { Circle, Ellipse, G, Path, Polygon, Rect } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { IconProps, VB, BodyGrad, gradId, rim, shade, HILITE } from './IconBase';
+
+/**
+ * File-local multi-stop vertical gradient for "rendered" hero icons that
+ * need richer materials than the shared BodyGrad recipe. (IconBase is a
+ * shared file owned elsewhere — keep custom helpers local to this file.)
+ */
+function LocalGrad({ id, stops }: { id: string; stops: ReadonlyArray<readonly [string, string]> }) {
+  return (
+    <Defs>
+      <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+        {stops.map(([offset, color]) => (
+          <Stop key={offset} offset={offset} stopColor={color} />
+        ))}
+      </LinearGradient>
+    </Defs>
+  );
+}
 
 export function MagnifierIcon({ size = 24, accent = '#00e5ff' }: IconProps) {
   const id = useMemo(() => gradId('mag'), []);
@@ -78,19 +95,40 @@ export function PuzzleIcon({ size = 24, accent = '#35b892' }: IconProps) {
 }
 
 export function OwlIcon({ size = 24, accent = '#c98b3f' }: IconProps) {
-  const id = useMemo(() => gradId('owl'), []);
+  const body = useMemo(() => gradId('owlbody'), []);
+  const chest = useMemo(() => gradId('owlchest'), []);
+  const beak = useMemo(() => gradId('owlbeak'), []);
+  const ol = shade(accent, -110);
   return (
     <Svg width={size} height={size} viewBox={VB}>
-      <BodyGrad id={id} color={accent} />
-      <Path d="M5 5.4 7.4 8a7.6 7.6 0 0 1 9.2 0L19 5.4c.8 2 .9 3.6.4 5A7.7 7.7 0 0 1 20 13.6c0 4.4-3.6 7.6-8 7.6s-8-3.2-8-7.6c0-1.2.2-2.2.6-3.2-.5-1.4-.4-3 .4-5Z" fill={`url(#${id})`} stroke={rim(accent)} strokeWidth="1.4" strokeLinejoin="round" />
-      <Circle cx="8.8" cy="11.6" r="2.9" fill="#f8edd8" stroke={rim(accent)} strokeWidth="1.1" />
-      <Circle cx="15.2" cy="11.6" r="2.9" fill="#f8edd8" stroke={rim(accent)} strokeWidth="1.1" />
-      <Circle cx="8.8" cy="11.6" r="1.3" fill="#2a1050" />
-      <Circle cx="15.2" cy="11.6" r="1.3" fill="#2a1050" />
-      <Circle cx="9.2" cy="11.1" r="0.45" fill="#fff" />
-      <Circle cx="15.6" cy="11.1" r="0.45" fill="#fff" />
-      <Polygon points="12,13.6 10.8,15.4 13.2,15.4" fill="#ffb800" stroke={rim('#ffb800')} strokeWidth="0.8" />
-      <Path d="M8.4 17.6c1.1.6 2.3.9 3.6.9s2.5-.3 3.6-.9" stroke={shade(accent, -50)} strokeWidth="1.1" strokeLinecap="round" fill="none" />
+      <LocalGrad id={body} stops={[['0', shade(accent, 72)], ['0.48', accent], ['1', shade(accent, -64)]]} />
+      <LocalGrad id={chest} stops={[['0', shade(accent, 104)], ['1', shade(accent, 22)]]} />
+      <LocalGrad id={beak} stops={[['0', '#ffd24d'], ['1', '#f08000']]} />
+      {/* feather-tuft ears — rooted under the body so only the tips show */}
+      <Path d="M4.9 8.6 5.7 2.6l4.6 3Z" fill={shade(accent, -10)} stroke={ol} strokeWidth="1.8" strokeLinejoin="round" />
+      <Path d="M19.1 8.6 18.3 2.6l-4.6 3Z" fill={shade(accent, -10)} stroke={ol} strokeWidth="1.8" strokeLinejoin="round" />
+      {/* round body, fat outline */}
+      <Ellipse cx="12" cy="13.1" rx="8.7" ry="8.5" fill={`url(#${body})`} stroke={ol} strokeWidth="2" />
+      {/* wing shading */}
+      <Ellipse cx="6.5" cy="13.9" rx="2" ry="4.4" transform="rotate(14 6.5 13.9)" fill={shade(accent, -44)} opacity="0.85" />
+      <Ellipse cx="17.5" cy="13.9" rx="2" ry="4.4" transform="rotate(-14 17.5 13.9)" fill={shade(accent, -44)} opacity="0.85" />
+      {/* lighter chest patch + feather scallops */}
+      <Ellipse cx="12" cy="16.5" rx="4.7" ry="4" fill={`url(#${chest})`} stroke={shade(accent, -34)} strokeWidth="0.9" />
+      <Path d="M10 15.4q1 .9 2 0M12 17.4q1 .9 2 0" fill="none" stroke={shade(accent, -34)} strokeOpacity="0.55" strokeWidth="0.9" strokeLinecap="round" />
+      {/* glossy specular + bottom bounce light */}
+      <Ellipse cx="8.7" cy="7.2" rx="3.1" ry="1.6" transform="rotate(-16 8.7 7.2)" fill="rgba(255,255,255,0.45)" />
+      <Path d="M7.4 20.8q4.6 1.9 9.2 0" fill="none" stroke="rgba(255,224,168,0.55)" strokeWidth="1.4" strokeLinecap="round" />
+      {/* big two-tone eyes: cream disc, plum pupil, white gleam */}
+      <Circle cx="8.3" cy="10.7" r="3.5" fill="#fff6e2" stroke={ol} strokeWidth="1.7" />
+      <Circle cx="15.7" cy="10.7" r="3.5" fill="#fff6e2" stroke={ol} strokeWidth="1.7" />
+      <Circle cx="8.6" cy="11" r="1.95" fill="#2a1050" />
+      <Circle cx="15.4" cy="11" r="1.95" fill="#2a1050" />
+      <Circle cx="7.9" cy="10.2" r="0.8" fill="#fff" />
+      <Circle cx="14.7" cy="10.2" r="0.8" fill="#fff" />
+      <Circle cx="9.3" cy="11.9" r="0.35" fill="rgba(255,255,255,0.7)" />
+      <Circle cx="16.1" cy="11.9" r="0.35" fill="rgba(255,255,255,0.7)" />
+      {/* small V beak */}
+      <Path d="M12 12.7 10.6 13.9q1.4 1.9 2.8 0Z" fill={`url(#${beak})`} stroke="#7a3c00" strokeWidth="1.1" strokeLinejoin="round" />
     </Svg>
   );
 }

@@ -760,17 +760,23 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
     const { accessible, reason, meter } = isModeAccessible(mode.id);
     const accent = mode.color;
     const special = mode.id === 'daily' || mode.id === 'weekly';
+    // Classic shares the full-width banner layout: as the FIRST card it
+    // otherwise sits alone in a half-empty grid row, which the round-3
+    // blind review read as "oversized Classic card creates dead space".
+    const hero = special || mode.id === 'classic';
+    const trim = special ? COLORS.gold : accent;
 
-    // Daily / Weekly events break the grid rhythm as full-width gold banner
-    // rows — medallion left, copy left-aligned, stat chip on the right.
-    if (special) {
+    // Daily / Weekly events (and Classic, the main journey) break the grid
+    // rhythm as full-width banner rows — medallion left, copy left-aligned,
+    // stat chip on the right.
+    if (hero) {
       return (
         <Pressable
           key={mode.id}
           style={({ pressed }) => [
             styles.bannerCard,
             accessible
-              ? [{ borderColor: COLORS.gold + '66' }, SHADOWS.glow(COLORS.gold)]
+              ? [{ borderColor: trim + '66' }, SHADOWS.glow(trim)]
               : styles.cardLocked,
             pressed && accessible && styles.cardPressed,
           ]}
@@ -791,14 +797,14 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
           />
           {accessible && (
             <LinearGradient
-              colors={[COLORS.gold + '26', 'transparent'] as [string, string]}
+              colors={[trim + '26', 'transparent'] as [string, string]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             />
           )}
           {accessible && (
-            <View style={[styles.bannerEdge, SHADOWS.neonEdge(COLORS.gold)]} />
+            <View style={[styles.bannerEdge, { backgroundColor: trim }, SHADOWS.neonEdge(trim)]} />
           )}
           {/* Same plate-free glow-ring treatment as the grid cards. */}
           <View
@@ -821,8 +827,8 @@ const ModesScreen: React.FC<ModesScreenProps> = ({
             )}
           </View>
           <View style={styles.bannerBody}>
-            <Text style={styles.bannerEyebrow}>
-              {mode.id === 'daily' ? 'DAILY EVENT' : 'WEEKLY EVENT'}
+            <Text style={[styles.bannerEyebrow, !special && { color: accent }]}>
+              {mode.id === 'daily' ? 'DAILY EVENT' : mode.id === 'weekly' ? 'WEEKLY EVENT' : 'THE MAIN JOURNEY'}
             </Text>
             <Text style={[styles.bannerName, !accessible && styles.textLocked]}>
               {mode.name}

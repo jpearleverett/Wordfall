@@ -241,7 +241,10 @@ export function AmbientBackdrop({ variant = 'home', colorOverride }: AmbientBack
             ...StyleSheet.absoluteFillObject,
             width: '100%',
             height: '100%',
-            opacity: 0.65,
+            // 0.65 → 0.45: round-3 blind review read the hex/grid pattern as
+            // "lines slicing through cards" on the hub screens — keep the
+            // flavor, cut the noise competing with foreground cards.
+            opacity: 0.45,
           }}
           resizeMode="cover"
         />

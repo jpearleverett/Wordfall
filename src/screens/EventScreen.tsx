@@ -72,9 +72,14 @@ const getTierPrizeIcon = (tier: string, idx: number): GameIconName =>
   TIER_PRIZE_ICONS[tier] ?? TIER_FALLBACK_ICONS[Math.min(idx, 3)];
 
 /**
- * TierMedallion — metallic milestone coin: metal ring, two-stop vertical
- * metal-gradient fill, top sheen, prize icon full-brightness inside. Locked
- * tiers stay full-color (locked reads via the lock badge + dimmed card).
+ * TierMedallion — struck-medal milestone coin (round-3 blind review: the old
+ * single-gradient fill read as a "plain gradient sphere"). Concentric layers
+ * sell die-struck metal: outer metal RING (vertical two-stop gradient) → a
+ * 1px darker GROOVE ring inset a few px from the rim → an inner FACE running
+ * the same metal at a tilted angle so rim and face catch light differently →
+ * a crescent specular arc + pure-white gleam dot on the upper-left → the
+ * prize icon full-brightness on top. Locked tiers stay full-color (locked
+ * reads via the lock badge + dimmed card).
  */
 function TierMedallion({
   size = 40,
@@ -87,6 +92,10 @@ function TierMedallion({
   muted?: boolean;
   children: React.ReactNode;
 }) {
+  const grooveInset = Math.max(3, size * 0.09);
+  const faceInset = grooveInset + 1.5;
+  const arcSize = size * 0.6;
+  const gleamSize = Math.max(2.5, size * 0.07);
   return (
     <View
       style={{
@@ -106,21 +115,73 @@ function TierMedallion({
         elevation: muted ? 1 : 4,
       }}
     >
+      {/* Rim: vertical metal gradient. */}
       <LinearGradient
         colors={[metal.top, metal.bottom]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
+      {/* Groove: 1px darker inset circle separating rim from face. */}
       <View
         style={{
           position: 'absolute',
-          top: size * 0.06,
-          left: size * 0.16,
-          right: size * 0.16,
-          height: size * 0.16,
-          borderRadius: size * 0.08,
-          backgroundColor: 'rgba(255,255,255,0.28)',
+          top: grooveInset,
+          left: grooveInset,
+          right: grooveInset,
+          bottom: grooveInset,
+          borderRadius: (size - grooveInset * 2) / 2,
+          borderWidth: 1,
+          borderColor: 'rgba(0,0,0,0.38)',
+        }}
+      />
+      {/* Face: same metal, tilted gradient — a distinct struck surface. */}
+      <View
+        style={{
+          position: 'absolute',
+          top: faceInset,
+          left: faceInset,
+          right: faceInset,
+          bottom: faceInset,
+          borderRadius: (size - faceInset * 2) / 2,
+          overflow: 'hidden',
+        }}
+      >
+        <LinearGradient
+          colors={[metal.top, metal.bottom]}
+          start={{ x: 0.12, y: 0 }}
+          end={{ x: 0.88, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+      {/* Specular crescent: border-arc circle with only the upper-left lit,
+          hugging the face's top-left curve. */}
+      <View
+        style={{
+          position: 'absolute',
+          top: faceInset + size * 0.03,
+          left: faceInset + size * 0.03,
+          width: arcSize,
+          height: arcSize,
+          borderRadius: arcSize / 2,
+          borderWidth: Math.max(1.5, size * 0.045),
+          borderColor: 'transparent',
+          borderTopColor: 'rgba(255,255,255,0.35)',
+          borderLeftColor: 'rgba(255,255,255,0.18)',
+          transform: [{ rotate: '-12deg' }],
+        }}
+      />
+      {/* Single hot gleam dot where the crescent peaks. */}
+      <View
+        style={{
+          position: 'absolute',
+          top: size * 0.16,
+          left: size * 0.26,
+          width: gleamSize,
+          height: gleamSize,
+          borderRadius: gleamSize / 2,
+          backgroundColor: '#FFFFFF',
+          opacity: 0.9,
         }}
       />
       {children}
@@ -906,6 +967,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
       eyebrow="LIVE CHALLENGES"
       accent={headerAccent}
       backdrop="event"
+      contentStyle={styles.scrollContent}
     >
       <>
         {/* Active Event Multipliers Banner */}
@@ -1051,9 +1113,12 @@ const EventScreen: React.FC<EventScreenProps> = ({
                     : canClaim
                       ? COLORS.gold
                       : color;
-                  // Bigger tiers = bigger cards: medallion + halo grow up the ladder.
-                  const medSize = 32 + Math.min(tierIdx, 3) * 4;
-                  const haloSize = medSize + 14;
+                  // Bigger tiers = bigger cards: medallion + halo grow up the
+                  // ladder. Diameters run ~15% over round 2's 32–44 so the four
+                  // tiers read as substantial struck medals, with the halo pad
+                  // trimmed to keep the 4-up row clear of card clipping.
+                  const medSize = 37 + Math.min(tierIdx, 3) * 5;
+                  const haloSize = medSize + 12;
                   return (
                     <Pressable
                       key={reward.tier}
@@ -1321,6 +1386,13 @@ const EventScreen: React.FC<EventScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  // Round-3 blind review: "bottom section clipped" — make the tab-bar
+  // clearance explicit rather than leaning on ScreenScaffold's default, so
+  // the final COMING UP card fully scrolls past NeonTabBar (64px + bottom
+  // inset) with breathing room on tall-inset gesture-nav devices.
+  scrollContent: {
+    paddingBottom: 128,
+  },
   pressedScale: {
     transform: [{ scale: 0.97 }],
     opacity: 0.9,
@@ -1504,10 +1576,12 @@ const styles = StyleSheet.create({
   },
 
   // Reward Tiers — cards align to the row's bottom so the size ramp
-  // (bronze → diamond) reads as an ascending ladder.
+  // (bronze → diamond) reads as an ascending ladder. Gap + card padding are
+  // tight because the round-3 medal size bump needs the width: the diamond
+  // halo (64px) must clear each card's overflow:hidden inner box.
   rewardTiersRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     alignItems: 'flex-end',
   },
   rewardTierCard: {
@@ -1517,7 +1591,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     paddingVertical: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     overflow: 'hidden',
   },
   // Next tier to hit: fully lit with an accent edge.
@@ -1574,10 +1648,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 5,
   },
+  // Labels run a point tighter than round 2 — the medal size bump takes the
+  // room, and the threshold/tier text must not crowd or wrap in the 4-up row.
   rewardTierThreshold: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: FONTS.display,
     color: COLORS.textMuted,
   },
@@ -1585,7 +1661,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: FONTS.bodySemiBold,
     color: COLORS.textMuted,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   claimPill: {
     borderRadius: RADIUS.md,
