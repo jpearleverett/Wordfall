@@ -113,8 +113,8 @@ interface GhostEntry extends GhostSpec {
 // Matches LetterCell's valid-word (green) tile ramp so the ghost reads as a
 // direct continuation of the valid-word flash the tiles showed at submit.
 const GHOST_BODY_COLORS = ['#33ffaa', '#00d96e', '#008844'] as [string, string, string];
-const GHOST_STAGGER_MS = 24;
-const GHOST_DURATION_MS = 340;
+const GHOST_STAGGER_MS = 40; // 24 → 40: word-clear sweep reads at coarse sampling (blind motion review)
+const GHOST_DURATION_MS = 430; // 340 → 430: same review — the pop was gone between frames
 
 const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: GhostEntry; cellSize: number }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -468,8 +468,10 @@ function GameGridImpl({
 
     // Hold just long enough for the cleared word's ghost pop to register,
     // then cascade columns outward from the cleared word's centroid.
-    const FALL_HOLD = 70;
-    const COL_STAGGER = 26;
+    const FALL_HOLD = 90;
+    // 26 → 46: the cascade read as a teleport at coarse frame sampling —
+    // wider column stagger makes gravity legible as a wave.
+    const COL_STAGGER = 46;
     const centroidCol =
       ghosts.length > 0
         ? ghosts.reduce((s, g) => s + g.col, 0) / ghosts.length
@@ -501,7 +503,7 @@ function GameGridImpl({
       // Distance-scaled fall time (√d, like real gravity) with an
       // accelerating ease-in, then a small directional rebound whose
       // size scales with impact distance. Reads as: drop, thud, settle.
-      const fallDur = Math.min(520, 150 + 130 * Math.sqrt(rowsFallen));
+      const fallDur = Math.min(620, 185 + 150 * Math.sqrt(rowsFallen));
       const bounceMag = Math.min(9, dist * 0.055);
       const bx = f.dx === 0 ? 0 : Math.sign(f.dx) * bounceMag;
       const by = f.dy === 0 ? 0 : Math.sign(f.dy) * bounceMag;

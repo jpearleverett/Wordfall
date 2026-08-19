@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, {
   Circle, Defs, LinearGradient as SvgLinearGradient, Polygon, RadialGradient, Rect, Stop,
@@ -9,6 +9,7 @@ import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import GameIcon, { GameIconName } from './icons/GameIcon';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { gradId } from './icons/IconBase';
 
 /**
@@ -92,6 +93,12 @@ export function MilestoneCeremony({
   const scale = useSharedValue(0.6);
   const iconProgress = useSharedValue(0);
   const rewardPop = useSharedValue(0);
+  // Ambient settle life — the card must never freeze after its entrance
+  // (blind motion review: "victory modal frozen two seconds"). A slow icon
+  // breath and a CTA pulse loop keep the ceremony alive until dismissed.
+  const iconBreath = useSharedValue(1);
+  const ctaPulse = useSharedValue(1);
+  const reduceMotion = useReduceMotion();
 
   // Defer the SparkleField until ~200ms after mount — see useDeferredMount
   // in perfInstrument.ts. Lets the card pop in fast and the decorations
@@ -102,14 +109,25 @@ export function MilestoneCeremony({
     fade.value = withTiming(1, { duration: 300 });
     scale.value = withSpring(1, { damping: 15, stiffness: 180 });
     iconProgress.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 200 }));
-    rewardPop.value = withDelay(480, withSpring(1, { damping: 12, stiffness: 190 }));
+    rewardPop.value = withDelay(560, withSpring(1, { damping: 12, stiffness: 190 }));
+    if (!reduceMotion) {
+      iconBreath.value = withDelay(900, withRepeat(withSequence(
+        withTiming(1.05, { duration: 1300 }),
+        withTiming(1, { duration: 1300 }),
+      ), -1, false));
+      ctaPulse.value = withDelay(1100, withRepeat(withSequence(
+        withTiming(1.035, { duration: 800 }),
+        withTiming(1, { duration: 800 }),
+      ), -1, false));
+    }
   }, []);
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
   const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(iconProgress.value, [0, 0.5, 1], [0, 1.4, 1]) }],
+    transform: [{ scale: interpolate(iconProgress.value, [0, 0.5, 1], [0, 1.4, 1]) * iconBreath.value }],
   }));
+  const ctaStyle = useAnimatedStyle(() => ({ transform: [{ scale: ctaPulse.value }] }));
   const rewardStyle = useAnimatedStyle(() => ({
     opacity: rewardPop.value,
     transform: [{ scale: interpolate(rewardPop.value, [0, 0.6, 1], [0.4, 1.12, 1]) }],
@@ -237,20 +255,22 @@ export function MilestoneCeremony({
             </View>
           ) : null}
 
-          <Pressable
-            style={({ pressed }) => [pressed && styles.buttonPressed]}
-            onPress={onDismiss}
-          >
-            {/* Primary action is ALWAYS gold — an accent-tinted pill on the
-                purple card had almost no value contrast (judge round 3).
-                Gold → amber gradient, dark text, soft gold outer glow. */}
-            <LinearGradient
-              colors={GRADIENTS.button.gold}
-              style={[styles.button, SHADOWS.glow(COLORS.gold)]}
+          <Animated.View style={ctaStyle}>
+            <Pressable
+              style={({ pressed }) => [pressed && styles.buttonPressed]}
+              onPress={onDismiss}
             >
-              <Text style={styles.buttonText}>{buttonText}</Text>
-            </LinearGradient>
-          </Pressable>
+              {/* Primary action is ALWAYS gold — an accent-tinted pill on the
+                  purple card had almost no value contrast (judge round 3).
+                  Gold → amber gradient, dark text, soft gold outer glow. */}
+              <LinearGradient
+                colors={GRADIENTS.button.gold}
+                style={[styles.button, SHADOWS.glow(COLORS.gold)]}
+              >
+                <Text style={styles.buttonText}>{buttonText}</Text>
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
         </LinearGradient>
       </Animated.View>
     </Animated.View>

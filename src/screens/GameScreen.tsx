@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
   Animated,
+  Easing,
   Image,
   LayoutAnimation,
   Platform,
@@ -373,14 +374,16 @@ const EMPTY_STRING_LIST: string[] = [];
 function WordClearParticle({ delay, startX, startY }: { delay: number; startX: number; startY: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   const angle = useRef(Math.random() * Math.PI * 2).current;
-  const distance = useRef(40 + Math.random() * 60).current;
-  const size = useRef(4 + Math.random() * 6).current;
+  // Travel + size lifted ~40% (blind motion review: "clears lack particles" —
+  // they existed but were too small/brief to register at a glance).
+  const distance = useRef(55 + Math.random() * 85).current;
+  const size = useRef(6 + Math.random() * 8).current;
   const color = useRef(PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)]).current;
 
   useEffect(() => {
     Animated.sequence([
       Animated.delay(delay),
-      Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(anim, { toValue: 1, duration: 560, useNativeDriver: true }),
     ]).start();
   }, []);
 
@@ -1573,10 +1576,17 @@ function GameScreenImpl({
           tension: 180,
           useNativeDriver: true,
         }),
-        Animated.delay(600),
+        // Drift upward while fully visible instead of a static 600ms hold —
+        // blind motion review read the frozen pill as "hangs then vanishes".
+        Animated.timing(scorePopupAnim, {
+          toValue: 1.6,
+          duration: 520,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
         Animated.timing(scorePopupAnim, {
           toValue: 2,
-          duration: 300,
+          duration: 260,
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {

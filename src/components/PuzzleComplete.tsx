@@ -153,35 +153,127 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
   );
 }
 
-function AnimatedScore({ targetScore }: { targetScore: number }) {
+function AnimatedScore({
+  targetScore,
+  startDelay = 0,
+  reduceMotion = false,
+}: {
+  targetScore: number;
+  startDelay?: number;
+  reduceMotion?: boolean;
+}) {
   const [displayScore, setDisplayScore] = useState(0);
+  // Landing pulse: 1 → 1.12 → 1 when the count-up resolves, so the final
+  // number "lands" instead of just stopping.
+  const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const duration = 800;
     const steps = 20;
     let step = 0;
-    const interval = setInterval(() => {
-      step += 1;
-      const progress = step / steps;
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
-      setDisplayScore(Math.round(targetScore * easedProgress));
-      // Coin-tally tick on every other step, pitch rising with progress —
-      // the classic mobile-game "score pour" sound. Finishes on a bright
-      // resolve chord when the total lands.
-      if (step % 2 === 0 && step < steps) {
-        void soundManager.playSound('bonusCountdownTick', { rate: 1 + progress * 0.5 });
-      }
-      if (step >= steps) {
-        setDisplayScore(targetScore);
-        clearInterval(interval);
-        void soundManager.playSound('bonusCountdownEnd');
-      }
-    }, duration / steps);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    // Hold at 0 until the score panel has faded in — counting inside an
+    // invisible panel wastes the payoff.
+    const startTimer = setTimeout(() => {
+      interval = setInterval(() => {
+        step += 1;
+        const progress = step / steps;
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+        setDisplayScore(Math.round(targetScore * easedProgress));
+        // Coin-tally tick on every other step, pitch rising with progress —
+        // the classic mobile-game "score pour" sound. Finishes on a bright
+        // resolve chord when the total lands.
+        if (step % 2 === 0 && step < steps) {
+          void soundManager.playSound('bonusCountdownTick', { rate: 1 + progress * 0.5 });
+        }
+        if (step >= steps) {
+          setDisplayScore(targetScore);
+          if (interval) clearInterval(interval);
+          void soundManager.playSound('bonusCountdownEnd');
+          if (!reduceMotion) {
+            Animated.sequence([
+              Animated.spring(pulse, { toValue: 1.12, friction: 4, tension: 320, useNativeDriver: true }),
+              Animated.spring(pulse, { toValue: 1, friction: 6, tension: 180, useNativeDriver: true }),
+            ]).start();
+          }
+        }
+      }, duration / steps);
+    }, startDelay);
 
-    return () => clearInterval(interval);
-  }, [targetScore]);
+    return () => {
+      clearTimeout(startTimer);
+      if (interval) clearInterval(interval);
+    };
+  }, [targetScore, startDelay, reduceMotion, pulse]);
 
-  return <Text style={styles.scoreValue}>{displayScore.toLocaleString()}</Text>;
+  return (
+    <Animated.View style={{ transform: [{ scale: pulse }] }}>
+      <Text style={styles.scoreValue}>{displayScore.toLocaleString()}</Text>
+    </Animated.View>
+  );
+}
+
+/**
+ * Ambient settle life — once the entrance choreography lands, the screen
+ * must never freeze (blind motion review: "results screen then fully
+ * static"). A soft breathing pulse for the primary CTA and a slow drifting
+ * sparkle field behind the card. Both loops skip under reduce-motion.
+ */
+function CtaPulse({ children, reduceMotion }: { children: React.ReactNode; reduceMotion: boolean }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.035, duration: 850, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 850, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, reduceMotion]);
+  return <Animated.View style={{ transform: [{ scale: pulse }] }}>{children}</Animated.View>;
+}
+
+const SETTLE_SPARKS = [
+  { left: '12%', top: '18%', size: 5, delay: 0, dur: 2600 },
+  { left: '84%', top: '24%', size: 4, delay: 600, dur: 3100 },
+  { left: '8%', top: '62%', size: 4, delay: 1200, dur: 2900 },
+  { left: '90%', top: '70%', size: 5, delay: 300, dur: 3300 },
+  { left: '48%', top: '10%', size: 3, delay: 900, dur: 2700 },
+] as const;
+
+function SettleSpark({ left, top, size, delay, dur, reduceMotion }: (typeof SETTLE_SPARKS)[number] & { reduceMotion: boolean }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: dur, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [anim, delay, dur, reduceMotion]);
+  if (reduceMotion) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: '#fff',
+        opacity: anim.interpolate({ inputRange: [0, 0.2, 0.7, 1], outputRange: [0, 0.85, 0.35, 0] }),
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -26] }) }],
+      }}
+    />
+  );
 }
 
 const MEDALLION_TICK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
@@ -626,28 +718,31 @@ export function PuzzleComplete({
         Animated.timing(glitchAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
       ]),
       // Ribbon, stats, actions fade in with staggered delays (all parallel)
-      Animated.sequence([
-        Animated.delay(150),
-        Animated.spring(ribbonAnim, {
-          toValue: 1,
-          friction: 10,
-          tension: 160,
-          useNativeDriver: true,
-        }),
-      ]),
+      // Stagger spread widened 150/220/300 → 220/420/650 (blind motion
+      // review: the 400ms build read as a hard cut — the reveal should be a
+      // legible sequence: ribbon → score/stats → actions).
       Animated.sequence([
         Animated.delay(220),
-        Animated.timing(statsAnim, {
+        Animated.spring(ribbonAnim, {
           toValue: 1,
-          duration: 200,
+          friction: 9,
+          tension: 150,
           useNativeDriver: true,
         }),
       ]),
       Animated.sequence([
-        Animated.delay(300),
+        Animated.delay(420),
+        Animated.timing(statsAnim, {
+          toValue: 1,
+          duration: 260,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(650),
         Animated.timing(actionsAnim, {
           toValue: 1,
-          duration: 200,
+          duration: 240,
           useNativeDriver: true,
         }),
       ]),
@@ -811,6 +906,9 @@ export function PuzzleComplete({
           />
           <SparkleField count={12} intensity="medium" />
           <CelebrationBurst centerX={190} centerY={200} particleCount={10} />
+          {SETTLE_SPARKS.map((sp, i) => (
+            <SettleSpark key={i} {...sp} reduceMotion={reduceMotion} />
+          ))}
           {confetti.map((particle) => (
             <ConfettiParticle
               key={particle.id}
@@ -914,7 +1012,7 @@ export function PuzzleComplete({
                 <ScanLineOverlay opacity={0.02} height={80} />
                 <Text style={styles.scoreLabel}>{t('result.finalScore')}</Text>
                 <View accessibilityLabel={`Final score: ${score}`}>
-                  <AnimatedScore targetScore={score} />
+                  <AnimatedScore targetScore={score} startDelay={480} reduceMotion={reduceMotion} />
                 </View>
               </LinearGradient>
 
@@ -1183,21 +1281,23 @@ export function PuzzleComplete({
                   },
                 ]}
               >
-                <Pressable
-                  style={({ pressed }) => [pressed && styles.buttonPressed]}
-                  onPress={onNextLevel}
-                  accessibilityRole="button"
-                  accessibilityLabel={isDaily ? 'Play another mode' : 'Next level'}
-                >
-                  <LinearGradient
-                    colors={GRADIENTS.button.primary as unknown as [string, string, ...string[]]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.primaryButton}
+                <CtaPulse reduceMotion={reduceMotion}>
+                  <Pressable
+                    style={({ pressed }) => [pressed && styles.buttonPressed]}
+                    onPress={onNextLevel}
+                    accessibilityRole="button"
+                    accessibilityLabel={isDaily ? 'Play another mode' : 'Next level'}
                   >
-                    <Text style={styles.primaryButtonText}>{isDaily ? t('result.playAnotherMode') : t('result.next').toUpperCase()}</Text>
-                  </LinearGradient>
-                </Pressable>
+                    <LinearGradient
+                      colors={GRADIENTS.button.primary as unknown as [string, string, ...string[]]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.primaryButton}
+                    >
+                      <Text style={styles.primaryButtonText}>{isDaily ? t('result.playAnotherMode') : t('result.next').toUpperCase()}</Text>
+                    </LinearGradient>
+                  </Pressable>
+                </CtaPulse>
                 {autoAdvanceRemainingMs !== null && !autoAdvanceCancelled && (
                   <Pressable
                     style={({ pressed }) => [styles.stayButton, pressed && styles.buttonPressed]}

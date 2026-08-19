@@ -799,6 +799,36 @@ function flashSaleValueLine(sale: Pick<FlashSale, 'productId' | 'name' | 'descri
  * full variant (which stays in use for the Home compact variant), but with a
  * drawn glass gem jar instead of the flat jar emoji the art review flagged.
  */
+/**
+ * One-shot mount cascade for the shop's above-the-fold sections — the push
+ * transition used to land on a fully-formed static page, which the blind
+ * motion review read as "content pops in, then dead". Each wrapped section
+ * fades + rises with a spring, staggered by `index`. Skipped entirely under
+ * reduce-motion.
+ */
+function SectionEntrance({ index, children }: { index: number; children: React.ReactNode }) {
+  const reduceMotion = useReduceMotion();
+  const anim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    Animated.sequence([
+      Animated.delay(120 + index * 90),
+      Animated.spring(anim, { toValue: 1, friction: 9, tension: 90, useNativeDriver: true }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Animated.View
+      style={{
+        opacity: anim,
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 function PiggyBankShopCard({
   onBreak,
   purchasing = false,
@@ -1671,13 +1701,16 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         }
       >
         {/* ── Piggy Bank (drawn jar — see PiggyBankShopCard) ───────── */}
+        <SectionEntrance index={0}>
         <PiggyBankShopCard
           onBreak={() => handlePurchase('piggy_bank_break')}
           purchasing={purchasingId === 'piggy_bank_break'}
         />
+        </SectionEntrance>
 
         {/* ── Flash Sale ──────────────────────────────────────────── */}
         {flashSale && (
+          <SectionEntrance index={1}>
           <View style={styles.flashSaleCard}>
             <LinearGradient
               colors={[COLORS.coral + '1F', 'rgba(45,20,82,0.60)', 'rgba(26,10,46,0.96)']}
@@ -1748,10 +1781,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             </View>
             <ShineSweep sweepWidth={width - 32} />
           </View>
+          </SectionEntrance>
         )}
 
         {/* ── Free Rewards (Watch Ads) ──────────────────────────────── */}
         {!adsRemoved && (
+          <SectionEntrance index={2}>
           <View style={styles.adSection}>
             <SectionHeader label="FREE REWARDS" accent={COLORS.green} />
 
@@ -1852,9 +1887,11 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
               </PressableScale>
             )}
           </View>
+          </SectionEntrance>
         )}
 
         {/* ── VIP Subscription ───────────────────────────────────────── */}
+        <SectionEntrance index={3}>
         <View style={styles.vipCard}>
           <LinearGradient
             colors={['#3a1466', '#22093f', '#160528']}
@@ -1942,6 +1979,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             />
           )}
         </View>
+        </SectionEntrance>
 
         {/* ── VIP Streak Bonus (for active subscribers) ─────────────── */}
         {isVip && (() => {
