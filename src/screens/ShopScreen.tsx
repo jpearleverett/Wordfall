@@ -848,7 +848,7 @@ function PiggyBankShopCard({
       />
       <View style={piggyStyles.header}>
         <DrawnMedallion size={64} accent={COLORS.gold} style={piggyStyles.jarMedallion}>
-          <JarGlyph size={44} />
+          <GameIcon name="piggyJar" size={44} />
         </DrawnMedallion>
         <View style={piggyStyles.headerInfo}>
           <Text style={piggyStyles.title}>Piggy Bank</Text>
