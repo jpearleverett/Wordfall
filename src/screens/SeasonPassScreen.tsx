@@ -252,15 +252,10 @@ function rewardArtSpec(reward: PassReward, tier: number): RewardArtSpec {
 const ART_SIZE: readonly [number, number, number, number] = [46, 56, 66, 76];
 const HERO_ART_SIZE = 84;
 
-/**
- * The ONE premium tier near the top of the ladder that draws the rendered
- * holographic-gem sprite (LOCAL_IMAGES.lootGem) instead of vector art:
- * tier 5's first milestone gem drop. Deliberately a single tier — raster
- * loot on every gem row (tier 1's 5 Gems included) would stop the render
- * reading as special (round-4 "generic gloss reward icons").
- */
-const RASTER_GEM_HERO_TIER = 5;
-const RASTER_GEM_SIZE = 44;
+// NOTE (round-5 blind review): rendered raster loot (holographic gem sprite
+// on tier 5, photoreal crown on the upsell + tier-50 showcase) was trialed
+// here and REVERTED — the judges unanimously read mixed raster/vector media
+// as a style clash. Vector consistency wins.
 
 function rewardArtSize(spec: RewardArtSpec): number {
   return spec.feature ? HERO_ART_SIZE : ART_SIZE[spec.sizeStep];
@@ -630,14 +625,12 @@ function RewardArt({
   name,
   size = 46,
   glow = COLORS.gold,
-  raster,
 }: {
   glyph?: string;
   name?: GameIconName;
   size?: number;
   glow?: string;
   /** Alpha-keyed rendered sprite — takes the GameIcon's slot when set. */
-  raster?: number;
 }) {
   const halo = /^#[0-9a-fA-F]{6}$/.test(glow) ? glow : COLORS.gold;
   return (
@@ -665,15 +658,7 @@ function RewardArt({
           elevation: 6,
         }}
       />
-      {raster != null ? (
-        <Image
-          source={raster}
-          style={{ width: size, height: size }}
-          resizeMode="contain"
-        />
-      ) : (
-        <GameIcon glyph={glyph} name={name} size={size} />
-      )}
+      <GameIcon glyph={glyph} name={name} size={size} />
     </View>
   );
 }
@@ -947,51 +932,6 @@ const crownStyles = StyleSheet.create({
   },
 });
 
-// ─── RasterCrown — rendered crystal-neon crown sprite ───────────────────────
-// The alpha-keyed raster render (LOCAL_IMAGES.lootCrown, see
-// utils/localAssets.ts) replaces the hand-drawn View crown on the two hero
-// sell moments — the GO PREMIUM upsell and the tier-50 grand showcase —
-// where blind judges scored the vector art as "generic flat". DrawnCrown
-// survives for the tiny inline PREMIUM pill, where a 14px raster would blur.
-
-interface RasterCrownProps {
-  size?: number;
-  /** Greys the glow for locked states — the crown art itself stays lit. */
-  muted?: boolean;
-  style?: ViewStyle;
-}
-
-const RasterCrown = memo(function RasterCrown({
-  size = 52,
-  muted = false,
-  style,
-}: RasterCrownProps) {
-  return (
-    <View
-      style={[
-        {
-          width: size,
-          height: size,
-          alignItems: 'center',
-          justifyContent: 'center',
-          shadowColor: muted ? '#000' : COLORS.gold,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: muted ? 0.2 : 0.55,
-          shadowRadius: size * 0.22,
-          elevation: muted ? 2 : 6,
-        },
-        style,
-      ]}
-    >
-      <Image
-        source={LOCAL_IMAGES.lootCrown}
-        style={{ width: size, height: size }}
-        resizeMode="contain"
-      />
-    </View>
-  );
-});
-
 // ─── Tier node — the medallion on the center spine ─────────────────────────
 
 interface TierNodeProps {
@@ -1195,9 +1135,6 @@ const LaneCard = memo(function LaneCard({
   const spec = rewardArtSpec(reward, tier);
   const artSize = rewardArtSize(spec);
   // One rendered-sprite hero moment on the ladder: tier 5's premium gem
-  // milestone draws the raster holographic gem (see RASTER_GEM_HERO_TIER).
-  const heroGemRaster =
-    premiumLane && tier === RASTER_GEM_HERO_TIER && reward.type === 'gems';
   // Lock strength scales with distance (see LOCK_STEP). A reached-but-
   // premium-gated card sits at 'near' so the gold lane reads as bought-not-
   // earned rather than as unreachable.
@@ -1332,9 +1269,8 @@ const LaneCard = memo(function LaneCard({
           <RewardArt
             glyph={reward.icon}
             name={spec.name}
-            size={heroGemRaster ? RASTER_GEM_SIZE : artSize}
+            size={artSize}
             glow={laneAccent}
-            raster={heroGemRaster ? LOCAL_IMAGES.lootGem : undefined}
           />
         )}
         {showLock && (
@@ -1448,7 +1384,7 @@ const SeasonTierRow = memo(function SeasonTierRow({
             end={{ x: 1, y: 0.5 }}
             style={styles.showcaseHoloStrip}
           />
-          <RasterCrown size={72} muted={!reached} style={styles.showcaseMedallion} />
+          <DrawnCrown size={64} muted={!reached} style={styles.showcaseMedallion} />
           <Text style={styles.showcaseEyebrow}>TIER 50</Text>
           <Text style={styles.showcaseTitle}>GRAND REWARD</Text>
           <Text style={styles.showcaseSubtitle}>{def.premiumReward.label}</Text>
@@ -1780,7 +1716,7 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
             style={[StyleSheet.absoluteFillObject, styles.panelFill]}
           />
           <View style={styles.upsellRow}>
-            <RasterCrown size={52} />
+            <DrawnCrown size={52} />
             <View style={styles.upsellCopy}>
               <Text style={styles.upsellTitle}>GO PREMIUM</Text>
               <Text style={styles.upsellDesc}>

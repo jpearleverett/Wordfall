@@ -145,7 +145,7 @@ export function OceanWaveIcon({ size = 24, accent = '#31a8e8' }: IconProps) {
  * in the top slot. Rendered-loot recipe: fat contour, radial candy gradient,
  * glossy specular blob, bottom bounce light. Reads at 44px.
  */
-export function PiggyJarIcon({ size = 24, accent = '#ff7bb8' }: IconProps) {
+export function PiggyJarIcon({ size = 24, accent = '#f0559e' }: IconProps) {
   const body = useMemo(() => gradId('pigB'), []);
   const coin = useMemo(() => gradId('pigC'), []);
   return (

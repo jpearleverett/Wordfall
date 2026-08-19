@@ -12,7 +12,6 @@ import {
   Alert,
   Animated,
   Easing,
-  Image,
   ViewStyle,
   StyleProp,
 } from 'react-native';
@@ -66,7 +65,6 @@ import {
   VIP_STREAK_BONUSES,
 } from '../data/vipBenefits';
 import GameIcon, { GameIconName, resolveIconName } from '../components/icons/GameIcon';
-import { LOCAL_IMAGES } from '../utils/localAssets';
 import { useCommerce } from '../hooks/useCommerce';
 import {
   selectPiggyBankGems,
@@ -752,23 +750,13 @@ const HERO_ICON_UPGRADE: Partial<Record<GameIconName, GameIconName>> = {
   chest: 'chestGold',
 };
 
-// Rendered raster loot for the hero sell moments — the alpha-keyed sprites
-// (see utils/localAssets.ts) give the flash-sale card the pre-rendered
-// "loot" read blind judges kept scoring vector art below.
-const HERO_LOOT_RASTER: Partial<Record<GameIconName, number>> = {
-  gem: LOCAL_IMAGES.lootGem,
-  coin: LOCAL_IMAGES.lootCoin,
-};
-
+// NOTE (round-5 blind review): a rendered-raster variant of this glyph was
+// trialed here (alpha-keyed photoreal diamond/coin sprites) and REVERTED —
+// all three judges read the mixed media as a style clash ("photoreal gem
+// clashes with flat UI"). Consistent vector loot scores better than
+// inconsistent rendered loot.
 function HeroProductGlyph({ icon, accent, size }: { icon?: string; accent: string; size: number }) {
   const name = icon ? resolveIconName(icon) : null;
-  const raster = name ? HERO_LOOT_RASTER[name] : undefined;
-  if (raster) {
-    // Rendered sprite slightly overflows the requested box — loot art reads
-    // best when it breaks the medallion bounds a little.
-    const px = Math.round(size * 1.3);
-    return <Image source={raster} style={{ width: px, height: px }} resizeMode="contain" />;
-  }
   const hero = name ? HERO_ICON_UPGRADE[name] : undefined;
   if (hero) {
     return <GameIcon name={hero} size={size} accent={hero === 'gemHoard' ? COLORS.cyan : undefined} />;
@@ -1889,7 +1877,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           />
           <View style={styles.vipHeader}>
             <HaloMedallion size={64} accent={COLORS.gold} style={styles.vipMedallion}>
-              <Image source={LOCAL_IMAGES.lootCrown} style={{ width: 56, height: 56 }} resizeMode="contain" />
+              <GameIcon name="vipTrophy" size={44} />
             </HaloMedallion>
             <View style={{ flex: 1 }}>
               <Text style={styles.vipTitle}>{t('shop.vipWeekly')}</Text>
