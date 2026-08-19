@@ -546,7 +546,7 @@ const MasteryLaneCard = memo(function MasteryLaneCard({
     () => buildRewardChips(reward, lane, milestone),
     [reward, lane, milestone],
   );
-  const chipSize = milestone ? 34 : 30;
+  const chipSize = milestone ? 40 : 36;
 
   return (
     <View

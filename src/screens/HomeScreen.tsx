@@ -617,7 +617,7 @@ export function HomeScreen({
                 >
                   {stat.icon && (
                     <View style={[styles.statIconWell, { backgroundColor: stat.tint + '24', borderColor: stat.tint + '55' }]}>
-                      <GameIcon name={stat.icon} size={20} />
+                      <GameIcon name={stat.icon} size={24} />
                     </View>
                   )}
                   <Text style={styles.heroStatValue}>{stat.value}</Text>
@@ -1654,9 +1654,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   statIconWell: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

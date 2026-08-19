@@ -108,7 +108,7 @@ const GameplayMascot: React.FC<GameplayMascotProps> = ({
           animStyle,
         ]}
       >
-        <OwlIcon size={25} accent={tensionActive ? COLORS.gold : undefined} />
+        <OwlIcon size={34} accent={tensionActive ? COLORS.gold : undefined} />
         {flawlessStreak > 0 && (
           <View style={styles.streakOverlay}>
             <FlameIcon size={16} />
@@ -132,9 +132,9 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   bubble: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: 'rgba(26, 10, 46, 0.85)',
     borderWidth: 1.5,
     borderColor: COLORS.accent,

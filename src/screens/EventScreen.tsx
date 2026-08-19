@@ -1117,7 +1117,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
                   // ladder. Diameters run ~15% over round 2's 32–44 so the four
                   // tiers read as substantial struck medals, with the halo pad
                   // trimmed to keep the 4-up row clear of card clipping.
-                  const medSize = 37 + Math.min(tierIdx, 3) * 5;
+                  const medSize = 41 + Math.min(tierIdx, 3) * 5;
                   const haloSize = medSize + 12;
                   return (
                     <Pressable
@@ -1170,7 +1170,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
                         >
                           <GameIcon
                             name={getTierPrizeIcon(reward.tier, tierIdx)}
-                            size={medSize * 0.62}
+                            size={medSize * 0.7}
                           />
                         </TierMedallion>
                         {reward.claimed && (

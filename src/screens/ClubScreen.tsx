@@ -771,9 +771,9 @@ const clubPrimStyles = StyleSheet.create({
     marginTop: 10,
   },
   benefitWell: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1348,9 +1348,9 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
         </Text>
 
         <View style={styles.benefitList}>
-          <BenefitRow icon={<GameIcon name="gift" size={22} accent={COLORS.accent} />} accent={COLORS.accent} text="Send and receive booster gifts with clubmates" />
-          <BenefitRow icon={<GameIcon name="trophy" size={22} accent={COLORS.gold} />} accent={COLORS.gold} text="Climb the weekly club rankings as a team" />
-          <BenefitRow icon={<GameIcon name="chat" size={22} accent={COLORS.cyan} />} accent={COLORS.cyan} text="Chat, react, and clear shared goals together" />
+          <BenefitRow icon={<GameIcon name="gift" size={28} accent={COLORS.accent} />} accent={COLORS.accent} text="Send and receive booster gifts with clubmates" />
+          <BenefitRow icon={<GameIcon name="trophy" size={28} accent={COLORS.gold} />} accent={COLORS.gold} text="Climb the weekly club rankings as a team" />
+          <BenefitRow icon={<GameIcon name="chat" size={28} accent={COLORS.cyan} />} accent={COLORS.cyan} text="Chat, react, and clear shared goals together" />
         </View>
       </View>
 
