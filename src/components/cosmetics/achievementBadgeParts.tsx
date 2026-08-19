@@ -18,7 +18,7 @@
  * r≈28 of (50, 44); `EMBLEM_FIT` scales them up per silhouette.
  */
 import React, { useMemo } from 'react';
-import { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
+import { Circle, Defs, G, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import { DuoGrad, gradId, shade } from '../icons/IconBase';
 
 export const ABVB = '0 0 100 100';
@@ -109,6 +109,85 @@ export function BadgeGlow({ accent }: { accent: string }) {
         </RadialGradient>
       </Defs>
       <Circle cx={50} cy={45} r={50} fill={`url(#${id})`} />
+    </>
+  );
+}
+
+/** Ink used for emblem contours and cast shadows (cool near-black). */
+const EMBLEM_INK = '#0b0e1a';
+
+/**
+ * MATERIAL pass for a bespoke emblem — the fix for "flat single-colour vector
+ * glyphs dropped into a plate".
+ *
+ * Every emblem is authored once and then re-rendered as a SILHOUETTE several
+ * times by feeding a constant paint through its own `c()` prop (the same hook
+ * the ghost ramp uses). One authored composition therefore gains, back to
+ * front:
+ *
+ * 1. a soft cast SHADOW dropped onto the enamel field beneath it (two offset
+ *    passes so the edge falls off instead of stamping a hard double),
+ * 2. a dark INSET OUTLINE — the silhouette grown ~3.5% about the emblem origin,
+ *    so the object is bedded into the enamel like cloisonné wire,
+ * 3. a bright top-edge CATCHLIGHT — the silhouette lifted 1.6 units and painted
+ *    with a top-lit ramp, so only the upward-facing edges catch light,
+ * 4. the emblem itself,
+ * 5. a two-tone ENAMEL glaze — white over the upper half, ink over the lower —
+ *    in user space, so the whole emblem shares ONE light direction instead of
+ *    each sub-path shading itself.
+ *
+ * Locked badges skip the second shadow pass and take a dimmer catchlight: a
+ * ghost should read as recessed, not as a lit object.
+ */
+export function EmblemMaterial({
+  Emblem,
+  c,
+  earned,
+}: {
+  Emblem: React.ComponentType<EmblemProps>;
+  c: (hex: string) => string;
+  earned: boolean;
+}) {
+  const rimId = useMemo(() => gradId('abEmRim'), []);
+  const glazeId = useMemo(() => gradId('abEmGlaze'), []);
+  const ink = useMemo(() => () => EMBLEM_INK, []);
+  const rimPaint = useMemo(() => () => `url(#${rimId})`, [rimId]);
+  const glazePaint = useMemo(() => () => `url(#${glazeId})`, [glazeId]);
+  const lit = earned ? 0.85 : 0.4;
+  return (
+    <>
+      <Defs>
+        {/* top-lit rim ramp, emblem user space (authored around y 16–72) */}
+        <LinearGradient id={rimId} gradientUnits="userSpaceOnUse" x1="0" y1="14" x2="0" y2="48">
+          <Stop offset="0" stopColor="#ffffff" stopOpacity={lit} />
+          <Stop offset="0.45" stopColor="#ffffff" stopOpacity={lit * 0.34} />
+          <Stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </LinearGradient>
+        {/* two-tone enamel glaze: lit upper, shadowed lower */}
+        <LinearGradient id={glazeId} gradientUnits="userSpaceOnUse" x1="0" y1="16" x2="0" y2="72">
+          <Stop offset="0" stopColor="#ffffff" stopOpacity={earned ? 0.3 : 0.16} />
+          <Stop offset="0.42" stopColor="#ffffff" stopOpacity="0.04" />
+          <Stop offset="0.56" stopColor={EMBLEM_INK} stopOpacity="0.05" />
+          <Stop offset="1" stopColor={EMBLEM_INK} stopOpacity={earned ? 0.34 : 0.42} />
+        </LinearGradient>
+      </Defs>
+      {earned && (
+        <G transform="translate(2.6 4.4)" opacity={0.14}>
+          <Emblem c={ink} />
+        </G>
+      )}
+      <G transform="translate(1.3 2.4)" opacity={earned ? 0.24 : 0.3}>
+        <Emblem c={ink} />
+      </G>
+      {/* dark contour: grown about the (50, 44) emblem origin */}
+      <G transform="translate(-1.7 -1.5) scale(1.034)" opacity={0.92}>
+        <Emblem c={ink} />
+      </G>
+      <G transform="translate(0 -1.6)">
+        <Emblem c={rimPaint} />
+      </G>
+      <Emblem c={c} />
+      <Emblem c={glazePaint} />
     </>
   );
 }

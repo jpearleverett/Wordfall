@@ -205,12 +205,18 @@ function CrestDrape({ tone }: { tone: string }) {
   );
 }
 
-/** Enamel field: body gradient + radial enamel bloom + rim + gloss. */
+/**
+ * Enamel FIELD: body gradient + radial enamel bloom + a radial VIGNETTE that
+ * darkens toward the rim, so the field reads as a dished pool of enamel rather
+ * than a flat disc of accent. `tone` is per-badge (see `enamelField`), not the
+ * raw family accent — neighbouring badges differ in field color, not only in
+ * emblem shape. The gloss lives in `GlassDome`, drawn over the emblem.
+ */
 export function BadgePlate({ shape, tone }: { shape: BadgeShape; tone: string }) {
   const lid = useMemo(() => gradId('abPlate'), []);
   const rid = useMemo(() => gradId('abEnamel'), []);
+  const vid = useMemo(() => gradId('abVign'), []);
   const spec = SHAPES[shape];
-  const [sx, sy, srx, sry] = spec.sheen;
   return (
     <>
       {spec.drape && <CrestDrape tone={tone} />}
@@ -225,9 +231,15 @@ export function BadgePlate({ shape, tone }: { shape: BadgeShape; tone: string })
           <Stop offset="0.52" stopColor={shade(tone, 24)} stopOpacity="0.14" />
           <Stop offset="1" stopColor={shade(tone, -92)} stopOpacity="0.46" />
         </RadialGradient>
+        <RadialGradient id={vid} cx="0.5" cy="0.44" r="0.62">
+          <Stop offset="0.36" stopColor={shade(tone, -104)} stopOpacity="0" />
+          <Stop offset="0.76" stopColor={shade(tone, -104)} stopOpacity="0.24" />
+          <Stop offset="1" stopColor={shade(tone, -120)} stopOpacity="0.58" />
+        </RadialGradient>
       </Defs>
       <Path d={spec.outline(PLATE_R)} fill={`url(#${lid})`} />
       <Path d={spec.outline(PLATE_R)} fill={`url(#${rid})`} />
+      <Path d={spec.outline(PLATE_R)} fill={`url(#${vid})`} />
       <Path
         d={spec.outline(PLATE_R * 0.9)}
         fill="none"
@@ -235,7 +247,53 @@ export function BadgePlate({ shape, tone }: { shape: BadgeShape; tone: string })
         strokeWidth={1.5}
         opacity={0.42}
       />
-      <Ellipse cx={sx} cy={sy} rx={srx} ry={sry} fill="#ffffff" opacity={0.12} />
+    </>
+  );
+}
+
+/**
+ * GLASS DOME over the finished badge face — drawn AFTER the emblem so the
+ * whole face (field + object) sits under one sheet of glass instead of the
+ * emblem floating on top of a separately-glossed plate.
+ *
+ * Two elements, both clipped to the silhouette: a broad elliptical highlight
+ * across the upper third at low opacity (the dome's reflection, widened from
+ * each form's authored `sheen` ellipse), and a thin bright arc along the inner
+ * rim that fades out by the equator — the tell that the surface is curved.
+ */
+export function GlassDome({ shape }: { shape: BadgeShape }) {
+  const clip = useMemo(() => gradId('abDomeClip'), []);
+  const dome = useMemo(() => gradId('abDome'), []);
+  const arc = useMemo(() => gradId('abArc'), []);
+  const spec = SHAPES[shape];
+  const [sx, sy, srx, sry] = spec.sheen;
+  return (
+    <>
+      <Defs>
+        <ClipPath id={clip}>
+          <Path d={spec.outline(PLATE_R)} />
+        </ClipPath>
+        <RadialGradient id={dome} cx="0.5" cy="0.5" r="0.5">
+          <Stop offset="0" stopColor="#ffffff" stopOpacity="0.24" />
+          <Stop offset="0.6" stopColor="#ffffff" stopOpacity="0.12" />
+          <Stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </RadialGradient>
+        <LinearGradient id={arc} gradientUnits="userSpaceOnUse" x1="0" y1="6" x2="0" y2="46">
+          <Stop offset="0" stopColor="#ffffff" stopOpacity="0.7" />
+          <Stop offset="0.55" stopColor="#ffffff" stopOpacity="0.22" />
+          <Stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </LinearGradient>
+      </Defs>
+      <G clipPath={`url(#${clip})`}>
+        <Ellipse cx={sx} cy={sy - 1} rx={n2(srx * 1.58)} ry={n2(sry * 1.95)} fill={`url(#${dome})`} />
+        <Path
+          d={spec.outline(PLATE_R * 0.955)}
+          fill="none"
+          stroke={`url(#${arc})`}
+          strokeWidth={1.7}
+          strokeLinejoin="round"
+        />
+      </G>
     </>
   );
 }

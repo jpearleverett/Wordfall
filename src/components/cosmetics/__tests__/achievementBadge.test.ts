@@ -21,6 +21,7 @@ import {
   MAX_PER_SHAPE,
   SHAPE_SAFE_R,
   emblemScale,
+  enamelField,
   ghostCloth,
   ghostEnamel,
   ghostRamp,
@@ -121,6 +122,31 @@ describe('achievementBadge art catalog', () => {
     expect(TIER_PIPS.silver).toBe(2);
     expect(TIER_PIPS.gold).toBe(3);
     expect(new Set(Object.values(TIER_PIPS)).size).toBe(3);
+  });
+
+  it('gives every badge its own enamel field color — 19 fields, not 5 accents', () => {
+    // The panel read the wall as five flat accent discs: the field is now
+    // derived per achievement id, so same-family neighbours differ in FIELD
+    // color and not only in emblem shape.
+    const fields = ACHIEVEMENTS.map((a) =>
+      enamelField(ACHIEVEMENT_BADGE_ART[a.id].accent, a.id)
+    );
+    for (const hex of fields) expect(hex).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(new Set(fields).size).toBe(fields.length);
+    // ...and it stays a nudge, not a re-hue: every field differs from the raw
+    // family accent but at most a couple of families' worth of hue away.
+    for (const achievement of ACHIEVEMENTS) {
+      const { accent } = ACHIEVEMENT_BADGE_ART[achievement.id];
+      expect(enamelField(accent, achievement.id)).not.toBe(accent);
+    }
+  });
+
+  it('derives the enamel field deterministically from accent + id', () => {
+    const accent = ACHIEVEMENT_FAMILY_ACCENTS.puzzle;
+    expect(enamelField(accent, 'word_finder')).toBe(enamelField(accent, 'word_finder'));
+    expect(enamelField(accent, 'word_finder')).not.toBe(enamelField(accent, 'puzzle_solver'));
+    // Non-hex input is passed through rather than throwing.
+    expect(enamelField('not-a-color', 'word_finder')).toBe('not-a-color');
   });
 
   it('falls back to a valid default for unknown ids', () => {

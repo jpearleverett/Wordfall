@@ -14,11 +14,15 @@
  * the box, and the same apparent size for every badge on a given form.
  *
  * Composition (back to front): gold ray burst (gold tier only) → accent glow
- * (earned) → enameled plate (body gradient
- * under a radial enamel bloom, so it reads as enamel over metal, not a vector
- * fill) → engraved dashed silhouette echo (locked) → bespoke emblem (from
- * `achievementEmblems1/2`, fitted per silhouette)
- * → riveted metal frame (hammered copper / brushed steel / rich gold by tier,
+ * (earned) → enameled plate (per-badge field tone from `enamelField` under a
+ * radial bloom and a rim vignette, so neighbouring badges differ in field
+ * color, not just emblem shape) → engraved dashed silhouette echo (locked) →
+ * bespoke emblem (from `achievementEmblems1/2`, fitted per silhouette) wrapped
+ * in `EmblemMaterial` — cast shadow, dark inset contour, top-edge catchlight
+ * and a two-tone enamel glaze, so the magnifier / puzzle piece / compass read
+ * as raised cloisonné OBJECTS rather than flat vector glyphs → `GlassDome`
+ * (broad upper-third reflection + inner-rim arc, putting field and emblem
+ * under one sheet of glass) → riveted metal frame (hammered copper / brushed steel / rich gold by tier,
  * slate when locked) → tier surface dressing (hammer facets · brushed
  * striations + specular sweep · sparkles) → BASE DRESSING → padlock chip
  * (locked).
@@ -43,12 +47,13 @@
 import React, { useMemo } from 'react';
 import Svg, { G } from 'react-native-svg';
 import { shade } from '../icons/IconBase';
-import { ABVB, BadgeGlow, BadgeMetal, EmblemProps } from './achievementBadgeParts';
+import { ABVB, BadgeGlow, BadgeMetal, EmblemMaterial, EmblemProps } from './achievementBadgeParts';
 import { BadgeDressingArt } from './achievementBadgeDressing';
 import {
   BadgeFrame,
   BadgePlate,
   GhostEcho,
+  GlassDome,
   GoldRayBurst,
   LockChip,
   TierDressing,
@@ -61,6 +66,7 @@ import {
   AchievementTierLevel,
   BadgeShape,
   SHAPE_DRESSING,
+  enamelField,
   ghostCloth,
   ghostEnamel,
   ghostRamp,
@@ -127,15 +133,20 @@ export function AchievementBadge({ achievementId, size, earned, tier }: Achievem
   const metal: BadgeMetal = earned ? tier ?? 'bronze' : 'stone';
   const Emblem = EMBLEMS[art.emblem];
   const c = useMemo(() => (earned ? identity : ghostRamp(art.accent)), [earned, art.accent]);
+  const field = useMemo(
+    () => enamelField(art.accent, achievementId),
+    [art.accent, achievementId]
+  );
   return (
     <Svg width={size} height={size} viewBox={ABVB}>
       {earned && metal === 'gold' && <GoldRayBurst />}
       {earned && <BadgeGlow accent={art.accent} />}
-      <BadgePlate shape={art.shape} tone={earned ? art.accent : ghostEnamel(art.accent)} />
+      <BadgePlate shape={art.shape} tone={earned ? field : ghostEnamel(field)} />
       {!earned && <GhostEcho shape={art.shape} accent={art.accent} />}
       <G transform={emblemFit(art.shape, art.emblem)}>
-        <Emblem c={c} />
+        <EmblemMaterial Emblem={Emblem} c={c} earned={earned} />
       </G>
+      <GlassDome shape={art.shape} />
       <BadgeFrame shape={art.shape} metal={metal} />
       {earned && <TierDressing shape={art.shape} metal={metal} />}
       <BadgeDressingArt

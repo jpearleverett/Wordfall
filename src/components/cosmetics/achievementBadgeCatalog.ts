@@ -269,6 +269,78 @@ export function mixHex(a: string, b: string, t: number): string {
   return toHex(pa.map((v, i) => Math.round(v + (pb[i] - v) * t)) as Rgb);
 }
 
+// ── Per-badge enamel field tone ─────────────────────────────────────────────
+
+function rgbToHsl([r, g, b]: Rgb): [number, number, number] {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+  else if (max === gn) h = ((bn - rn) / d + 2) / 6;
+  else h = ((rn - gn) / d + 4) / 6;
+  return [h, s, l];
+}
+
+function hslToRgb(h: number, s: number, l: number): Rgb {
+  const hue = ((h % 1) + 1) % 1;
+  if (s <= 0) {
+    const v = Math.round(l * 255);
+    return [v, v, v];
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const ch = (t0: number) => {
+    let t = ((t0 % 1) + 1) % 1;
+    if (t < 1 / 6) t = p + (q - p) * 6 * t;
+    else if (t < 1 / 2) t = q;
+    else if (t < 2 / 3) t = p + (q - p) * (2 / 3 - t) * 6;
+    else t = p;
+    return Math.max(0, Math.min(255, Math.round(t * 255)));
+  };
+  return [ch(hue + 1 / 3), ch(hue), ch(hue - 1 / 3)];
+}
+
+function hash32(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Enamel FIELD color for one badge: the family accent nudged deterministically
+ * by achievement id, so two neighbours from the same family differ in field
+ * color and not only in emblem shape (the panel read a wall of five flat
+ * accent discs). The shift is small — ±20° hue, ±12% saturation, ±7%
+ * lightness — so the family still reads as a family.
+ */
+export function enamelField(accent: string, achievementId: string): string {
+  const p = parseHex(accent);
+  if (!p) return accent;
+  const [h, s, l] = rgbToHsl(p);
+  const a = hash32(achievementId);
+  const b = hash32(`${achievementId}:field`);
+  const hueStep = (a % 11) - 5; // -5..5
+  const satStep = ((a >>> 7) % 7) - 3; // -3..3
+  const lightStep = (b % 9) - 4; // -4..4
+  return toHex(
+    hslToRgb(
+      h + (hueStep * 4) / 360,
+      Math.max(0.2, Math.min(1, s * (1 + satStep * 0.04))),
+      Math.max(0.17, Math.min(0.76, l + lightStep * 0.016))
+    )
+  );
+}
+
 const GHOST_LO = '#232741'; // deep slate floor of the ghost ramp
 const GHOST_HI = '#c9cede'; // lit slate ceiling of the ghost ramp
 

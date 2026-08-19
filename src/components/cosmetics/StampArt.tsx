@@ -13,17 +13,30 @@
  *    real stamp puts there: an engraved denomination over a thin foil rule.
  *  - Every stamp derives a FULL-STRENGTH color wash for its picture panel
  *    from its own motif family (sun/heat → amber, wave → teal, palm → green,
- *    frost → ice, blossom → pink …), so a sheet of nine shows nine colors.
- *    The perforated paper border stays neutral parchment so the wash reads
- *    as the printed area, not as a tinted card.
+ *    frost → ice, blossom → pink …) — but the family hue is only a STARTING
+ *    POINT. `stampWashPalette` rotates hue in 5 steps and alternates
+ *    light/deep value by SHEET INDEX, because a seasonal album is mostly one
+ *    family (Summer = sun/heat/beach/ice-cream/tropical) and a purely
+ *    family-keyed sheet collapsed into "six of nine stamps share the same
+ *    amber gradient". A summer page now prints amber, violet, teal, rose and
+ *    mint panels. The perforated paper border stays neutral parchment so the
+ *    wash reads as the printed area, not as a tinted card.
+ *  - The stamp is MATERIAL, not flat vector: a fine dot+line paper grain
+ *    tiles the whole die-cut, the picture panel carries an inner bevel (lit
+ *    top-left, shadowed bottom-right), and a soft radial contact shadow sits
+ *    under the motif so the art rests ON the paper.
  *  - The foil sheen is per-stamp, not per-template (`stampSheen`): angle,
  *    band width, centre offset and opacity all derive from the sheet index,
  *    and ~1 stamp in 3 prints MATTE with no streak at all — the panel's
  *    "identical diagonal gloss streak in the same position" complaint.
- *  - Rarity tiers dress the frame: `rare` adds a foil-gradient inner frame
- *    plus corner rosettes, `epic` adds a serrated gold outer edge and two
- *    sparkles. `stampRarity(index, total)` derives the tier by sheet
- *    position (every 5th rare, the album's last epic).
+ *  - Rarity is legible at a glance, not just "a slightly different frame":
+ *    COMMON prints matte (grain only, its per-index sheen damped), RARE adds
+ *    the foil-gradient frame + corner rosettes PLUS a metallic sheen band
+ *    swept across the panel, EPIC adds a serrated gold outer edge, faceted
+ *    gem corner dots, a deeper double bevel and two sparkles. A 'Summer King'
+ *    epic can no longer read at the same weight as a common 'Sunshine'.
+ *    `stampRarity(index, total)` derives the tier by sheet position (every
+ *    5th rare, the album's last epic).
  *
  * Unearned stamps keep the identical die-cut silhouette but ghost out —
  * gray paper, dashed panel, '?' watermark — so an album page reads as a
@@ -34,9 +47,11 @@ import { View, StyleProp, ViewStyle } from 'react-native';
 import Svg, {
   Circle,
   Defs,
+  Ellipse,
   G,
   LinearGradient,
   Path,
+  Pattern,
   RadialGradient,
   Rect,
   Stop,
@@ -45,9 +60,13 @@ import Svg, {
 import { COLORS } from '../../constants';
 import { gradId, shade } from '../icons/IconBase';
 import GameIcon from '../icons/GameIcon';
-import type { GameIconName } from '../icons/GameIcon';
 import { stampIconName } from '../icons/iconsStamps';
 import { sheenVector, stampSheen, stampSheenIndex } from './stampSheen';
+import { stampWashColor, stampWashPalette } from './stampWash';
+
+// Re-exported so existing importers keep working; the table itself lives in
+// the pure module so tests can reach it without the JSX transform.
+export { stampWashColor, stampWashPalette } from './stampWash';
 
 /** Neutral parchment papers — variety lives in the panel wash, not here. */
 export const STAMP_PAPERS = ['#f3ece0', '#efe8dc', '#f2ebe2', '#ece6da'];
@@ -56,6 +75,8 @@ const GHOST_PAPER = '#646b7e';
 const INK = '#3d3428';
 const POSTMARK_INK = '#20263c';
 const GOLD = '#f0c33c';
+/** Epic corner gems — four stones so the capstone reads as jewelled. */
+const GEMS = ['#7ee6ff', '#ff8fd0', '#a98bff', '#8bffc0'];
 
 // ── Picture panel (viewBox units) ───────────────────────────────────────────
 const PANEL = { x: 8.5, y: 8.5, w: 83, h: 85 };
@@ -73,54 +94,6 @@ export type StampRarity = 'common' | 'rare' | 'epic';
 export function stampRarity(index: number, total: number): StampRarity {
   if (total > 0 && index === total - 1) return 'epic';
   return (index + 1) % 5 === 0 ? 'rare' : 'common';
-}
-
-// ── Per-motif color families ────────────────────────────────────────────────
-const FAMILIES: Array<[string, GameIconName[]]> = [
-  // warm amber — sun, heat, fire, gold
-  ['#f2a12c', [
-    'stampSun', 'stampHeatwave', 'stampSunrise', 'stampSunflower', 'stampBee',
-    'stampLemonade', 'stampCorn', 'stampCandle', 'stampAmber', 'stampHarvestMoon',
-    'stampStarTrail', 'stampCrown', 'stampTrophy', 'stampFireworks', 'stampFireflyJar',
-  ]],
-  // ember orange — autumn, canvas, embers
-  ['#e0702a', [
-    'stampCampfire', 'stampAutumnLeaf', 'stampPumpkin', 'stampCocoa', 'stampKite',
-    'stampUmbrella', 'stampParasol', 'stampSled', 'stampBeachBall',
-  ]],
-  // ocean teal — water in motion
-  ['#1f9fc4', [
-    'stampWave', 'stampWaterfall', 'stampSailboat', 'stampSurfboard', 'stampDewdrop',
-    'stampSongbird', 'stampFrozenLake',
-  ]],
-  // foliage green
-  ['#3fa25a', [
-    'stampSeedling', 'stampFern', 'stampPalm', 'stampEvergreen', 'stampHolly',
-    'stampAurora',
-  ]],
-  // ice blue — frost and vapor
-  ['#6fbfe8', [
-    'stampSnowflake', 'stampIceCrystal', 'stampSnowman', 'stampMist', 'stampRainCloud',
-  ]],
-  // blossom pink
-  ['#e87fb0', ['stampBlossom', 'stampFlowerCrown', 'stampIceCream', 'stampCoral']],
-  // dusk violet
-  ['#8b74e8', ['stampButterfly', 'stampCrescentMoon']],
-  // warm sand / bark
-  ['#cfa15c', ['stampSandcastle', 'stampPaw', 'stampAcorn', 'stampOwl']],
-  // crimson
-  ['#d8483f', ['stampApple', 'stampMushroom', 'stampGift', 'stampMitten']],
-];
-
-const WASH_BY_MOTIF: Partial<Record<GameIconName, string>> = (() => {
-  const out: Partial<Record<GameIconName, string>> = {};
-  for (const [hue, motifs] of FAMILIES) for (const m of motifs) out[m] = hue;
-  return out;
-})();
-
-/** Full-strength wash hue for a motif, falling back to the caller's accent. */
-export function stampWashColor(motif: GameIconName | null, fallback: string): string {
-  return (motif && WASH_BY_MOTIF[motif]) || fallback;
 }
 
 // ── Perforation geometry (computed once) ────────────────────────────────────
@@ -180,6 +153,25 @@ function sparkle(cx: number, cy: number, r: number): string {
   );
 }
 
+/**
+ * Inner-bevel polylines for a rect inset by `d`. `lit` traces the top-left
+ * pair of edges (catching the light), `shade` the bottom-right pair, so the
+ * printed panel reads as pressed INTO the paper rather than drawn on it.
+ */
+function bevel(d: number): { lit: string; shade: string } {
+  const x0 = PANEL.x + d;
+  const y0 = PANEL.y + d;
+  const x1 = PANEL.x + PANEL.w - d;
+  const y1 = PANEL.y + PANEL.h - d;
+  return {
+    lit: `M${x0},${y1} L${x0},${y0} L${x1},${y0}`,
+    shade: `M${x1},${y0} L${x1},${y1} L${x0},${y1}`,
+  };
+}
+
+const BEVEL_OUTER = bevel(0.9);
+const BEVEL_INNER = bevel(3.2);
+
 export interface StampArtProps {
   /**
    * Catalog stamp id (e.g. 'su26_4'). Preferred: resolves bespoke art that
@@ -234,20 +226,32 @@ export default function StampArt({
       foil: gradId('stampFoil'),
       gold: gradId('stampGold'),
       sheen: gradId('stampSheen'),
+      grain: gradId('stampGrain'),
+      band: gradId('stampBand'),
+      halo: gradId('stampHalo'),
+      gem: gradId('stampGem'),
     }),
     [],
   );
   const motif = stampIconName(stampId);
-  const wash = stampWashColor(motif, accent);
+  const family = stampWashColor(motif, accent);
+  // Sheet position drives BOTH the wash rotation and the foil streak, so a
+  // single-family album still prints a multi-coloured page.
+  const seat = stampSheenIndex(index, stampId);
+  const palette = useMemo(() => stampWashPalette(family, seat), [family, seat]);
+  const wash = palette.base;
   const paper = earned ? paperTint : GHOST_PAPER;
   const h = size * 1.2;
   const iconSize = size * MOTIF_SCALE;
   const iconTop = h * (PANEL_CY / 120) - iconSize / 2;
   const rare = rarity === 'rare' || rarity === 'epic';
   const epic = rarity === 'epic';
-  // Per-position foil streak — null on the matte stamps.
-  const sheen = useMemo(() => stampSheen(stampSheenIndex(index, stampId)), [index, stampId]);
+  // Per-position foil streak — null on the matte stamps. Commons print damped
+  // so paper-vs-foil also reads as a rarity signal.
+  const sheen = useMemo(() => stampSheen(seat), [seat]);
   const sheenDir = sheen ? sheenVector(sheen.angle) : null;
+  const sheenAlpha = sheen ? sheen.opacity * (rare ? 1 : 0.55) : 0;
+  const gem = GEMS[seat % GEMS.length];
 
   return (
     <View style={[{ width: size, height: h }, style]} pointerEvents="none">
@@ -258,12 +262,47 @@ export default function StampArt({
             <Stop offset="0.55" stopColor={paper} />
             <Stop offset="1" stopColor={shade(paper, -18)} />
           </LinearGradient>
-          {/* Full-strength printed-panel wash in the motif's own family. */}
+          {/* Printed-panel wash: family hue rotated + valued by sheet index. */}
           <LinearGradient id={ids.wash} x1="0" y1="0" x2="0.35" y2="1">
-            <Stop offset="0" stopColor={shade(wash, 58)} />
-            <Stop offset="0.48" stopColor={shade(wash, 4)} />
-            <Stop offset="1" stopColor={shade(wash, -60)} />
+            <Stop offset="0" stopColor={palette.light} />
+            <Stop offset="0.48" stopColor={palette.base} />
+            <Stop offset="1" stopColor={palette.deep} />
           </LinearGradient>
+          {/* Paper grain: a fine dot + hairline tile, tiled over the die-cut
+              at low opacity so the stock reads as fibre, not flat fill. */}
+          <Pattern
+            id={ids.grain}
+            x="0"
+            y="0"
+            width="3"
+            height="3"
+            patternUnits="userSpaceOnUse"
+          >
+            <Circle cx="0.7" cy="0.75" r="0.36" fill="#2a2013" fillOpacity="0.1" />
+            <Circle cx="2.15" cy="2.05" r="0.3" fill="#ffffff" fillOpacity="0.09" />
+            <Path d="M0,1.55 H3" stroke="#2a2013" strokeOpacity="0.05" strokeWidth="0.22" />
+            <Path d="M1.5,0 V3" stroke="#ffffff" strokeOpacity="0.035" strokeWidth="0.2" />
+          </Pattern>
+          {/* Soft contact shadow under the motif so the art sits ON the paper. */}
+          <RadialGradient id={ids.halo} cx="0.5" cy="0.5" r="0.5">
+            <Stop offset="0" stopColor="#000000" stopOpacity="0.34" />
+            <Stop offset="0.55" stopColor="#000000" stopOpacity="0.16" />
+            <Stop offset="1" stopColor="#000000" stopOpacity="0" />
+          </RadialGradient>
+          {/* Rare/epic metallic sheen band swept across the picture panel. */}
+          <LinearGradient id={ids.band} x1="0" y1="1" x2="1" y2="0">
+            <Stop offset="0.2" stopColor="#ffffff" stopOpacity="0" />
+            <Stop offset="0.42" stopColor="#fff9e0" stopOpacity={epic ? '0.4' : '0.26'} />
+            <Stop offset="0.5" stopColor="#ffffff" stopOpacity={epic ? '0.5' : '0.32'} />
+            <Stop offset="0.58" stopColor="#ffe9a8" stopOpacity={epic ? '0.38' : '0.24'} />
+            <Stop offset="0.8" stopColor="#ffffff" stopOpacity="0" />
+          </LinearGradient>
+          {/* Faceted epic corner stone. */}
+          <RadialGradient id={ids.gem} cx="0.36" cy="0.32" r="0.72">
+            <Stop offset="0" stopColor="#ffffff" />
+            <Stop offset="0.4" stopColor={gem} />
+            <Stop offset="1" stopColor={shade(gem, -96)} />
+          </RadialGradient>
           <RadialGradient id={ids.lit} cx="0.5" cy="0.44" r="0.62">
             <Stop offset="0" stopColor="#ffffff" stopOpacity="0.42" />
             <Stop offset="0.55" stopColor="#ffffff" stopOpacity="0.12" />
@@ -296,7 +335,7 @@ export default function StampArt({
               <Stop
                 offset={String(sheen.center)}
                 stopColor="#ffffff"
-                stopOpacity={String(sheen.opacity)}
+                stopOpacity={String(sheenAlpha)}
               />
               <Stop
                 offset={String(Math.min(1, sheen.center + sheen.width))}
@@ -354,6 +393,15 @@ export default function StampArt({
               height={PANEL.h}
               fill={`url(#${ids.lit})`}
             />
+            {/* Contact shadow: the motif overlay sits directly above this, so
+                the art casts onto the printed panel instead of floating. */}
+            <Ellipse
+              cx={50.8}
+              cy={PANEL_CY + 3.5}
+              rx={30}
+              ry={24}
+              fill={`url(#${ids.halo})`}
+            />
             {/* Engraved hairline inside the panel. */}
             <Rect
               x={PANEL.x + 2.6}
@@ -365,6 +413,29 @@ export default function StampArt({
               strokeOpacity={0.3}
               strokeWidth={0.6}
             />
+            {/* Embossed inner bevel — lit top-left, shadowed bottom-right, so
+                the printed area reads as pressed into the stock. Epic gets a
+                second, deeper step. */}
+            <G fill="none" strokeLinecap="square">
+              <Path
+                d={BEVEL_OUTER.lit}
+                stroke="#ffffff"
+                strokeOpacity={epic ? 0.5 : 0.34}
+                strokeWidth={epic ? 1.8 : 1.2}
+              />
+              <Path
+                d={BEVEL_OUTER.shade}
+                stroke="#000000"
+                strokeOpacity={epic ? 0.44 : 0.3}
+                strokeWidth={epic ? 1.8 : 1.2}
+              />
+              {epic && (
+                <>
+                  <Path d={BEVEL_INNER.lit} stroke="#ffffff" strokeOpacity={0.26} strokeWidth={1} />
+                  <Path d={BEVEL_INNER.shade} stroke="#000000" strokeOpacity={0.3} strokeWidth={1} />
+                </>
+              )}
+            </G>
             {/* Panel edge — foil for rare/epic, plain ink otherwise. */}
             <Rect
               x={PANEL.x}
@@ -372,17 +443,48 @@ export default function StampArt({
               width={PANEL.w}
               height={PANEL.h}
               fill="none"
-              stroke={rare ? `url(#${ids.foil})` : shade(wash, -78)}
+              stroke={rare ? `url(#${ids.foil})` : palette.ink}
               strokeWidth={rare ? 2 : 1.1}
             />
+            {/* Rare/epic metallic sheen band across the printed area — the
+                tier's own gloss, on top of the per-index paper streak. */}
             {rare && (
-              <G fill={`url(#${epic ? ids.gold : ids.foil})`}>
+              <Rect
+                x={PANEL.x}
+                y={PANEL.y}
+                width={PANEL.w}
+                height={PANEL.h}
+                fill={`url(#${ids.band})`}
+              />
+            )}
+            {rare && !epic && (
+              <G fill={`url(#${ids.foil})`}>
                 <Path d={star(PANEL.x + 4.4, PANEL.y + 4.4, 3.1)} />
                 <Path d={star(PANEL.x + PANEL.w - 4.4, PANEL.y + 4.4, 3.1)} />
                 <Path d={star(PANEL.x + 4.4, PANEL.y + PANEL.h - 4.4, 3.1)} />
                 <Path d={star(PANEL.x + PANEL.w - 4.4, PANEL.y + PANEL.h - 4.4, 3.1)} />
               </G>
             )}
+            {/* Epic: gold rosettes bedded under faceted gem corner dots. */}
+            {epic && (
+              <>
+                <G fill={`url(#${ids.gold})`}>
+                  <Path d={star(PANEL.x + 5, PANEL.y + 5, 4.2)} />
+                  <Path d={star(PANEL.x + PANEL.w - 5, PANEL.y + 5, 4.2)} />
+                  <Path d={star(PANEL.x + 5, PANEL.y + PANEL.h - 5, 4.2)} />
+                  <Path d={star(PANEL.x + PANEL.w - 5, PANEL.y + PANEL.h - 5, 4.2)} />
+                </G>
+                <G fill={`url(#${ids.gem})`} stroke="#3a2c05" strokeWidth={0.4}>
+                  <Circle cx={PANEL.x + 5} cy={PANEL.y + 5} r={1.7} />
+                  <Circle cx={PANEL.x + PANEL.w - 5} cy={PANEL.y + 5} r={1.7} />
+                  <Circle cx={PANEL.x + 5} cy={PANEL.y + PANEL.h - 5} r={1.7} />
+                  <Circle cx={PANEL.x + PANEL.w - 5} cy={PANEL.y + PANEL.h - 5} r={1.7} />
+                </G>
+              </>
+            )}
+            {/* Paper grain over the whole die-cut — fibre on both the printed
+                panel and the parchment margin. */}
+            <Path d={STAMP_OUTLINE} fill={`url(#${ids.grain})`} />
 
             {/* ── Denomination band: thin foil rule + engraved value ── */}
             <G stroke={`url(#${ids.foil})`} strokeWidth={1} strokeLinecap="round">
@@ -484,6 +586,8 @@ export default function StampArt({
               strokeWidth={0.9}
               strokeLinecap="round"
             />
+            {/* Same stock, same grain — the slot reads as blank album paper. */}
+            <Path d={STAMP_OUTLINE} fill={`url(#${ids.grain})`} opacity={0.6} />
           </>
         )}
       </Svg>

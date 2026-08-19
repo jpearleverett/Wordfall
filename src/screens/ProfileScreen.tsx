@@ -54,9 +54,17 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
 import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
 import { AchievementBadge } from '../components/cosmetics/AchievementBadge';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, {
+  Circle,
+  Defs,
+  Ellipse,
+  G,
+  LinearGradient as SvgLinearGradient,
+  Path,
+  Stop,
+} from 'react-native-svg';
 import AvatarPortrait from '../components/cosmetics/AvatarPortrait';
-import { DuoGrad, gradId, shade } from '../components/icons/IconBase';
+import { gradId, shade } from '../components/icons/IconBase';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
 import {
   canPrestige,
@@ -126,14 +134,64 @@ const DEFAULT_PLAYER: PlayerData = {
 // tiles (per the AAA audit) instead of a monochrome web grid. Icons are
 // drawn View glyphs (see the glyph kit below), never emoji.
 const STAT_CARDS = [
-  { key: 'puzzlesSolved', label: 'Puzzles Solved', accent: COLORS.green },
-  { key: 'totalStars', label: 'Total Stars', accent: COLORS.gold },
-  { key: 'currentStreak', label: 'Current Streak', accent: COLORS.orange },
-  { key: 'bestStreak', label: 'Best Streak', accent: COLORS.accent },
-  { key: 'perfectSolves', label: 'Perfect Solves', accent: COLORS.cyan },
-  { key: 'totalScore', label: 'Total Score', accent: COLORS.purple },
-  { key: 'level', label: 'Current Level', accent: COLORS.teal },
+  { key: 'puzzlesSolved', label: 'Puzzles Solved', accent: COLORS.green, family: 'progress' },
+  { key: 'totalStars', label: 'Total Stars', accent: COLORS.gold, family: 'reward' },
+  { key: 'currentStreak', label: 'Current Streak', accent: COLORS.orange, family: 'streak' },
+  { key: 'bestStreak', label: 'Best Streak', accent: COLORS.accent, family: 'streak' },
+  { key: 'perfectSolves', label: 'Perfect Solves', accent: COLORS.cyan, family: 'mastery' },
+  { key: 'totalScore', label: 'Total Score', accent: COLORS.purple, family: 'reward' },
+  { key: 'level', label: 'Current Level', accent: COLORS.teal, family: 'progress' },
 ] as const;
+
+type StatFamily = (typeof STAT_CARDS)[number]['family'];
+type StatOrnamentKind = 'notch' | 'facet' | 'chevrons' | 'pips';
+
+/**
+ * Metric families. Icon hue alone made the six tiles one repeated rectangle,
+ * so each family now owns a distinct wash DIRECTION and undertone (progress
+ * falls, streak heat rises from the base, reward runs warm on the diagonal,
+ * mastery reads cold from the top-right), plus its own corner ornament and
+ * hairline-rule width. Two tiles of the same family are meant to rhyme.
+ */
+const STAT_FAMILY_STYLE: Record<
+  StatFamily,
+  {
+    wash: (accent: string) => [string, string, string];
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+    ornament: StatOrnamentKind;
+    ruleWidth: `${number}%`;
+  }
+> = {
+  progress: {
+    wash: (a) => [a + '2b', 'rgba(30,14,58,0.90)', 'rgba(20,8,38,0.96)'],
+    start: { x: 0.5, y: 0 },
+    end: { x: 0.5, y: 1 },
+    ornament: 'pips',
+    ruleWidth: '58%',
+  },
+  reward: {
+    wash: (a) => [a + '2e', 'rgba(70,42,12,0.34)', 'rgba(24,10,44,0.95)'],
+    start: { x: 0, y: 0 },
+    end: { x: 1, y: 1 },
+    ornament: 'facet',
+    ruleWidth: '44%',
+  },
+  streak: {
+    wash: (a) => ['rgba(24,10,44,0.95)', a + '1c', a + '3a'],
+    start: { x: 0.5, y: 0 },
+    end: { x: 0.5, y: 1 },
+    ornament: 'chevrons',
+    ruleWidth: '34%',
+  },
+  mastery: {
+    wash: (a) => [a + '32', 'rgba(16,42,64,0.40)', 'rgba(22,9,42,0.95)'],
+    start: { x: 1, y: 0 },
+    end: { x: 0, y: 1 },
+    ornament: 'notch',
+    ruleWidth: '50%',
+  },
+};
 
 // ─── Drawn glyph kit — layered Views/gradients, no emoji (same technique as
 // LeaderboardScreen's GlyphMedallion / ClubScreen's ShieldCrest family). ────
@@ -651,6 +709,51 @@ function StatGlyph({ statKey, accent, size }: { statKey: string; accent: string;
   }
 }
 
+/**
+ * Top-right corner mark, one per metric family. Small enough to stay quiet at
+ * a 31%-wide tile, distinct enough that the families sort themselves out
+ * peripherally without reading a single label.
+ */
+function StatOrnament({ kind, accent }: { kind: StatOrnamentKind; accent: string }) {
+  switch (kind) {
+    case 'facet':
+      return (
+        <View style={styles.statOrnSlot} pointerEvents="none">
+          <View style={[styles.statOrnFacet, { borderColor: accent + 'b3' }]} />
+        </View>
+      );
+    case 'chevrons':
+      return (
+        <View style={styles.statOrnSlot} pointerEvents="none">
+          <View style={[styles.statOrnChevron, { borderColor: accent + 'cc' }]} />
+          <View
+            style={[styles.statOrnChevron, { borderColor: accent + '59', marginTop: -1 }]}
+          />
+        </View>
+      );
+    case 'pips':
+      return (
+        <View style={[styles.statOrnSlot, styles.statOrnPipRow]} pointerEvents="none">
+          <View style={[styles.statOrnPip, { backgroundColor: accent + 'cc' }]} />
+          <View style={[styles.statOrnPip, { backgroundColor: accent + '80' }]} />
+          <View style={[styles.statOrnPip, { backgroundColor: accent + '3d' }]} />
+        </View>
+      );
+    case 'notch':
+    default:
+      return (
+        <View style={styles.statOrnSlot} pointerEvents="none">
+          <View
+            style={[
+              styles.statOrnNotch,
+              { borderTopColor: accent + 'a6', borderRightColor: accent + 'a6' },
+            ]}
+          />
+        </View>
+      );
+  }
+}
+
 // ─── Prestige tier marks — one distinct SVG mark per prestige tier ──────────
 
 /** Tier metal per prestige level: bronze / silver / gold / diamond / legendary. */
@@ -662,142 +765,278 @@ const PRESTIGE_TIER_COLORS: Record<number, string> = {
   5: COLORS.accent,
 };
 
-/** Laurel leaf-dot anchor points (left branch; right branch mirrors on x). */
+// ─── Struck-medal geometry (viewBox 0 0 100 100, medal centred at 50,48) ────
+// The medallion is minted, not printed: an outer bezel band that catches light
+// along its upper-left, a field recessed BELOW it (gradient inverted so the
+// eye reads a dish), an inner raised ring, laurels standing proud of the
+// field, and the tier numeral cut INTO it. Every layer is a ring/offset pair,
+// which is what survives the shrink to 40px where blur-based relief dies.
+
+/** Laurel leaf anchors on the LEFT branch: [cx, cy, rotationDeg]. */
 const LAUREL_LEAVES = [
-  [5.2, 17.5],
-  [4.3, 14.3],
-  [4.6, 11.0],
-  [5.9, 8.2],
+  [26.5, 61.0, -42],
+  [23.4, 53.5, -32],
+  [22.1, 45.5, -20],
+  [22.9, 37.5, -8],
 ] as const;
 
+/** Left laurel stem; the right branch mirrors it about x = 50. */
+const LAUREL_STEM = 'M29.5 67.5 C23.6 59.4 21.4 45.8 24.6 33.4';
+
 /**
- * PrestigeTierMark — laurel-flanked star in the tier's metal with one chevron
- * pip per prestige level (I–V), so Bronze / Silver / Gold / Diamond /
- * Legendary read apart at a glance instead of sharing one gold star burst.
+ * Specular hits along the bezel band (r ≈ 41), each ellipse rotated onto the
+ * local tangent so the highlights ride the ring instead of floating on it.
  */
-function PrestigeTierMark({ level, size = 24 }: { level: number; size?: number }) {
-  const tier = Math.max(1, Math.min(PRESTIGE_LEVELS.length, level));
-  const metal = PRESTIGE_TIER_COLORS[tier] ?? COLORS.gold;
-  const id = useMemo(() => gradId('prestigeTier'), []);
-  // The mark now sits on a LIGHT gilded disc (PrestigeMedallion), so it reads
-  // as struck relief: a warm ink outline carries the silhouette at any tier
-  // metal, and the star body keeps a bright-to-mid ramp inside it. Drawing the
-  // laurel/pips in the metal itself was what made bronze vanish.
-  const INK = '#3a2007';
-  const pipSpan = tier * 2.6 + (tier - 1) * 0.9;
+const BEZEL_SPECULARS = [
+  { cx: 26.5, cy: 14.4, rx: 9.4, ry: 3.1, rot: -35, o: 0.88 },
+  { cx: 12.8, cy: 30.7, rx: 5.4, ry: 2.3, rot: -65, o: 0.55 },
+  { cx: 67.3, cy: 10.8, rx: 5.0, ry: 2.1, rot: 25, o: 0.5 },
+  { cx: 76.4, cy: 79.4, rx: 6.6, ry: 2.5, rot: -40, o: 0.34 },
+] as const;
+
+/** Roman numeral composition per prestige tier. */
+const NUMERAL_GLYPHS: Record<number, ReadonlyArray<'I' | 'V'>> = {
+  1: ['I'],
+  2: ['I', 'I'],
+  3: ['I', 'I', 'I'],
+  4: ['I', 'V'],
+  5: ['V'],
+};
+
+/** Serifed slab strokes — drawn, never typeset, so no font ships with them. */
+const GLYPH_PATH = {
+  I: 'M-3.8 -13 H3.8 M0 -13 V13 M-3.8 13 H3.8',
+  V: 'M-8.5 -13 L0 13 L8.5 -13',
+} as const;
+const GLYPH_WIDTH = { I: 7.6, V: 17 } as const;
+const GLYPH_GAP = 4;
+
+/** Centre the numeral's glyph run on x = 0; caller translates to the field. */
+function numeralLayout(tier: number): Array<{ g: 'I' | 'V'; x: number }> {
+  const glyphs = NUMERAL_GLYPHS[tier] ?? NUMERAL_GLYPHS[1];
+  const total =
+    glyphs.reduce((sum, g) => sum + GLYPH_WIDTH[g], 0) + GLYPH_GAP * (glyphs.length - 1);
+  let cursor = -total / 2;
+  return glyphs.map((g) => {
+    const x = cursor + GLYPH_WIDTH[g] / 2;
+    cursor += GLYPH_WIDTH[g] + GLYPH_GAP;
+    return { g, x };
+  });
+}
+
+/** One laurel branch in relief: a dark under-copy offset down-right, then the lit copy. */
+function LaurelBranch({ metal, mirrored }: { metal: string; mirrored?: boolean }) {
+  const lit = shade(metal, 62);
+  const body = shade(metal, 8);
+  const cast = shade(metal, -74);
+  const flip = mirrored ? 'translate(100, 0) scale(-1, 1)' : undefined;
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <DuoGrad id={id} from={shade(metal, 70)} to={shade(metal, -30)} />
-      <Path d="M7.1 19.6 C4.2 16.9 3.3 12.2 5.5 8.2" stroke={INK} strokeWidth={1.4} strokeLinecap="round" fill="none" />
-      <Path d="M16.9 19.6 C19.8 16.9 20.7 12.2 18.5 8.2" stroke={INK} strokeWidth={1.4} strokeLinecap="round" fill="none" />
-      {LAUREL_LEAVES.map(([x, y], i) => (
+    <G transform={flip} opacity={0.95}>
+      {/* Cast copy — offset down-right; this is the whole relief illusion. */}
+      <G transform="translate(1.1, 1.2)" opacity={0.75}>
+        <Path d={LAUREL_STEM} stroke={cast} strokeWidth={2.2} strokeLinecap="round" fill="none" />
+        {LAUREL_LEAVES.map(([cx, cy, rot], i) => (
+          <Ellipse
+            key={`c${i}`}
+            cx={cx}
+            cy={cy}
+            rx={4.6}
+            ry={2.3}
+            fill={cast}
+            transform={`rotate(${rot}, ${cx}, ${cy})`}
+          />
+        ))}
+      </G>
+      <Path d={LAUREL_STEM} stroke={body} strokeWidth={1.9} strokeLinecap="round" fill="none" />
+      {LAUREL_LEAVES.map(([cx, cy, rot], i) => (
         <React.Fragment key={i}>
-          <Circle cx={x} cy={y} r={1.2} fill={shade(metal, -26)} stroke={INK} strokeWidth={0.5} />
-          <Circle cx={24 - x} cy={y} r={1.2} fill={shade(metal, -26)} stroke={INK} strokeWidth={0.5} />
+          <Ellipse
+            cx={cx}
+            cy={cy}
+            rx={4.6}
+            ry={2.3}
+            fill={body}
+            stroke={cast}
+            strokeWidth={0.45}
+            transform={`rotate(${rot}, ${cx}, ${cy})`}
+          />
+          {/* Upper-left facet of each leaf — the struck highlight. */}
+          <Ellipse
+            cx={cx - 0.7}
+            cy={cy - 0.7}
+            rx={2.6}
+            ry={0.95}
+            fill={lit}
+            opacity={0.85}
+            transform={`rotate(${rot}, ${cx}, ${cy})`}
+          />
         </React.Fragment>
       ))}
-      <Path
-        d="M12 4.4 L13.41 8.26 L17.52 8.41 L14.28 10.94 L15.41 14.89 L12 12.6 L8.59 14.89 L9.72 10.94 L6.48 8.41 L10.59 8.26 Z"
-        fill={`url(#${id})`}
-        stroke={INK}
-        strokeWidth={1}
-        strokeLinejoin="round"
-      />
-      <Circle cx={10.9} cy={7.6} r={0.9} fill="rgba(255,255,255,0.75)" />
-      {Array.from({ length: tier }, (_, i) => {
-        const sx = 12 - pipSpan / 2 + i * 3.5;
-        return (
-          <Path
-            key={i}
-            d={`M${sx} 19.4 l1.3 1.6 l1.3 -1.6`}
-            stroke={INK}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-        );
-      })}
-    </Svg>
+    </G>
   );
 }
 
 /**
- * PrestigeMedallion — the marquee unlockable's shell. DrawnMedallion's
- * near-black gem body (rgba(8,2,22,.92)) turned the prestige emblem into an
- * empty circle on the gilded card, so this variant swaps in a struck-gold
- * disc: cream→amber→bronze fill, a thin bright inner rim that separates the
- * medallion from the card behind it, and the tier metal kept for the outer
- * ring + glow so Bronze…Legendary still read apart.
+ * The tier numeral, genuinely engraved: a dark wall on the upper-left of the
+ * groove, a bright catch on its lower-right lip, and a dim interior between
+ * them. Three offset passes of the same stroke, in that order.
  */
-function PrestigeMedallion({
+function EngravedNumeral({ tier, metal }: { tier: number; metal: string }) {
+  const layout = numeralLayout(tier);
+  const passes = [
+    { dx: -1.2, dy: -1.3, color: shade(metal, -96), w: 5.4, o: 0.92 },
+    { dx: 1.4, dy: 1.5, color: shade(metal, 118), w: 5.4, o: 0.72 },
+    { dx: 0, dy: 0, color: shade(metal, -58), w: 4, o: 1 },
+  ] as const;
+  return (
+    <G>
+      {passes.map((pass, pi) =>
+        layout.map(({ g, x }, gi) => (
+          <Path
+            key={`${pi}-${gi}`}
+            d={GLYPH_PATH[g]}
+            transform={`translate(${50 + x + pass.dx}, ${49 + pass.dy})`}
+            stroke={pass.color}
+            strokeWidth={pass.w}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={pass.o}
+            fill="none"
+          />
+        )),
+      )}
+    </G>
+  );
+}
+
+/**
+ * PrestigeMedal — the headline unlockable, struck rather than printed.
+ *
+ * Layer order (all in one 100×100 viewBox so it holds together at 40px and
+ * 62px alike): cast shadow → raised outer bezel with bevelled arcs → recessed
+ * field (gradient INVERTED against the bezel, which is what makes the eye read
+ * a dish) → inner raised ring → laurels in relief → engraved tier numeral →
+ * specular hits riding the bezel tangent.
+ */
+function PrestigeMedal({
+  level,
   size = 62,
-  metal = COLORS.gold,
   style,
-  children,
 }: {
+  level: number;
   size?: number;
-  metal?: string;
   style?: object;
-  children: React.ReactNode;
 }) {
-  const inset = Math.max(2, size * 0.055);
+  const tier = Math.max(1, Math.min(PRESTIGE_LEVELS.length, level));
+  const metal = PRESTIGE_TIER_COLORS[tier] ?? COLORS.gold;
+  const ids = useMemo(() => {
+    const n = gradId('medal');
+    return { bezel: `${n}-b`, field: `${n}-f`, ring: `${n}-r` };
+  }, []);
+  const edge = shade(metal, -88);
   return (
     <View
       style={[
         {
           width: size,
           height: size,
-          borderRadius: size / 2,
-          borderWidth: 2,
-          borderColor: shade(metal, 34),
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          backgroundColor: '#e8bd63',
           shadowColor: metal,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.75,
-          shadowRadius: size * 0.28,
-          elevation: 8,
+          shadowOffset: { width: 0, height: size * 0.05 },
+          shadowOpacity: 0.6,
+          shadowRadius: size * 0.24,
+          elevation: 9,
         },
         style ?? null,
       ]}
     >
-      <LinearGradient
-        colors={['#fff4d2', '#f0c574', '#b87a2c']}
-        locations={[0, 0.52, 1]}
-        start={{ x: 0.3, y: 0 }}
-        end={{ x: 0.7, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-      {/* Thin bright inner rim — the separation line from the gilded card. */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: inset,
-          left: inset,
-          right: inset,
-          bottom: inset,
-          borderRadius: (size - inset * 2) / 2,
-          borderWidth: 1,
-          borderColor: 'rgba(255,252,240,0.92)',
-        }}
-      />
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          top: size * 0.09,
-          left: size * 0.24,
-          right: size * 0.24,
-          height: size * 0.12,
-          borderRadius: size * 0.06,
-          backgroundColor: 'rgba(255,255,255,0.5)',
-        }}
-      />
-      {children}
+      <Svg width={size} height={size} viewBox="0 0 100 100">
+        <Defs>
+          {/* Raised: lit at the top, falling into shadow at the base. */}
+          <SvgLinearGradient id={ids.bezel} x1="0.25" y1="0" x2="0.75" y2="1">
+            <Stop offset="0" stopColor={shade(metal, 104)} />
+            <Stop offset="0.42" stopColor={shade(metal, 26)} />
+            <Stop offset="1" stopColor={shade(metal, -72)} />
+          </SvgLinearGradient>
+          {/* Recessed: the same ramp inverted, so the field sits below. */}
+          <SvgLinearGradient id={ids.field} x1="0.3" y1="0" x2="0.7" y2="1">
+            <Stop offset="0" stopColor={shade(metal, -54)} />
+            <Stop offset="0.55" stopColor={shade(metal, 4)} />
+            <Stop offset="1" stopColor={shade(metal, 60)} />
+          </SvgLinearGradient>
+          <SvgLinearGradient id={ids.ring} x1="0.3" y1="0" x2="0.7" y2="1">
+            <Stop offset="0" stopColor={shade(metal, 116)} />
+            <Stop offset="1" stopColor={shade(metal, -46)} />
+          </SvgLinearGradient>
+        </Defs>
+
+        {/* Cast shadow onto the card. */}
+        <Circle cx={50} cy={56} r={44.5} fill="rgba(6,1,16,0.55)" />
+        <Circle cx={50} cy={53} r={44.5} fill="rgba(6,1,16,0.32)" />
+
+        {/* Outer bezel + its rim line. */}
+        <Circle cx={50} cy={48} r={45} fill={`url(#${ids.bezel})`} stroke={edge} strokeWidth={1.3} />
+        {/* Bevel: bright along the upper-left arc, dark along the lower-right. */}
+        <Path
+          d="M13.1 73.8 A45 45 0 0 1 69 7.2"
+          stroke="rgba(255,255,255,0.62)"
+          strokeWidth={2.1}
+          strokeLinecap="round"
+          fill="none"
+        />
+        <Path
+          d="M86.9 22.2 A45 45 0 1 1 31 88.8"
+          stroke="rgba(24,8,0,0.42)"
+          strokeWidth={2.1}
+          strokeLinecap="round"
+          fill="none"
+        />
+
+        {/* Recessed field, with a hard inner shoulder where the bezel drops. */}
+        <Circle cx={50} cy={48} r={37} fill={`url(#${ids.field})`} />
+        <Path
+          d="M19.7 69.2 A37 37 0 0 1 65.6 14.5"
+          stroke="rgba(22,8,0,0.5)"
+          strokeWidth={1.9}
+          strokeLinecap="round"
+          fill="none"
+        />
+        <Path
+          d="M80.3 26.8 A37 37 0 1 1 34.4 81.5"
+          stroke="rgba(255,255,255,0.4)"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          fill="none"
+        />
+
+        {/* Inner raised ring around the field proper. */}
+        <Circle
+          cx={50}
+          cy={48}
+          r={32}
+          fill="none"
+          stroke={`url(#${ids.ring})`}
+          strokeWidth={2.6}
+        />
+        <Circle cx={50} cy={48} r={33.5} fill="none" stroke={edge} strokeWidth={0.7} opacity={0.55} />
+        <Circle cx={50} cy={48} r={30.4} fill="none" stroke={edge} strokeWidth={0.7} opacity={0.4} />
+
+        <LaurelBranch metal={metal} />
+        <LaurelBranch metal={metal} mirrored />
+        <EngravedNumeral tier={tier} metal={metal} />
+
+        {BEZEL_SPECULARS.map((s, i) => (
+          <Ellipse
+            key={i}
+            cx={s.cx}
+            cy={s.cy}
+            rx={s.rx}
+            ry={s.ry}
+            fill="#fffdf4"
+            opacity={s.o}
+            transform={`rotate(${s.rot}, ${s.cx}, ${s.cy})`}
+          />
+        ))}
+      </Svg>
     </View>
   );
 }
@@ -950,6 +1189,20 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     [contextPlayer, playerProp],
   );
   const initial = useMemo(() => p.name.charAt(0).toUpperCase(), [p.name]);
+  // The single biggest number gets the metallic treatment, so the stat block
+  // has a focal point instead of six equal-weight rectangles.
+  const topStatKey = useMemo<string | null>(() => {
+    let bestKey: string | null = null;
+    let bestVal = 0;
+    for (const stat of STAT_CARDS) {
+      const raw = Number((p as any)[stat.key] ?? 0);
+      if (Number.isFinite(raw) && raw > bestVal) {
+        bestVal = raw;
+        bestKey = stat.key;
+      }
+    }
+    return bestKey;
+  }, [p]);
 
   // Achievement badges must FILL their card, not float inside it. The grid is
   // 3 columns of `achievementCard` (width 31%) inside the scaffold's 16px
@@ -1199,9 +1452,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               />
-              <PrestigeMedallion metal={PRESTIGE_TIER_COLORS[prestigeLevel] ?? COLORS.gold} size={40}>
-                <PrestigeTierMark level={prestigeLevel} size={26} />
-              </PrestigeMedallion>
+              <PrestigeMedal level={prestigeLevel} size={40} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.prestigeBadgeLabel}>{prestigeDef.label}</Text>
                 <Text style={styles.prestigeBadgeMultiplier}>
@@ -1269,9 +1520,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 end={{ x: 0.5, y: 1 }}
                 pointerEvents="none"
               />
-              <PrestigeMedallion metal={COLORS.gold} size={62}>
-                <PrestigeTierMark level={nextPrestige} size={44} />
-              </PrestigeMedallion>
+              <PrestigeMedal level={nextPrestige} size={62} />
               <View style={styles.prestigeCardBody}>
                 <Text style={styles.prestigeCardHeadline}>PRESTIGE</Text>
                 {PRESTIGE_BENEFITS.map((benefit) => (
@@ -1290,31 +1539,60 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       {/* Stats — accent-tinted gem tiles with medallion icons */}
       <SectionHeader label="STATISTICS" accent={COLORS.cyan} />
       <View style={styles.statsGrid}>
-        {STAT_CARDS.map((stat) => (
-          <View
-            key={stat.key}
-            style={[
-              styles.statCard,
-              { borderColor: stat.accent + '3d', shadowColor: stat.accent },
-            ]}
-            accessibilityRole="text"
-            accessibilityLabel={`${stat.label}: ${(p as any)[stat.key]?.toLocaleString?.() ?? 0}`}
-          >
-            <LinearGradient
-              colors={[stat.accent + '24', 'rgba(26,10,46,0.94)'] as [string, string]}
-              style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-            />
-            <DrawnMedallion accent={stat.accent} size={38} style={{ marginBottom: 8 }}>
-              <StatGlyph statKey={stat.key} accent={stat.accent} size={19} />
-            </DrawnMedallion>
-            <Text style={styles.statValue}>
-              {(p as any)[stat.key]?.toLocaleString?.() ?? 0}
-            </Text>
-            <Text style={styles.statLabel}>{stat.label}</Text>
-          </View>
-        ))}
+        {STAT_CARDS.map((stat) => {
+          const fam = STAT_FAMILY_STYLE[stat.family];
+          const isTop = stat.key === topStatKey;
+          return (
+            <View
+              key={stat.key}
+              style={[
+                styles.statCard,
+                { borderColor: stat.accent + '3d', shadowColor: stat.accent },
+                isTop && { borderColor: stat.accent + '7a' },
+              ]}
+              accessibilityRole="text"
+              accessibilityLabel={`${stat.label}: ${(p as any)[stat.key]?.toLocaleString?.() ?? 0}`}
+            >
+              <LinearGradient
+                colors={fam.wash(stat.accent)}
+                locations={[0, 0.55, 1]}
+                style={[StyleSheet.absoluteFill, { borderRadius: RADIUS.xl }]}
+                start={fam.start}
+                end={fam.end}
+              />
+              <StatOrnament kind={fam.ornament} accent={stat.accent} />
+              <DrawnMedallion accent={stat.accent} size={38} style={{ marginBottom: 8 }}>
+                <StatGlyph statKey={stat.key} accent={stat.accent} size={19} />
+              </DrawnMedallion>
+              <View style={styles.statValueWrap}>
+                {/* Metallic sheen — only the leading stat earns the polish. */}
+                {isTop && (
+                  <LinearGradient
+                    colors={[
+                      'rgba(255,255,255,0)',
+                      'rgba(255,255,255,0.30)',
+                      'rgba(255,255,255,0)',
+                    ]}
+                    locations={[0.12, 0.5, 0.88]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[StyleSheet.absoluteFill, { borderRadius: 5 }]}
+                  />
+                )}
+                <Text style={[styles.statValue, isTop && styles.statValueTop]}>
+                  {(p as any)[stat.key]?.toLocaleString?.() ?? 0}
+                </Text>
+              </View>
+              <LinearGradient
+                colors={[stat.accent + '00', stat.accent + 'a6', stat.accent + '00']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={[styles.statRule, { width: fam.ruleWidth }]}
+              />
+              <Text style={styles.statLabel}>{stat.label}</Text>
+            </View>
+          );
+        })}
       </View>
       {/* Achievements */}
       <SectionHeader
@@ -1709,14 +1987,70 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
   },
+  // Corner ornaments — one mark per metric family, top-right of the tile.
+  statOrnSlot: {
+    position: 'absolute',
+    top: 7,
+    right: 8,
+    alignItems: 'flex-end',
+  },
+  statOrnFacet: {
+    width: 7,
+    height: 7,
+    borderWidth: 1.2,
+    transform: [{ rotate: '45deg' }],
+  },
+  statOrnChevron: {
+    width: 7,
+    height: 7,
+    borderTopWidth: 1.3,
+    borderRightWidth: 1.3,
+    transform: [{ rotate: '-45deg' }],
+  },
+  statOrnPipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  statOrnPip: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+  },
+  statOrnNotch: {
+    width: 9,
+    height: 9,
+    borderTopWidth: 1.2,
+    borderRightWidth: 1.2,
+  },
+  statValueWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderRadius: 5,
+  },
   statValue: {
     fontSize: 20,
     fontFamily: FONTS.display,
     color: COLORS.textPrimary,
+    // Tabular figures so the numbers across the 3-column grid align on their
+    // digit columns instead of jittering with each new score.
+    fontVariant: ['tabular-nums'],
     marginBottom: 2,
     textShadowColor: 'rgba(255,255,255,0.2)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 6,
+  },
+  statValueTop: {
+    color: '#fff7e2',
+    textShadowColor: 'rgba(255,214,140,0.9)',
+    textShadowRadius: 9,
+  },
+  /** Hairline rule between value and label; width varies by metric family. */
+  statRule: {
+    height: 1,
+    borderRadius: 1,
+    marginBottom: 5,
   },
   statLabel: {
     fontSize: 9,
