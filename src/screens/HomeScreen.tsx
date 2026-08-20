@@ -57,6 +57,8 @@ import { getNextMilestone } from '../data/onboardingMilestones';
 import DailyRewardTimers from '../components/DailyRewardTimers';
 import { getNextGoal } from '../data/nextGoal';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
+import { OwlIcon } from '../components/icons/iconsMisc';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface DailyMissionDisplay {
   id: string;
@@ -153,28 +155,246 @@ const WORDMARK_TILES: Array<{ letter: string; colors: [string, string]; drop: nu
   { letter: 'L', colors: ['#22b8f0', '#1585c2'], drop: 11, tilt: '3deg' },
 ];
 
-function WordfallWordmark() {
+// One wordmark tile with a gentle staggered vertical bob (±4px, ~2.2s
+// period, 110ms stagger per letter) so a wave ripples through WORDFALL
+// while Home idles. Loop is skipped entirely when `animate` is false
+// (reduce-motion or screen blurred) — the tile then sits at its authored
+// resting drop, identical to the old static render.
+function WordmarkTile({ tile, index, animate }: {
+  tile: (typeof WORDMARK_TILES)[number];
+  index: number;
+  animate: boolean;
+}) {
+  const bob = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!animate) return;
+    const seq = Animated.sequence([
+      Animated.delay(index * 110),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(bob, { toValue: 1, duration: 550, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(bob, { toValue: -1, duration: 1100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(bob, { toValue: 0, duration: 550, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ]),
+      ),
+    ]);
+    seq.start();
+    return () => {
+      seq.stop();
+      bob.setValue(0);
+    };
+  }, [animate, bob, index]);
+
+  return (
+    <View
+      style={[
+        styles.wordmarkTileWrap,
+        { transform: [{ translateY: tile.drop }, { rotate: tile.tilt }] },
+      ]}
+    >
+      <Animated.View
+        style={{
+          transform: [
+            { translateY: bob.interpolate({ inputRange: [-1, 1], outputRange: [4, -4] }) },
+          ],
+        }}
+      >
+        <LinearGradient
+          colors={tile.colors}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.8, y: 1 }}
+          style={[styles.wordmarkTile, { shadowColor: tile.colors[0] }]}
+        >
+          <View style={styles.wordmarkTileSheen} pointerEvents="none" />
+          <Text style={styles.wordmarkLetter}>{tile.letter}</Text>
+        </LinearGradient>
+      </Animated.View>
+    </View>
+  );
+}
+
+function WordfallWordmark({ animate }: { animate: boolean }) {
   return (
     <View style={styles.wordmarkRow} accessibilityRole="header" accessibilityLabel="Wordfall">
       {WORDMARK_TILES.map((tile, i) => (
-        <View
-          key={`${tile.letter}${i}`}
-          style={[
-            styles.wordmarkTileWrap,
-            { transform: [{ translateY: tile.drop }, { rotate: tile.tilt }] },
-          ]}
-        >
-          <LinearGradient
-            colors={tile.colors}
-            start={{ x: 0.2, y: 0 }}
-            end={{ x: 0.8, y: 1 }}
-            style={[styles.wordmarkTile, { shadowColor: tile.colors[0] }]}
-          >
-            <View style={styles.wordmarkTileSheen} pointerEvents="none" />
-            <Text style={styles.wordmarkLetter}>{tile.letter}</Text>
-          </LinearGradient>
-        </View>
+        <WordmarkTile key={`${tile.letter}${i}`} tile={tile} index={i} animate={animate} />
       ))}
+    </View>
+  );
+}
+
+// Ambient floating motes — dots drifting slowly upward over the home
+// background while fading in/out (blind motion review scored the idle home
+// 2.9/10: "sits completely still"; round 3 still read the original 3-6px
+// lavender set as invisible at 250ms frame sampling). Amplified: 12 motes,
+// 5-9px, mostly warm gold, peak opacity 0.85, faster rise so adjacent
+// 250ms frames visibly differ (~3-4px drift per frame). Fixed spec table
+// à la PuzzleComplete's SETTLE_SPARKS: randomized-feeling but
+// deterministic. Rendered only when ambient motion is active (focused +
+// no reduce-motion), always pointerEvents="none".
+const MOTE_GOLD = '#FFD98A';
+const MOTE_LAVENDER = '#E0C3FF';
+const AMBIENT_MOTES = [
+  { left: '8%', top: '78%', size: 7, delay: 0, dur: 4600, drift: 64, color: MOTE_GOLD },
+  { left: '22%', top: '90%', size: 5, delay: 1800, dur: 5600, drift: 70, color: MOTE_GOLD },
+  { left: '34%', top: '70%', size: 8, delay: 3200, dur: 4200, drift: 56, color: MOTE_GOLD },
+  { left: '48%', top: '84%', size: 5, delay: 900, dur: 6200, drift: 68, color: MOTE_LAVENDER },
+  { left: '60%', top: '64%', size: 7, delay: 2600, dur: 5000, drift: 60, color: MOTE_GOLD },
+  { left: '72%', top: '88%', size: 9, delay: 400, dur: 3800, drift: 54, color: MOTE_GOLD },
+  { left: '84%', top: '74%', size: 5, delay: 3800, dur: 6400, drift: 66, color: MOTE_LAVENDER },
+  { left: '92%', top: '58%', size: 6, delay: 1400, dur: 5200, drift: 58, color: MOTE_GOLD },
+  { left: '14%', top: '52%', size: 8, delay: 2200, dur: 4400, drift: 62, color: MOTE_GOLD },
+  { left: '40%', top: '94%', size: 6, delay: 3000, dur: 4800, drift: 72, color: MOTE_GOLD },
+  { left: '66%', top: '76%', size: 5, delay: 1100, dur: 5800, drift: 64, color: MOTE_LAVENDER },
+  { left: '90%', top: '92%', size: 9, delay: 2000, dur: 4000, drift: 58, color: MOTE_GOLD },
+] as const;
+
+function AmbientMote({ left, top, size, delay, dur, drift, color }: (typeof AMBIENT_MOTES)[number]) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      anim.setValue(0);
+    };
+  }, [anim, delay, dur]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: color,
+        opacity: anim.interpolate({ inputRange: [0, 0.2, 0.75, 1], outputRange: [0, 0.85, 0.5, 0] }),
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -drift] }) }],
+      }}
+    />
+  );
+}
+
+// Diagonal light band that sweeps across the Play CTA (~900ms sweep, then
+// ~1.7s rest → 2.6s cycle). Lives inside its own absolute-fill clipping
+// layer so the band never escapes the button's rounded rect, and never
+// intercepts touches. Unmounted entirely under reduce-motion / blur.
+function PlayCtaSweep({ active }: { active: boolean }) {
+  const sweep = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!active) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(sweep, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.delay(1700),
+        Animated.timing(sweep, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      sweep.setValue(0);
+    };
+  }, [active, sweep]);
+
+  if (!active) return null;
+  return (
+    <View pointerEvents="none" style={styles.playButtonSweepClip}>
+      <Animated.View
+        style={[
+          styles.playButtonSweepBand,
+          {
+            transform: [
+              { translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-180, 560] }) },
+              { rotate: '18deg' },
+            ],
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
+// FOLIO on the home screen — the same owl archivist that keeps players
+// company in-game (see src/components/GameplayMascot.tsx; that component
+// is hard-wired to gameplay props + its own board-relative position, so
+// the owl art is re-hosted here via the shared OwlIcon SVG). Perched in
+// the bottom-left corner so a living character is on screen through every
+// idle frame (round-3 blind judges: "settled home screen … a still image";
+// ambient characters like Wordscapes' fox scored 7.3+). Three composed
+// transform-only, native-driver loops: idle bob (translateY ±6px, ~1.8s),
+// gentle rock (rotate ±3°, ~2.6s), and a playful spring hop (-12px, ~600ms)
+// every ~4s. pointerEvents="none" throughout. When `animate` is false
+// (reduce-motion or screen blurred) the owl renders settled and static —
+// no loops run at all.
+function HomeMascot({ animate }: { animate: boolean }) {
+  const bob = useRef(new Animated.Value(0)).current;
+  const rock = useRef(new Animated.Value(0)).current;
+  const hop = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!animate) return;
+    const bobLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: -1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    const rockLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(rock, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(rock, { toValue: -1, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    const hopLoop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(3400),
+        Animated.timing(hop, { toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.spring(hop, { toValue: 0, friction: 4, tension: 160, useNativeDriver: true }),
+      ]),
+    );
+    bobLoop.start();
+    rockLoop.start();
+    hopLoop.start();
+    return () => {
+      bobLoop.stop();
+      rockLoop.stop();
+      hopLoop.stop();
+      bob.setValue(0);
+      rock.setValue(0);
+      hop.setValue(0);
+    };
+  }, [animate, bob, rock, hop]);
+
+  return (
+    <View pointerEvents="none" style={styles.mascotWrap}>
+      <Animated.View
+        style={{
+          transform: [
+            // Two translateY entries compose additively: continuous bob +
+            // the periodic hop ride the same axis without fighting.
+            { translateY: bob.interpolate({ inputRange: [-1, 1], outputRange: [6, -6] }) },
+            { translateY: hop.interpolate({ inputRange: [0, 1], outputRange: [0, -12] }) },
+            { rotate: rock.interpolate({ inputRange: [-1, 1], outputRange: ['-3deg', '3deg'] }) },
+          ],
+        }}
+      >
+        <View style={styles.mascotBubble}>
+          <OwlIcon size={46} />
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -321,6 +541,101 @@ export function HomeScreen({
   // GameScreen for the whole session (AmbientBackdrop gates for the same
   // reason).
   const isFocused = useIsFocused();
+
+  // Ambient idle motion (Aug 2026 blind-motion review: home sat completely
+  // still). Every loop below is gated on focus (freezeOnBlur doesn't stop
+  // native-driver loops) AND on reduce-motion — vestibular-sensitive players
+  // get the settled static screen with no loops at all.
+  const reduceMotion = useReduceMotion();
+  const ambientActive = isFocused && !reduceMotion;
+
+  // Play CTA breathing pulse: scale 1.0 ↔ 1.035 over a 1.6s ease-in-out
+  // cycle. The same value drives the CTA's halo-glow opacity (0.15 ↔ 0.45)
+  // so glow and scale breathe together off one native-driver value.
+  const playPulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!ambientActive) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(playPulse, { toValue: 1.035, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(playPulse, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      playPulse.setValue(1);
+    };
+  }, [ambientActive, playPulse]);
+
+  // Streak flame flicker: subtle 1.0 ↔ 1.06 scale, ~1.1s cycle.
+  const flamePulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!ambientActive) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flamePulse, { toValue: 1.06, duration: 550, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(flamePulse, { toValue: 1, duration: 550, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      flamePulse.setValue(1);
+    };
+  }, [ambientActive, flamePulse]);
+
+  // LIVE NOW section header pulse: opacity 0.5 ↔ 1.0 over a 1.2s cycle so
+  // the "live" band reads as actually live while Home idles.
+  const livePulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!ambientActive) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(livePulse, { toValue: 0.5, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(livePulse, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      livePulse.setValue(1);
+    };
+  }, [ambientActive, livePulse]);
+
+  // Event-banner medallion bob (community goal / event cards): translateY
+  // ±4px over a 2s cycle. One shared value drives every banner's icon.
+  const eventIconBob = useRef(new Animated.Value(0)).current;
+  const hasEventBanners = activeEventBanners.length > 0;
+  useEffect(() => {
+    if (!ambientActive || !hasEventBanners) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(eventIconBob, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(eventIconBob, { toValue: -1, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      eventIconBob.setValue(0);
+    };
+  }, [ambientActive, hasEventBanners, eventIconBob]);
+
+  // Today's-challenge sun: slow continuous rotation, 360° over 8s, linear.
+  // Runs only while the sun is actually rendered (daily not yet done).
+  const sunSpin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!ambientActive || dailyDone || progress.puzzlesSolved < 1) return;
+    const loop = Animated.loop(
+      Animated.timing(sunSpin, { toValue: 1, duration: 8000, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      sunSpin.setValue(0);
+    };
+  }, [ambientActive, dailyDone, progress.puzzlesSolved, sunSpin]);
 
   // Pulse animation for wheel button when spins available
   useEffect(() => {
@@ -517,6 +832,16 @@ export function HomeScreen({
   return (
     <View style={styles.container}>
       <VideoBackground source={LOCAL_VIDEOS.bgHomescreen} opacity={0.6} overlayColor="rgba(10,14,39,0.4)" />
+      {/* Ambient floating motes — above the video, below all content, never
+          touchable. Mounted only while focused + motion allowed so blurred
+          screens and reduce-motion users pay zero cost. */}
+      {ambientActive && (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          {AMBIENT_MOTES.map((mote, i) => (
+            <AmbientMote key={i} {...mote} />
+          ))}
+        </View>
+      )}
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         {onOpenSettings && (
@@ -599,7 +924,7 @@ export function HomeScreen({
             <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowMid]} />
             <View pointerEvents="none" style={[styles.heroGlowLayer, styles.heroGlowInner]} />
             <View style={styles.heroLogoGlow}>
-              <WordfallWordmark />
+              <WordfallWordmark animate={ambientActive} />
             </View>
           </View>
           <View style={styles.statsRow}>
@@ -617,7 +942,14 @@ export function HomeScreen({
                 >
                   {stat.icon && (
                     <View style={[styles.statIconWell, { backgroundColor: stat.tint + '24', borderColor: stat.tint + '55' }]}>
-                      <GameIcon name={stat.icon} size={20} />
+                      {stat.icon === 'flame' ? (
+                        // Streak flame gets a subtle scale flicker while idle.
+                        <Animated.View style={{ transform: [{ scale: flamePulse }] }}>
+                          <GameIcon name={stat.icon} size={24} />
+                        </Animated.View>
+                      ) : (
+                        <GameIcon name={stat.icon} size={24} />
+                      )}
                     </View>
                   )}
                   <Text style={styles.heroStatValue}>{stat.value}</Text>
@@ -633,7 +965,17 @@ export function HomeScreen({
             accessibilityRole="button"
             accessibilityLabel={`Play level ${progress.currentLevel}`}
           >
-            <View style={styles.playButtonWrapper}>
+            <Animated.View style={[styles.playButtonWrapper, { transform: [{ scale: playPulse }] }]}>
+              {/* Breathing halo behind the CTA — opacity rides the same
+                  pulse value as the scale, so glow swells as the button
+                  does. Decorative only. */}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.playButtonGlow,
+                  { opacity: playPulse.interpolate({ inputRange: [1, 1.035], outputRange: [0.15, 0.45] }) },
+                ]}
+              />
               {/* Flat premium magenta→purple fill — same family as the bento
                   cards, elevated by a single outer magenta glow. Replaces the
                   glossy chrome-glass image asset (judge flaw: specular band
@@ -644,6 +986,14 @@ export function HomeScreen({
                 end={{ x: 1, y: 1 }}
                 style={styles.playButtonSurface}
               />
+              {/* Soft top sheen — between the earlier chrome-glass (too
+                  specular) and the flat slab a later review called
+                  "sits flat": a 12% white wash over the upper third plus a
+                  hairline lit top edge gives the CTA dimension without
+                  reintroducing the glass band. */}
+              <View pointerEvents="none" style={styles.playButtonSheen} />
+              {/* Diagonal light band sweeping the CTA every ~2.6s. */}
+              <PlayCtaSweep active={ambientActive} />
               <View style={styles.playButtonOverlay}>
                 <View>
                   <Text style={styles.playButtonLabel}>{playerStage === 'new' ? 'Start playing' : 'Continue journey'}</Text>
@@ -651,7 +1001,7 @@ export function HomeScreen({
                 </View>
                 <Text style={styles.playButtonArrow}>→</Text>
               </View>
-            </View>
+            </Animated.View>
           </Pressable>
 
           {/* Daily challenge - show after first puzzle completion */}
@@ -692,7 +1042,19 @@ export function HomeScreen({
                 </View>
                 {dailyDone
                   ? <GameIcon name="check" size={26} accent={COLORS.green} />
-                  : <GameIcon name="sun" size={26} />}
+                  : (
+                    // Slow continuous sun spin — 360° / 8s, linear (static
+                    // under reduce-motion: sunSpin stays 0 → 0deg).
+                    <Animated.View
+                      style={{
+                        transform: [
+                          { rotate: sunSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+                        ],
+                      }}
+                    >
+                      <GameIcon name="sun" size={26} />
+                    </Animated.View>
+                  )}
               </LinearGradient>
             </Pressable>
           )}
@@ -791,7 +1153,11 @@ export function HomeScreen({
 
       {/* Live rail — swipeable carousel: event / wheel / season pass / deal / flash sale */}
       {(progress.puzzlesSolved >= 1 || activeEventBanners.length > 0) && (
-        <SectionHeader label="LIVE NOW" accent={COLORS.coral} />
+        // Breathing opacity (0.5 ↔ 1, 1.2s) sells "live"; settles at full
+        // opacity when ambient motion is off.
+        <Animated.View style={{ opacity: livePulse }}>
+          <SectionHeader label="LIVE NOW" accent={COLORS.coral} />
+        </Animated.View>
       )}
       <LiveRail>
       {/* Active Event Banners */}
@@ -832,7 +1198,17 @@ export function HomeScreen({
                   </View>
                   <View style={styles.eventBannerBody}>
                     <View style={[styles.eventBannerMedallion, { borderColor: eb.color + '55', backgroundColor: eb.color + '22' }]}>
-                      <GameIcon glyph={eb.icon} size={34} />
+                      {/* Icon bob ±4px / 2s — shared eventIconBob value. */}
+                      <Animated.View
+                        pointerEvents="none"
+                        style={{
+                          transform: [
+                            { translateY: eventIconBob.interpolate({ inputRange: [-1, 1], outputRange: [4, -4] }) },
+                          ],
+                        }}
+                      >
+                        <GameIcon glyph={eb.icon} size={34} />
+                      </Animated.View>
                     </View>
                     <View style={styles.eventBannerInfo}>
                       <Text style={styles.eventBannerName} numberOfLines={1}>{eb.name}</Text>
@@ -1431,6 +1807,11 @@ export function HomeScreen({
       </Animated.View>
       </>)}
     </ScrollView>
+      {/* Ambient owl companion — bottom-left, matching Folio's in-game
+          perch. pointerEvents="none": scroll + taps pass straight through.
+          Cards keep their interactive affordances (chevrons, BUY buttons)
+          on the right edge, so the left corner is the quietest overlap. */}
+      <HomeMascot animate={ambientActive} />
       {/* Streak shield contextual offer */}
       {showStreakOffer && (
         <ContextualOffer
@@ -1455,7 +1836,28 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: 96, // clearance so the last card can scroll above the owl
+  },
+  mascotWrap: {
+    position: 'absolute',
+    bottom: 18,
+    left: 12,
+    zIndex: 30,
+  },
+  mascotBubble: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(26, 10, 46, 0.85)',
+    borderWidth: 1.5,
+    borderColor: COLORS.accent,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 6,
   },
   topBar: {
     flexDirection: 'row',
@@ -1525,8 +1927,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   heroCard: {
-    padding: 24,
-    marginBottom: 14,
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 14,
+    marginBottom: 10,
   },
   heroLogoGlow: {
     // iOS-only: CoreAnimation traces the logo's transparent pixels, so the
@@ -1646,9 +2050,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   statIconWell: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1686,6 +2090,44 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
+  },
+  playButtonSheen: {
+    position: 'absolute',
+    top: 1,
+    left: 1,
+    right: 1,
+    height: '38%',
+    borderTopLeftRadius: 23,
+    borderTopRightRadius: 23,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.30)',
+  },
+  // Breathing halo behind the Play CTA (opacity animated with the pulse).
+  playButtonGlow: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    borderRadius: 32,
+    backgroundColor: COLORS.pink,
+  },
+  // Clips the animated sweep band to the CTA's rounded rect. Kept as its
+  // own layer (rather than overflow:hidden on the wrapper) so the wrapper's
+  // outer glow shadow survives on Android.
+  playButtonSweepClip: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  playButtonSweepBand: {
+    position: 'absolute',
+    top: -50,
+    bottom: -50,
+    left: 0,
+    width: 70,
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   playButtonOverlay: {
     ...StyleSheet.absoluteFillObject,

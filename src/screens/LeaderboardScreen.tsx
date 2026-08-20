@@ -18,6 +18,7 @@ import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import { getLevelConfigExtended } from '../engine/puzzleGenerator';
 import ScreenScaffold from '../components/common/ScreenScaffold';
 import IconMedallion from '../components/common/IconMedallion';
+import AvatarPortrait from '../components/cosmetics/AvatarPortrait';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { logger } from '../utils/logger';
@@ -150,14 +151,23 @@ interface LeaderboardScreenProps {
 // Design primitives (screen-local)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Metallic specs for the crafted gold / silver / bronze rank medallions. */
+/** Metallic specs for the crafted gold / silver / bronze rank medallions.
+ *  `edge` is the thin dark rim that sells the coin as struck metal; `score`
+ *  is the podium score tint (lighter than the raw metal so it stays legible
+ *  on the dark-violet card surface). */
 const MEDAL_SPECS: Record<
   number,
-  { metal: readonly [string, string, string]; glow: string; text: string; ring: string }
+  {
+    metal: readonly [string, string, string];
+    glow: string;
+    text: string;
+    edge: string;
+    score: string;
+  }
 > = {
-  1: { metal: ['#fff3c4', '#ffd24d', '#a86f00'], glow: COLORS.gold, text: '#3a2600', ring: 'rgba(255,222,120,0.95)' },
-  2: { metal: ['#ffffff', '#c9d3e6', '#7e8ca6'], glow: COLORS.chrome, text: '#1f2738', ring: 'rgba(226,234,248,0.95)' },
-  3: { metal: ['#f4b880', '#cd7f32', '#7a4715'], glow: '#e08e3c', text: '#331c04', ring: 'rgba(235,164,96,0.95)' },
+  1: { metal: ['#fff3c4', '#ffd24d', '#a86f00'], glow: COLORS.gold, text: '#3a2600', edge: 'rgba(122,80,0,0.92)', score: COLORS.goldLight },
+  2: { metal: ['#ffffff', '#c9d3e6', '#7e8ca6'], glow: COLORS.chrome, text: '#1f2738', edge: 'rgba(90,104,132,0.92)', score: COLORS.chromeHighlight },
+  3: { metal: ['#f4b880', '#cd7f32', '#7a4715'], glow: '#e08e3c', text: '#331c04', edge: 'rgba(104,60,16,0.92)', score: '#f2a55e' },
 };
 
 /**
@@ -185,8 +195,8 @@ function RankMedallion({ rank, size = 34 }: { rank: number; size?: number }) {
         width: size,
         height: size,
         borderRadius: size / 2,
-        borderWidth: 1.5,
-        borderColor: spec.ring,
+        borderWidth: 1,
+        borderColor: spec.edge,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
@@ -198,10 +208,12 @@ function RankMedallion({ rank, size = 34 }: { rank: number; size?: number }) {
         elevation: 8,
       }}
     >
+      {/* Struck-coin shading: lit crown at top falling to a dark lower rim,
+          held in by the thin dark edge border above. */}
       <LinearGradient
         colors={[...spec.metal]}
-        start={{ x: 0.2, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
       {/* Glass top highlight */}
@@ -242,38 +254,58 @@ const AVATAR_HUE_PAIRS: ReadonlyArray<readonly [string, string]> = [
   [COLORS.orange, COLORS.purple],
 ];
 
-function nameHuePair(name: string): readonly [string, string] {
+function hashSeed(seed: string): number {
   let h = 5381;
-  for (let i = 0; i < name.length; i++) {
-    h = ((h * 33) ^ name.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = ((h * 33) ^ seed.charCodeAt(i)) >>> 0;
   }
-  return AVATAR_HUE_PAIRS[h % AVATAR_HUE_PAIRS.length];
+  return h;
 }
 
 /**
- * GlassAvatar — "monogram gem". Layered gradient disc with a per-player hue
- * (derived deterministically from the name hash), radial-ish inner highlight,
- * tinted gradient ring, and display-font initial with a hue glow. Podium rows
- * pass `rim` to wrap the gem in a metallic ring matching their rank metal.
+ * Hue pair is salted DIFFERENTLY from the portrait pose seed (see
+ * `GlassAvatar`), so two names that collide onto the same pose still land on
+ * different ring colors instead of reading as a copy-pasted avatar.
+ */
+function nameHuePair(name: string): readonly [string, string] {
+  return AVATAR_HUE_PAIRS[hashSeed(name + '#hue') % AVATAR_HUE_PAIRS.length];
+}
+
+/**
+ * GlassAvatar — illustrated player gem. The inner disc hosts the bespoke
+ * `AvatarPortrait` keeper art, seeded deterministically by the player's name
+ * (so a given name always shows the same character), backdrop-tinted by the
+ * same per-player hue pair that colors the gradient ring. Ranked rows pass
+ * `rank` so the pose seed mixes in a rank bucket — with only six poses and six
+ * hue pairs, adjacent rows otherwise collide onto identical pose+hue combos.
+ * Podium rows pass `rim` to wrap the gem in a metallic ring matching their
+ * rank metal, which also feeds the portrait's rim light.
  */
 function GlassAvatar({
   name,
   size = 36,
   highlighted = false,
+  rank,
   rim,
 }: {
   name: string;
   size?: number;
   highlighted?: boolean;
+  rank?: number;
   rim?: readonly [string, string, string];
 }) {
   const [hueA, hueB] = highlighted
     ? ([COLORS.accentLight, COLORS.accent] as const)
     : nameHuePair(name);
   const hue = highlighted ? COLORS.accent : hueA;
+  // The current user's gem stays seeded by name ALONE so their character is
+  // stable across every screen (EditProfile hero, sticky bar, list row).
+  const portraitSeed =
+    !highlighted && rank != null ? `${name}#${rank % 3}` : name;
   const ringColors: readonly [string, string, string] =
     rim ?? ([hueA, hueB, hueA + 'D9'] as const);
   const pad = 1.5;
+  const inner = size - pad * 2;
   return (
     <View
       style={{
@@ -295,45 +327,36 @@ function GlassAvatar({
       >
         <View
           style={{
-            flex: 1,
-            borderRadius: (size - pad * 2) / 2,
+            width: inner,
+            height: inner,
+            borderRadius: inner / 2,
             overflow: 'hidden',
-            alignItems: 'center',
-            justifyContent: 'center',
             backgroundColor: 'rgba(8, 2, 22, 0.95)',
           }}
         >
-          <LinearGradient
-            colors={[hueA + '8C', hueB + '2E', 'rgba(8, 2, 22, 0.94)']}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
+          {/* Illustrated keeper portrait — deterministic per name, so each
+              player keeps a stable character instead of a letter initial.
+              Podium rims lend the portrait their metal as its rim light. */}
+          <AvatarPortrait
+            size={inner}
+            accent={hue}
+            variant={portraitSeed}
+            rimColor={rim ? rim[0] : undefined}
           />
-          {/* Radial-ish top highlight */}
+          {/* Glass sheen keeps the gem language over the art */}
           <View
+            pointerEvents="none"
             style={{
               position: 'absolute',
-              top: size * 0.05,
+              top: size * 0.04,
               left: size * 0.16,
               right: size * 0.16,
-              height: size * 0.3,
-              borderRadius: size * 0.15,
-              backgroundColor: 'rgba(255,255,255,0.20)',
+              height: size * 0.22,
+              borderRadius: size * 0.11,
+              backgroundColor: 'rgba(255,255,255,0.14)',
               transform: [{ scaleY: 0.55 }],
             }}
           />
-          <Text
-            style={{
-              fontFamily: FONTS.display,
-              fontSize: size * 0.46,
-              color: COLORS.textPrimary,
-              textShadowColor: hue,
-              textShadowOffset: { width: 0, height: 1 },
-              textShadowRadius: 3,
-            }}
-          >
-            {name.charAt(0).toUpperCase()}
-          </Text>
         </View>
       </LinearGradient>
     </View>
@@ -790,7 +813,12 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
         <View style={styles.rankContainer}>
           <RankMedallion rank={entry.rank} size={30} />
         </View>
-        <GlassAvatar name={entry.name} size={36} highlighted={isCurrentUser} />
+        <GlassAvatar
+          name={entry.name}
+          size={36}
+          highlighted={isCurrentUser}
+          rank={entry.rank}
+        />
         <View style={styles.listInfo}>
           <Text
             style={[styles.listName, isCurrentUser && styles.listNameHighlight]}
@@ -1154,6 +1182,7 @@ const LeaderboardScreen: React.FC<
             ? ([COLORS.accentLight, COLORS.accent, COLORS.accentDark] as const)
             : spec.metal;
           const glow = isMe ? COLORS.accent : spec.glow;
+          const scoreColor = isMe ? COLORS.accentLight : spec.score;
 
           return (
             // Metallic gradient border frame — glow scaled by rank.
@@ -1178,17 +1207,23 @@ const LeaderboardScreen: React.FC<
                 style={[styles.topCard, isFirst && styles.topCardFirst]}
               >
                 {isFirst && (
+                  // Crown glow only: the gold breath stays a thin band behind
+                  // the medallion. A full-card gold wash over the violet
+                  // surface read as murky brown — the card body stays clean
+                  // dark violet and gold lives on the rim/coin/score.
                   <Animated.View
                     pointerEvents="none"
-                    style={[
-                      StyleSheet.absoluteFillObject,
-                      {
-                        opacity: championPulse.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.12, 0.5],
-                        }),
-                      },
-                    ]}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '40%',
+                      opacity: championPulse.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.1, 0.32],
+                      }),
+                    }}
                   >
                     <LinearGradient
                       colors={[...GRADIENTS.goldShine] as [string, string, string]}
@@ -1204,6 +1239,7 @@ const LeaderboardScreen: React.FC<
                   name={entry.name}
                   size={isFirst ? 56 : 44}
                   highlighted={isMe}
+                  rank={entry.rank}
                   rim={metal}
                 />
                 <Text style={styles.topName} numberOfLines={1}>
@@ -1214,7 +1250,7 @@ const LeaderboardScreen: React.FC<
                   style={[
                     styles.topScore,
                     {
-                      color: glow,
+                      color: scoreColor,
                       textShadowColor: glow + '60',
                       textShadowOffset: { width: 0, height: 0 },
                       textShadowRadius: 8,
@@ -1845,6 +1881,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     alignItems: 'center',
     overflow: 'hidden',
+    // Opaque violet floor: the surfaceCard gradient is ~12% translucent, and
+    // compositing it straight over the metallic frame let gold bleed through
+    // as a muddy brown. Ground it on the app's card violet instead.
+    backgroundColor: '#1d0b36',
   },
   topCardFirst: {
     paddingVertical: 20,

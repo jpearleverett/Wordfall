@@ -104,24 +104,26 @@ describe('feel-polish — cellPositionToScreen math', () => {
 });
 
 describe('feel-polish — multi-tile bloom capping', () => {
-  const MAX_BLOOM_PARTICLES = 24;
+  // Mirrors GameScreen's MAX_BLOOM_PARTICLES (36 → 48 in burst v2,
+  // round-3 blind review: bursts still read as "sparse particles").
+  const MAX_BLOOM_PARTICLES = 48;
 
   function computeTileCount(wordLen: number, perTile: number): number {
     const maxTiles = Math.max(1, Math.floor(MAX_BLOOM_PARTICLES / perTile));
     return Math.min(wordLen, maxTiles);
   }
 
-  it('caps a 10-letter word with perTile=2 at 12 tiles (<=24 particles)', () => {
-    expect(computeTileCount(10, 2)).toBe(10); // 10*2=20 <= 24
+  it('lets a 10-letter word with perTile=2 bloom every tile (<=48 particles)', () => {
+    expect(computeTileCount(10, 2)).toBe(10); // 10*2=20 <= 48
   });
 
-  it('caps a 20-letter degenerate word with perTile=2 at 12 tiles', () => {
-    // Should never exceed MAX_BLOOM_PARTICLES / perTile = 12.
-    expect(computeTileCount(20, 2)).toBe(12);
+  it('caps a 30-letter degenerate word with perTile=2 at 24 tiles', () => {
+    // Should never exceed MAX_BLOOM_PARTICLES / perTile = 24.
+    expect(computeTileCount(30, 2)).toBe(24);
   });
 
-  it('honors perTile=1 all the way up to 24 cells', () => {
-    expect(computeTileCount(30, 1)).toBe(24);
+  it('honors perTile=1 all the way up to 48 cells', () => {
+    expect(computeTileCount(60, 1)).toBe(48);
   });
 
   it('never drops below 1 tile', () => {

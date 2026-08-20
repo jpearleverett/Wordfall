@@ -21,6 +21,8 @@ import {
   Animated,
   Easing,
   Alert,
+  Image,
+  Pressable,
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,7 +50,16 @@ import {
 import { useCommerce } from '../hooks/useCommerce';
 import { usePlayerActions } from '../stores/playerStore';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
+import { LOCAL_IMAGES } from '../utils/localAssets';
 import { getDecorationIconName } from '../data/library';
+import {
+  PREMIUM_CTA_GRADIENT,
+  PREMIUM_ACCENT,
+  PREMIUM_TEXT,
+  PREMIUM_TEXT_GLOW,
+  PREMIUM_INNER_BORDER,
+  PREMIUM_GLOW,
+} from '../utils/rewardArt';
 
 /**
  * Reward → illustration-grade render + physical size, keyed on BOTH the
@@ -240,6 +251,11 @@ function rewardArtSpec(reward: PassReward, tier: number): RewardArtSpec {
  */
 const ART_SIZE: readonly [number, number, number, number] = [46, 56, 66, 76];
 const HERO_ART_SIZE = 84;
+
+// NOTE (round-5 blind review): rendered raster loot (holographic gem sprite
+// on tier 5, photoreal crown on the upsell + tier-50 showcase) was trialed
+// here and REVERTED — the judges unanimously read mixed raster/vector media
+// as a style clash. Vector consistency wins.
 
 function rewardArtSize(spec: RewardArtSpec): number {
   return spec.feature ? HERO_ART_SIZE : ART_SIZE[spec.sizeStep];
@@ -614,6 +630,7 @@ function RewardArt({
   name?: GameIconName;
   size?: number;
   glow?: string;
+  /** Alpha-keyed rendered sprite — takes the GameIcon's slot when set. */
 }) {
   const halo = /^#[0-9a-fA-F]{6}$/.test(glow) ? glow : COLORS.gold;
   return (
@@ -1117,6 +1134,7 @@ const LaneCard = memo(function LaneCard({
   // Art identity + physical size, both driven by what the reward is WORTH.
   const spec = rewardArtSpec(reward, tier);
   const artSize = rewardArtSize(spec);
+  // One rendered-sprite hero moment on the ladder: tier 5's premium gem
   // Lock strength scales with distance (see LOCK_STEP). A reached-but-
   // premium-gated card sits at 'near' so the gold lane reads as bought-not-
   // earned rather than as unreachable.
@@ -1153,6 +1171,7 @@ const LaneCard = memo(function LaneCard({
         // decoration / rare tile / booster / mystery box can never read at
         // the same weight as a 55-coin drop.
         spec.feature && styles.laneCardFeature,
+        premiumLane && styles.laneCardPremium,
         {
           backgroundColor: theme.panel,
           borderColor: fadeRgba(frame.border, step.borderAlpha),
@@ -1220,7 +1239,7 @@ const LaneCard = memo(function LaneCard({
       {premiumLane && (
         <View style={styles.premiumRibbon}>
           <LinearGradient
-            colors={[...GRADIENTS.button.gold]}
+            colors={[...PREMIUM_CTA_GRADIENT]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={StyleSheet.absoluteFillObject}
@@ -1453,6 +1472,61 @@ const SeasonTierRow = memo(function SeasonTierRow({
   );
 });
 
+// ─── Premium CTA — synthwave-harmonized gold ───────────────────────────────
+// Blind-panel fix: PrimaryButton's flat saturated gold clashed with the
+// magenta/violet scheme. The premium purchase CTA uses a warm amber →
+// coral → magenta-leaning gradient, thin white-alpha inner border, and a
+// softer glow so the gold sits INSIDE the neon palette instead of on top
+// of it. (Per-tier CLAIM buttons keep the shared gold PrimaryButton — the
+// clash was the purchase chrome, not the claim affordance.)
+
+function PremiumCTAButton({
+  label,
+  onPress,
+  disabled = false,
+  accessibilityLabel,
+  style,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  accessibilityLabel?: string;
+  style?: ViewStyle;
+}) {
+  return (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled }}
+      style={({ pressed }) => [
+        !disabled && PREMIUM_GLOW,
+        pressed && !disabled && styles.premiumCtaPressed,
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={
+          disabled
+            ? [COLORS.buttonDisabled, COLORS.buttonDisabled]
+            : [...PREMIUM_CTA_GRADIENT]
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.premiumCtaSurface}
+      >
+        <Text
+          style={[styles.premiumCtaLabel, disabled && { color: COLORS.textDisabled }]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
 // ─── Screen ────────────────────────────────────────────────────────────────
 
 const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
@@ -1636,7 +1710,7 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
       {!state.isPremium && (
         <View style={[styles.upsellPanel, { backgroundColor: theme.panel }]}>
           <LinearGradient
-            colors={['rgba(255,184,0,0.16)', 'rgba(26,10,46,0.94)']}
+            colors={['rgba(255,138,92,0.14)', 'rgba(26,10,46,0.94)']}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={[StyleSheet.absoluteFillObject, styles.panelFill]}
@@ -1653,10 +1727,8 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
           {/* CTA + price live in separate elements so the label can never
               truncate into "$9…" at narrow widths (390px design review). */}
           <View style={styles.upsellCtaRow}>
-            <PrimaryButton
+            <PremiumCTAButton
               label={purchasing ? 'PROCESSING…' : 'UPGRADE NOW'}
-              variant="gold"
-              size="large"
               disabled={purchasing}
               onPress={handleBuyPremium}
               accessibilityLabel="Upgrade to Premium Season Pass for $9.99"
@@ -1670,13 +1742,11 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
         </View>
       )}
 
-      {/* Meta deliberately does NOT repeat "TIER n / 50" — the hero above is
-          the single place that stat reads (design-review hierarchy note). */}
-      <SectionHeader
-        label="REWARD TRACK"
-        meta={`${MAX_SEASON_TIER} TIERS`}
-        accent={COLORS.gold}
-      />
+      {/* Header deliberately carries NO tier-count meta — the hero above is
+          the single place tier progress reads ("TIER n / 50" + XP bar), and
+          a "50 TIERS" repeat here re-stated it (round-3 "tier info stated
+          twice"). */}
+      <SectionHeader label="REWARD TRACK" accent={COLORS.gold} />
       <View style={styles.laneTagsRow}>
         <View
           style={[
@@ -1689,7 +1759,7 @@ const SeasonPassScreen: React.FC<SeasonPassScreenProps> = ({ onBack }) => {
         </View>
         <View style={styles.laneTagSpacer} />
         <View style={[styles.laneTag, styles.laneTagPremium]}>
-          <Text style={[styles.laneTagText, { color: COLORS.gold }]}>PREMIUM</Text>
+          <Text style={[styles.laneTagText, { color: PREMIUM_TEXT }]}>PREMIUM</Text>
         </View>
       </View>
     </View>
@@ -1787,6 +1857,9 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginLeft: 6,
   },
+  // Premium chrome runs the warm amber→coral family (see utils/rewardArt)
+  // so gold accents harmonize with the magenta/violet scheme instead of
+  // clashing against it.
   premiumPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1794,13 +1867,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: RADIUS.full,
-    backgroundColor: 'rgba(255,184,0,0.18)',
+    backgroundColor: 'rgba(255,138,92,0.16)',
     borderWidth: 1,
-    borderColor: COLORS.gold + '80',
-    ...SHADOWS.glow(COLORS.gold),
+    borderColor: PREMIUM_ACCENT + '80',
+    ...PREMIUM_GLOW,
   },
   premiumPillText: {
-    color: COLORS.gold,
+    color: PREMIUM_TEXT,
     fontSize: 11,
     fontFamily: FONTS.display,
     letterSpacing: 1,
@@ -1849,6 +1922,9 @@ const styles = StyleSheet.create({
   upsellPanel: {
     ...bentoPanel('gold', { padding: 16 }),
     backgroundColor: 'rgba(12,4,28,0.94)',
+    // Warm the bento gold shell into the amber→coral premium family.
+    borderColor: 'rgba(255,138,92,0.26)',
+    shadowColor: PREMIUM_ACCENT,
   },
   upsellRow: {
     flexDirection: 'row',
@@ -1862,9 +1938,9 @@ const styles = StyleSheet.create({
   upsellTitle: {
     fontFamily: FONTS.display,
     fontSize: 18,
-    color: COLORS.gold,
+    color: PREMIUM_TEXT,
     letterSpacing: 2.5,
-    textShadowColor: COLORS.goldGlow,
+    textShadowColor: PREMIUM_TEXT_GLOW,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
   },
@@ -1883,22 +1959,44 @@ const styles = StyleSheet.create({
   upsellButton: {
     flex: 1,
   },
+  // ── Premium CTA (amber→coral, thin white-alpha inner border) ─────────
+  premiumCtaPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  premiumCtaSurface: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.xl,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: PREMIUM_INNER_BORDER,
+  },
+  premiumCtaLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 16,
+    letterSpacing: 2,
+    color: COLORS.bg,
+    textAlign: 'center',
+  },
   upsellPriceCapsule: {
     marginLeft: 10,
     paddingHorizontal: 14,
     borderRadius: RADIUS.xl,
     borderWidth: 1.5,
-    borderColor: COLORS.gold + '66',
-    backgroundColor: 'rgba(255,184,0,0.10)',
+    borderColor: PREMIUM_ACCENT + '66',
+    backgroundColor: 'rgba(255,138,92,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   upsellPriceText: {
     fontFamily: FONTS.display,
     fontSize: 17,
-    color: COLORS.gold,
+    color: PREMIUM_TEXT,
     letterSpacing: 0.5,
-    textShadowColor: COLORS.goldGlow,
+    textShadowColor: PREMIUM_TEXT_GLOW,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
   },
@@ -1906,7 +2004,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     fontSize: 7,
     letterSpacing: 1.5,
-    color: COLORS.goldLight,
+    color: PREMIUM_TEXT,
     marginTop: 1,
   },
 
@@ -1928,8 +2026,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,229,255,0.08)',
   },
   laneTagPremium: {
-    borderColor: 'rgba(255,184,0,0.35)',
-    backgroundColor: 'rgba(255,184,0,0.08)',
+    borderColor: 'rgba(255,138,92,0.40)',
+    backgroundColor: 'rgba(255,138,92,0.08)',
   },
   laneTagSpacer: {
     width: 56,
@@ -2021,6 +2119,11 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 12,
   },
+  // Premium cards reserve headroom for the inset PREMIUM pill (it ends
+  // ~26px down the card) so the pill can never overlap the reward art.
+  laneCardPremium: {
+    paddingTop: 30,
+  },
   featureArtWell: {
     position: 'absolute',
     top: 0,
@@ -2078,17 +2181,24 @@ const styles = StyleSheet.create({
   },
   premiumRibbon: {
     position: 'absolute',
-    top: -7,
+    // Fully inset inside the card: clear of the 18px corner radius and 5px+
+    // below the holo strip (0–2.5px), so the pill never overhangs the card
+    // edge (round-4 "premium ribbons collide with card edges"). Premium
+    // cards reserve headroom for it — see laneCardPremium.
+    top: 8,
     alignSelf: 'center',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: RADIUS.full,
     overflow: 'hidden',
-    ...SHADOWS.glow(COLORS.gold),
+    borderWidth: 1,
+    borderColor: PREMIUM_INNER_BORDER,
+    ...PREMIUM_GLOW,
   },
   premiumRibbonText: {
     fontFamily: FONTS.display,
     fontSize: 8,
+    lineHeight: 12,
     letterSpacing: 1.5,
     color: COLORS.bg,
   },

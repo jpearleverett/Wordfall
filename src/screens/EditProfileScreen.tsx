@@ -22,6 +22,8 @@ import ScreenScaffold from '../components/common/ScreenScaffold';
 import SectionHeader from '../components/common/SectionHeader';
 import ThemePreview from '../components/cosmetics/ThemePreview';
 import { ProfileFrameArt } from '../components/cosmetics/ProfileFrameArt';
+import AvatarPortrait from '../components/cosmetics/AvatarPortrait';
+import { resolveFrameArt } from '../components/cosmetics/frameArtCatalog';
 import { bentoPanel, bentoDividerColor } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
@@ -48,6 +50,32 @@ const RARITY_COLORS: Record<string, string> = {
   epic: COLORS.rarityEpic,
   legendary: COLORS.rarityLegendary,
 };
+
+const HEX6 = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Blend two #rrggbb colors — `t` is the weight of `toward` (0 = pure `hex`).
+ * Only used to tune portrait BACKDROP accents; rings, frames and badges keep
+ * their true theme/rarity colors. Non-6-digit inputs pass through untouched.
+ */
+function mixHex(hex: string, toward: string, t: number): string {
+  if (!HEX6.test(hex) || !HEX6.test(toward)) return hex;
+  const a = parseInt(hex.slice(1), 16);
+  const b = parseInt(toward.slice(1), 16);
+  const ch = (shift: number) =>
+    Math.round(((a >> shift) & 0xff) * (1 - t) + ((b >> shift) & 0xff) * t);
+  return '#' + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0');
+}
+
+/**
+ * Hot red/orange theme accents make the hero portrait's synthwave backdrop
+ * read harsh against the dark screen, so every backdrop accent is pulled 50%
+ * toward the app violet. The frame ring around it keeps the TRUE rarity
+ * color — only the portrait's sky/sun tint softens.
+ */
+function softenAccent(hex: string): string {
+  return mixHex(hex, COLORS.purple, 0.5);
+}
 
 const LIST_GAP = 12;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -338,7 +366,6 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
   );
 
   const frameRarityColor = RARITY_COLORS[equippedFrameData.rarity] ?? COLORS.rarityCommon;
-  const initial = playerName.charAt(0).toUpperCase();
 
   // Hero avatar glow pulse — mirrors ProfileScreen's legendary ring treatment.
   // Legendary frames get the full breathing pulse; everything else keeps a
@@ -445,25 +472,19 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
                 />
-                <LinearGradient
-                  colors={[rarityColor + '40', 'rgba(8,2,22,0)']}
+                {/* The player's own keeper portrait inside each ring — same
+                    name seed as the hero, backdrop-tinted by the frame art's
+                    accent (nudged toward the rarity color so frames that
+                    share an accent hex still get distinct backdrops) and
+                    rim-lit in its rarity metal, so every card previews "you,
+                    wearing this frame" instead of a monogram. */}
+                <AvatarPortrait
+                  size={67}
+                  accent={mixHex(resolveFrameArt(frame.id).accent, rarityColor, 0.35)}
+                  variant={playerName}
+                  rimColor={rarityColor}
                   style={StyleSheet.absoluteFill}
-                  start={{ x: 0.5, y: 0 }}
-                  end={{ x: 0.5, y: 0.85 }}
                 />
-                <View style={styles.avatarGlyphStack}>
-                  <Text style={[styles.framePreviewLetter, styles.framePreviewLetterUnder]}>
-                    {initial}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.framePreviewLetter,
-                      { textShadowColor: rarityColor + 'B3' },
-                    ]}
-                  >
-                    {initial}
-                  </Text>
-                </View>
               </View>
             </ProfileFrameArt>
           </View>
@@ -492,7 +513,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
         </Pressable>
       );
     },
-    [isOwned, equippedFrame, handleEquipFrame, initial],
+    [isOwned, equippedFrame, handleEquipFrame, playerName],
   );
 
   const renderThemeItem = useCallback(
@@ -578,6 +599,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
       accent={COLORS.accent}
       backdrop="profile"
       onBack={() => navigation?.goBack()}
+      contentStyle={styles.scrollContent}
     >
       {/* Live Preview — dominant hero card. The equipped theme paints a
           full-bleed gradient across the card top so the preview reads as a
@@ -657,30 +679,20 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
               />
-              {/* Rarity-tinted radial-ish wash + bottom counter-glow */}
-              <LinearGradient
-                colors={[frameRarityColor + '3D', 'rgba(8,2,22,0)']}
+              {/* Illustrated keeper portrait — the same name-seeded character
+                  other screens (leaderboard rows) show for this player, so the
+                  hero reads as real identity art instead of a monogram
+                  placeholder. The backdrop tints from the equipped THEME's
+                  accent (softened toward the app violet so hot-red themes
+                  don't clash) and the rim light from the equipped frame's
+                  rarity, so both equip choices retint the preview live. */}
+              <AvatarPortrait
+                size={116}
+                accent={softenAccent(equippedThemeData.colors.accent)}
+                variant={playerName}
+                rimColor={frameRarityColor}
                 style={StyleSheet.absoluteFill}
-                start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 0.72 }}
               />
-              <LinearGradient
-                colors={['rgba(8,2,22,0)', frameRarityColor + '20']}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0.5, y: 0.45 }}
-                end={{ x: 0.5, y: 1 }}
-              />
-              {/* Subtle geometric backdrop — orbit ring + rotated diamonds */}
-              <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                <View style={[styles.avatarOrbit, { borderColor: frameRarityColor + '26' }]} />
-                <View style={[styles.avatarDiamond, { borderColor: frameRarityColor + '30' }]} />
-                <View style={styles.avatarDiamondSmall} />
-              </View>
-              {/* Dual-layer bevel monogram + glass top shine */}
-              <View style={styles.avatarGlyphStack}>
-                <Text style={[styles.avatarLetter, styles.avatarLetterUnder]}>{initial}</Text>
-                <Text style={[styles.avatarLetter, { color: equippedThemeData.colors.accent }]}>{initial}</Text>
-              </View>
               <View style={styles.avatarShine} pointerEvents="none" />
             </View>
           </Animated.View>
@@ -830,6 +842,12 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
 };
 
 const styles = StyleSheet.create({
+  // Bottom clearance for the floating tab bar (64px bar + gesture-nav inset)
+  // so the last section's final rows scroll fully into view instead of
+  // resting clipped beneath it.
+  scrollContent: {
+    paddingBottom: 120,
+  },
   // Preview card
   previewClip: {
     overflow: 'hidden',
@@ -899,61 +917,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-  },
-  avatarLetter: {
-    fontSize: 52,
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    textShadowColor: COLORS.accentGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
-  // Dark offset copy rendered UNDER the lit glyph — reads as a bevel edge.
-  avatarLetterUnder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    color: 'rgba(5,0,16,0.65)',
-    textShadowColor: 'transparent',
-    textShadowRadius: 0,
-    transform: [{ translateY: 2.5 }, { translateX: 1.5 }],
-  },
-  avatarGlyphStack: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Low-alpha geometric backdrop inside the 94px disc (clipped by the circle).
-  avatarOrbit: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: 8,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 1,
-  },
-  avatarDiamond: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: 24,
-    width: 68,
-    height: 68,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    transform: [{ rotate: '45deg' }],
-  },
-  avatarDiamondSmall: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: 36,
-    width: 44,
-    height: 44,
-    borderWidth: 1,
-    borderRadius: 8,
-    borderColor: 'rgba(255,255,255,0.09)',
-    transform: [{ rotate: '45deg' }],
   },
   avatarShine: {
     position: 'absolute',
@@ -1052,13 +1015,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  framePreviewLetter: {
-    fontSize: 25,
-    fontFamily: FONTS.display,
-    color: COLORS.textPrimary,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
-  },
   // Locked frame preview: dimmed to ~55% but still fully drawn.
   framePreviewLockedDim: {
     opacity: 0.55,
@@ -1067,17 +1023,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-  },
-  framePreviewLetterUnder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    color: 'rgba(5,0,16,0.6)',
-    textShadowColor: 'transparent',
-    textShadowRadius: 0,
-    transform: [{ translateY: 1.5 }, { translateX: 1 }],
   },
   frameName: {
     fontSize: 12,

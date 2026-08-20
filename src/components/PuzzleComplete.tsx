@@ -153,35 +153,374 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
   );
 }
 
-function AnimatedScore({ targetScore }: { targetScore: number }) {
+function AnimatedScore({
+  targetScore,
+  startDelay = 0,
+  reduceMotion = false,
+}: {
+  targetScore: number;
+  startDelay?: number;
+  reduceMotion?: boolean;
+}) {
   const [displayScore, setDisplayScore] = useState(0);
+  // Landing pulse: 1 → 1.12 → 1 when the count-up resolves, so the final
+  // number "lands" instead of just stopping.
+  const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const duration = 800;
     const steps = 20;
     let step = 0;
-    const interval = setInterval(() => {
-      step += 1;
-      const progress = step / steps;
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
-      setDisplayScore(Math.round(targetScore * easedProgress));
-      // Coin-tally tick on every other step, pitch rising with progress —
-      // the classic mobile-game "score pour" sound. Finishes on a bright
-      // resolve chord when the total lands.
-      if (step % 2 === 0 && step < steps) {
-        void soundManager.playSound('bonusCountdownTick', { rate: 1 + progress * 0.5 });
-      }
-      if (step >= steps) {
-        setDisplayScore(targetScore);
-        clearInterval(interval);
-        void soundManager.playSound('bonusCountdownEnd');
-      }
-    }, duration / steps);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    // Hold at 0 until the score panel has faded in — counting inside an
+    // invisible panel wastes the payoff.
+    const startTimer = setTimeout(() => {
+      interval = setInterval(() => {
+        step += 1;
+        const progress = step / steps;
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+        setDisplayScore(Math.round(targetScore * easedProgress));
+        // Coin-tally tick on every other step, pitch rising with progress —
+        // the classic mobile-game "score pour" sound. Finishes on a bright
+        // resolve chord when the total lands.
+        if (step % 2 === 0 && step < steps) {
+          void soundManager.playSound('bonusCountdownTick', { rate: 1 + progress * 0.5 });
+        }
+        if (step >= steps) {
+          setDisplayScore(targetScore);
+          if (interval) clearInterval(interval);
+          void soundManager.playSound('bonusCountdownEnd');
+          if (!reduceMotion) {
+            Animated.sequence([
+              Animated.spring(pulse, { toValue: 1.12, friction: 4, tension: 320, useNativeDriver: true }),
+              Animated.spring(pulse, { toValue: 1, friction: 6, tension: 180, useNativeDriver: true }),
+            ]).start();
+          }
+        }
+      }, duration / steps);
+    }, startDelay);
 
-    return () => clearInterval(interval);
-  }, [targetScore]);
+    return () => {
+      clearTimeout(startTimer);
+      if (interval) clearInterval(interval);
+    };
+  }, [targetScore, startDelay, reduceMotion, pulse]);
 
-  return <Text style={styles.scoreValue}>{displayScore.toLocaleString()}</Text>;
+  return (
+    <Animated.View style={{ transform: [{ scale: pulse }] }}>
+      <Text style={styles.scoreValue}>{displayScore.toLocaleString()}</Text>
+    </Animated.View>
+  );
+}
+
+/**
+ * Ambient settle life — once the entrance choreography lands, the screen
+ * must never freeze (blind motion review: "results screen then fully
+ * static"). A soft breathing pulse for the primary CTA and a slow drifting
+ * sparkle field behind the card. Both loops skip under reduce-motion.
+ */
+function CtaPulse({
+  children,
+  reduceMotion,
+  to = 1.06,
+  duration = 700,
+  glowColor,
+}: {
+  children: React.ReactNode;
+  reduceMotion: boolean;
+  /** Peak scale of the breath (default 1.06 — visible at 250ms sampling). */
+  to?: number;
+  /** Half-period ms; full breath cycle is 2× this (default ~1.4s). */
+  duration?: number;
+  /** Optional halo plate behind the children whose opacity breathes
+      0.2↔0.55 in perfect sync with the scale pulse (same Animated.Value),
+      so the CTA visibly "glows" at strip scale instead of just resizing.
+      Under reduce motion the loop never starts and the halo rests at its
+      settled 0.2 opacity — static, no motion. */
+  glowColor?: string;
+}) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: to, duration, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, reduceMotion, to, duration]);
+  return (
+    <Animated.View style={{ transform: [{ scale: pulse }] }}>
+      {glowColor ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.ctaGlow,
+            {
+              backgroundColor: glowColor,
+              shadowColor: glowColor,
+              opacity: pulse.interpolate({ inputRange: [1, to], outputRange: [0.2, 0.55] }),
+            },
+          ]}
+        />
+      ) : null}
+      {children}
+    </Animated.View>
+  );
+}
+
+// 13 drifting sparks tuned to register even at coarse (250ms) frame
+// sampling: drift distances of 40-70px over 2.2-3.4s mean adjacent sampled
+// frames differ by ~4-8px, and peak opacities up to 0.9 read clearly
+// against the dark backdrop. Mix of white and warm gold (#FFD98A) tints.
+const SETTLE_SPARKS = [
+  { left: '10%', top: '16%', size: 7, delay: 0, dur: 2600, drift: 56, peak: 0.9, color: '#fff' },
+  { left: '86%', top: '22%', size: 5, delay: 600, dur: 3100, drift: 64, peak: 0.75, color: '#FFD98A' },
+  { left: '6%', top: '60%', size: 6, delay: 1200, dur: 2900, drift: 60, peak: 0.85, color: '#FFD98A' },
+  { left: '92%', top: '68%', size: 8, delay: 300, dur: 3300, drift: 70, peak: 0.8, color: '#fff' },
+  { left: '48%', top: '8%', size: 4, delay: 900, dur: 2400, drift: 44, peak: 0.7, color: '#fff' },
+  { left: '22%', top: '34%', size: 5, delay: 1500, dur: 2700, drift: 52, peak: 0.85, color: '#FFD98A' },
+  { left: '74%', top: '40%', size: 6, delay: 450, dur: 2500, drift: 48, peak: 0.9, color: '#fff' },
+  { left: '32%', top: '78%', size: 7, delay: 1050, dur: 3200, drift: 66, peak: 0.8, color: '#FFD98A' },
+  { left: '64%', top: '84%', size: 5, delay: 150, dur: 2800, drift: 58, peak: 0.75, color: '#fff' },
+  { left: '16%', top: '88%', size: 9, delay: 750, dur: 3400, drift: 68, peak: 0.7, color: '#FFD98A' },
+  { left: '82%', top: '52%', size: 4, delay: 1800, dur: 2300, drift: 42, peak: 0.85, color: '#fff' },
+  { left: '40%', top: '28%', size: 5, delay: 1350, dur: 2600, drift: 50, peak: 0.8, color: '#FFD98A' },
+  { left: '56%', top: '64%', size: 6, delay: 500, dur: 3000, drift: 62, peak: 0.9, color: '#fff' },
+] as const;
+
+function SettleSpark({ left, top, size, delay, dur, drift, peak, color, reduceMotion }: (typeof SETTLE_SPARKS)[number] & { reduceMotion: boolean }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: dur, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [anim, delay, dur, reduceMotion]);
+  if (reduceMotion) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: color,
+        opacity: anim.interpolate({ inputRange: [0, 0.2, 0.7, 1], outputRange: [0, peak, peak * 0.4, 0] }),
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -drift] }) }],
+      }}
+    />
+  );
+}
+
+// Confetti drizzle — 10 small gold/pink/teal flakes drifting from the card
+// top down to ~60% of its height in staggered 3.2-5s loops: a continuous
+// gentle celebration rain (vs. the one-shot ConfettiParticle burst at
+// entrance). Fall distances of 280-320px over those periods move each flake
+// 15-24px per 250ms sampled frame, with rotation + fade so adjacent frames
+// always differ visibly. Same const-spec-array pattern as SETTLE_SPARKS.
+const DRIZZLE_SPECS = [
+  { left: '6%', w: 6, h: 6, color: '#FFD24D', delay: 0, dur: 3600, fall: 300, spin: '340deg' },
+  { left: '16%', w: 5, h: 8, color: '#FF6FB5', delay: 1400, dur: 4200, fall: 320, spin: '-300deg' },
+  { left: '26%', w: 7, h: 7, color: '#2DD4BF', delay: 700, dur: 3200, fall: 280, spin: '280deg' },
+  { left: '36%', w: 5, h: 5, color: '#FFD24D', delay: 2100, dur: 4600, fall: 310, spin: '-360deg' },
+  { left: '47%', w: 6, h: 8, color: '#FF6FB5', delay: 350, dur: 3900, fall: 290, spin: '320deg' },
+  { left: '57%', w: 8, h: 8, color: '#FFD24D', delay: 1750, dur: 5000, fall: 320, spin: '-280deg' },
+  { left: '67%', w: 5, h: 7, color: '#2DD4BF', delay: 1050, dur: 3400, fall: 285, spin: '300deg' },
+  { left: '77%', w: 6, h: 6, color: '#FF6FB5', delay: 2450, dur: 4400, fall: 305, spin: '-320deg' },
+  { left: '87%', w: 7, h: 7, color: '#FFD24D', delay: 550, dur: 3700, fall: 295, spin: '360deg' },
+  { left: '93%', w: 5, h: 5, color: '#2DD4BF', delay: 1900, dur: 4800, fall: 315, spin: '-340deg' },
+] as const;
+
+function DrizzleFlake({ left, w, h, color, delay, dur, fall, spin, reduceMotion }: (typeof DRIZZLE_SPECS)[number] & { reduceMotion: boolean }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(anim, { toValue: 1, duration: dur, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [anim, delay, dur, reduceMotion]);
+  if (reduceMotion) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: -10,
+        left,
+        width: w,
+        height: h,
+        borderRadius: 1.5,
+        backgroundColor: color,
+        opacity: anim.interpolate({ inputRange: [0, 0.08, 0.7, 1], outputRange: [0, 0.9, 0.55, 0] }),
+        transform: [
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, fall] }) },
+          { rotate: anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', spin] }) },
+        ],
+      }}
+    />
+  );
+}
+
+/**
+ * Repeating diagonal shine sweep across the medal/stars row. A narrow
+ * rotated highlight band travels the row every ~2.4s (1.0s sweep + 1.4s
+ * rest). Lives in its own absolute overflow-hidden overlay on top of the
+ * row, so only the BAND is clipped — the stars' glow rings and neon bursts
+ * beneath are untouched. Decorative only: pointerEvents="none" throughout.
+ */
+function MedalGlint({ reduceMotion }: { reduceMotion: boolean }) {
+  const sweep = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1400),
+        Animated.timing(sweep, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sweep, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [sweep, reduceMotion]);
+  if (reduceMotion) return null;
+  return (
+    <View pointerEvents="none" style={styles.medalGlintClip}>
+      <Animated.View
+        style={[
+          styles.medalGlintBand,
+          {
+            opacity: sweep.interpolate({ inputRange: [0, 0.12, 0.88, 1], outputRange: [0, 1, 1, 0] }),
+            transform: [
+              { translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-90, 340] }) },
+              { rotate: '18deg' },
+            ],
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={['rgba(255,255,255,0)', 'rgba(255,241,200,0.65)', 'rgba(255,255,255,0)'] as [string, string, string]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
+/**
+ * Rotating victory rays — the classic AAA results-screen effect: two soft
+ * elongated gold beams crossing at the medal center, counter-rotating
+ * continuously (360° over 14s clockwise, 360° over 18s counter-clockwise).
+ * At 250ms frame sampling the 700px beam tips travel ~30-40px per sampled
+ * frame, so the motion registers while the 0.10-0.14 alpha fill keeps it
+ * ambient. Mounted as the FIRST child of the stars row so every medal
+ * paints on top; the card's overflow:hidden clips the beam ends at the
+ * card edge. Decorative only — pointerEvents="none", null under
+ * reduce motion.
+ */
+function VictoryRays({ reduceMotion }: { reduceMotion: boolean }) {
+  const spinA = useRef(new Animated.Value(0)).current;
+  const spinB = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loopA = Animated.loop(
+      Animated.timing(spinA, { toValue: 1, duration: 14000, easing: Easing.linear, useNativeDriver: true }),
+    );
+    const loopB = Animated.loop(
+      Animated.timing(spinB, { toValue: 1, duration: 18000, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loopA.start();
+    loopB.start();
+    return () => {
+      loopA.stop();
+      loopB.stop();
+    };
+  }, [spinA, spinB, reduceMotion]);
+  if (reduceMotion) return null;
+  return (
+    <View pointerEvents="none" style={styles.raysLayer}>
+      <Animated.View
+        style={[
+          styles.rayBeam,
+          {
+            backgroundColor: 'rgba(255,220,140,0.14)',
+            transform: [{ rotate: spinA.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }],
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.rayBeam,
+          {
+            backgroundColor: 'rgba(255,220,140,0.10)',
+            transform: [{ rotate: spinB.interpolate({ inputRange: [0, 1], outputRange: ['60deg', '-300deg'] }) }],
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
+/**
+ * Medal bounce ripple — every 3.2s each medal pulses scale 1→1.10→1, with
+ * a 140ms phase offset per medal so the bounce travels across the row as a
+ * wave. All three share the same 3200ms period (160 up + 240 down + 2800
+ * rest) so the stagger stays locked cycle after cycle. The one-time 1.6s
+ * lead-in lets the star pop-in reveal and the first MedalGlint sweep land
+ * before the ambient ripple takes over; the glint composes on top as a
+ * sibling overlay. No loop under reduce motion — medals rest at scale 1.
+ */
+function MedalRipple({
+  children,
+  reduceMotion,
+  offset,
+}: {
+  children: React.ReactNode;
+  reduceMotion: boolean;
+  /** Per-medal phase offset in ms (0 / 140 / 280 across the row). */
+  offset: number;
+}) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const anim = Animated.sequence([
+      Animated.delay(1600 + offset),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1, duration: 240, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+          Animated.delay(2800),
+        ]),
+      ),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [pulse, reduceMotion, offset]);
+  return <Animated.View style={{ transform: [{ scale: pulse }] }}>{children}</Animated.View>;
 }
 
 const MEDALLION_TICK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
@@ -583,6 +922,13 @@ export function PuzzleComplete({
   const statsAnim = useRef(new Animated.Value(0)).current;
   const actionsAnim = useRef(new Animated.Value(0)).current;
   const glitchAnim = useRef(new Animated.Value(0)).current;
+  // Root entrance (blind round-3 review: "hard cut between two results
+  // screens") — the card itself now fades 0→1 AND scales 0.93→1 with a
+  // ~350ms spring while the backdrop fades over 250ms, so the screen
+  // arrives instead of appearing. One-shot; under reduce motion it
+  // collapses to a plain 150ms fade with no scale.
+  const cardScaleAnim = useRef(new Animated.Value(0.93)).current;
+  const cardOpacityAnim = useRef(new Animated.Value(0)).current;
   const [starsRevealed, setStarsRevealed] = useState(false);
 
   // Progressive disclosure: the main card mounts immediately so the user
@@ -605,10 +951,10 @@ export function PuzzleComplete({
     // Previous springs (friction 5-7) produced ~1.8s of wobble. New params
     // settle in ~400ms total with a satisfying snap.
     Animated.parallel([
-      // Backdrop fade — fast
+      // Backdrop fade — 250ms so the dark scrim washes in rather than cuts
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 200,
+        duration: 250,
         useNativeDriver: true,
       }),
       // Card pops up with a crisp spring (high friction = fast settle)
@@ -626,28 +972,31 @@ export function PuzzleComplete({
         Animated.timing(glitchAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
       ]),
       // Ribbon, stats, actions fade in with staggered delays (all parallel)
-      Animated.sequence([
-        Animated.delay(150),
-        Animated.spring(ribbonAnim, {
-          toValue: 1,
-          friction: 10,
-          tension: 160,
-          useNativeDriver: true,
-        }),
-      ]),
+      // Stagger spread widened 150/220/300 → 220/420/650 (blind motion
+      // review: the 400ms build read as a hard cut — the reveal should be a
+      // legible sequence: ribbon → score/stats → actions).
       Animated.sequence([
         Animated.delay(220),
-        Animated.timing(statsAnim, {
+        Animated.spring(ribbonAnim, {
           toValue: 1,
-          duration: 200,
+          friction: 9,
+          tension: 150,
           useNativeDriver: true,
         }),
       ]),
       Animated.sequence([
-        Animated.delay(300),
+        Animated.delay(420),
+        Animated.timing(statsAnim, {
+          toValue: 1,
+          duration: 260,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.sequence([
+        Animated.delay(650),
         Animated.timing(actionsAnim, {
           toValue: 1,
-          duration: 200,
+          duration: 240,
           useNativeDriver: true,
         }),
       ]),
@@ -657,6 +1006,32 @@ export function PuzzleComplete({
     const timer = setTimeout(() => setStarsRevealed(true), 800);
     return () => clearTimeout(timer);
   }, [actionsAnim, cardAnim, fadeAnim, glitchAnim, ribbonAnim, statsAnim]);
+
+  // Card entrance: opacity 0→1 + scale 0.93→1 spring (~350ms settle).
+  // Reduce motion: snap scale to 1 and run a 150ms fade only. If the
+  // reduce-motion preference resolves asynchronously after mount, the
+  // re-run just snaps to the settled state — harmless.
+  useEffect(() => {
+    if (reduceMotion) {
+      cardScaleAnim.setValue(1);
+      Animated.timing(cardOpacityAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+      return;
+    }
+    Animated.parallel([
+      Animated.timing(cardOpacityAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardScaleAnim, {
+        toValue: 1,
+        friction: 9,
+        tension: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [cardOpacityAnim, cardScaleAnim, reduceMotion]);
 
   // Auto-advance: 3.5s after victory, call onNextLevel. Cut to 2s in
   // reduce-motion. Disabled for daily (player may want to share) and
@@ -811,6 +1186,9 @@ export function PuzzleComplete({
           />
           <SparkleField count={12} intensity="medium" />
           <CelebrationBurst centerX={190} centerY={200} particleCount={10} />
+          {SETTLE_SPARKS.map((sp, i) => (
+            <SettleSpark key={i} {...sp} reduceMotion={reduceMotion} />
+          ))}
           {confetti.map((particle) => (
             <ConfettiParticle
               key={particle.id}
@@ -822,7 +1200,16 @@ export function PuzzleComplete({
         </>
       )}
 
-      <Animated.View style={[styles.cardOuter, { transform: [{ translateY: cardAnim }], maxHeight: maxCardHeight }]}>
+      <Animated.View
+        style={[
+          styles.cardOuter,
+          {
+            opacity: cardOpacityAnim,
+            transform: [{ translateY: cardAnim }, { scale: cardScaleAnim }],
+            maxHeight: maxCardHeight,
+          },
+        ]}
+      >
         {/* Gradient border wrapper */}
         <LinearGradient
           colors={borderColors as [string, string, ...string[]]}
@@ -883,18 +1270,26 @@ export function PuzzleComplete({
 
               {/* Stars with neon burst effects */}
               <View style={styles.starsRow} accessibilityLabel={`${stars} out of 3 stars earned`}>
-                <View style={styles.starContainer}>
-                  <Star filled={stars >= 1} delay={140} size={44} />
-                  <NeonStarBurst active={starsRevealed && stars >= 1} color={COLORS.gold} size={50} />
-                </View>
-                <View style={styles.starContainer}>
-                  <Star filled={stars >= 2} delay={340} size={56} />
-                  <NeonStarBurst active={starsRevealed && stars >= 2} color={COLORS.gold} size={64} />
-                </View>
-                <View style={styles.starContainer}>
-                  <Star filled={stars >= 3} delay={560} size={44} />
-                  <NeonStarBurst active={starsRevealed && stars >= 3} color={COLORS.gold} size={50} />
-                </View>
+                <VictoryRays reduceMotion={reduceMotion} />
+                <MedalRipple reduceMotion={reduceMotion} offset={0}>
+                  <View style={styles.starContainer}>
+                    <Star filled={stars >= 1} delay={140} size={44} />
+                    <NeonStarBurst active={starsRevealed && stars >= 1} color={COLORS.gold} size={50} />
+                  </View>
+                </MedalRipple>
+                <MedalRipple reduceMotion={reduceMotion} offset={140}>
+                  <View style={styles.starContainer}>
+                    <Star filled={stars >= 2} delay={340} size={56} />
+                    <NeonStarBurst active={starsRevealed && stars >= 2} color={COLORS.gold} size={64} />
+                  </View>
+                </MedalRipple>
+                <MedalRipple reduceMotion={reduceMotion} offset={280}>
+                  <View style={styles.starContainer}>
+                    <Star filled={stars >= 3} delay={560} size={44} />
+                    <NeonStarBurst active={starsRevealed && stars >= 3} color={COLORS.gold} size={50} />
+                  </View>
+                </MedalRipple>
+                <MedalGlint reduceMotion={reduceMotion} />
               </View>
 
               {/* Flawless badge — reveals after the third star. Every clean
@@ -914,7 +1309,12 @@ export function PuzzleComplete({
                 <ScanLineOverlay opacity={0.02} height={80} />
                 <Text style={styles.scoreLabel}>{t('result.finalScore')}</Text>
                 <View accessibilityLabel={`Final score: ${score}`}>
-                  <AnimatedScore targetScore={score} />
+                  {/* Continuous gentle breath on the settled score value —
+                      1.0↔1.03 over ~1.8s. Scale transform is center-anchored
+                      so the panel layout never shifts. */}
+                  <CtaPulse reduceMotion={reduceMotion} to={1.03} duration={900}>
+                    <AnimatedScore targetScore={score} startDelay={480} reduceMotion={reduceMotion} />
+                  </CtaPulse>
                 </View>
               </LinearGradient>
 
@@ -1183,21 +1583,23 @@ export function PuzzleComplete({
                   },
                 ]}
               >
-                <Pressable
-                  style={({ pressed }) => [pressed && styles.buttonPressed]}
-                  onPress={onNextLevel}
-                  accessibilityRole="button"
-                  accessibilityLabel={isDaily ? 'Play another mode' : 'Next level'}
-                >
-                  <LinearGradient
-                    colors={GRADIENTS.button.primary as unknown as [string, string, ...string[]]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.primaryButton}
+                <CtaPulse reduceMotion={reduceMotion} glowColor={COLORS.accent}>
+                  <Pressable
+                    style={({ pressed }) => [pressed && styles.buttonPressed]}
+                    onPress={onNextLevel}
+                    accessibilityRole="button"
+                    accessibilityLabel={isDaily ? 'Play another mode' : 'Next level'}
                   >
-                    <Text style={styles.primaryButtonText}>{isDaily ? t('result.playAnotherMode') : t('result.next').toUpperCase()}</Text>
-                  </LinearGradient>
-                </Pressable>
+                    <LinearGradient
+                      colors={GRADIENTS.button.primary as unknown as [string, string, ...string[]]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.primaryButton}
+                    >
+                      <Text style={styles.primaryButtonText}>{isDaily ? t('result.playAnotherMode') : t('result.next').toUpperCase()}</Text>
+                    </LinearGradient>
+                  </Pressable>
+                </CtaPulse>
                 {autoAdvanceRemainingMs !== null && !autoAdvanceCancelled && (
                   <Pressable
                     style={({ pressed }) => [styles.stayButton, pressed && styles.buttonPressed]}
@@ -1267,6 +1669,17 @@ export function PuzzleComplete({
                 </View>
               </Animated.View>
             </ScrollView>
+            {/* Confetti drizzle — continuous gentle celebration rain inside
+                the card (top → ~60% height). Deferred behind the same
+                250ms decoration gate as the entrance burst; skipped
+                entirely under reduce motion. Never intercepts touches. */}
+            {decorationsMounted && !reduceMotion && (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                {DRIZZLE_SPECS.map((sp, i) => (
+                  <DrizzleFlake key={i} {...sp} reduceMotion={reduceMotion} />
+                ))}
+              </View>
+            )}
           </LinearGradient>
         </LinearGradient>
       </Animated.View>
@@ -1407,6 +1820,47 @@ const styles = StyleSheet.create({
   starContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Clip window for the medal glint sweep — absolute over the stars row so
+  // only the highlight band is clipped, never the stars/bursts beneath.
+  medalGlintClip: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+    borderRadius: 16,
+  },
+  medalGlintBand: {
+    position: 'absolute',
+    top: -30,
+    bottom: -30,
+    left: 0,
+    width: 46,
+  },
+  // Rotating victory rays — centering layer inside the stars row; the
+  // beams pivot around the medal-row center and the card's overflow:hidden
+  // clips their ends at the card edge.
+  raysLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rayBeam: {
+    position: 'absolute',
+    width: 40,
+    height: 700,
+    borderRadius: 20,
+  },
+  // Breathing halo behind the primary CTA — a 6px rim + soft shadow whose
+  // opacity is driven by the same Animated.Value as the CtaPulse scale.
+  ctaGlow: {
+    position: 'absolute',
+    top: -6,
+    bottom: -6,
+    left: -6,
+    right: -6,
+    borderRadius: 26,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 18,
   },
   starGlowRing: {
     position: 'absolute',

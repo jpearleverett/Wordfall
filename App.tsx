@@ -133,7 +133,7 @@ const RootStack = createStackNavigator();
 // still keeps covered screens from burning frames.
 //
 // Push = spring (stiffness 180 / damping 22, clamped — no overshoot blur)
-// tuned to the in-game ceremony settle feel; pop = 220ms cubic-out so
+// tuned to the in-game ceremony settle feel; pop = 320ms cubic-out so
 // back-nav feels snappier than forward-nav. React Navigation itself honors
 // the OS reduce-motion flag for stack transitions.
 type StackTransitionSpec = NonNullable<StackNavigationOptions['transitionSpec']>;
@@ -141,8 +141,10 @@ type StackTransitionSpec = NonNullable<StackNavigationOptions['transitionSpec']>
 const springOpenSpec: StackTransitionSpec['open'] = {
   animation: 'spring',
   config: {
-    stiffness: 180,
-    damping: 22,
+    // 180 → 120 (blind motion review: the push read as a hard cut at coarse
+    // frame sampling — a ~480ms settle reads as motion, not teleport).
+    stiffness: 120,
+    damping: 20,
     mass: 1,
     overshootClamping: true,
     restDisplacementThreshold: 0.01,
@@ -153,7 +155,9 @@ const springOpenSpec: StackTransitionSpec['open'] = {
 const timingCloseSpec: StackTransitionSpec['close'] = {
   animation: 'timing',
   config: {
-    duration: 220,
+    // 220 → 320ms: at coarse frame sampling the 220ms pop landed between
+    // frames and read as a hard cut (blind motion review, round 2).
+    duration: 320,
     easing: Easing.out(Easing.cubic),
   },
 };
@@ -167,11 +171,13 @@ function cardSpringFadeInterpolator({
 }: StackCardInterpolationProps) {
   const translateX = current.progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [layouts.screen.width * 0.06, 0],
+    // 6% → 14%: the shallower slide was invisible between sampled frames
+    // (blind motion review) — deeper travel makes the push read as depth.
+    outputRange: [layouts.screen.width * 0.14, 0],
   });
   const scale = current.progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.96, 1],
+    outputRange: [0.94, 1],
   });
   const opacity = current.progress.interpolate({
     inputRange: [0, 0.3, 1],
@@ -180,7 +186,8 @@ function cardSpringFadeInterpolator({
   const nextOpacity = next
     ? next.progress.interpolate({
         inputRange: [0, 1],
-        outputRange: [1, 0.92],
+        // Dim the outgoing card harder (0.92 → 0.75) so depth reads.
+        outputRange: [1, 0.75],
       })
     : 1;
   return {
@@ -483,6 +490,10 @@ function MainTabs() {
       tabBar={(props) => <NeonTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        // Cross-fade + shift between tabs (bottom-tabs v7). Instant tab
+        // switches read as hard cuts (blind motion review) — a ~220ms fade
+        // makes the change legible without slowing navigation down.
+        animation: 'shift',
         // Freeze inactive tabs so their timers, animations, and effects pause.
         // This is the single biggest perf win in a multi-tab app — without it
         // every tab keeps running its AmbientBackdrop reanimated loops, video

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, {
   Circle, Defs, LinearGradient as SvgLinearGradient, Polygon, RadialGradient, Rect, Stop,
@@ -9,6 +9,7 @@ import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import GameIcon, { GameIconName } from './icons/GameIcon';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { gradId } from './icons/IconBase';
 
 /**
@@ -38,6 +39,52 @@ const BACKDROP_MOTES: Array<{ cx: number; cy: number; r: number; o: number; gold
   { cx: 72, cy: 176, r: 1.5, o: 0.36, gold: true },
   { cx: 132, cy: 166, r: 1.1, o: 0.28, gold: false },
 ];
+
+/**
+ * 7 slow floating sparkle dots behind the ceremony card — continuous ambient
+ * drift so the dark backdrop never freezes after the entrance settles.
+ * Ping-pong float (rise `drift`px while brightening to `peak`, then sink
+ * back) so there is never a snap-reset frame. Drift distances 44-64px over
+ * 2.2-3.0s keep adjacent 250ms-sampled frames visibly different. Only
+ * rendered when reduce-motion is off (the static BACKDROP_MOTES remain).
+ */
+const CEREMONY_SPARKS = [
+  { left: '12%', top: '20%', size: 6, delay: 0, dur: 2400, drift: 52, peak: 0.8, color: '#fff' },
+  { left: '84%', top: '16%', size: 5, delay: 700, dur: 2800, drift: 60, peak: 0.7, color: '#FFD98A' },
+  { left: '8%', top: '58%', size: 7, delay: 1200, dur: 2600, drift: 56, peak: 0.75, color: '#FFD98A' },
+  { left: '90%', top: '64%', size: 5, delay: 350, dur: 3000, drift: 64, peak: 0.8, color: '#fff' },
+  { left: '20%', top: '84%', size: 6, delay: 900, dur: 2500, drift: 50, peak: 0.7, color: '#fff' },
+  { left: '76%', top: '88%', size: 8, delay: 500, dur: 2900, drift: 62, peak: 0.75, color: '#FFD98A' },
+  { left: '48%', top: '9%', size: 4, delay: 1500, dur: 2200, drift: 44, peak: 0.7, color: '#fff' },
+] as const;
+
+function CeremonySpark({ left, top, size, delay, dur, drift, peak, color }: (typeof CEREMONY_SPARKS)[number]) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withDelay(delay, withRepeat(withTiming(1, { duration: dur }), -1, true));
+  }, []);
+  const sparkStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(t.value, [0, 0.3, 0.7, 1], [0.12, peak, peak, 0.18]),
+    transform: [{ translateY: interpolate(t.value, [0, 1], [0, -drift]) }],
+  }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: 'absolute',
+          left,
+          top,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+        },
+        sparkStyle,
+      ]}
+    />
+  );
+}
 
 interface MilestoneCeremonyProps {
   ribbon: string;
@@ -92,6 +139,12 @@ export function MilestoneCeremony({
   const scale = useSharedValue(0.6);
   const iconProgress = useSharedValue(0);
   const rewardPop = useSharedValue(0);
+  // Ambient settle life — the card must never freeze after its entrance
+  // (blind motion review: "victory modal frozen two seconds"). A slow icon
+  // breath and a CTA pulse loop keep the ceremony alive until dismissed.
+  const iconBreath = useSharedValue(1);
+  const ctaPulse = useSharedValue(1);
+  const reduceMotion = useReduceMotion();
 
   // Defer the SparkleField until ~200ms after mount — see useDeferredMount
   // in perfInstrument.ts. Lets the card pop in fast and the decorations
@@ -102,14 +155,27 @@ export function MilestoneCeremony({
     fade.value = withTiming(1, { duration: 300 });
     scale.value = withSpring(1, { damping: 15, stiffness: 180 });
     iconProgress.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 200 }));
-    rewardPop.value = withDelay(480, withSpring(1, { damping: 12, stiffness: 190 }));
+    rewardPop.value = withDelay(560, withSpring(1, { damping: 12, stiffness: 190 }));
+    if (!reduceMotion) {
+      // Amplitudes sized to stay visible even at coarse (250ms) frame
+      // sampling: 8% icon breath over 2.6s, 5% CTA pulse over 1.6s.
+      iconBreath.value = withDelay(900, withRepeat(withSequence(
+        withTiming(1.08, { duration: 1300 }),
+        withTiming(1, { duration: 1300 }),
+      ), -1, false));
+      ctaPulse.value = withDelay(1100, withRepeat(withSequence(
+        withTiming(1.05, { duration: 800 }),
+        withTiming(1, { duration: 800 }),
+      ), -1, false));
+    }
   }, []);
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
   const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(iconProgress.value, [0, 0.5, 1], [0, 1.4, 1]) }],
+    transform: [{ scale: interpolate(iconProgress.value, [0, 0.5, 1], [0, 1.4, 1]) * iconBreath.value }],
   }));
+  const ctaStyle = useAnimatedStyle(() => ({ transform: [{ scale: ctaPulse.value }] }));
   const rewardStyle = useAnimatedStyle(() => ({
     opacity: rewardPop.value,
     transform: [{ scale: interpolate(rewardPop.value, [0, 0.6, 1], [0.4, 1.12, 1]) }],
@@ -193,6 +259,10 @@ export function MilestoneCeremony({
       {decorationsMounted && (
         <SparkleField count={16} intensity="medium" colors={[accentColor, COLORS.gold, '#fff']} />
       )}
+      {/* Floating sparkle dots — continuous ambient drift behind the card.
+          Skipped entirely under reduce-motion (static motes still render). */}
+      {!reduceMotion &&
+        CEREMONY_SPARKS.map((sp) => <CeremonySpark key={`${sp.left}-${sp.top}`} {...sp} />)}
       <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: accentColor }]}>{ribbon}</Text>
@@ -237,20 +307,22 @@ export function MilestoneCeremony({
             </View>
           ) : null}
 
-          <Pressable
-            style={({ pressed }) => [pressed && styles.buttonPressed]}
-            onPress={onDismiss}
-          >
-            {/* Primary action is ALWAYS gold — an accent-tinted pill on the
-                purple card had almost no value contrast (judge round 3).
-                Gold → amber gradient, dark text, soft gold outer glow. */}
-            <LinearGradient
-              colors={GRADIENTS.button.gold}
-              style={[styles.button, SHADOWS.glow(COLORS.gold)]}
+          <Animated.View style={ctaStyle}>
+            <Pressable
+              style={({ pressed }) => [pressed && styles.buttonPressed]}
+              onPress={onDismiss}
             >
-              <Text style={styles.buttonText}>{buttonText}</Text>
-            </LinearGradient>
-          </Pressable>
+              {/* Primary action is ALWAYS gold — an accent-tinted pill on the
+                  purple card had almost no value contrast (judge round 3).
+                  Gold → amber gradient, dark text, soft gold outer glow. */}
+              <LinearGradient
+                colors={GRADIENTS.button.gold}
+                style={[styles.button, SHADOWS.glow(COLORS.gold)]}
+              >
+                <Text style={styles.buttonText}>{buttonText}</Text>
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
         </LinearGradient>
       </Animated.View>
     </Animated.View>

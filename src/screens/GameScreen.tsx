@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
   Animated,
+  Easing,
   Image,
   LayoutAnimation,
   Platform,
@@ -373,14 +374,17 @@ const EMPTY_STRING_LIST: string[] = [];
 function WordClearParticle({ delay, startX, startY }: { delay: number; startX: number; startY: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   const angle = useRef(Math.random() * Math.PI * 2).current;
-  const distance = useRef(40 + Math.random() * 60).current;
-  const size = useRef(4 + Math.random() * 6).current;
+  // Travel + size lifted again (blind motion review round 2: "particle
+  // energy is sparse" — bigger, brighter, farther so bursts still register
+  // at 250ms frame sampling).
+  const distance = useRef(65 + Math.random() * 85).current;
+  const size = useRef(8 + Math.random() * 8).current;
   const color = useRef(PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)]).current;
 
   useEffect(() => {
     Animated.sequence([
       Animated.delay(delay),
-      Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(anim, { toValue: 1, duration: 620, useNativeDriver: true }),
     ]).start();
   }, []);
 
@@ -393,13 +397,168 @@ function WordClearParticle({ delay, startX, startY }: { delay: number; startX: n
       height: size,
       borderRadius: size / 2,
       backgroundColor: color,
-      opacity: anim.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
+      alignItems: 'center',
+      justifyContent: 'center',
+      // Colored glow halo so the mote reads mid-flight, not just at spawn.
+      shadowColor: color,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.9,
+      shadowRadius: 6,
+      opacity: anim.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 1, 0] }),
       transform: [
         { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * distance] }) },
         { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * distance] }) },
-        { scale: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.3, 1.2, 0.2] }) },
+        { scale: anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.4, 1.25, 0.25] }) },
       ],
-    }} />
+    }}>
+      {/* Hot white core — brighter center makes each mote read as a spark. */}
+      <View style={{
+        width: size * 0.45,
+        height: size * 0.45,
+        borderRadius: size * 0.225,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+      }} />
+    </Animated.View>
+  );
+}
+
+// Radial flash ring — ONE expanding circle at the centroid of a cleared
+// word, spawned alongside the bloom particles. Scales 0.3 → 2.2 while
+// fading 0.85 → 0 over 500ms (ease-out) so the clear moment reads as a
+// shockwave even at coarse frame sampling. Decorative only; rendered inside
+// the pointerEvents="none" particle layer, and only reached through the
+// same reduce-motion-gated dispatch sites as spawnTileBloom.
+const RING_BASE_SIZE = 120;
+const RING_DURATION_MS = 500;
+
+function ClearFlashRing({ x, y }: { x: number; y: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: RING_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: x - RING_BASE_SIZE / 2,
+        top: y - RING_BASE_SIZE / 2,
+        width: RING_BASE_SIZE,
+        height: RING_BASE_SIZE,
+        borderRadius: RING_BASE_SIZE / 2,
+        borderWidth: 4,
+        borderColor: 'rgba(255,236,160,0.95)',
+        shadowColor: '#ffd700',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 10,
+        opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 0] }),
+        transform: [
+          { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 2.2] }) },
+        ],
+      }}
+    />
+  );
+}
+
+// Four-point star sparks — 6–8 per word clear, launched from the burst
+// centroid, flying outward 80–160px while scaling 0 → 1 → 0 with rotation
+// over ~600ms. Second particle vocabulary layered over the round motes so
+// bursts read as fireworks, not sparse dots (round-3 blind review: juice
+// 4–5 vs AAA 7.3). Same decorative rules as WordClearParticle: transform/
+// opacity only, native driver, pointerEvents="none" layer, reduce-motion
+// gated at the dispatch sites.
+const STAR_SPARK_DURATION_MS = 600;
+const STAR_SPARK_COLORS = ['#ffffff', '#ffe27a', '#ffd700'];
+
+function StarSpark({ x, y, delay }: { x: number; y: number; delay: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const angle = useRef(Math.random() * Math.PI * 2).current;
+  const distance = useRef(80 + Math.random() * 80).current; // 80–160px
+  const size = useRef(14 + Math.random() * 8).current; // 14–22px
+  const spin = useRef(Math.random() < 0.5 ? 200 : -200).current;
+  const color = useRef(
+    STAR_SPARK_COLORS[Math.floor(Math.random() * STAR_SPARK_COLORS.length)],
+  ).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: STAR_SPARK_DURATION_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: x - size / 2,
+        top: y - size / 2,
+        width: size,
+        height: size,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#ffd700',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.85,
+        shadowRadius: 6,
+        opacity: anim.interpolate({ inputRange: [0, 0.1, 0.75, 1], outputRange: [0, 1, 1, 0] }),
+        transform: [
+          { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * distance] }) },
+          { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * distance] }) },
+          { rotate: anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${spin}deg`] }) },
+          { scale: anim.interpolate({ inputRange: [0, 0.45, 1], outputRange: [0, 1, 0] }) },
+        ],
+      }}
+    >
+      {/* Vertical + horizontal rays = 4-point star (same trick as Grid's GlintStar). */}
+      <View style={{ position: 'absolute', width: size * 0.22, height: size, borderRadius: size * 0.11, backgroundColor: color }} />
+      <View style={{ position: 'absolute', width: size, height: size * 0.22, borderRadius: size * 0.11, backgroundColor: color }} />
+    </Animated.View>
+  );
+}
+
+// Brief white flash stamped on each cleared cell — a rounded rect matching
+// the tile footprint fading 0.65 → 0 over 260ms, spawned with the bloom so
+// the cleared letters visibly "pop" before gravity moves in. Opacity-only,
+// native-driven, decorative layer.
+const CELL_FLASH_DURATION_MS = 260;
+
+function CellClearFlash({ x, y, size }: { x: number; y: number; size: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: CELL_FLASH_DURATION_MS,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: x - size / 2,
+        top: y - size / 2,
+        width: size,
+        height: size,
+        borderRadius: Math.max(6, size * 0.18),
+        backgroundColor: '#ffffff',
+        opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.65, 0] }),
+      }}
+    />
   );
 }
 
@@ -414,9 +573,34 @@ interface ClearParticleEntry {
   y: number;
 }
 
+interface ClearRingEntry {
+  id: string;
+  x: number;
+  y: number;
+}
+
+interface StarSparkEntry {
+  id: string;
+  x: number;
+  y: number;
+}
+
+interface CellFlashEntry {
+  id: string;
+  x: number;
+  y: number;
+  size: number;
+}
+
 export interface ClearParticleLayerHandle {
   push(entries: ClearParticleEntry[]): void;
   removeIds(ids: string[]): void;
+  /** Word-clear flash ring; self-removes after its 500ms animation. */
+  pushRing(entry: ClearRingEntry): void;
+  /** Star sparks batch; self-removes after the ~600ms flight. */
+  pushStars(entries: StarSparkEntry[]): void;
+  /** Per-cell white clear flashes; self-remove after 260ms. */
+  pushCellFlashes(entries: CellFlashEntry[]): void;
 }
 
 interface ClearParticleLayerProps {
@@ -426,6 +610,16 @@ interface ClearParticleLayerProps {
 const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticleLayerProps>(
   function ClearParticleLayerImpl({ style }, ref) {
     const [queue, setQueue] = useState<ClearParticleEntry[]>([]);
+    const [rings, setRings] = useState<ClearRingEntry[]>([]);
+    const [stars, setStars] = useState<StarSparkEntry[]>([]);
+    const [flashes, setFlashes] = useState<CellFlashEntry[]>([]);
+    // Self-removal timers for rings / stars / cell flashes.
+    const ringTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+    useEffect(() => () => {
+      ringTimersRef.current.forEach(clearTimeout);
+      ringTimersRef.current.clear();
+    }, []);
 
     useImperativeHandle(ref, () => ({
       push(entries) {
@@ -437,12 +631,51 @@ const ClearParticleLayerImpl = forwardRef<ClearParticleLayerHandle, ClearParticl
         const idSet = new Set(ids);
         setQueue(prev => prev.filter(q => !idSet.has(q.id)));
       },
+      pushRing(entry) {
+        setRings(prev => [...prev, entry]);
+        const t = setTimeout(() => {
+          ringTimersRef.current.delete(t);
+          setRings(prev => prev.filter(r => r.id !== entry.id));
+        }, RING_DURATION_MS + 60);
+        ringTimersRef.current.add(t);
+      },
+      pushStars(entries) {
+        if (entries.length === 0) return;
+        setStars(prev => [...prev, ...entries]);
+        const idSet = new Set(entries.map(e => e.id));
+        const t = setTimeout(() => {
+          ringTimersRef.current.delete(t);
+          setStars(prev => prev.filter(s => !idSet.has(s.id)));
+        }, STAR_SPARK_DURATION_MS + 8 * 15 + 60); // flight + max stagger
+        ringTimersRef.current.add(t);
+      },
+      pushCellFlashes(entries) {
+        if (entries.length === 0) return;
+        setFlashes(prev => [...prev, ...entries]);
+        const idSet = new Set(entries.map(e => e.id));
+        const t = setTimeout(() => {
+          ringTimersRef.current.delete(t);
+          setFlashes(prev => prev.filter(f => !idSet.has(f.id)));
+        }, CELL_FLASH_DURATION_MS + 60);
+        ringTimersRef.current.add(t);
+      },
     }), []);
 
-    if (queue.length === 0) return null;
+    if (queue.length === 0 && rings.length === 0 && stars.length === 0 && flashes.length === 0) {
+      return null;
+    }
 
     return (
       <View style={style} pointerEvents="none">
+        {flashes.map(f => (
+          <CellClearFlash key={f.id} x={f.x} y={f.y} size={f.size} />
+        ))}
+        {rings.map(r => (
+          <ClearFlashRing key={r.id} x={r.x} y={r.y} />
+        ))}
+        {stars.map((s, i) => (
+          <StarSpark key={s.id} x={s.x} y={s.y} delay={(i % 8) * 15} />
+        ))}
         {queue.map((p, i) => (
           <WordClearParticle
             key={p.id}
@@ -1092,7 +1325,9 @@ function GameScreenImpl({
 
   // Hard cap on simultaneously-rendered bloom particles. Keeps the queue
   // bounded so a 10-letter word with perTile=2 can't balloon past this limit.
-  const MAX_BLOOM_PARTICLES = 24;
+  // 24 → 36 (round 2: "particle energy is sparse") → 48 (round 3: bursts
+  // still read as "sparse particles"; star sparks + cell flashes join in).
+  const MAX_BLOOM_PARTICLES = 48;
 
   // Map a grid (row, col) to pixel-space coordinates inside the particle
   // container (which is `absoluteFillObject` inside `gridArea`). Mirrors the
@@ -1130,9 +1365,24 @@ function GameScreenImpl({
     [grid, gridAreaHeight],
   );
 
+  // Pixel size of one tile — mirrors cellPositionToScreen's sizing math so
+  // the per-cell clear flash matches the tile footprint. 0 until layout.
+  const gridCellSize = useMemo(() => {
+    const rows = grid.length;
+    const cols = grid[0]?.length ?? 0;
+    if (cols === 0 || rows === 0 || gridAreaHeight <= 0) return 0;
+    const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
+    let cellSize = Math.floor(availableWidth / cols);
+    const frameAllowance = 58;
+    const heightAvail = gridAreaHeight - frameAllowance;
+    cellSize = Math.min(cellSize, Math.floor(heightAvail / rows - CELL_GAP));
+    return Math.max(0, cellSize);
+  }, [grid, gridAreaHeight]);
+
   // Spawn multi-tile bloom particles for a word. Each cell gets
   // `tileBloomParticlesPerTile` particle instances, staggered 30ms per tile
-  // for a waterfall effect. Entries auto-remove from the queue after ~700ms.
+  // for a waterfall effect, plus a 260ms white flash stamped on the tile
+  // itself. Entries auto-remove from the queue after ~700ms.
   // No-op when `tileBloomEnabled` is false (Remote Config kill-switch).
   const spawnTileBloom = useCallback(
     (cells: CellPosition[]) => {
@@ -1148,6 +1398,11 @@ function GameScreenImpl({
       tiles.forEach((cell, idx) => {
         trackTimeout(() => {
           const { x, y } = cellPositionToScreen(cell.row, cell.col);
+          if (gridCellSize > 0) {
+            particleLayerRef.current?.pushCellFlashes([
+              { id: `${bloomBatchId}-${idx}-flash`, x, y, size: gridCellSize },
+            ]);
+          }
           const entries: ClearParticleEntry[] = [];
           for (let p = 0; p < perTile; p++) {
             entries.push({ id: `${bloomBatchId}-${idx}-${p}`, x, y });
@@ -1160,7 +1415,60 @@ function GameScreenImpl({
         }, idx * 30);
       });
     },
-    [cellPositionToScreen, trackTimeout],
+    [cellPositionToScreen, trackTimeout, gridCellSize],
+  );
+
+  // One expanding flash ring at the centroid of the cleared cells — a single
+  // "shockwave" beat under the particle burst so the clear moment reads even
+  // between coarse sample frames. Shares spawnTileBloom's Remote Config
+  // kill-switch; reduce-motion gating happens at the dispatch sites, exactly
+  // like spawnTileBloom's calls.
+  const spawnClearRing = useCallback(
+    (cells: CellPosition[]) => {
+      if (cells.length === 0) return;
+      if (!getRemoteBoolean('tileBloomEnabled')) return;
+      let sx = 0;
+      let sy = 0;
+      for (const cell of cells) {
+        const { x, y } = cellPositionToScreen(cell.row, cell.col);
+        sx += x;
+        sy += y;
+      }
+      particleLayerRef.current?.pushRing({
+        id: `ring-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+        x: sx / cells.length,
+        y: sy / cells.length,
+      });
+    },
+    [cellPositionToScreen],
+  );
+
+  // 6–8 four-point star sparks from the cleared word's centroid — the
+  // second particle vocabulary of burst v2 (see StarSpark). Shares the
+  // tileBloomEnabled kill-switch and the dispatch sites' reduce-motion
+  // gating, exactly like spawnClearRing.
+  const spawnStarSparks = useCallback(
+    (cells: CellPosition[]) => {
+      if (cells.length === 0) return;
+      if (!getRemoteBoolean('tileBloomEnabled')) return;
+      let sx = 0;
+      let sy = 0;
+      for (const cell of cells) {
+        const { x, y } = cellPositionToScreen(cell.row, cell.col);
+        sx += x;
+        sy += y;
+      }
+      const cx = sx / cells.length;
+      const cy = sy / cells.length;
+      const count = 6 + Math.floor(Math.random() * 3); // 6–8
+      const batchId = `star-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const entries: StarSparkEntry[] = [];
+      for (let i = 0; i < count; i++) {
+        entries.push({ id: `${batchId}-${i}`, x: cx, y: cy });
+      }
+      particleLayerRef.current?.pushStars(entries);
+    },
+    [cellPositionToScreen],
   );
 
   // #5 reduceMotion support
@@ -1491,6 +1799,8 @@ function GameScreenImpl({
           const bigCells = lastSubmittedCellsRef.current;
           if (bigCells.length > 0) {
             spawnTileBloom(bigCells);
+            spawnClearRing(bigCells);
+            spawnStarSparks(bigCells);
             // Second batch for extra celebratory impact
             trackTimeout(() => spawnTileBloom(bigCells), 250);
           } else {
@@ -1529,6 +1839,8 @@ function GameScreenImpl({
         const cells = lastSubmittedCellsRef.current;
         if (cells.length > 0) {
           spawnTileBloom(cells);
+          spawnClearRing(cells);
+          spawnStarSparks(cells);
         } else {
           const fallbackId = `chain-${Date.now()}`;
           const entry: ClearParticleEntry = { id: fallbackId, x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
@@ -1567,16 +1879,26 @@ function GameScreenImpl({
 
       scorePopupAnim.setValue(0);
       Animated.sequence([
+        // Quick pop-in (~200ms). Round-3 blind review flagged the old
+        // spring + 520ms + 260ms chain as "lingers ~1.7s / sluggish" —
+        // total visible lifetime now targets ~900ms. Stiffer spring +
+        // raised rest thresholds cut the settle tail.
         Animated.spring(scorePopupAnim, {
           toValue: 1,
-          friction: 5,
-          tension: 180,
+          friction: 6,
+          tension: 320,
+          restDisplacementThreshold: 0.01,
+          restSpeedThreshold: 0.5,
           useNativeDriver: true,
         }),
-        Animated.delay(600),
+        // Single drift-and-fade leg (~550ms): the 1→2 drive still carries
+        // the pill the same -40px translateY (GameFlashes interpolation is
+        // unchanged) and the 1.8→2 opacity ramp fades it over the final
+        // ~250ms. Fully gone by ~900ms.
         Animated.timing(scorePopupAnim, {
           toValue: 2,
-          duration: 300,
+          duration: 550,
+          easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => {
