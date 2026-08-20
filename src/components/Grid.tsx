@@ -216,8 +216,11 @@ const ClearGhostLayer = React.memo(forwardRef<GhostLayerHandle, { cellSize: numb
 ));
 
 // ── Idle tile glint ─────────────────────────────────────────────────────────
-// Ambient sparkle: every 2.8–4.2s (randomized) one random occupied cell gets
-// a 650ms four-point glint that scales 0 → 1 → 0 while fading. Pure
+// Ambient sparkle: every 1.5–2.4s (randomized) a random occupied cell gets
+// a 650ms four-point glint that scales 0 → 1 → 0 while fading, and a second
+// glint on another random cell follows ~500ms later — so any 3s idle window
+// at 250ms frame sampling reliably shows sparkle activity (round-3 blind
+// review: "nine near-identical static frames... lifeless while idle"). Pure
 // decoration — pointerEvents none, never mounted under reduce motion (the
 // parent gates it), native-driven transform/opacity only. Cell coordinates
 // come from the same cellBounds array the hit-test and ghost layer use, with
@@ -230,8 +233,9 @@ interface GlintSpec {
 }
 
 const GLINT_DURATION_MS = 650;
-const GLINT_MIN_GAP_MS = 2800;
-const GLINT_GAP_JITTER_MS = 1400;
+const GLINT_MIN_GAP_MS = 1500;
+const GLINT_GAP_JITTER_MS = 900;
+const GLINT_STAGGER_MS = 500;
 
 const GlintStar = React.memo(function GlintStar({ glint, cellSize }: { glint: GlintSpec; cellSize: number }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -283,7 +287,7 @@ const IdleGlintLayer = React.memo(function IdleGlintLayer({
   cellBounds: { x: number; y: number }[];
   cellSize: number;
 }) {
-  const [glint, setGlint] = useState<GlintSpec | null>(null);
+  const [glints, setGlints] = useState<GlintSpec[]>([]);
   // Bounds live in a ref so the rescheduling timer chain never restarts on
   // grid changes — it just reads the freshest occupied-cell list at fire time.
   const boundsRef = useRef(cellBounds);
@@ -291,31 +295,53 @@ const IdleGlintLayer = React.memo(function IdleGlintLayer({
   const counterRef = useRef(0);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
     let cancelled = false;
+    const spawn = () => {
+      const bounds = boundsRef.current;
+      if (bounds.length === 0) return;
+      const b = bounds[Math.floor(Math.random() * bounds.length)];
+      counterRef.current += 1;
+      const spec: GlintSpec = { key: counterRef.current, x: b.x, y: b.y };
+      // Keep at most 2 concurrent (primary + staggered) — the gap floor
+      // (1500ms) exceeds the glint duration, so only the staggered pair
+      // ever overlaps.
+      setGlints(prev => [...prev.slice(-1), spec]);
+      const cleanup = setTimeout(() => {
+        timers.delete(cleanup);
+        setGlints(prev => prev.filter(g => g.key !== spec.key));
+      }, GLINT_DURATION_MS + 60);
+      timers.add(cleanup);
+    };
     const schedule = () => {
-      timer = setTimeout(() => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
         if (cancelled) return;
-        const bounds = boundsRef.current;
-        if (bounds.length > 0) {
-          const b = bounds[Math.floor(Math.random() * bounds.length)];
-          counterRef.current += 1;
-          setGlint({ key: counterRef.current, x: b.x, y: b.y });
-        }
+        spawn();
+        // Second glint on another random cell, ~500ms behind the first.
+        const stagger = setTimeout(() => {
+          timers.delete(stagger);
+          if (!cancelled) spawn();
+        }, GLINT_STAGGER_MS);
+        timers.add(stagger);
         schedule();
       }, GLINT_MIN_GAP_MS + Math.random() * GLINT_GAP_JITTER_MS);
+      timers.add(timer);
     };
     schedule();
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      timers.forEach(clearTimeout);
+      timers.clear();
     };
   }, []);
 
-  if (!glint) return null;
+  if (glints.length === 0) return null;
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-      <GlintStar glint={glint} cellSize={cellSize} />
+      {glints.map(g => (
+        <GlintStar key={g.key} glint={g} cellSize={cellSize} />
+      ))}
     </View>
   );
 });

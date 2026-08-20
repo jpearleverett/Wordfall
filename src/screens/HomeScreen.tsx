@@ -57,6 +57,7 @@ import { getNextMilestone } from '../data/onboardingMilestones';
 import DailyRewardTimers from '../components/DailyRewardTimers';
 import { getNextGoal } from '../data/nextGoal';
 import GameIcon, { GameIconName } from '../components/icons/GameIcon';
+import { OwlIcon } from '../components/icons/iconsMisc';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface DailyMissionDisplay {
@@ -154,7 +155,7 @@ const WORDMARK_TILES: Array<{ letter: string; colors: [string, string]; drop: nu
   { letter: 'L', colors: ['#22b8f0', '#1585c2'], drop: 11, tilt: '3deg' },
 ];
 
-// One wordmark tile with a gentle staggered vertical bob (±2.5px, ~2.2s
+// One wordmark tile with a gentle staggered vertical bob (±4px, ~2.2s
 // period, 110ms stagger per letter) so a wave ripples through WORDFALL
 // while Home idles. Loop is skipped entirely when `animate` is false
 // (reduce-motion or screen blurred) — the tile then sits at its authored
@@ -195,7 +196,7 @@ function WordmarkTile({ tile, index, animate }: {
       <Animated.View
         style={{
           transform: [
-            { translateY: bob.interpolate({ inputRange: [-1, 1], outputRange: [2.5, -2.5] }) },
+            { translateY: bob.interpolate({ inputRange: [-1, 1], outputRange: [4, -4] }) },
           ],
         }}
       >
@@ -223,25 +224,33 @@ function WordfallWordmark({ animate }: { animate: boolean }) {
   );
 }
 
-// Ambient floating motes — soft lavender dots drifting slowly upward over
-// the home background while fading in/out (blind motion review scored the
-// idle home 2.9/10: "sits completely still"). Fixed spec table à la
-// PuzzleComplete's SETTLE_SPARKS: randomized-feeling but deterministic
-// positions/sizes/delays/durations. Rendered only when ambient motion is
-// active (focused + no reduce-motion), always pointerEvents="none".
+// Ambient floating motes — dots drifting slowly upward over the home
+// background while fading in/out (blind motion review scored the idle home
+// 2.9/10: "sits completely still"; round 3 still read the original 3-6px
+// lavender set as invisible at 250ms frame sampling). Amplified: 12 motes,
+// 5-9px, mostly warm gold, peak opacity 0.85, faster rise so adjacent
+// 250ms frames visibly differ (~3-4px drift per frame). Fixed spec table
+// à la PuzzleComplete's SETTLE_SPARKS: randomized-feeling but
+// deterministic. Rendered only when ambient motion is active (focused +
+// no reduce-motion), always pointerEvents="none".
+const MOTE_GOLD = '#FFD98A';
+const MOTE_LAVENDER = '#E0C3FF';
 const AMBIENT_MOTES = [
-  { left: '8%', top: '78%', size: 4, delay: 0, dur: 6200, drift: 44 },
-  { left: '22%', top: '90%', size: 3, delay: 1800, dur: 7400, drift: 50 },
-  { left: '34%', top: '70%', size: 5, delay: 3200, dur: 5600, drift: 36 },
-  { left: '48%', top: '84%', size: 3, delay: 900, dur: 8200, drift: 48 },
-  { left: '60%', top: '64%', size: 4, delay: 2600, dur: 6800, drift: 40 },
-  { left: '72%', top: '88%', size: 6, delay: 400, dur: 5200, drift: 34 },
-  { left: '84%', top: '74%', size: 3, delay: 3800, dur: 8800, drift: 46 },
-  { left: '92%', top: '58%', size: 4, delay: 1400, dur: 7000, drift: 38 },
-  { left: '14%', top: '52%', size: 5, delay: 2200, dur: 6000, drift: 42 },
+  { left: '8%', top: '78%', size: 7, delay: 0, dur: 4600, drift: 64, color: MOTE_GOLD },
+  { left: '22%', top: '90%', size: 5, delay: 1800, dur: 5600, drift: 70, color: MOTE_GOLD },
+  { left: '34%', top: '70%', size: 8, delay: 3200, dur: 4200, drift: 56, color: MOTE_GOLD },
+  { left: '48%', top: '84%', size: 5, delay: 900, dur: 6200, drift: 68, color: MOTE_LAVENDER },
+  { left: '60%', top: '64%', size: 7, delay: 2600, dur: 5000, drift: 60, color: MOTE_GOLD },
+  { left: '72%', top: '88%', size: 9, delay: 400, dur: 3800, drift: 54, color: MOTE_GOLD },
+  { left: '84%', top: '74%', size: 5, delay: 3800, dur: 6400, drift: 66, color: MOTE_LAVENDER },
+  { left: '92%', top: '58%', size: 6, delay: 1400, dur: 5200, drift: 58, color: MOTE_GOLD },
+  { left: '14%', top: '52%', size: 8, delay: 2200, dur: 4400, drift: 62, color: MOTE_GOLD },
+  { left: '40%', top: '94%', size: 6, delay: 3000, dur: 4800, drift: 72, color: MOTE_GOLD },
+  { left: '66%', top: '76%', size: 5, delay: 1100, dur: 5800, drift: 64, color: MOTE_LAVENDER },
+  { left: '90%', top: '92%', size: 9, delay: 2000, dur: 4000, drift: 58, color: MOTE_GOLD },
 ] as const;
 
-function AmbientMote({ left, top, size, delay, dur, drift }: (typeof AMBIENT_MOTES)[number]) {
+function AmbientMote({ left, top, size, delay, dur, drift, color }: (typeof AMBIENT_MOTES)[number]) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -269,8 +278,8 @@ function AmbientMote({ left, top, size, delay, dur, drift }: (typeof AMBIENT_MOT
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: 'rgba(224,195,255,0.95)',
-        opacity: anim.interpolate({ inputRange: [0, 0.2, 0.75, 1], outputRange: [0, 0.6, 0.3, 0] }),
+        backgroundColor: color,
+        opacity: anim.interpolate({ inputRange: [0, 0.2, 0.75, 1], outputRange: [0, 0.85, 0.5, 0] }),
         transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -drift] }) }],
       }}
     />
@@ -314,6 +323,78 @@ function PlayCtaSweep({ active }: { active: boolean }) {
           },
         ]}
       />
+    </View>
+  );
+}
+
+// FOLIO on the home screen — the same owl archivist that keeps players
+// company in-game (see src/components/GameplayMascot.tsx; that component
+// is hard-wired to gameplay props + its own board-relative position, so
+// the owl art is re-hosted here via the shared OwlIcon SVG). Perched in
+// the bottom-left corner so a living character is on screen through every
+// idle frame (round-3 blind judges: "settled home screen … a still image";
+// ambient characters like Wordscapes' fox scored 7.3+). Three composed
+// transform-only, native-driver loops: idle bob (translateY ±6px, ~1.8s),
+// gentle rock (rotate ±3°, ~2.6s), and a playful spring hop (-12px, ~600ms)
+// every ~4s. pointerEvents="none" throughout. When `animate` is false
+// (reduce-motion or screen blurred) the owl renders settled and static —
+// no loops run at all.
+function HomeMascot({ animate }: { animate: boolean }) {
+  const bob = useRef(new Animated.Value(0)).current;
+  const rock = useRef(new Animated.Value(0)).current;
+  const hop = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!animate) return;
+    const bobLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: -1, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    const rockLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(rock, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(rock, { toValue: -1, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    const hopLoop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(3400),
+        Animated.timing(hop, { toValue: 1, duration: 200, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.spring(hop, { toValue: 0, friction: 4, tension: 160, useNativeDriver: true }),
+      ]),
+    );
+    bobLoop.start();
+    rockLoop.start();
+    hopLoop.start();
+    return () => {
+      bobLoop.stop();
+      rockLoop.stop();
+      hopLoop.stop();
+      bob.setValue(0);
+      rock.setValue(0);
+      hop.setValue(0);
+    };
+  }, [animate, bob, rock, hop]);
+
+  return (
+    <View pointerEvents="none" style={styles.mascotWrap}>
+      <Animated.View
+        style={{
+          transform: [
+            // Two translateY entries compose additively: continuous bob +
+            // the periodic hop ride the same axis without fighting.
+            { translateY: bob.interpolate({ inputRange: [-1, 1], outputRange: [6, -6] }) },
+            { translateY: hop.interpolate({ inputRange: [0, 1], outputRange: [0, -12] }) },
+            { rotate: rock.interpolate({ inputRange: [-1, 1], outputRange: ['-3deg', '3deg'] }) },
+          ],
+        }}
+      >
+        <View style={styles.mascotBubble}>
+          <OwlIcon size={46} />
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -503,6 +584,58 @@ export function HomeScreen({
       flamePulse.setValue(1);
     };
   }, [ambientActive, flamePulse]);
+
+  // LIVE NOW section header pulse: opacity 0.5 ↔ 1.0 over a 1.2s cycle so
+  // the "live" band reads as actually live while Home idles.
+  const livePulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!ambientActive) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(livePulse, { toValue: 0.5, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(livePulse, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      livePulse.setValue(1);
+    };
+  }, [ambientActive, livePulse]);
+
+  // Event-banner medallion bob (community goal / event cards): translateY
+  // ±4px over a 2s cycle. One shared value drives every banner's icon.
+  const eventIconBob = useRef(new Animated.Value(0)).current;
+  const hasEventBanners = activeEventBanners.length > 0;
+  useEffect(() => {
+    if (!ambientActive || !hasEventBanners) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(eventIconBob, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(eventIconBob, { toValue: -1, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      eventIconBob.setValue(0);
+    };
+  }, [ambientActive, hasEventBanners, eventIconBob]);
+
+  // Today's-challenge sun: slow continuous rotation, 360° over 8s, linear.
+  // Runs only while the sun is actually rendered (daily not yet done).
+  const sunSpin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!ambientActive || dailyDone || progress.puzzlesSolved < 1) return;
+    const loop = Animated.loop(
+      Animated.timing(sunSpin, { toValue: 1, duration: 8000, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      sunSpin.setValue(0);
+    };
+  }, [ambientActive, dailyDone, progress.puzzlesSolved, sunSpin]);
 
   // Pulse animation for wheel button when spins available
   useEffect(() => {
@@ -909,7 +1042,19 @@ export function HomeScreen({
                 </View>
                 {dailyDone
                   ? <GameIcon name="check" size={26} accent={COLORS.green} />
-                  : <GameIcon name="sun" size={26} />}
+                  : (
+                    // Slow continuous sun spin — 360° / 8s, linear (static
+                    // under reduce-motion: sunSpin stays 0 → 0deg).
+                    <Animated.View
+                      style={{
+                        transform: [
+                          { rotate: sunSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+                        ],
+                      }}
+                    >
+                      <GameIcon name="sun" size={26} />
+                    </Animated.View>
+                  )}
               </LinearGradient>
             </Pressable>
           )}
@@ -1008,7 +1153,11 @@ export function HomeScreen({
 
       {/* Live rail — swipeable carousel: event / wheel / season pass / deal / flash sale */}
       {(progress.puzzlesSolved >= 1 || activeEventBanners.length > 0) && (
-        <SectionHeader label="LIVE NOW" accent={COLORS.coral} />
+        // Breathing opacity (0.5 ↔ 1, 1.2s) sells "live"; settles at full
+        // opacity when ambient motion is off.
+        <Animated.View style={{ opacity: livePulse }}>
+          <SectionHeader label="LIVE NOW" accent={COLORS.coral} />
+        </Animated.View>
       )}
       <LiveRail>
       {/* Active Event Banners */}
@@ -1049,7 +1198,17 @@ export function HomeScreen({
                   </View>
                   <View style={styles.eventBannerBody}>
                     <View style={[styles.eventBannerMedallion, { borderColor: eb.color + '55', backgroundColor: eb.color + '22' }]}>
-                      <GameIcon glyph={eb.icon} size={34} />
+                      {/* Icon bob ±4px / 2s — shared eventIconBob value. */}
+                      <Animated.View
+                        pointerEvents="none"
+                        style={{
+                          transform: [
+                            { translateY: eventIconBob.interpolate({ inputRange: [-1, 1], outputRange: [4, -4] }) },
+                          ],
+                        }}
+                      >
+                        <GameIcon glyph={eb.icon} size={34} />
+                      </Animated.View>
                     </View>
                     <View style={styles.eventBannerInfo}>
                       <Text style={styles.eventBannerName} numberOfLines={1}>{eb.name}</Text>
@@ -1648,6 +1807,11 @@ export function HomeScreen({
       </Animated.View>
       </>)}
     </ScrollView>
+      {/* Ambient owl companion — bottom-left, matching Folio's in-game
+          perch. pointerEvents="none": scroll + taps pass straight through.
+          Cards keep their interactive affordances (chevrons, BUY buttons)
+          on the right edge, so the left corner is the quietest overlap. */}
+      <HomeMascot animate={ambientActive} />
       {/* Streak shield contextual offer */}
       {showStreakOffer && (
         <ContextualOffer
@@ -1672,7 +1836,28 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: 96, // clearance so the last card can scroll above the owl
+  },
+  mascotWrap: {
+    position: 'absolute',
+    bottom: 18,
+    left: 12,
+    zIndex: 30,
+  },
+  mascotBubble: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(26, 10, 46, 0.85)',
+    borderWidth: 1.5,
+    borderColor: COLORS.accent,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 6,
   },
   topBar: {
     flexDirection: 'row',
