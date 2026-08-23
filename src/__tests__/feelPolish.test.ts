@@ -10,6 +10,8 @@
  * throw particles outside the grid.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
 import { CELL_GAP, MAX_GRID_WIDTH, SCREEN_WIDTH } from '../constants';
 import {
@@ -19,6 +21,11 @@ import {
   GRID_FRAME_ALLOWANCE,
 } from '../components/game/gridGeometry';
 import { Grid } from '../types';
+
+const GAME_SCREEN_SOURCE = fs.readFileSync(
+  path.resolve(__dirname, '../screens/GameScreen.tsx'),
+  'utf8',
+);
 
 function makeGrid(rows: number, cols: number): Grid {
   return Array.from({ length: rows }, (_, row) =>
@@ -47,6 +54,23 @@ describe('feel-polish — Remote Config defaults', () => {
 
   it('ships tileBloomParticlesPerTile=2 as a conservative default', () => {
     expect(getRemoteNumber('tileBloomParticlesPerTile')).toBe(2);
+  });
+});
+
+describe('feel-polish — shared gameplay contracts', () => {
+  it('uses the centralized fail-closed reduce-motion hook', () => {
+    expect(GAME_SCREEN_SOURCE).toContain(
+      "import { useReduceMotion } from '../hooks/useReduceMotion';",
+    );
+    expect(GAME_SCREEN_SOURCE).toContain('const reduceMotion = useReduceMotion();');
+    expect(GAME_SCREEN_SOURCE).not.toContain('AccessibilityInfo.isReduceMotionEnabled()');
+    expect(GAME_SCREEN_SOURCE).not.toContain(
+      "AccessibilityInfo.addEventListener('reduceMotionChanged'",
+    );
+  });
+
+  it('routes particle origins through the canonical null-slot helper', () => {
+    expect(GAME_SCREEN_SOURCE).toContain('gridSlotCenter(gridGeometry, row, col)');
   });
 });
 
