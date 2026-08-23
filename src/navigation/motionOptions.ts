@@ -1,4 +1,3 @@
-import { Animated, Easing } from 'react-native';
 import type {
   StackCardInterpolationProps,
   StackNavigationOptions,
@@ -6,6 +5,8 @@ import type {
 import { COLORS } from '../constants';
 
 type StackTransitionSpec = NonNullable<StackNavigationOptions['transitionSpec']>;
+
+const cubicOut = (value: number): number => 1 - Math.pow(1 - value, 3);
 
 const springOpenSpec: StackTransitionSpec['open'] = {
   animation: 'spring',
@@ -23,7 +24,7 @@ const timingCloseSpec: StackTransitionSpec['close'] = {
   animation: 'timing',
   config: {
     duration: 320,
-    easing: Easing.out(Easing.cubic),
+    easing: cubicOut,
   },
 };
 
@@ -44,12 +45,12 @@ function cardSpringFadeInterpolator({
     inputRange: [0, 0.3, 1],
     outputRange: [0, 0.6, 1],
   });
-  const nextOpacity = next
+  const overlayOpacity = next
     ? next.progress.interpolate({
         inputRange: [0, 1],
-        outputRange: [1, 0.75],
+        outputRange: [0, 0.25],
       })
-    : 1;
+    : 0;
 
   return {
     cardStyle: {
@@ -57,7 +58,7 @@ function cardSpringFadeInterpolator({
       opacity,
     },
     overlayStyle: {
-      opacity: Animated.subtract(1, nextOpacity),
+      opacity: overlayOpacity,
     },
   };
 }
