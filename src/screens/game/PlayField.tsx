@@ -15,8 +15,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { GameGrid } from '../../components/Grid';
 import { WordBank } from '../../components/WordBank';
 import { useGameStore, useGameDispatch } from '../../stores/gameStore';
-import { CellPosition, GameMode, GameState, GravityDirection } from '../../types';
-import { CELL_GAP, MAX_GRID_WIDTH, COLORS } from '../../constants';
+import { CellPosition, GameMode, GameState } from '../../types';
 import { matchesWord } from '../../hooks/useGame';
 import { profilerOnRender, perfMark } from '../../utils/perfInstrument';
 import { tapHaptic } from '../../services/haptics';
@@ -248,7 +247,6 @@ function PlayFieldImpl({
             spotlightDimmedCells={spotlightDimmedSet}
             bonusCellId={bonusCellId}
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
-            noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
             onGravitySettled={onGravitySettled}
             frameAccent={frameAccent}
             wildcardMode={wildcardMode}

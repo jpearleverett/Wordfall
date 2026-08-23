@@ -85,6 +85,11 @@ import { GameFlashes } from './game/GameFlashes';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
 import { TilePaletteContext } from '../components/LetterCell';
+import {
+  computeGridGeometry,
+  computeGridMetrics,
+  GRID_FRAME_ALLOWANCE,
+} from '../components/game/gridGeometry';
 
 interface GameScreenProps {
   board: Board;
@@ -167,6 +172,7 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
 
 // Shared empty Set so memoized consumers (PlayField's GameGrid) don't re-render when spotlight is inactive.
 const EMPTY_CELL_KEY_SET: Set<string> = new Set();
+const GRID_AREA_BOTTOM_PADDING = 36;
 
 // Unified booster-button body gradient — matches the tile material language
 // so the three boosters read as one shelf with different icons rather than
@@ -816,7 +822,8 @@ function GameScreenImpl({
 
   const [showComplete, setShowComplete] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
-  const [gridAreaHeight, setGridAreaHeight] = useState(0);
+  const [gridAreaSize, setGridAreaSize] = useState({ width: 0, height: 0 });
+  const { width: gridAreaWidth, height: gridAreaHeight } = gridAreaSize;
 
   // Announce every newly-found word to screen readers (TalkBack / VoiceOver).
   // solveSequence grows by one entry per valid word; we watch its length and
@@ -1317,10 +1324,16 @@ function GameScreenImpl({
   // claimed its real height. Now we track every measurement but only
   // re-render when the height actually changed by ≥1px, which absorbs
   // the post-mount layout settle while staying stable during gameplay.
-  const handleGridLayout = useCallback((e: { nativeEvent: { layout: { height: number } } }) => {
-    const h = e.nativeEvent.layout.height;
-    if (h <= 0) return;
-    setGridAreaHeight((prev) => (Math.abs(prev - h) >= 1 ? h : prev));
+  const handleGridLayout = useCallback((e: {
+    nativeEvent: { layout: { width: number; height: number } };
+  }) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width <= 0 || height <= 0) return;
+    setGridAreaSize((prev) => (
+      Math.abs(prev.width - width) >= 1 || Math.abs(prev.height - height) >= 1
+        ? { width, height }
+        : prev
+    ));
   }, []);
 
   // Hard cap on simultaneously-rendered bloom particles. Keeps the queue
@@ -1329,55 +1342,61 @@ function GameScreenImpl({
   // still read as "sparse particles"; star sparks + cell flashes join in).
   const MAX_BLOOM_PARTICLES = 48;
 
-  // Map a grid (row, col) to pixel-space coordinates inside the particle
-  // container (which is `absoluteFillObject` inside `gridArea`). Mirrors the
-  // cellSize math used by Grid.tsx and the gravity block so bloom particles
-  // land at each tile's visual center. Returns a safe fallback centered in
-  // the grid area when layout hasn't measured yet.
-  const cellPositionToScreen = useCallback(
-    (row: number, col: number): { x: number; y: number } => {
-      const rows = grid.length;
-      const cols = grid[0]?.length ?? 0;
-      if (cols === 0 || rows === 0 || gridAreaHeight <= 0) {
-        return { x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
-      }
-      const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-      let cellSize = Math.floor(availableWidth / cols);
-      const frameAllowance = 58;
-      const heightAvail = gridAreaHeight - frameAllowance;
-      const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
-      cellSize = Math.min(cellSize, heightBased);
-      if (cellSize <= 0) {
-        return { x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
-      }
-      const cellStride = cellSize + CELL_GAP;
-      const gridWidth = cols * cellStride + CELL_GAP;
-      const gridHeight = rows * cellStride;
-      // Grid is centered inside gridArea (≈ SCREEN_WIDTH wide with 8px padding).
-      const gridLeft = (SCREEN_WIDTH - gridWidth) / 2;
-      const gridTop = (gridAreaHeight - gridHeight) / 2;
-      const padding = CELL_GAP / 2;
-      return {
-        x: gridLeft + padding + col * cellStride + cellSize / 2,
-        y: gridTop + row * cellStride + cellSize / 2,
-      };
-    },
+  const gridMetrics = useMemo(
+    () => computeGridMetrics(
+      grid.length,
+      grid[0]?.length ?? 0,
+      MAX_GRID_WIDTH,
+      gridAreaHeight,
+      CELL_GAP,
+      GRID_FRAME_ALLOWANCE,
+    ),
     [grid, gridAreaHeight],
   );
+  const gridGeometry = useMemo(
+    () => computeGridGeometry(grid, gridMetrics.cellSize, CELL_GAP),
+    [grid, gridMetrics.cellSize],
+  );
+  const gridOffset = useMemo(
+    () => ({
+      left: (gridAreaWidth - gridGeometry.width) / 2,
+      top: (gridAreaHeight - GRID_AREA_BOTTOM_PADDING - gridGeometry.height) / 2,
+    }),
+    [gridAreaWidth, gridAreaHeight, gridGeometry],
+  );
 
-  // Pixel size of one tile — mirrors cellPositionToScreen's sizing math so
-  // the per-cell clear flash matches the tile footprint. 0 until layout.
-  const gridCellSize = useMemo(() => {
-    const rows = grid.length;
-    const cols = grid[0]?.length ?? 0;
-    if (cols === 0 || rows === 0 || gridAreaHeight <= 0) return 0;
-    const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-    let cellSize = Math.floor(availableWidth / cols);
-    const frameAllowance = 58;
-    const heightAvail = gridAreaHeight - frameAllowance;
-    cellSize = Math.min(cellSize, Math.floor(heightAvail / rows - CELL_GAP));
-    return Math.max(0, cellSize);
-  }, [grid, gridAreaHeight]);
+  // Map an engine-owned (row, col) slot to its center in the particle
+  // container. The same geometry drives Grid rendering and hit-testing.
+  const cellPositionToScreen = useCallback(
+    (row: number, col: number): { x: number; y: number } => {
+      if (
+        gridMetrics.cellSize <= 0 ||
+        row < 0 ||
+        row >= gridGeometry.rows ||
+        col < 0 ||
+        col >= gridGeometry.cols
+      ) {
+        return {
+          x: gridAreaWidth > 0 ? gridAreaWidth / 2 : SCREEN_WIDTH / 2,
+          y: gridAreaHeight / 2 + 60,
+        };
+      }
+      const bound = gridGeometry.byPosition.get(`${row},${col}`);
+      const x = bound
+        ? bound.x + bound.w / 2
+        : gridGeometry.padding + col * gridGeometry.stride + gridGeometry.stride / 2;
+      const y = bound
+        ? bound.y + bound.h / 2
+        : row * gridGeometry.stride + gridGeometry.stride / 2;
+      return {
+        x: gridOffset.left + x,
+        y: gridOffset.top + y,
+      };
+    },
+    [gridAreaHeight, gridAreaWidth, gridGeometry, gridMetrics.cellSize, gridOffset],
+  );
+
+  const gridCellSize = gridMetrics.cellSize;
 
   // Spawn multi-tile bloom particles for a word. Each cell gets
   // `tileBloomParticlesPerTile` particle instances, staggered 30ms per tile
@@ -2010,7 +2029,7 @@ function GameScreenImpl({
   // Reset grid height when board changes (new puzzle/level) — prompts a
   // fresh onLayout measurement for the new grid's dimensions.
   useEffect(() => {
-    setGridAreaHeight(0);
+    setGridAreaSize({ width: 0, height: 0 });
     // Also reset the adjuster's per-puzzle stuck-fail guard so the
     // next puzzle can record its own struggle signal independently.
     stuckFailRecordedRef.current = false;
@@ -3104,7 +3123,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingBottom: 36,
+    paddingBottom: GRID_AREA_BOTTOM_PADDING,
   },
   bannerOverlay: {
     position: 'absolute',
