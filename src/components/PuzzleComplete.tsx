@@ -709,17 +709,23 @@ function FlawlessBadgePlate({
   visible,
   reduceMotion = false,
   delay = 700,
+  initialScale,
+  initialOpacity,
 }: {
   visible: boolean;
   reduceMotion?: boolean;
   delay?: number;
+  initialScale: number;
+  initialOpacity: number;
 }) {
-  const scale = useRef(new Animated.Value(reduceMotion ? 1 : 0.6)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(initialScale)).current;
+  const opacity = useRef(
+    new Animated.Value(visible ? initialOpacity : 0),
+  ).current;
 
   useEffect(() => {
     if (!visible) {
-      scale.setValue(reduceMotion ? 1 : 0.6);
+      scale.setValue(initialScale);
       opacity.setValue(0);
       return;
     }
@@ -751,7 +757,14 @@ function FlawlessBadgePlate({
         }),
       ]),
     ]).start();
-  }, [visible, reduceMotion, delay, scale, opacity]);
+  }, [
+    visible,
+    reduceMotion,
+    delay,
+    initialScale,
+    scale,
+    opacity,
+  ]);
 
   if (!visible) return null;
 
@@ -1370,7 +1383,13 @@ export function PuzzleComplete({
                   solve gets this; streak milestones get a full-screen ceremony
                   on top. */}
               {perfectRun && (
-                <FlawlessBadgePlate visible={starsRevealed} delay={700} reduceMotion={!motionPolicy.animateStars} />
+                <FlawlessBadgePlate
+                  visible={starsRevealed}
+                  delay={700}
+                  reduceMotion={!motionPolicy.animateStars}
+                  initialScale={motionPolicy.state.flawlessBadgeScale}
+                  initialOpacity={motionPolicy.state.flawlessBadgeOpacity}
+                />
               )}
 
               {/* Chrome score panel with CRT scan lines */}

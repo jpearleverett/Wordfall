@@ -44,6 +44,8 @@ export interface PuzzleCompleteMotionPolicy {
     glitchProgress: number;
     cardScale: number;
     cardOpacity: number;
+    flawlessBadgeScale: number;
+    flawlessBadgeOpacity: number;
     starsRevealed: boolean;
     displayedScore: number;
   };
@@ -68,6 +70,8 @@ export function getPuzzleCompleteMotionPolicy(
       glitchProgress: 0,
       cardScale: animate ? 0.93 : 1,
       cardOpacity: animate ? 0 : 1,
+      flawlessBadgeScale: animate ? 0.6 : 1,
+      flawlessBadgeOpacity: animate ? 0 : 1,
       starsRevealed: !animate,
       displayedScore: animate ? 0 : finalScore,
     },
