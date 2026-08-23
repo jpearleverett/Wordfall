@@ -96,6 +96,17 @@ describe('wing restoration pays its bonus', () => {
   });
 });
 
+describe('quest step completion pays at ceremony pop time', () => {
+  it('credits the queued coin and gem reward', () => {
+    expect(
+      ceremonyEconomyGrant({
+        type: 'quest_step_complete',
+        data: { rewardCoins: 75, rewardGems: 4 },
+      }),
+    ).toEqual({ coins: 75, gems: 4, hintTokens: 0, rareTile: false });
+  });
+});
+
 describe('types whose own flows already grant are excluded', () => {
   // Granting any of these here would double-pay:
   // daily_quest_claim is credited at claim time in App.tsx; the wheel
