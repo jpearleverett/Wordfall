@@ -11,7 +11,7 @@ test('reduced motion disables spatial stack and tab transitions', () => {
 
 test('normal motion retains the Wordfall stack spring and tab shift', () => {
   const options = getStackMotionOptions(false);
-  expect(options.animationEnabled).not.toBe(false);
+  expect(options.animation).not.toBe('none');
   expect(options.cardStyleInterpolator).toBeDefined();
   expect(options.transitionSpec?.open.animation).toBe('spring');
   expect(getTabAnimation(false)).toBe('shift');
