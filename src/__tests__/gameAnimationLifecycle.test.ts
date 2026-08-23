@@ -58,10 +58,10 @@ describe('animation resource lifecycle', () => {
     expect(secondAnimation.stop).toHaveBeenCalledTimes(1);
     expect(firstListener.remove).toHaveBeenCalledTimes(1);
     expect(secondListener.remove).toHaveBeenCalledTimes(1);
-    expect(active).toHaveSize(0);
-    expect(listeners).toHaveSize(0);
-    expect(liveOffsets).toHaveSize(0);
-    expect(animatedValues).toHaveSize(0);
+    expect(active.size).toBe(0);
+    expect(listeners.size).toBe(0);
+    expect(liveOffsets.size).toBe(0);
+    expect(animatedValues.size).toBe(0);
   });
 
   test('timeout cleanup prevents delayed work after unmount', () => {
@@ -69,13 +69,15 @@ describe('animation resource lifecycle', () => {
     try {
       const callback = jest.fn();
       const handles = new Set<ReturnType<typeof setTimeout>>();
-      handles.add(setTimeout(callback, 22));
+      handles.add(
+        setTimeout(callback, 22) as unknown as ReturnType<typeof setTimeout>,
+      );
 
       clearTimeoutHandles(handles);
       jest.advanceTimersByTime(22);
 
       expect(callback).not.toHaveBeenCalled();
-      expect(handles).toHaveSize(0);
+      expect(handles.size).toBe(0);
     } finally {
       jest.useRealTimers();
     }
@@ -127,8 +129,7 @@ describe('fall sequence ownership release', () => {
     );
 
     expect(shouldDecrement).toBe(false);
-    expect(active).not.toHaveProperty('A');
-    expect(active).toHaveSize(0);
+    expect(active.size).toBe(0);
     expect(listeners.get('A')).toBe(listener);
     expect(liveOffsets.get('A')).toEqual({ x: 0, y: 30 });
     expect(listener.remove).not.toHaveBeenCalled();
@@ -151,9 +152,9 @@ describe('fall sequence ownership release', () => {
     );
 
     expect(shouldDecrement).toBe(true);
-    expect(active).toHaveSize(0);
-    expect(listeners).toHaveSize(0);
-    expect(liveOffsets).toHaveSize(0);
+    expect(active.size).toBe(0);
+    expect(listeners.size).toBe(0);
+    expect(liveOffsets.size).toBe(0);
     expect(listener.remove).toHaveBeenCalledTimes(1);
   });
 });
