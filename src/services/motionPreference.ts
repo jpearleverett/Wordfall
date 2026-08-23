@@ -42,20 +42,22 @@ export function createMotionPreferenceStore(
     if (initialized) return;
     initialized = true;
     const currentGeneration = ++generation;
+    let nativeEventReceived = false;
     removeNativeListener = adapter.addReduceMotionListener((reduceMotion) => {
       if (currentGeneration === generation) {
+        nativeEventReceived = true;
         publish({ reduceMotion, resolved: true });
       }
     });
     adapter
       .isReduceMotionEnabled()
       .then((reduceMotion) => {
-        if (currentGeneration === generation) {
+        if (currentGeneration === generation && !nativeEventReceived) {
           publish({ reduceMotion, resolved: true });
         }
       })
       .catch(() => {
-        if (currentGeneration === generation) {
+        if (currentGeneration === generation && !nativeEventReceived) {
           publish({ reduceMotion: true, resolved: true });
         }
       });
