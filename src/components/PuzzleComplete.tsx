@@ -42,6 +42,7 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
 import { isCeremonyVisible } from '../hooks/useCeremonyQueue';
 import GameIcon from './icons/GameIcon';
 import { WINGS, getWing } from '../data/library';
+import { getPuzzleCompleteMotionPolicy } from '../utils/gameMotion';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -155,18 +156,27 @@ function ConfettiParticle({ delay, color, startX }: { delay: number; color: stri
 function AnimatedScore({
   targetScore,
   startDelay = 0,
-  reduceMotion = false,
+  animate,
+  initialScore,
 }: {
   targetScore: number;
   startDelay?: number;
-  reduceMotion?: boolean;
+  animate: boolean;
+  initialScore: number;
 }) {
-  const [displayScore, setDisplayScore] = useState(0);
+  const [displayScore, setDisplayScore] = useState(initialScore);
+  const animationDisabledRef = useRef(!animate);
+  if (!animate) animationDisabledRef.current = true;
   // Landing pulse: 1 → 1.12 → 1 when the count-up resolves, so the final
   // number "lands" instead of just stopping.
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    if (!animate || animationDisabledRef.current) {
+      setDisplayScore(targetScore);
+      pulse.setValue(1);
+      return;
+    }
     const duration = 800;
     const steps = 20;
     let step = 0;
@@ -189,12 +199,10 @@ function AnimatedScore({
           setDisplayScore(targetScore);
           if (interval) clearInterval(interval);
           void soundManager.playSound('bonusCountdownEnd');
-          if (!reduceMotion) {
-            Animated.sequence([
-              Animated.spring(pulse, { toValue: 1.12, friction: 4, tension: 320, useNativeDriver: true }),
-              Animated.spring(pulse, { toValue: 1, friction: 6, tension: 180, useNativeDriver: true }),
-            ]).start();
-          }
+          Animated.sequence([
+            Animated.spring(pulse, { toValue: 1.12, friction: 4, tension: 320, useNativeDriver: true }),
+            Animated.spring(pulse, { toValue: 1, friction: 6, tension: 180, useNativeDriver: true }),
+          ]).start();
         }
       }, duration / steps);
     }, startDelay);
@@ -203,7 +211,7 @@ function AnimatedScore({
       clearTimeout(startTimer);
       if (interval) clearInterval(interval);
     };
-  }, [targetScore, startDelay, reduceMotion, pulse]);
+  }, [targetScore, startDelay, animate, pulse]);
 
   return (
     <Animated.View style={{ transform: [{ scale: pulse }] }}>
@@ -528,12 +536,26 @@ const MEDALLION_TICK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 // → bronze bottom-right) with an inner shine face, a beveled bright-gold star,
 // and 8 tiny ray ticks. Unearned: dark recessed socket with a dim star ghost.
 // Pop-in animation params + delays are IDENTICAL to the old flat Star.
-function Star({ filled, delay, size }: { filled: boolean; delay: number; size: number }) {
-  const anim = useRef(new Animated.Value(0)).current;
+function Star({
+  filled,
+  delay,
+  size,
+  animate,
+}: {
+  filled: boolean;
+  delay: number;
+  size: number;
+  animate: boolean;
+}) {
+  const anim = useRef(new Animated.Value(filled && !animate ? 1 : 0)).current;
 
   useEffect(() => {
     if (!filled) return;
-    Animated.sequence([
+    if (!animate) {
+      anim.setValue(1);
+      return;
+    }
+    const animation = Animated.sequence([
       Animated.delay(delay),
       Animated.spring(anim, {
         toValue: 1,
@@ -541,8 +563,10 @@ function Star({ filled, delay, size }: { filled: boolean; delay: number; size: n
         tension: 180,
         useNativeDriver: true,
       }),
-    ]).start();
-  }, [anim, delay, filled]);
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [anim, animate, delay, filled]);
 
   const disc = size + 16;
   const glowSize = disc + 10;
@@ -700,13 +724,8 @@ function FlawlessBadgePlate({
       return;
     }
     if (reduceMotion) {
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 280,
-        delay,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }).start();
+      scale.setValue(1);
+      opacity.setValue(1);
       return;
     }
     Animated.parallel([
@@ -904,6 +923,10 @@ export function PuzzleComplete({
   const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
   const reduceMotion = useReduceMotion();
+  const motionPolicy = useMemo(
+    () => getPuzzleCompleteMotionPolicy(reduceMotion, score),
+    [reduceMotion, score],
+  );
 
   // Victory card share (Phase 4C). Captures the off-screen <ShareCard/>
   // into a PNG and hands it to the system share sheet. Falls back to a
@@ -915,20 +938,38 @@ export function PuzzleComplete({
     score,
   });
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const cardAnim = useRef(new Animated.Value(30)).current;
-  const ribbonAnim = useRef(new Animated.Value(0)).current;
-  const statsAnim = useRef(new Animated.Value(0)).current;
-  const actionsAnim = useRef(new Animated.Value(0)).current;
-  const glitchAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(
+    new Animated.Value(motionPolicy.state.overlayOpacity),
+  ).current;
+  const cardAnim = useRef(
+    new Animated.Value(motionPolicy.state.cardTranslateY),
+  ).current;
+  const ribbonAnim = useRef(
+    new Animated.Value(motionPolicy.state.ribbonProgress),
+  ).current;
+  const statsAnim = useRef(
+    new Animated.Value(motionPolicy.state.statsProgress),
+  ).current;
+  const actionsAnim = useRef(
+    new Animated.Value(motionPolicy.state.actionsProgress),
+  ).current;
+  const glitchAnim = useRef(
+    new Animated.Value(motionPolicy.state.glitchProgress),
+  ).current;
   // Root entrance (blind round-3 review: "hard cut between two results
   // screens") — the card itself now fades 0→1 AND scales 0.93→1 with a
   // ~350ms spring while the backdrop fades over 250ms, so the screen
-  // arrives instead of appearing. One-shot; under reduce motion it
-  // collapses to a plain 150ms fade with no scale.
-  const cardScaleAnim = useRef(new Animated.Value(0.93)).current;
-  const cardOpacityAnim = useRef(new Animated.Value(0)).current;
-  const [starsRevealed, setStarsRevealed] = useState(false);
+  // arrives instead of appearing. Reduced or unresolved motion initializes
+  // every semantic surface at its settled value and skips this choreography.
+  const cardScaleAnim = useRef(
+    new Animated.Value(motionPolicy.state.cardScale),
+  ).current;
+  const cardOpacityAnim = useRef(
+    new Animated.Value(motionPolicy.state.cardOpacity),
+  ).current;
+  const [starsRevealed, setStarsRevealed] = useState(
+    motionPolicy.state.starsRevealed,
+  );
 
   // Progressive disclosure: the main card mounts immediately so the user
   // sees SOMETHING fast, then we mount the decorative particles after a
@@ -940,16 +981,30 @@ export function PuzzleComplete({
   // card's own entrance animation.
   const [decorationsMounted, setDecorationsMounted] = useState(false);
   useEffect(() => {
+    if (!motionPolicy.animateDecorations) {
+      setDecorationsMounted(false);
+      return;
+    }
     const t = setTimeout(() => setDecorationsMounted(true), 250);
     return () => clearTimeout(t);
-  }, []);
+  }, [motionPolicy.animateDecorations]);
 
   useEffect(() => {
+    if (!motionPolicy.animateEntrance) {
+      fadeAnim.setValue(motionPolicy.state.overlayOpacity);
+      cardAnim.setValue(motionPolicy.state.cardTranslateY);
+      ribbonAnim.setValue(motionPolicy.state.ribbonProgress);
+      statsAnim.setValue(motionPolicy.state.statsProgress);
+      actionsAnim.setValue(motionPolicy.state.actionsProgress);
+      glitchAnim.setValue(motionPolicy.state.glitchProgress);
+      setStarsRevealed(motionPolicy.state.starsRevealed);
+      return;
+    }
     // Crisp entrance: card pops in fast with minimal bounce, then content
     // fades in with staggered parallel timing instead of sequential springs.
     // Previous springs (friction 5-7) produced ~1.8s of wobble. New params
     // settle in ~400ms total with a satisfying snap.
-    Animated.parallel([
+    const entrance = Animated.parallel([
       // Backdrop fade — 250ms so the dark scrim washes in rather than cuts
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -999,24 +1054,41 @@ export function PuzzleComplete({
           useNativeDriver: true,
         }),
       ]),
-    ]).start();
+    ]);
+    entrance.start();
 
     // Trigger star burst effects after star reveal delay
     const timer = setTimeout(() => setStarsRevealed(true), 800);
-    return () => clearTimeout(timer);
-  }, [actionsAnim, cardAnim, fadeAnim, glitchAnim, ribbonAnim, statsAnim]);
+    return () => {
+      entrance.stop();
+      clearTimeout(timer);
+    };
+  }, [
+    actionsAnim,
+    cardAnim,
+    fadeAnim,
+    glitchAnim,
+    motionPolicy.animateEntrance,
+    motionPolicy.state.actionsProgress,
+    motionPolicy.state.cardTranslateY,
+    motionPolicy.state.glitchProgress,
+    motionPolicy.state.overlayOpacity,
+    motionPolicy.state.ribbonProgress,
+    motionPolicy.state.starsRevealed,
+    motionPolicy.state.statsProgress,
+    ribbonAnim,
+    statsAnim,
+  ]);
 
   // Card entrance: opacity 0→1 + scale 0.93→1 spring (~350ms settle).
-  // Reduce motion: snap scale to 1 and run a 150ms fade only. If the
-  // reduce-motion preference resolves asynchronously after mount, the
-  // re-run just snaps to the settled state — harmless.
+  // Reduced or unresolved motion snaps both channels to their final values.
   useEffect(() => {
-    if (reduceMotion) {
-      cardScaleAnim.setValue(1);
-      Animated.timing(cardOpacityAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    if (!motionPolicy.animateEntrance) {
+      cardScaleAnim.setValue(motionPolicy.state.cardScale);
+      cardOpacityAnim.setValue(motionPolicy.state.cardOpacity);
       return;
     }
-    Animated.parallel([
+    const entrance = Animated.parallel([
       Animated.timing(cardOpacityAnim, {
         toValue: 1,
         duration: 220,
@@ -1029,8 +1101,16 @@ export function PuzzleComplete({
         tension: 140,
         useNativeDriver: true,
       }),
-    ]).start();
-  }, [cardOpacityAnim, cardScaleAnim, reduceMotion]);
+    ]);
+    entrance.start();
+    return () => entrance.stop();
+  }, [
+    cardOpacityAnim,
+    cardScaleAnim,
+    motionPolicy.animateEntrance,
+    motionPolicy.state.cardOpacity,
+    motionPolicy.state.cardScale,
+  ]);
 
   // Auto-advance: 3.5s after victory, call onNextLevel. Cut to 2s in
   // reduce-motion. Disabled for daily (player may want to share) and
@@ -1072,7 +1152,7 @@ export function PuzzleComplete({
   // Per-star reveal audio — one `starEarn` sting per earned star, staggered
   // to match the NeonStarBurst reveal delays (140 / 340 / 560 ms).
   useEffect(() => {
-    if (!starsRevealed) return;
+    if (!starsRevealed || !motionPolicy.animateStars) return;
     const delays = [140, 340, 560];
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (let i = 0; i < stars; i++) {
@@ -1083,16 +1163,16 @@ export function PuzzleComplete({
       );
     }
     return () => { for (const t of timers) clearTimeout(t); };
-  }, [starsRevealed, stars]);
+  }, [motionPolicy.animateStars, starsRevealed, stars]);
 
   // Flawless badge audio sting: plays once when the badge reveals.
   // Dedicated `flawlessBadge` slot — synth fallback until `flawless_badge.mp3`
   // lands in `assets/audio/`.
   useEffect(() => {
-    if (starsRevealed && perfectRun) {
+    if (motionPolicy.animateStars && starsRevealed && perfectRun) {
       void soundManager.playSound('flawlessBadge');
     }
-  }, [starsRevealed, perfectRun]);
+  }, [motionPolicy.animateStars, starsRevealed, perfectRun]);
 
   const title = useMemo(() => {
     if (isDaily) return 'Daily Triumph';
@@ -1171,7 +1251,7 @@ export function PuzzleComplete({
       {/* Under reduce motion the celebration video and falling confetti are
           skipped entirely (SparkleField / CelebrationBurst self-gate). The
           card, stars, and badge still appear — content, not motion. */}
-      {decorationsMounted && !reduceMotion && (
+      {decorationsMounted && motionPolicy.animateDecorations && (
         <>
           <VideoBackground
             source={LOCAL_VIDEOS.victoryCelebration}
@@ -1267,20 +1347,20 @@ export function PuzzleComplete({
                 <VictoryRays reduceMotion={reduceMotion} />
                 <MedalRipple reduceMotion={reduceMotion} offset={0}>
                   <View style={styles.starContainer}>
-                    <Star filled={stars >= 1} delay={140} size={44} />
-                    <NeonStarBurst active={starsRevealed && stars >= 1} color={COLORS.gold} size={50} />
+                    <Star filled={stars >= 1} delay={140} size={44} animate={motionPolicy.animateStars} />
+                    <NeonStarBurst active={motionPolicy.animateStars && starsRevealed && stars >= 1} color={COLORS.gold} size={50} />
                   </View>
                 </MedalRipple>
                 <MedalRipple reduceMotion={reduceMotion} offset={140}>
                   <View style={styles.starContainer}>
-                    <Star filled={stars >= 2} delay={340} size={56} />
-                    <NeonStarBurst active={starsRevealed && stars >= 2} color={COLORS.gold} size={64} />
+                    <Star filled={stars >= 2} delay={340} size={56} animate={motionPolicy.animateStars} />
+                    <NeonStarBurst active={motionPolicy.animateStars && starsRevealed && stars >= 2} color={COLORS.gold} size={64} />
                   </View>
                 </MedalRipple>
                 <MedalRipple reduceMotion={reduceMotion} offset={280}>
                   <View style={styles.starContainer}>
-                    <Star filled={stars >= 3} delay={560} size={44} />
-                    <NeonStarBurst active={starsRevealed && stars >= 3} color={COLORS.gold} size={50} />
+                    <Star filled={stars >= 3} delay={560} size={44} animate={motionPolicy.animateStars} />
+                    <NeonStarBurst active={motionPolicy.animateStars && starsRevealed && stars >= 3} color={COLORS.gold} size={50} />
                   </View>
                 </MedalRipple>
                 <MedalGlint reduceMotion={reduceMotion} />
@@ -1290,7 +1370,7 @@ export function PuzzleComplete({
                   solve gets this; streak milestones get a full-screen ceremony
                   on top. */}
               {perfectRun && (
-                <FlawlessBadgePlate visible={starsRevealed} delay={700} reduceMotion={reduceMotion} />
+                <FlawlessBadgePlate visible={starsRevealed} delay={700} reduceMotion={!motionPolicy.animateStars} />
               )}
 
               {/* Chrome score panel with CRT scan lines */}
@@ -1307,7 +1387,12 @@ export function PuzzleComplete({
                       1.0↔1.03 over ~1.8s. Scale transform is center-anchored
                       so the panel layout never shifts. */}
                   <CtaPulse reduceMotion={reduceMotion} to={1.03} duration={900}>
-                    <AnimatedScore targetScore={score} startDelay={480} reduceMotion={reduceMotion} />
+                    <AnimatedScore
+                      targetScore={score}
+                      startDelay={480}
+                      animate={motionPolicy.animateScore}
+                      initialScore={motionPolicy.state.displayedScore}
+                    />
                   </CtaPulse>
                 </View>
               </LinearGradient>
@@ -1667,7 +1752,7 @@ export function PuzzleComplete({
                 the card (top → ~60% height). Deferred behind the same
                 250ms decoration gate as the entrance burst; skipped
                 entirely under reduce motion. Never intercepts touches. */}
-            {decorationsMounted && !reduceMotion && (
+            {decorationsMounted && motionPolicy.animateDecorations && (
               <View pointerEvents="none" style={StyleSheet.absoluteFill}>
                 {DRIZZLE_SPECS.map((sp, i) => (
                   <DrizzleFlake key={i} {...sp} reduceMotion={reduceMotion} />

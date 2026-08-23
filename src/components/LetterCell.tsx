@@ -24,7 +24,6 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { CoinIcon } from './icons/iconsCore';
 import { useSettings } from '../contexts/SettingsContext';
 import { getColorblindTileRamps } from '../services/colorblind';
-import { useReduceMotion } from '../hooks/useReduceMotion';
 
 // ── Pre-computed style constants (module scope so tuples share a single reference) ─
 const BODY_COLORS_VALID: [string, string, string, string, string] = ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
@@ -120,6 +119,7 @@ interface LetterCellProps {
   letter: string;
   cellId: string;
   size: number;
+  reduceMotion: boolean;
   isSelected: boolean;
   isHinted: boolean;
   selectionIndex: number;
@@ -149,6 +149,7 @@ export const LetterCell = React.memo(function LetterCell({
   letter,
   cellId,
   size,
+  reduceMotion,
   isSelected,
   isHinted,
   selectionIndex,
@@ -164,7 +165,6 @@ export const LetterCell = React.memo(function LetterCell({
   // Dev-only: count how many LetterCell renders happen per Grid commit.
   // If memoization is working we expect ~1 render per tap.
   perfCountCellRender();
-  const reduceMotion = useReduceMotion();
   const palette = useColors();
   // Chapter-derived default tile gradient. Stable across a single level; a
   // level transition re-renders the whole grid anyway, so the extra context

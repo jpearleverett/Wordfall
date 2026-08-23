@@ -980,6 +980,7 @@ function GameGridImpl({
                         letter={cell.letter}
                         cellId={cell.id}
                         size={cellSize}
+                        reduceMotion={reduceMotion}
                         isSelected={isSelected}
                         isHinted={isHinted}
                         selectionIndex={selIndex}
