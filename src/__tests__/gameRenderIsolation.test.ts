@@ -11,6 +11,10 @@ const useGameSource = readSource('../hooks/useGame.ts');
 const gameHeaderSource = readSource('../components/GameHeader.tsx');
 const timerSource = readSource('../screens/game/TimerMovesBars.tsx');
 const playFieldSource = readSource('../screens/game/PlayField.tsx');
+const gridSource = readSource('../components/Grid.tsx');
+const letterCellSource = readSource('../components/LetterCell.tsx');
+const wordBankSource = readSource('../components/WordBank.tsx');
+const puzzleCompleteSource = readSource('../components/PuzzleComplete.tsx');
 
 describe('gameplay render isolation', () => {
   it('keeps authoritative timer ticks out of GameScreen and GameHeader', () => {
@@ -30,5 +34,16 @@ describe('gameplay render isolation', () => {
   it('shares last-word tension eligibility across gameplay surfaces', () => {
     expect(playFieldSource).toContain('isLastWordTensionActive');
     expect(gameScreenSource).toContain('isLastWordTensionActive');
+  });
+
+  it('connects gameplay surfaces to the tested motion policies', () => {
+    expect(wordBankSource).toContain('getWordBankMotionPolicy');
+    expect(puzzleCompleteSource).toContain('getPuzzleCompleteMotionPolicy');
+  });
+
+  it('resolves motion once in Grid and passes a stable boolean to each cell', () => {
+    expect(gridSource).toContain('reduceMotion={reduceMotion}');
+    expect(letterCellSource).toContain('reduceMotion: boolean');
+    expect(letterCellSource).not.toContain('useReduceMotion');
   });
 });
