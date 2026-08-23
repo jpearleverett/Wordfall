@@ -18,7 +18,7 @@ test('normal motion retains the Wordfall stack spring and tab shift', () => {
   expect(options.animation).not.toBe('none');
   expect(options.cardStyleInterpolator).toBeDefined();
   expect(options.headerShown).toBe(false);
-  expect(options.cardStyle).toEqual({ backgroundColor: '#0a0e27' });
+  expect(options.cardStyle).toEqual({ backgroundColor: '#0a0015' });
   expect(options.freezeOnBlur).toBe(true);
   expect(options.transitionSpec?.open).toEqual({
     animation: 'spring',
