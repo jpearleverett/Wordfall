@@ -17,7 +17,6 @@ import SectionHeader from '../components/common/SectionHeader';
 import NeonProgressBar from '../components/common/NeonProgressBar';
 import { bentoPanel, bentoHeaderStyles, bentoDividerColor } from '../styles/bentoPanel';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-import ScreenEntrance from '../components/ScreenEntrance';
 import { SkeletonCard } from '../components/common/Skeleton';
 import {
   usePlayerStore,
@@ -1012,14 +1011,11 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
         contentContainerStyle={styles.atlasGrid}
         showsVerticalScrollIndicator={false}
       >
-        <ScreenEntrance index={2}>
-          <SectionHeader
-            label="WORD ATLAS"
-            accent={COLORS.cyan}
-            meta={`${completedPages}/${atlasPages.length} PAGES`}
-          />
-        </ScreenEntrance>
-        <ScreenEntrance index={3}>
+        <SectionHeader
+          label="WORD ATLAS"
+          accent={COLORS.cyan}
+          meta={`${completedPages}/${atlasPages.length} PAGES`}
+        />
         <Pressable
           style={({ pressed }) => [
             styles.atlasFeaturedCard,
@@ -1070,9 +1066,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             />
           </View>
         </Pressable>
-        </ScreenEntrance>
         {expandedAtlasId === featured.id && renderAtlasWordList(featured, featuredAccent)}
-        <ScreenEntrance index={4}>
         <View style={styles.atlasGridWrap}>
         {gridPages.map((page: any, pageIndex: number) => {
           const isComplete = page.found >= page.total;
@@ -1145,7 +1139,6 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
           );
         })}
         </View>
-        </ScreenEntrance>
         <View style={styles.bottomSpacer} />
       </ScrollView>
     );
@@ -1159,22 +1152,19 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
         contentContainerStyle={styles.tilesContainer}
         showsVerticalScrollIndicator={false}
       >
-        <ScreenEntrance index={2}>
-          <SectionHeader
-            label="RARE TILES"
-            accent={COLORS.gold}
-            meta={`${totalCollected}/26 COLLECTED`}
+        <SectionHeader
+          label="RARE TILES"
+          accent={COLORS.gold}
+          meta={`${totalCollected}/26 COLLECTED`}
+        />
+        <View style={styles.vaultMeter}>
+          <NeonProgressBar
+            progress={totalCollected / 26}
+            color={COLORS.gold}
+            height={8}
           />
-          <View style={styles.vaultMeter}>
-            <NeonProgressBar
-              progress={totalCollected / 26}
-              color={COLORS.gold}
-              height={8}
-            />
-          </View>
-        </ScreenEntrance>
+        </View>
 
-        <ScreenEntrance index={3}>
         <View style={[styles.tileSetsSection, bentoPanel('gold', { padding: 16, marginBottom: 6 })]}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
@@ -1230,12 +1220,8 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             );
           })}
         </View>
-        </ScreenEntrance>
 
-        <ScreenEntrance index={4}>
-          <SectionHeader label="LETTER VAULT" accent={COLORS.gold} meta="RARITY-TINTED" />
-        </ScreenEntrance>
-        <ScreenEntrance index={5}>
+        <SectionHeader label="LETTER VAULT" accent={COLORS.gold} meta="RARITY-TINTED" />
         <View style={styles.tilesGrid}>
           {ALPHABET.map((letter) => {
             const owned = collectedTiles.includes(letter);
@@ -1272,7 +1258,6 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             );
           })}
         </View>
-        </ScreenEntrance>
         <View style={styles.bottomSpacer} />
       </ScrollView>
     );
@@ -1286,7 +1271,6 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
         contentContainerStyle={styles.stampsContainer}
         showsVerticalScrollIndicator={false}
       >
-        <ScreenEntrance index={2}>
         <View style={[styles.seasonBanner, bentoPanel('purple', { padding: 20 })]}>
           <LinearGradient
             colors={[...GRADIENTS.surfaceCard]}
@@ -1313,9 +1297,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             />
           </View>
         </View>
-        </ScreenEntrance>
 
-        <ScreenEntrance index={3}>
         <View style={styles.stampsGrid}>
           {stamps.map((stamp: any, stampIdx: number) => (
             <View
@@ -1367,7 +1349,6 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             </View>
           ))}
         </View>
-        </ScreenEntrance>
         <View style={styles.bottomSpacer} />
       </ScrollView>
     );
@@ -1390,7 +1371,6 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
           It pushes the tab bar + list down instead of floating over them
           (the old absolutely-positioned Tooltip occluded the atlas cards). */}
       {showTooltip && (
-        <ScreenEntrance index={0}>
         <Pressable
           onPress={() => {
             setShowTooltip(false);
@@ -1422,9 +1402,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             <Text style={styles.coachDismissText}>{'✕'}</Text>
           </View>
         </Pressable>
-        </ScreenEntrance>
       )}
-      <ScreenEntrance index={1}>
       <View
         style={styles.tabBar}
         onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
@@ -1479,7 +1457,6 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
           </Pressable>
         ))}
       </View>
-      </ScreenEntrance>
       {loading ? (
         <ScrollView
           style={styles.tabContent}

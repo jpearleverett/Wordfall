@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Pressable,
@@ -10,6 +10,7 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../../constants';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 
 const INDICATOR_WIDTH = 20;
 const INDICATOR_HEIGHT = 3;
@@ -21,6 +22,7 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
   navigation,
 }) => {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
   const { width: screenWidth } = useWindowDimensions();
   const tabCount = state.routes.length;
   const tabWidth = screenWidth / tabCount;
@@ -38,32 +40,58 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
     }).start();
   }, [state.index, tabWidth, indicatorX]);
 
-  // Honor `tabBarStyle: { display: 'none' }` resolved onto the focused tab
-  // descriptor. The default React Navigation tab bar respects this
-  // automatically; this is a custom tab bar, so we have to opt in. Set
-  // via the `hideTabBarOnGame` helper in App.tsx which keys off
-  // `getFocusedRouteNameFromRoute` — when the focused nested route is
-  // `Game`, the tab screen's options gain `tabBarStyle.display: 'none'`
-  // and we return null here. This check MUST come after every hook
-  // (Rules of Hooks) — doing the early-return first drops the
-  // useRef/useEffect from the render tree and React throws
-  // "Rendered fewer hooks than expected".
   const focusedDescriptor = descriptors[state.routes[state.index]?.key];
   const focusedTabBarStyle = focusedDescriptor?.options?.tabBarStyle as
     | { display?: 'flex' | 'none' }
     | undefined;
-  if (focusedTabBarStyle?.display === 'none') {
-    return null;
-  }
+  const hidden = focusedTabBarStyle?.display === 'none';
+  const [mounted, setMounted] = useState(!hidden);
+  const visibility = useRef(new Animated.Value(hidden ? 0 : 1)).current;
+
+  useEffect(() => {
+    if (!hidden) setMounted(true);
+    if (reduceMotion) {
+      visibility.setValue(hidden ? 0 : 1);
+      setMounted(!hidden);
+      return;
+    }
+
+    const animation = Animated.timing(visibility, {
+      toValue: hidden ? 0 : 1,
+      duration: hidden ? 140 : 180,
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished && hidden) setMounted(false);
+    });
+    return () => animation.stop();
+  }, [hidden, reduceMotion, visibility]);
+
+  if (!mounted) return null;
 
   return (
-    <LinearGradient
-      colors={GRADIENTS.tabBar as unknown as readonly [string, string, ...string[]]}
+    <Animated.View
+      pointerEvents={hidden ? 'none' : 'auto'}
       style={[
         styles.container,
         { paddingBottom: insets.bottom, height: TAB_BAR_HEIGHT + insets.bottom },
+        {
+          opacity: visibility,
+          transform: [
+            {
+              translateY: visibility.interpolate({
+                inputRange: [0, 1],
+                outputRange: [TAB_BAR_HEIGHT + insets.bottom, 0],
+              }),
+            },
+          ],
+        },
       ]}
     >
+      <LinearGradient
+        colors={GRADIENTS.tabBar as unknown as readonly [string, string, ...string[]]}
+        style={StyleSheet.absoluteFillObject}
+      />
       {/* Neon top edge line */}
       <View style={[styles.topEdge, SHADOWS.neonGlow(COLORS.accent)]} />
 
@@ -146,7 +174,7 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
           );
         })}
       </View>
-    </LinearGradient>
+    </Animated.View>
   );
 };
 
