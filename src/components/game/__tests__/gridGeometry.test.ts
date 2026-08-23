@@ -4,6 +4,7 @@ import { applyGravityInDirection } from '../../../engine/gravity';
 import { Grid } from '../../../types';
 import * as gridGeometryModule from '../gridGeometry';
 import {
+  computeGridTransition,
   computeGridGeometry,
   computeGridMetrics,
   hitTestGridGeometry,
@@ -154,5 +155,57 @@ test.each([
     bounds: [],
     byCellId: new Map(),
     byPosition: new Map(),
+  });
+});
+
+describe('grid transition diff', () => {
+  test('inverse transform paints a moved tile at its previous visual position', () => {
+    const previous = new Map([
+      ['A', { cellId: 'A', row: 0, col: 0, x: 2, y: 0, w: 44, h: 44 }],
+    ]);
+    const next = new Map([
+      ['A', { cellId: 'A', row: 2, col: 0, x: 2, y: 88, w: 44, h: 44 }],
+    ]);
+
+    const diff = computeGridTransition(previous, next, new Map());
+
+    expect(diff.falls).toEqual([{ id: 'A', dx: 0, dy: -88, col: 0 }]);
+    expect(next.get('A')!.y + diff.falls[0].dy).toBe(previous.get('A')!.y);
+  });
+
+  test('successor fall starts from an interrupted tile current visual offset', () => {
+    const previous = new Map([
+      ['A', { cellId: 'A', row: 0, col: 0, x: 2, y: 0, w: 44, h: 44 }],
+    ]);
+    const next = new Map([
+      ['A', { cellId: 'A', row: 2, col: 0, x: 2, y: 88, w: 44, h: 44 }],
+    ]);
+    const live = new Map([['A', { x: 0, y: 30 }]]);
+
+    expect(computeGridTransition(previous, next, live).falls[0].dy).toBe(-58);
+  });
+
+  test('removed cells become stable ghost entries, not destination tiles', () => {
+    const previous = new Map([
+      ['A', { cellId: 'A', row: 0, col: 0, x: 2, y: 0, w: 44, h: 44 }],
+    ]);
+
+    const diff = computeGridTransition(previous, new Map(), new Map());
+
+    expect(diff.falls).toHaveLength(0);
+    expect(diff.ghosts[0]).toMatchObject({ id: 'A', x: 2, y: 0 });
+  });
+
+  test('horizontal movement uses the same ID-based inverse transform', () => {
+    const previous = new Map([
+      ['A', { cellId: 'A', row: 0, col: 2, x: 90, y: 0, w: 44, h: 44 }],
+    ]);
+    const next = new Map([
+      ['A', { cellId: 'A', row: 0, col: 0, x: 2, y: 0, w: 44, h: 44 }],
+    ]);
+
+    expect(computeGridTransition(previous, next, new Map()).falls).toEqual([
+      { id: 'A', dx: 88, dy: 0, col: 0 },
+    ]);
   });
 });
