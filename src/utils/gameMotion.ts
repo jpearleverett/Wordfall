@@ -77,3 +77,22 @@ export function getPuzzleCompleteMotionPolicy(
     },
   };
 }
+
+export interface MotionEligibilitySnapshot {
+  reduceMotion: boolean;
+  resolved: boolean;
+}
+
+/**
+ * A mounted result may lose motion eligibility, but it can never gain it.
+ * Passing `undefined` starts a new mount from the current shared snapshot.
+ */
+export function transitionMotionEligibility(
+  current: boolean | undefined,
+  snapshot: MotionEligibilitySnapshot,
+): boolean {
+  const snapshotEligible = snapshot.resolved && !snapshot.reduceMotion;
+  return current === undefined
+    ? snapshotEligible
+    : current && snapshotEligible;
+}

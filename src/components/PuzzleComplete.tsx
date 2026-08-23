@@ -38,11 +38,14 @@ import ScanLineOverlay from './common/ScanLineOverlay';
 import NeonStarBurst from './victory/NeonStarBurst';
 import { ShareCard } from './ShareCard';
 import { useShareVictory } from '../hooks/useShareVictory';
-import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useMotionPreference } from '../services/motionPreference';
 import { isCeremonyVisible } from '../hooks/useCeremonyQueue';
 import GameIcon from './icons/GameIcon';
 import { WINGS, getWing } from '../data/library';
-import { getPuzzleCompleteMotionPolicy } from '../utils/gameMotion';
+import {
+  getPuzzleCompleteMotionPolicy,
+  transitionMotionEligibility,
+} from '../utils/gameMotion';
 
 interface PuzzleCompleteProps {
   score: number;
@@ -181,6 +184,7 @@ function AnimatedScore({
     const steps = 20;
     let step = 0;
     let interval: ReturnType<typeof setInterval> | null = null;
+    let landingAnimation: Animated.CompositeAnimation | null = null;
     // Hold at 0 until the score panel has faded in — counting inside an
     // invisible panel wastes the payoff.
     const startTimer = setTimeout(() => {
@@ -199,10 +203,11 @@ function AnimatedScore({
           setDisplayScore(targetScore);
           if (interval) clearInterval(interval);
           void soundManager.playSound('bonusCountdownEnd');
-          Animated.sequence([
+          landingAnimation = Animated.sequence([
             Animated.spring(pulse, { toValue: 1.12, friction: 4, tension: 320, useNativeDriver: true }),
             Animated.spring(pulse, { toValue: 1, friction: 6, tension: 180, useNativeDriver: true }),
-          ]).start();
+          ]);
+          landingAnimation.start();
         }
       }, duration / steps);
     }, startDelay);
@@ -210,6 +215,7 @@ function AnimatedScore({
     return () => {
       clearTimeout(startTimer);
       if (interval) clearInterval(interval);
+      landingAnimation?.stop();
     };
   }, [targetScore, startDelay, animate, pulse]);
 
@@ -248,7 +254,10 @@ function CtaPulse({
 }) {
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion) {
+      pulse.setValue(1);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: to, duration, useNativeDriver: true }),
@@ -256,7 +265,10 @@ function CtaPulse({
       ]),
     );
     loop.start();
-    return () => loop.stop();
+    return () => {
+      loop.stop();
+      pulse.setValue(1);
+    };
   }, [pulse, reduceMotion, to, duration]);
   return (
     <Animated.View style={{ transform: [{ scale: pulse }] }}>
@@ -513,7 +525,10 @@ function MedalRipple({
 }) {
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion) {
+      pulse.setValue(1);
+      return;
+    }
     const anim = Animated.sequence([
       Animated.delay(1600 + offset),
       Animated.loop(
@@ -525,7 +540,10 @@ function MedalRipple({
       ),
     ]);
     anim.start();
-    return () => anim.stop();
+    return () => {
+      anim.stop();
+      pulse.setValue(1);
+    };
   }, [pulse, reduceMotion, offset]);
   return <Animated.View style={{ transform: [{ scale: pulse }] }}>{children}</Animated.View>;
 }
@@ -734,7 +752,7 @@ function FlawlessBadgePlate({
       opacity.setValue(1);
       return;
     }
-    Animated.parallel([
+    const reveal = Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
         duration: 180,
@@ -756,7 +774,9 @@ function FlawlessBadgePlate({
           useNativeDriver: true,
         }),
       ]),
-    ]).start();
+    ]);
+    reveal.start();
+    return () => reveal.stop();
   }, [
     visible,
     reduceMotion,
@@ -935,10 +955,17 @@ export function PuzzleComplete({
 }: PuzzleCompleteProps) {
   const { t } = useTranslation();
   const { height: screenHeight } = useWindowDimensions();
-  const reduceMotion = useReduceMotion();
+  const motionSnapshot = useMotionPreference();
+  const motionEligibilityRef = useRef<boolean | undefined>(undefined);
+  motionEligibilityRef.current = transitionMotionEligibility(
+    motionEligibilityRef.current,
+    motionSnapshot,
+  );
+  const motionEligible = motionEligibilityRef.current;
+  const suppressMotion = !motionEligible;
   const motionPolicy = useMemo(
-    () => getPuzzleCompleteMotionPolicy(reduceMotion, score),
-    [reduceMotion, score],
+    () => getPuzzleCompleteMotionPolicy(suppressMotion, score),
+    [suppressMotion, score],
   );
 
   // Victory card share (Phase 4C). Captures the off-screen <ShareCard/>
@@ -1141,9 +1168,9 @@ export function PuzzleComplete({
       return;
     }
     const base = getRemoteNumber('autoAdvanceDelayMs');
-    const delayMs = reduceMotion ? Math.min(2000, base) : base;
+    const delayMs = suppressMotion ? Math.min(2000, base) : base;
     setAutoAdvanceRemainingMs(delayMs);
-  }, [autoAdvanceCancelled, isDaily, perfectRun, mode, reduceMotion]);
+  }, [autoAdvanceCancelled, isDaily, perfectRun, mode, suppressMotion]);
 
   useEffect(() => {
     if (autoAdvanceRemainingMs === null) return;
@@ -1274,7 +1301,7 @@ export function PuzzleComplete({
           <SparkleField count={12} intensity="medium" />
           <CelebrationBurst centerX={190} centerY={200} particleCount={10} />
           {SETTLE_SPARKS.map((sp, i) => (
-            <SettleSpark key={i} {...sp} reduceMotion={reduceMotion} />
+            <SettleSpark key={i} {...sp} reduceMotion={suppressMotion} />
           ))}
           {confetti.map((particle) => (
             <ConfettiParticle
@@ -1357,26 +1384,26 @@ export function PuzzleComplete({
 
               {/* Stars with neon burst effects */}
               <View style={styles.starsRow} accessibilityLabel={`${stars} out of 3 stars earned`}>
-                <VictoryRays reduceMotion={reduceMotion} />
-                <MedalRipple reduceMotion={reduceMotion} offset={0}>
+                <VictoryRays reduceMotion={suppressMotion} />
+                <MedalRipple reduceMotion={suppressMotion} offset={0}>
                   <View style={styles.starContainer}>
                     <Star filled={stars >= 1} delay={140} size={44} animate={motionPolicy.animateStars} />
                     <NeonStarBurst active={motionPolicy.animateStars && starsRevealed && stars >= 1} color={COLORS.gold} size={50} />
                   </View>
                 </MedalRipple>
-                <MedalRipple reduceMotion={reduceMotion} offset={140}>
+                <MedalRipple reduceMotion={suppressMotion} offset={140}>
                   <View style={styles.starContainer}>
                     <Star filled={stars >= 2} delay={340} size={56} animate={motionPolicy.animateStars} />
                     <NeonStarBurst active={motionPolicy.animateStars && starsRevealed && stars >= 2} color={COLORS.gold} size={64} />
                   </View>
                 </MedalRipple>
-                <MedalRipple reduceMotion={reduceMotion} offset={280}>
+                <MedalRipple reduceMotion={suppressMotion} offset={280}>
                   <View style={styles.starContainer}>
                     <Star filled={stars >= 3} delay={560} size={44} animate={motionPolicy.animateStars} />
                     <NeonStarBurst active={motionPolicy.animateStars && starsRevealed && stars >= 3} color={COLORS.gold} size={50} />
                   </View>
                 </MedalRipple>
-                <MedalGlint reduceMotion={reduceMotion} />
+                <MedalGlint reduceMotion={suppressMotion} />
               </View>
 
               {/* Flawless badge — reveals after the third star. Every clean
@@ -1405,7 +1432,7 @@ export function PuzzleComplete({
                   {/* Continuous gentle breath on the settled score value —
                       1.0↔1.03 over ~1.8s. Scale transform is center-anchored
                       so the panel layout never shifts. */}
-                  <CtaPulse reduceMotion={reduceMotion} to={1.03} duration={900}>
+                  <CtaPulse reduceMotion={suppressMotion} to={1.03} duration={900}>
                     <AnimatedScore
                       targetScore={score}
                       startDelay={480}
@@ -1681,7 +1708,7 @@ export function PuzzleComplete({
                   },
                 ]}
               >
-                <CtaPulse reduceMotion={reduceMotion} glowColor={COLORS.accent}>
+                <CtaPulse reduceMotion={suppressMotion} glowColor={COLORS.accent}>
                   <Pressable
                     style={({ pressed }) => [pressed && styles.buttonPressed]}
                     onPress={onNextLevel}
@@ -1774,7 +1801,7 @@ export function PuzzleComplete({
             {decorationsMounted && motionPolicy.animateDecorations && (
               <View pointerEvents="none" style={StyleSheet.absoluteFill}>
                 {DRIZZLE_SPECS.map((sp, i) => (
-                  <DrizzleFlake key={i} {...sp} reduceMotion={reduceMotion} />
+                  <DrizzleFlake key={i} {...sp} reduceMotion={suppressMotion} />
                 ))}
               </View>
             )}
