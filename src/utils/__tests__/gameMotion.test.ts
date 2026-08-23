@@ -2,6 +2,7 @@ import {
   getPuzzleCompleteMotionPolicy,
   getWordBankMotionPolicy,
   isLastWordTensionActive,
+  transitionMotionEligibility,
 } from '../gameMotion';
 
 test.each([
@@ -104,5 +105,42 @@ describe('PuzzleComplete motion policy', () => {
         displayedScore: 0,
       },
     });
+  });
+});
+
+describe('mounted result motion eligibility latch', () => {
+  const unresolved = { resolved: false, reduceMotion: true };
+  const normal = { resolved: true, reduceMotion: false };
+  const reduced = { resolved: true, reduceMotion: true };
+
+  test('unresolved to normal stays ineligible for the current mount', () => {
+    const initial = transitionMotionEligibility(undefined, unresolved);
+
+    expect(initial).toBe(false);
+    expect(transitionMotionEligibility(initial, normal)).toBe(false);
+  });
+
+  test('normal to reduced permanently disables the current mount', () => {
+    const initial = transitionMotionEligibility(undefined, normal);
+    const disabled = transitionMotionEligibility(initial, reduced);
+
+    expect(initial).toBe(true);
+    expect(disabled).toBe(false);
+    expect(transitionMotionEligibility(disabled, normal)).toBe(false);
+  });
+
+  test('reduced to normal stays ineligible for the current mount', () => {
+    const initial = transitionMotionEligibility(undefined, reduced);
+
+    expect(initial).toBe(false);
+    expect(transitionMotionEligibility(initial, normal)).toBe(false);
+  });
+
+  test('a future mount may animate from an already-resolved normal snapshot', () => {
+    const previousMount = transitionMotionEligibility(undefined, unresolved);
+    const futureMount = transitionMotionEligibility(undefined, normal);
+
+    expect(previousMount).toBe(false);
+    expect(futureMount).toBe(true);
   });
 });

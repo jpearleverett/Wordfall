@@ -41,6 +41,12 @@ describe('gameplay render isolation', () => {
     expect(puzzleCompleteSource).toContain('getPuzzleCompleteMotionPolicy');
   });
 
+  it('latches PuzzleComplete motion from the full preference snapshot', () => {
+    expect(puzzleCompleteSource).toContain('useMotionPreference');
+    expect(puzzleCompleteSource).toContain('transitionMotionEligibility');
+    expect(puzzleCompleteSource).not.toContain('useReduceMotion');
+  });
+
   it('resolves motion once in Grid and passes a stable boolean to each cell', () => {
     expect(gridSource).toContain('reduceMotion={reduceMotion}');
     expect(letterCellSource).toContain('reduceMotion: boolean');
