@@ -11,8 +11,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, GRADIENTS, SHADOWS, FONTS } from '../../constants';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
+import {
+  getTabIndicatorPlan,
+  getTabVisibilityPlan,
+  shouldUnmountTabBar,
+  TAB_INDICATOR_WIDTH,
+} from '../../navigation/motionOptions';
 
-const INDICATOR_WIDTH = 20;
 const INDICATOR_HEIGHT = 3;
 const TAB_BAR_HEIGHT = 64;
 
@@ -27,42 +32,61 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
   const tabCount = state.routes.length;
   const tabWidth = screenWidth / tabCount;
 
-  const indicatorX = useRef(new Animated.Value(0)).current;
+  const initialIndicator = getTabIndicatorPlan(tabWidth, state.index, reduceMotion);
+  const indicatorX = useRef(new Animated.Value(initialIndicator.target)).current;
 
   useEffect(() => {
-    const toValue =
-      tabWidth * state.index + tabWidth / 2 - INDICATOR_WIDTH / 2;
-    Animated.spring(indicatorX, {
-      toValue,
+    const plan = getTabIndicatorPlan(tabWidth, state.index, reduceMotion);
+    if (!plan.animate) {
+      indicatorX.setValue(plan.target);
+      return;
+    }
+
+    const animation = Animated.spring(indicatorX, {
+      toValue: plan.target,
       useNativeDriver: true,
       tension: 68,
       friction: 10,
-    }).start();
-  }, [state.index, tabWidth, indicatorX]);
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [indicatorX, reduceMotion, state.index, tabWidth]);
 
   const focusedDescriptor = descriptors[state.routes[state.index]?.key];
   const focusedTabBarStyle = focusedDescriptor?.options?.tabBarStyle as
     | { display?: 'flex' | 'none' }
     | undefined;
   const hidden = focusedTabBarStyle?.display === 'none';
+  const visibilityPlan = getTabVisibilityPlan(hidden, reduceMotion);
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
   const [mounted, setMounted] = useState(!hidden);
-  const visibility = useRef(new Animated.Value(hidden ? 0 : 1)).current;
+  const visibility = useRef(new Animated.Value(visibilityPlan.target)).current;
 
   useEffect(() => {
-    if (!hidden) setMounted(true);
-    if (reduceMotion) {
-      visibility.setValue(hidden ? 0 : 1);
-      setMounted(!hidden);
+    const plan = getTabVisibilityPlan(hidden, reduceMotion);
+    if (plan.ensureMounted) setMounted(true);
+    if (plan.duration === 0) {
+      visibility.setValue(plan.target);
+      setMounted(!plan.unmountOnFinish);
       return;
     }
 
     const animation = Animated.timing(visibility, {
-      toValue: hidden ? 0 : 1,
-      duration: hidden ? 140 : 180,
+      toValue: plan.target,
+      duration: plan.duration,
       useNativeDriver: true,
     });
     animation.start(({ finished }) => {
-      if (finished && hidden) setMounted(false);
+      if (
+        shouldUnmountTabBar(
+          finished,
+          plan.unmountOnFinish,
+          hiddenRef.current,
+        )
+      ) {
+        setMounted(false);
+      }
     });
     return () => animation.stop();
   }, [hidden, reduceMotion, visibility]);
@@ -71,7 +95,7 @@ const NeonTabBar: React.FC<BottomTabBarProps> = ({
 
   return (
     <Animated.View
-      pointerEvents={hidden ? 'none' : 'auto'}
+      pointerEvents={visibilityPlan.pointerEvents}
       style={[
         styles.container,
         { paddingBottom: insets.bottom, height: TAB_BAR_HEIGHT + insets.bottom },
@@ -197,7 +221,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: INDICATOR_WIDTH,
+    width: TAB_INDICATOR_WIDTH,
     height: INDICATOR_HEIGHT,
     backgroundColor: COLORS.accent,
     borderBottomLeftRadius: 2,

@@ -7,6 +7,7 @@ import { COLORS } from '../constants';
 type StackTransitionSpec = NonNullable<StackNavigationOptions['transitionSpec']>;
 
 const cubicOut = (value: number): number => 1 - Math.pow(1 - value, 3);
+export const TAB_INDICATOR_WIDTH = 20;
 
 const springOpenSpec: StackTransitionSpec['open'] = {
   animation: 'spring',
@@ -120,6 +121,51 @@ export function getStackMotionOptions(reduceMotion: boolean): StackNavigationOpt
 
 export function getTabAnimation(reduceMotion: boolean): 'none' | 'shift' {
   return reduceMotion ? 'none' : 'shift';
+}
+
+export function getTabIndicatorPlan(
+  tabWidth: number,
+  activeIndex: number,
+  reduceMotion: boolean,
+): { target: number; animate: boolean } {
+  return {
+    target: tabWidth * activeIndex + tabWidth / 2 - TAB_INDICATOR_WIDTH / 2,
+    animate: !reduceMotion,
+  };
+}
+
+export function getTabVisibilityPlan(
+  hidden: boolean,
+  reduceMotion: boolean,
+): {
+  target: 0 | 1;
+  duration: number;
+  ensureMounted: boolean;
+  unmountOnFinish: boolean;
+  pointerEvents: 'none' | 'auto';
+} {
+  return {
+    target: hidden ? 0 : 1,
+    duration: reduceMotion ? 0 : hidden ? 140 : 180,
+    ensureMounted: !hidden,
+    unmountOnFinish: hidden,
+    pointerEvents: hidden ? 'none' : 'auto',
+  };
+}
+
+export function shouldUnmountTabBar(
+  finished: boolean,
+  requestedHidden: boolean,
+  currentlyHidden: boolean,
+): boolean {
+  return finished && requestedHidden && currentlyHidden;
+}
+
+export function shouldResetGameRouteMarker(
+  sameRouteTransition: boolean,
+  closing: boolean,
+): boolean {
+  return sameRouteTransition && !closing;
 }
 
 export function getGameRouteMotion(

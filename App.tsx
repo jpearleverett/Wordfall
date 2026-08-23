@@ -14,9 +14,19 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationContainer, NavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  NavigationContainerRef,
+  getFocusedRouteNameFromRoute,
+  type ParamListBase,
+  type RouteProp,
+} from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
+import {
+  createStackNavigator,
+  type StackNavigationEventMap,
+  type StackNavigationProp,
+} from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts, loadAsync as loadFontAsync } from 'expo-font';
 import { markRoundedFontReady } from './src/services/fontReady';
@@ -115,6 +125,7 @@ import {
   getGameRouteMotion,
   getStackMotionOptions,
   getTabAnimation,
+  shouldResetGameRouteMarker,
 } from './src/navigation/motionOptions';
 
 const Tab = createBottomTabNavigator();
@@ -124,6 +135,33 @@ const CollectionsStack = createStackNavigator();
 const LibraryStack = createStackNavigator();
 const ProfileStack = createStackNavigator();
 const RootStack = createStackNavigator();
+
+type GameRouteParams = { sameRouteTransition?: boolean };
+
+// React Navigation 7 exposes `transitionEnd` on stack screens. Clear the
+// replacement-only marker after the opening transition so its fade options
+// stay stable in flight, then normal stack options resume for a later back.
+function getGameRouteListeners({
+  navigation,
+  route,
+}: {
+  navigation: StackNavigationProp<ParamListBase>;
+  route: RouteProp<ParamListBase>;
+}) {
+  return {
+    transitionEnd: ({
+      data,
+    }: {
+      data: StackNavigationEventMap['transitionEnd']['data'];
+    }) => {
+      const sameRouteTransition =
+        (route.params as GameRouteParams | undefined)?.sameRouteTransition === true;
+      if (shouldResetGameRouteMarker(sameRouteTransition, data.closing)) {
+        navigation.setParams({ sameRouteTransition: undefined });
+      }
+    },
+  };
+}
 
 // Home Tab Stack
 function HomeStackScreen() {
@@ -141,6 +179,7 @@ function HomeStackScreen() {
       <HomeStack.Screen
         name="Game"
         component={GameScreenWrapper}
+        listeners={getGameRouteListeners}
         options={({ route }) =>
           getGameRouteMotion(
             (route.params as { sameRouteTransition?: boolean } | undefined)
@@ -275,6 +314,7 @@ function PlayStackScreen() {
       <PlayStack.Screen
         name="Game"
         component={GameScreenWrapper}
+        listeners={getGameRouteListeners}
         options={({ route }) =>
           getGameRouteMotion(
             (route.params as { sameRouteTransition?: boolean } | undefined)
