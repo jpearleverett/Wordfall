@@ -75,7 +75,10 @@ describe('puzzle effect lifecycle ownership', () => {
     expect(dependencyMatch).not.toBeNull();
 
     const dependencies = new Set(
-      dependencyMatch![1].split(',').map(dependency => dependency.trim()),
+      dependencyMatch![1]
+        .split(',')
+        .map(dependency => dependency.trim())
+        .filter(Boolean),
     );
     expect(dependencies).toEqual(new Set([
       'addCoins',
