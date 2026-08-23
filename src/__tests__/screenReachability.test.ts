@@ -26,6 +26,10 @@ const SRC = path.join(__dirname, '..');
 const NAVIGATOR = path.join(SRC, '../App.tsx');
 const SCAFFOLD = path.join(SRC, 'components/common/ScreenScaffold.tsx');
 const HOME_SCREEN = path.join(SRC, 'screens/HomeScreen.tsx');
+const MODES_SCREEN = path.join(SRC, 'screens/ModesScreen.tsx');
+const COLLECTIONS_SCREEN = path.join(SRC, 'screens/CollectionsScreen.tsx');
+const SHOP_SCREEN = path.join(SRC, 'screens/ShopScreen.tsx');
+const TAB_BAR = path.join(SRC, 'components/navigation/NeonTabBar.tsx');
 
 /**
  * Routes with no in-app navigation on purpose. Each needs a reason, so that
@@ -119,10 +123,52 @@ describe('screen transition ownership', () => {
   const appSource = fs.readFileSync(NAVIGATOR, 'utf8');
   const scaffoldSource = fs.readFileSync(SCAFFOLD, 'utf8');
   const homeSource = fs.readFileSync(HOME_SCREEN, 'utf8');
+  const modesSource = fs.readFileSync(MODES_SCREEN, 'utf8');
+  const collectionsSource = fs.readFileSync(COLLECTIONS_SCREEN, 'utf8');
+  const shopSource = fs.readFileSync(SHOP_SCREEN, 'utf8');
+  const tabBarSource = fs.readFileSync(TAB_BAR, 'utf8');
 
-  it('leaves full-screen entrance motion to navigation', () => {
+  it('wires motion-aware options into all six stacks and bottom tabs', () => {
+    const stackRegistrations =
+      appSource.match(
+        /<\w+Stack\.Navigator screenOptions=\{getStackMotionOptions\(reduceMotion\)\}>/g,
+      ) ?? [];
+    expect(stackRegistrations).toHaveLength(6);
+    expect(appSource).toContain('animation: getTabAnimation(reduceMotion)');
+  });
+
+  it('wires both Game registrations to replacement-marker cleanup', () => {
+    const gameRegistrations =
+      appSource.match(/<\w+Stack\.Screen\s+name="Game"[\s\S]*?\/>/g) ?? [];
+    expect(gameRegistrations).toHaveLength(2);
+    for (const registration of gameRegistrations) {
+      expect(registration).toContain('getGameRouteMotion(');
+      expect(registration).toContain('listeners={getGameRouteListeners}');
+    }
+    expect(appSource).toContain('transitionEnd:');
+    expect(appSource).toContain(
+      'navigation.setParams({ sameRouteTransition: undefined })',
+    );
+  });
+
+  it('leaves full-screen entrance motion to navigation on every migrated screen', () => {
     expect(appSource).not.toContain("from './src/components/ScreenEntrance'");
     expect(scaffoldSource).not.toContain('Animated.timing(enterAnim');
     expect(homeSource).not.toContain('Animated.spring(titleAnim');
+    expect(homeSource).not.toContain('contentAnim');
+    expect(modesSource).not.toContain('ScreenEntrance');
+    expect(collectionsSource).not.toContain('ScreenEntrance');
+    expect(shopSource).not.toContain('SectionEntrance');
+  });
+
+  it('wires pure indicator and visibility decisions into the custom tab bar', () => {
+    expect(tabBarSource).toContain('getTabIndicatorPlan(');
+    expect(tabBarSource).toContain('new Animated.Value(initialIndicator.target)');
+    expect(tabBarSource).toContain(
+      '[indicatorX, reduceMotion, state.index, tabWidth]',
+    );
+    expect(tabBarSource).toContain('return () => animation.stop()');
+    expect(tabBarSource).toContain('getTabVisibilityPlan(');
+    expect(tabBarSource).toContain('shouldUnmountTabBar(');
   });
 });
