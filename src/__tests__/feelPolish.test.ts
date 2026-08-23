@@ -1,13 +1,11 @@
 /**
  * Feel-polish tests — lock the Remote-Config defaults + pure math used by
- * the invalid-word screen shake and multi-tile bloom particle effects in
- * GameScreen.
+ * the multi-tile bloom particle effects in GameScreen.
  *
- * The UI wiring itself (the Animated.sequence triggered inside
- * showInvalidFlashAnim, the spawnTileBloom state-queue flow) is exercised
- * via manual + Maestro smoke — these unit tests pin the tunable defaults
- * and canonical grid geometry so a later layout refactor can't silently
- * throw particles outside the grid.
+ * The spawnTileBloom state-queue flow is exercised via manual + Maestro
+ * smoke — these unit tests pin the tunable defaults and canonical grid
+ * geometry so a later layout refactor can't silently throw particles
+ * outside the grid.
  */
 
 import * as fs from 'fs';
@@ -44,10 +42,6 @@ function center(bound: CellBound): { x: number; y: number } {
 }
 
 describe('feel-polish — Remote Config defaults', () => {
-  it('ships invalidShakeEnabled=true so invalid taps feel like a "no"', () => {
-    expect(getRemoteBoolean('invalidShakeEnabled')).toBe(true);
-  });
-
   it('ships tileBloomEnabled=true so word-finds spawn per-tile particles', () => {
     expect(getRemoteBoolean('tileBloomEnabled')).toBe(true);
   });

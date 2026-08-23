@@ -7,6 +7,7 @@ import {
   computeGridTransition,
   computeGridGeometry,
   computeGridMetrics,
+  decideGridTransitionUpdate,
   hitTestGridGeometry,
 } from '../gridGeometry';
 
@@ -196,6 +197,17 @@ describe('grid transition diff', () => {
     expect(diff.ghosts[0]).toMatchObject({ id: 'A', x: 2, y: 0 });
   });
 
+  test('removed falling cells ghost from their current visual offset', () => {
+    const previous = new Map([
+      ['A', { cellId: 'A', row: 0, col: 0, x: 2, y: 0, w: 44, h: 44 }],
+    ]);
+    const live = new Map([['A', { x: 5, y: 30 }]]);
+
+    const diff = computeGridTransition(previous, new Map(), live);
+
+    expect(diff.ghosts).toEqual([{ id: 'A', x: 7, y: 30, col: 0 }]);
+  });
+
   test('horizontal movement uses the same ID-based inverse transform', () => {
     const previous = new Map([
       ['A', { cellId: 'A', row: 0, col: 2, x: 90, y: 0, w: 44, h: 44 }],
@@ -207,5 +219,33 @@ describe('grid transition diff', () => {
     expect(computeGridTransition(previous, next, new Map()).falls).toEqual([
       { id: 'A', dx: 88, dy: 0, col: 0 },
     ]);
+  });
+});
+
+describe('grid transition update decision', () => {
+  const grid = [[cell('A')]];
+  const state = {
+    grid,
+    cellSize: 40,
+    rows: 1,
+    cols: 1,
+  };
+
+  test('resets when geometry changes without a new grid object', () => {
+    expect(decideGridTransitionUpdate(state, {
+      ...state,
+      cellSize: 41,
+    })).toBe('reset');
+  });
+
+  test('transitions a new grid object in unchanged geometry', () => {
+    expect(decideGridTransitionUpdate(state, {
+      ...state,
+      grid: [[cell('A')]],
+    })).toBe('transition');
+  });
+
+  test('does nothing when grid identity and geometry are unchanged', () => {
+    expect(decideGridTransitionUpdate(state, state)).toBe('none');
   });
 });
