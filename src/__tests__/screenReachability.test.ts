@@ -24,6 +24,8 @@ const SRC = path.join(__dirname, '..');
 // module returns, point this at wherever the screens are actually
 // registered.
 const NAVIGATOR = path.join(SRC, '../App.tsx');
+const SCAFFOLD = path.join(SRC, 'components/common/ScreenScaffold.tsx');
+const HOME_SCREEN = path.join(SRC, 'screens/HomeScreen.tsx');
 
 /**
  * Routes with no in-app navigation on purpose. Each needs a reason, so that
@@ -110,5 +112,17 @@ describe('navigator route reachability', () => {
           `Either wire an entry point, or add it to INTENTIONALLY_UNREACHABLE with a reason.`,
       );
     }
+  });
+});
+
+describe('screen transition ownership', () => {
+  const appSource = fs.readFileSync(NAVIGATOR, 'utf8');
+  const scaffoldSource = fs.readFileSync(SCAFFOLD, 'utf8');
+  const homeSource = fs.readFileSync(HOME_SCREEN, 'utf8');
+
+  it('leaves full-screen entrance motion to navigation', () => {
+    expect(appSource).not.toContain("from './src/components/ScreenEntrance'");
+    expect(scaffoldSource).not.toContain('Animated.timing(enterAnim');
+    expect(homeSource).not.toContain('Animated.spring(titleAnim');
   });
 });
