@@ -1128,7 +1128,7 @@ export function PuzzleComplete({
       cardOpacityAnim.setValue(motionPolicy.state.cardOpacity);
       return;
     }
-    const entrance = Animated.parallel([
+    const cardEntrance = Animated.parallel([
       Animated.timing(cardOpacityAnim, {
         toValue: 1,
         duration: 220,
@@ -1142,8 +1142,8 @@ export function PuzzleComplete({
         useNativeDriver: true,
       }),
     ]);
-    entrance.start();
-    return () => entrance.stop();
+    cardEntrance.start();
+    return () => cardEntrance.stop();
   }, [
     cardOpacityAnim,
     cardScaleAnim,

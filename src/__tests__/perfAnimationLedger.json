@@ -263,7 +263,7 @@
     "file": "src/components/SeasonPassCompleteCeremony.tsx",
     "klass": "P7",
     "severity": "medium",
-    "status": "open",
+    "status": "fixed",
     "checks": [
       {
         "type": "pattern-present",
@@ -288,7 +288,7 @@
     "file": "src/components/FirstPurchaseOfferModal.tsx",
     "klass": "F3",
     "severity": "medium",
-    "status": "open",
+    "status": "fixed",
     "checks": [
       {
         "type": "pattern-present",
@@ -313,7 +313,7 @@
     "file": "src/components/PuzzleComplete.tsx",
     "klass": "F3",
     "severity": "medium",
-    "status": "open",
+    "status": "fixed",
     "checks": [
       {
         "type": "pattern-present",
