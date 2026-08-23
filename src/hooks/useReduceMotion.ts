@@ -8,45 +8,15 @@
  * confetti, gravity trails, ceremony spring-ins, mystery-wheel spin,
  * wing stagger all bypassed the flag.
  *
- * This hook centralises the AccessibilityInfo listener so every
+ * This hook reads the central motion-preference store so every
  * animation site can degrade gracefully with one `const reduceMotion
  * = useReduceMotion();` call. Consumers skip the animation entirely
  * (jump to final state) rather than running a shorter one — a
  * vestibular-sensitive player benefits more from "no confetti" than
  * from "less confetti".
  */
-import { useEffect, useState } from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { useMotionPreference } from '../services/motionPreference';
 
 export function useReduceMotion(): boolean {
-  const [enabled, setEnabled] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((value) => {
-        if (!cancelled) setEnabled(value);
-      })
-      .catch(() => {
-        // Query failed (unusual, but be resilient). Default to "motion
-        // enabled" so we don't accidentally strip animations from
-        // players who haven't requested reduced motion.
-        if (!cancelled) setEnabled(false);
-      });
-
-    const sub = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      (value: boolean) => {
-        setEnabled(value);
-      },
-    );
-
-    return () => {
-      cancelled = true;
-      sub.remove();
-    };
-  }, []);
-
-  return enabled;
+  return useMotionPreference().reduceMotion;
 }
