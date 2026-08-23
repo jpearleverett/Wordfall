@@ -827,7 +827,7 @@ function GameGridImpl({
   ], [outerWidth, outerHeight]);
 
   const frameInnerStyle = useMemo(() => [
-    styles.frameInner, { width: gridWidth + 2, height: gridHeight + 2, borderRadius: 22 }
+    styles.frameInner, { width: gridWidth, height: gridHeight, borderRadius: 22 }
   ], [gridWidth, gridHeight]);
 
   const gridContainerStyle = useMemo(() => [
@@ -1029,7 +1029,10 @@ const styles = StyleSheet.create({
   },
   gridContainer: {
     flexDirection: 'row',
-    padding: CELL_GAP / 2,
+    // Horizontal padding supplies geometry.padding. There is deliberately no
+    // vertical padding: canonical row zero begins at y=0, so tiles, overlays,
+    // hit-testing, and particles share the exact same local coordinate space.
+    paddingHorizontal: CELL_GAP / 2,
     overflow: 'hidden',
     backgroundColor: 'transparent',
   },

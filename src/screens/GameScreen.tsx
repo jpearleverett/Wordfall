@@ -37,6 +37,7 @@ import { LOCAL_IMAGES } from '../utils/localAssets';
 import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic, stuckHaptic } from '../services/haptics';
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
   canShowOfferNow,
   recordOfferShown,
@@ -89,6 +90,7 @@ import {
   computeGridGeometry,
   computeGridMetrics,
   GRID_FRAME_ALLOWANCE,
+  gridSlotCenter,
 } from '../components/game/gridGeometry';
 
 interface GameScreenProps {
@@ -1369,6 +1371,10 @@ function GameScreenImpl({
   // container. The same geometry drives Grid rendering and hit-testing.
   const cellPositionToScreen = useCallback(
     (row: number, col: number): { x: number; y: number } => {
+      const fallback = {
+        x: gridAreaWidth > 0 ? gridAreaWidth / 2 : SCREEN_WIDTH / 2,
+        y: gridAreaHeight / 2 + 60,
+      };
       if (
         gridMetrics.cellSize <= 0 ||
         row < 0 ||
@@ -1376,21 +1382,13 @@ function GameScreenImpl({
         col < 0 ||
         col >= gridGeometry.cols
       ) {
-        return {
-          x: gridAreaWidth > 0 ? gridAreaWidth / 2 : SCREEN_WIDTH / 2,
-          y: gridAreaHeight / 2 + 60,
-        };
+        return fallback;
       }
-      const bound = gridGeometry.byPosition.get(`${row},${col}`);
-      const x = bound
-        ? bound.x + bound.w / 2
-        : gridGeometry.padding + col * gridGeometry.stride + gridGeometry.stride / 2;
-      const y = bound
-        ? bound.y + bound.h / 2
-        : row * gridGeometry.stride + gridGeometry.stride / 2;
+      const center = gridSlotCenter(gridGeometry, row, col);
+      if (!center) return fallback;
       return {
-        x: gridOffset.left + x,
-        y: gridOffset.top + y,
+        x: gridOffset.left + center.x,
+        y: gridOffset.top + center.y,
       };
     },
     [gridAreaHeight, gridAreaWidth, gridGeometry, gridMetrics.cellSize, gridOffset],
@@ -1490,14 +1488,7 @@ function GameScreenImpl({
     [cellPositionToScreen],
   );
 
-  // #5 reduceMotion support
-  const [reduceMotion, setReduceMotion] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => sub.remove();
-  }, []);
-
+  const reduceMotion = useReduceMotion();
 
   // Invalid word flash animation. Runs a brief low-amplitude screen shake
   // (kinesthetic negative feedback — distinct from the 7+-letter celebration

@@ -31,12 +31,31 @@ export interface GridMetrics {
   gridHeight: number;
 }
 
+export interface GridPoint {
+  x: number;
+  y: number;
+}
+
 const EMPTY_METRICS: GridMetrics = {
   cellSize: 0,
   stride: 0,
   gridWidth: 0,
   gridHeight: 0,
 };
+
+function emptyGridGeometry(): GridGeometry {
+  return {
+    rows: 0,
+    cols: 0,
+    stride: 0,
+    padding: 0,
+    width: 0,
+    height: 0,
+    bounds: [],
+    byCellId: new Map(),
+    byPosition: new Map(),
+  };
+}
 
 export function computeGridMetrics(
   rows: number,
@@ -74,6 +93,15 @@ export function computeGridGeometry(
   cellSize: number,
   gap: number,
 ): GridGeometry {
+  if (
+    cellSize < 0 ||
+    gap < 0 ||
+    !Number.isFinite(cellSize) ||
+    !Number.isFinite(gap)
+  ) {
+    return emptyGridGeometry();
+  }
+
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
   const stride = cellSize + gap;
@@ -111,6 +139,36 @@ export function computeGridGeometry(
     bounds,
     byCellId,
     byPosition,
+  };
+}
+
+export function gridSlotCenter(
+  geometry: GridGeometry,
+  row: number,
+  col: number,
+): GridPoint | null {
+  if (
+    geometry.stride <= 0 ||
+    !Number.isInteger(row) ||
+    !Number.isInteger(col) ||
+    row < 0 ||
+    row >= geometry.rows ||
+    col < 0 ||
+    col >= geometry.cols
+  ) {
+    return null;
+  }
+
+  const bound = geometry.byPosition.get(`${row},${col}`);
+  if (bound) {
+    return {
+      x: bound.x + bound.w / 2,
+      y: bound.y + bound.h / 2,
+    };
+  }
+  return {
+    x: geometry.padding + col * geometry.stride + geometry.stride / 2,
+    y: row * geometry.stride + geometry.stride / 2,
   };
 }
 
