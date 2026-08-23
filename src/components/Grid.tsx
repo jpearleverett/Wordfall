@@ -19,8 +19,10 @@ import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import SelectionTrailOverlay from './game/SelectionTrailOverlay';
 import {
+  type CellBound,
   computeGridGeometry,
   computeGridMetrics,
+  computeGridTransition,
   GRID_FRAME_ALLOWANCE,
   hitTestGridGeometry,
 } from './game/gridGeometry';
@@ -122,7 +124,7 @@ const GHOST_DURATION_MS = 430; // 340 → 430: same review — the pop was gone 
 const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: GhostEntry; cellSize: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.sequence([
+    const animation = Animated.sequence([
       Animated.delay(ghost.order * GHOST_STAGGER_MS),
       Animated.timing(anim, {
         toValue: 1,
@@ -130,7 +132,9 @@ const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: Gh
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-    ]).start();
+    ]);
+    animation.start();
+    return () => animation.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -244,12 +248,14 @@ const GlintStar = React.memo(function GlintStar({ glint, cellSize }: { glint: Gl
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     anim.setValue(0);
-    Animated.timing(anim, {
+    const animation = Animated.timing(anim, {
       toValue: 1,
       duration: GLINT_DURATION_MS,
       easing: Easing.inOut(Easing.quad),
       useNativeDriver: true,
-    }).start();
+    });
+    animation.start();
+    return () => animation.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [glint.key]);
 
@@ -451,30 +457,21 @@ function GameGridImpl({
   // teleported).
   const reduceMotion = useReduceMotion();
 
-  // Map cell ID → pixel bound for the current grid.
-  const boundsById = useMemo(() => {
-    const map = new Map<string, { x: number; y: number; col: number; letter: string }>();
-    for (const bound of geometry.bounds) {
-      const cell = grid[bound.row]?.[bound.col];
-      if (!cell) continue;
-      map.set(bound.cellId, {
-        x: bound.x,
-        y: bound.y,
-        col: bound.col,
-        letter: cell.letter,
-      });
-    }
-    return map;
-  }, [geometry, grid]);
+  // Canonical map cell ID → rendered pixel bound for the current grid.
+  const boundsById = geometry.byCellId;
 
   const fallAnimMapRef = useRef(new Map<string, Animated.ValueXY>());
   // Live offsets reported by native-driver listeners while a fall is in
   // flight — lets an interrupting clear start the next fall from the tile's
   // CURRENT visual position instead of teleporting it to its settled slot.
   const liveOffsetRef = useRef(new Map<string, { x: number; y: number }>());
-  const listenerHandleRef = useRef(new Map<string, string>());
+  const listenerHandleRef = useRef(new Map<
+    string,
+    { value: Animated.ValueXY; handle: string }
+  >());
+  const activeFallsRef = useRef(new Map<string, Animated.CompositeAnimation>());
   const prevGridRef = useRef<GridType | null>(null);
-  const prevBoundsRef = useRef<Map<string, { x: number; y: number; col: number; letter: string }> | null>(null);
+  const prevBoundsRef = useRef<Map<string, CellBound> | null>(null);
   const prevCellSizeRef = useRef(cellSize);
   const prevDimsRef = useRef({ rows, cols });
   const pendingFallsRef = useRef<{ id: string; dx: number; dy: number; col: number }[]>([]);
@@ -483,6 +480,20 @@ function GameGridImpl({
   const ghostLayerRef = useRef<GhostLayerHandle | null>(null);
   const onGravitySettledRef = useRef(onGravitySettled);
   onGravitySettledRef.current = onGravitySettled;
+
+  useEffect(() => () => {
+    fallRunIdRef.current += 1;
+    activeFallsRef.current.forEach(animation => animation.stop());
+    activeFallsRef.current.clear();
+    for (const { value, handle } of listenerHandleRef.current.values()) {
+      value.removeListener(handle);
+    }
+    listenerHandleRef.current.clear();
+    liveOffsetRef.current.clear();
+    fallAnimMapRef.current.clear();
+    pendingFallsRef.current = [];
+    pendingGhostsRef.current = [];
+  }, []);
 
   // Render-phase diff. Runs exactly once per grid-data change; geometry
   // changes (cell size / board dims from layout settle or board shrink)
@@ -496,31 +507,55 @@ function GameGridImpl({
       prevBounds !== null;
     const falls: { id: string; dx: number; dy: number; col: number }[] = [];
     const ghosts: GhostSpec[] = [];
-    if (prevGridRef.current !== null && prevBounds && sameGeometry && !reduceMotion) {
-      for (const [id, bound] of boundsById) {
-        const prev = prevBounds.get(id);
-        if (!prev) continue;
-        const live = liveOffsetRef.current.get(id);
-        const dx = prev.x + (live?.x ?? 0) - bound.x;
-        const dy = prev.y + (live?.y ?? 0) - bound.y;
-        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-          const existing = fallAnimMapRef.current.get(id);
-          if (existing) {
-            existing.setValue({ x: dx, y: dy });
-          } else {
-            fallAnimMapRef.current.set(id, new Animated.ValueXY({ x: dx, y: dy }));
-          }
-          falls.push({ id, dx, dy, col: bound.col });
+    const previousGrid = prevGridRef.current;
+    if (previousGrid !== null && prevBounds && sameGeometry && !reduceMotion) {
+      const transition = computeGridTransition(
+        prevBounds,
+        boundsById,
+        liveOffsetRef.current,
+      );
+      for (const fall of transition.falls) {
+        const existing = fallAnimMapRef.current.get(fall.id);
+        if (existing) {
+          existing.setValue({ x: fall.dx, y: fall.dy });
+        } else {
+          fallAnimMapRef.current.set(
+            fall.id,
+            new Animated.ValueXY({ x: fall.dx, y: fall.dy }),
+          );
         }
+        falls.push(fall);
       }
-      for (const [id, prev] of prevBounds) {
-        if (!boundsById.has(id)) {
-          ghosts.push({ id, letter: prev.letter, x: prev.x, y: prev.y, col: prev.col });
+      for (const ghost of transition.ghosts) {
+        const previousBound = prevBounds.get(ghost.id);
+        const previousCell = previousBound
+          ? previousGrid[previousBound.row]?.[previousBound.col]
+          : null;
+        if (previousCell) {
+          ghosts.push({ ...ghost, letter: previousCell.letter });
         }
+        const active = activeFallsRef.current.get(ghost.id);
+        if (active) {
+          active.stop();
+          activeFallsRef.current.delete(ghost.id);
+        }
+        const listener = listenerHandleRef.current.get(ghost.id);
+        if (listener) {
+          listener.value.removeListener(listener.handle);
+          listenerHandleRef.current.delete(ghost.id);
+        }
+        liveOffsetRef.current.delete(ghost.id);
       }
     } else if (!sameGeometry) {
       // Layout settle / board-shrink: the pixel space changed, so any
       // in-flight offsets are meaningless — snap everything to rest.
+      fallRunIdRef.current += 1;
+      activeFallsRef.current.forEach(animation => animation.stop());
+      activeFallsRef.current.clear();
+      for (const { value, handle } of listenerHandleRef.current.values()) {
+        value.removeListener(handle);
+      }
+      listenerHandleRef.current.clear();
       for (const av of fallAnimMapRef.current.values()) {
         av.setValue({ x: 0, y: 0 });
       }
@@ -579,7 +614,7 @@ function GameGridImpl({
         const handle = av.addListener(({ x, y }) => {
           liveOffsetRef.current.set(cellId, { x, y });
         });
-        listenerHandleRef.current.set(f.id, handle);
+        listenerHandleRef.current.set(f.id, { value: av, handle });
       }
       const dist = Math.hypot(f.dx, f.dy);
       const rowsFallen = Math.max(1, dist / stride);
@@ -593,7 +628,7 @@ function GameGridImpl({
       const bounceMag = Math.min(9, dist * 0.055);
       const bx = f.dx === 0 ? 0 : Math.sign(f.dx) * bounceMag;
       const by = f.dy === 0 ? 0 : Math.sign(f.dy) * bounceMag;
-      Animated.sequence([
+      const sequence = Animated.sequence([
         Animated.delay(FALL_HOLD + (colDelay.get(f.col) ?? 0)),
         Animated.timing(av, {
           toValue: { x: 0, y: 0 },
@@ -613,13 +648,18 @@ function GameGridImpl({
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
-      ]).start(({ finished }) => {
+      ]);
+      activeFallsRef.current.set(f.id, sequence);
+      sequence.start(({ finished }) => {
+        if (activeFallsRef.current.get(f.id) === sequence) {
+          activeFallsRef.current.delete(f.id);
+        }
         // Interrupted tiles belong to the successor run — it re-computed
         // their offsets from the live listener values and owns cleanup.
         if (!finished) return;
-        const h = listenerHandleRef.current.get(f.id);
-        if (h) {
-          av.removeListener(h);
+        const listener = listenerHandleRef.current.get(f.id);
+        if (listener?.value === av) {
+          av.removeListener(listener.handle);
           listenerHandleRef.current.delete(f.id);
         }
         liveOffsetRef.current.delete(f.id);

@@ -36,6 +36,25 @@ export interface GridPoint {
   y: number;
 }
 
+export interface GridTransitionFall {
+  id: string;
+  dx: number;
+  dy: number;
+  col: number;
+}
+
+export interface GridTransitionGhost {
+  id: string;
+  x: number;
+  y: number;
+  col: number;
+}
+
+export interface GridTransition {
+  falls: GridTransitionFall[];
+  ghosts: GridTransitionGhost[];
+}
+
 const EMPTY_METRICS: GridMetrics = {
   cellSize: 0,
   stride: 0,
@@ -55,6 +74,34 @@ function emptyGridGeometry(): GridGeometry {
     byCellId: new Map(),
     byPosition: new Map(),
   };
+}
+
+export function computeGridTransition(
+  previous: ReadonlyMap<string, CellBound>,
+  next: ReadonlyMap<string, CellBound>,
+  liveOffsets: ReadonlyMap<string, GridPoint>,
+): GridTransition {
+  const falls: GridTransitionFall[] = [];
+  const ghosts: GridTransitionGhost[] = [];
+
+  for (const [id, bound] of next) {
+    const previousBound = previous.get(id);
+    if (!previousBound) continue;
+    const live = liveOffsets.get(id);
+    const dx = previousBound.x + (live?.x ?? 0) - bound.x;
+    const dy = previousBound.y + (live?.y ?? 0) - bound.y;
+    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+      falls.push({ id, dx, dy, col: bound.col });
+    }
+  }
+
+  for (const [id, bound] of previous) {
+    if (!next.has(id)) {
+      ghosts.push({ id, x: bound.x, y: bound.y, col: bound.col });
+    }
+  }
+
+  return { falls, ghosts };
 }
 
 export function computeGridMetrics(

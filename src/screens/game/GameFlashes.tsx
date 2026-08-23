@@ -5,7 +5,7 @@ import { CoinIcon } from '../../components/icons/iconsCore';
 
 /**
  * GameFlashes — collects every full-screen overlay that flashes in response
- * to gameplay events (valid/invalid word flash, score popup, big-word label).
+ * to gameplay events (valid-word flash, score popup, big-word label).
  *
  * All Animated.Value instances are owned by GameScreen (stored in stable
  * refs via useRef) and passed in as props. Because `Animated.Value` is a
@@ -21,8 +21,6 @@ import { CoinIcon } from '../../components/icons/iconsCore';
 interface GameFlashesProps {
   /** Whether the green "valid word" full-screen flash is active. */
   showValidFlash: boolean;
-  /** Whether the red "invalid word" full-screen flash is active. */
-  showInvalidFlash: boolean;
   /** Current score popup content, or null if no popup is visible. */
   scorePopup: { points: number; label: string; bonusCoins?: number } | null;
   /**
@@ -35,19 +33,16 @@ interface GameFlashesProps {
 
   // ── Animated.Value drivers (ref-backed, stable references) ──
   validFlashAnim: Animated.Value;
-  invalidFlashAnim: Animated.Value;
   scorePopupAnim: Animated.Value;
   bigWordAnim: Animated.Value;
 }
 
 function GameFlashesImpl({
   showValidFlash,
-  showInvalidFlash,
   scorePopup,
   lastSubmittedWordLen,
   bigWordLabel,
   validFlashAnim,
-  invalidFlashAnim,
   scorePopupAnim,
   bigWordAnim,
 }: GameFlashesProps) {
@@ -56,25 +51,12 @@ function GameFlashesImpl({
     outputRange: [0, 0.3],
   });
 
-  const invalidFlashOpacity = invalidFlashAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.25],
-  });
-
   return (
     <>
       {/* Valid word green flash overlay */}
       {showValidFlash && (
         <Animated.View
           style={[styles.validFlashOverlay, { opacity: validFlashOpacity }]}
-          pointerEvents="none"
-        />
-      )}
-
-      {/* Invalid word red flash overlay */}
-      {showInvalidFlash && (
-        <Animated.View
-          style={[styles.invalidFlashOverlay, { opacity: invalidFlashOpacity }]}
           pointerEvents="none"
         />
       )}
@@ -179,11 +161,6 @@ const styles = StyleSheet.create({
   validFlashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.green,
-    zIndex: 50,
-  },
-  invalidFlashOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.coral,
     zIndex: 50,
   },
   scorePopup: {

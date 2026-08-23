@@ -126,6 +126,12 @@ function PlayFieldImpl({
   // ── Tap feedback throttle ─────────────────────────────────────────────
   const lastTapFeedbackAt = useRef(0);
   const selectionLenRef = useRef(0);
+  const tapSoundTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  useEffect(() => () => {
+    tapSoundTimersRef.current.forEach(clearTimeout);
+    tapSoundTimersRef.current.clear();
+  }, []);
 
   // Rising tap scale: each cell added to the trace plays a slightly
   // higher-pitched tap (Wordscapes-style momentum feedback). +6% per cell,
@@ -173,9 +179,11 @@ function PlayFieldImpl({
           if (i === 0) {
             void soundManager.playSound('tap', { rate });
           } else {
-            setTimeout(() => {
+            const timer = setTimeout(() => {
+              tapSoundTimersRef.current.delete(timer);
               void soundManager.playSound('tap', { rate });
             }, i * 22);
+            tapSoundTimersRef.current.add(timer);
           }
         }
       }

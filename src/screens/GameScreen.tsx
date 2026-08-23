@@ -5,7 +5,6 @@ import {
   Animated,
   Easing,
   Image,
-  LayoutAnimation,
   Platform,
   Pressable,
   SafeAreaView,
@@ -848,8 +847,6 @@ function GameScreenImpl({
   }, [solveSequence, foundWords, totalWords]);
   const validFlashAnim = useRef(new Animated.Value(0)).current;
   const [showValidFlash, setShowValidFlash] = useState(false);
-  const invalidFlashAnim = useRef(new Animated.Value(0)).current;
-  const [showInvalidFlash, setShowInvalidFlash] = useState(false);
   const scorePopupAnim = useRef(new Animated.Value(0)).current;
   const [scorePopup, setScorePopup] = useState<{ points: number; label: string; bonusCoins?: number } | null>(null);
   // Pending reduce-motion popup teardown — cleared before scheduling the next
@@ -1490,57 +1487,6 @@ function GameScreenImpl({
 
   const reduceMotion = useReduceMotion();
 
-  // Invalid word flash animation. Runs a brief low-amplitude screen shake
-  // (kinesthetic negative feedback — distinct from the 7+-letter celebration
-  // shake). Gated by Remote Config `invalidShakeEnabled` and skipped under
-  // reduceMotion.
-  const showInvalidFlashAnim = useCallback(() => {
-    setShowInvalidFlash(true);
-    void errorHaptic();
-    void soundManager.playSound('wordInvalid');
-    invalidFlashAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(invalidFlashAnim, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(invalidFlashAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      // A rapid second invalid tap restarts the sequence; the interrupted
-      // run's callback must not hide the flash the new run just showed.
-      if (finished) setShowInvalidFlash(false);
-    });
-
-    if (!reduceMotion && getRemoteBoolean('invalidShakeEnabled')) {
-      // ~120ms total, ±8px peak — reduced amplitude vs the 7+-letter shake
-      shakeAnim.setValue(0);
-      Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 8, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -7, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 5, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -4, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 2, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 20, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [invalidFlashAnim, reduceMotion, shakeAnim]);
-
-  // NOTE (Aug 2026 feel audit): the "invalid tap" error treatment that used
-  // to fire here — error haptic + wordInvalid SFX + red flash + screen shake
-  // whenever a non-adjacent tap broke a 2+ cell trace — is deliberately GONE.
-  // game_mechanics.md is explicit that invalid-word rejection is not a moment
-  // this game has, and the gesture it punished (abandon a guess, start a new
-  // one) is the single most common transition in exploratory play. Dead
-  // traces now release silently on finger lift (see PlayField's
-  // handleDragEnd), and a restart tap is just normal play. The reducer still
-  // records lastSelectionResetTap; showInvalidFlashAnim stays for any future
-  // surface that needs a genuine error flash.
-
   // Hints/undos use persistent economy tokens (not per-level allocation)
   // Relax mode still uses unlimited per-level allocation.
   // allowHints was only ever read by GameHeader (hiding the button), so
@@ -1919,7 +1865,24 @@ function GameScreenImpl({
         if (finished) setScorePopup(null);
       });
     }
-  }, [score]);
+  }, [
+    addCoins,
+    bigWordAnim,
+    bonusTile,
+    gridAreaHeight,
+    level,
+    mode,
+    reduceMotion,
+    score,
+    scorePopupAnim,
+    shakeAnim,
+    spawnClearRing,
+    spawnStarSparks,
+    spawnTileBloom,
+    status,
+    store,
+    trackTimeout,
+  ]);
 
   // Green flash + auto-submit when a valid word is selected.
   // Driven by PlayField's onValidWordChange callback (not a direct subscription
@@ -2370,13 +2333,6 @@ function GameScreenImpl({
       ]).start();
     }
 
-    LayoutAnimation.configureNext(
-      LayoutAnimation.create(
-        300,
-        LayoutAnimation.Types.easeInEaseOut,
-        LayoutAnimation.Properties.opacity
-      )
-    );
     undoMove();
 
     setShowFailed(false);
@@ -2384,13 +2340,6 @@ function GameScreenImpl({
   }, [undoMove, grantUndo, level, mode, undosAvailable, undosLeft, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
 
   const handleRetry = useCallback(() => {
-    LayoutAnimation.configureNext(
-      LayoutAnimation.create(
-        200,
-        LayoutAnimation.Types.easeInEaseOut,
-        LayoutAnimation.Properties.opacity
-      )
-    );
     newGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
     setShowComplete(false);
     completionHandled.current = false;
@@ -2535,8 +2484,8 @@ function GameScreenImpl({
   });
 
   // NOTE: chainScale/chainBgColor/chainShadowColor/chainBorderColor and the
-  // valid/invalid flash opacities were previously computed here. They moved
-  // to GameFlashes (src/screens/game/GameFlashes.tsx) as part of the
+  // valid-flash opacity were previously computed here. They moved to
+  // GameFlashes (src/screens/game/GameFlashes.tsx) as part of the
   // per-tap re-render decomposition — see that file for the memoized subtree.
 
   const bt = boosterTokens ?? { wildcardTile: 0, spotlight: 0, smartShuffle: 0 };
@@ -2661,19 +2610,17 @@ function GameScreenImpl({
         actionLabel="Return home"
         onReset={onHome}
       >
-      {/* Valid/invalid flash, score popup, big-word celebration — extracted
+      {/* Valid flash, score popup, big-word celebration — extracted
           into a single memoized subtree so this branch doesn't re-reconcile
           on every SELECT_CELL. All Animated.Values are ref-stable and
           compared referentially by React.memo; primitive props only change
           on word submit. */}
       <GameFlashes
         showValidFlash={showValidFlash}
-        showInvalidFlash={showInvalidFlash}
         scorePopup={scorePopup}
         lastSubmittedWordLen={lastSubmittedWordLenRef.current}
         bigWordLabel={bigWordLabel}
         validFlashAnim={validFlashAnim}
-        invalidFlashAnim={invalidFlashAnim}
         scorePopupAnim={scorePopupAnim}
         bigWordAnim={bigWordAnim}
       />
@@ -3279,11 +3226,6 @@ const styles = StyleSheet.create({
   validFlashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.green,
-    zIndex: 50,
-  },
-  invalidFlashOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.coral,
     zIndex: 50,
   },
   idleHintBanner: {
