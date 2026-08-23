@@ -1,6 +1,5 @@
 import { Animated, Easing } from 'react-native';
-import {
-  CardStyleInterpolators,
+import type {
   StackCardInterpolationProps,
   StackNavigationOptions,
 } from '@react-navigation/stack';
@@ -94,6 +93,26 @@ const sameGameFadeSpec: StackTransitionSpec = {
   },
 };
 
+function fadeFromCenterInterpolator({
+  current: { progress },
+}: StackCardInterpolationProps) {
+  return {
+    cardStyle: {
+      opacity: progress.interpolate({
+        inputRange: [0, 0.5, 0.9, 1],
+        outputRange: [0, 0.25, 0.7, 1],
+      }),
+    },
+    overlayStyle: {
+      opacity: progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 0.5],
+        extrapolate: 'clamp',
+      }),
+    },
+  };
+}
+
 export function getStackMotionOptions(reduceMotion: boolean): StackNavigationOptions {
   return reduceMotion ? reducedStackOptions : normalStackOptions;
 }
@@ -110,7 +129,7 @@ export function getGameRouteMotion(
   if (reduceMotion) return { animation: 'none' };
 
   return {
-    cardStyleInterpolator: CardStyleInterpolators.forFadeFromCenter,
+    cardStyleInterpolator: fadeFromCenterInterpolator,
     transitionSpec: sameGameFadeSpec,
   };
 }
