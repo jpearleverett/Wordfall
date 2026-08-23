@@ -1,57 +1,47 @@
 /**
  * Feel-polish tests — lock the Remote-Config defaults + pure math used by
- * the invalid-word screen shake and multi-tile bloom particle effects in
- * GameScreen.
+ * the multi-tile bloom particle effects in GameScreen.
  *
- * The UI wiring itself (the Animated.sequence triggered inside
- * showInvalidFlashAnim, the spawnTileBloom state-queue flow) is exercised
- * via manual + Maestro smoke — these unit tests pin the tunable defaults
- * and the cell-to-screen coordinate math so a later layout refactor can't
- * silently throw particles outside the grid.
+ * The spawnTileBloom state-queue flow is exercised via manual + Maestro
+ * smoke — these unit tests pin the tunable defaults and canonical grid
+ * geometry so a later layout refactor can't silently throw particles
+ * outside the grid.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
 import { CELL_GAP, MAX_GRID_WIDTH, SCREEN_WIDTH } from '../constants';
+import {
+  CellBound,
+  computeGridGeometry,
+  computeGridMetrics,
+  GRID_FRAME_ALLOWANCE,
+} from '../components/game/gridGeometry';
+import { Grid } from '../types';
 
-// Pure re-implementation of the helper inside GameScreen.cellPositionToScreen.
-// Kept in lockstep so a test failure here flags when the GameScreen copy
-// drifts from the formula shared with the gravity block + Grid.tsx.
-function cellPositionToScreen(
-  row: number,
-  col: number,
-  rows: number,
-  cols: number,
-  gridAreaHeight: number,
-): { x: number; y: number } {
-  if (cols === 0 || rows === 0 || gridAreaHeight <= 0) {
-    return { x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
-  }
-  const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-  let cellSize = Math.floor(availableWidth / cols);
-  const frameAllowance = 58;
-  const heightAvail = gridAreaHeight - frameAllowance;
-  const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
-  cellSize = Math.min(cellSize, heightBased);
-  if (cellSize <= 0) {
-    return { x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
-  }
-  const cellStride = cellSize + CELL_GAP;
-  const gridWidth = cols * cellStride + CELL_GAP;
-  const gridHeight = rows * cellStride;
-  const gridLeft = (SCREEN_WIDTH - gridWidth) / 2;
-  const gridTop = (gridAreaHeight - gridHeight) / 2;
-  const padding = CELL_GAP / 2;
+const GAME_SCREEN_SOURCE = fs.readFileSync(
+  path.resolve(__dirname, '../screens/GameScreen.tsx'),
+  'utf8',
+);
+
+function makeGrid(rows: number, cols: number): Grid {
+  return Array.from({ length: rows }, (_, row) =>
+    Array.from({ length: cols }, (_, col) => ({
+      id: `${row}-${col}`,
+      letter: 'A',
+    })),
+  );
+}
+
+function center(bound: CellBound): { x: number; y: number } {
   return {
-    x: gridLeft + padding + col * cellStride + cellSize / 2,
-    y: gridTop + row * cellStride + cellSize / 2,
+    x: bound.x + bound.w / 2,
+    y: bound.y + bound.h / 2,
   };
 }
 
 describe('feel-polish — Remote Config defaults', () => {
-  it('ships invalidShakeEnabled=true so invalid taps feel like a "no"', () => {
-    expect(getRemoteBoolean('invalidShakeEnabled')).toBe(true);
-  });
-
   it('ships tileBloomEnabled=true so word-finds spawn per-tile particles', () => {
     expect(getRemoteBoolean('tileBloomEnabled')).toBe(true);
   });
@@ -61,44 +51,66 @@ describe('feel-polish — Remote Config defaults', () => {
   });
 });
 
-describe('feel-polish — cellPositionToScreen math', () => {
-  it('falls back to a centered position when layout is unmeasured', () => {
-    const pos = cellPositionToScreen(0, 0, 5, 5, 0);
-    expect(pos.x).toBe(SCREEN_WIDTH / 2);
-    expect(pos.y).toBe(60);
+describe('feel-polish — shared gameplay contracts', () => {
+  it('uses the centralized fail-closed reduce-motion hook', () => {
+    expect(GAME_SCREEN_SOURCE).toContain(
+      "import { useReduceMotion } from '../hooks/useReduceMotion';",
+    );
+    expect(GAME_SCREEN_SOURCE).toContain('const reduceMotion = useReduceMotion();');
+    expect(GAME_SCREEN_SOURCE).not.toContain('AccessibilityInfo.isReduceMotionEnabled()');
+    expect(GAME_SCREEN_SOURCE).not.toContain(
+      "AccessibilityInfo.addEventListener('reduceMotionChanged'",
+    );
   });
 
-  it('falls back when rows or cols are zero', () => {
-    const a = cellPositionToScreen(0, 0, 0, 5, 400);
-    const b = cellPositionToScreen(0, 0, 5, 0, 400);
-    expect(a.x).toBe(SCREEN_WIDTH / 2);
-    expect(b.x).toBe(SCREEN_WIDTH / 2);
+  it('routes particle origins through the canonical null-slot helper', () => {
+    expect(GAME_SCREEN_SOURCE).toContain('gridSlotCenter(gridGeometry, row, col)');
   });
+});
 
-  it('returns distinct x/y for distinct cells in a 5×5 grid', () => {
-    const topLeft = cellPositionToScreen(0, 0, 5, 5, 400);
-    const bottomRight = cellPositionToScreen(4, 4, 5, 5, 400);
+describe('feel-polish — authoritative grid geometry', () => {
+  const grid = makeGrid(5, 5);
+  const metrics = computeGridMetrics(
+    5,
+    5,
+    MAX_GRID_WIDTH,
+    400,
+    CELL_GAP,
+    GRID_FRAME_ALLOWANCE,
+  );
+  const geometry = computeGridGeometry(grid, metrics.cellSize, CELL_GAP);
+
+  it('returns distinct centers for distinct engine slots', () => {
+    const topLeft = center(geometry.byPosition.get('0,0')!);
+    const bottomRight = center(geometry.byPosition.get('4,4')!);
     expect(bottomRight.x).toBeGreaterThan(topLeft.x);
     expect(bottomRight.y).toBeGreaterThan(topLeft.y);
   });
 
-  it('places a centered 5×5 grid symmetrically around SCREEN_WIDTH/2', () => {
-    const topLeft = cellPositionToScreen(0, 0, 5, 5, 400);
-    const topRight = cellPositionToScreen(0, 4, 5, 5, 400);
-    const midX = (topLeft.x + topRight.x) / 2;
-    // Symmetry: midpoint of the top row should coincide with the horizontal
-    // center of the screen (within the rounding slack from Math.floor on
-    // cellSize + the CELL_GAP padding split).
+  it('centers the geometry symmetrically in the measured grid area', () => {
+    const gridLeft = (SCREEN_WIDTH - geometry.width) / 2;
+    const topLeft = center(geometry.byPosition.get('0,0')!);
+    const topRight = center(geometry.byPosition.get('0,4')!);
+    const midX = gridLeft + (topLeft.x + topRight.x) / 2;
     expect(Math.abs(midX - SCREEN_WIDTH / 2)).toBeLessThanOrEqual(CELL_GAP);
   });
 
-  it('keeps every cell inside the grid horizontally', () => {
-    // With paddingHorizontal=8 on gridArea and the grid centered inside it,
-    // every cell center must land within the screen horizontal bounds.
-    for (let c = 0; c < 6; c++) {
-      const { x } = cellPositionToScreen(0, c, 6, 6, 400);
-      expect(x).toBeGreaterThan(0);
-      expect(x).toBeLessThan(SCREEN_WIDTH);
+  it('keeps every cell center inside the measured grid area', () => {
+    const sixGrid = makeGrid(6, 6);
+    const sixMetrics = computeGridMetrics(
+      6,
+      6,
+      MAX_GRID_WIDTH,
+      400,
+      CELL_GAP,
+      GRID_FRAME_ALLOWANCE,
+    );
+    const sixGeometry = computeGridGeometry(sixGrid, sixMetrics.cellSize, CELL_GAP);
+    const gridLeft = (SCREEN_WIDTH - sixGeometry.width) / 2;
+    for (const bound of sixGeometry.bounds) {
+      const { x } = center(bound);
+      expect(gridLeft + x).toBeGreaterThan(0);
+      expect(gridLeft + x).toBeLessThan(SCREEN_WIDTH);
     }
   });
 });

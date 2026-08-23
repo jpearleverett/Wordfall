@@ -7,6 +7,7 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { useColors } from '../hooks/useColors';
 import { useSettings } from '../contexts/SettingsContext';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { getWordBankMotionPolicy } from '../utils/gameMotion';
 
 interface WordChipProps {
   wordPlacement: WordPlacement;
@@ -18,24 +19,23 @@ interface WordChipProps {
   // single biggest contributor to WordBank's 10-20ms per-tap cost.
   isActive: boolean;
   isValidWord: boolean;
-  /**
-   * Last-remaining-word pulse. True when this is the only unfound chip in the
-   * puzzle — drives a looping scale pulse so the final word telegraphs the
-   * "one away from winning" moment.
-   */
-  isLastRemaining: boolean;
-  /**
-   * Tier 6 B7 — rising edge of this prop fires a one-shot overshoot + glow so
-   * the visual coordinates with the BGM swap + haptic tension moment. This is
-   * distinct from `isLastRemaining`: that stays true for the whole final-word
-   * phase (driving the gentle loop), while `tensionActive` transitions false →
-   * true exactly once when the player enters the tension state.
-   */
-  tensionActive: boolean;
+  lastWordEmphasis: boolean;
+  animateLastWordLoop: boolean;
+  animateLastWordOvershoot: boolean;
+  animateFoundChip: boolean;
   index: number;
 }
 
-const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValidWord, isLastRemaining, tensionActive, index }: WordChipProps) {
+const WordChip = React.memo(function WordChip({
+  wordPlacement,
+  isActive,
+  isValidWord,
+  lastWordEmphasis,
+  animateLastWordLoop,
+  animateLastWordOvershoot,
+  animateFoundChip,
+  index,
+}: WordChipProps) {
   const foundAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const lastRemainingAnim = useRef(new Animated.Value(1)).current;
@@ -51,12 +51,14 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   const wasFound = useRef(false);
   const lastRemainingLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const tensionFiredRef = useRef(false);
-  // The last-word pulse loops indefinitely until the puzzle resolves — the
-  // textbook case reduce-motion exists for. The static gold border that
-  // isLastRemaining already applies carries the meaning without motion.
-  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
+    if (wordPlacement.found && !animateFoundChip) {
+      wasFound.current = true;
+      foundAnim.setValue(1);
+      scaleAnim.setValue(1);
+      return;
+    }
     if (wordPlacement.found && !wasFound.current) {
       wasFound.current = true;
       Animated.sequence([
@@ -90,16 +92,18 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         ]),
       ]).start();
     }
-  }, [wordPlacement.found]);
+  }, [wordPlacement.found, animateFoundChip, foundAnim, scaleAnim]);
 
   // Tier 6 B7 — fire a one-shot overshoot + glow when `tensionActive` rises,
   // coordinating the visual with the BGM swap + haptic moment in GameScreen.
-  // Only fires on the chip that is currently `isLastRemaining` (so found
-  // chips and earlier-resolved words stay calm) and only once per puzzle
-  // (tensionFiredRef).
+  // Only fires on the chip that currently owns the shared tension emphasis
+  // (so early boards, terminal boards, found chips, and earlier-resolved words
+  // stay calm) and only once per puzzle (tensionFiredRef).
   useEffect(() => {
-    if (!tensionActive) {
+    if (!lastWordEmphasis) {
       tensionFiredRef.current = false;
+    }
+    if (!lastWordEmphasis || !animateLastWordOvershoot) {
       // Reset back to 0 via a zero-duration native animation rather than
       // setValue() — setValue on a node that's already been moved to
       // native can trigger the same "JS driven animation on native
@@ -107,16 +111,15 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
       Animated.timing(tensionScaleAnim, { toValue: 0, duration: 0, useNativeDriver: true }).start();
       return;
     }
-    if (!isLastRemaining || wordPlacement.found) return;
+    if (wordPlacement.found) return;
     if (tensionFiredRef.current) return;
-    if (reduceMotion) return;
     if (!getRemoteBoolean('lastWordTensionPulseEnabled')) return;
     tensionFiredRef.current = true;
     Animated.sequence([
       Animated.timing(tensionScaleAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
       Animated.spring(tensionScaleAnim, { toValue: 0.35, friction: 5, tension: 160, useNativeDriver: true }),
     ]).start();
-  }, [tensionActive, isLastRemaining, wordPlacement.found, reduceMotion]);
+  }, [lastWordEmphasis, animateLastWordOvershoot, wordPlacement.found]);
 
   useEffect(() => {
     // Last-remaining-word pulse: loop scale 1.0 → 1.08 → 1.0 while this is the
@@ -125,7 +128,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
       lastRemainingLoopRef.current.stop();
       lastRemainingLoopRef.current = null;
     }
-    if (isLastRemaining && !wordPlacement.found && !reduceMotion) {
+    if (lastWordEmphasis && !wordPlacement.found && animateLastWordLoop) {
       lastRemainingAnim.setValue(1);
       const loop = Animated.loop(
         Animated.sequence([
@@ -152,7 +155,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         lastRemainingLoopRef.current = null;
       }
     };
-  }, [isLastRemaining, wordPlacement.found, reduceMotion]);
+  }, [lastWordEmphasis, animateLastWordLoop, wordPlacement.found]);
 
   // NOTE: the old glow layer's Animated.Value was removed along with its
   // driver effect — it fired a ~1.85s native sequence at every word-match
@@ -205,9 +208,9 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
       style={[
         styles.wordChip,
         getChipStyle(),
-        isLastRemaining && !wordPlacement.found && styles.wordChipLastRemaining,
+        lastWordEmphasis && !wordPlacement.found && styles.wordChipLastRemaining,
         getChipCvdOverride(),
-        isLastRemaining && !wordPlacement.found && cvdActive
+        lastWordEmphasis && !wordPlacement.found && cvdActive
           ? { borderColor: palette.gold, shadowColor: palette.gold }
           : null,
         {
@@ -216,7 +219,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
           ],
         },
       ]}
-      accessibilityLabel={`${wordPlacement.word}, ${wordPlacement.found ? 'found' : 'not found'}${isLastRemaining && !wordPlacement.found ? ', last remaining' : ''}`}
+      accessibilityLabel={`${wordPlacement.word}, ${wordPlacement.found ? 'found' : 'not found'}${lastWordEmphasis && !wordPlacement.found ? ', last remaining' : ''}`}
     >
       {/* Background gradient + glass edge clipped to chip shape */}
       <View style={styles.chipBackground}>
@@ -332,6 +335,8 @@ const DashRow = React.memo(function DashRow({ word, found, prefixLen, isValidWor
 export const WordBank = React.memo(function WordBank({ words, currentWord, isValidWord, tensionActive }: WordBankProps) {
   const wordAnim = useRef(new Animated.Value(0)).current;
   const prevWord = useRef('');
+  const reduceMotion = useReduceMotion();
+  const motionPolicy = getWordBankMotionPolicy(!!tensionActive, reduceMotion);
   const { height: windowHeight } = useWindowDimensions();
   const foundCount = useMemo(() => words.filter(w => w.found).length, [words]);
   // Wrap chips into a multi-row panel by default. The earlier guard
@@ -352,6 +357,11 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
 
   // Animate current word text on change
   useEffect(() => {
+    if (!motionPolicy.animateTrace) {
+      prevWord.current = currentWord;
+      wordAnim.setValue(motionPolicy.settledTraceValue);
+      return;
+    }
     if (currentWord !== prevWord.current) {
       prevWord.current = currentWord;
       if (currentWord.length > 0) {
@@ -364,7 +374,12 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
         }).start();
       }
     }
-  }, [currentWord]);
+  }, [
+    currentWord,
+    motionPolicy.animateTrace,
+    motionPolicy.settledTraceValue,
+    wordAnim,
+  ]);
 
   return (
     <View style={styles.container} accessibilityRole="list">
@@ -456,14 +471,18 @@ export const WordBank = React.memo(function WordBank({ words, currentWord, isVal
           // of re-renders across all 4-6 chips on every valid-word moment.
           const chipIsValid = isActive && isValidWord;
           const isLastRemaining = unfoundCount === 1 && !wordPlacement.found;
+          const lastWordEmphasis =
+            isLastRemaining && motionPolicy.showLastWordEmphasis;
           return (
             <WordChip
               key={`${wordPlacement.word}-${index}`}
               wordPlacement={wordPlacement}
               isActive={isActive}
               isValidWord={chipIsValid}
-              isLastRemaining={isLastRemaining}
-              tensionActive={!!tensionActive}
+              lastWordEmphasis={lastWordEmphasis}
+              animateLastWordLoop={motionPolicy.animateLastWordLoop}
+              animateLastWordOvershoot={motionPolicy.animateLastWordOvershoot}
+              animateFoundChip={motionPolicy.animateFoundChip}
               index={index}
             />
           );

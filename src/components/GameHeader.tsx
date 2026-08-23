@@ -11,6 +11,7 @@ import { getWing } from '../data/library';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { useRoundedFontReady } from '../services/fontReady';
 import GameIcon from './icons/GameIcon';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 /**
  * Floating "+N" callout that rises from the score on every word-found.
@@ -69,7 +70,6 @@ interface GameHeaderProps {
   isDaily?: boolean;
   mode?: GameMode;
   maxMoves?: number;
-  timeRemaining?: number;
   themeColors?: {
     bg: string;
     surface: string;
@@ -94,13 +94,13 @@ export const GameHeader = React.memo(function GameHeader({
   isDaily,
   mode = 'classic',
   maxMoves = 0,
-  timeRemaining = 0,
   themeColors,
   onHint,
   onUndo,
   onBack,
 }: GameHeaderProps) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
   const modeConfig = MODE_CONFIGS[mode];
   const accentColor = themeColors?.accent ?? COLORS.accent;
   const surfaceColor = themeColors?.surface ?? '#1a0a2e';
@@ -146,13 +146,17 @@ export const GameHeader = React.memo(function GameHeader({
   const labelFontOverride = useRoundedFont ? { fontFamily: FONTS.displayRounded } : null;
   const flawlessScale = useSharedValue(1);
   useEffect(() => {
+    if (reduceMotion) {
+      flawlessScale.value = 1;
+      return;
+    }
     if (flawlessStreak > 0) {
       flawlessScale.value = withSequence(
         withTiming(1.15, { duration: 120 }),
         withSpring(1, { damping: 8 }),
       );
     }
-  }, [flawlessStreak]);
+  }, [flawlessStreak, reduceMotion, flawlessScale]);
   const flawlessStyle = useAnimatedStyle(() => ({
     transform: [{ scale: flawlessScale.value }],
   }));
@@ -165,11 +169,16 @@ export const GameHeader = React.memo(function GameHeader({
   useEffect(() => {
     const delta = score - prevScoreRef.current;
     prevScoreRef.current = score;
+    if (reduceMotion) {
+      scoreScale.value = 1;
+    }
     if (delta <= 0) return;
-    scoreScale.value = withSequence(
-      withTiming(1.18, { duration: 90 }),
-      withSpring(1, { damping: 7, stiffness: 220 }),
-    );
+    if (!reduceMotion) {
+      scoreScale.value = withSequence(
+        withTiming(1.18, { duration: 90 }),
+        withSpring(1, { damping: 7, stiffness: 220 }),
+      );
+    }
     popKeyRef.current += 1;
     const key = popKeyRef.current;
     setPop({ amount: delta, key });
@@ -178,12 +187,14 @@ export const GameHeader = React.memo(function GameHeader({
       setPop((p) => (p && p.key === key ? null : p));
     }, SCORE_POP_DURATION_MS + 80);
     return () => clearTimeout(timeout);
-  }, [score]);
+  }, [score, reduceMotion, scoreScale]);
 
   // Animate progress bar smoothly — Reanimated handles layout props on UI thread
   useEffect(() => {
-    progressValue.value = withSpring(progress, { damping: 16, stiffness: 60 });
-  }, [progress]);
+    progressValue.value = reduceMotion
+      ? progress
+      : withSpring(progress, { damping: 16, stiffness: 60 });
+  }, [progress, reduceMotion, progressValue]);
 
   const scoreStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scoreScale.value }],

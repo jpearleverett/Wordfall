@@ -4,7 +4,6 @@ import {
   Alert,
   AppState,
   Animated,
-  Easing,
   InteractionManager,
   Platform,
   Pressable,
@@ -15,12 +14,18 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NavigationContainer, NavigationContainerRef, getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  NavigationContainerRef,
+  getFocusedRouteNameFromRoute,
+  type ParamListBase,
+  type RouteProp,
+} from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import {
   createStackNavigator,
-  StackCardInterpolationProps,
-  StackNavigationOptions,
+  type StackNavigationEventMap,
+  type StackNavigationProp,
 } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts, loadAsync as loadFontAsync } from 'expo-font';
@@ -113,8 +118,15 @@ import { firestoreService, FirestoreGift } from './src/services/firestore';
 import { useRewardWiring, playerStageFromPuzzles } from './src/hooks/useRewardWiring';
 import { useCeremonyQueue } from './src/hooks/useCeremonyQueue';
 import { useRewardInboxClaim } from './src/hooks/useRewardInbox';
+import { useReduceMotion } from './src/hooks/useReduceMotion';
 import { ceremonyEconomyGrant } from './src/utils/ceremonyGrants';
 import { getLoginCalendarDay } from './src/data/loginCalendar';
+import {
+  getGameRouteMotion,
+  getStackMotionOptions,
+  getTabAnimation,
+  shouldResetGameRouteMarker,
+} from './src/navigation/motionOptions';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createStackNavigator();
@@ -124,103 +136,39 @@ const LibraryStack = createStackNavigator();
 const ProfileStack = createStackNavigator();
 const RootStack = createStackNavigator();
 
-// P2 in launch_blockers.md (re-landed Aug 2026): the custom spring/fade
-// transition was originally authored in the dead src/navigation/
-// MainNavigator.tsx and never ran. These are the REAL navigators, on the JS
-// stack (@react-navigation/stack) because native-stack cannot run a custom
-// cardStyleInterpolator. The card transform/opacity animate on the native
-// driver, so the transition itself stays off the JS thread; freezeOnBlur
-// still keeps covered screens from burning frames.
-//
-// Push = spring (stiffness 180 / damping 22, clamped — no overshoot blur)
-// tuned to the in-game ceremony settle feel; pop = 320ms cubic-out so
-// back-nav feels snappier than forward-nav. React Navigation itself honors
-// the OS reduce-motion flag for stack transitions.
-type StackTransitionSpec = NonNullable<StackNavigationOptions['transitionSpec']>;
+type GameRouteParams = { sameRouteTransition?: boolean };
 
-const springOpenSpec: StackTransitionSpec['open'] = {
-  animation: 'spring',
-  config: {
-    // 180 → 120 (blind motion review: the push read as a hard cut at coarse
-    // frame sampling — a ~480ms settle reads as motion, not teleport).
-    stiffness: 120,
-    damping: 20,
-    mass: 1,
-    overshootClamping: true,
-    restDisplacementThreshold: 0.01,
-    restSpeedThreshold: 0.01,
-  },
-};
-
-const timingCloseSpec: StackTransitionSpec['close'] = {
-  animation: 'timing',
-  config: {
-    // 220 → 320ms: at coarse frame sampling the 220ms pop landed between
-    // frames and read as a hard cut (blind motion review, round 2).
-    duration: 320,
-    easing: Easing.out(Easing.cubic),
-  },
-};
-
-// Incoming card: 6% slide-in + 0.96→1 scale + fade; outgoing card dims to
-// 92% behind a matching overlay so the push reads as depth, not a cover.
-function cardSpringFadeInterpolator({
-  current,
-  next,
-  layouts,
-}: StackCardInterpolationProps) {
-  const translateX = current.progress.interpolate({
-    inputRange: [0, 1],
-    // 6% → 14%: the shallower slide was invisible between sampled frames
-    // (blind motion review) — deeper travel makes the push read as depth.
-    outputRange: [layouts.screen.width * 0.14, 0],
-  });
-  const scale = current.progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.94, 1],
-  });
-  const opacity = current.progress.interpolate({
-    inputRange: [0, 0.3, 1],
-    outputRange: [0, 0.6, 1],
-  });
-  const nextOpacity = next
-    ? next.progress.interpolate({
-        inputRange: [0, 1],
-        // Dim the outgoing card harder (0.92 → 0.75) so depth reads.
-        outputRange: [1, 0.75],
-      })
-    : 1;
+// React Navigation 7 exposes `transitionEnd` on stack screens. Clear the
+// replacement-only marker after the opening transition so its fade options
+// stay stable in flight, then normal stack options resume for a later back.
+function getGameRouteListeners({
+  navigation,
+  route,
+}: {
+  navigation: StackNavigationProp<ParamListBase>;
+  route: RouteProp<ParamListBase>;
+}) {
   return {
-    cardStyle: {
-      transform: [{ translateX }, { scale }],
-      opacity,
-    },
-    overlayStyle: {
-      opacity: Animated.subtract(1, nextOpacity),
+    transitionEnd: ({
+      data,
+    }: {
+      data: StackNavigationEventMap['transitionEnd']['data'];
+    }) => {
+      const sameRouteTransition =
+        (route.params as GameRouteParams | undefined)?.sameRouteTransition === true;
+      if (shouldResetGameRouteMarker(sameRouteTransition, data.closing)) {
+        navigation.setParams({ sameRouteTransition: undefined });
+      }
     },
   };
 }
 
-const screenOptions: StackNavigationOptions = {
-  headerShown: false,
-  // JS stack uses `cardStyle` for the screen background (native-stack used
-  // `contentStyle`). Same effect, different field name.
-  cardStyle: { backgroundColor: COLORS.bg },
-  // Freeze screens that are pushed behind the current one. Without this, every
-  // previous screen keeps running its backdrop animations, setIntervals, and
-  // effects in the background — a 5-screen stack = 5x animation load.
-  freezeOnBlur: true,
-  cardStyleInterpolator: cardSpringFadeInterpolator,
-  transitionSpec: {
-    open: springOpenSpec,
-    close: timingCloseSpec,
-  },
-};
-
 // Home Tab Stack
 function HomeStackScreen() {
+  const reduceMotion = useReduceMotion();
+
   return (
-    <HomeStack.Navigator screenOptions={screenOptions}>
+    <HomeStack.Navigator screenOptions={getStackMotionOptions(reduceMotion)}>
       <HomeStack.Screen name="HomeMain" component={HomeMainScreen} />
       <HomeStack.Screen name="Shop" component={ShopScreen} />
       <HomeStack.Screen name="CosmeticStore" component={CosmeticStoreScreen} />
@@ -228,7 +176,18 @@ function HomeStackScreen() {
       <HomeStack.Screen name="SeasonPass">
         {({ navigation }) => <SeasonPassScreen onBack={() => navigation.goBack()} />}
       </HomeStack.Screen>
-      <HomeStack.Screen name="Game" component={GameScreenWrapper} />
+      <HomeStack.Screen
+        name="Game"
+        component={GameScreenWrapper}
+        listeners={getGameRouteListeners}
+        options={({ route }) =>
+          getGameRouteMotion(
+            (route.params as { sameRouteTransition?: boolean } | undefined)
+              ?.sameRouteTransition === true,
+            reduceMotion,
+          )
+        }
+      />
     </HomeStack.Navigator>
   );
 }
@@ -347,10 +306,23 @@ function EventScreenWrapperNav({ navigation }: any) {
 }
 
 function PlayStackScreen() {
+  const reduceMotion = useReduceMotion();
+
   return (
-    <PlayStack.Navigator screenOptions={screenOptions}>
+    <PlayStack.Navigator screenOptions={getStackMotionOptions(reduceMotion)}>
       <PlayStack.Screen name="Modes" component={ModesScreenWrapper} />
-      <PlayStack.Screen name="Game" component={GameScreenWrapper} />
+      <PlayStack.Screen
+        name="Game"
+        component={GameScreenWrapper}
+        listeners={getGameRouteListeners}
+        options={({ route }) =>
+          getGameRouteMotion(
+            (route.params as { sameRouteTransition?: boolean } | undefined)
+              ?.sameRouteTransition === true,
+            reduceMotion,
+          )
+        }
+      />
       <PlayStack.Screen name="Event" component={EventScreenWrapperNav} />
       <PlayStack.Screen name="Leaderboard" component={LeaderboardScreen} />
     </PlayStack.Navigator>
@@ -359,8 +331,10 @@ function PlayStackScreen() {
 
 // Collections Tab Stack
 function CollectionsStackScreen() {
+  const reduceMotion = useReduceMotion();
+
   return (
-    <CollectionsStack.Navigator screenOptions={screenOptions}>
+    <CollectionsStack.Navigator screenOptions={getStackMotionOptions(reduceMotion)}>
       <CollectionsStack.Screen name="CollectionsMain" component={CollectionsScreen} />
     </CollectionsStack.Navigator>
   );
@@ -368,8 +342,10 @@ function CollectionsStackScreen() {
 
 // Library Tab Stack
 function LibraryStackScreen() {
+  const reduceMotion = useReduceMotion();
+
   return (
-    <LibraryStack.Navigator screenOptions={screenOptions}>
+    <LibraryStack.Navigator screenOptions={getStackMotionOptions(reduceMotion)}>
       <LibraryStack.Screen name="LibraryMain" component={LibraryScreen} />
     </LibraryStack.Navigator>
   );
@@ -393,8 +369,10 @@ function MasteryScreenWrapper({ navigation }: any) {
 
 // Profile Tab Stack
 function ProfileStackScreen() {
+  const reduceMotion = useReduceMotion();
+
   return (
-    <ProfileStack.Navigator screenOptions={screenOptions}>
+    <ProfileStack.Navigator screenOptions={getStackMotionOptions(reduceMotion)}>
       <ProfileStack.Screen name="ProfileMain" component={ProfileMainScreen} />
       <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} />
@@ -482,6 +460,7 @@ function hideTabBarOnGame({ route }: { route: { name: string; state?: any } }) {
 function MainTabs() {
   const insets = useSafeAreaInsets();
   const player = usePlayer();
+  const reduceMotion = useReduceMotion();
 
   const hasFeature = (id: string) => player.featuresUnlocked.includes(id);
 
@@ -490,10 +469,7 @@ function MainTabs() {
       tabBar={(props) => <NeonTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        // Cross-fade + shift between tabs (bottom-tabs v7). Instant tab
-        // switches read as hard cuts (blind motion review) — a ~220ms fade
-        // makes the change legible without slowing navigation down.
-        animation: 'shift',
+        animation: getTabAnimation(reduceMotion),
         // Freeze inactive tabs so their timers, animations, and effects pause.
         // This is the single biggest perf win in a multi-tab app — without it
         // every tab keeps running its AmbientBackdrop reanimated loops, video
@@ -857,6 +833,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         level: modeLevel,
         mode,
         isDaily: false,
+        sameRouteTransition: true,
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
@@ -875,6 +852,7 @@ function GameScreenWrapper({ route, navigation }: any) {
           emitBoardGenNotice();
           navigation.replace('Game', {
             board, level: fallbackLevel, mode: fallbackMode, isDaily: false,
+            sameRouteTransition: true,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
@@ -928,6 +906,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         level: nextModeLevel,
         mode,
         isDaily: false,
+        sameRouteTransition: true,
         maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
         timeLimit: modeConfig.rules.timerSeconds || 0,
       });
@@ -945,6 +924,7 @@ function GameScreenWrapper({ route, navigation }: any) {
           emitBoardGenNotice();
           navigation.replace('Game', {
             board, level: nextModeLevel, mode: fallbackMode, isDaily: false,
+            sameRouteTransition: true,
             maxMoves: modeConfig.rules.hasMoveLimit ? board.words.length : 0,
             timeLimit: modeConfig.rules.timerSeconds || 0,
           });
@@ -1978,6 +1958,7 @@ function AppContent() {
   const player = usePlayer();
   const economy = useEconomy();
   const settings = useSettings();
+  const reduceMotion = useReduceMotion();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [consentLoaded, setConsentLoaded] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
@@ -2139,7 +2120,7 @@ function AppContent() {
         }}
       >
         <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
-        <RootStack.Navigator screenOptions={screenOptions}>
+        <RootStack.Navigator screenOptions={getStackMotionOptions(reduceMotion)}>
           {showOnboarding ? (
             <RootStack.Screen name="Onboarding">
               {(props: any) => (

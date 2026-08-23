@@ -445,8 +445,6 @@ export function HomeScreen({
     queueCeremony,
     completeOnboardingMilestone,
   } = usePlayerActions();
-  const titleAnim = useRef(new Animated.Value(0)).current;
-  const contentAnim = useRef(new Animated.Value(0)).current;
   const wheelPulse = useRef(new Animated.Value(1)).current;
   const wheelSpin = useRef(new Animated.Value(0)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
@@ -517,23 +515,6 @@ export function HomeScreen({
     setShowStreakOffer(false);
     streakOfferDismissed.current = true;
   }, []);
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(titleAnim, {
-        toValue: 1,
-        friction: 6,
-        tension: 80,
-        useNativeDriver: true,
-      }),
-      Animated.spring(contentAnim, {
-        toValue: 1,
-        friction: 7,
-        tension: 65,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [contentAnim, titleAnim]);
 
   // Focus gate for the decorative loops below. freezeOnBlur suspends React
   // rendering but does NOT stop already-running native-driver animations, so
@@ -684,16 +665,6 @@ export function HomeScreen({
   useEffect(() => {
     void soundManager.playMusic('menu');
   }, []);
-
-  const heroTranslate = titleAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [28, 0],
-  });
-
-  const contentTranslate = contentAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [48, 0],
-  });
 
   // Memoize derived values. HomeScreen re-renders on every player/economy state
   // change (level up, coin change, ceremony, etc.), and without memoization each
@@ -902,14 +873,7 @@ export function HomeScreen({
         </View>
       </View>
 
-      <Animated.View
-        style={[
-          {
-            opacity: titleAnim,
-            transform: [{ translateY: heroTranslate }, { scale: titleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }],
-          },
-        ]}
-      >
+      <View>
         <View
           style={styles.heroCard}
         >
@@ -1059,7 +1023,7 @@ export function HomeScreen({
             </Pressable>
           )}
         </View>
-      </Animated.View>
+      </View>
 
       {/* Guided onboarding milestone banner — shown for first 5 levels */}
       {/* Segment-driven welcome-back banner for at-risk / lapsed / returned
@@ -1162,12 +1126,7 @@ export function HomeScreen({
       <LiveRail>
       {/* Active Event Banners */}
       {activeEventBanners.length > 0 && (
-        <Animated.View
-          style={{
-            opacity: contentAnim,
-            transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [48, 0] }) }],
-          }}
-        >
+        <View>
           {activeEventBanners.map((eb) => {
             const daysLeft = eb.endMs
               ? Math.max(0, Math.ceil((eb.endMs - Date.now()) / 86400000))
@@ -1222,17 +1181,11 @@ export function HomeScreen({
               </Pressable>
             );
           })}
-        </Animated.View>
+        </View>
       )}
       {/* Mystery Wheel Button */}
       {showMysteryWheel && (
-        <Animated.View
-          style={{
-            opacity: contentAnim,
-            transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [48, 0] }) }],
-            marginBottom: 14,
-          }}
-        >
+        <View style={{ marginBottom: 14 }}>
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
             onPress={onOpenWheel}
@@ -1308,7 +1261,7 @@ export function HomeScreen({
               </LinearGradient>
             </Animated.View>
           </Pressable>
-        </Animated.View>
+        </View>
       )}
         {/* Season Pass — tier ladder entry point */}
         {onOpenSeasonPass && (
@@ -1423,14 +1376,10 @@ export function HomeScreen({
       )}
 
       {/* Below-the-fold content (progress highway, quests, goals, calendar,
-          quick play) mounts one beat after first paint — the hero card +
-          daily CTA appear immediately and the rest streams in while the
-          entry animation plays. Cuts Home mount/commit cost roughly in half. */}
+          quick play) mounts one beat after first paint. */}
       {belowFoldMounted && (<>
       {/* ── YOUR JOURNEY — level progress + personal streak/piggy meters ── */}
-      <Animated.View
-        style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
-      >
+      <View>
         <SectionHeader label="YOUR JOURNEY" accent={COLORS.teal} />
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.highwayShell}>
           <NeonHighwayProgress
@@ -1488,11 +1437,9 @@ export function HomeScreen({
           compact
           onBreak={() => onOpenShop?.()}
         />
-      </Animated.View>
+      </View>
 
-      <Animated.View
-        style={{ opacity: contentAnim, transform: [{ translateY: contentTranslate }] }}
-      >
+      <View>
         {/* ── TODAY'S GOALS — missions / quests / weekly goals ── */}
         {hasGoalsContent && <SectionHeader label="TODAY'S GOALS" accent={COLORS.gold} />}
         {/* Mission Progress - established+ */}
@@ -1804,7 +1751,7 @@ export function HomeScreen({
             </View>
           </LinearGradient>
         )}
-      </Animated.View>
+      </View>
       </>)}
     </ScrollView>
       {/* Ambient owl companion — bottom-left, matching Folio's in-game

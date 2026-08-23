@@ -15,12 +15,13 @@ import { useShallow } from 'zustand/react/shallow';
 import { GameGrid } from '../../components/Grid';
 import { WordBank } from '../../components/WordBank';
 import { useGameStore, useGameDispatch } from '../../stores/gameStore';
-import { CellPosition, GameMode, GameState, GravityDirection } from '../../types';
-import { CELL_GAP, MAX_GRID_WIDTH, COLORS } from '../../constants';
+import { CellPosition, GameMode, GameState } from '../../types';
 import { matchesWord } from '../../hooks/useGame';
 import { profilerOnRender, perfMark } from '../../utils/perfInstrument';
 import { tapHaptic } from '../../services/haptics';
 import { soundManager } from '../../services/sound';
+import { clearTimeoutHandles } from '../../utils/animationLifecycle';
+import { isLastWordTensionActive } from '../../utils/gameMotion';
 
 interface PlayFieldProps {
   mode: GameMode;
@@ -127,6 +128,11 @@ function PlayFieldImpl({
   // ── Tap feedback throttle ─────────────────────────────────────────────
   const lastTapFeedbackAt = useRef(0);
   const selectionLenRef = useRef(0);
+  const tapSoundTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  useEffect(() => () => {
+    clearTimeoutHandles(tapSoundTimersRef.current);
+  }, []);
 
   // Rising tap scale: each cell added to the trace plays a slightly
   // higher-pitched tap (Wordscapes-style momentum feedback). +6% per cell,
@@ -174,9 +180,11 @@ function PlayFieldImpl({
           if (i === 0) {
             void soundManager.playSound('tap', { rate });
           } else {
-            setTimeout(() => {
+            const timer = setTimeout(() => {
+              tapSoundTimersRef.current.delete(timer);
               void soundManager.playSound('tap', { rate });
             }, i * 22);
+            tapSoundTimersRef.current.add(timer);
           }
         }
       }
@@ -248,7 +256,6 @@ function PlayFieldImpl({
             spotlightDimmedCells={spotlightDimmedSet}
             bonusCellId={bonusCellId}
             gravityDirection={mode === 'gravityFlip' ? gravityDirection : undefined}
-            noGravityLayout={mode === 'noGravity' || mode === 'shrinkingBoard'}
             onGravitySettled={onGravitySettled}
             frameAccent={frameAccent}
             wildcardMode={wildcardMode}
@@ -285,6 +292,7 @@ function ConnectedWordBankImpl({ hidden = false }: ConnectedWordBankProps) {
   const grid = useGameStore(s => s.board.grid);
   const words = useGameStore(useShallow((s: GameState) => s.board.words));
   const wildcardCells = useGameStore(useShallow((s: GameState) => s.wildcardCells));
+  const status = useGameStore(s => s.status);
 
   const wildcardSet = useMemo(
     () => new Set(wildcardCells.map(c => `${c.row},${c.col}`)),
@@ -314,11 +322,15 @@ function ConnectedWordBankImpl({ hidden = false }: ConnectedWordBankProps) {
     [selectedCells, currentWord, wildcardCells, words, remainingWordSet, rawWord],
   );
 
-  // Tier 6 B7 — mirror GameScreen's tension trigger so the final chip
-  // coordinates its overshoot + glow with the BGM swap + haptic moment.
-  const tensionActive = useMemo(() => {
-    return words.filter((w) => !w.found).length === 1;
-  }, [words]);
+  const tensionActive = useMemo(
+    () =>
+      isLastWordTensionActive(
+        words.length,
+        words.filter((word) => !word.found).length,
+        status,
+      ),
+    [status, words],
+  );
 
   return (
     <View

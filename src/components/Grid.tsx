@@ -18,8 +18,23 @@ import { LetterCell } from './LetterCell';
 import { CELL_GAP, COLORS, MAX_GRID_WIDTH } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import SelectionTrailOverlay from './game/SelectionTrailOverlay';
+import {
+  type CellBound,
+  computeGridGeometry,
+  computeGridMetrics,
+  computeGridTransition,
+  decideGridTransitionUpdate,
+  GRID_FRAME_ALLOWANCE,
+  hitTestGridGeometry,
+} from './game/gridGeometry';
 import { perfDragStart, perfDragDispatch, perfDragEnd } from '../utils/perfInstrument';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import {
+  clearAnimationResources,
+  clearTimeoutHandles,
+  releaseOwnedAnimation,
+  startAnimationWithCleanup,
+} from '../utils/animationLifecycle';
 
 // Extracted constants to avoid creating new objects on every render
 const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]];
@@ -33,7 +48,6 @@ function hexToRgba(color: string, alpha: number): string {
 }
 const GRADIENT_START = { x: 0, y: 0 };
 const GRADIENT_END = { x: 1, y: 1 };
-const EMPTY_FLEX = { flex: 1 } as const;
 const IS_ANDROID = Platform.OS === 'android';
 
 interface GridProps {
@@ -60,8 +74,6 @@ interface GridProps {
   wildcardCells?: CellPosition[];
   spotlightDimmedCells?: Set<string>;
   gravityDirection?: GravityDirection;
-  /** When true, cells render at their grid row position instead of stacking to bottom */
-  noGravityLayout?: boolean;
   validWord?: boolean;
   maxHeight?: number;
   /**
@@ -119,7 +131,7 @@ const GHOST_DURATION_MS = 430; // 340 → 430: same review — the pop was gone 
 const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: GhostEntry; cellSize: number }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.sequence([
+    const animation = Animated.sequence([
       Animated.delay(ghost.order * GHOST_STAGGER_MS),
       Animated.timing(anim, {
         toValue: 1,
@@ -127,7 +139,8 @@ const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: Gh
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-    ]).start();
+    ]);
+    return startAnimationWithCleanup(animation);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -200,8 +213,7 @@ const ClearGhostLayer = React.memo(forwardRef<GhostLayerHandle, { cellSize: numb
     }), []);
 
     useEffect(() => () => {
-      timersRef.current.forEach(clearTimeout);
-      timersRef.current.clear();
+      clearTimeoutHandles(timersRef.current);
     }, []);
 
     if (ghosts.length === 0) return null;
@@ -241,12 +253,13 @@ const GlintStar = React.memo(function GlintStar({ glint, cellSize }: { glint: Gl
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     anim.setValue(0);
-    Animated.timing(anim, {
+    const animation = Animated.timing(anim, {
       toValue: 1,
       duration: GLINT_DURATION_MS,
       easing: Easing.inOut(Easing.quad),
       useNativeDriver: true,
-    }).start();
+    });
+    return startAnimationWithCleanup(animation);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [glint.key]);
 
@@ -331,8 +344,7 @@ const IdleGlintLayer = React.memo(function IdleGlintLayer({
     schedule();
     return () => {
       cancelled = true;
-      timers.forEach(clearTimeout);
-      timers.clear();
+      clearTimeoutHandles(timers);
     };
   }, []);
 
@@ -359,27 +371,30 @@ function GameGridImpl({
   gravityDirection,
   validWord = false,
   maxHeight,
-  noGravityLayout = false,
   onGravitySettled,
   frameAccent,
   wildcardMode = false,
   bonusCellId = null,
 }: GridProps) {
   const rows = grid.length;
-  const cols = grid[0].length;
+  const cols = grid[0]?.length ?? 0;
 
-  const cellSize = useMemo(() => {
-    const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-    const widthBased = Math.floor(availableWidth / cols);
-    if (maxHeight && maxHeight > 0) {
-      // Account for neon frame (framePad*2=6), gradient border (3*2=6), outer glow padding (12)
-      const frameAllowance = 58;
-      const heightAvail = maxHeight - frameAllowance;
-      const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
-      return Math.min(widthBased, heightBased);
-    }
-    return widthBased;
-  }, [cols, rows, maxHeight]);
+  const metrics = useMemo(
+    () => computeGridMetrics(
+      rows,
+      cols,
+      MAX_GRID_WIDTH,
+      maxHeight && maxHeight > 0 ? maxHeight : Number.MAX_SAFE_INTEGER,
+      CELL_GAP,
+      GRID_FRAME_ALLOWANCE,
+    ),
+    [cols, rows, maxHeight],
+  );
+  const { cellSize, gridWidth, gridHeight } = metrics;
+  const geometry = useMemo(
+    () => computeGridGeometry(grid, cellSize, CELL_GAP),
+    [grid, cellSize],
+  );
 
   const selectedSet = useMemo(() => {
     const set = new Map<string, number>();
@@ -424,66 +439,12 @@ function GameGridImpl({
     for (let c = 0; c < cols; c++) {
       const column: { cell: NonNullable<GridType[0][0]> | null; row: number; col: number }[] = [];
       for (let r = 0; r < rows; r++) {
-        const cell = grid[r][c];
-        if (cell) {
-          column.push({ cell, row: r, col: c });
-        } else if (noGravityLayout) {
-          // Preserve empty slots so cells stay at their grid position
-          column.push({ cell: null, row: r, col: c });
-        }
+        column.push({ cell: grid[r]?.[c] ?? null, row: r, col: c });
       }
       cols_arr.push(column);
     }
     return cols_arr;
-  }, [grid, rows, cols, noGravityLayout]);
-
-  const gridWidth = useMemo(() => cols * (cellSize + CELL_GAP) + CELL_GAP, [cols, cellSize]);
-  const gridHeight = useMemo(() => rows * (cellSize + CELL_GAP), [rows, cellSize]);
-
-  const cellBounds = useMemo(() => {
-    const bounds: { row: number; col: number; x: number; y: number; w: number; h: number }[] = [];
-    const cellStride = cellSize + CELL_GAP;
-    const padding = CELL_GAP / 2;
-
-    for (let c = 0; c < cols; c++) {
-      const colCells: { row: number }[] = [];
-      for (let r = 0; r < rows; r++) {
-        if (grid[r][c]) {
-          colCells.push({ row: r });
-        }
-      }
-      const colX = padding + c * cellStride;
-
-      if (noGravityLayout) {
-        // Cells at their actual row positions (no bottom-stacking)
-        colCells.forEach((cell) => {
-          bounds.push({
-            row: cell.row,
-            col: c,
-            x: colX,
-            y: cell.row * cellStride,
-            w: cellSize + CELL_GAP,
-            h: cellSize + CELL_GAP,
-          });
-        });
-      } else {
-        // Gravity layout: stack cells at bottom of column
-        const totalCellHeight = colCells.length * cellStride;
-        const startY = gridHeight - totalCellHeight;
-        colCells.forEach((cell, i) => {
-          bounds.push({
-            row: cell.row,
-            col: c,
-            x: colX,
-            y: startY + i * cellStride,
-            w: cellSize + CELL_GAP,
-            h: cellSize + CELL_GAP,
-          });
-        });
-      }
-    }
-    return bounds;
-  }, [grid, rows, cols, cellSize, gridHeight, noGravityLayout]);
+  }, [grid, rows, cols]);
 
   // ── Gravity animation engine ─────────────────────────────────────────────
   // Grid owns the whole fall animation. The critical property: translate
@@ -499,30 +460,21 @@ function GameGridImpl({
   // teleported).
   const reduceMotion = useReduceMotion();
 
-  // Map cell ID → pixel bound for the current grid.
-  const boundsById = useMemo(() => {
-    const byPos = new Map<string, { x: number; y: number }>();
-    for (const b of cellBounds) byPos.set(`${b.row},${b.col}`, { x: b.x, y: b.y });
-    const map = new Map<string, { x: number; y: number; col: number; letter: string }>();
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const cell = grid[r][c];
-        if (!cell) continue;
-        const b = byPos.get(`${r},${c}`);
-        if (b) map.set(cell.id, { x: b.x, y: b.y, col: c, letter: cell.letter });
-      }
-    }
-    return map;
-  }, [grid, cellBounds, rows, cols]);
+  // Canonical map cell ID → rendered pixel bound for the current grid.
+  const boundsById = geometry.byCellId;
 
   const fallAnimMapRef = useRef(new Map<string, Animated.ValueXY>());
   // Live offsets reported by native-driver listeners while a fall is in
   // flight — lets an interrupting clear start the next fall from the tile's
   // CURRENT visual position instead of teleporting it to its settled slot.
   const liveOffsetRef = useRef(new Map<string, { x: number; y: number }>());
-  const listenerHandleRef = useRef(new Map<string, string>());
+  const listenerHandleRef = useRef(new Map<
+    string,
+    { remove: () => void }
+  >());
+  const activeFallsRef = useRef(new Map<string, Animated.CompositeAnimation>());
   const prevGridRef = useRef<GridType | null>(null);
-  const prevBoundsRef = useRef<Map<string, { x: number; y: number; col: number; letter: string }> | null>(null);
+  const prevBoundsRef = useRef<Map<string, CellBound> | null>(null);
   const prevCellSizeRef = useRef(cellSize);
   const prevDimsRef = useRef({ rows, cols });
   const pendingFallsRef = useRef<{ id: string; dx: number; dy: number; col: number }[]>([]);
@@ -532,47 +484,88 @@ function GameGridImpl({
   const onGravitySettledRef = useRef(onGravitySettled);
   onGravitySettledRef.current = onGravitySettled;
 
-  // Render-phase diff. Runs exactly once per grid-data change; geometry
-  // changes (cell size / board dims from layout settle or board shrink)
-  // reset the baseline without animating.
-  if (prevGridRef.current !== grid) {
+  useEffect(() => () => {
+    fallRunIdRef.current += 1;
+    clearAnimationResources(
+      activeFallsRef.current,
+      listenerHandleRef.current,
+      liveOffsetRef.current,
+      fallAnimMapRef.current,
+    );
+    pendingFallsRef.current = [];
+    pendingGhostsRef.current = [];
+  }, []);
+
+  // Render-phase diff. Grid data changes transition stable cell IDs; geometry
+  // changes reset even when the grid object itself is unchanged.
+  const transitionDecision = decideGridTransitionUpdate(
+    {
+      grid: prevGridRef.current,
+      cellSize: prevCellSizeRef.current,
+      rows: prevDimsRef.current.rows,
+      cols: prevDimsRef.current.cols,
+    },
+    { grid, cellSize, rows, cols },
+  );
+  if (transitionDecision !== 'none') {
     const prevBounds = prevBoundsRef.current;
-    const sameGeometry =
-      prevCellSizeRef.current === cellSize &&
-      prevDimsRef.current.rows === rows &&
-      prevDimsRef.current.cols === cols &&
-      prevBounds !== null;
     const falls: { id: string; dx: number; dy: number; col: number }[] = [];
     const ghosts: GhostSpec[] = [];
-    if (prevGridRef.current !== null && prevBounds && sameGeometry && !reduceMotion) {
-      for (const [id, bound] of boundsById) {
-        const prev = prevBounds.get(id);
-        if (!prev) continue;
-        const live = liveOffsetRef.current.get(id);
-        const dx = prev.x + (live?.x ?? 0) - bound.x;
-        const dy = prev.y + (live?.y ?? 0) - bound.y;
-        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-          const existing = fallAnimMapRef.current.get(id);
-          if (existing) {
-            existing.setValue({ x: dx, y: dy });
-          } else {
-            fallAnimMapRef.current.set(id, new Animated.ValueXY({ x: dx, y: dy }));
-          }
-          falls.push({ id, dx, dy, col: bound.col });
+    const previousGrid = prevGridRef.current;
+    if (
+      transitionDecision === 'transition' &&
+      previousGrid !== null &&
+      prevBounds &&
+      !reduceMotion
+    ) {
+      const transition = computeGridTransition(
+        prevBounds,
+        boundsById,
+        liveOffsetRef.current,
+      );
+      for (const fall of transition.falls) {
+        const existing = fallAnimMapRef.current.get(fall.id);
+        if (existing) {
+          existing.setValue({ x: fall.dx, y: fall.dy });
+        } else {
+          fallAnimMapRef.current.set(
+            fall.id,
+            new Animated.ValueXY({ x: fall.dx, y: fall.dy }),
+          );
         }
+        falls.push(fall);
       }
-      for (const [id, prev] of prevBounds) {
-        if (!boundsById.has(id)) {
-          ghosts.push({ id, letter: prev.letter, x: prev.x, y: prev.y, col: prev.col });
+      for (const ghost of transition.ghosts) {
+        const previousBound = prevBounds.get(ghost.id);
+        const previousCell = previousBound
+          ? previousGrid[previousBound.row]?.[previousBound.col]
+          : null;
+        if (previousCell) {
+          ghosts.push({ ...ghost, letter: previousCell.letter });
         }
+        const active = activeFallsRef.current.get(ghost.id);
+        if (active) {
+          active.stop();
+          activeFallsRef.current.delete(ghost.id);
+        }
+        const listener = listenerHandleRef.current.get(ghost.id);
+        if (listener) {
+          listener.remove();
+          listenerHandleRef.current.delete(ghost.id);
+        }
+        liveOffsetRef.current.delete(ghost.id);
       }
-    } else if (!sameGeometry) {
+    } else if (transitionDecision === 'reset') {
       // Layout settle / board-shrink: the pixel space changed, so any
       // in-flight offsets are meaningless — snap everything to rest.
-      for (const av of fallAnimMapRef.current.values()) {
-        av.setValue({ x: 0, y: 0 });
-      }
-      liveOffsetRef.current.clear();
+      fallRunIdRef.current += 1;
+      clearAnimationResources(
+        activeFallsRef.current,
+        listenerHandleRef.current,
+        liveOffsetRef.current,
+        fallAnimMapRef.current,
+        value => value.setValue({ x: 0, y: 0 }),
+      );
     }
     pendingFallsRef.current = falls;
     pendingGhostsRef.current = ghosts;
@@ -615,7 +608,7 @@ function GameGridImpl({
     const colDelay = new Map<number, number>();
     movedColsArr.forEach((c, i) => colDelay.set(c, i * COL_STAGGER));
 
-    const stride = cellSize + CELL_GAP;
+    const stride = geometry.stride;
     let remaining = falls.length;
     for (const f of falls) {
       const av = fallAnimMapRef.current.get(f.id);
@@ -627,7 +620,9 @@ function GameGridImpl({
         const handle = av.addListener(({ x, y }) => {
           liveOffsetRef.current.set(cellId, { x, y });
         });
-        listenerHandleRef.current.set(f.id, handle);
+        listenerHandleRef.current.set(f.id, {
+          remove: () => av.removeListener(handle),
+        });
       }
       const dist = Math.hypot(f.dx, f.dy);
       const rowsFallen = Math.max(1, dist / stride);
@@ -641,7 +636,7 @@ function GameGridImpl({
       const bounceMag = Math.min(9, dist * 0.055);
       const bx = f.dx === 0 ? 0 : Math.sign(f.dx) * bounceMag;
       const by = f.dy === 0 ? 0 : Math.sign(f.dy) * bounceMag;
-      Animated.sequence([
+      const sequence = Animated.sequence([
         Animated.delay(FALL_HOLD + (colDelay.get(f.col) ?? 0)),
         Animated.timing(av, {
           toValue: { x: 0, y: 0 },
@@ -661,16 +656,21 @@ function GameGridImpl({
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
-      ]).start(({ finished }) => {
+      ]);
+      activeFallsRef.current.set(f.id, sequence);
+      sequence.start(({ finished }) => {
         // Interrupted tiles belong to the successor run — it re-computed
-        // their offsets from the live listener values and owns cleanup.
-        if (!finished) return;
-        const h = listenerHandleRef.current.get(f.id);
-        if (h) {
-          av.removeListener(h);
-          listenerHandleRef.current.delete(f.id);
-        }
-        liveOffsetRef.current.delete(f.id);
+        // their offsets from the live listener values and owns every shared
+        // cleanup decision, including a late `finished: true` predecessor.
+        const shouldDecrement = releaseOwnedAnimation(
+          activeFallsRef.current,
+          listenerHandleRef.current,
+          liveOffsetRef.current,
+          f.id,
+          sequence,
+          finished,
+        );
+        if (!shouldDecrement) return;
         remaining -= 1;
         if (remaining === 0 && runId === fallRunIdRef.current) {
           onGravitySettledRef.current?.();
@@ -696,106 +696,22 @@ function GameGridImpl({
   const isDraggingRef = useRef(false);
   const dragGlowAnim = useRef(new Animated.Value(0)).current;
 
-  // ── Column-indexed hit-test lookup (stride-based O(1)) ───────────────────
-  // The old implementation iterated every cellBounds entry (up to 49) on
-  // every pointer move, then again per interpolated step during fast drags.
-  // Now we precompute per-column ordered arrays and compute (col, rowSlot)
-  // with arithmetic, reducing each hit test to at most one bounds check.
-  const cellBoundsRef = useRef(cellBounds);
-  cellBoundsRef.current = cellBounds;
+  // Hit-testing consumes the same canonical engine-slot geometry used by
+  // rendering, trails, ghosts, glints, and fall diffs.
+  const geometryRef = useRef(geometry);
+  geometryRef.current = geometry;
   const cellSizeRef = useRef(cellSize);
   cellSizeRef.current = cellSize;
-
-  // Per-column sorted bounds list. Each column entry holds the cells in
-  // layout order (top to bottom) so a y-coordinate maps to an index via
-  // `Math.floor((y - firstY) / stride)`.
-  const cellsByColumnRef = useRef<Array<Array<{ row: number; col: number; y: number; h: number }>>>([]);
-  cellsByColumnRef.current = useMemo(() => {
-    const byCol: Array<Array<{ row: number; col: number; y: number; h: number }>> = [];
-    for (let c = 0; c < cols; c++) byCol.push([]);
-    for (const b of cellBounds) {
-      if (b.col >= 0 && b.col < cols) {
-        byCol[b.col].push({ row: b.row, col: b.col, y: b.y, h: b.h });
-      }
-    }
-    // Sort each column by y so we can binary-search or stride-index.
-    for (const col of byCol) col.sort((a, b) => a.y - b.y);
-    return byCol;
-  }, [cellBounds, cols]);
-
-  const strideRef = useRef(cellSize + CELL_GAP);
-  strideRef.current = cellSize + CELL_GAP;
-  const gridWidthRef = useRef(gridWidth);
-  gridWidthRef.current = gridWidth;
-  const gridHeightRef = useRef(gridHeight);
-  gridHeightRef.current = gridHeight;
-  const noGravityLayoutRef = useRef(noGravityLayout);
-  noGravityLayoutRef.current = noGravityLayout;
   const wildcardModeRef = useRef(wildcardMode);
   wildcardModeRef.current = wildcardMode;
-  const rowsRef = useRef(rows);
-  rowsRef.current = rows;
 
-  // Stable hit test. Column is computed by x/stride (constant time).
-  // For gravity-down grids, cells are contiguous so we use stride-based O(1)
-  // slot indexing. For noGravityLayout grids (noGravity / shrinkingBoard),
-  // cleared cells leave gaps, so we derive the target row directly from
-  // the y-coordinate and scan the (small) column array.
   const hitTestCell = useCallback((absX: number, absY: number): CellPosition | null => {
-    // Fast out-of-bounds rejection.
-    if (absX < 0 || absY < 0 || absX >= gridWidthRef.current || absY >= gridHeightRef.current) {
-      return null;
-    }
-    const stride = strideRef.current;
-    if (stride <= 0) return null;
-    // CELL_GAP / 2 is the inner padding added in cellBounds computation.
-    const padding = CELL_GAP / 2;
-
-    // In wildcard placement mode, any grid position is tappable — even empty
-    // cells — so the reducer can create a placeholder wildcard cell there.
-    if (wildcardModeRef.current) {
-      const colIdx = Math.floor((absX - padding) / stride);
-      const rowIdx = Math.floor(absY / stride);
-      if (colIdx >= 0 && colIdx < cellsByColumnRef.current.length && rowIdx >= 0 && rowIdx < rowsRef.current) {
-        return { row: rowIdx, col: colIdx };
-      }
-      return null;
-    }
-
-    const colIdx = Math.floor((absX - padding) / stride);
-    const byCol = cellsByColumnRef.current;
-    if (colIdx < 0 || colIdx >= byCol.length) return null;
-    const column = byCol[colIdx];
-    if (column.length === 0) return null;
-
-    if (noGravityLayoutRef.current) {
-      // In noGravityLayout, cells sit at y = row * stride. Cleared cells
-      // leave gaps so the column array is NOT contiguous. Derive the target
-      // row directly from the y-coordinate and scan for a match.
-      const targetRow = Math.floor(absY / stride);
-      for (let i = 0; i < column.length; i++) {
-        const c = column[i];
-        if (c.row === targetRow) {
-          if (absY >= c.y && absY < c.y + c.h) {
-            return { row: c.row, col: c.col };
-          }
-          return null;
-        }
-        if (c.row > targetRow) return null; // Past it (sorted), no match
-      }
-      return null;
-    }
-
-    // Gravity-down: cells are contiguous, stride-based O(1) slot indexing.
-    const firstY = column[0].y;
-    const slotIdx = Math.floor((absY - firstY) / stride);
-    if (slotIdx < 0 || slotIdx >= column.length) return null;
-    const candidate = column[slotIdx];
-    // Cheap sanity check: ensure absY is actually within [candidate.y, candidate.y + candidate.h).
-    if (absY >= candidate.y && absY < candidate.y + candidate.h) {
-      return { row: candidate.row, col: candidate.col };
-    }
-    return null;
+    return hitTestGridGeometry(
+      geometryRef.current,
+      absX,
+      absY,
+      wildcardModeRef.current,
+    );
   }, []);
 
   const onCellPressRef = useRef(onCellPress);
@@ -959,25 +875,18 @@ function GameGridImpl({
   ], [outerWidth, outerHeight]);
 
   const frameInnerStyle = useMemo(() => [
-    styles.frameInner, { width: gridWidth + 2, height: gridHeight + 2, borderRadius: 22 }
+    styles.frameInner, { width: gridWidth, height: gridHeight, borderRadius: 22 }
   ], [gridWidth, gridHeight]);
 
   const gridContainerStyle = useMemo(() => [
     styles.gridContainer, { width: gridWidth, height: gridHeight, borderRadius: 21 }
   ], [gridWidth, gridHeight]);
 
-  // Build a single stable column style per gravity config to avoid per-column allocations inside the map loop.
-  const columnStyle = useMemo(() => {
-    const base = [
-      styles.column,
-      { width: cellSize + CELL_GAP, height: gridHeight },
-    ] as any[];
-    if (noGravityLayout) base.push(styles.columnNoGravity);
-    else if (gravityDirection === 'up') base.push(styles.columnGravityUp);
-    return base;
-  }, [cellSize, gridHeight, noGravityLayout, gravityDirection]);
+  const columnStyle = useMemo(
+    () => [styles.column, { width: geometry.stride, height: gridHeight }],
+    [geometry.stride, gridHeight],
+  );
 
-  // Empty-slot placeholder style (only used by noGravityLayout), memoized to share reference.
   const emptySlotStyle = useMemo(
     () => ({ width: cellSize, height: cellSize, margin: CELL_GAP / 2 }),
     [cellSize],
@@ -1022,7 +931,7 @@ function GameGridImpl({
           {selectedCells.length > 1 && (
             <SelectionTrailOverlay
               selectedCells={selectedCells}
-              cellBounds={cellBounds}
+              cellBounds={geometry.bounds}
             />
           )}
 
@@ -1040,10 +949,8 @@ function GameGridImpl({
             >
               {columns.map((column, colIndex) => (
                 <View key={colIndex} style={columnStyle}>
-                  {!noGravityLayout && gravityDirection !== 'up' && <View style={EMPTY_FLEX} />}
                   {column.map(({ cell, row, col }) => {
                     if (!cell) {
-                      // Empty slot placeholder for noGravity layout
                       return (
                         <View
                           key={`empty-${row}-${col}`}
@@ -1073,6 +980,7 @@ function GameGridImpl({
                         letter={cell.letter}
                         cellId={cell.id}
                         size={cellSize}
+                        reduceMotion={reduceMotion}
                         isSelected={isSelected}
                         isHinted={isHinted}
                         selectionIndex={selIndex}
@@ -1087,7 +995,6 @@ function GameGridImpl({
                       />
                     );
                   })}
-                  {!noGravityLayout && gravityDirection === 'up' && <View style={EMPTY_FLEX} />}
                 </View>
               ))}
             </View>
@@ -1097,7 +1004,7 @@ function GameGridImpl({
               occupied tile so an untouched board still shimmers. Unmounted
               entirely under reduce motion (no timer, no loop). */}
           {!reduceMotion && (
-            <IdleGlintLayer cellBounds={cellBounds} cellSize={cellSize} />
+            <IdleGlintLayer cellBounds={geometry.bounds} cellSize={cellSize} />
           )}
 
           {/* Gravity direction arrow indicator */}
@@ -1171,19 +1078,16 @@ const styles = StyleSheet.create({
   },
   gridContainer: {
     flexDirection: 'row',
-    padding: CELL_GAP / 2,
+    // Horizontal padding supplies geometry.padding. There is deliberately no
+    // vertical padding: canonical row zero begins at y=0, so tiles, overlays,
+    // hit-testing, and particles share the exact same local coordinate space.
+    paddingHorizontal: CELL_GAP / 2,
     overflow: 'hidden',
     backgroundColor: 'transparent',
   },
   column: {
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  columnNoGravity: {
-    justifyContent: 'flex-start',
-  },
-  columnGravityUp: {
     justifyContent: 'flex-start',
   },
   gravityArrowContainer: {

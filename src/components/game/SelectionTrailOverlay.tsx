@@ -1,15 +1,7 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { COLORS } from '../../constants';
-
-interface CellBound {
-  row: number;
-  col: number;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+import { CellBound } from './gridGeometry';
 
 interface SelectionTrailOverlayProps {
   /** Array of selected cell positions in order */

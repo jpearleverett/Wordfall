@@ -5,7 +5,6 @@ import {
   Animated,
   Easing,
   Image,
-  LayoutAnimation,
   Platform,
   Pressable,
   SafeAreaView,
@@ -34,9 +33,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic, stuckHaptic } from '../services/haptics';
+import { wordFoundHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic, stuckHaptic } from '../services/haptics';
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import {
   canShowOfferNow,
   recordOfferShown,
@@ -84,7 +84,15 @@ import { FailBreatherOffer, BREATHER_COOLDOWN_MS } from '../components/FailBreat
 import { GameFlashes } from './game/GameFlashes';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
+import { ConnectedTimerMovesBars } from './game/TimerMovesBars';
 import { TilePaletteContext } from '../components/LetterCell';
+import { isLastWordTensionActive } from '../utils/gameMotion';
+import {
+  computeGridGeometry,
+  computeGridMetrics,
+  GRID_FRAME_ALLOWANCE,
+  gridSlotCenter,
+} from '../components/game/gridGeometry';
 
 interface GameScreenProps {
   board: Board;
@@ -167,6 +175,7 @@ function getMovedCellPositions(previousGrid: Board['grid'], nextGrid: Board['gri
 
 // Shared empty Set so memoized consumers (PlayField's GameGrid) don't re-render when spotlight is inactive.
 const EMPTY_CELL_KEY_SET: Set<string> = new Set();
+const GRID_AREA_BOTTOM_PADDING = 36;
 
 // Unified booster-button body gradient — matches the tile material language
 // so the three boosters read as one shelf with different icons rather than
@@ -256,93 +265,6 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
   );
 });
 
-// ── Memoized timer/moves bars ──────────────────────────────────────────
-// These only need to update when the tick fires or moves increment — never
-// on cell taps. Separating them means GameScreen's tap-driven re-renders
-// don't touch this subtree.
-interface TimerMovesBarsProps {
-  hasTimer: boolean;
-  hasMoveLimit: boolean;
-  timeRemaining: number;
-  /** Full time budget for the puzzle — suppresses warnings that would fire at start. */
-  totalSeconds: number;
-  moves: number;
-  maxMoves: number;
-}
-const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
-  hasTimer,
-  hasMoveLimit,
-  timeRemaining,
-  totalSeconds,
-  moves,
-  maxMoves,
-}: TimerMovesBarsProps) {
-  // Tier 4 C2 — 30s/10s threshold warnings (haptic + SFX). These were
-  // authored in components/modes/TimerDisplay.tsx, which nothing ever
-  // mounted; that component also ran its own setInterval countdown, so
-  // mounting it would have raced the reducer's authoritative timer. The
-  // warnings live here instead, driven by the store's timeRemaining.
-  const warned30Ref = useRef(false);
-  const warned10Ref = useRef(false);
-  const prevTimeRef = useRef(timeRemaining);
-  useEffect(() => {
-    const prev = prevTimeRef.current;
-    prevTimeRef.current = timeRemaining;
-    if (!hasTimer) return;
-    if (timeRemaining > prev) {
-      // Timer refilled (new puzzle / time bonus) — re-arm the crossings.
-      if (timeRemaining > 30) warned30Ref.current = false;
-      if (timeRemaining > 10) warned10Ref.current = false;
-      return;
-    }
-    if (!warned30Ref.current && timeRemaining <= 30 && timeRemaining > 10 && totalSeconds > 30) {
-      warned30Ref.current = true;
-      void errorHaptic();
-      void soundManager.playSound('timerWarning30s');
-    }
-    if (!warned10Ref.current && timeRemaining <= 10 && timeRemaining > 0 && totalSeconds > 10) {
-      warned10Ref.current = true;
-      void errorHaptic();
-      void soundManager.playSound('timerWarning10s');
-    }
-  }, [timeRemaining, hasTimer, totalSeconds]);
-
-  return (
-    <>
-      {hasTimer && (
-        <View style={[
-          styles.timerBar,
-          timeRemaining <= 30 && timeRemaining > 0 && styles.timerBarDanger,
-          timeRemaining <= 0 && styles.barHidden,
-        ]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <GameIcon name="hourglass" size={16} accent={timeRemaining <= 30 ? COLORS.coral : undefined} />
-            <Text style={[
-              styles.timerText,
-              timeRemaining <= 30 && styles.timerTextDanger,
-            ]}>
-              {formatTime(timeRemaining)}
-            </Text>
-          </View>
-        </View>
-      )}
-      {hasMoveLimit && maxMoves > 0 && (
-        <View style={[
-          styles.moveBar,
-          moves >= maxMoves - 1 && styles.moveBarDanger,
-        ]}>
-          <Text style={[
-            styles.moveText,
-            moves >= maxMoves - 1 && styles.moveTextDanger,
-          ]}>
-            Moves: {moves}/{maxMoves}
-          </Text>
-        </View>
-      )}
-    </>
-  );
-});
-
 // --- Word-Clear Particle Pop ---
 const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', '#ff9100'];
 
@@ -363,10 +285,6 @@ function stuckTooltipKeyForLevel(level: number): string {
   const phase = Math.min(3, Math.floor(Math.max(0, level - 1) / 15));
   return phase === 0 ? FIRST_STUCK_TOOLTIP : `${FIRST_STUCK_TOOLTIP}_p${phase}`;
 }
-
-// Last-word tension only fires on boards with at least this many words —
-// on 2-3 word early boards the "climax" landed seconds into the puzzle.
-const LAST_WORD_TENSION_MIN_WORDS = 4;
 
 /** Stable empty array so the stranded-words memo can't churn GameBanners. */
 const EMPTY_STRING_LIST: string[] = [];
@@ -798,7 +716,6 @@ function GameScreenImpl({
   const hintsLeft = useStore(store, s => s.hintsLeft);
   const hintsUsed = useStore(store, s => s.hintsUsed);
   const undosLeft = useStore(store, s => s.undosLeft);
-  const timeRemaining = useStore(store, s => s.timeRemaining);
   const grid = useStore(store, s => s.board.grid);
   const history = useStore(store, useShallow((s: GameState) => s.history));
   const wildcardMode = useStore(store, s => s.wildcardMode);
@@ -816,7 +733,8 @@ function GameScreenImpl({
 
   const [showComplete, setShowComplete] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
-  const [gridAreaHeight, setGridAreaHeight] = useState(0);
+  const [gridAreaSize, setGridAreaSize] = useState({ width: 0, height: 0 });
+  const { width: gridAreaWidth, height: gridAreaHeight } = gridAreaSize;
 
   // Announce every newly-found word to screen readers (TalkBack / VoiceOver).
   // solveSequence grows by one entry per valid word; we watch its length and
@@ -839,8 +757,6 @@ function GameScreenImpl({
   }, [solveSequence, foundWords, totalWords]);
   const validFlashAnim = useRef(new Animated.Value(0)).current;
   const [showValidFlash, setShowValidFlash] = useState(false);
-  const invalidFlashAnim = useRef(new Animated.Value(0)).current;
-  const [showInvalidFlash, setShowInvalidFlash] = useState(false);
   const scorePopupAnim = useRef(new Animated.Value(0)).current;
   const [scorePopup, setScorePopup] = useState<{ points: number; label: string; bonusCoins?: number } | null>(null);
   // Pending reduce-motion popup teardown — cleared before scheduling the next
@@ -1317,10 +1233,16 @@ function GameScreenImpl({
   // claimed its real height. Now we track every measurement but only
   // re-render when the height actually changed by ≥1px, which absorbs
   // the post-mount layout settle while staying stable during gameplay.
-  const handleGridLayout = useCallback((e: { nativeEvent: { layout: { height: number } } }) => {
-    const h = e.nativeEvent.layout.height;
-    if (h <= 0) return;
-    setGridAreaHeight((prev) => (Math.abs(prev - h) >= 1 ? h : prev));
+  const handleGridLayout = useCallback((e: {
+    nativeEvent: { layout: { width: number; height: number } };
+  }) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width <= 0 || height <= 0) return;
+    setGridAreaSize((prev) => (
+      Math.abs(prev.width - width) >= 1 || Math.abs(prev.height - height) >= 1
+        ? { width, height }
+        : prev
+    ));
   }, []);
 
   // Hard cap on simultaneously-rendered bloom particles. Keeps the queue
@@ -1329,55 +1251,57 @@ function GameScreenImpl({
   // still read as "sparse particles"; star sparks + cell flashes join in).
   const MAX_BLOOM_PARTICLES = 48;
 
-  // Map a grid (row, col) to pixel-space coordinates inside the particle
-  // container (which is `absoluteFillObject` inside `gridArea`). Mirrors the
-  // cellSize math used by Grid.tsx and the gravity block so bloom particles
-  // land at each tile's visual center. Returns a safe fallback centered in
-  // the grid area when layout hasn't measured yet.
-  const cellPositionToScreen = useCallback(
-    (row: number, col: number): { x: number; y: number } => {
-      const rows = grid.length;
-      const cols = grid[0]?.length ?? 0;
-      if (cols === 0 || rows === 0 || gridAreaHeight <= 0) {
-        return { x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
-      }
-      const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-      let cellSize = Math.floor(availableWidth / cols);
-      const frameAllowance = 58;
-      const heightAvail = gridAreaHeight - frameAllowance;
-      const heightBased = Math.floor(heightAvail / rows - CELL_GAP);
-      cellSize = Math.min(cellSize, heightBased);
-      if (cellSize <= 0) {
-        return { x: SCREEN_WIDTH / 2, y: gridAreaHeight / 2 + 60 };
-      }
-      const cellStride = cellSize + CELL_GAP;
-      const gridWidth = cols * cellStride + CELL_GAP;
-      const gridHeight = rows * cellStride;
-      // Grid is centered inside gridArea (≈ SCREEN_WIDTH wide with 8px padding).
-      const gridLeft = (SCREEN_WIDTH - gridWidth) / 2;
-      const gridTop = (gridAreaHeight - gridHeight) / 2;
-      const padding = CELL_GAP / 2;
-      return {
-        x: gridLeft + padding + col * cellStride + cellSize / 2,
-        y: gridTop + row * cellStride + cellSize / 2,
-      };
-    },
+  const gridMetrics = useMemo(
+    () => computeGridMetrics(
+      grid.length,
+      grid[0]?.length ?? 0,
+      MAX_GRID_WIDTH,
+      gridAreaHeight,
+      CELL_GAP,
+      GRID_FRAME_ALLOWANCE,
+    ),
     [grid, gridAreaHeight],
   );
+  const gridGeometry = useMemo(
+    () => computeGridGeometry(grid, gridMetrics.cellSize, CELL_GAP),
+    [grid, gridMetrics.cellSize],
+  );
+  const gridOffset = useMemo(
+    () => ({
+      left: (gridAreaWidth - gridGeometry.width) / 2,
+      top: (gridAreaHeight - GRID_AREA_BOTTOM_PADDING - gridGeometry.height) / 2,
+    }),
+    [gridAreaWidth, gridAreaHeight, gridGeometry],
+  );
 
-  // Pixel size of one tile — mirrors cellPositionToScreen's sizing math so
-  // the per-cell clear flash matches the tile footprint. 0 until layout.
-  const gridCellSize = useMemo(() => {
-    const rows = grid.length;
-    const cols = grid[0]?.length ?? 0;
-    if (cols === 0 || rows === 0 || gridAreaHeight <= 0) return 0;
-    const availableWidth = MAX_GRID_WIDTH - CELL_GAP * (cols + 1);
-    let cellSize = Math.floor(availableWidth / cols);
-    const frameAllowance = 58;
-    const heightAvail = gridAreaHeight - frameAllowance;
-    cellSize = Math.min(cellSize, Math.floor(heightAvail / rows - CELL_GAP));
-    return Math.max(0, cellSize);
-  }, [grid, gridAreaHeight]);
+  // Map an engine-owned (row, col) slot to its center in the particle
+  // container. The same geometry drives Grid rendering and hit-testing.
+  const cellPositionToScreen = useCallback(
+    (row: number, col: number): { x: number; y: number } => {
+      const fallback = {
+        x: gridAreaWidth > 0 ? gridAreaWidth / 2 : SCREEN_WIDTH / 2,
+        y: gridAreaHeight / 2 + 60,
+      };
+      if (
+        gridMetrics.cellSize <= 0 ||
+        row < 0 ||
+        row >= gridGeometry.rows ||
+        col < 0 ||
+        col >= gridGeometry.cols
+      ) {
+        return fallback;
+      }
+      const center = gridSlotCenter(gridGeometry, row, col);
+      if (!center) return fallback;
+      return {
+        x: gridOffset.left + center.x,
+        y: gridOffset.top + center.y,
+      };
+    },
+    [gridAreaHeight, gridAreaWidth, gridGeometry, gridMetrics.cellSize, gridOffset],
+  );
+
+  const gridCellSize = gridMetrics.cellSize;
 
   // Spawn multi-tile bloom particles for a word. Each cell gets
   // `tileBloomParticlesPerTile` particle instances, staggered 30ms per tile
@@ -1471,65 +1395,7 @@ function GameScreenImpl({
     [cellPositionToScreen],
   );
 
-  // #5 reduceMotion support
-  const [reduceMotion, setReduceMotion] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => sub.remove();
-  }, []);
-
-
-  // Invalid word flash animation. Runs a brief low-amplitude screen shake
-  // (kinesthetic negative feedback — distinct from the 7+-letter celebration
-  // shake). Gated by Remote Config `invalidShakeEnabled` and skipped under
-  // reduceMotion.
-  const showInvalidFlashAnim = useCallback(() => {
-    setShowInvalidFlash(true);
-    void errorHaptic();
-    void soundManager.playSound('wordInvalid');
-    invalidFlashAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(invalidFlashAnim, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(invalidFlashAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      // A rapid second invalid tap restarts the sequence; the interrupted
-      // run's callback must not hide the flash the new run just showed.
-      if (finished) setShowInvalidFlash(false);
-    });
-
-    if (!reduceMotion && getRemoteBoolean('invalidShakeEnabled')) {
-      // ~120ms total, ±8px peak — reduced amplitude vs the 7+-letter shake
-      shakeAnim.setValue(0);
-      Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 8, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -7, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 5, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -4, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 2, duration: 20, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 20, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [invalidFlashAnim, reduceMotion, shakeAnim]);
-
-  // NOTE (Aug 2026 feel audit): the "invalid tap" error treatment that used
-  // to fire here — error haptic + wordInvalid SFX + red flash + screen shake
-  // whenever a non-adjacent tap broke a 2+ cell trace — is deliberately GONE.
-  // game_mechanics.md is explicit that invalid-word rejection is not a moment
-  // this game has, and the gesture it punished (abandon a guess, start a new
-  // one) is the single most common transition in exploratory play. Dead
-  // traces now release silently on finger lift (see PlayField's
-  // handleDragEnd), and a restart tap is just normal play. The reducer still
-  // records lastSelectionResetTap; showInvalidFlashAnim stays for any future
-  // surface that needs a genuine error flash.
+  const reduceMotion = useReduceMotion();
 
   // Hints/undos use persistent economy tokens (not per-level allocation)
   // Relax mode still uses unlimited per-level allocation.
@@ -1688,10 +1554,14 @@ function GameScreenImpl({
   // found, before they even knew what the word bank was, training them to
   // ignore the cue before it meant anything. Early levels stay quiet; the
   // beat debuts around L8 where 4-word boards make it earned.
-  const tensionEligible = totalWords >= LAST_WORD_TENSION_MIN_WORDS;
+  const tensionActive = isLastWordTensionActive(
+    totalWords,
+    totalWords - foundWords,
+    status,
+  );
   useEffect(() => {
     const remaining = totalWords - foundWords;
-    if (remaining !== 1 || status !== 'playing' || !tensionEligible) {
+    if (!tensionActive) {
       if (remaining !== 1) lastWordTensionFiredRef.current = false;
       return;
     }
@@ -1707,7 +1577,7 @@ function GameScreenImpl({
       mode,
       timeIntoPuzzleMs,
     });
-  }, [foundWords, totalWords, status, level, mode, store, tensionEligible]);
+  }, [foundWords, totalWords, level, mode, store, tensionActive]);
 
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && showFailed) {
@@ -1909,7 +1779,24 @@ function GameScreenImpl({
         if (finished) setScorePopup(null);
       });
     }
-  }, [score]);
+  }, [
+    addCoins,
+    bigWordAnim,
+    bonusTile,
+    gridAreaHeight,
+    level,
+    mode,
+    reduceMotion,
+    score,
+    scorePopupAnim,
+    shakeAnim,
+    spawnClearRing,
+    spawnStarSparks,
+    spawnTileBloom,
+    status,
+    store,
+    trackTimeout,
+  ]);
 
   // Green flash + auto-submit when a valid word is selected.
   // Driven by PlayField's onValidWordChange callback (not a direct subscription
@@ -2010,7 +1897,7 @@ function GameScreenImpl({
   // Reset grid height when board changes (new puzzle/level) — prompts a
   // fresh onLayout measurement for the new grid's dimensions.
   useEffect(() => {
-    setGridAreaHeight(0);
+    setGridAreaSize({ width: 0, height: 0 });
     // Also reset the adjuster's per-puzzle stuck-fail guard so the
     // next puzzle can record its own struggle signal independently.
     stuckFailRecordedRef.current = false;
@@ -2360,13 +2247,6 @@ function GameScreenImpl({
       ]).start();
     }
 
-    LayoutAnimation.configureNext(
-      LayoutAnimation.create(
-        300,
-        LayoutAnimation.Types.easeInEaseOut,
-        LayoutAnimation.Properties.opacity
-      )
-    );
     undoMove();
 
     setShowFailed(false);
@@ -2374,13 +2254,6 @@ function GameScreenImpl({
   }, [undoMove, grantUndo, level, mode, undosAvailable, undosLeft, undoTokens, spendUndoToken, reduceMotion, undoFlashAnim, undoPulseAnim, history.length]);
 
   const handleRetry = useCallback(() => {
-    LayoutAnimation.configureNext(
-      LayoutAnimation.create(
-        200,
-        LayoutAnimation.Types.easeInEaseOut,
-        LayoutAnimation.Properties.opacity
-      )
-    );
     newGame(board, level, mode, effectiveMaxMoves, effectiveTimeLimit);
     setShowComplete(false);
     completionHandled.current = false;
@@ -2525,8 +2398,8 @@ function GameScreenImpl({
   });
 
   // NOTE: chainScale/chainBgColor/chainShadowColor/chainBorderColor and the
-  // valid/invalid flash opacities were previously computed here. They moved
-  // to GameFlashes (src/screens/game/GameFlashes.tsx) as part of the
+  // valid-flash opacity were previously computed here. They moved to
+  // GameFlashes (src/screens/game/GameFlashes.tsx) as part of the
   // per-tap re-render decomposition — see that file for the memoized subtree.
 
   const bt = boosterTokens ?? { wildcardTile: 0, spotlight: 0, smartShuffle: 0 };
@@ -2604,7 +2477,7 @@ function GameScreenImpl({
 
       <GameplayMascot
         foundCount={foundWords}
-        tensionActive={tensionEligible && totalWords - foundWords === 1}
+        tensionActive={tensionActive}
         flawlessStreak={flawlessStreakCurrent}
         // Folio wears the current wing's colors — same chapter resolution
         // as the backdrop palette, so mascot + backdrop always agree.
@@ -2624,7 +2497,6 @@ function GameScreenImpl({
         isDaily={isDaily}
         mode={mode}
         maxMoves={effectiveMaxMoves}
-        timeRemaining={timeRemaining}
         onHint={handleHint}
         onUndo={handleUndo}
         onBack={onHome}
@@ -2632,12 +2504,10 @@ function GameScreenImpl({
 
       {/* Timer/move bars — extracted to a memoized sub-component so they only
           re-render on tick / move-increment, not on every cell tap. */}
-      <TimerMovesBarsMemo
+      <ConnectedTimerMovesBars
         hasTimer={modeConfig.rules.hasTimer ?? false}
         hasMoveLimit={modeConfig.rules.hasMoveLimit ?? false}
-        timeRemaining={timeRemaining}
         totalSeconds={effectiveTimeLimit}
-        moves={moves}
         maxMoves={effectiveMaxMoves}
       />
 
@@ -2651,19 +2521,17 @@ function GameScreenImpl({
         actionLabel="Return home"
         onReset={onHome}
       >
-      {/* Valid/invalid flash, score popup, big-word celebration — extracted
+      {/* Valid flash, score popup, big-word celebration — extracted
           into a single memoized subtree so this branch doesn't re-reconcile
           on every SELECT_CELL. All Animated.Values are ref-stable and
           compared referentially by React.memo; primitive props only change
           on word submit. */}
       <GameFlashes
         showValidFlash={showValidFlash}
-        showInvalidFlash={showInvalidFlash}
         scorePopup={scorePopup}
         lastSubmittedWordLen={lastSubmittedWordLenRef.current}
         bigWordLabel={bigWordLabel}
         validFlashAnim={validFlashAnim}
-        invalidFlashAnim={invalidFlashAnim}
         scorePopupAnim={scorePopupAnim}
         bigWordAnim={bigWordAnim}
       />
@@ -3104,7 +2972,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingBottom: 36,
+    paddingBottom: GRID_AREA_BOTTOM_PADDING,
   },
   bannerOverlay: {
     position: 'absolute',
@@ -3124,81 +2992,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 60,
   },
-  barHidden: {
-    opacity: 0,
-  },
   wordArea: {
     paddingTop: 2,
     paddingBottom: 2,
     height: 86,
-  },
-  timerBar: {
-    backgroundColor: 'rgba(26, 10, 46, 0.75)',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    marginHorizontal: 18,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginBottom: 3,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 45, 149, 0.30)',
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  timerBarDanger: {
-    backgroundColor: 'rgba(60, 15, 20, 0.75)',
-    borderColor: 'rgba(255, 107, 107, 0.5)',
-    shadowColor: COLORS.coral,
-    shadowOpacity: 0.3,
-  },
-  timerText: {
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    fontSize: 16,
-    letterSpacing: 3,
-    textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 12,
-  },
-  timerTextDanger: {
-    color: COLORS.coral,
-    textShadowColor: COLORS.coralGlow,
-    textShadowRadius: 12,
-  },
-  moveBar: {
-    backgroundColor: 'rgba(26, 10, 46, 0.75)',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    marginHorizontal: 18,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginBottom: 3,
-    borderWidth: 1.5,
-    borderColor: 'rgba(200, 77, 255, 0.20)',
-    shadowColor: COLORS.purple,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  moveBarDanger: {
-    backgroundColor: 'rgba(60, 15, 20, 0.75)',
-    borderColor: 'rgba(255, 107, 107, 0.5)',
-    shadowColor: COLORS.coral,
-    shadowOpacity: 0.3,
-  },
-  moveText: {
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    letterSpacing: 0.5,
-  },
-  moveTextDanger: {
-    color: COLORS.coral,
-    textShadowColor: COLORS.coralGlow,
-    textShadowRadius: 10,
   },
   cascadeBar: {
     backgroundColor: 'rgba(50, 15, 20, 0.75)',
@@ -3269,11 +3066,6 @@ const styles = StyleSheet.create({
   validFlashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: COLORS.green,
-    zIndex: 50,
-  },
-  invalidFlashOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.coral,
     zIndex: 50,
   },
   idleHintBanner: {

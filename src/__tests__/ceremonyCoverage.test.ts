@@ -22,6 +22,7 @@ import path from 'path';
 const ROOT = path.join(__dirname, '../..');
 const TYPES = path.join(ROOT, 'src/types.ts');
 const ROUTER = path.join(ROOT, 'src/App/CeremonyRouter.tsx');
+const APP = path.join(ROOT, 'App.tsx');
 
 function unionMembers(source: string, interfaceName: string): string[] {
   const match = new RegExp(
@@ -49,8 +50,8 @@ describe('ceremony union and router agree', () => {
   it('parses both sides', () => {
     // Guard the guard: if either regex stops matching after a refactor this
     // suite would pass while checking nothing.
-    expect(variants.length).toBeGreaterThan(10);
-    expect(rendered.size).toBeGreaterThan(10);
+    expect(variants).toHaveLength(22);
+    expect(rendered.size).toBe(22);
   });
 
   it.each(variants)('%s has a render case in CeremonyRouter', (variant) => {
@@ -62,6 +63,29 @@ describe('ceremony union and router agree', () => {
     // reward, but it means someone removed a ceremony and left half of it.
     const orphanCases = [...rendered].filter((r) => !variants.includes(r));
     expect(orphanCases).toEqual([]);
+  });
+});
+
+describe('ceremony reward and focus contracts', () => {
+  const routerSource = fs.readFileSync(ROUTER, 'utf8');
+  const appSource = fs.readFileSync(APP, 'utf8');
+
+  it('does not grant rewards during render or dismissal', () => {
+    expect(routerSource).not.toContain('economy.addCoins');
+    expect(routerSource).not.toContain('economy.addGems');
+  });
+
+  it('does not repeat the quest description as a reward label', () => {
+    expect(routerSource).not.toContain(
+      'rewardLabel={activeCeremony.data.description}',
+    );
+  });
+
+  it('hides navigation descendants from accessibility while a ceremony is active', () => {
+    expect(appSource).toContain('importantForAccessibility=');
+    expect(appSource).toContain(
+      "activeCeremony ? 'no-hide-descendants' : 'auto'",
+    );
   });
 });
 

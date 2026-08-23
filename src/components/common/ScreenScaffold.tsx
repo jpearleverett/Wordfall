@@ -1,7 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import {
-  Animated,
-  Easing,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +11,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../../constants';
 import { AmbientBackdrop } from './AmbientBackdrop';
-import { useReduceMotion } from '../../hooks/useReduceMotion';
 
 type BackdropVariant =
   | 'home'
@@ -61,8 +58,7 @@ interface ScreenScaffoldProps {
  * most screens simply lacked): safe-area top inset instead of a hardcoded
  * paddingTop: 60, an AmbientBackdrop, a glass back button (several screens
  * shipped with NO back affordance at all), a chrome-styled title with an
- * accent hairline, and Home's entrance spring so every screen animates in
- * with the same motion signature.
+ * accent hairline. Route-level motion is owned by React Navigation.
  */
 export default function ScreenScaffold({
   title,
@@ -77,35 +73,6 @@ export default function ScreenScaffold({
   children,
 }: ScreenScaffoldProps) {
   const insets = useSafeAreaInsets();
-  const reduceMotion = useReduceMotion();
-  const enterAnim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
-
-  useEffect(() => {
-    if (reduceMotion) {
-      enterAnim.setValue(1);
-      return;
-    }
-    Animated.timing(enterAnim, {
-      toValue: 1,
-      duration: 340,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const bodyStyle = {
-    flex: 1,
-    opacity: enterAnim,
-    transform: [
-      {
-        translateY: enterAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [24, 0],
-        }),
-      },
-    ],
-  };
 
   return (
     <View style={styles.container}>
@@ -161,7 +128,7 @@ export default function ScreenScaffold({
         />
       </View>
 
-      <Animated.View style={bodyStyle}>
+      <View style={styles.body}>
         {scroll ? (
           <ScrollView
             style={styles.scroll}
@@ -173,7 +140,7 @@ export default function ScreenScaffold({
         ) : (
           <View style={[styles.noScrollBody, contentStyle]}>{children}</View>
         )}
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -260,6 +227,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   scroll: {
+    flex: 1,
+  },
+  body: {
     flex: 1,
   },
   content: {

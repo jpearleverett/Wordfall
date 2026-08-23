@@ -119,6 +119,7 @@ interface LetterCellProps {
   letter: string;
   cellId: string;
   size: number;
+  reduceMotion: boolean;
   isSelected: boolean;
   isHinted: boolean;
   selectionIndex: number;
@@ -148,6 +149,7 @@ export const LetterCell = React.memo(function LetterCell({
   letter,
   cellId,
   size,
+  reduceMotion,
   isSelected,
   isHinted,
   selectionIndex,
@@ -201,6 +203,10 @@ export const LetterCell = React.memo(function LetterCell({
   const scaleAnim = useSharedValue(1);
 
   useEffect(() => {
+    if (reduceMotion) {
+      scaleAnim.value = 1;
+      return;
+    }
     // One withSequence call per selection change. Scale pop is the only
     // active feedback now — the decorative rings (ripple/overcharge/glow)
     // were removed because their mount/unmount dominated the native commit
@@ -215,7 +221,7 @@ export const LetterCell = React.memo(function LetterCell({
     } else {
       scaleAnim.value = withSpring(1, { damping: 12, stiffness: 180 });
     }
-  }, [isSelected, scaleAnim]);
+  }, [isSelected, reduceMotion, scaleAnim]);
 
   const scaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleAnim.value }],
