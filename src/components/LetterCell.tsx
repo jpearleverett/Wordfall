@@ -24,6 +24,7 @@ import { getRemoteBoolean } from '../services/remoteConfig';
 import { CoinIcon } from './icons/iconsCore';
 import { useSettings } from '../contexts/SettingsContext';
 import { getColorblindTileRamps } from '../services/colorblind';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 // ── Pre-computed style constants (module scope so tuples share a single reference) ─
 const BODY_COLORS_VALID: [string, string, string, string, string] = ['#33ffaa', '#00ff87', '#00d96e', '#00b85c', '#008844'];
@@ -163,6 +164,7 @@ export const LetterCell = React.memo(function LetterCell({
   // Dev-only: count how many LetterCell renders happen per Grid commit.
   // If memoization is working we expect ~1 render per tap.
   perfCountCellRender();
+  const reduceMotion = useReduceMotion();
   const palette = useColors();
   // Chapter-derived default tile gradient. Stable across a single level; a
   // level transition re-renders the whole grid anyway, so the extra context
@@ -201,6 +203,10 @@ export const LetterCell = React.memo(function LetterCell({
   const scaleAnim = useSharedValue(1);
 
   useEffect(() => {
+    if (reduceMotion) {
+      scaleAnim.value = 1;
+      return;
+    }
     // One withSequence call per selection change. Scale pop is the only
     // active feedback now — the decorative rings (ripple/overcharge/glow)
     // were removed because their mount/unmount dominated the native commit
@@ -215,7 +221,7 @@ export const LetterCell = React.memo(function LetterCell({
     } else {
       scaleAnim.value = withSpring(1, { damping: 12, stiffness: 180 });
     }
-  }, [isSelected, scaleAnim]);
+  }, [isSelected, reduceMotion, scaleAnim]);
 
   const scaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleAnim.value }],

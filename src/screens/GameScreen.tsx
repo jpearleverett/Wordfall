@@ -33,7 +33,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, MODE_CONFIGS, ANIM, FONTS, SCREEN_WIDTH, getDifficultyTier, isSpikeLevel, CELL_GAP, MAX_GRID_WIDTH } from '../constants';
 import { soundManager } from '../services/sound';
 import { LOCAL_IMAGES } from '../utils/localAssets';
-import { wordFoundHaptic, errorHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic, stuckHaptic } from '../services/haptics';
+import { wordFoundHaptic, successHaptic, boosterComboHaptic, lastWordHaptic, gravityLandHaptic, stuckHaptic } from '../services/haptics';
 import { profilerOnRender } from '../utils/perfInstrument';
 import { useStableCallback } from '../utils/hooks';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -84,7 +84,9 @@ import { FailBreatherOffer, BREATHER_COOLDOWN_MS } from '../components/FailBreat
 import { GameFlashes } from './game/GameFlashes';
 import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
+import { ConnectedTimerMovesBars } from './game/TimerMovesBars';
 import { TilePaletteContext } from '../components/LetterCell';
+import { isLastWordTensionActive } from '../utils/gameMotion';
 import {
   computeGridGeometry,
   computeGridMetrics,
@@ -263,93 +265,6 @@ const BoosterBarMemo = React.memo(function BoosterBarMemo({
   );
 });
 
-// ── Memoized timer/moves bars ──────────────────────────────────────────
-// These only need to update when the tick fires or moves increment — never
-// on cell taps. Separating them means GameScreen's tap-driven re-renders
-// don't touch this subtree.
-interface TimerMovesBarsProps {
-  hasTimer: boolean;
-  hasMoveLimit: boolean;
-  timeRemaining: number;
-  /** Full time budget for the puzzle — suppresses warnings that would fire at start. */
-  totalSeconds: number;
-  moves: number;
-  maxMoves: number;
-}
-const TimerMovesBarsMemo = React.memo(function TimerMovesBars({
-  hasTimer,
-  hasMoveLimit,
-  timeRemaining,
-  totalSeconds,
-  moves,
-  maxMoves,
-}: TimerMovesBarsProps) {
-  // Tier 4 C2 — 30s/10s threshold warnings (haptic + SFX). These were
-  // authored in components/modes/TimerDisplay.tsx, which nothing ever
-  // mounted; that component also ran its own setInterval countdown, so
-  // mounting it would have raced the reducer's authoritative timer. The
-  // warnings live here instead, driven by the store's timeRemaining.
-  const warned30Ref = useRef(false);
-  const warned10Ref = useRef(false);
-  const prevTimeRef = useRef(timeRemaining);
-  useEffect(() => {
-    const prev = prevTimeRef.current;
-    prevTimeRef.current = timeRemaining;
-    if (!hasTimer) return;
-    if (timeRemaining > prev) {
-      // Timer refilled (new puzzle / time bonus) — re-arm the crossings.
-      if (timeRemaining > 30) warned30Ref.current = false;
-      if (timeRemaining > 10) warned10Ref.current = false;
-      return;
-    }
-    if (!warned30Ref.current && timeRemaining <= 30 && timeRemaining > 10 && totalSeconds > 30) {
-      warned30Ref.current = true;
-      void errorHaptic();
-      void soundManager.playSound('timerWarning30s');
-    }
-    if (!warned10Ref.current && timeRemaining <= 10 && timeRemaining > 0 && totalSeconds > 10) {
-      warned10Ref.current = true;
-      void errorHaptic();
-      void soundManager.playSound('timerWarning10s');
-    }
-  }, [timeRemaining, hasTimer, totalSeconds]);
-
-  return (
-    <>
-      {hasTimer && (
-        <View style={[
-          styles.timerBar,
-          timeRemaining <= 30 && timeRemaining > 0 && styles.timerBarDanger,
-          timeRemaining <= 0 && styles.barHidden,
-        ]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <GameIcon name="hourglass" size={16} accent={timeRemaining <= 30 ? COLORS.coral : undefined} />
-            <Text style={[
-              styles.timerText,
-              timeRemaining <= 30 && styles.timerTextDanger,
-            ]}>
-              {formatTime(timeRemaining)}
-            </Text>
-          </View>
-        </View>
-      )}
-      {hasMoveLimit && maxMoves > 0 && (
-        <View style={[
-          styles.moveBar,
-          moves >= maxMoves - 1 && styles.moveBarDanger,
-        ]}>
-          <Text style={[
-            styles.moveText,
-            moves >= maxMoves - 1 && styles.moveTextDanger,
-          ]}>
-            Moves: {moves}/{maxMoves}
-          </Text>
-        </View>
-      )}
-    </>
-  );
-});
-
 // --- Word-Clear Particle Pop ---
 const PARTICLE_COLORS = ['#00d4ff', '#00e676', '#ffd700', '#b366ff', '#ff5252', '#ff9100'];
 
@@ -370,10 +285,6 @@ function stuckTooltipKeyForLevel(level: number): string {
   const phase = Math.min(3, Math.floor(Math.max(0, level - 1) / 15));
   return phase === 0 ? FIRST_STUCK_TOOLTIP : `${FIRST_STUCK_TOOLTIP}_p${phase}`;
 }
-
-// Last-word tension only fires on boards with at least this many words —
-// on 2-3 word early boards the "climax" landed seconds into the puzzle.
-const LAST_WORD_TENSION_MIN_WORDS = 4;
 
 /** Stable empty array so the stranded-words memo can't churn GameBanners. */
 const EMPTY_STRING_LIST: string[] = [];
@@ -805,7 +716,6 @@ function GameScreenImpl({
   const hintsLeft = useStore(store, s => s.hintsLeft);
   const hintsUsed = useStore(store, s => s.hintsUsed);
   const undosLeft = useStore(store, s => s.undosLeft);
-  const timeRemaining = useStore(store, s => s.timeRemaining);
   const grid = useStore(store, s => s.board.grid);
   const history = useStore(store, useShallow((s: GameState) => s.history));
   const wildcardMode = useStore(store, s => s.wildcardMode);
@@ -1644,10 +1554,14 @@ function GameScreenImpl({
   // found, before they even knew what the word bank was, training them to
   // ignore the cue before it meant anything. Early levels stay quiet; the
   // beat debuts around L8 where 4-word boards make it earned.
-  const tensionEligible = totalWords >= LAST_WORD_TENSION_MIN_WORDS;
+  const tensionActive = isLastWordTensionActive(
+    totalWords,
+    totalWords - foundWords,
+    status,
+  );
   useEffect(() => {
     const remaining = totalWords - foundWords;
-    if (remaining !== 1 || status !== 'playing' || !tensionEligible) {
+    if (!tensionActive) {
       if (remaining !== 1) lastWordTensionFiredRef.current = false;
       return;
     }
@@ -1663,7 +1577,7 @@ function GameScreenImpl({
       mode,
       timeIntoPuzzleMs,
     });
-  }, [foundWords, totalWords, status, level, mode, store, tensionEligible]);
+  }, [foundWords, totalWords, level, mode, store, tensionActive]);
 
   useEffect(() => {
     if ((status === 'failed' || status === 'timeout') && showFailed) {
@@ -2563,7 +2477,7 @@ function GameScreenImpl({
 
       <GameplayMascot
         foundCount={foundWords}
-        tensionActive={tensionEligible && totalWords - foundWords === 1}
+        tensionActive={tensionActive}
         flawlessStreak={flawlessStreakCurrent}
         // Folio wears the current wing's colors — same chapter resolution
         // as the backdrop palette, so mascot + backdrop always agree.
@@ -2583,7 +2497,6 @@ function GameScreenImpl({
         isDaily={isDaily}
         mode={mode}
         maxMoves={effectiveMaxMoves}
-        timeRemaining={timeRemaining}
         onHint={handleHint}
         onUndo={handleUndo}
         onBack={onHome}
@@ -2591,12 +2504,10 @@ function GameScreenImpl({
 
       {/* Timer/move bars — extracted to a memoized sub-component so they only
           re-render on tick / move-increment, not on every cell tap. */}
-      <TimerMovesBarsMemo
+      <ConnectedTimerMovesBars
         hasTimer={modeConfig.rules.hasTimer ?? false}
         hasMoveLimit={modeConfig.rules.hasMoveLimit ?? false}
-        timeRemaining={timeRemaining}
         totalSeconds={effectiveTimeLimit}
-        moves={moves}
         maxMoves={effectiveMaxMoves}
       />
 
@@ -3081,81 +2992,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 60,
   },
-  barHidden: {
-    opacity: 0,
-  },
   wordArea: {
     paddingTop: 2,
     paddingBottom: 2,
     height: 86,
-  },
-  timerBar: {
-    backgroundColor: 'rgba(26, 10, 46, 0.75)',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    marginHorizontal: 18,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginBottom: 3,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 45, 149, 0.30)',
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  timerBarDanger: {
-    backgroundColor: 'rgba(60, 15, 20, 0.75)',
-    borderColor: 'rgba(255, 107, 107, 0.5)',
-    shadowColor: COLORS.coral,
-    shadowOpacity: 0.3,
-  },
-  timerText: {
-    fontFamily: FONTS.display,
-    color: COLORS.accent,
-    fontSize: 16,
-    letterSpacing: 3,
-    textShadowColor: COLORS.accentGlow,
-    textShadowRadius: 12,
-  },
-  timerTextDanger: {
-    color: COLORS.coral,
-    textShadowColor: COLORS.coralGlow,
-    textShadowRadius: 12,
-  },
-  moveBar: {
-    backgroundColor: 'rgba(26, 10, 46, 0.75)',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    marginHorizontal: 18,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginBottom: 3,
-    borderWidth: 1.5,
-    borderColor: 'rgba(200, 77, 255, 0.20)',
-    shadowColor: COLORS.purple,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  moveBarDanger: {
-    backgroundColor: 'rgba(60, 15, 20, 0.75)',
-    borderColor: 'rgba(255, 107, 107, 0.5)',
-    shadowColor: COLORS.coral,
-    shadowOpacity: 0.3,
-  },
-  moveText: {
-    fontFamily: FONTS.bodySemiBold,
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    letterSpacing: 0.5,
-  },
-  moveTextDanger: {
-    color: COLORS.coral,
-    textShadowColor: COLORS.coralGlow,
-    textShadowRadius: 10,
   },
   cascadeBar: {
     backgroundColor: 'rgba(50, 15, 20, 0.75)',

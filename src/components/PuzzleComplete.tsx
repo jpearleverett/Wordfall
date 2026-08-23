@@ -12,7 +12,6 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { AccessibilityInfo } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, ECONOMY, FONTS, GRADIENTS, LIBRARY, RADIUS, SHADOWS, STAR_MILESTONES, ANIM } from '../constants';
 import { getRemoteBoolean, getRemoteNumber } from '../services/remoteConfig';
@@ -1048,15 +1047,10 @@ export function PuzzleComplete({
       setAutoAdvanceRemainingMs(null);
       return;
     }
-    let cancelled = false;
-    AccessibilityInfo.isReduceMotionEnabled().then((rm) => {
-      if (cancelled) return;
-      const base = getRemoteNumber('autoAdvanceDelayMs');
-      const delayMs = rm ? Math.min(2000, base) : base;
-      setAutoAdvanceRemainingMs(delayMs);
-    });
-    return () => { cancelled = true; };
-  }, [autoAdvanceCancelled, isDaily, perfectRun, mode]);
+    const base = getRemoteNumber('autoAdvanceDelayMs');
+    const delayMs = reduceMotion ? Math.min(2000, base) : base;
+    setAutoAdvanceRemainingMs(delayMs);
+  }, [autoAdvanceCancelled, isDaily, perfectRun, mode, reduceMotion]);
 
   useEffect(() => {
     if (autoAdvanceRemainingMs === null) return;

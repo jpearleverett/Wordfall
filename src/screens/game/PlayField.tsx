@@ -21,6 +21,7 @@ import { profilerOnRender, perfMark } from '../../utils/perfInstrument';
 import { tapHaptic } from '../../services/haptics';
 import { soundManager } from '../../services/sound';
 import { clearTimeoutHandles } from '../../utils/animationLifecycle';
+import { isLastWordTensionActive } from '../../utils/gameMotion';
 
 interface PlayFieldProps {
   mode: GameMode;
@@ -291,6 +292,7 @@ function ConnectedWordBankImpl({ hidden = false }: ConnectedWordBankProps) {
   const grid = useGameStore(s => s.board.grid);
   const words = useGameStore(useShallow((s: GameState) => s.board.words));
   const wildcardCells = useGameStore(useShallow((s: GameState) => s.wildcardCells));
+  const status = useGameStore(s => s.status);
 
   const wildcardSet = useMemo(
     () => new Set(wildcardCells.map(c => `${c.row},${c.col}`)),
@@ -320,11 +322,15 @@ function ConnectedWordBankImpl({ hidden = false }: ConnectedWordBankProps) {
     [selectedCells, currentWord, wildcardCells, words, remainingWordSet, rawWord],
   );
 
-  // Tier 6 B7 — mirror GameScreen's tension trigger so the final chip
-  // coordinates its overshoot + glow with the BGM swap + haptic moment.
-  const tensionActive = useMemo(() => {
-    return words.filter((w) => !w.found).length === 1;
-  }, [words]);
+  const tensionActive = useMemo(
+    () =>
+      isLastWordTensionActive(
+        words.length,
+        words.filter((word) => !word.found).length,
+        status,
+      ),
+    [status, words],
+  );
 
   return (
     <View

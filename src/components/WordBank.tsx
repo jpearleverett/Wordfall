@@ -57,6 +57,12 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
   const reduceMotion = useReduceMotion();
 
   useEffect(() => {
+    if (wordPlacement.found && reduceMotion) {
+      wasFound.current = true;
+      foundAnim.setValue(1);
+      scaleAnim.setValue(1);
+      return;
+    }
     if (wordPlacement.found && !wasFound.current) {
       wasFound.current = true;
       Animated.sequence([
@@ -90,7 +96,7 @@ const WordChip = React.memo(function WordChip({ wordPlacement, isActive, isValid
         ]),
       ]).start();
     }
-  }, [wordPlacement.found]);
+  }, [wordPlacement.found, reduceMotion, foundAnim, scaleAnim]);
 
   // Tier 6 B7 — fire a one-shot overshoot + glow when `tensionActive` rises,
   // coordinating the visual with the BGM swap + haptic moment in GameScreen.
