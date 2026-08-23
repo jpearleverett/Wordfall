@@ -979,7 +979,6 @@ export function useGame(
 
   // ── Narrow selectors for effects that need reactive reads ────────────
   const status = useStore(store, s => s.status);
-  const timeRemaining = useStore(store, s => s.timeRemaining);
   const grid = useStore(store, s => s.board.grid);
   const words = useStore(store, useShallow((s: GameState) => s.board.words));
   const gravityDirection = useStore(store, s => s.gravityDirection);
@@ -1047,7 +1046,13 @@ export function useGame(
 
   // ── Timer for timed modes ────────────────────────────────────────────
   useEffect(() => {
-    if (mode !== 'timePressure' || status !== 'playing' || timeRemaining <= 0) return;
+    if (
+      mode !== 'timePressure' ||
+      status !== 'playing' ||
+      store.getState().timeRemaining <= 0
+    ) {
+      return;
+    }
 
     const interval = setInterval(() => {
       if (store.getState().status === 'playing') {
@@ -1056,7 +1061,7 @@ export function useGame(
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [mode, status, timeRemaining <= 0, store]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, status, store]);
 
   // ── isStuck (debounced DFS — mode-aware) ─────────────────────────────
   const [isStuck, setIsStuck] = useState(false);
