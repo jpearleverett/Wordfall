@@ -20,6 +20,7 @@ import { matchesWord } from '../../hooks/useGame';
 import { profilerOnRender, perfMark } from '../../utils/perfInstrument';
 import { tapHaptic } from '../../services/haptics';
 import { soundManager } from '../../services/sound';
+import { clearTimeoutHandles } from '../../utils/animationLifecycle';
 
 interface PlayFieldProps {
   mode: GameMode;
@@ -129,8 +130,7 @@ function PlayFieldImpl({
   const tapSoundTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   useEffect(() => () => {
-    tapSoundTimersRef.current.forEach(clearTimeout);
-    tapSoundTimersRef.current.clear();
+    clearTimeoutHandles(tapSoundTimersRef.current);
   }, []);
 
   // Rising tap scale: each cell added to the trace plays a slightly

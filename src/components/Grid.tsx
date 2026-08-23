@@ -23,11 +23,18 @@ import {
   computeGridGeometry,
   computeGridMetrics,
   computeGridTransition,
+  decideGridTransitionUpdate,
   GRID_FRAME_ALLOWANCE,
   hitTestGridGeometry,
 } from './game/gridGeometry';
 import { perfDragStart, perfDragDispatch, perfDragEnd } from '../utils/perfInstrument';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import {
+  clearAnimationResources,
+  clearTimeoutHandles,
+  releaseOwnedAnimation,
+  startAnimationWithCleanup,
+} from '../utils/animationLifecycle';
 
 // Extracted constants to avoid creating new objects on every render
 const NEON_FRAME_COLORS = ['rgba(255,45,149,0.35)', 'rgba(200,77,255,0.25)', 'rgba(0,229,255,0.20)'] as [string, string, ...string[]];
@@ -133,8 +140,7 @@ const GhostTile = React.memo(function GhostTile({ ghost, cellSize }: { ghost: Gh
         useNativeDriver: true,
       }),
     ]);
-    animation.start();
-    return () => animation.stop();
+    return startAnimationWithCleanup(animation);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -207,8 +213,7 @@ const ClearGhostLayer = React.memo(forwardRef<GhostLayerHandle, { cellSize: numb
     }), []);
 
     useEffect(() => () => {
-      timersRef.current.forEach(clearTimeout);
-      timersRef.current.clear();
+      clearTimeoutHandles(timersRef.current);
     }, []);
 
     if (ghosts.length === 0) return null;
@@ -254,8 +259,7 @@ const GlintStar = React.memo(function GlintStar({ glint, cellSize }: { glint: Gl
       easing: Easing.inOut(Easing.quad),
       useNativeDriver: true,
     });
-    animation.start();
-    return () => animation.stop();
+    return startAnimationWithCleanup(animation);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [glint.key]);
 
@@ -340,8 +344,7 @@ const IdleGlintLayer = React.memo(function IdleGlintLayer({
     schedule();
     return () => {
       cancelled = true;
-      timers.forEach(clearTimeout);
-      timers.clear();
+      clearTimeoutHandles(timers);
     };
   }, []);
 
@@ -467,7 +470,7 @@ function GameGridImpl({
   const liveOffsetRef = useRef(new Map<string, { x: number; y: number }>());
   const listenerHandleRef = useRef(new Map<
     string,
-    { value: Animated.ValueXY; handle: string }
+    { remove: () => void }
   >());
   const activeFallsRef = useRef(new Map<string, Animated.CompositeAnimation>());
   const prevGridRef = useRef<GridType | null>(null);
@@ -483,32 +486,38 @@ function GameGridImpl({
 
   useEffect(() => () => {
     fallRunIdRef.current += 1;
-    activeFallsRef.current.forEach(animation => animation.stop());
-    activeFallsRef.current.clear();
-    for (const { value, handle } of listenerHandleRef.current.values()) {
-      value.removeListener(handle);
-    }
-    listenerHandleRef.current.clear();
-    liveOffsetRef.current.clear();
-    fallAnimMapRef.current.clear();
+    clearAnimationResources(
+      activeFallsRef.current,
+      listenerHandleRef.current,
+      liveOffsetRef.current,
+      fallAnimMapRef.current,
+    );
     pendingFallsRef.current = [];
     pendingGhostsRef.current = [];
   }, []);
 
-  // Render-phase diff. Runs exactly once per grid-data change; geometry
-  // changes (cell size / board dims from layout settle or board shrink)
-  // reset the baseline without animating.
-  if (prevGridRef.current !== grid) {
+  // Render-phase diff. Grid data changes transition stable cell IDs; geometry
+  // changes reset even when the grid object itself is unchanged.
+  const transitionDecision = decideGridTransitionUpdate(
+    {
+      grid: prevGridRef.current,
+      cellSize: prevCellSizeRef.current,
+      rows: prevDimsRef.current.rows,
+      cols: prevDimsRef.current.cols,
+    },
+    { grid, cellSize, rows, cols },
+  );
+  if (transitionDecision !== 'none') {
     const prevBounds = prevBoundsRef.current;
-    const sameGeometry =
-      prevCellSizeRef.current === cellSize &&
-      prevDimsRef.current.rows === rows &&
-      prevDimsRef.current.cols === cols &&
-      prevBounds !== null;
     const falls: { id: string; dx: number; dy: number; col: number }[] = [];
     const ghosts: GhostSpec[] = [];
     const previousGrid = prevGridRef.current;
-    if (previousGrid !== null && prevBounds && sameGeometry && !reduceMotion) {
+    if (
+      transitionDecision === 'transition' &&
+      previousGrid !== null &&
+      prevBounds &&
+      !reduceMotion
+    ) {
       const transition = computeGridTransition(
         prevBounds,
         boundsById,
@@ -541,25 +550,22 @@ function GameGridImpl({
         }
         const listener = listenerHandleRef.current.get(ghost.id);
         if (listener) {
-          listener.value.removeListener(listener.handle);
+          listener.remove();
           listenerHandleRef.current.delete(ghost.id);
         }
         liveOffsetRef.current.delete(ghost.id);
       }
-    } else if (!sameGeometry) {
+    } else if (transitionDecision === 'reset') {
       // Layout settle / board-shrink: the pixel space changed, so any
       // in-flight offsets are meaningless — snap everything to rest.
       fallRunIdRef.current += 1;
-      activeFallsRef.current.forEach(animation => animation.stop());
-      activeFallsRef.current.clear();
-      for (const { value, handle } of listenerHandleRef.current.values()) {
-        value.removeListener(handle);
-      }
-      listenerHandleRef.current.clear();
-      for (const av of fallAnimMapRef.current.values()) {
-        av.setValue({ x: 0, y: 0 });
-      }
-      liveOffsetRef.current.clear();
+      clearAnimationResources(
+        activeFallsRef.current,
+        listenerHandleRef.current,
+        liveOffsetRef.current,
+        fallAnimMapRef.current,
+        value => value.setValue({ x: 0, y: 0 }),
+      );
     }
     pendingFallsRef.current = falls;
     pendingGhostsRef.current = ghosts;
@@ -614,7 +620,9 @@ function GameGridImpl({
         const handle = av.addListener(({ x, y }) => {
           liveOffsetRef.current.set(cellId, { x, y });
         });
-        listenerHandleRef.current.set(f.id, { value: av, handle });
+        listenerHandleRef.current.set(f.id, {
+          remove: () => av.removeListener(handle),
+        });
       }
       const dist = Math.hypot(f.dx, f.dy);
       const rowsFallen = Math.max(1, dist / stride);
@@ -651,18 +659,18 @@ function GameGridImpl({
       ]);
       activeFallsRef.current.set(f.id, sequence);
       sequence.start(({ finished }) => {
-        if (activeFallsRef.current.get(f.id) === sequence) {
-          activeFallsRef.current.delete(f.id);
-        }
         // Interrupted tiles belong to the successor run — it re-computed
-        // their offsets from the live listener values and owns cleanup.
-        if (!finished) return;
-        const listener = listenerHandleRef.current.get(f.id);
-        if (listener?.value === av) {
-          av.removeListener(listener.handle);
-          listenerHandleRef.current.delete(f.id);
-        }
-        liveOffsetRef.current.delete(f.id);
+        // their offsets from the live listener values and owns every shared
+        // cleanup decision, including a late `finished: true` predecessor.
+        const shouldDecrement = releaseOwnedAnimation(
+          activeFallsRef.current,
+          listenerHandleRef.current,
+          liveOffsetRef.current,
+          f.id,
+          sequence,
+          finished,
+        );
+        if (!shouldDecrement) return;
         remaining -= 1;
         if (remaining === 0 && runId === fallRunIdRef.current) {
           onGravitySettledRef.current?.();

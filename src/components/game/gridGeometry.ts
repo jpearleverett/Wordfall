@@ -55,6 +55,19 @@ export interface GridTransition {
   ghosts: GridTransitionGhost[];
 }
 
+export interface GridTransitionRenderState {
+  grid: Grid | null;
+  cellSize: number;
+  rows: number;
+  cols: number;
+}
+
+export type GridTransitionUpdateDecision =
+  | 'none'
+  | 'initialize'
+  | 'reset'
+  | 'transition';
+
 const EMPTY_METRICS: GridMetrics = {
   cellSize: 0,
   stride: 0,
@@ -74,6 +87,21 @@ function emptyGridGeometry(): GridGeometry {
     byCellId: new Map(),
     byPosition: new Map(),
   };
+}
+
+export function decideGridTransitionUpdate(
+  previous: GridTransitionRenderState,
+  next: GridTransitionRenderState,
+): GridTransitionUpdateDecision {
+  if (previous.grid === null) return 'initialize';
+  if (
+    previous.cellSize !== next.cellSize ||
+    previous.rows !== next.rows ||
+    previous.cols !== next.cols
+  ) {
+    return 'reset';
+  }
+  return previous.grid === next.grid ? 'none' : 'transition';
 }
 
 export function computeGridTransition(
@@ -97,7 +125,13 @@ export function computeGridTransition(
 
   for (const [id, bound] of previous) {
     if (!next.has(id)) {
-      ghosts.push({ id, x: bound.x, y: bound.y, col: bound.col });
+      const live = liveOffsets.get(id);
+      ghosts.push({
+        id,
+        x: bound.x + (live?.x ?? 0),
+        y: bound.y + (live?.y ?? 0),
+        col: bound.col,
+      });
     }
   }
 
