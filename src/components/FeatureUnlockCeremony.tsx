@@ -1,13 +1,14 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
+import { Animated as RNAnimated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import GameIcon from './icons/GameIcon';
+import { useCeremonyTransition, CEREMONY_LAYER } from '../hooks/useCeremonyTransition';
 
 interface FeatureUnlockCeremonyProps {
   icon: string;
@@ -25,15 +26,18 @@ export function FeatureUnlockCeremony({
   onDismiss,
 }: FeatureUnlockCeremonyProps) {
   const { t } = useTranslation();
-  const fade = useSharedValue(0);
-  const scale = useSharedValue(0.7);
-  const iconProgress = useSharedValue(0);
+  // Shared ceremony transition: one entrance, one faster exit, instant
+  // settle + instant dismiss under reduced motion, stop-on-unmount.
+  const { reduceMotion, animateDecorations, overlayStyle, cardStyle, requestDismiss } =
+    useCeremonyTransition(onDismiss);
+  const iconProgress = useSharedValue(reduceMotion ? 1 : 0);
+  // 0.4 is the glow's settled value — the pulse loop both starts and ends
+  // there, so under reduced motion it simply holds still.
   const glow = useSharedValue(0.4);
   const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
-    fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
+    if (!animateDecorations) return undefined; // reduced motion: mounted settled
     iconProgress.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 200 }));
     glow.value = withRepeat(
       withSequence(
@@ -42,10 +46,12 @@ export function FeatureUnlockCeremony({
       ),
       3,
     );
+    return () => {
+      cancelAnimation(iconProgress);
+      cancelAnimation(glow);
+    };
   }, []);
 
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
-  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const glowStyle = useAnimatedStyle(() => ({
     backgroundColor: accentColor + '30',
     opacity: glow.value,
@@ -58,11 +64,16 @@ export function FeatureUnlockCeremony({
   }));
 
   return (
-    <Animated.View style={[styles.overlay, overlayStyle]}>
-      {decorationsMounted && (
+    <RNAnimated.View
+      style={[styles.overlay, overlayStyle]}
+      accessibilityViewIsModal
+      accessibilityRole="alert"
+      accessibilityLabel={`${t('ceremony.newUnlock')}. ${title}. ${description}`}
+    >
+      {decorationsMounted && animateDecorations && (
         <SparkleField count={18} intensity="medium" />
       )}
-      <Animated.View style={[styles.card, cardStyle]}>
+      <RNAnimated.View style={[styles.card, cardStyle]}>
         <LinearGradient
           colors={GRADIENTS.surfaceCard}
           style={styles.cardInner}
@@ -93,7 +104,7 @@ export function FeatureUnlockCeremony({
 
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
-            onPress={onDismiss}
+            onPress={requestDismiss}
           >
             <LinearGradient
               colors={GRADIENTS.button.primary}
@@ -105,8 +116,8 @@ export function FeatureUnlockCeremony({
             </LinearGradient>
           </Pressable>
         </LinearGradient>
-      </Animated.View>
-    </Animated.View>
+      </RNAnimated.View>
+    </RNAnimated.View>
   );
 }
 
@@ -117,7 +128,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    zIndex: 200,
+    zIndex: CEREMONY_LAYER,
   },
   card: {
     width: '100%',

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
+import { Animated as RNAnimated, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, withRepeat, withSequence, interpolate, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, {
   Circle, Defs, LinearGradient as SvgLinearGradient, Polygon, RadialGradient, Rect, Stop,
@@ -9,7 +9,7 @@ import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import GameIcon, { GameIconName } from './icons/GameIcon';
-import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useCeremonyTransition, CEREMONY_LAYER } from '../hooks/useCeremonyTransition';
 import { gradId } from './icons/IconBase';
 
 /**
@@ -135,16 +135,17 @@ export function MilestoneCeremony({
   buttonText = 'AWESOME!',
   onDismiss,
 }: MilestoneCeremonyProps) {
-  const fade = useSharedValue(0);
-  const scale = useSharedValue(0.6);
-  const iconProgress = useSharedValue(0);
-  const rewardPop = useSharedValue(0);
+  // Shared ceremony transition: one entrance, one faster exit, instant
+  // settle + instant dismiss under reduced motion, stop-on-unmount.
+  const { reduceMotion, animateDecorations, overlayStyle, cardStyle, requestDismiss } =
+    useCeremonyTransition(onDismiss);
+  const iconProgress = useSharedValue(reduceMotion ? 1 : 0);
+  const rewardPop = useSharedValue(reduceMotion ? 1 : 0);
   // Ambient settle life — the card must never freeze after its entrance
   // (blind motion review: "victory modal frozen two seconds"). A slow icon
   // breath and a CTA pulse loop keep the ceremony alive until dismissed.
   const iconBreath = useSharedValue(1);
   const ctaPulse = useSharedValue(1);
-  const reduceMotion = useReduceMotion();
 
   // Defer the SparkleField until ~200ms after mount — see useDeferredMount
   // in perfInstrument.ts. Lets the card pop in fast and the decorations
@@ -152,26 +153,26 @@ export function MilestoneCeremony({
   const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
-    fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
+    if (!animateDecorations) return undefined; // reduced motion: mounted settled
     iconProgress.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 200 }));
     rewardPop.value = withDelay(560, withSpring(1, { damping: 12, stiffness: 190 }));
-    if (!reduceMotion) {
-      // Amplitudes sized to stay visible even at coarse (250ms) frame
-      // sampling: 8% icon breath over 2.6s, 5% CTA pulse over 1.6s.
-      iconBreath.value = withDelay(900, withRepeat(withSequence(
-        withTiming(1.08, { duration: 1300 }),
-        withTiming(1, { duration: 1300 }),
-      ), -1, false));
-      ctaPulse.value = withDelay(1100, withRepeat(withSequence(
-        withTiming(1.05, { duration: 800 }),
-        withTiming(1, { duration: 800 }),
-      ), -1, false));
-    }
+    // Amplitudes sized to stay visible even at coarse (250ms) frame
+    // sampling: 8% icon breath over 2.6s, 5% CTA pulse over 1.6s.
+    iconBreath.value = withDelay(900, withRepeat(withSequence(
+      withTiming(1.08, { duration: 1300 }),
+      withTiming(1, { duration: 1300 }),
+    ), -1, false));
+    ctaPulse.value = withDelay(1100, withRepeat(withSequence(
+      withTiming(1.05, { duration: 800 }),
+      withTiming(1, { duration: 800 }),
+    ), -1, false));
+    return () => {
+      cancelAnimation(iconProgress);
+      cancelAnimation(rewardPop);
+      cancelAnimation(iconBreath);
+      cancelAnimation(ctaPulse);
+    };
   }, []);
-
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
-  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const iconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: interpolate(iconProgress.value, [0, 0.5, 1], [0, 1.4, 1]) * iconBreath.value }],
   }));
@@ -191,7 +192,12 @@ export function MilestoneCeremony({
   );
 
   return (
-    <Animated.View style={[styles.overlay, overlayStyle]}>
+    <RNAnimated.View
+      style={[styles.overlay, overlayStyle]}
+      accessibilityViewIsModal
+      accessibilityRole="alert"
+      accessibilityLabel={`${ribbon}. ${title}. ${description}`}
+    >
       {/* Radial vignette, darkest at center-bottom where home-screen copy
           sits — together with the near-opaque scrim nothing behind the
           card stays legible during the reward moment. */}
@@ -256,14 +262,14 @@ export function MilestoneCeremony({
           />
         ))}
       </Svg>
-      {decorationsMounted && (
+      {decorationsMounted && animateDecorations && (
         <SparkleField count={16} intensity="medium" colors={[accentColor, COLORS.gold, '#fff']} />
       )}
       {/* Floating sparkle dots — continuous ambient drift behind the card.
           Skipped entirely under reduce-motion (static motes still render). */}
-      {!reduceMotion &&
+      {animateDecorations &&
         CEREMONY_SPARKS.map((sp) => <CeremonySpark key={`${sp.left}-${sp.top}`} {...sp} />)}
-      <Animated.View style={[styles.card, cardStyle]}>
+      <RNAnimated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: accentColor }]}>{ribbon}</Text>
 
@@ -310,7 +316,7 @@ export function MilestoneCeremony({
           <Animated.View style={ctaStyle}>
             <Pressable
               style={({ pressed }) => [pressed && styles.buttonPressed]}
-              onPress={onDismiss}
+              onPress={requestDismiss}
             >
               {/* Primary action is ALWAYS gold — an accent-tinted pill on the
                   purple card had almost no value contrast (judge round 3).
@@ -324,8 +330,8 @@ export function MilestoneCeremony({
             </Pressable>
           </Animated.View>
         </LinearGradient>
-      </Animated.View>
-    </Animated.View>
+      </RNAnimated.View>
+    </RNAnimated.View>
   );
 }
 
@@ -339,7 +345,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    zIndex: 200,
+    zIndex: CEREMONY_LAYER,
   },
   card: {
     width: '100%',

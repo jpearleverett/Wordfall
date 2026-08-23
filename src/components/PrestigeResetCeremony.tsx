@@ -1,18 +1,20 @@
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated as RNAnimated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  cancelAnimation,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
   withSpring,
-  withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, TYPOGRAPHY } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
+import { useDeferredMount } from '../utils/perfInstrument';
 import { PermanentBonus } from '../data/prestigeSystem';
 import GameIcon from './icons/GameIcon';
+import { useCeremonyTransition, CEREMONY_LAYER } from '../hooks/useCeremonyTransition';
 
 interface Props {
   level: number;
@@ -50,26 +52,41 @@ export default function PrestigeResetCeremony({
   cosmeticReward,
   onDismiss,
 }: Props) {
-  const fade = useSharedValue(0);
-  const scale = useSharedValue(0.6);
-  const iconPulse = useSharedValue(0);
+  // Shared ceremony transition: one entrance, one faster exit, instant
+  // settle + instant dismiss under reduced motion, stop-on-unmount.
+  const { reduceMotion, animateDecorations, overlayStyle, cardStyle, requestDismiss } =
+    useCeremonyTransition(onDismiss);
+  const iconPulse = useSharedValue(reduceMotion ? 1 : 0);
+
+  // Defer the heavy SparkleField mount so the card pops in fast and the
+  // decorations arrive once the entrance has settled.
+  const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
-    fade.value = withTiming(1, { duration: 400 });
-    scale.value = withSpring(1, { damping: 13, stiffness: 160 });
+    if (!animateDecorations) return undefined; // reduced motion: mounted settled
     iconPulse.value = withDelay(300, withSpring(1, { damping: 10, stiffness: 200 }));
+    return () => {
+      cancelAnimation(iconPulse);
+    };
+    // Mount-only: the motion plan is latched for this ceremony's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
-  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const iconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: interpolate(iconPulse.value, [0, 0.5, 1], [0, 1.5, 1]) }],
   }));
 
   return (
-    <Animated.View style={[styles.overlay, overlayStyle]}>
-      <SparkleField count={28} intensity="intense" colors={[COLORS.gold, '#fff', COLORS.purple]} />
-      <Animated.View style={[styles.card, cardStyle]}>
+    <RNAnimated.View
+      style={[styles.overlay, overlayStyle]}
+      accessibilityViewIsModal
+      accessibilityRole="alert"
+      accessibilityLabel={`Prestige ${level}. ${label}. You have ascended!`}
+    >
+      {decorationsMounted && animateDecorations && (
+        <SparkleField count={28} intensity="intense" colors={[COLORS.gold, '#fff', COLORS.purple]} />
+      )}
+      <RNAnimated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>PRESTIGE {level}</Text>
 
@@ -101,7 +118,7 @@ export default function PrestigeResetCeremony({
             </View>
           )}
 
-          <Pressable onPress={onDismiss}>
+          <Pressable onPress={requestDismiss}>
             <LinearGradient
               colors={[COLORS.gold, '#ff9900']}
               style={[styles.button, SHADOWS.glow(COLORS.gold)]}
@@ -110,8 +127,8 @@ export default function PrestigeResetCeremony({
             </LinearGradient>
           </Pressable>
         </LinearGradient>
-      </Animated.View>
-    </Animated.View>
+      </RNAnimated.View>
+    </RNAnimated.View>
   );
 }
 
@@ -125,7 +142,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(6, 2, 14, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10000,
+    zIndex: CEREMONY_LAYER,
     padding: 20,
   },
   card: {

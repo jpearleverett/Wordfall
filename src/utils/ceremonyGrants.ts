@@ -19,8 +19,8 @@
  *   - daily_quest_claim   → claimDailyQuest returns the reward to App.tsx,
  *                           which credits it at claim time
  *   - mystery_wheel_jackpot → the wheel spin flow grants the segment
- *   - quest_step_complete / season_pass_complete / feature unlocks → no
- *                           currency amounts are displayed
+ *   - season_pass_complete / feature unlocks → no currency amounts are
+ *                           displayed
  *   - inbox_reward        → useRewardInboxClaim credits the amounts at the
  *                           rules-enforced unclaimed→claimed transition and
  *                           only then queues the ceremony (display-only)
@@ -108,6 +108,17 @@ export function ceremonyEconomyGrant(ceremony: CeremonyItem): CeremonyGrant | nu
       // break), so amounts are tuned as "nice", not "jackpot".
       const grant = flawlessMilestoneGrant(Number(ceremony.data?.streak) || 0);
       return grant && !isEmpty(grant) ? grant : null;
+    }
+    case 'quest_step_complete': {
+      // Seasonal quest step rewards used to be credited in the router's
+      // onDismiss — a swipe-away or process death between pop and dismiss
+      // silently ate the reward, and a re-rendered dismiss could double-pay.
+      // Pop-time grant here makes it exactly-once like every other type.
+      const grant = normalize({
+        coins: Number(ceremony.data?.rewardCoins) || 0,
+        gems: Number(ceremony.data?.rewardGems) || 0,
+      });
+      return isEmpty(grant) ? null : grant;
     }
     case 'win_streak_milestone': {
       // The ceremony carries only {streak, label}; the amounts live in the

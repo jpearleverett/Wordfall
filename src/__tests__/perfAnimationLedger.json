@@ -1,0 +1,331 @@
+[
+  {
+    "id": "cer-transition-module-missing",
+    "title": "Shared ceremony transition policy module was specified (red tests) but never committed",
+    "file": "src/hooks/useCeremonyTransition.ts",
+    "klass": "F3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyTransition.ts",
+        "pattern": "export function getCeremonyMotionPlan"
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/ceremonyTransition.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "cer-quest-grant-dismiss-time",
+    "title": "Quest-step rewards granted in router onDismiss \u2014 lost on process death, double-paid on re-render",
+    "file": "src/App/CeremonyRouter.tsx",
+    "klass": "F6",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/App/CeremonyRouter.tsx",
+        "pattern": "economy\\.addCoins"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/App/CeremonyRouter.tsx",
+        "pattern": "economy\\.addGems"
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/ceremonyGrants.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "cer-quest-reward-label-duplication",
+    "title": "Quest-step ceremony repeats its description as the reward label",
+    "file": "src/App/CeremonyRouter.tsx",
+    "klass": "F3",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/App/CeremonyRouter.tsx",
+        "pattern": "rewardLabel=\\{activeCeremony\\.data\\.description\\}"
+      }
+    ]
+  },
+  {
+    "id": "cer-a11y-focus-escape",
+    "title": "Screen-reader focus escapes to navigation content underneath an active ceremony",
+    "file": "App.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "activeCeremony \\? 'no-hide-descendants' : 'auto'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "accessibilityElementsHidden=\\{activeCeremony != null\\}"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-MilestoneCeremony",
+    "title": "MilestoneCeremony owns a private entrance with no exit, no reduced-motion settle, no unmount stop",
+    "file": "src/components/MilestoneCeremony.tsx",
+    "klass": "F3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "requestDismiss"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-FeatureUnlockCeremony",
+    "title": "FeatureUnlockCeremony not on the shared ceremony transition contract",
+    "file": "src/components/FeatureUnlockCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/FeatureUnlockCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/FeatureUnlockCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/FeatureUnlockCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-ModeUnlockCeremony",
+    "title": "ModeUnlockCeremony bespoke runOnJS exit competes with the shared transition contract",
+    "file": "src/components/ModeUnlockCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeUnlockCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeUnlockCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeUnlockCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-AchievementCeremony",
+    "title": "AchievementCeremony not on the shared ceremony transition contract",
+    "file": "src/components/AchievementCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/AchievementCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/AchievementCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/AchievementCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-StreakMilestoneCeremony",
+    "title": "StreakMilestoneCeremony not on the shared ceremony transition contract",
+    "file": "src/components/StreakMilestoneCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-CollectionCompleteCeremony",
+    "title": "CollectionCompleteCeremony not on the shared ceremony transition contract",
+    "file": "src/components/CollectionCompleteCeremony.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-PrestigeResetCeremony",
+    "title": "PrestigeResetCeremony: no shared contract, heavy particle field mounts with the card (entrance jank)",
+    "file": "src/components/PrestigeResetCeremony.tsx",
+    "klass": "P7",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/PrestigeResetCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PrestigeResetCeremony.tsx",
+        "pattern": "useDeferredMount\\(280\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PrestigeResetCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-SeasonPassCompleteCeremony",
+    "title": "SeasonPassCompleteCeremony: no shared contract, heavy particle field mounts with the card (entrance jank)",
+    "file": "src/components/SeasonPassCompleteCeremony.tsx",
+    "klass": "P7",
+    "severity": "medium",
+    "status": "open",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonPassCompleteCeremony.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonPassCompleteCeremony.tsx",
+        "pattern": "useDeferredMount\\(280\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonPassCompleteCeremony.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      }
+    ]
+  },
+  {
+    "id": "cer-shared-transition-FirstPurchaseOfferModal",
+    "title": "FirstPurchaseOfferModal not on the shared ceremony transition contract",
+    "file": "src/components/FirstPurchaseOfferModal.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "open",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/FirstPurchaseOfferModal.tsx",
+        "pattern": "useCeremonyTransition\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/FirstPurchaseOfferModal.tsx",
+        "pattern": "zIndex: CEREMONY_LAYER"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/FirstPurchaseOfferModal.tsx",
+        "pattern": "accessibilityViewIsModal"
+      }
+    ]
+  },
+  {
+    "id": "cer-puzzlecomplete-double-entrance",
+    "title": "PuzzleComplete still has two competing 'const entrance = Animated.parallel' owners",
+    "file": "src/components/PuzzleComplete.tsx",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "open",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/PuzzleComplete.tsx",
+        "pattern": "const entrance = Animated\\.parallel",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PuzzleComplete.tsx",
+        "pattern": "reduceMotion=\\{suppressMotion\\}"
+      }
+    ]
+  }
+]

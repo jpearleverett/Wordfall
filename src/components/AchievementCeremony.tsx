@@ -1,13 +1,14 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, withDelay, interpolate } from 'react-native-reanimated';
+import { Animated as RNAnimated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withDelay, interpolate, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import GameIcon from './icons/GameIcon';
+import { useCeremonyTransition, CEREMONY_LAYER } from '../hooks/useCeremonyTransition';
 
 interface AchievementCeremonyProps {
   icon: string;
@@ -33,19 +34,23 @@ export function AchievementCeremony({
   onDismiss,
 }: AchievementCeremonyProps) {
   const { t } = useTranslation();
-  const fade = useSharedValue(0);
-  const scale = useSharedValue(0.6);
-  const badge = useSharedValue(0);
+  // Shared ceremony transition: one entrance, one faster exit, instant
+  // settle + instant dismiss under reduced motion, stop-on-unmount.
+  const { reduceMotion, animateDecorations, overlayStyle, cardStyle, requestDismiss } =
+    useCeremonyTransition(onDismiss);
+  const badge = useSharedValue(reduceMotion ? 1 : 0);
   const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
-    fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
+    if (!animateDecorations) return undefined; // reduced motion: mounted settled
     badge.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 200 }));
+    return () => {
+      cancelAnimation(badge);
+    };
+    // Mount-only: the motion plan is latched for this ceremony's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
-  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const badgeStyle = useAnimatedStyle(() => ({
     transform: [{ scale: interpolate(badge.value, [0, 0.6, 1], [0, 1.2, 1]) }],
   }));
@@ -53,11 +58,16 @@ export function AchievementCeremony({
   const tierColor = TIER_COLORS[tier];
 
   return (
-    <Animated.View style={[styles.overlay, overlayStyle]}>
-      {decorationsMounted && (
+    <RNAnimated.View
+      style={[styles.overlay, overlayStyle]}
+      accessibilityViewIsModal
+      accessibilityRole="alert"
+      accessibilityLabel={`${t('ceremony.achievementUnlocked')}. ${name}. ${description}`}
+    >
+      {decorationsMounted && animateDecorations && (
         <SparkleField count={22} intensity="intense" colors={[tierColor, '#fff', COLORS.gold, COLORS.accent]} />
       )}
-      <Animated.View style={[styles.card, cardStyle]}>
+      <RNAnimated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={[styles.ribbon, { color: tierColor }]}>{t('ceremony.achievementUnlocked')}</Text>
 
@@ -94,7 +104,7 @@ export function AchievementCeremony({
 
           <Pressable
             style={({ pressed }) => [pressed && styles.buttonPressed]}
-            onPress={onDismiss}
+            onPress={requestDismiss}
             accessibilityRole="button"
             accessibilityLabel={t('ceremony.claimA11y')}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -107,8 +117,8 @@ export function AchievementCeremony({
             </LinearGradient>
           </Pressable>
         </LinearGradient>
-      </Animated.View>
-    </Animated.View>
+      </RNAnimated.View>
+    </RNAnimated.View>
   );
 }
 
@@ -121,7 +131,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    zIndex: 200,
+    zIndex: CEREMONY_LAYER,
   },
   card: {
     width: '100%',

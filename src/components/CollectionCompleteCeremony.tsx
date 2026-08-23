@@ -1,12 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
+import { Animated as RNAnimated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
 import GameIcon from './icons/GameIcon';
+import { useCeremonyTransition, CEREMONY_LAYER } from '../hooks/useCeremonyTransition';
 
 interface CollectionCompleteCeremonyProps {
   collectionName: string;
@@ -21,33 +21,27 @@ export function CollectionCompleteCeremony({
   reward,
   onDismiss,
 }: CollectionCompleteCeremonyProps) {
+  // Shared ceremony transition: one entrance, one faster exit, instant
+  // settle + instant dismiss under reduced motion, stop-on-unmount.
+  const { animateDecorations, overlayStyle, cardStyle, requestDismiss } =
+    useCeremonyTransition(onDismiss);
   const { t } = useTranslation();
-  const fadeAnim = useSharedValue(0);
-  const scaleAnim = useSharedValue(0.6);
   const decorationsMounted = useDeferredMount(280);
 
-  useEffect(() => {
-    fadeAnim.value = withTiming(1, { duration: 300 });
-    scaleAnim.value = withSpring(1, { damping: 15, stiffness: 180 });
-  }, []);
-
-  const overlayStyle = useAnimatedStyle(() => ({
-    opacity: fadeAnim.value,
-  }));
-
-  const cardStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleAnim.value }],
-  }));
-
   return (
-    <Animated.View style={[styles.overlay, overlayStyle]}>
-      {decorationsMounted && (
+    <RNAnimated.View
+      style={[styles.overlay, overlayStyle]}
+      accessibilityViewIsModal
+      accessibilityRole="alert"
+      accessibilityLabel={`${t('ceremony.collectionComplete')}. ${collectionName}. ${t('ceremony.foundEveryItem')}`}
+    >
+      {decorationsMounted && animateDecorations && (
         <SparkleField count={26} intensity="intense" colors={[COLORS.gold, COLORS.accent, COLORS.purple, '#fff']} />
       )}
-      {decorationsMounted && (
+      {decorationsMounted && animateDecorations && (
         <CelebrationBurst centerX={180} centerY={200} particleCount={20} />
       )}
-      <Animated.View style={[styles.card, cardStyle]}>
+      <RNAnimated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>
           <Text style={styles.ribbon}>{t('ceremony.collectionComplete')}</Text>
           <Text style={styles.icon}>{collectionIcon}</Text>
@@ -67,14 +61,14 @@ export function CollectionCompleteCeremony({
             )}
           </View>
 
-          <Pressable style={({ pressed }) => [pressed && styles.buttonPressed]} onPress={onDismiss}>
+          <Pressable style={({ pressed }) => [pressed && styles.buttonPressed]} onPress={requestDismiss}>
             <LinearGradient colors={GRADIENTS.button.gold} style={styles.button}>
               <Text style={styles.buttonText}>{t('ceremony.wonderful')}</Text>
             </LinearGradient>
           </Pressable>
         </LinearGradient>
-      </Animated.View>
-    </Animated.View>
+      </RNAnimated.View>
+    </RNAnimated.View>
   );
 }
 
@@ -85,7 +79,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    zIndex: 200,
+    zIndex: CEREMONY_LAYER,
   },
   card: { width: '100%', maxWidth: 320, ...SHADOWS.strong },
   cardInner: {

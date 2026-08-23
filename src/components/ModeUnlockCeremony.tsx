@@ -1,11 +1,12 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, interpolate, runOnJS } from 'react-native-reanimated';
+import { Animated as RNAnimated, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withDelay, interpolate, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField } from './effects/ParticleSystem';
 import { useDeferredMount } from '../utils/perfInstrument';
+import { useCeremonyTransition, CEREMONY_LAYER } from '../hooks/useCeremonyTransition';
 
 interface ModeUnlockCeremonyProps {
   modeName: string;
@@ -25,25 +26,21 @@ export function ModeUnlockCeremony({
   onTryNow,
 }: ModeUnlockCeremonyProps) {
   const { t } = useTranslation();
-  const fade = useSharedValue(0);
-  const scale = useSharedValue(0.7);
-  const iconProgress = useSharedValue(0);
+  // Shared ceremony transition: one entrance, one faster exit, instant
+  // settle + instant dismiss under reduced motion, stop-on-unmount.
+  const { reduceMotion, animateDecorations, overlayStyle, cardStyle, requestDismiss } =
+    useCeremonyTransition(onDismiss);
+  const iconProgress = useSharedValue(reduceMotion ? 1 : 0);
   const decorationsMounted = useDeferredMount(280);
 
   useEffect(() => {
-    fade.value = withTiming(1, { duration: 300 });
-    scale.value = withSpring(1, { damping: 15, stiffness: 180 });
+    if (!animateDecorations) return undefined; // reduced motion: mounted settled
     iconProgress.value = withDelay(200, withSpring(1, { damping: 14, stiffness: 200 }));
+    return () => {
+      cancelAnimation(iconProgress);
+    };
   }, []);
 
-  const dismiss = useCallback(() => {
-    fade.value = withTiming(0, { duration: 200 }, () => {
-      runOnJS(onDismiss)();
-    });
-  }, [onDismiss]);
-
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
-  const cardStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const iconStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: interpolate(iconProgress.value, [0, 1], [0.3, 1]) },
@@ -52,11 +49,16 @@ export function ModeUnlockCeremony({
   }));
 
   return (
-    <Animated.View style={[styles.overlay, overlayStyle]}>
-      {decorationsMounted && (
+    <RNAnimated.View
+      style={[styles.overlay, overlayStyle]}
+      accessibilityViewIsModal
+      accessibilityRole="alert"
+      accessibilityLabel={`${t('ceremony.newModeUnlocked')}. ${modeName}. ${modeDescription}`}
+    >
+      {decorationsMounted && animateDecorations && (
         <SparkleField count={20} intensity="medium" colors={[modeColor, '#fff', COLORS.accent]} />
       )}
-      <Animated.View style={[styles.cardOuter, cardStyle]}>
+      <RNAnimated.View style={[styles.cardOuter, cardStyle]}>
         <LinearGradient
           colors={GRADIENTS.surfaceCard}
           style={[styles.card, SHADOWS.strong]}
@@ -74,7 +76,7 @@ export function ModeUnlockCeremony({
             {onTryNow && (
               <Pressable
                 style={({ pressed }) => [pressed && styles.pressed]}
-                onPress={() => { dismiss(); onTryNow(); }}
+                onPress={() => { requestDismiss(); onTryNow(); }}
               >
                 <LinearGradient
                   colors={[modeColor, modeColor + 'CC']}
@@ -88,14 +90,14 @@ export function ModeUnlockCeremony({
             )}
             <Pressable
               style={({ pressed }) => [styles.laterButton, pressed && styles.pressed]}
-              onPress={dismiss}
+              onPress={requestDismiss}
             >
               <Text style={styles.laterButtonText}>{t('ceremony.later')}</Text>
             </Pressable>
           </View>
         </LinearGradient>
-      </Animated.View>
-    </Animated.View>
+      </RNAnimated.View>
+    </RNAnimated.View>
   );
 }
 
@@ -106,7 +108,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    zIndex: 200,
+    zIndex: CEREMONY_LAYER,
   },
   cardOuter: {
     width: '100%',

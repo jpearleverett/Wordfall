@@ -2097,6 +2097,15 @@ function AppContent() {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* While a full-screen ceremony is up, hide the entire navigation
+          tree from screen readers so focus cannot escape to covered
+          content. Android: importantForAccessibility; iOS:
+          accessibilityElementsHidden. */}
+      <View
+        style={{ flex: 1 }}
+        importantForAccessibility={activeCeremony ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={activeCeremony != null}
+      >
       <NavigationContainer
         ref={navigationRef}
         onReady={handleNavigationReady}
@@ -2181,6 +2190,7 @@ function AppContent() {
           )}
         </RootStack.Navigator>
       </NavigationContainer>
+      </View>
 
       {/* Ceremony modals — rendered at app level to overlay all screens.
           Wrapped in a local boundary so a render error in any one ceremony
@@ -2188,7 +2198,6 @@ function AppContent() {
       <CeremonyRouter
         activeCeremony={activeCeremony}
         onDismiss={handleDismissCeremony}
-        economy={economy}
       />
       <BoardGenBanner />
       <NotSyncedBanner />
