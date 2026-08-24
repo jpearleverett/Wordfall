@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
+import { publishColorblindMode } from '../services/colorblindPreference';
 import i18n from '../i18n';
 import { notificationManager } from '../services/notifications';
 import { auth as firebaseAuth } from '../config/firebase';
@@ -82,6 +83,14 @@ const SettingsContext = createContext<SettingsContextType>({
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
+
+  // Mirror colorblindMode into its external preference store so hot
+  // gameplay components (LetterCell × ~64, WordBank) subscribe to just
+  // that field instead of the whole settings bag — any unrelated settings
+  // write used to re-render the entire board through their memos.
+  useEffect(() => {
+    publishColorblindMode(settings.colorblindMode);
+  }, [settings.colorblindMode]);
 
   // Load from AsyncStorage on mount
   useEffect(() => {

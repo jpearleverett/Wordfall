@@ -525,5 +525,40 @@
         "pattern": "=== 'playing' && isFocused"
       }
     ]
+  },
+  {
+    "id": "lettercell-full-settings-subscription",
+    "title": "Every LetterCell (+WordBank) subscribed to the full SettingsContext for one field (colorblindMode)",
+    "file": "src/components/LetterCell.tsx",
+    "klass": "P1",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/LetterCell.tsx",
+        "pattern": "useSettings\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/WordBank.tsx",
+        "pattern": "useSettings\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useColors.ts",
+        "pattern": "useSettings\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/colorblindPreference.ts",
+        "pattern": "useSyncExternalStore"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/SettingsContext.tsx",
+        "pattern": "publishColorblindMode\\(settings\\.colorblindMode\\)"
+      }
+    ]
   }
 ]

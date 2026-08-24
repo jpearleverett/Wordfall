@@ -22,7 +22,7 @@ import { useColors } from '../hooks/useColors';
 import { useRoundedFontReady } from '../services/fontReady';
 import { getRemoteBoolean } from '../services/remoteConfig';
 import { CoinIcon } from './icons/iconsCore';
-import { useSettings } from '../contexts/SettingsContext';
+import { useColorblindMode } from '../services/colorblindPreference';
 import { getColorblindTileRamps } from '../services/colorblind';
 
 // ── Pre-computed style constants (module scope so tuples share a single reference) ─
@@ -177,7 +177,7 @@ export const LetterCell = React.memo(function LetterCell({
   const roundedReady = useRoundedFontReady();
   const useRoundedFont =
     getRemoteBoolean('roundedDisplayFontEnabled') && roundedReady;
-  const { colorblindMode } = useSettings();
+  const colorblindMode = useColorblindMode();
   // Vowel tint disabled under any colorblind mode — the CVD palette swap
   // owns tile-state color and a second layer would fight it.
   const useVowelTint =
