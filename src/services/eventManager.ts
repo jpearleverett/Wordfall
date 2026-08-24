@@ -240,7 +240,15 @@ class EventManager {
           rewards: miniEvent.rewards.map((r, i) => ({
             tier: ['bronze', 'silver', 'gold'][i] || `tier_${i}`,
             threshold: r.threshold,
-            rewards: r.reward,
+            // Mini tiers are authored with a `hints` key; the claim contract
+            // (EventScreen → addHintTokens) only reads `hintTokens`. Map at
+            // the boundary — passing r.reward through verbatim silently
+            // dropped the hint portion of every mini-event tier at claim.
+            rewards: {
+              ...(r.reward.coins !== undefined ? { coins: r.reward.coins } : {}),
+              ...(r.reward.gems !== undefined ? { gems: r.reward.gems } : {}),
+              ...(r.reward.hints !== undefined ? { hintTokens: r.reward.hints } : {}),
+            },
             claimed: this.isTierClaimed(eventId, ['bronze', 'silver', 'gold'][i] || `tier_${i}`),
             reached: progress >= r.threshold,
           })),
@@ -345,11 +353,10 @@ class EventManager {
       };
     }
 
-    // progressType determines how to apply the amount:
-    // 'score' — adds to raw progress total
-    // 'puzzles' — increments puzzle count
-    // 'stars' — adds star count
-    // 'perfect' — increments perfect count
+    // progressType is a semantic label only — the caller is responsible for
+    // passing `amount` already expressed in the unit the event's tier
+    // thresholds are authored in ('score' points, 'puzzles' count, 'stars'
+    // count, 'rare_tiles' count). See onPuzzleComplete for the routing.
     this.eventProgress[eventId].progress += amount;
   }
 
@@ -447,22 +454,68 @@ class EventManager {
 
   /**
    * Called on each puzzle completion — updates all active event progress.
+   *
+   * Mini-event increments are routed by the active template's bonusType,
+   * because each template authors its tier thresholds in a different unit:
+   * score for coin_rush / xp_surge (500/1500/3000), STARS for star_shower
+   * (10/25/50), PUZZLES for hint_frenzy (5/15/30), RARE TILES for rare_hunt
+   * (2/5/10). Feeding raw score to all of them made every star/puzzle/rare
+   * tier claimable after a single ordinary puzzle (~1000 points) — a
+   * recurring coin + gem faucet on a common path.
    */
   onPuzzleComplete(score: number, stars: number, isPerfect: boolean): void {
     const events = this.getActiveEvents();
+    const activeMini = getActiveMiniEvent(this.getToday());
+    const builtinMiniId = activeMini
+      ? `mini_${activeMini.event.id}_${activeMini.startDateStr}`
+      : null;
     for (const event of events) {
       switch (event.type) {
         case 'main':
           this.updateEventProgress(event.id, 'score', score);
           break;
         case 'mini':
-          // Mini events track based on their bonus type
-          this.updateEventProgress(event.id, 'score', score);
+          if (event.id !== builtinMiniId || !activeMini) {
+            // Remote-Config mini overlays have no tier ladder (rewards: []);
+            // keep their progress in raw score as before.
+            this.updateEventProgress(event.id, 'score', score);
+            break;
+          }
+          switch (activeMini.event.bonusType) {
+            case 'double_stars': // star_shower — thresholds are stars
+              this.updateEventProgress(event.id, 'stars', stars);
+              break;
+            case 'bonus_hints': // hint_frenzy — thresholds are puzzles solved
+              this.updateEventProgress(event.id, 'puzzles', 1);
+              break;
+            case 'rare_tile_boost':
+              // rare_hunt — thresholds are rare tiles found; advanced by
+              // onRareTileEarned, not by generic completion.
+              break;
+            default: // coin_rush / xp_surge — thresholds are score-scaled
+              this.updateEventProgress(event.id, 'score', score);
+          }
           break;
         case 'weekend_blitz':
           this.updateEventProgress(event.id, 'puzzles', 1);
           break;
       }
+    }
+  }
+
+  /**
+   * Called when the player earns a rare tile — advances the active
+   * rare_tile_boost mini event (Rare Tile Hunt), whose tier thresholds are
+   * authored in rare tiles found. The reward wiring should invoke this right
+   * after crediting the tile (player.addRareTile).
+   */
+  onRareTileEarned(): void {
+    const activeMini = getActiveMiniEvent(this.getToday());
+    if (!activeMini || activeMini.event.bonusType !== 'rare_tile_boost') return;
+    const builtinMiniId = `mini_${activeMini.event.id}_${activeMini.startDateStr}`;
+    const active = this.getActiveEvents().find(e => e.id === builtinMiniId);
+    if (active) {
+      this.updateEventProgress(active.id, 'rare_tiles', 1);
     }
   }
 

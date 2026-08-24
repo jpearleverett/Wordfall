@@ -26,6 +26,15 @@ export interface MiniEvent {
   durationHours: number;
   bonusType: 'double_coins' | 'double_stars' | 'bonus_hints' | 'rare_tile_boost' | 'xp_surge';
   multiplier: number;
+  /**
+   * Tier thresholds are authored in the unit implied by bonusType — the
+   * event manager routes per-completion progress accordingly:
+   * double_coins / xp_surge → SCORE points, double_stars → STARS earned,
+   * bonus_hints → PUZZLES solved, rare_tile_boost → RARE TILES found.
+   * Keep description text honest about both the multiplier actually applied
+   * (double_stars maps to the XP multiplier — stars themselves are never
+   * doubled anywhere) and the ladder's unit.
+   */
   rewards: { threshold: number; reward: { coins?: number; gems?: number; hints?: number } }[];
 }
 
@@ -47,7 +56,10 @@ export const MINI_EVENT_TEMPLATES: MiniEvent[] = [
   {
     id: 'star_shower',
     name: 'Star Shower',
-    description: 'Earn double stars on every puzzle!',
+    // Honest copy: the delivered bonus is the 2x XP multiplier and a
+    // star-driven tier ladder — star AWARDS are never doubled anywhere,
+    // so the old "Earn double stars" promise was undeliverable.
+    description: 'Double XP all day — collect stars to claim tier rewards!',
     icon: '\u{2B50}',
     durationHours: 24,
     bonusType: 'double_stars',
@@ -61,7 +73,10 @@ export const MINI_EVENT_TEMPLATES: MiniEvent[] = [
   {
     id: 'hint_frenzy',
     name: 'Hint Frenzy',
-    description: 'Free bonus hints every puzzle for the next 24 hours!',
+    // Honest copy: no per-puzzle hint grant exists — the event's real
+    // content is its puzzle-count ladder paying hint-token bundles, so the
+    // old "free bonus hints every puzzle" promise was undeliverable.
+    description: 'Solve puzzles today to earn free hint tokens!',
     icon: '\u{1F4A1}',
     durationHours: 24,
     bonusType: 'bonus_hints',

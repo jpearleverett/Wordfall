@@ -36,6 +36,7 @@ import {
   selectIsPremiumPassFlag,
   selectVipStreakWeeks,
   selectVipStreakBonusClaimed,
+  selectPurchaseHistory,
 } from '../stores/economyStore';
 import {
   usePlayerActions,
@@ -56,7 +57,7 @@ import { funnelTracker } from '../services/funnelTracker';
 import { COIN_SHOP_ITEMS, CoinShopItem, canPurchaseCoinItem, getCoinShopByCategory } from '../data/coinShop';
 import { getFlashSale, FlashSale, getDynamicOffers, DynamicOffer } from '../data/dynamicPricing';
 import { getRemoteBoolean } from '../services/remoteConfig';
-import { getProductById } from '../data/shopProducts';
+import { getProductById, getVipDailyDrip } from '../data/shopProducts';
 import { soundManager } from '../services/sound';
 import {
   getVipStreakBonus,
@@ -1139,7 +1140,20 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     claimVipDailyRewards,
     claimVipStreakBonus,
   } = useEconomyActions();
-  const { unlockCosmetic, awardFreeSpin } = usePlayerActions();
+  const { unlockCosmetic, updateMysteryWheel } = usePlayerActions();
+  // Current spin balance — needed so the rewarded-ad grant below can credit
+  // an actual spin (spinsAvailable + 1). Same pattern as App.tsx's
+  // handleWheelBuySpin.
+  const mysteryWheelSpins = usePlayerStore((s) => s.mysteryWheel.spinsAvailable);
+  // Tier the player actually subscribed to — drives the VIP card's daily-drip
+  // copy, the claim alert, and the accessibility label so a monthly/annual
+  // subscriber is never told the weekly tier's smaller numbers. Non-VIPs see
+  // the weekly tier (the tier the SUBSCRIBE button sells).
+  const purchaseHistory = useEconomyStore(selectPurchaseHistory);
+  const vipDrip = useMemo(
+    () => getVipDailyDrip(isVip ? purchaseHistory : []),
+    [isVip, purchaseHistory],
+  );
   // Tier 6 B6 — read player segments + current level to compute the dynamic
   // "For You" row. When segments haven't been computed yet (first session),
   // the hook returns an empty offer list so the section simply doesn't render.
@@ -1228,6 +1242,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
 
   // Flash sale state
   const flashSale = useMemo(() => getFlashSale(new Date()), []);
+  // The advertised buy price must be what the store sheet will actually
+  // charge: prefer the live currency-localized store price, falling back to
+  // the catalog-derived salePrice (which getFlashSale pins to the product's
+  // real fallback price — never a fictional discounted number).
+  const flashSaleBuyPrice = flashSale
+    ? iapManager.getPrice(flashSale.productId) || flashSale.salePrice
+    : '';
 
   // Today's rotating items
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -1375,7 +1396,12 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
         // The ad view has already been counted against the daily rewarded-ad
         // cap by adManager, so failing to grant here didn't just do nothing —
         // it burned one of the player's limited ad slots for nothing.
-        awardFreeSpin();
+        // Credit an ACTUAL spin (spinsAvailable + 1). NOT awardFreeSpin():
+        // that is the per-puzzle progress ticker, which only grants a spin
+        // on every 5th call — 4 of 5 ad watches delivered nothing while the
+        // alert claimed a spin, and each watch corrupted the every-5-puzzles
+        // pacing counter.
+        updateMysteryWheel({ spinsAvailable: mysteryWheelSpins + 1 });
         Alert.alert('Reward Earned!', 'You received 1 free Mystery Wheel spin!');
       }
     } catch {
@@ -1383,7 +1409,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
     } finally {
       setWatchingAd(false);
     }
-  }, [watchingAd, awardFreeSpin]);
+  }, [watchingAd, updateMysteryWheel, mysteryWheelSpins]);
 
   // ── Restore purchases handler ───────────────────────────────────────────
 
@@ -1715,7 +1741,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 <Text style={styles.flashSaleDesc}>{flashSaleValueLine(flashSale)}</Text>
                 <View style={styles.flashSalePriceRow}>
                   <PriceCapsule
-                    price={flashSale.salePrice}
+                    price={flashSaleBuyPrice}
                     originalPrice={flashSale.originalPrice}
                     accent={COLORS.gold}
                   />
@@ -1736,13 +1762,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 </View>
               ) : (
                 <PrimaryButton
-                  label={`BUY NOW ${flashSale.salePrice}`}
+                  label={`BUY NOW ${flashSaleBuyPrice}`}
                   onPress={() => handlePurchase(flashSale.productId)}
                   variant="gold"
                   size="medium"
                   disabled={!!purchasingId}
                   style={{ borderRadius: RADIUS.xl }}
-                  accessibilityLabel={`Flash sale: Buy now for ${flashSale.salePrice}`}
+                  accessibilityLabel={`Flash sale: Buy now for ${flashSaleBuyPrice}`}
                 />
               )}
             </View>
@@ -1892,8 +1918,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
           <View style={styles.vipBenefits}>
             {([
               [<GameIcon key="g" name="sparkle" size={13} accent={COLORS.gold} />, 'Ad-free experience'],
-              [<GameIcon key="g" name="gem" size={13} accent={COLORS.cyan} />, '50 daily gems'],
-              [<GameIcon key="g" name="hint" size={13} />, '3 daily hints'],
+              [<GameIcon key="g" name="gem" size={13} accent={COLORS.cyan} />, `${vipDrip.gems} daily gems`],
+              [<GameIcon key="g" name="hint" size={13} />, `${vipDrip.hintTokens} daily hints`],
               [<GameIcon key="g" name="frame" size={13} accent={COLORS.purpleLight} />, 'Exclusive VIP frame'],
               [<GameIcon key="g" name="rocket" size={13} accent={COLORS.teal} />, '2x XP boost'],
             ] as [React.ReactNode, string][]).map(([g, label]) => (
@@ -1910,7 +1936,13 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 onPress={() => {
                   const claimed = claimVipDailyRewards();
                   if (claimed) {
-                    Alert.alert('VIP Rewards Claimed!', 'You received 50 gems and 3 hints.');
+                    // vipDrip mirrors the tier-aware payout inside
+                    // claimVipDailyRewards, so a monthly/annual subscriber
+                    // is told the amount they were actually credited.
+                    Alert.alert(
+                      'VIP Rewards Claimed!',
+                      `You received ${vipDrip.gems} gems and ${vipDrip.hintTokens} hints.`,
+                    );
                   } else {
                     Alert.alert('Already Claimed', 'Come back tomorrow for more VIP rewards!');
                   }
@@ -1919,7 +1951,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
                 size="large"
                 fullWidth
                 style={{ borderRadius: RADIUS.xl }}
-                accessibilityLabel="Claim daily VIP rewards: 50 gems and 3 hints"
+                accessibilityLabel={`Claim daily VIP rewards: ${vipDrip.gems} gems and ${vipDrip.hintTokens} hints`}
               />
               <Text style={styles.vipExpiryText}>
                 Renews {new Date(vipExpiresAt).toLocaleDateString()}
@@ -2092,10 +2124,15 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             >
               {dynamicOffers.map((offer) => {
                 const product = getProductById(offer.productId as any);
-                const name = product?.name ?? offer.productId;
-                const price = product?.fallbackPrice ?? '$1.99';
-                const originalPrice = product?.originalPrice;
-                const icon = product?.icon ?? '\u{1F381}';
+                // Never render an offer whose product isn't in the catalog:
+                // it can't be purchased (iap.ts can't map the SKU and
+                // delivery would no-op), so the card would be a dead end
+                // with a made-up price.
+                if (!product) return null;
+                const name = product.name;
+                const price = iapManager.getPrice(offer.productId) || product.fallbackPrice;
+                const originalPrice = product.originalPrice;
+                const icon = product.icon;
                 return (
                   <PressableScale
                     key={`${offer.productId}-${offer.discountPercent}`}
@@ -2373,7 +2410,7 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             style={[styles.premiumCard, { borderColor: COLORS.teal + '3D' }]}
             onPress={() => handlePurchase('daily_value_pack')}
             disabled={!!purchasingId}
-            accessibilityLabel="Buy Daily Value Pack for $0.99: bonus rewards every day for 30 days"
+            accessibilityLabel="Buy Daily Value Pack for $0.99: bonus rewards every day for 7 days"
           >
             <LinearGradient
               colors={[COLORS.teal + '10', 'rgba(26,10,46,0.94)']}
@@ -2387,7 +2424,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({
             <View style={styles.premiumInfo}>
               <Text style={styles.premiumName}>{t('shop.dailyValuePack')}</Text>
               <Text style={styles.premiumDesc}>
-                Bonus rewards every day for 30 days
+                {/* 7 days, matching the product's dripDays — the old "30
+                    days" copy overstated the paid drip window 4x. */}
+                Bonus rewards every day for 7 days
               </Text>
             </View>
             <PriceCapsule price="$0.99" loading={isLoading('daily_value_pack')} accent={COLORS.teal} />

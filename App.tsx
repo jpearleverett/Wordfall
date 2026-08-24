@@ -127,6 +127,8 @@ import {
   getWelcomeBackMessage,
 } from './src/services/playerSegmentation';
 import { firestoreService, FirestoreGift } from './src/services/firestore';
+import { applyGiftGrant } from './src/utils/giftGrants';
+import { comebackAmounts } from './src/utils/comebackRewards';
 
 // Extracted modules for decomposition
 import { useRewardWiring, playerStageFromPuzzles } from './src/hooks/useRewardWiring';
@@ -260,7 +262,7 @@ function EventScreenWrapperNav({ navigation }: any) {
           `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
           [
             { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
             {
               text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
               onPress: () => {
@@ -486,6 +488,29 @@ function detectDifficultyTransition(oldLevel: number, newLevel: number): { from:
   return null;
 }
 
+// Shared "Watch Ad (+5)" handler for the three out-of-energy dialogs. The
+// button used to grant the refill instantly without showing anything —
+// bypassing the soft-scarcity system, the gem refill, and every ad
+// impression. Now the rewarded ad must actually complete (same adManager
+// convention as the hard-energy path in GameScreenWrapper): refill only on
+// `result.rewarded`, never on error/unavailability. `life_reward` is the
+// closest existing AdRewardType with a strict daily cap
+// (AD_CONFIG.MAX_LIFE_ADS_PER_DAY); the grant itself is applied here by the
+// caller, not by processAdReward, so no lives are credited.
+async function watchAdForEnergyRefill(player: {
+  refillEnergy: (method: 'ad') => boolean;
+}): Promise<void> {
+  try {
+    const { adManager } = await import('./src/services/ads');
+    const result = await adManager.showRewardedAd('life_reward');
+    if (result.rewarded) {
+      player.refillEnergy('ad');
+    }
+  } catch (err) {
+    if (__DEV__) console.warn('[Energy] rewarded ad failed:', err);
+  }
+}
+
 // Hide the global tab bar whenever the focused nested route inside a tab
 // stack is 'Game'. This is the documented React-Navigation pattern for
 // custom tab bars — see `NeonTabBar` which reads the resolved tabBarStyle
@@ -614,7 +639,7 @@ function ModesScreenWrapper({ navigation, route }: any) {
           `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
           [
             { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
             {
               text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
               onPress: () => {
@@ -754,6 +779,11 @@ function GameScreenWrapper({ route, navigation }: any) {
   const [showSpinPrompt, setShowSpinPrompt] = useState(false);
   const [earnedNewSpin, setEarnedNewSpin] = useState(false);
   const spinsBeforeComplete = useRef(0);
+  // The baseline above is only meaningful once handleComplete has recorded
+  // it. Without this guard the detection effect ran on mount and compared
+  // preexisting unspent spins against the ref's initial 0 — so every level's
+  // home exit was interrupted by the spin prompt until the spin was spent.
+  const hasCompletedThisLevelRef = useRef(false);
   const [pendingNavAction, setPendingNavAction] = useState<'home' | 'next' | null>(null);
 
   // Phase 4B hard-energy gate. When the Remote Config flag is on and the
@@ -765,19 +795,33 @@ function GameScreenWrapper({ route, navigation }: any) {
     if (!hardEnergy.enabled) return;
     const key = `${params.mode ?? 'classic'}:${params.level ?? 0}:${route.key}`;
     if (debitedLevelRef.current === key) return;
-    debitedLevelRef.current = key;
+    // While the modal is up the recovery handlers own the flow: closing it
+    // re-runs this effect, which then performs the (exactly-once) debit.
+    if (showNoLives) return;
     if (!hardEnergy.canPlay) {
       setShowNoLives(true);
       return;
     }
     const { started } = hardEnergy.startLevel();
-    if (!started) setShowNoLives(true);
-  }, [hardEnergy, params.mode, params.level, route.key]);
+    if (!started) {
+      setShowNoLives(true);
+      return;
+    }
+    // Claim the guard key only AFTER a successful debit. Claiming it before
+    // the canPlay check burned the key on the out-of-lives path, so the
+    // gated level played free after an ad or gem refill — each rewarded ad
+    // effectively bought two level-plays; a gem refill under-charged by one.
+    debitedLevelRef.current = key;
+  }, [hardEnergy, params.mode, params.level, route.key, showNoLives]);
 
   const handleNoLivesClose = useCallback(() => {
+    // Abandoning the level: claim the guard key so the debit effect can't
+    // charge a life during the exit transition (e.g. a life regenerating
+    // while the modal was open).
+    debitedLevelRef.current = `${params.mode ?? 'classic'}:${params.level ?? 0}:${route.key}`;
     setShowNoLives(false);
     navigation.goBack();
-  }, [navigation]);
+  }, [navigation, params.mode, params.level, route.key]);
 
   const handleNoLivesWatchAd = useCallback(async () => {
     try {
@@ -854,6 +898,7 @@ function GameScreenWrapper({ route, navigation }: any) {
   ) => {
     // Track spins before completion to detect if a new one is awarded
     spinsBeforeComplete.current = mysteryWheelSpins;
+    hasCompletedThisLevelRef.current = true;
     handleCompleteInner(stars, score, perfectRun, completionTimeSeconds, assists);
 
     // Pre-generate the next board while the player is looking at the
@@ -1037,8 +1082,12 @@ function GameScreenWrapper({ route, navigation }: any) {
   // Extract completion data from params (set by handleComplete)
   const completionData = params.completionData || {};
 
-  // Detect when a new spin is earned during puzzle completion
+  // Detect when a new spin is earned during puzzle completion — only after
+  // handleComplete has recorded the pre-completion baseline. A spin the
+  // player already held on entry must NOT trigger the prompt (see the
+  // "Only show spin prompt when a NEW spin was earned" note below).
   useEffect(() => {
+    if (!hasCompletedThisLevelRef.current) return;
     if (mysteryWheelSpins > spinsBeforeComplete.current) {
       setEarnedNewSpin(true);
     }
@@ -1258,10 +1307,11 @@ function HomeMainScreen({ route, navigation }: any) {
       });
       const rewards = player.checkComebackRewards();
       if (rewards.length > 0) {
-        const is7day = rewards.some(r => r.includes('7day'));
-        const is14day = rewards.some(r => r.includes('14day'));
-        const coins = is14day ? 500 : is7day ? 350 : 200;
-        const hints = is14day ? 15 : is7day ? 10 : 5;
+        // Tiers keyed to the ids checkComebackRewards actually emits
+        // (3day/7day/30day). This used to branch on '14day' — which nothing
+        // emits — so the 500/15 tier was unreachable and a 30+ day returner
+        // was paid the bottom tier.
+        const { coins, hints } = comebackAmounts(rewards);
         setComebackCoins(coins);
         setComebackHints(hints);
         economy.addCoins(coins);
@@ -1475,37 +1525,32 @@ function HomeMainScreen({ route, navigation }: any) {
   }, []);
 
   // ── Gift claiming ──
+  // Grants route through the shared applyGiftGrant mapper so this banner
+  // delivers exactly what ClubScreen's GiftInbox delivers for the same gift
+  // document. It used to convert 'tile' — and, via a bare else, even 'life' —
+  // gifts into random rare collection letters, so the reward depended on
+  // which screen the recipient happened to claim from.
   const handleClaimAllGifts = useCallback(async () => {
     if (pendingGifts.length === 0 || claimingGift) return;
     setClaimingGift(true);
-    let totalHints = 0;
-    let totalTiles = 0;
+    const totals = { hint: 0, tile: 0, life: 0 };
     for (const gift of pendingGifts) {
       const claimed = await firestoreService.claimGift(gift.id);
       if (claimed || !firestoreService.isAvailable()) {
-        if (gift.type === 'hint') {
-          totalHints += gift.amount;
-        } else {
-          totalTiles += gift.amount;
-        }
-      }
-    }
-    if (totalHints > 0) economy.addHintTokens(totalHints);
-    if (totalTiles > 0) {
-      for (let i = 0; i < totalTiles; i++) {
-        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        player.addRareTile(letters[Math.floor(Math.random() * letters.length)]);
+        const granted = applyGiftGrant(gift, economy);
+        if (granted) totals[granted.type] += granted.amount;
       }
     }
     setPendingGifts([]);
     setClaimingGift(false);
     const parts: string[] = [];
-    if (totalHints > 0) parts.push(`${totalHints} hint${totalHints > 1 ? 's' : ''}`);
-    if (totalTiles > 0) parts.push(`${totalTiles} rare tile${totalTiles > 1 ? 's' : ''}`);
+    if (totals.hint > 0) parts.push(`${totals.hint} hint${totals.hint > 1 ? 's' : ''}`);
+    if (totals.tile > 0) parts.push(`${totals.tile} wildcard tile${totals.tile > 1 ? 's' : ''}`);
+    if (totals.life > 0) parts.push(totals.life === 1 ? '1 life' : `${totals.life} lives`);
     if (parts.length > 0) {
       Alert.alert('Gifts Claimed!', `You received ${parts.join(' and ')} from friends!`);
     }
-  }, [pendingGifts, claimingGift, economy, player]);
+  }, [pendingGifts, claimingGift, economy]);
 
   // Ceremony tracking & dismissal now handled by useCeremonyQueue hook
 
@@ -1634,7 +1679,7 @@ function HomeMainScreen({ route, navigation }: any) {
           `You've played a lot today! Your next energy refills in ${minutesUntilNext} minute${minutesUntilNext !== 1 ? 's' : ''}.\n\nOr refill all energy now:`,
           [
             { text: 'Wait', style: 'cancel' },
-            { text: 'Watch Ad (+5)', onPress: () => { player.refillEnergy('ad'); } },
+            { text: 'Watch Ad (+5)', onPress: () => { void watchAdForEnergyRefill(player); } },
             {
               text: `Refill (${ENERGY.GEM_REFILL_COST} gems)`,
               onPress: () => {

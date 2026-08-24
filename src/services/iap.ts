@@ -69,6 +69,8 @@ export interface StoredReceipt {
 
 type PurchaseListener = (result: PurchaseResult) => void;
 
+type FulfillmentFlusher = () => Promise<void>;
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const RECEIPTS_STORAGE_KEY = '@wordfall_iap_receipts';
@@ -104,6 +106,15 @@ class IAPManager {
    */
   private processedTransactionIds: Set<string> = new Set();
   private readonly MAX_PROCESSED_TX_IDS = 200;
+  /**
+   * Durable-fulfilment hooks. EconomyContext registers a callback that
+   * force-flushes the granted economy state to AsyncStorage; we await them
+   * after delivering a purchase result and BEFORE consuming the purchase,
+   * so a crash between the in-memory grant and the 1s-debounced persist
+   * can no longer lose a paid consumable (consumed purchases vanish from
+   * getAvailablePurchases, making next-launch recovery impossible).
+   */
+  private fulfillmentFlushers: FulfillmentFlusher[] = [];
 
   private recordTransactionId(transactionId: string): void {
     this.processedTransactionIds.add(transactionId);
@@ -537,6 +548,36 @@ class IAPManager {
     }
   }
 
+  /**
+   * Register a hook that persists just-granted fulfilment state to durable
+   * storage. Awaited between result delivery and store-side consumption in
+   * handlePurchaseUpdate. Returns an unregister function.
+   */
+  onFulfillmentFlush(flusher: FulfillmentFlusher): () => void {
+    this.fulfillmentFlushers.push(flusher);
+    return () => {
+      this.fulfillmentFlushers = this.fulfillmentFlushers.filter((f) => f !== flusher);
+    };
+  }
+
+  /**
+   * Wait one macrotask so the just-delivered result's continuation has run
+   * (the awaited `purchase()` path applies its grant in a microtask; the
+   * listener path applies synchronously inside notifyListeners), then run
+   * every registered flusher. Never throws — a flush failure must not
+   * abort the settlement flow it guards.
+   */
+  private async flushFulfillment(): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    for (const flusher of this.fulfillmentFlushers) {
+      try {
+        await flusher();
+      } catch (e) {
+        logger.warn('[IAP] Fulfillment flush failed:', e);
+      }
+    }
+  }
+
   // ── Purchase event handlers ─────────────────────────────────────────────
 
   private async handlePurchaseUpdate(purchase: any): Promise<void> {
@@ -581,6 +622,33 @@ class IAPManager {
         purchaseDate: Date.now(),
       });
 
+      const successResult: PurchaseResult = {
+        success: true,
+        productId: internalId,
+        transactionId,
+        receipt,
+        expiresAt: validation.expiresAt,
+      };
+
+      // Deliver the grant and force it into durable storage BEFORE settling
+      // the store side. The old order consumed first: a crash/OOM/force-kill
+      // in the ~1-2.5s before the debounced economy persist committed left
+      // the consumable consumed (gone from getAvailablePurchases, so Restore
+      // and the pending-purchase recovery pass both come up empty) while the
+      // grant existed only in dead React state — a real-money charge with
+      // nothing delivered. Redelivery after a crash mid-settlement is
+      // idempotent: validateReceipt reports alreadyValidated and
+      // applyCatalogPurchase dedupes on transactionId.
+      //
+      // Only broadcast when nobody was awaiting purchase() — otherwise the
+      // listener would fulfil first and make the awaited path's own
+      // applyValidatedPurchase a no-op, silently skipping recordSpend and
+      // revenue analytics.
+      if (!this.resolvePendingPurchase(storeId, successResult)) {
+        this.notifyListeners(successResult);
+      }
+      await this.flushFulfillment();
+
       // Acknowledge / finish the transaction
       let acknowledged = true;
       if (this.rniap) {
@@ -603,11 +671,12 @@ class IAPManager {
         } catch (ackError) {
           acknowledged = false;
           logger.warn('[IAP] Failed to acknowledge/finish transaction:', ackError);
-          // Purchase still succeeded from the user's perspective — grant it
-          // below. But Google auto-refunds anything left unacknowledged for
-          // 3 days, so the SKU stays in the pending list to force a retry on
-          // the next launch (validateReceipt now reports the redelivered
-          // receipt as alreadyValidated instead of rejecting it as a replay).
+          // The purchase was already granted and flushed above. But Google
+          // auto-refunds anything left unacknowledged for 3 days, so the SKU
+          // stays in the pending list to force a retry on the next launch
+          // (validateReceipt reports the redelivered receipt as
+          // alreadyValidated instead of rejecting it as a replay, and the
+          // transactionId dedup makes the re-grant a no-op).
           crashReporter.captureException(
             ackError instanceof Error ? ackError : new Error(String(ackError)),
             { tags: { step: 'acknowledgePurchase' }, sku: storeId, transactionId },
@@ -618,22 +687,6 @@ class IAPManager {
       // Clear pending purchase only once the store side is settled.
       if (acknowledged) {
         await this.clearPendingPurchase(internalId);
-      }
-
-      const successResult: PurchaseResult = {
-        success: true,
-        productId: internalId,
-        transactionId,
-        receipt,
-        expiresAt: validation.expiresAt,
-      };
-
-      // Only broadcast when nobody was awaiting purchase() — otherwise the
-      // listener would fulfil first and make the awaited path's own
-      // applyValidatedPurchase a no-op, silently skipping recordSpend and
-      // revenue analytics.
-      if (!this.resolvePendingPurchase(storeId, successResult)) {
-        this.notifyListeners(successResult);
       }
     } catch (e: any) {
       logger.warn('[IAP] Error handling purchase update:', e);

@@ -8,6 +8,7 @@ import {
   getNonConsumableIds,
   storeIdToInternalId,
   internalIdToStoreId,
+  getVipDailyDrip,
   ShopProduct,
 } from '../shopProducts';
 
@@ -244,5 +245,81 @@ describe('storeIdToInternalId / internalIdToStoreId', () => {
       const internalId = storeIdToInternalId(storeId!);
       expect(internalId).toBe(product.id);
     }
+  });
+});
+
+// ─── Catalog contract: every promised cosmetic id must be deliverable ────────
+// splitPlayerGrantIds (commercialEntitlements.ts) admits a rewards.decorations
+// id only via hasDecoration (LIBRARY_DECORATIONS) or isProfileCosmeticId
+// (theme/frame/title catalogs) — any other id is silently DROPPED, i.e. paid
+// content that never arrives. vip_monthly/vip_annual shipped exactly that
+// (frame_vip_monthly / frame_vip_annual / decoration_vip_annual_trophy,
+// defined nowhere); this pins the contract for every current and future
+// product.
+describe('rewards.decorations catalog contract', () => {
+  it('every decorations id resolves in a cosmetic catalog', () => {
+    // Lazy import keeps the top of this suite dependency-light.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { hasDecoration, isProfileCosmeticId } = require('../cosmetics') as {
+      hasDecoration: (id: string) => boolean;
+      isProfileCosmeticId: (id: string) => boolean;
+    };
+    for (const product of SHOP_PRODUCTS) {
+      for (const id of product.rewards.decorations ?? []) {
+        const deliverable = hasDecoration(id) || isProfileCosmeticId(id);
+        if (!deliverable) {
+          throw new Error(
+            `${product.id} promises cosmetic '${id}' which exists in no catalog — it would be silently dropped at delivery`,
+          );
+        }
+      }
+    }
+  });
+
+  it('vip tiers grant the real VIP cosmetics', () => {
+    expect(getProductById('vip_monthly')!.rewards.decorations).toEqual(['frame_vip_exclusive']);
+    expect(getProductById('vip_annual')!.rewards.decorations).toEqual([
+      'frame_vip_exclusive',
+      'vip_trophy',
+    ]);
+  });
+});
+
+// ─── getVipDailyDrip — tier-aware VIP daily drip for UI copy ─────────────────
+// Mirrors the payout logic inside EconomyContext.claimVipDailyRewards so the
+// claim alert / benefits list can never promise different numbers than the
+// claim credits.
+describe('getVipDailyDrip', () => {
+  const record = (item: string) => ({ item });
+
+  it('returns the weekly floor for an empty history', () => {
+    expect(getVipDailyDrip([])).toEqual({ gems: 50, hintTokens: 3 });
+  });
+
+  it('returns the monthly drip for a history ending in vip_monthly', () => {
+    expect(getVipDailyDrip([record('starter_pack'), record('vip_monthly')])).toEqual({
+      gems: 75,
+      hintTokens: 5,
+    });
+  });
+
+  it('returns the annual drip for a history ending in vip_annual', () => {
+    expect(getVipDailyDrip([record('vip_weekly'), record('vip_annual')])).toEqual({
+      gems: 100,
+      hintTokens: 8,
+    });
+  });
+
+  it('uses the most recent vip_* record, ignoring later non-vip purchases', () => {
+    expect(
+      getVipDailyDrip([record('vip_annual'), record('vip_weekly'), record('gems_500')]),
+    ).toEqual({ gems: 50, hintTokens: 3 });
+  });
+
+  it('tolerates malformed records (missing/non-string item)', () => {
+    expect(getVipDailyDrip([{}, { item: 42 }, record('vip_monthly')])).toEqual({
+      gems: 75,
+      hintTokens: 5,
+    });
   });
 });

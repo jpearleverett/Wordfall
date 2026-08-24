@@ -153,6 +153,20 @@ const FLUSH_INTERVAL_MS = 60_000;
 const EVENT_RETENTION_DAYS = 7;
 const EVENT_PERSIST_DEBOUNCE_MS = 1500;
 
+// ── Retention date arithmetic ──
+/**
+ * The UTC 'YYYY-MM-DD' string `days` days after a UTC install-date string.
+ * Pure UTC epoch arithmetic — advancing with local setDate() and
+ * re-serializing via toISOString() landed one day early whenever the
+ * retention window crossed a spring DST transition, permanently mis-marking
+ * D1/D7/D30 for those cohorts (appOpenDates entries are UTC date strings).
+ */
+export function retentionDayDate(installDate: string, days: number): string {
+  return new Date(Date.parse(`${installDate}T00:00:00Z`) + days * 86_400_000)
+    .toISOString()
+    .split('T')[0];
+}
+
 // ── Deterministic hash for A/B testing ──
 function simpleHash(str: string): number {
   let hash = 0;
@@ -176,12 +190,15 @@ class Analytics {
     experiments: {},
   };
   private loaded = false;
+  private stateLoadPromise: Promise<void> | null = null;
   private flushTimer: ReturnType<typeof setInterval> | null = null;
+  private flushPromise: Promise<number> | null = null;
   private firebaseAnalytics: any = null;
   private firestore: any = null;
   private useFirebase = false;
   private bufferedEvents: StoredEvent[] = [];
   private eventsLoaded = false;
+  private eventsLoadPromise: Promise<void> | null = null;
   private eventsDirty = false;
   private eventsPersistTimer: ReturnType<typeof setTimeout> | null = null;
   private eventsPersistPromise: Promise<void> = Promise.resolve();
@@ -266,6 +283,19 @@ class Analytics {
       logger.log('[Analytics] Firebase not available, using local storage only');
     }
 
+    // Re-apply the user's opt-out now that the SDK is wired. setEnabled() may
+    // have run while the dynamic imports above were still in flight — its
+    // native setAnalyticsCollectionEnabled call is silently skipped when
+    // firebaseAnalytics isn't connected yet, which left native auto-collection
+    // ON for the whole session despite a recorded opt-out.
+    if (this.firebaseAnalytics?.instance?.setAnalyticsCollectionEnabled) {
+      try {
+        await this.firebaseAnalytics.instance.setAnalyticsCollectionEnabled(this.analyticsEnabled);
+      } catch (e) {
+        logger.warn('[Analytics] setAnalyticsCollectionEnabled on init failed:', e);
+      }
+    }
+
     this.startAutoFlush();
   }
 
@@ -275,30 +305,52 @@ class Analytics {
 
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return;
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY_STATE);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<AnalyticsState>;
-        this.state = {
-          ...this.state,
-          ...parsed,
-          userProperties: parsed.userProperties ?? {},
-          experiments: parsed.experiments ?? {},
-        };
-      }
-      // Set install timestamp if first run
-      if (!this.state.installTimestamp) {
-        this.state.installTimestamp = Date.now();
-      }
-    } catch (error) {
-      logger.warn('[Analytics] Failed to load state:', error);
+    // Single-flight: concurrent boot callers must share one load — parallel
+    // loads each re-assigned this.state on resolution, clobbering mutations
+    // (e.g. a freshly started session) made in between.
+    if (!this.stateLoadPromise) {
+      this.stateLoadPromise = (async () => {
+        try {
+          const raw = await AsyncStorage.getItem(STORAGE_KEY_STATE);
+          if (raw) {
+            const parsed = JSON.parse(raw) as Partial<AnalyticsState>;
+            this.state = {
+              ...this.state,
+              ...parsed,
+              // sessionId/sessionStartedAt are process-lifetime. A crash never
+              // runs endSession, so a session found on disk is a dead one —
+              // restoring it made startSession('app_launch') a no-op (missing
+              // app_session_start, frozen sessionNumber) and the eventual
+              // session_end span the whole gap across the crash.
+              sessionId: this.state.sessionId,
+              sessionStartedAt: this.state.sessionStartedAt,
+              userProperties: parsed.userProperties ?? {},
+              experiments: parsed.experiments ?? {},
+            };
+          }
+          // Set install timestamp if first run
+          if (!this.state.installTimestamp) {
+            this.state.installTimestamp = Date.now();
+          }
+        } catch (error) {
+          logger.warn('[Analytics] Failed to load state:', error);
+        }
+        this.loaded = true;
+      })();
     }
-    this.loaded = true;
+    return this.stateLoadPromise;
   }
 
   private async persistState(): Promise<void> {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(this.state));
+      // Never persist the live session — it dies with the process. Persisting
+      // it resurrected dead sessions after a crash (see ensureLoaded).
+      const persistable: AnalyticsState = {
+        ...this.state,
+        sessionId: null,
+        sessionStartedAt: null,
+      };
+      await AsyncStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(persistable));
     } catch (error) {
       logger.warn('[Analytics] Failed to persist state:', error);
     }
@@ -306,15 +358,26 @@ class Analytics {
 
   private async ensureEventsLoaded(): Promise<void> {
     if (this.eventsLoaded) return;
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY_EVENTS);
-      if (raw) {
-        this.bufferedEvents = JSON.parse(raw) as StoredEvent[];
-      }
-    } catch (error) {
-      logger.warn('[Analytics] Failed to load events:', error);
+    // Single-flight: with parallel loads, the later-resolving read replaced
+    // bufferedEvents wholesale, silently dropping any event pushed by an
+    // earlier caller in between (first-tick boot events vanished).
+    if (!this.eventsLoadPromise) {
+      this.eventsLoadPromise = (async () => {
+        try {
+          const raw = await AsyncStorage.getItem(STORAGE_KEY_EVENTS);
+          if (raw) {
+            const parsed = JSON.parse(raw) as StoredEvent[];
+            // Merge disk events ahead of anything already pushed in memory
+            // rather than assigning over it.
+            this.bufferedEvents = [...parsed, ...this.bufferedEvents];
+          }
+        } catch (error) {
+          logger.warn('[Analytics] Failed to load events:', error);
+        }
+        this.eventsLoaded = true;
+      })();
     }
-    this.eventsLoaded = true;
+    return this.eventsLoadPromise;
   }
 
   private async loadEvents(): Promise<StoredEvent[]> {
@@ -568,18 +631,11 @@ class Analytics {
       }
     }
 
-    // Calculate retention metrics
+    // Calculate retention metrics (all-UTC — see retentionDayDate)
     if (retention.installDate) {
-      const installDate = new Date(retention.installDate);
-      const dayAfterInstall = (days: number): string => {
-        const d = new Date(installDate);
-        d.setDate(d.getDate() + days);
-        return d.toISOString().split('T')[0];
-      };
-
-      const d1Date = dayAfterInstall(1);
-      const d7Date = dayAfterInstall(7);
-      const d30Date = dayAfterInstall(30);
+      const d1Date = retentionDayDate(retention.installDate, 1);
+      const d7Date = retentionDayDate(retention.installDate, 7);
+      const d30Date = retentionDayDate(retention.installDate, 30);
 
       // Only mark as true/false once the day has passed
       if (today >= d1Date && retention.d1 === null) {
@@ -937,6 +993,18 @@ class Analytics {
   // ─────────────────────────────────────────
 
   async flush(): Promise<number> {
+    // Single-flight: the 60s auto-flush and endSession()'s flush (fired on
+    // every app-background) can overlap — without this guard each snapshotted
+    // the same bufferedEvents and each addDoc'd all of them, duplicating every
+    // event in the Firestore mirror.
+    if (this.flushPromise) return this.flushPromise;
+    this.flushPromise = this.flushInternal().finally(() => {
+      this.flushPromise = null;
+    });
+    return this.flushPromise;
+  }
+
+  private async flushInternal(): Promise<number> {
     await this.ensureLoaded();
     await this.ensureEventsLoaded();
 
@@ -954,13 +1022,13 @@ class Analytics {
     const events = [...this.bufferedEvents];
     if (events.length === 0) return 0;
 
+    const { instance: db, collection: col, addDoc } = this.firestore;
+    const analyticsCol = col(db, 'analytics_events');
+
+    const batchSize = 50;
+    let flushed = 0;
+
     try {
-      const { instance: db, collection: col, addDoc } = this.firestore;
-      const analyticsCol = col(db, 'analytics_events');
-
-      const batchSize = 50;
-      let flushed = 0;
-
       for (let i = 0; i < events.length; i += batchSize) {
         const batch = events.slice(i, i + batchSize);
         const writePromises = batch.map((evt: StoredEvent) =>
@@ -972,12 +1040,16 @@ class Analytics {
         );
         await Promise.all(writePromises);
         flushed += batch.length;
+
+        // Clear this batch from the buffer as soon as it lands — if a later
+        // batch fails, the events already written must NOT be retained and
+        // re-sent wholesale on the next flush (that duplicated them before).
+        const batchIds = new Set(batch.map((e: StoredEvent) => e.id));
+        this.bufferedEvents = this.bufferedEvents.filter(e => !batchIds.has(e.id));
+        this.eventsDirty = true;
       }
 
-      // Clear flushed events from local storage
-      const flushedIds = new Set(events.map((e: StoredEvent) => e.id));
-      const remaining = this.bufferedEvents.filter(e => !flushedIds.has(e.id));
-      await this.persistEvents(remaining);
+      await this.persistEventsNow();
 
       if (__DEV__) {
         logger.log(`[Analytics] Flushed ${flushed} events to Firestore`);
@@ -985,8 +1057,11 @@ class Analytics {
 
       return flushed;
     } catch (error) {
-      logger.warn('[Analytics] Firestore flush failed, events retained locally:', error);
-      return 0;
+      // Keep the partial progress: batches that landed are already cleared
+      // from the buffer, only unsent events stay retained locally.
+      await this.persistEventsNow();
+      logger.warn('[Analytics] Firestore flush failed, unsent events retained locally:', error);
+      return flushed;
     }
   }
 

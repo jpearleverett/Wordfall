@@ -9,13 +9,18 @@ import {
   SpendingSegment,
   EngagementSegment,
 } from '../services/playerSegmentation';
-import { ShopProduct } from './shopProducts';
+import { ShopProduct, getProductById } from './shopProducts';
 import { getRemoteString } from '../services/remoteConfig';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface DynamicOffer {
-  /** Product ID from shopProducts or mega bundles */
+  /**
+   * Product ID — MUST exist in SHOP_PRODUCTS. Anything else is
+   * unpurchasable (iap.ts can't map it to a store SKU and
+   * applyCatalogPurchase would deliver nothing), so the offer card
+   * would be a dead end.
+   */
   productId: string;
   /** Discount percentage (0-70) */
   discountPercent: number;
@@ -28,6 +33,14 @@ export interface DynamicOffer {
 }
 
 // ─── Mega Bundles (for dolphins and whales) ──────────────────────────────────
+//
+// WARNING: these bundles are NOT purchasable today. They were never merged
+// into SHOP_PRODUCTS, so getProductById() can't resolve them, iap.ts can't
+// map their ids to registered store SKUs, and applyCatalogPurchase would
+// return applied:false even if a charge somehow completed. Do NOT point a
+// DynamicOffer (or any other purchase surface) at these ids until they are
+// merged into SHOP_PRODUCTS and the wordfall_mega_* SKUs are registered in
+// Play Console.
 
 export const MEGA_BUNDLES: ShopProduct[] = [
   {
@@ -102,7 +115,7 @@ export const MEGA_BUNDLES: ShopProduct[] = [
  *  - Day 2–3 ("lightly lapsed"): 50% off starter, 24h "COME BACK"
  *  - Day 4–7 ("lapsed"): 70% off starter, 48h "WELCOME BACK"
  *  - Day 8–14 ("deeply lapsed"): 75% off first-purchase-special + 100 gems, 48h "WE MISS YOU"
- *  - Day 15+ ("churned"): 30% off gold mega bundle + cosmetic frame, 72h "LAST CALL"
+ *  - Day 15+ ("churned"): 30% off Champion Pack + cosmetic frame, 72h "LAST CALL"
  *
  * Returns an empty array when the player is still Day-0 or Day-1 active;
  * callers should fall through to the standard segment-based branches.
@@ -171,10 +184,14 @@ function lapsedLadder(daysSinceActive: number, playerLevel: number): DynamicOffe
     ];
   }
 
-  // Day 15+: churned tier — mega bundle at 30% + cosmetic frame hook
+  // Day 15+: churned tier — premium bundle at 30% + cosmetic frame hook.
+  // champion_pack, NOT mega_bundle_gold: the mega bundles were never merged
+  // into SHOP_PRODUCTS, so pointing here at one made the flagship winback
+  // offer a dead end (wrong price shown, purchase always failed). Champion
+  // Pack is the same $14.99 price point with an exclusive frame.
   return [
     {
-      productId: 'mega_bundle_gold',
+      productId: 'champion_pack',
       discountPercent: 30,
       badge: 'LAST CALL',
       expiresInHours: 72,
@@ -307,7 +324,10 @@ export function getDynamicOffers(
   // ── Dolphins: premium bundles ──
   if (spending === 'dolphin') {
     offers.push({
-      productId: 'mega_bundle_gold',
+      // champion_pack, NOT mega_bundle_gold — see the churned-tier note in
+      // lapsedLadder(): the mega bundles are not in SHOP_PRODUCTS and can't
+      // be purchased.
+      productId: 'champion_pack',
       discountPercent: 15,
       badge: 'EXCLUSIVE',
       expiresInHours: 24,
@@ -372,18 +392,31 @@ export interface FlashSale {
   icon: string;
   /** Description */
   description: string;
-  /** Original price string (e.g. "$4.99") */
+  /** Anchor price string (the SHOP_PRODUCTS originalPrice, e.g. "$4.99") */
   originalPrice: string;
-  /** Original numeric price */
+  /** Anchor numeric price */
   originalPriceAmount: number;
-  /** Discount percentage */
+  /** Discount percentage derived from anchor vs. real price */
   discountPercent: number;
-  /** Discounted price string */
+  /**
+   * The advertised buy price — ALWAYS the product's real charged price
+   * (SHOP_PRODUCTS fallbackPriceAmount, USD). There is no discounted-SKU
+   * mechanism: the store sheet charges the SKU's registered price, so the
+   * card must never advertise a number the store won't honor. UI should
+   * prefer the live currency-localized `iapManager.getPrice(productId)`
+   * over this fallback string at render time.
+   */
   salePrice: string;
   /** Hours remaining until midnight */
   hoursRemaining: number;
 }
 
+// Pricing invariant: the advertised sale price must equal the price the
+// store actually charges (the product's SHOP_PRODUCTS fallbackPriceAmount),
+// with the strike-through anchored at the catalog originalPriceAmount and
+// discountPercent = the rounded anchor→real ratio. getFlashSale() derives
+// all three from the catalog, so the fields here are display fallbacks
+// only — keep them in sync with SHOP_PRODUCTS anyway to avoid confusion.
 const FLASH_SALE_POOL: {
   productId: string;
   name: string;
@@ -400,43 +433,43 @@ const FLASH_SALE_POOL: {
     description: '500 Coins + 50 Gems + 10 Hints + Exclusive Decoration',
     originalPrice: '$4.99',
     originalPriceAmount: 4.99,
-    discountPercent: 60,
+    discountPercent: 60, // real $1.99 vs $4.99 anchor
   },
   {
     productId: 'hint_bundle_50',
     name: '50 Hints Mega Pack',
     icon: '\u{1F4A1}',
     description: '50 Hints to power through any puzzle',
-    originalPrice: '$2.99',
-    originalPriceAmount: 2.99,
-    discountPercent: 40,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
+    discountPercent: 40, // real $2.99 vs $4.99 anchor
   },
   {
     productId: 'gems_250',
     name: '250 Gems',
     icon: '\u{1F48E}',
     description: '250 Gems for cosmetics, spins & more',
-    originalPrice: '$4.99',
-    originalPriceAmount: 4.99,
-    discountPercent: 50,
+    originalPrice: '$7.99',
+    originalPriceAmount: 7.99,
+    discountPercent: 38, // real $4.99 vs $7.99 anchor
   },
   {
     productId: 'chapter_bundle',
     name: 'Chapter Bundle',
     icon: '\u{1F4D6}',
     description: 'Theme decoration + 20 gems + 10 hints + Board Preview',
-    originalPrice: '$2.99',
-    originalPriceAmount: 2.99,
-    discountPercent: 35,
+    originalPrice: '$4.99',
+    originalPriceAmount: 4.99,
+    discountPercent: 40, // real $2.99 vs $4.99 anchor
   },
   {
     productId: 'gems_500',
     name: '500 Gems',
     icon: '\u{1F48E}',
     description: '500 Gems — the biggest gem pack available',
-    originalPrice: '$9.99',
-    originalPriceAmount: 9.99,
-    discountPercent: 40,
+    originalPrice: '$14.99',
+    originalPriceAmount: 14.99,
+    discountPercent: 33, // real $9.99 vs $14.99 anchor
   },
 ];
 
@@ -498,12 +531,64 @@ function parseRemoteDailyDeal(): RemoteDailyDeal | null {
 }
 
 /**
+ * Resolve the truthful pricing triple for a flash-sale product. The sale
+ * price is ALWAYS the price the store actually charges (the catalog
+ * fallbackPriceAmount — there is no discounted-SKU mechanism), the anchor
+ * is the catalog originalPrice, and the discount badge is derived from the
+ * two. `preferredAnchor` lets an RC override author a custom anchor; a
+ * value at or below the real price is ignored in favor of the catalog
+ * anchor so the badge can never overstate the deal. Returns null for a
+ * product that isn't in SHOP_PRODUCTS — an unpurchasable id must never be
+ * advertised.
+ */
+function resolveSalePricing(
+  productId: string,
+  preferredAnchor?: number,
+  preferredAnchorLabel?: string,
+): {
+  saleAmount: number;
+  anchorAmount: number;
+  anchorLabel: string;
+  discountPercent: number;
+} | null {
+  const product = getProductById(productId);
+  if (!product) return null;
+
+  const saleAmount = product.fallbackPriceAmount;
+  const catalogAnchor =
+    product.originalPriceAmount !== undefined && product.originalPriceAmount > saleAmount
+      ? product.originalPriceAmount
+      : undefined;
+  const anchorAmount =
+    preferredAnchor !== undefined && preferredAnchor > saleAmount
+      ? preferredAnchor
+      : catalogAnchor ?? saleAmount;
+
+  let anchorLabel: string;
+  if (anchorAmount === preferredAnchor && preferredAnchorLabel) {
+    anchorLabel = preferredAnchorLabel;
+  } else if (anchorAmount === product.originalPriceAmount && product.originalPrice) {
+    anchorLabel = product.originalPrice;
+  } else {
+    anchorLabel = `$${anchorAmount.toFixed(2)}`;
+  }
+
+  const discountPercent =
+    anchorAmount > saleAmount
+      ? Math.round((1 - saleAmount / anchorAmount) * 100)
+      : 0;
+
+  return { saleAmount, anchorAmount, anchorLabel, discountPercent };
+}
+
+/**
  * Deterministically pick a flash sale for a given date.
  * Returns null roughly 30% of days (no sale).
  *
  * Honors the `dailyDealOverride` Remote Config key: authoring a JSON blob
  * there swaps the deal globally without a rebuild (`disabled: true` suppresses
- * the default hashed deal for the day).
+ * the default hashed deal for the day). An override naming a product that is
+ * not in SHOP_PRODUCTS (unpurchasable) falls through to the hashed default.
  */
 export function getFlashSale(date: Date): FlashSale | null {
   // Remote-Config kill switch: short-circuits the full flash-sale
@@ -521,25 +606,37 @@ export function getFlashSale(date: Date): FlashSale | null {
   const override = parseRemoteDailyDeal();
   if (override?.disabled) return null;
   if (override) {
-    const saleAmount = override.originalPriceAmount * (1 - override.discountPercent / 100);
-    const hoursRemaining = override.endTime
-      ? Math.max(0, Math.ceil((override.endTime - date.getTime()) / 3600000))
-      : (() => {
-          const midnight = new Date(date);
-          midnight.setHours(23, 59, 59, 999);
-          return Math.max(0, Math.ceil((midnight.getTime() - date.getTime()) / 3600000));
-        })();
-    return {
-      productId: override.productId,
-      name: override.name,
-      icon: override.icon,
-      description: override.description,
-      originalPrice: override.originalPrice ?? `$${override.originalPriceAmount.toFixed(2)}`,
-      originalPriceAmount: override.originalPriceAmount,
-      discountPercent: override.discountPercent,
-      salePrice: `$${saleAmount.toFixed(2)}`,
-      hoursRemaining,
-    };
+    // Enforce the pricing invariant on RC-authored deals too: the deal is
+    // rendered only when its product is purchasable, the advertised price
+    // is the product's real charged price (the store will not honor
+    // anything else), and the discount badge is derived from the validated
+    // anchor. An unfulfillable override falls through to the hashed default
+    // instead of advertising a deal that can't be bought.
+    const pricing = resolveSalePricing(
+      override.productId,
+      override.originalPriceAmount,
+      override.originalPrice,
+    );
+    if (pricing) {
+      const hoursRemaining = override.endTime
+        ? Math.max(0, Math.ceil((override.endTime - date.getTime()) / 3600000))
+        : (() => {
+            const midnight = new Date(date);
+            midnight.setHours(23, 59, 59, 999);
+            return Math.max(0, Math.ceil((midnight.getTime() - date.getTime()) / 3600000));
+          })();
+      return {
+        productId: override.productId,
+        name: override.name,
+        icon: override.icon,
+        description: override.description,
+        originalPrice: pricing.anchorLabel,
+        originalPriceAmount: pricing.anchorAmount,
+        discountPercent: pricing.discountPercent,
+        salePrice: `$${pricing.saleAmount.toFixed(2)}`,
+        hoursRemaining,
+      };
+    }
   }
 
   const dayOfYear =
@@ -553,17 +650,28 @@ export function getFlashSale(date: Date): FlashSale | null {
   const index = hash % FLASH_SALE_POOL.length;
   const item = FLASH_SALE_POOL[index];
 
+  // Derive all pricing from the catalog so the advertised buy price is the
+  // price the store actually charges — the pool's own numbers are display
+  // fallbacks that must never disagree with SHOP_PRODUCTS. A pool entry
+  // that drifted out of the catalog yields "no sale today" over a lie.
+  const pricing = resolveSalePricing(item.productId);
+  if (!pricing) return null;
+
   // Calculate hours remaining until midnight
   const now = date;
   const midnight = new Date(now);
   midnight.setHours(23, 59, 59, 999);
   const hoursRemaining = Math.max(0, Math.ceil((midnight.getTime() - now.getTime()) / 3600000));
 
-  const saleAmount = item.originalPriceAmount * (1 - item.discountPercent / 100);
-
   return {
-    ...item,
-    salePrice: `$${saleAmount.toFixed(2)}`,
+    productId: item.productId,
+    name: item.name,
+    icon: item.icon,
+    description: item.description,
+    originalPrice: pricing.anchorLabel,
+    originalPriceAmount: pricing.anchorAmount,
+    discountPercent: pricing.discountPercent,
+    salePrice: `$${pricing.saleAmount.toFixed(2)}`,
     hoursRemaining,
   };
 }

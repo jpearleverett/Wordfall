@@ -27,6 +27,7 @@
  */
 import { CeremonyItem } from '../types';
 import { WIN_STREAK_TIERS } from '../data/eventLayers';
+import { getQuestFinalReward } from '../data/seasonalQuests';
 
 export interface CeremonyGrant {
   coins: number;
@@ -114,9 +115,17 @@ export function ceremonyEconomyGrant(ceremony: CeremonyItem): CeremonyGrant | nu
       // onDismiss — a swipe-away or process death between pop and dismiss
       // silently ate the reward, and a re-rendered dismiss could double-pay.
       // Pop-time grant here makes it exactly-once like every other type.
+      //
+      // Claiming a quest's LAST step also completes the quest, whose
+      // finalReward coins/gems no path ever granted — they ride this same
+      // exactly-once grant. (The cosmetic half of finalReward is unlocked
+      // by popCeremony at the same pop.) Weekly-goal completions reuse this
+      // ceremony type without questId/stepIndex, so `final` stays null for
+      // them.
+      const final = getQuestFinalReward(ceremony.data?.questId, ceremony.data?.stepIndex);
       const grant = normalize({
-        coins: Number(ceremony.data?.rewardCoins) || 0,
-        gems: Number(ceremony.data?.rewardGems) || 0,
+        coins: (Number(ceremony.data?.rewardCoins) || 0) + (final?.coins ?? 0),
+        gems: (Number(ceremony.data?.rewardGems) || 0) + (final?.gems ?? 0),
       });
       return isEmpty(grant) ? null : grant;
     }

@@ -342,6 +342,30 @@ export function getQuestProgress(
   };
 }
 
+/**
+ * The finalReward owed when `stepIndex` is the LAST step of the quest with
+ * id `questId`, or null for any other (or unknown) step.
+ *
+ * Claiming the last step both pays that step AND completes the quest, but
+ * nothing ever granted finalReward (2000c/50g + an exclusive frame): the
+ * claim queued only a step ceremony and advanceQuestStep silently flipped
+ * the quest into completedQuestIds. The four quest frames sat in the live
+ * cosmetics catalog with an impossible unlock path. The completion bonus
+ * now rides the final step's own ceremony — ceremonyEconomyGrant adds the
+ * coins/gems at pop time (exactly-once) and popCeremony unlocks the
+ * cosmetic at the same point. Inputs are unvalidated ceremony data, hence
+ * the loose types.
+ */
+export function getQuestFinalReward(
+  questId: unknown,
+  stepIndex: unknown,
+): SeasonalQuest['finalReward'] | null {
+  if (typeof questId !== 'string' || typeof stepIndex !== 'number') return null;
+  const quest = SEASONAL_QUESTS.find((q) => q.id === questId);
+  if (!quest) return null;
+  return stepIndex === quest.steps.length - 1 ? quest.finalReward : null;
+}
+
 /** Advances to the next step (or marks quest complete if on last step) */
 export function advanceQuestStep(state: SeasonalQuestState, quest: SeasonalQuest): SeasonalQuestState {
   const nextIndex = state.currentStepIndex + 1;

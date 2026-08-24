@@ -2,7 +2,16 @@ export interface WeeklyGoalTemplate {
   id: string;
   description: string;
   target: number;
-  trackingKey: 'puzzles_solved' | 'total_score' | 'stars_earned' | 'daily_completed' | 'perfect_solves' | 'words_found' | 'modes_played';
+  /**
+   * Only keys that useRewardWiring actually calls
+   * `updateWeeklyGoalProgress` with. 'words_found' and 'modes_played' used
+   * to be in this union and had six templates — but nothing ever updated
+   * them, so those goals sat frozen at 0 all week (~60% of weeks drew at
+   * least one). The seasonal-quest system tracks those two keys through its
+   * own path; weekly goals must stick to the wired five unless the wiring
+   * gains the key first.
+   */
+  trackingKey: 'puzzles_solved' | 'total_score' | 'stars_earned' | 'daily_completed' | 'perfect_solves';
   reward: { coins: number; gems: number };
 }
 
@@ -57,24 +66,24 @@ export const WEEKLY_GOAL_TEMPLATES: WeeklyGoalTemplate[] = [
     reward: { coins: 700, gems: 15 },
   },
   {
-    id: 'weekly_modes_3',
-    description: 'Play 3 different modes',
-    target: 3,
-    trackingKey: 'modes_played',
+    id: 'weekly_stars_10',
+    description: 'Earn 10 stars this week',
+    target: 10,
+    trackingKey: 'stars_earned',
     reward: { coins: 400, gems: 8 },
   },
   {
-    id: 'weekly_words_50',
-    description: 'Find 50 words this week',
-    target: 50,
-    trackingKey: 'words_found',
-    reward: { coins: 500, gems: 10 },
+    id: 'weekly_daily_3',
+    description: 'Complete 3 daily challenges',
+    target: 3,
+    trackingKey: 'daily_completed',
+    reward: { coins: 400, gems: 8 },
   },
   {
-    id: 'weekly_words_100',
-    description: 'Find 100 words this week',
-    target: 100,
-    trackingKey: 'words_found',
+    id: 'weekly_stars_40',
+    description: 'Earn 40 stars this week',
+    target: 40,
+    trackingKey: 'stars_earned',
     reward: { coins: 1000, gems: 20 },
   },
   {
@@ -141,24 +150,24 @@ export const WEEKLY_GOAL_TEMPLATES: WeeklyGoalTemplate[] = [
     reward: { coins: 2000, gems: 35 },
   },
   {
-    id: 'weekly_modes_5',
-    description: 'Play 5 different modes',
-    target: 5,
-    trackingKey: 'modes_played',
+    id: 'weekly_score_10k',
+    description: 'Earn 10,000 total score this week',
+    target: 10000,
+    trackingKey: 'total_score',
     reward: { coins: 600, gems: 12 },
   },
   {
-    id: 'weekly_modes_7',
-    description: 'Play 7 different modes',
-    target: 7,
-    trackingKey: 'modes_played',
+    id: 'weekly_perfect_4',
+    description: 'Get 4 perfect solves',
+    target: 4,
+    trackingKey: 'perfect_solves',
     reward: { coins: 800, gems: 16 },
   },
   {
-    id: 'weekly_words_200',
-    description: 'Find 200 words this week',
-    target: 200,
-    trackingKey: 'words_found',
+    id: 'weekly_puzzles_40',
+    description: 'Solve 40 puzzles this week',
+    target: 40,
+    trackingKey: 'puzzles_solved',
     reward: { coins: 1500, gems: 30 },
   },
   {

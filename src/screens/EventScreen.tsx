@@ -844,6 +844,10 @@ const EventScreen: React.FC<EventScreenProps> = ({
       if (reward.coins) addCoins(reward.coins);
       if (reward.gems) addGems(reward.gems);
       if (reward.hintTokens) addHintTokens(reward.hintTokens);
+      // Diamond tiers carry a decoration — grant it like the exclusive
+      // reward below does. It used to be silently dropped here while the
+      // tier was still marked claimed, permanently losing the cosmetic.
+      if (reward.decoration) unlockDecoration(reward.decoration);
 
       // Animate claim (skipped under reduce motion — claimed styling is
       // the durable signal; the bounce is decoration)
@@ -858,7 +862,7 @@ const EventScreen: React.FC<EventScreenProps> = ({
       setActiveEvents(eventManager.getActiveEvents());
       updateProgress({ eventProgress: eventManager.getProgressSnapshot() });
     }
-  }, [addCoins, addGems, addHintTokens, claimAnim, updateProgress, reduceMotion]);
+  }, [addCoins, addGems, addHintTokens, unlockDecoration, claimAnim, updateProgress, reduceMotion]);
 
   // Get the current event's exclusive reward (must be declared before the claim callback
   // that closes over it, otherwise TS flags a "used before declaration" error).

@@ -12,6 +12,8 @@ import { useCallback } from 'react';
 import { CeremonyItem, WeeklyGoalsState } from '../types';
 import { CHAPTERS, WING_NAMES, getChapterForLevel, getLastLevelOfChapter } from '../data/chapters';
 import { generateWeeklyGoals, isNewWeek } from '../data/weeklyGoals';
+import { getQuestFinalReward } from '../data/seasonalQuests';
+import { ATLAS_PAGES } from '../data/collections';
 import { ACHIEVEMENTS, getAchievementTier, getAchievementTierId } from '../data/achievements';
 import { FEATURE_UNLOCK_SCHEDULE, STREAK } from '../constants';
 import { isProfileCosmeticId, resolveLegacyCosmeticId } from '../data/cosmetics';
@@ -291,12 +293,15 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
           )
         : 0;
 
-      // Streak-shield window: purchased shield is valid for 72h after purchase.
-      const SHIELD_WINDOW_MS = 72 * 60 * 60 * 1000;
-      const shieldLastMs = streaks.lastShieldDate
-        ? new Date(streaks.lastShieldDate).getTime()
-        : 0;
-      const shieldFresh = streaks.streakShieldAvailable && (Date.now() - shieldLastMs) < SHIELD_WINDOW_MS;
+      // A purchased streak shield persists until consumed — no freshness
+      // window. The SKU copy ("Protect your streak for one missed day.
+      // Single-use shield.") promises no expiry, and the old 72h window
+      // silently voided exactly the buyer the shield was sold to: someone
+      // who bought insurance in advance and then missed a day more than
+      // three days later lost their streak with the shield still "owned" —
+      // and because the stale flag was never cleared, the in-game shield
+      // re-offer stayed suppressed for the life of the account.
+      const shieldUsable = streaks.streakShieldAvailable;
 
       let newStreak: number;
       let graceUsed = false;
@@ -330,10 +335,13 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       } else if (diffDays === 2 && canUseGrace(streaks.lastGraceDate, todayDate)) {
         newStreak = streaks.currentStreak + 1;
         graceUsed = true;
-      } else if (diffDays >= 2 && shieldFresh) {
-        // Shield saves the streak: preserve current count, no increment since
-        // the missed day didn't include a puzzle. Consume the shield.
-        newStreak = streaks.currentStreak;
+      } else if (diffDays >= 2 && shieldUsable) {
+        // Shield saves the streak: the missed day is forgiven and TODAY's
+        // play counts, exactly like the grace branch above. (The old
+        // no-increment version conflated the missed day with today, so the
+        // paid path permanently counted one day fewer than free grace for
+        // the identical scenario.) Consume the shield.
+        newStreak = streaks.currentStreak + 1;
         shieldConsumed = true;
       } else {
         newStreak = 1;
@@ -489,19 +497,22 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       // The break was detected DURING a play: updateStreak had just set
       // lastPlayDate to that day and reset currentStreak to 1 before writing
       // recentBreak. So the day they broke, they played — restoring means
-      // prevStreak plus that day's play. The old code set the streak to
-      // prevStreak and backdated lastPlayDate to YESTERDAY, so the next
-      // play computed a 2-day gap and needed grace or a shield to survive —
-      // re-breaking the streak the player had just paid 50 gems to save,
-      // while the comment claimed the opposite. lastPlayDate is left alone:
-      // it already records the last day they actually played.
-      restoredCount = br.prevStreak + 1;
+      // prevStreak plus the whole post-break run. On the break day itself
+      // that run is 1; restored the NEXT day (still inside the 24h offer
+      // window, after the mount-effect updateStreak counted that day too)
+      // it is 2. The old hardcoded prevStreak + 1 was right only for the
+      // same-day case — a next-day restore overwrote the day already
+      // counted, silently shorting the paying player one day forever.
+      // lastPlayDate is left alone: it already records the last day they
+      // actually played.
+      const postBreakRun = Math.max(prev.streaks.currentStreak, 1);
+      restoredCount = br.prevStreak + postBreakRun;
       return {
         ...prev,
         streaks: {
           ...prev.streaks,
-          currentStreak: br.prevStreak + 1,
-          bestStreak: Math.max(prev.streaks.bestStreak, br.prevStreak + 1),
+          currentStreak: br.prevStreak + postBreakRun,
+          bestStreak: Math.max(prev.streaks.bestStreak, br.prevStreak + postBreakRun),
           recentBreak: null,
         },
       };
@@ -517,29 +528,64 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     );
   };
 
+  /**
+   * Completion targets per mission template — the same numbers HomeScreen's
+   * MISSION_LABELS renders next to each row. `completed` flips here the
+   * moment progress reaches the target: claimMissionReward, previously the
+   * ONLY writer of the flag, has no callers anywhere, so the panel could
+   * never show a checkmark and its counter read 0/3 forever.
+   */
+  const MISSION_TARGETS: Record<string, number> = {
+    solve_3_puzzles: 3,
+    earn_500_score: 500,
+    get_perfect_solve: 1,
+    collect_rare_tile: 1,
+    complete_daily: 1,
+    solve_without_hints: 1,
+    earn_3_stars: 3,
+    play_5_minutes: 1,
+  };
+
   const updateMissionProgress = (missionId: string, progress: number): void => {
-    setData((prev) => ({
-      ...prev,
-      missions: {
-        ...prev.missions,
-        dailyMissions: prev.missions.dailyMissions.map((m) =>
-          m.id === missionId ? { ...m, progress: Math.max(m.progress, progress) } : m,
-        ),
-      },
-    }));
+    setData((prev) => {
+      let completedDelta = 0;
+      const dailyMissions = prev.missions.dailyMissions.map((m) => {
+        if (m.id !== missionId) return m;
+        const newProgress = Math.max(m.progress, progress);
+        const target = MISSION_TARGETS[m.id] ?? Number.POSITIVE_INFINITY;
+        const completed = m.completed || newProgress >= target;
+        if (completed && !m.completed) completedDelta += 1;
+        return { ...m, progress: newProgress, completed };
+      });
+      return {
+        ...prev,
+        missions: {
+          ...prev.missions,
+          dailyMissions,
+          missionsCompletedToday: prev.missions.missionsCompletedToday + completedDelta,
+        },
+      };
+    });
   };
 
   const claimMissionReward = (missionId: string): void => {
-    setData((prev) => ({
-      ...prev,
-      missions: {
-        ...prev.missions,
-        dailyMissions: prev.missions.dailyMissions.map((m) =>
-          m.id === missionId ? { ...m, completed: true } : m,
-        ),
-        missionsCompletedToday: prev.missions.missionsCompletedToday + 1,
-      },
-    }));
+    // Legacy path — updateMissionProgress now flips `completed` at target.
+    // Kept for API compatibility, made idempotent so a future caller can't
+    // double-count missionsCompletedToday for an already-completed mission.
+    setData((prev) => {
+      const mission = prev.missions.dailyMissions.find((m) => m.id === missionId);
+      if (!mission || mission.completed) return prev;
+      return {
+        ...prev,
+        missions: {
+          ...prev.missions,
+          dailyMissions: prev.missions.dailyMissions.map((m) =>
+            m.id === missionId ? { ...m, completed: true } : m,
+          ),
+          missionsCompletedToday: prev.missions.missionsCompletedToday + 1,
+        },
+      };
+    });
   };
 
   const generateDailyMissions = (): void => {
@@ -547,15 +593,17 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     setData((prev) => {
       if (prev.missions.lastMissionDate === today) return prev;
 
+      // Only templates useRewardWiring actually feeds progress into.
+      // 'collect_rare_tile' and 'play_5_minutes' had no wiring at all, so a
+      // day that drew one showed a bar frozen at the 2% minimum all day —
+      // untracked templates must not be generated.
       const missionTemplates = [
         'solve_3_puzzles',
         'earn_500_score',
         'get_perfect_solve',
-        'collect_rare_tile',
         'complete_daily',
         'solve_without_hints',
         'earn_3_stars',
-        'play_5_minutes',
       ];
 
       const shuffled = [...missionTemplates].sort(() => Math.random() - 0.5);
@@ -640,18 +688,61 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
   const updateWeeklyGoalProgress = (trackingKey: string, value: number): void => {
     setData((prev) => {
       if (!prev.weeklyGoals) return prev;
+      // The HomeScreen panel renders goal.reward (and allCompleteBonus) next
+      // to each goal, but no code path ever credited them — every weekly
+      // reward was phantom currency. A goal flipping to completed now queues
+      // a ceremony carrying its reward; App.tsx credits it at pop time via
+      // ceremonyEconomyGrant, exactly-once (the `g.completed` early-return
+      // above the flip means a goal can complete only once per week, and pop
+      // removes the ceremony from the persisted queue). The generic
+      // quest_step_complete surface is reused so no new ceremony variant /
+      // router case is needed.
+      const newCeremonies: CeremonyItem[] = [];
       const updatedGoals = prev.weeklyGoals.goals.map((g) => {
         if (g.trackingKey !== trackingKey || g.completed) return g;
         const newProgress = g.progress + value;
-        return {
-          ...g,
-          progress: newProgress,
-          completed: newProgress >= g.target,
-        };
+        const completed = newProgress >= g.target;
+        if (completed) {
+          newCeremonies.push({
+            type: 'quest_step_complete' as const,
+            data: {
+              icon: '\u{1F3AF}',
+              title: 'Weekly Goal Complete!',
+              description: g.description,
+              weeklyGoalId: g.templateId,
+              rewardCoins: g.reward?.coins ?? 0,
+              rewardGems: g.reward?.gems ?? 0,
+            },
+          });
+        }
+        return { ...g, progress: newProgress, completed };
       });
+      // The all-complete bonus fires exactly on the not-all → all transition,
+      // which can happen at most once per weekly generation since completed
+      // goals never un-complete before Monday's regeneration.
+      const wasAllComplete =
+        prev.weeklyGoals.goals.length > 0 && prev.weeklyGoals.goals.every((g) => g.completed);
+      const nowAllComplete = updatedGoals.length > 0 && updatedGoals.every((g) => g.completed);
+      if (!wasAllComplete && nowAllComplete) {
+        const bonus = prev.weeklyGoals.allCompleteBonus;
+        newCeremonies.push({
+          type: 'quest_step_complete' as const,
+          data: {
+            icon: '\u{1F3C6}',
+            title: 'All Weekly Goals Complete!',
+            description: 'You finished every goal this week — bonus reward!',
+            weeklyGoalId: 'weekly_all_complete',
+            rewardCoins: bonus?.coins ?? 0,
+            rewardGems: bonus?.gems ?? 0,
+          },
+        });
+      }
       return {
         ...prev,
         weeklyGoals: { ...prev.weeklyGoals, goals: updatedGoals },
+        ...(newCeremonies.length > 0
+          ? { pendingCeremonies: [...prev.pendingCeremonies, ...newCeremonies] }
+          : {}),
       };
     });
   };
@@ -667,9 +758,27 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
     const current = getData();
     if (current.pendingCeremonies.length === 0) return null;
     const ceremony = current.pendingCeremonies[0];
+    // Claiming a seasonal quest's LAST step completes the quest. The
+    // finalReward's coins/gems ride ceremonyEconomyGrant (applied by App.tsx
+    // around this same pop), and its exclusive cosmetic frame unlocks here —
+    // pop is the one exactly-once point, and unlockedCosmetics lives on this
+    // context. Before this, the four quest frames sat in the live cosmetics
+    // catalog with no reachable unlock path.
+    let finalCosmeticId: string | null = null;
+    if (ceremony.type === 'quest_step_complete') {
+      const final = getQuestFinalReward(ceremony.data?.questId, ceremony.data?.stepIndex);
+      const rawId = final?.cosmetic?.id;
+      if (rawId) {
+        const resolved = resolveLegacyCosmeticId(rawId);
+        if (isProfileCosmeticId(resolved)) finalCosmeticId = resolved;
+      }
+    }
     setData((prev) => ({
       ...prev,
       pendingCeremonies: prev.pendingCeremonies.slice(1),
+      ...(finalCosmeticId && !prev.unlockedCosmetics.includes(finalCosmeticId)
+        ? { unlockedCosmetics: [...prev.unlockedCosmetics, finalCosmeticId] }
+        : {}),
     }));
     return ceremony;
   };
@@ -711,8 +820,22 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       high_scorer: data.totalScore,
       streak_master: data.streaks.currentStreak,
       daily_devotee: data.dailyCompleted.length,
-      atlas_scholar: Object.keys(data.collections.atlasPages).length,
-      tile_collector: Object.keys(data.collections.rareTiles).length,
+      // "Complete Word Atlas pages" — pages whose every word has been
+      // collected. Counting keys counted pages merely TOUCHED (the key is
+      // created on the first word found), which handed out tiers for
+      // finding one word per page.
+      atlas_scholar: ATLAS_PAGES.filter(
+        (page) => (data.collections.atlasPages[page.id]?.length ?? 0) >= page.words.length,
+      ).length,
+      // "Collect rare tiles" — TOTAL tiles, not distinct letters. The map
+      // is keyed A–Z, so counting keys capped the metric at 26: gold
+      // (threshold 52) was mathematically unreachable and silver meant
+      // "one of every letter". Same summed formula as the title_collector
+      // unlock in PlayerContext.
+      tile_collector: Object.values(data.collections.rareTiles).reduce(
+        (sum, count) => sum + (count || 0),
+        0,
+      ),
       library_restorer: data.restoredWings.length,
       mode_explorer: Object.keys(data.modeStats).filter((m) => data.modeStats[m].played > 0).length,
       speed_demon: data.modeStats.timePressure?.wins || 0,

@@ -941,8 +941,14 @@ export function getChapterForLevel(level: number): Chapter | undefined {
 
   // Past authored + overlay content: use procedural chapter generation.
   // Import dynamically to avoid circular dependency.
+  // proceduralLevel is 1-based, so the first chapter past the catalog spans
+  // proceduralLevel 1..15 — the (proceduralLevel - 1) keeps every procedural
+  // chapter at exactly 15 levels, agreeing with getLastLevelOfChapter above
+  // and with puzzleGenerator's proceduralChapterIndexForLevel. (Without it,
+  // chapter 41 spanned only 14 levels and every boundary landed one level
+  // early, turning the star-gate clamp in PlayerProgressContext into a no-op.)
   const proceduralLevel = level - cumulativeLevels;
-  const chapterId = all.length + 1 + Math.floor(proceduralLevel / 15);
+  const chapterId = all.length + 1 + Math.floor((proceduralLevel - 1) / 15);
   try {
     const { generateProceduralChapter } = require('../engine/puzzleGenerator');
     return generateProceduralChapter(chapterId);

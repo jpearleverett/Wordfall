@@ -122,6 +122,45 @@ function getTodayDateString(): string {
 }
 
 /**
+ * Run a Cloud Function callable under the standard withRetry policy.
+ *
+ * The validated-score paths originally awaited the callable exactly once and
+ * swallowed any error — so a network blip or cold-start timeout permanently
+ * dropped the score (the daily can only be completed once, and weekly/event
+ * totals accumulate server-side per call), while the legacy direct writes
+ * they replaced had always retried via withRetry.
+ *
+ * One impedance mismatch: callable rejections carry `functions/`-prefixed
+ * codes (`functions/unavailable`, `functions/permission-denied`) while
+ * withRetry's permanent-error short-circuit matches the bare Firestore form.
+ * Normalize the code before withRetry classifies it, so validator rejections
+ * (permission-denied plausibility bounces, invalid-argument) fail fast
+ * instead of burning retries, while transient unavailable/deadline-exceeded/
+ * internal failures back off and retry.
+ */
+function callableWithRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+  return withRetry(
+    async () => {
+      try {
+        return await fn();
+      } catch (e) {
+        const code = (e as { code?: unknown })?.code;
+        if (typeof code === 'string' && code.startsWith('functions/')) {
+          try {
+            (e as { code?: string }).code = code.slice('functions/'.length);
+          } catch {
+            // Read-only `code` — withRetry then treats it as transient,
+            // which only costs the two extra attempts.
+          }
+        }
+        throw e;
+      }
+    },
+    { label },
+  );
+}
+
+/**
  * Week bucket for leaderboard reads/writes. Delegates to the one canonical
  * implementation in src/utils/weekId.ts — this file used to carry its own
  * copy, and a divergent copy is exactly how the weekly leaderboard ended up
@@ -230,6 +269,43 @@ class FirestoreService {
       );
     } catch (e) {
       logFirestoreError('syncPlayerProfile', 'users', e);
+    }
+  }
+
+  /**
+   * Server-authoritative VIP subscription status.
+   *
+   * `onSubscriptionRenew` (functions/src/index.ts) writes vipActive /
+   * vipExpiresAt / vipUpdatedAt onto the user doc on every Apple SSN v2 and
+   * Google RTDN event — renewals, expiries, cancellations, refunds. Nothing
+   * read those fields: the client's VIP entitlement was purely local, so a
+   * subscription that lapsed or was refunded server-side kept its benefits
+   * locally until the local expiry ran out, and a renewal processed while
+   * the app was closed never extended anything. Returns null when Firestore
+   * is disabled/offline or the doc carries no VIP fields, so the caller
+   * simply keeps local state.
+   */
+  async getServerVipStatus(
+    userId: string,
+  ): Promise<{ vipActive: boolean; vipExpiresAt: number; vipUpdatedAtMs: number } | null> {
+    if (!this.enabled || !userId) return null;
+    try {
+      const snap = await getDoc(doc(db, 'users', userId));
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      if (typeof data.vipActive !== 'boolean') return null;
+      const updatedAt = data.vipUpdatedAt;
+      return {
+        vipActive: data.vipActive,
+        vipExpiresAt: typeof data.vipExpiresAt === 'number' ? data.vipExpiresAt : 0,
+        // Firestore Timestamp → ms; a missing stamp reads as 0 (oldest), so
+        // an unstamped server record can never revoke a local purchase.
+        vipUpdatedAtMs:
+          updatedAt && typeof updatedAt.toMillis === 'function' ? updatedAt.toMillis() : 0,
+      };
+    } catch (e) {
+      logFirestoreError('getServerVipStatus', 'users', e);
+      return null;
     }
   }
 
@@ -381,13 +457,17 @@ class FirestoreService {
     // case, so flipping the flag off doesn't break leaderboards.
     if (leaderboardValidationEnabled()) {
       try {
-        await submitValidatedScoreCallable({
-          scope: 'daily',
-          score,
-          stars,
-          level,
-          displayName,
-        });
+        await callableWithRetry(
+          () =>
+            submitValidatedScoreCallable({
+              scope: 'daily',
+              score,
+              stars,
+              level,
+              displayName,
+            }),
+          'submitDailyScore',
+        );
         return;
       } catch (e) {
         logFirestoreError('submitDailyScore(callable)', 'dailyScores', e);
@@ -439,13 +519,17 @@ class FirestoreService {
         // permission-denied, and the catch below returns without falling
         // back, which left the weekly leaderboard rejecting essentially all
         // legitimate entries whenever validation was on.
-        await submitValidatedScoreCallable({
-          scope: 'weekly',
-          score,
-          displayName,
-          level,
-          mode,
-        });
+        await callableWithRetry(
+          () =>
+            submitValidatedScoreCallable({
+              scope: 'weekly',
+              score,
+              displayName,
+              level,
+              mode,
+            }),
+          'submitWeeklyScore',
+        );
         return;
       } catch (e) {
         logFirestoreError('submitWeeklyScore(callable)', 'weeklyScores', e);
@@ -492,14 +576,18 @@ class FirestoreService {
       try {
         // Same as weekly: without level/mode the server assumes level 0 and
         // rejects anything above 1000 points.
-        await submitValidatedScoreCallable({
-          scope: 'event',
-          score,
-          eventId,
-          displayName,
-          level,
-          mode,
-        });
+        await callableWithRetry(
+          () =>
+            submitValidatedScoreCallable({
+              scope: 'event',
+              score,
+              eventId,
+              displayName,
+              level,
+              mode,
+            }),
+          'submitEventScore',
+        );
         return;
       } catch (e) {
         logFirestoreError('submitEventScore(callable)', 'events.scores', e);

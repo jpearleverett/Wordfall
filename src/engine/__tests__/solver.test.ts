@@ -1,4 +1,15 @@
-import { findWordInGrid, isWordInGrid, isDeadEnd, getHint, solve, getAvailableWords, isSolvable } from '../solver';
+import {
+  findWordInGrid,
+  isWordInGrid,
+  isDeadEnd,
+  isDeadEndGravityFlip,
+  isDeadEndShrinkingBoard,
+  isDeadEndNoGravity,
+  getHint,
+  solve,
+  getAvailableWords,
+  isSolvable,
+} from '../solver';
 import { Grid, Cell } from '../../types';
 
 function makeCell(letter: string, id?: string): Cell {
@@ -146,6 +157,66 @@ describe('isDeadEnd', () => {
   it('returns false for empty remaining words', () => {
     const grid = makeGrid([['A']]);
     expect(isDeadEnd(grid, [])).toBe(false);
+  });
+});
+
+describe('dead-end checks treat budget exhaustion as inconclusive', () => {
+  // Only a FINISHED search may report stuck. solve() returns null both for
+  // "proven unsolvable" and "ran out of budget mid-search"; a false stuck
+  // fires the fail banner, adaptive-difficulty failure recording, and rescue
+  // offers on a board that may still be winnable. These fixtures are
+  // genuinely dead, so a completed search says stuck — but a starved budget
+  // cannot finish the proof and must say NOT stuck.
+  const deadGrid = () =>
+    makeGrid([
+      ['Z', 'Q'],
+      ['Q', 'Z'],
+    ]);
+
+  it('isDeadEnd: exhausted budget is not stuck; finished search is', () => {
+    expect(isDeadEnd(deadGrid(), ['ZAP'], { remaining: 1 })).toBe(false);
+    expect(isDeadEnd(deadGrid(), ['ZAP'])).toBe(true);
+  });
+
+  it('isDeadEnd: an already-elapsed wall clock is not stuck either', () => {
+    const budget = { remaining: 10000, startTime: Date.now() - 1000, timeoutMs: 300 };
+    expect(isDeadEnd(deadGrid(), ['ZAP'], budget)).toBe(false);
+  });
+
+  it('isDeadEnd: heuristic positive proof needs no budget at all', () => {
+    const grid = makeGrid([
+      ['G', 'O', 'X'],
+      ['X', 'H', 'I'],
+    ]);
+    expect(isDeadEnd(grid, ['GO', 'HI'], { remaining: 0 })).toBe(false);
+  });
+
+  it('isDeadEndGravityFlip: exhausted budget is not stuck; finished search is', () => {
+    expect(isDeadEndGravityFlip(deadGrid(), ['ZAP'], 'down', { remaining: 1 })).toBe(false);
+    expect(isDeadEndGravityFlip(deadGrid(), ['ZAP'], 'down')).toBe(true);
+  });
+
+  it('isDeadEndShrinkingBoard: exhausted budget is not stuck; finished search is', () => {
+    // 2x3 board, three disjoint vertical words. Every cell sits on the outer
+    // ring, so the shrink after the second clear wipes whichever word is
+    // left: genuinely dead, but only a completed backtracking pass knows it.
+    const grid = () =>
+      makeGrid([
+        ['A', 'C', 'E'],
+        ['B', 'D', 'F'],
+      ]);
+    const words = ['AB', 'CD', 'EF'];
+    expect(isDeadEndShrinkingBoard(grid(), words, 2, { remaining: 1 })).toBe(false);
+    expect(isDeadEndShrinkingBoard(grid(), words, 2)).toBe(true);
+  });
+
+  it('isDeadEndNoGravity: a word with no path at all is conclusively dead', () => {
+    expect(isDeadEndNoGravity(deadGrid(), ['ZAP'])).toBe(true);
+    const grid = makeGrid([
+      ['G', 'O', 'X'],
+      ['X', 'H', 'I'],
+    ]);
+    expect(isDeadEndNoGravity(grid, ['GO', 'HI'])).toBe(false);
   });
 });
 

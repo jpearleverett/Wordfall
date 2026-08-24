@@ -211,11 +211,16 @@ const TIER_ORDER: Record<string, number> = { bronze: 0, silver: 1, gold: 2, diam
  */
 export function generateClubGoal(
   clubTier: 'bronze' | 'silver' | 'gold' | 'diamond',
-  memberCount: number
+  memberCount: number,
+  now: Date = new Date()
 ): ActiveClubGoal {
-  // Deterministic selection based on date — same goal for the whole club
-  const now = new Date();
-  const dateHash = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  // Deterministic selection based on date — same goal for the whole club.
+  // The hash must use the same UTC clock as startDate/goalId below: hashed
+  // on the LOCAL date, members in different timezones (or one member
+  // straddling local vs UTC midnight) computed different templates for the
+  // same UTC-dated goalId.
+  const dateHash =
+    now.getUTCFullYear() * 10000 + (now.getUTCMonth() + 1) * 100 + now.getUTCDate();
   const template = CLUB_GOAL_TEMPLATES[dateHash % CLUB_GOAL_TEMPLATES.length];
 
   // Scale target by member count (minimum 5 members worth)

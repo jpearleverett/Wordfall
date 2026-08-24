@@ -61,6 +61,12 @@ import {
   type PlayerStore,
   type PlayerActions,
 } from '../stores/playerStore';
+import { EconomyActionsContext } from '../stores/economyStore';
+import {
+  chooseSnapshot,
+  hydratePlayerData,
+  reconcileDiscoveredClub,
+} from './playerDataSync';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -426,6 +432,14 @@ export interface PlayerContextType extends PlayerData {
 
 const STORAGE_KEY = '@wordfall_player';
 
+/**
+ * Delay before re-attempting the initial cloud pull after a transient
+ * failure. One failed getDoc must not disable the pull for the whole
+ * session — while it stays un-pulled, Firestore pushes are gated off so
+ * a fresh/default local blob can never clobber the cloud save.
+ */
+const CLOUD_PULL_RETRY_MS = 15000;
+
 const getToday = (): string => new Date().toISOString().split('T')[0];
 
 const DEFAULT_PLAYER_DATA: PlayerData = {
@@ -788,6 +802,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
   const latestDataRef = useRef<PlayerData>(DEFAULT_PLAYER_DATA);
   const isInitialLoadDone = useRef(false);
+  // True only once the initial Firestore pull has settled definitively for
+  // this user (doc merged, or confirmed absent). Until then Step 3 neither
+  // stamps lastModified as a fresh write nor pushes to Firestore — an
+  // un-reconciled (possibly default) local blob must never win the
+  // last-write-wins comparison against a real cloud save, let alone
+  // overwrite it (setDoc merge:true still replaces scalars and arrays).
+  const cloudReconciledRef = useRef(false);
+  const cloudPullRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [cloudPullNonce, setCloudPullNonce] = useState(0);
+  // EconomyProvider is an ancestor (see src/App/Providers.tsx), so currency
+  // credits owed by player-side claims (referral milestones) can be applied
+  // here. Ref-captured so the claim callbacks stay dependency-free; null
+  // only outside the provider tree (unit tests).
+  const economyActions = useContext(EconomyActionsContext);
+  const economyActionsRef = useRef(economyActions);
+  economyActionsRef.current = economyActions;
 
   // Zustand store mirror — see src/stores/playerStore.ts. Every consumer that
   // calls usePlayerStore(selector) re-renders only when that slice changes.
@@ -804,7 +834,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored) as Partial<PlayerData>;
-          setData((prev) => ({ ...prev, ...parsed } as PlayerData));
+          // Deep-merge over the defaults so nested fields added to the
+          // schema after this save was written hydrate to their defaults
+          // instead of undefined (a shallow spread let a stored
+          // `collections` object predating atlasWordMastery drop the map
+          // wholesale and crash collectAtlasWord).
+          setData((prev) => hydratePlayerData(prev, parsed));
         }
       } catch (e) {
         logger.warn('Failed to load player data from AsyncStorage:', e);
@@ -826,25 +861,34 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const snapshot = await getDoc(docRef);
         if (snapshot.exists()) {
           const cloudData = snapshot.data() as Partial<PlayerData>;
-          setData((prev) => {
-            // Use whichever data is more recent
-            const localModified = prev.lastModified || 0;
-            const cloudModified = cloudData.lastModified || 0;
-            if (cloudModified > localModified) {
-              return { ...DEFAULT_PLAYER_DATA, ...cloudData } as PlayerData;
-            }
-            return prev;
-          });
+          setData((prev) => chooseSnapshot(prev, cloudData, DEFAULT_PLAYER_DATA));
         }
+        // The pull settled definitively (doc merged, or confirmed absent).
+        // Only now may Step 3 stamp lastModified as a fresh write and push
+        // to Firestore.
+        cloudReconciledRef.current = true;
         setCloudSyncStatus('synced');
       } catch (e) {
         logger.warn('Firestore player sync failed, using local data:', e);
         setCloudSyncStatus('offline');
+        // A transient failure must not disable the pull for the whole
+        // session (with the pull dead, a locally-stamped push would clobber
+        // the cloud save the moment the network returned). Re-arm the latch
+        // and retry after a delay.
+        isInitialLoadDone.current = false;
+        if (cloudPullRetryTimer.current) clearTimeout(cloudPullRetryTimer.current);
+        cloudPullRetryTimer.current = setTimeout(() => {
+          setCloudPullNonce((n) => n + 1);
+        }, CLOUD_PULL_RETRY_MS);
       }
     };
 
     syncFromFirestore();
-  }, [loaded, user]);
+
+    return () => {
+      if (cloudPullRetryTimer.current) clearTimeout(cloudPullRetryTimer.current);
+    };
+  }, [loaded, user, cloudPullNonce]);
 
   // Step 3: Debounced persist to AsyncStorage (300ms) + Firestore (5s).
   //
@@ -859,10 +903,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loaded) return;
 
-    // Always stamp lastModified and capture the latest snapshot so the
-    // debounced writer and the AppState flush both see the same payload.
+    // Stamp lastModified and capture the latest snapshot so the debounced
+    // writer and the AppState flush both see the same payload. The stamp is
+    // gated on the initial cloud pull having settled: this effect also runs
+    // on hydration/reconcile passes with zero user mutations, and stamping
+    // those made untouched (possibly default) local state look fresher than
+    // a real cloud save — which then lost every future last-write-wins
+    // comparison. Until the pull settles, carry the hydrated stamp forward
+    // (0 for a fresh install, so an existing cloud doc always wins).
     const now = Date.now();
-    const dataWithTimestamp: PlayerData = { ...data, lastModified: now };
+    const dataWithTimestamp: PlayerData = {
+      ...data,
+      lastModified: cloudReconciledRef.current ? now : data.lastModified || 0,
+    };
     latestDataRef.current = dataWithTimestamp;
 
     // Debounced AsyncStorage write (300ms) routed through the persist queue.
@@ -871,8 +924,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       localPersistQueueRef.current.enqueue(latestDataRef.current);
     }, 300);
 
-    // Debounced Firestore save (5 seconds) via the per-user queue.
-    if (user) {
+    // Debounced Firestore save (5 seconds) via the per-user queue. Gated on
+    // the initial pull having settled — pushing before the cloud doc has
+    // been merged (or confirmed absent) could overwrite a real save with
+    // fresh/default local state (setDoc merge:true still replaces scalars
+    // and arrays wholesale). The failed-pull path re-arms its own retry,
+    // so this gate lifts as soon as a pull lands.
+    if (user && cloudReconciledRef.current) {
       if (firestoreSaveTimer.current) {
         clearTimeout(firestoreSaveTimer.current);
       }
@@ -1246,7 +1304,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Local cache of the server-authoritative membership. Set after a
   // successful joinClub/leaveClub callable, and reconciled on app open by
   // the membership-discovery effect below.
+  //
+  // clubMutationCounter is bumped on every setClubId call so the discovery
+  // effect can detect a membership change that landed while its query was
+  // in flight (e.g. the club_invite deep-link join at app open) and skip
+  // applying its stale pre-join answer.
+  const clubMutationCounter = useRef(0);
   const setClubId = useCallback((clubId: string | null) => {
+    clubMutationCounter.current += 1;
     setData((prev) => (prev.clubId === clubId ? prev : { ...prev, clubId }));
   }, []);
 
@@ -1260,12 +1325,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loaded || !user || clubDiscoveryDone.current) return;
     clubDiscoveryDone.current = true;
+    const mutationsAtQueryStart = clubMutationCounter.current;
     (async () => {
       try {
         const { firestoreService } = await import('../services/firestore');
         const club = await firestoreService.findClubByMembership(user.uid);
-        if (club === undefined) return; // unknown — keep local cache
-        setClubId(club ? (club.id as string) : null);
+        // A join/leave that completed via the callables while this query
+        // was in flight is server-authoritative and fresher than this
+        // snapshot (which can even be served from Firestore's offline
+        // cache while one-shot callables still succeed). Applying the
+        // stale answer would wipe a just-joined club for the rest of the
+        // session; genuine cross-device changes reconcile on the next
+        // app open, exactly like the offline (`undefined`) case.
+        const decision = reconcileDiscoveredClub(
+          club,
+          clubMutationCounter.current !== mutationsAtQueryStart,
+        );
+        if (!decision.apply) return; // unknown or stale — keep local cache
+        setClubId(decision.clubId);
       } catch (e) {
         logger.warn('[Player] club membership discovery failed:', e);
       }
@@ -1619,24 +1696,45 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const claimReferralMilestone = useCallback((count: number): boolean => {
-    let claimed = false;
+    // Eligibility decided against committed state (claimDailyQuest pattern)
+    // so the coin/gem credit below can happen OUTSIDE the updater — state
+    // updaters must stay pure, and 4 of the 6 REFERRAL_MILESTONES advertise
+    // currency that has to actually land when the milestone flips claimed.
+    const current = dataRef.current;
+    if (current.referralMilestonesClaimed.includes(count)) return false;
+    if (current.referralCount < count) return false;
+    const milestone = REFERRAL_MILESTONES.find((entry) => entry.count === count);
+    if (!milestone) return false;
+    const rewards = milestone.rewards;
+
     setData((prev) => {
+      // Re-guard inside the updater so a re-entrant call can't double-mark.
       if (prev.referralMilestonesClaimed.includes(count)) return prev;
       if (prev.referralCount < count) return prev;
-      const milestone = REFERRAL_MILESTONES.find((entry) => entry.count === count);
-      const rewards = milestone?.rewards;
       const unlockedCosmetics =
-        rewards?.cosmeticId && isProfileCosmeticId(rewards.cosmeticId)
+        rewards.cosmeticId && isProfileCosmeticId(rewards.cosmeticId)
           ? Array.from(new Set([...prev.unlockedCosmetics, resolveLegacyCosmeticId(rewards.cosmeticId)]))
           : prev.unlockedCosmetics;
-      claimed = true;
       return {
         ...prev,
         unlockedCosmetics,
         referralMilestonesClaimed: [...prev.referralMilestonesClaimed, count],
       };
     });
-    return claimed;
+
+    // Credit the advertised coins/gems exactly once at claim time — the
+    // claimed-flag check above returns false before this point on any
+    // re-claim. (Display and credit share REFERRAL_MILESTONES as their
+    // single source, so the milestone card cannot advertise amounts that
+    // are not paid.)
+    if (rewards.coins) economyActionsRef.current?.addCoins(rewards.coins);
+    if (rewards.gems) economyActionsRef.current?.addGems(rewards.gems);
+    analytics.logEvent('referral_milestone_claimed', {
+      count,
+      coins: rewards.coins ?? 0,
+      gems: rewards.gems ?? 0,
+    });
+    return true;
   }, []);
 
   // ── Seasonal Quest ────────────────────────────────────────────────────
@@ -1701,6 +1799,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         totalStars: 0,
         currentChapter: 1,
         modeLevels: {},
+        // Reset per-level difficulty/pacing state too. The adaptive
+        // adjuster keys "recent" on the 5 HIGHEST level numbers in
+        // levelAttempts, so retained endgame keys (97–99 with 3+ attempts)
+        // would pin the entire New-Game+ run to 'easier' boards from level
+        // 1, and stale first-run fail counts would mis-fire the
+        // fail-breather/rescue offers on levels the player never failed
+        // this run.
+        performanceMetrics: {
+          ...DEFAULT_PLAYER_METRICS,
+          levelAttempts: {},
+          recentStars: [],
+          recentCompletionTimes: [],
+        },
+        failCountByLevel: {},
+        consecutiveFailures: 0,
+        lastLevelStars: 0,
         // Update prestige state
         prestige: {
           prestigeLevel: newPrestigeLevel,
@@ -1875,7 +1989,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // ── Player Segmentation ───────────────────────────────────────────────
 
-  const recomputeSegments = useCallback((totalSpendCents: number = 0, sharesCount: number = 0) => {
+  const recomputeSegments = useCallback((totalSpendCents?: number, sharesCount: number = 0) => {
     setData((prev) => {
       const rareTilesCount = Object.values(prev.collections.rareTiles)
         .reduce((sum, c) => sum + c, 0);
@@ -1900,12 +2014,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         modeStats: prev.modeStats,
         achievementIds: prev.achievementIds,
         tooltipsShown: prev.tooltipsShown,
-        totalSpendCents,
+        totalSpendCents: totalSpendCents ?? 0,
         wordsFoundTotal: prev.wordsFoundTotal,
         modesPlayedThisWeek: prev.modesPlayedThisWeek,
         sharesCount,
       };
       const segments = computeSegments(input);
+      // A caller that doesn't know the real purchase total (the provider's
+      // own on-load recompute below) must not downgrade the spending tier:
+      // computeSpending(0) says 'non_payer' for everyone, whales included,
+      // and this provider's effect flushes AFTER HomeMainScreen's
+      // real-spend recompute in the same commit — the zero-spend answer
+      // would overwrite it for the whole session. Keep the last real tier.
+      if (totalSpendCents === undefined) {
+        segments.spending = prev.segments.spending;
+      }
       return { ...prev, segments };
     });
   }, []);
@@ -2212,34 +2335,3 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 }
 
 export const usePlayer = () => useContext(PlayerContext);
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function deepMerge<T extends Record<string, unknown>>(
-  target: T,
-  source: Partial<T>,
-): T {
-  const result = { ...target };
-  for (const key of Object.keys(source) as Array<keyof T>) {
-    const sourceVal = source[key];
-    const targetVal = target[key];
-
-    if (
-      sourceVal !== null &&
-      sourceVal !== undefined &&
-      typeof sourceVal === 'object' &&
-      !Array.isArray(sourceVal) &&
-      typeof targetVal === 'object' &&
-      targetVal !== null &&
-      !Array.isArray(targetVal)
-    ) {
-      result[key] = deepMerge(
-        targetVal as Record<string, unknown>,
-        sourceVal as Record<string, unknown>,
-      ) as T[keyof T];
-    } else if (sourceVal !== undefined) {
-      result[key] = sourceVal as T[keyof T];
-    }
-  }
-  return result;
-}

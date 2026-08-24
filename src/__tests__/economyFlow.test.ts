@@ -298,7 +298,11 @@ describe('Economy Flow Integration', () => {
           expect(sale.productId).toBeTruthy();
           expect(sale.name).toBeTruthy();
           expect(sale.originalPriceAmount).toBeGreaterThan(0);
-          expect(sale.discountPercent).toBeGreaterThanOrEqual(35);
+          // Discounts are now DERIVED from catalog anchor vs. real charged
+          // price (the advertised price must match what the store charges),
+          // so the band follows the catalog: gems_500 is 33% (9.99 vs
+          // 14.99 anchor), starter_pack tops out at 60%.
+          expect(sale.discountPercent).toBeGreaterThanOrEqual(33);
           expect(sale.discountPercent).toBeLessThanOrEqual(60);
           expect(sale.hoursRemaining).toBeGreaterThanOrEqual(0);
           expect(sale.salePrice).toMatch(/^\$/);

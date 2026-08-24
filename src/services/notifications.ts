@@ -102,7 +102,13 @@ const NOTIFICATION_TEMPLATES: Record<NotificationCategory, { titles: string[]; b
     ],
   },
   friend_activity: {
-    titles: ['{friendName} needs help!', 'Friend alert!', '{friendName} sent you a gift!'],
+    // ROW-PAIRED, NOT interchangeable: unlike every other category, these
+    // three rows describe three DIFFERENT events — row 0: gift received,
+    // row 1: friend beat your score, row 2: partner event task. Title N
+    // must ship with body N, and the row is chosen deterministically from
+    // the actual event (see resolveTemplateIndex below) — a random pick
+    // announced gifts that didn't exist ~2/3 of the time.
+    titles: ['{friendName} sent you a gift!', 'Friend alert!', '{friendName} needs help!'],
     bodies: [
       '{friendName} sent you a hint gift! Open Wordfall to claim it.',
       '{friendName} beat your score on Level {level}. Can you take it back?',
@@ -134,6 +140,40 @@ const NOTIFICATION_TEMPLATES: Record<NotificationCategory, { titles: string[]; b
     ],
   },
 };
+
+// ─── Event-specific template rows ─────────────────────────────────────────────
+//
+// friend_activity's rows each describe a distinct event, so the row has to
+// match what actually happened. Triggers don't pass an event tag today, but
+// their payloads already discriminate: only triggerFriendBeatScoreNotification
+// supplies a numeric {level}. An explicit `friendEvent` template var wins when
+// a future caller provides one. Categories whose rows are just phrasings of
+// the same event return null and keep the random pick.
+
+const FRIEND_ACTIVITY_ROWS = { gift: 0, beatScore: 1, partnerEvent: 2 } as const;
+
+function resolveTemplateIndex(
+  category: NotificationCategory,
+  templateVars?: Record<string, string | number>,
+): number | null {
+  if (category !== 'friend_activity') return null;
+
+  const friendEvent = templateVars?.friendEvent;
+  if (friendEvent === 'gift') return FRIEND_ACTIVITY_ROWS.gift;
+  if (friendEvent === 'beat_score') return FRIEND_ACTIVITY_ROWS.beatScore;
+  if (friendEvent === 'partner_event') return FRIEND_ACTIVITY_ROWS.partnerEvent;
+
+  const level = templateVars?.level;
+  if (typeof level === 'number' || (typeof level === 'string' && /^\d+$/.test(level))) {
+    return FRIEND_ACTIVITY_ROWS.beatScore;
+  }
+
+  // No usable discriminator (e.g. triggerSocialProofNotification's free-text
+  // detail). "Friend did a thing, your turn" is the only row that neither
+  // promises the player an in-app claimable (gift) nor renders free text into
+  // the {level} slot as garbled copy.
+  return FRIEND_ACTIVITY_ROWS.partnerEvent;
+}
 
 // ─── Deep-link screen mapping per notification category ──────────────────────
 
@@ -209,6 +249,15 @@ export function resolveReminderHours(): {
 }
 
 function isCategoryAllowedForSegment(category: NotificationCategory): boolean {
+  // 'comeback' is exempt from the segment filter: it is scheduled while the
+  // player is still ACTIVE (on app-background) to fire after a FUTURE lapse,
+  // but the only segments whose enabledCategories include it — at_risk and
+  // lapsed — are assigned on an app open AFTER the absence, when the ping
+  // should already have fired. Filtering it by the CURRENT segment therefore
+  // made the comeback unschedulable for every cohort it targets, including
+  // the 20-hour D1 ping for brand-new installs (new_player has no config
+  // branch and falls through to non_payer, which omits 'comeback').
+  if (category === 'comeback') return true;
   if (!currentSegments) return true;
   const personalized = getPersonalizedNotifications(currentSegments);
   if (!personalized.enabledCategories || personalized.enabledCategories.length === 0) {
@@ -221,6 +270,7 @@ function isCategoryAllowedForSegment(category: NotificationCategory): boolean {
 
 const PUSH_TOKEN_STORAGE_KEY = '@wordfall_push_token';
 const DEVICE_TOKEN_STORAGE_KEY = '@wordfall_device_push_token';
+const SCHEDULED_IDS_STORAGE_KEY = '@wordfall_notif_scheduled_ids';
 
 // ─── Android Notification Channel ─────────────────────────────────────────────
 
@@ -260,9 +310,60 @@ class NotificationManager {
   private permissionGranted = false;
   private expoPushToken: string | null = null;
   private scheduledIds: Map<string, string> = new Map(); // category -> notification ID
+  private scheduledIdsHydrated = false;
+  private scheduledIdsHydration: Promise<void> | null = null;
   private lastRemotePayload: Record<string, unknown> | null = null;
   private categoryListeners: Map<NotificationCategory, Set<(data: Record<string, unknown>) => void>> = new Map();
   private responseListenerSubscription: { remove: () => void } | null = null;
+
+  /**
+   * Rehydrate the category → OS-notification-id registry from AsyncStorage.
+   *
+   * One-shot TIME_INTERVAL notifications are OS-persisted and survive process
+   * death, but this map used to be in-memory only — after Android killed the
+   * process, cancel() early-returned and schedule() couldn't replace the
+   * previous session's pending notification, so stale copy still fired
+   * ("Your streak expires tonight!" after the player had already played) and
+   * comeback pings from dead sessions accumulated. Every mutator awaits this
+   * before touching the map so cancel/replace work across restarts.
+   */
+  private ensureScheduledIdsHydrated(): Promise<void> {
+    if (this.scheduledIdsHydrated) return Promise.resolve();
+    if (!this.scheduledIdsHydration) {
+      this.scheduledIdsHydration = (async () => {
+        try {
+          const stored = await AsyncStorage.getItem(SCHEDULED_IDS_STORAGE_KEY);
+          if (stored) {
+            const parsed = JSON.parse(stored) as Record<string, string>;
+            for (const [category, id] of Object.entries(parsed)) {
+              // Entries scheduled by THIS process are newer than the
+              // snapshot — never overwrite them with stale ids.
+              if (typeof id === 'string' && !this.scheduledIds.has(category)) {
+                this.scheduledIds.set(category, id);
+              }
+            }
+          }
+        } catch {
+          // Best-effort: an unreadable registry just means this process
+          // behaves like the old in-memory-only version.
+        }
+        this.scheduledIdsHydrated = true;
+      })();
+    }
+    return this.scheduledIdsHydration;
+  }
+
+  /** Best-effort snapshot of scheduledIds so cancellation survives restarts. */
+  private async persistScheduledIds(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(
+        SCHEDULED_IDS_STORAGE_KEY,
+        JSON.stringify(Object.fromEntries(this.scheduledIds)),
+      );
+    } catch {
+      // Ignore — worst case is the pre-persistence behaviour for one entry.
+    }
+  }
 
   /**
    * Initialize notification permissions and token.
@@ -273,6 +374,10 @@ class NotificationManager {
    */
   async init(): Promise<boolean> {
     try {
+      // Restore the category → id registry from the previous process before
+      // any scheduling/cancelling runs, so replacements can find their target.
+      await this.ensureScheduledIdsHydrated();
+
       if (!Notifications) {
         logger.log('[Notifications] Module not available — running in Expo Go or notifications unsupported');
         this.initialized = true;
@@ -343,6 +448,10 @@ class NotificationManager {
   ): Promise<string | null> {
     if (!this.initialized || !this.permissionGranted || !Notifications) return null;
 
+    // The replacement check and the cancel-existing path below both read the
+    // registry — make sure the previous process's entries are loaded first.
+    await this.ensureScheduledIdsHydrated();
+
     // Segment-aware category filter: if the player's segment opted out of
     // this category via getPersonalizedNotifications(), skip silently.
     if (!isCategoryAllowedForSegment(category)) {
@@ -390,8 +499,12 @@ class NotificationManager {
     }
 
     const template = NOTIFICATION_TEMPLATES[category];
-    const titleIdx = Math.floor(Math.random() * template.titles.length);
-    const bodyIdx = Math.floor(Math.random() * template.bodies.length);
+    // Categories whose rows describe different EVENTS (friend_activity) get a
+    // deterministic row — title and body pinned together so the copy matches
+    // what actually happened. Everything else keeps the random variety pick.
+    const pinnedRow = resolveTemplateIndex(category, templateVars);
+    const titleIdx = pinnedRow ?? Math.floor(Math.random() * template.titles.length);
+    const bodyIdx = pinnedRow ?? Math.floor(Math.random() * template.bodies.length);
 
     let title = template.titles[titleIdx];
     let body = template.bodies[bodyIdx];
@@ -458,6 +571,7 @@ class NotificationManager {
       });
 
       this.scheduledIds.set(category, id);
+      await this.persistScheduledIds();
       logger.log(`[Notifications] Scheduled (${category}): ${title} — ${body}`);
       return id;
     } catch (error) {
@@ -470,6 +584,8 @@ class NotificationManager {
    * Cancel a scheduled notification by category.
    */
   async cancel(category: NotificationCategory): Promise<void> {
+    await this.ensureScheduledIdsHydrated();
+
     const existingId = this.scheduledIds.get(category);
     if (!existingId) return;
 
@@ -480,6 +596,7 @@ class NotificationManager {
     }
 
     this.scheduledIds.delete(category);
+    await this.persistScheduledIds();
     logger.log(`[Notifications] Cancelled: ${category}`);
   }
 
@@ -487,6 +604,8 @@ class NotificationManager {
    * Cancel all scheduled notifications.
    */
   async cancelAll(): Promise<void> {
+    await this.ensureScheduledIdsHydrated();
+
     try {
       if (Notifications) await Notifications.cancelAllScheduledNotificationsAsync();
     } catch {
@@ -494,6 +613,7 @@ class NotificationManager {
     }
 
     this.scheduledIds.clear();
+    await this.persistScheduledIds();
     logger.log('[Notifications] All cancelled');
   }
 

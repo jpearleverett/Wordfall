@@ -78,12 +78,30 @@ export const REFERRAL_MILESTONES: ReferralMilestone[] = [
 /**
  * Generates a deterministic 6-character alphanumeric referral code from a user ID.
  * Uses a simple hash to produce a stable, short code.
+ *
+ * The code is a pure function of a 31-bit hash, and the 6-char space is only
+ * ~2^30, so DISTINCT uids collide at birthday-problem rates — a collision is
+ * expected, not exceptional, at scale. The `referralCodes/{code}` index doc
+ * pins each code to the first uid that registered it (Firestore rules reject
+ * a second owner), so a collision left undetected silently credits every
+ * referral to the stranger who registered the code first.
+ *
+ * `salt` exists for the collision-retry protocol: when the upsert of the
+ * salt-0 code is rejected because the doc belongs to another uid, the caller
+ * regenerates with salt 1, 2, ... (each salt yields an independent code),
+ * persists the first code it successfully registers, and shares only that
+ * one. salt 0 (the default) is byte-identical to the historical output so
+ * every already-registered code, share link, and locally cached
+ * `player.referralCode` stays valid.
  */
-export function generateReferralCode(userId: string): string {
+export function generateReferralCode(userId: string, salt: number = 0): string {
   const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 to avoid confusion
+  // salt > 0 re-hashes uid + salt so each retry lands on an unrelated code;
+  // salt <= 0 hashes the bare uid, preserving the legacy mapping exactly.
+  const source = salt > 0 ? `${userId}#${salt}` : userId;
   let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    const char = userId.charCodeAt(i);
+  for (let i = 0; i < source.length; i++) {
+    const char = source.charCodeAt(i);
     hash = ((hash << 5) - hash + char) | 0; // 32-bit int
   }
   // Use absolute value and convert to base-CHARS string
@@ -95,6 +113,14 @@ export function generateReferralCode(userId: string): string {
   }
   return code;
 }
+
+/**
+ * How many salted regenerations the registration retry may attempt before
+ * giving up for the session (it retries again on next app open). Collisions
+ * are rare per-user, so consecutive collisions across several independent
+ * codes almost certainly mean something other than bad luck (e.g. offline).
+ */
+export const REFERRAL_CODE_MAX_REGEN_ATTEMPTS = 5;
 
 // ─── Reward Helpers ─────────────────────────────────────────────────────────
 
