@@ -179,4 +179,48 @@ describe('trackExperimentExposure', () => {
     expect(payload).toHaveProperty('experiment_name');
     expect(payload).toHaveProperty('timestamp');
   });
+
+  it('logs the same variant the segment-filtered user was actually served', () => {
+    for (let i = 0; i < 60; i++) {
+      (analytics.logEvent as jest.Mock).mockClear();
+      const uid = `payer_${i}`;
+      const segments = ['whale', 'engaged'];
+      const served = getAssignedVariant('first_purchase_offer', uid, segments);
+      trackExperimentExposure('first_purchase_offer', uid, segments);
+      const payload = (analytics.logEvent as jest.Mock).mock.calls[0][1];
+      expect(payload.variant_id).toBe(served.id);
+    }
+  });
+});
+
+describe('not-enrolled users get the real control variant', () => {
+  it('never shows the first-purchase offer to a segment-excluded payer', () => {
+    // first_purchase_offer targets ['non_payer']; variants[0] is a $0.99
+    // treatment, so the excluded path must fall to the no-offer control 'C'.
+    for (let i = 0; i < 60; i++) {
+      const variant = getAssignedVariant('first_purchase_offer', `whale_${i}`, [
+        'whale',
+        'engaged',
+      ]);
+      expect(variant.id).toBe('C');
+      expect(variant.config.showOffer).toBe(false);
+    }
+  });
+
+  it('still enrolls targeted segments across multiple variants', () => {
+    const ids = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      ids.add(
+        getAssignedVariant('first_purchase_offer', `free_${i}`, ['non_payer']).id,
+      );
+    }
+    expect(ids.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it('declared controlVariantId resolves to a real variant', () => {
+    for (const exp of getAllActiveExperiments()) {
+      if (!exp.controlVariantId) continue;
+      expect(exp.variants.map(v => v.id)).toContain(exp.controlVariantId);
+    }
+  });
 });

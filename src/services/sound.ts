@@ -1136,6 +1136,11 @@ class SoundManager {
   private synthesisCache: Map<string, Int16Array> = new Map(); // Raw sample buffer cache (avoids re-doing DSP math)
   private currentMusic: any = null;
   private currentTrack: MusicTrack | null = null;
+  // Last BGM the app asked for, recorded even when the request could not be
+  // honoured (muted, or not yet initialized). Every playMusic call site is
+  // transition-triggered (level start, tension edge, screen mount), so without
+  // this, un-muting would leave the game silent until the next transition.
+  private lastRequestedTrack: MusicTrack | null = null;
   private sfxVolume: number = 1.0;
   private musicVolume: number = 0.5;
   // Plan task 2.4: ceremony SFX (level-up, star-earn, etc.) route through a
@@ -1489,6 +1494,8 @@ class SoundManager {
    * from zero to the effective music volume, then dispose the old player.
    */
   async playMusic(track: MusicTrack, options?: { crossfadeMs?: number }): Promise<void> {
+    // Remember the request before any early return so un-muting can resume it.
+    this.lastRequestedTrack = track;
     if (this.muted || !this.initialized) return;
     if (this.currentTrack === track) return;
 
@@ -1613,14 +1620,27 @@ class SoundManager {
   }
 
   setMuted(muted: boolean): void {
+    const wasMuted = this.muted;
     this.muted = muted;
     if (muted) {
       void this.stopMusic();
+      return;
+    }
+    // Un-muting: stopMusic() disposed the player and nulled currentTrack, so
+    // resume the last requested BGM ourselves — nothing else will until the
+    // next screen/level transition.
+    if (wasMuted && this.lastRequestedTrack && !this.currentMusic) {
+      void this.playMusic(this.lastRequestedTrack);
     }
   }
 
   isMuted(): boolean {
     return this.muted;
+  }
+
+  /** The BGM track currently playing, or null when music is stopped. */
+  getCurrentTrack(): MusicTrack | null {
+    return this.currentTrack;
   }
 
   getSfxVolume(): number {
