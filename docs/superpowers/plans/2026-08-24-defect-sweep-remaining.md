@@ -1,7 +1,7 @@
 # Defect sweep — remaining work (2026-08-24)
 
-Status ledger: `src/__tests__/perfAnimationLedger.json` (machine-checked;
-`node scripts/perf-scorecard.js` prints % done). 90 entries fixed so far:
+Status ledger: `src/__tests__/defectLedger.json` (machine-checked;
+`node scripts/defect-scorecard.js` prints % done). 90 entries fixed so far:
 84 perf/animation + the 6 review bugs. A repo-wide correctness hunt
 (adversarially verified) confirmed **96 more bugs**; fixing them is in
 flight. This file is the to-do list for finishing that campaign.
@@ -75,8 +75,7 @@ already covers. Findings source:
 ## D. Finalization
 
 - Harvest all agent ledger entries → ledger; flip statuses honestly.
-- Rename `perfAnimationLedger` → `defectLedger` (json + test + scorecard
-  + CLAUDE.md row) now that it spans correctness classes C1–C8.
+- ~~Rename `perfAnimationLedger` → `defectLedger`~~ (done).
 - Full verification: `npm run typecheck`, full jest, engine benchmark
   suites, **`npx expo export --platform android`** (hermes bundle — not
   yet run this session), scorecard, push.

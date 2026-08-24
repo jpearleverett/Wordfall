@@ -57,7 +57,7 @@ reward tables — all support a `*_VERBOSE=1` env var to print full profiles.
 | `engine/__tests__/modeSolvability` | Every generated board is solvable under **its own mode's** clear rule | 0 unsolvable across 8 modes |
 | `__tests__/rewardCadence` | No long stretch of levels without a scheduled payoff | ≤5 dry levels to L60, ≤9 to L150 |
 | `__tests__/curveProfile` + `spikeLevels` | Early levels never repeat a board or go backwards | monotonic through L14 |
-| `__tests__/perfAnimationLedger` | Every perf/animation defect fixed in the Aug 2026 sweep stays fixed AND the ledger stays honest (an "open" entry whose checks pass must be flipped) — one machine-checked entry per defect in `perfAnimationLedger.json`; `node scripts/perf-scorecard.js` prints % done by severity/class | 80/80 fixed |
+| `__tests__/defectLedger` | Every defect fixed in the Aug 2026 sweeps stays fixed AND the ledger stays honest (an "open" entry whose checks pass must be flipped) — one machine-checked entry per defect in `defectLedger.json`, spanning perf/animation classes (F1–F7, P1–P9) and correctness classes (C1–C8: money, server, gameplay contract, time, input, progression, persistence, telemetry); `node scripts/defect-scorecard.js` prints % done by severity/class | 100+ fixed |
 | `__tests__/animationReachability` | 22 dead animation components (zero importers, several with infinite loops) stay deleted; re-adding one requires a consumer + delisting | 0 resurrected |
 
 **Read those two stuck numbers together.** The 57% was treated for a while as

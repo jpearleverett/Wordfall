@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * Perf & animation doneness scorecard.
+ * Defect-ledger doneness scorecard (perf/animation F/P classes + correctness C classes).
  *
- * Reads src/__tests__/perfAnimationLedger.json, re-runs every pattern check
+ * Reads src/__tests__/defectLedger.json, re-runs every pattern check
  * against the current working tree, and prints completion by severity and
  * defect class. A "fixed" entry whose checks fail is flagged REGRESSED; an
  * "open" entry whose checks all pass is flagged FLIP-TO-FIXED (the jest
  * ledger suite fails on both until the ledger is corrected).
  *
- * Usage: node scripts/perf-scorecard.js [--verbose]
+ * Usage: node scripts/defect-scorecard.js [--verbose]
  */
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const LEDGER = path.join(ROOT, 'src/__tests__/perfAnimationLedger.json');
+const LEDGER = path.join(ROOT, 'src/__tests__/defectLedger.json');
 const entries = JSON.parse(fs.readFileSync(LEDGER, 'utf8'));
 const verbose = process.argv.includes('--verbose');
 
@@ -59,8 +59,8 @@ function bucket(keyFn) {
 }
 
 console.log('');
-console.log('  Wordfall perf & animation scorecard');
-console.log('  ===================================');
+console.log('  Wordfall defect-ledger scorecard');
+console.log('  ==============================');
 console.log(`  DONE ${done}/${total}  (${pct}%)`);
 console.log('');
 console.log('  By severity:');

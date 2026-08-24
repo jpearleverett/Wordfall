@@ -1,8 +1,9 @@
 /**
- * Performance & animation defect ledger — the "how done are we" guard.
+ * Defect ledger — the "how done are we" guard.
  *
- * Every confirmed perf/animation defect found in the Aug 2026 sweep lives in
- * perfAnimationLedger.json with one or more machine-checkable checks:
+ * Every confirmed defect from the Aug 2026 sweeps (perf/animation classes
+ * F1-F7/P1-P9 and correctness classes C1-C8) lives in defectLedger.json
+ * with one or more machine-checkable checks:
  *
  *   - pattern-absent : the defect pattern must NOT match the file
  *   - pattern-present: the fix pattern MUST match the file
@@ -14,14 +15,14 @@
  *   - status "open"  ⇒ at least one check fails (fixing the defect forces
  *     you to flip the status, so the scorecard can never silently drift)
  *
- * Scorecard: `node scripts/perf-scorecard.js` prints fixed/open by severity
+ * Scorecard: `node scripts/defect-scorecard.js` prints fixed/open by severity
  * and class from the same JSON.
  */
 import fs from 'fs';
 import path from 'path';
 
 const ROOT = path.resolve(__dirname, '../..');
-const LEDGER = path.join(__dirname, 'perfAnimationLedger.json');
+const LEDGER = path.join(__dirname, 'defectLedger.json');
 
 interface LedgerCheck {
   type: 'pattern-absent' | 'pattern-present' | 'test';
