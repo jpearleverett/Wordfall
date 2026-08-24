@@ -106,16 +106,9 @@ describe('shop glyph coverage (GameIcon EMOJI_TO_NAME)', () => {
     );
   });
 
-  it('DIFFICULTY_META icons all resolve (parsed from component source)', () => {
-    const source = readSource('components/DifficultyTransitionCeremony.tsx');
-    const block = extractBlock(source, 'const DIFFICULTY_META', '\n};');
-    const icons = [...block.matchAll(/(\w+):\s*\{[^}]*icon:\s*'([^']+)'/g)].map((m) => ({
-      id: m[1],
-      icon: decodeEscapes(m[2]),
-    }));
-    expect(icons.length).toBe(4);
-    expectAllResolve('difficulty', icons);
-  });
+  // The DIFFICULTY_META case is gone with DifficultyTransitionCeremony.tsx —
+  // the component was dead code (zero importers) removed in the Aug 2026
+  // perf/animation sweep; see src/__tests__/animationReachability.test.ts.
 
   it('ShopScreen bundle-contents glyph literals all resolve', () => {
     const source = readSource('screens/ShopScreen.tsx');

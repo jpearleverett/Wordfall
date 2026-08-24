@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Animated,
   Pressable,
@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, SHADOWS } from '../constants';
+import { useCeremonyTransition } from '../hooks/useCeremonyTransition';
 import { analytics } from '../services/analytics';
 import { errorHaptic, wordFoundHaptic } from '../services/haptics';
 import GameIcon, { GameIconName } from './icons/GameIcon';
@@ -102,8 +103,9 @@ export function PostLossModal({
   variant = 'stuck',
 }: PostLossModalProps) {
   const theme = VARIANTS[variant];
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  // Shared ceremony policy: overlay fades, card scales, instant settle +
+  // instant dismiss under reduced motion, finished-guarded exit.
+  const { overlayStyle, cardStyle, requestDismiss } = useCeremonyTransition(onDismiss);
   const [timeLeft, setTimeLeft] = useState(Math.ceil(AUTO_DISMISS_MS / 1000));
 
   useEffect(() => {
@@ -113,27 +115,23 @@ export function PostLossModal({
       total_words: totalWords,
     });
     void theme.haptic();
-
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
-    ]).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Pure countdown tick — side effects live in the timeLeft === 0 effect
+  // below, never inside the state updater.
   useEffect(() => {
     const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          onDismiss();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, [onDismiss]);
+  }, []);
+
+  useEffect(() => {
+    if (timeLeft === 0) {
+      requestDismiss();
+    }
+  }, [timeLeft, requestDismiss]);
 
   const handleWatchAd = useCallback(() => {
     void analytics.logEvent('offer_accepted', {
@@ -153,20 +151,15 @@ export function PostLossModal({
 
   const handleDismiss = useCallback(() => {
     void analytics.logEvent('offer_dismissed', { offer_type: theme.analyticsOfferType });
-    onDismiss();
-  }, [onDismiss, theme.analyticsOfferType]);
+    requestDismiss();
+  }, [requestDismiss, theme.analyticsOfferType]);
 
   const wordsRemaining = Math.max(0, totalWords - wordsFound);
   const progressPercent = totalWords > 0 ? Math.round((wordsFound / totalWords) * 100) : 0;
 
   return (
-    <Animated.View
-      style={[
-        styles.overlay,
-        { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
-      ]}
-    >
-      <View style={styles.card}>
+    <Animated.View style={[styles.overlay, overlayStyle]}>
+      <Animated.View style={[styles.card, cardStyle]}>
         <LinearGradient
           colors={[COLORS.surface, COLORS.bgLight]}
           style={styles.gradient}
@@ -237,7 +230,7 @@ export function PostLossModal({
             <Text style={styles.dismissText}>No thanks ({timeLeft}s)</Text>
           </Pressable>
         </LinearGradient>
-      </View>
+      </Animated.View>
     </Animated.View>
   );
 }

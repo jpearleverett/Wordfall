@@ -327,5 +327,78 @@
         "pattern": "reduceMotion=\\{suppressMotion\\}"
       }
     ]
+  },
+  {
+    "id": "dead-animation-components-removed",
+    "title": "22 dead animation-bearing components (zero importers, several with infinite loops) removed",
+    "file": "src/components",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "test",
+        "suite": "src/__tests__/animationReachability.test.ts"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/LevelUpCeremony.tsx",
+        "pattern": "."
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/game/GravityTrailEffect.tsx",
+        "pattern": "."
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/SynthwaveBackdrop.tsx",
+        "pattern": "."
+      }
+    ]
+  },
+  {
+    "id": "ceremony-auto-dismiss-hard-cut",
+    "title": "Tier-2 auto-dismissed ceremonies hard-cut off screen instead of playing the shared exit",
+    "file": "src/hooks/useCeremonyQueue.ts",
+    "klass": "F4",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyQueue.ts",
+        "pattern": "requestActiveCeremonyDismiss"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyTransition.ts",
+        "pattern": "activeGracefulDismiss"
+      }
+    ]
+  },
+  {
+    "id": "ceremony-dual-advance-race",
+    "title": "Dismiss-timer advance raced the processing effect and could eat a popped ceremony's celebration",
+    "file": "src/hooks/useCeremonyQueue.ts",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useCeremonyQueue.ts",
+        "pattern": "popCeremonyRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyQueue.ts",
+        "pattern": "cooldownUntilRef"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/ceremonyQueue.test.ts"
+      }
+    ]
   }
 ]

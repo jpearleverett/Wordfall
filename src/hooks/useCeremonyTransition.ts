@@ -58,6 +58,23 @@ export function getCeremonyMotionPlan(reduceMotion: boolean): CeremonyMotionPlan
       };
 }
 
+/**
+ * The mounted ceremony's graceful dismiss, registered by the hook below.
+ * useCeremonyQueue's auto-dismiss timer calls requestActiveCeremonyDismiss
+ * so Tier-2 ceremonies play the shared exit fade instead of hard-cutting
+ * off screen (setActiveCeremony(null) unmounts instantly). Falls back to
+ * the direct dismiss when no contract-mounted ceremony is registered.
+ */
+let activeGracefulDismiss: (() => void) | null = null;
+
+export function requestActiveCeremonyDismiss(fallback: () => void): void {
+  if (activeGracefulDismiss) {
+    activeGracefulDismiss();
+  } else {
+    fallback();
+  }
+}
+
 export interface CeremonyTransition {
   reduceMotion: boolean;
   /** Gate confetti / sparkles / pulse loops on this, not on reduceMotion
@@ -149,6 +166,15 @@ export function useCeremonyTransition(onDismiss: () => void): CeremonyTransition
     // plan is latched per-mount; overlayOpacity/cardScale are stable refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan.exitDurationMs]);
+
+  useEffect(() => {
+    activeGracefulDismiss = requestDismiss;
+    return () => {
+      if (activeGracefulDismiss === requestDismiss) {
+        activeGracefulDismiss = null;
+      }
+    };
+  }, [requestDismiss]);
 
   const overlayStyle = useMemo(() => ({ opacity: overlayOpacity }), [overlayOpacity]);
   const cardStyle = useMemo(

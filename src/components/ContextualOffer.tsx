@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, cancelAnimation } from 'react-native-reanimated';
@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { LOCAL_IMAGES } from '../utils/localAssets';
 import { analytics } from '../services/analytics';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 const AnimatedText = Animated.createAnimatedComponent(Text);
 
@@ -73,8 +74,10 @@ export function ContextualOffer({
   onDismiss,
 }: ContextualOfferProps) {
   const { t } = useTranslation();
-  const fade = useSharedValue(0);
-  const slideY = useSharedValue(40);
+  const reduceMotion = useReduceMotion();
+  // Under reduce motion the overlay mounts already settled (no entrance).
+  const fade = useSharedValue(reduceMotion ? 1 : 0);
+  const slideY = useSharedValue(reduceMotion ? 0 : 40);
   const pulse = useSharedValue(1);
 
   const [secondsLeft, setSecondsLeft] = useState(expiresInSeconds);
@@ -89,45 +92,70 @@ export function ContextualOffer({
     difficulty: context?.difficulty ?? '',
   });
 
-  // Countdown timer
+  // Countdown timer. The state updater stays pure — expiry side effects
+  // (analytics + onDismiss) run in the effect below on the observed 0.
+  const running = secondsLeft > 0;
   useEffect(() => {
+    if (!running) {
+      return;
+    }
     const interval = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          void analytics.logEvent('offer_expired', { offerType: type });
-          onDismiss();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setSecondsLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, [type, onDismiss]);
+  }, [running]);
 
-  // Pulse animation when under 60 seconds
+  // Expiry side effects, fired exactly once when the countdown hits 0.
+  const expiredRef = useRef(false);
   useEffect(() => {
-    if (secondsLeft > 0 && secondsLeft < 60) {
-      pulse.value = withRepeat(
-        withSequence(
-          withTiming(1.15, { duration: 500 }),
-          withTiming(1, { duration: 500 }),
-        ),
-        -1,
-      );
-      return () => cancelAnimation(pulse);
+    if (secondsLeft === 0 && !expiredRef.current) {
+      expiredRef.current = true;
+      void analytics.logEvent('offer_expired', { offerType: type });
+      onDismiss();
     }
-  }, [secondsLeft < 60]);
+  }, [secondsLeft, type, onDismiss]);
+
+  // Pulse animation when under 60 seconds — decorative, so it is skipped
+  // entirely under reduce motion (the timerTextUrgent glow still conveys
+  // urgency and the countdown text keeps updating).
+  const urgent = secondsLeft > 0 && secondsLeft < 60;
+  useEffect(() => {
+    if (reduceMotion || !urgent) {
+      pulse.value = 1;
+      return;
+    }
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1.15, { duration: 500 }),
+        withTiming(1, { duration: 500 }),
+      ),
+      -1,
+    );
+    return () => {
+      cancelAnimation(pulse);
+      pulse.value = 1;
+    };
+  }, [reduceMotion, urgent, pulse]);
 
   // Format seconds as MM:SS
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
   const timerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
+  // Entrance — snapped to the settled state under reduce motion.
   useEffect(() => {
+    if (reduceMotion) {
+      fade.value = 1;
+      slideY.value = 0;
+      return;
+    }
     fade.value = withTiming(1, { duration: 250 });
     slideY.value = withSpring(0, { damping: 14, stiffness: 100 });
-  }, []);
+    return () => {
+      cancelAnimation(fade);
+      cancelAnimation(slideY);
+    };
+  }, [reduceMotion, fade, slideY]);
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
   const cardStyle = useAnimatedStyle(() => ({ transform: [{ translateY: slideY.value }] }));
