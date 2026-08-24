@@ -4781,7 +4781,7 @@
   },
   {
     "id": "referral-code-collision-silently-misdirects-rewards",
-    "title": "Referral code hash collisions silently credit rewards to a stranger",
+    "title": "Referral code collisions left the loser with a code resolving to another user (their referral rewards paid that user)",
     "file": "src/data/referralSystem.ts",
     "klass": "C2",
     "severity": "medium",
@@ -4789,19 +4789,22 @@
       {
         "type": "pattern-present",
         "file": "src/data/referralSystem.ts",
-        "pattern": "generateReferralCode\\(userId: string, salt: number = 0\\)",
-        "count": 1
+        "pattern": "REFERRAL_CODE_MAX_REGEN_ATTEMPTS"
       },
       {
         "type": "pattern-present",
         "file": "src/data/referralSystem.ts",
-        "pattern": "REFERRAL_CODE_MAX_REGEN_ATTEMPTS",
-        "count": 1
+        "pattern": "generateReferralCode\\(userId: string, salt: number = 0\\)"
       },
       {
-        "type": "pattern-absent",
-        "file": "src/data/referralSystem.ts",
-        "pattern": "generateReferralCode\\(userId: string\\): string"
+        "type": "pattern-present",
+        "file": "src/services/firestore.ts",
+        "pattern": "Promise<'ok' \\| 'collision' \\| 'error'>"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerContext.tsx",
+        "pattern": "generateReferralCode\\(user\\.uid, salt\\)"
       },
       {
         "type": "test",
@@ -4854,5 +4857,224 @@
         "pattern": "baseDropChance \\+ prestigeRareTileBonus"
       }
     ]
+  },
+  {
+    "id": "google-recovery-signin-clobbers-cloud-account",
+    "title": "credential-already-in-use recovery signed into the existing account and let this device's anonymous data overwrite its cloud save",
+    "file": "src/services/googleAuth.ts",
+    "klass": "C7",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/googleAuth.ts",
+        "pattern": "export async function recoverExistingGoogleAccount"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/googleAuth.ts",
+        "pattern": "code: 'CREDENTIAL_IN_USE'"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/googleAuth.ts",
+        "pattern": "already-in-use'\\)[\\s\\S]{0,300}signInWithCredential"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SettingsScreen.tsx",
+        "pattern": "recoverExistingGoogleAccount"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/googleAccountRecovery.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "securestore-keys-invalid-migration-dead",
+    "title": "SecureStore rejected the '@'-prefixed caller keys, so the receipt migration silently fell back to plaintext AsyncStorage forever",
+    "file": "src/services/secureStorage.ts",
+    "klass": "C7",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "function toSecureKey\\(key: string\\): string"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "secureSet\\(toSecureKey\\(key\\), value\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "secureGet\\(toSecureKey\\(key\\)\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/secureStorageActive.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "settings-issignedin-never-cleared-on-signout",
+    "title": "Persisted isSignedIn flag was never cleared, so Settings claimed 'Cloud backup active' after sign-out and hid the Sign In row forever",
+    "file": "src/screens/SettingsScreen.tsx",
+    "klass": "C5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SettingsScreen.tsx",
+        "pattern": "onUpdateSetting\\('isSignedIn', false\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SettingsScreen.tsx",
+        "pattern": "linkedEmail != null \\|\\| \\(settings\\?\\.isSignedIn \\?\\? false\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/SettingsScreen.tsx",
+        "pattern": "const isSignedIn = settings\\?\\.isSignedIn \\?\\? false;"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "inbox-claim-before-credit-loses-reward-on-kill",
+    "title": "Inbox sweep burned the irreversible server claim before the economy credit was durable, destroying the reward on a crash",
+    "file": "src/hooks/useRewardInbox.ts",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardInbox.ts",
+        "pattern": "export function planJournalReplay"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardInbox.ts",
+        "pattern": "CLAIM_JOURNAL_KEY"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardInbox.ts",
+        "pattern": "if \\(!\\(await writeJournal\\(journal\\)\\)\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/hooks/__tests__/rewardInboxJournal.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "securestore-torn-chunk-write-corruption",
+    "title": "Multi-chunk rewrite overwrote live shards in place under a stale count, so a crash mid-write yielded a corrupt new/old string",
+    "file": "src/services/secureStorage.ts",
+    "klass": "C7",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "__g\\$\\{generation\\}__chunk_"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "function parseChunkPointer"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "\\$\\{generation\\}:\\$\\{chunks\\.length\\}"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/services/secureStorage.ts",
+        "pattern": "String\\(chunks\\.length\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/secureStorageActive.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "gamescreen-streak-shield-offer-fires-on-utc-clock-not-risk",
+    "title": "In-game streak-shield upsell fired on the UTC clock instead of real streak risk",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "new Date\\(streaks\\.lastPlayDate\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "diffHours"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "streakShieldOfferDue\\(playerStreaks, new Date\\(\\)\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/gameMotion.ts",
+        "pattern": "export function streakShieldOfferDue",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/gameMotion.ts",
+        "pattern": "lastPlayDate >= utcDayStamp\\(now\\)",
+        "count": 1
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/gameMotion.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "offer-funnel-param-name-mismatch",
+    "title": "Offer funnel events emitted offerType in GameScreen and offer_type everywhere else",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C8",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "offerType\\s*:"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "offer_type:",
+        "count": 3
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/offerFunnelSchema.test.ts"
+      }
+    ],
+    "status": "fixed"
   }
 ]

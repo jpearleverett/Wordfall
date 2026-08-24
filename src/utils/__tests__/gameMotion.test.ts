@@ -2,6 +2,7 @@ import {
   getPuzzleCompleteMotionPolicy,
   getWordBankMotionPolicy,
   isLastWordTensionActive,
+  streakShieldOfferDue,
   transitionMotionEligibility,
 } from '../gameMotion';
 
@@ -142,5 +143,92 @@ describe('mounted result motion eligibility latch', () => {
 
     expect(previousMount).toBe(false);
     expect(futureMount).toBe(true);
+  });
+});
+
+describe('streak shield offer risk predicate', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const utcDay = (d: Date) => d.toISOString().slice(0, 10);
+  const yesterdayOf = (d: Date) => utcDay(new Date(d.getTime() - DAY_MS));
+  const base = {
+    currentStreak: 12,
+    streakShieldAvailable: false,
+  };
+
+  test('a day already banked never counts as at risk, whatever the UTC clock says', () => {
+    // The old inline predicate parsed lastPlayDate ('YYYY-MM-DD' = UTC
+    // midnight) as a timestamp, so this case read as "21.5h since last play"
+    // and fired the paid offer on a streak app open had already secured.
+    const now = new Date('2026-05-10T21:30:00Z');
+
+    expect(
+      streakShieldOfferDue({ ...base, lastPlayDate: utcDay(now) }, now),
+    ).toBe(false);
+  });
+
+  test('an unbanked day with grace on cooldown is at risk at any hour', () => {
+    const now = new Date('2026-05-10T09:15:00Z');
+
+    expect(
+      streakShieldOfferDue(
+        { ...base, lastPlayDate: yesterdayOf(now), lastGraceDate: '2026-05-04' },
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  test('an unbanked day with grace still available waits for the local evening', () => {
+    const morning = new Date(2026, 4, 10, 9, 0, 0);
+    const evening = new Date(2026, 4, 10, 21, 0, 0);
+
+    expect(
+      streakShieldOfferDue({ ...base, lastPlayDate: yesterdayOf(morning) }, morning),
+    ).toBe(false);
+    expect(
+      streakShieldOfferDue({ ...base, lastPlayDate: yesterdayOf(evening) }, evening),
+    ).toBe(true);
+  });
+
+  test('never upsells a shield the player already owns', () => {
+    const now = new Date('2026-05-10T21:30:00Z');
+
+    expect(
+      streakShieldOfferDue(
+        {
+          ...base,
+          streakShieldAvailable: true,
+          lastPlayDate: yesterdayOf(now),
+          lastGraceDate: '2026-05-04',
+        },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  test('never sells prevention on a comeback day', () => {
+    const now = new Date('2026-05-10T21:30:00Z');
+
+    expect(
+      streakShieldOfferDue(
+        {
+          ...base,
+          lastPlayDate: yesterdayOf(now),
+          lastGraceDate: '2026-05-04',
+          recentBreak: { brokenAtMs: now.getTime() - 3 * 60 * 60 * 1000 },
+        },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  test('short streaks, missing state and absent play dates are never at risk', () => {
+    const now = new Date('2026-05-10T21:30:00Z');
+
+    expect(
+      streakShieldOfferDue({ ...base, currentStreak: 2, lastPlayDate: yesterdayOf(now) }, now),
+    ).toBe(false);
+    expect(streakShieldOfferDue({ ...base, lastPlayDate: '' }, now)).toBe(false);
+    expect(streakShieldOfferDue(null, now)).toBe(false);
+    expect(streakShieldOfferDue(undefined, now)).toBe(false);
   });
 });

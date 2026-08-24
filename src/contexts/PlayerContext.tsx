@@ -31,7 +31,11 @@ import {
 import { triggerEnergyFullNotification } from '../services/notificationTriggers';
 import { createProgressMethods } from './PlayerProgressContext';
 import { createSocialMethods } from './PlayerSocialContext';
-import { generateReferralCode, REFERRAL_MILESTONES } from '../data/referralSystem';
+import {
+  generateReferralCode,
+  REFERRAL_CODE_MAX_REGEN_ATTEMPTS,
+  REFERRAL_MILESTONES,
+} from '../data/referralSystem';
 import { createPersistQueue } from '../utils/persistQueue';
 import { stripUndefinedDeep } from '../utils/firestoreSanitize';
 import { firestoreService } from '../services/firestore';
@@ -1029,9 +1033,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return { ...prev, referralCode: nextCode };
     });
     if (nextCode) {
-      firestoreService
-        .upsertReferralCode(user.uid, nextCode)
-        .catch(() => undefined);
+      const claimCode = async () => {
+        let candidate = nextCode as string;
+        // Codes collide (6 chars off a 32-bit hash). The loser used to keep
+        // a code that resolved to the OTHER user, silently paying them every
+        // referral reward it earned. Re-derive with an increasing salt until
+        // one is free, then persist the code we actually own.
+        for (let salt = 0; salt <= REFERRAL_CODE_MAX_REGEN_ATTEMPTS; salt++) {
+          if (salt > 0) candidate = generateReferralCode(user.uid, salt);
+          const result = await firestoreService.upsertReferralCode(user.uid, candidate);
+          if (result === 'ok') {
+            if (candidate !== nextCode) {
+              setData((prev) => ({ ...prev, referralCode: candidate }));
+            }
+            return;
+          }
+          if (result === 'error') return; // transient — retry next launch
+        }
+      };
+      void claimCode().catch(() => undefined);
     }
   }, [loaded, user]);
 

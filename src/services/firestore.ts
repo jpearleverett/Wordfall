@@ -1466,23 +1466,44 @@ class FirestoreService {
    * Cloud Function reads this collection to resolve a player-entered code back
    * to the referrer's UID. Safe to call repeatedly; writes are merged.
    */
-  async upsertReferralCode(userId: string, referralCode: string): Promise<boolean> {
-    if (!this.enabled || !userId || !referralCode) return false;
+  /**
+   * Claim the code→uid mapping the referral Cloud Function resolves against.
+   *
+   * Tri-state, not boolean: referral codes are a 6-char projection of a
+   * 32-bit hash, so distinct users DO collide. The loser's write was
+   * rejected by rules and swallowed as a plain `false`, leaving them with a
+   * code that resolves to somebody else — every reward they earned by
+   * sharing it paid the other user. 'collision' lets the caller re-derive a
+   * salted code (generateReferralCode(uid, salt)) and retry; 'error' is a
+   * transient failure worth leaving alone.
+   */
+  async upsertReferralCode(
+    userId: string,
+    referralCode: string,
+  ): Promise<'ok' | 'collision' | 'error'> {
+    if (!this.enabled || !userId || !referralCode) return 'error';
+    const code = referralCode.toUpperCase();
     try {
-      const ref = doc(db, 'referralCodes', referralCode.toUpperCase());
+      const ref = doc(db, 'referralCodes', code);
+      const existing = await getDoc(ref);
+      if (existing.exists() && existing.data().uid !== userId) {
+        return 'collision';
+      }
       await setDoc(
         ref,
-        {
-          uid: userId,
-          code: referralCode.toUpperCase(),
-          updatedAt: serverTimestamp(),
-        },
+        { uid: userId, code, updatedAt: serverTimestamp() },
         { merge: true },
       );
-      return true;
+      return 'ok';
     } catch (e) {
+      // Rules reject a write onto a foreign-owned doc — indistinguishable
+      // from a transient error by message, but the read above already
+      // caught the readable case, so treat permission failures as a
+      // collision and anything else as transient.
+      const code = (e as { code?: string })?.code ?? '';
+      if (code === 'permission-denied') return 'collision';
       logger.warn('[Firestore] upsertReferralCode failed:', e);
-      return false;
+      return 'error';
     }
   }
 

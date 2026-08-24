@@ -88,7 +88,7 @@ import { GameBanners } from './game/GameBanners';
 import { PlayField, ConnectedWordBank } from './game/PlayField';
 import { ConnectedTimerMovesBars } from './game/TimerMovesBars';
 import { TilePaletteContext } from '../components/LetterCell';
-import { isLastWordTensionActive } from '../utils/gameMotion';
+import { isLastWordTensionActive, streakShieldOfferDue } from '../utils/gameMotion';
 import {
   computeGridGeometry,
   computeGridMetrics,
@@ -934,8 +934,10 @@ function GameScreenImpl({
 
   const dismissOffer = useCallback(() => {
     if (activeOffer) {
+      // snake_case matches PostLossModal + the typed analytics helpers — one
+      // param schema per event name, or the funnel slices to NULL.
       void analytics.logEvent('offer_dismissed', {
-        offerType: activeOffer,
+        offer_type: activeOffer,
         level,
         mode,
         difficulty,
@@ -967,7 +969,7 @@ function GameScreenImpl({
     trackTimeout(() => {
       setActiveOffer(type);
       void analytics.logEvent('offer_shown', {
-        offerType: type,
+        offer_type: type,
         level,
         mode,
         difficulty,
@@ -1114,21 +1116,16 @@ function GameScreenImpl({
     }
   }, [status, lives, activeOffer, showOfferIfAllowed]);
 
-  // streak_shield: show when player has an active streak at risk during gameplay
+  // streak_shield: show only when the streak can actually lapse. The old
+  // predicate treated the date-only lastPlayDate stamp as a play timestamp,
+  // so "last play > 20h ago" really meant "the UTC clock passed 20:00" — the
+  // offer fired every evening on streaks that app open had already banked.
+  // streakShieldOfferDue owns the risk rule now (see utils/gameMotion).
   useEffect(() => {
     if (status !== 'playing') return;
-    const streaks = playerStreaks;
-    if (!streaks || streaks.currentStreak < 3 || streaks.streakShieldAvailable) return;
-    // Check if last play was yesterday (streak at risk of expiring today)
-    if (!streaks.lastPlayDate) return;
-    const lastPlayed = new Date(streaks.lastPlayDate);
-    const now = new Date();
-    const diffMs = now.getTime() - lastPlayed.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-    // Streak is at risk if last completed > 20 hours ago (approaching the daily reset)
-    if (diffHours >= 20 && !offerShownThisLevel.current && !activeOffer) {
-      showOfferIfAllowed('streak_shield');
-    }
+    if (offerShownThisLevel.current || activeOffer) return;
+    if (!streakShieldOfferDue(playerStreaks, new Date())) return;
+    showOfferIfAllowed('streak_shield');
   }, [status, playerStreaks, activeOffer, showOfferIfAllowed]);
 
   // post_puzzle: flag when puzzle won with hint tokens depleted
@@ -1211,7 +1208,7 @@ function GameScreenImpl({
         break;
     }
     void analytics.logEvent('offer_accepted', {
-      offerType: activeOffer,
+      offer_type: activeOffer,
       level,
       mode,
       difficulty,
