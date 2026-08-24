@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, interpolate, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, interpolate, Easing, cancelAnimation } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, MODE_CONFIGS } from '../constants';
@@ -20,16 +20,34 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
  * no Reanimated-to-JS worklet callback needed.
  */
 const SCORE_POP_DURATION_MS = 660;
-const ScorePop: React.FC<{ amount: number; color: string }> = ({ amount, color }) => {
+const ScorePop: React.FC<{ amount: number; color: string; reduceMotion: boolean }> = ({
+  amount,
+  color,
+  reduceMotion,
+}) => {
   const translateY = useSharedValue(0);
   const opacity = useSharedValue(0);
   useEffect(() => {
+    if (reduceMotion) {
+      // Reduce motion: the +N info stays, the float/fade is skipped — show
+      // the callout statically at a fixed offset. The parent's existing
+      // SCORE_POP_DURATION_MS + 80 teardown timeout removes it.
+      opacity.value = 1;
+      translateY.value = -24;
+      return;
+    }
     opacity.value = withSequence(
       withTiming(1, { duration: 80 }),
       withTiming(1, { duration: 360 }),
       withTiming(0, { duration: 220, easing: Easing.in(Easing.quad) }),
     );
     translateY.value = withTiming(-36, { duration: SCORE_POP_DURATION_MS, easing: Easing.out(Easing.quad) });
+    return () => {
+      // A rapid follow-up find replaces this instance mid-flight (fresh key)
+      // — stop the orphaned animations with the component.
+      cancelAnimation(opacity);
+      cancelAnimation(translateY);
+    };
     // fire-once on mount — new amounts arrive with a fresh key
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -204,6 +222,13 @@ export const GameHeader = React.memo(function GameHeader({
     width: `${interpolate(progressValue.value, [0, 100], [0, 100])}%`,
   }));
 
+  // Glow dot rides the same spring value as the fill so the tip marker and
+  // the fill it decorates can never disagree about position mid-animation.
+  // (progressValue already snaps under reduce-motion — no extra gating.)
+  const progressGlowDotStyle = useAnimatedStyle(() => ({
+    left: `${interpolate(progressValue.value, [0, 100], [0, 100])}%`,
+  }));
+
   return (
     <View style={[styles.wrapper, { paddingTop: Math.max(insets.top, 6) + 4 }]}>
       <View style={styles.chromeCard}>
@@ -362,7 +387,7 @@ export const GameHeader = React.memo(function GameHeader({
           </Animated.Text>
           <View pointerEvents="none" style={styles.scorePopSlot}>
             {pop && (
-              <ScorePop key={pop.key} amount={pop.amount} color={accentColor} />
+              <ScorePop key={pop.key} amount={pop.amount} color={accentColor} reduceMotion={reduceMotion} />
             )}
           </View>
           <Text style={styles.scoreHeroLabel}>
@@ -381,8 +406,8 @@ export const GameHeader = React.memo(function GameHeader({
             <Animated.View
               style={[
                 styles.progressGlowDot,
+                progressGlowDotStyle,
                 {
-                  left: `${progress}%` as any,
                   backgroundColor: selectedColor,
                   shadowColor: selectedColor,
                 },

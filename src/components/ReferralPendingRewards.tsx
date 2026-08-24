@@ -31,18 +31,12 @@ const ReferralPendingRewards: React.FC = () => {
   const { user } = useAuth();
   const { addCoins, addGems, addHintTokens } = useEconomyActions();
   const [rewards, setRewards] = useState<PendingRewardRow[]>([]);
-  const [loading, setLoading] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
-    try {
-      const list = await firestoreService.getPendingReferralRewards(user.uid);
-      setRewards(list);
-    } finally {
-      setLoading(false);
-    }
+    const list = await firestoreService.getPendingReferralRewards(user.uid);
+    setRewards(list);
   }, [user]);
 
   useEffect(() => {
@@ -79,7 +73,10 @@ const ReferralPendingRewards: React.FC = () => {
 
   if (!getRemoteBoolean('referralEnabled')) return null;
   if (!user) return null;
-  if (!loading && rewards.length === 0) return null;
+  // Mount nothing until at least one claimable reward exists — the card
+  // appears once, atomically, with real rows (no loading-flash of an
+  // empty "Rewards Ready" banner while the fetch is in flight).
+  if (rewards.length === 0) return null;
 
   return (
     <View style={styles.container}>

@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, interpolate } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, interpolate, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 
 interface SkeletonProps {
   width: number | string;
@@ -12,8 +13,14 @@ interface SkeletonProps {
 
 export function Skeleton({ width, height, borderRadius = 12, style }: SkeletonProps) {
   const shimmer = useSharedValue(0);
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
+    if (reduceMotion) {
+      // Static mid-shimmer opacity — decorative loop skipped entirely.
+      shimmer.value = 0.5;
+      return;
+    }
     shimmer.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 1200 }),
@@ -21,7 +28,8 @@ export function Skeleton({ width, height, borderRadius = 12, style }: SkeletonPr
       ),
       -1,
     );
-  }, []);
+    return () => cancelAnimation(shimmer);
+  }, [reduceMotion, shimmer]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     opacity: interpolate(shimmer.value, [0, 1], [0.3, 0.8]),

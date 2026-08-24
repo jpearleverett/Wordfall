@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
+  Platform,
   Pressable,
   TextInput,
   StyleSheet,
@@ -12,7 +13,9 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  type ListRenderItemInfo,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, RADIUS } from '../constants';
 import { getLevelConfigExtended } from '../engine/puzzleGenerator';
@@ -773,6 +776,31 @@ const segStyles = StyleSheet.create({
 });
 
 /**
+ * The list card's `GRADIENTS.surfaceCard` wash, re-plotted per virtualized
+ * cell. With the rows windowed by the FlatList, one full-height LinearGradient
+ * can no longer wrap them, so each cell paints the solid color the original
+ * gradient had at its own position — adjacent rows differ by well under one
+ * RGB unit, so the card reads identically while rows mount lazily.
+ */
+function parseRgba(stop: string): readonly [number, number, number, number] {
+  const m = /rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/.exec(stop);
+  return m
+    ? [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])]
+    : [26, 10, 46, 0.9];
+}
+const CARD_STOP_TOP = parseRgba(GRADIENTS.surfaceCard[0]);
+const CARD_STOP_BOTTOM = parseRgba(GRADIENTS.surfaceCard[1]);
+
+function listCardColorAt(t: number): string {
+  const mix = (a: number, b: number) => a + (b - a) * t;
+  const r = Math.round(mix(CARD_STOP_TOP[0], CARD_STOP_BOTTOM[0]));
+  const g = Math.round(mix(CARD_STOP_TOP[1], CARD_STOP_BOTTOM[1]));
+  const b = Math.round(mix(CARD_STOP_TOP[2], CARD_STOP_BOTTOM[2]));
+  const a = mix(CARD_STOP_TOP[3], CARD_STOP_BOTTOM[3]).toFixed(3);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/**
  * One list row, extracted so React (with the Compiler's auto-memoization)
  * can bail out unchanged rows when the screen re-renders — previously every
  * tab/scope switch and Firestore refresh rebuilt all ~47 inline row subtrees.
@@ -884,6 +912,7 @@ const LeaderboardScreen: React.FC<
   const [scope, setScope] = useState<LeaderboardScope>(initialScope);
   const { user } = useAuth();
   const reduceMotion = useReduceMotion();
+  const isFocused = useIsFocused();
   const currentLevel = usePlayerStore(selectCurrentLevel);
   const dailyCompleted = usePlayerStore(selectDailyCompleted);
   const totalScore = usePlayerStore(selectTotalScore);
@@ -915,31 +944,9 @@ const LeaderboardScreen: React.FC<
   const [addFriendFocused, setAddFriendFocused] = useState(false);
 
   // Champion card ambient shimmer — a slow breathing glow behind rank #1.
+  // (The loop effect lives below the `entries` memo so it can gate on
+  // whether a podium is actually mounted to consume it.)
   const championPulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (reduceMotion) {
-      championPulse.setValue(0);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(championPulse, {
-          toValue: 1,
-          duration: 1600,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(championPulse, {
-          toValue: 0,
-          duration: 1600,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reduceMotion, championPulse]);
 
   const isFirestoreAvailable = firestoreService.isAvailable();
 
@@ -973,10 +980,18 @@ const LeaderboardScreen: React.FC<
     return generateMockLeaderboard(42, totalScore > 0 ? totalScore : null, currentUserId);
   }, [totalScore, currentUserId]);
 
+  // Monotonic sequence for in-flight leaderboard fetches. Rapid tab switches
+  // launch concurrent requests, and without this guard the SLOWER stale
+  // response could land last and display the wrong tab's rows under the
+  // active tab (last-write-wins race); it also stops setState after unmount.
+  const fetchSeqRef = useRef(0);
+
   // Fetch leaderboard data from Firestore
   const fetchLeaderboard = useCallback(
     async (tab: TimeTab) => {
       if (!isFirestoreAvailable) return;
+      const seq = ++fetchSeqRef.current;
+      const isStale = () => seq !== fetchSeqRef.current;
       setLoading(true);
       try {
         let data: FirestoreLeaderboardEntry[] = [];
@@ -987,6 +1002,7 @@ const LeaderboardScreen: React.FC<
         } else {
           data = await firestoreService.getAllTimeLeaderboard(50);
         }
+        if (isStale()) return;
 
         if (data.length > 0) {
           // Merge with current player if not already in the list
@@ -1015,8 +1031,10 @@ const LeaderboardScreen: React.FC<
         }
       } catch (e) {
         logger.warn('[Leaderboard] fetch failed:', e);
+        if (isStale()) return;
         setFirestoreEntries([]);
       }
+      if (isStale()) return;
       setLoading(false);
     },
     [currentUserId, isFirestoreAvailable, playerDailyScore, totalScore]
@@ -1025,15 +1043,24 @@ const LeaderboardScreen: React.FC<
   // Load friend code on mount
   useEffect(() => {
     if (currentUserId && isFirestoreAvailable) {
-      firestoreService.generateFriendCode(currentUserId).then(setMyFriendCode);
-    } else {
-      setMyFriendCode(currentUserId.slice(0, 8).toUpperCase());
+      let cancelled = false;
+      firestoreService.generateFriendCode(currentUserId).then((code) => {
+        if (!cancelled) setMyFriendCode(code);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
+    setMyFriendCode(currentUserId.slice(0, 8).toUpperCase());
   }, [currentUserId, isFirestoreAvailable]);
 
-  // Fetch data when tab changes
+  // Fetch data when tab changes. The cleanup invalidates any in-flight
+  // request so its continuation drops instead of overwriting newer rows.
   useEffect(() => {
     fetchLeaderboard(activeTime);
+    return () => {
+      fetchSeqRef.current++;
+    };
   }, [activeTime, fetchLeaderboard]);
 
   const onRefresh = useCallback(async () => {
@@ -1143,6 +1170,40 @@ const LeaderboardScreen: React.FC<
     currentUserId,
     friendIds,
   ]);
+
+  // Champion shimmer loop — runs only while this screen is focused AND a
+  // podium is mounted to consume it. The stacks keep blurred screens alive
+  // (freezeOnBlur), which suspends rendering but does NOT stop a running
+  // Animated.loop, and during the loading/empty states the rank-1 crown glow
+  // (the value's sole consumer) isn't rendered at all.
+  const championActive = isFocused && !reduceMotion && entries.length > 0;
+  useEffect(() => {
+    if (!championActive) {
+      championPulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(championPulse, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(championPulse, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      championPulse.setValue(0);
+    };
+  }, [championActive, championPulse]);
 
   const handleChallenge = useCallback((entry: LeaderboardEntry) => {
     const level = currentLevel;
@@ -1263,6 +1324,38 @@ const LeaderboardScreen: React.FC<
             </LinearGradient>
           );
         })}
+      </View>
+    );
+  };
+
+  // Rows below the podium, fed to the virtualized FlatList so only a window
+  // of the ~47 heavy rows (medallion + illustrated avatar + gradients) mounts
+  // at open instead of every subtree synchronously.
+  const restEntries = entries.slice(3);
+
+  const keyExtractRow = (item: LeaderboardEntry) => item.id;
+
+  const renderRow = ({ item, index }: ListRenderItemInfo<LeaderboardEntry>) => {
+    const isLast = index === restEntries.length - 1;
+    // Position along the (virtual) card for the segmented gradient color.
+    const t = restEntries.length > 1 ? index / (restEntries.length - 1) : 0;
+    return (
+      <View
+        style={[
+          styles.listCell,
+          index === 0 && styles.listCellFirst,
+          isLast && styles.listCellLast,
+          { backgroundColor: listCardColorAt(t) },
+        ]}
+      >
+        <LeaderboardRow
+          entry={item}
+          isCurrentUser={item.id === currentUserId}
+          showDivider={index > 0}
+          showGift={scope === 'friends' || friendIds.includes(item.id)}
+          alternate={index % 2 === 1}
+          onChallenge={handleChallenge}
+        />
       </View>
     );
   };
@@ -1489,10 +1582,17 @@ const LeaderboardScreen: React.FC<
           </View>
         )}
 
-        <ScrollView
+        <FlatList
+          data={restEntries}
+          renderItem={renderRow}
+          keyExtractor={keyExtractRow}
           style={styles.scrollView}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={12}
+          maxToRenderPerBatch={12}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1501,88 +1601,71 @@ const LeaderboardScreen: React.FC<
               colors={[COLORS.accent]}
             />
           }
-        >
-          <ReferralPendingRewards />
-          <FriendLeaderboardCard onViewAll={() => setScope('friends')} />
-          {referralCode ? (
-            <ReferralCard
-              referralCode={referralCode}
-              referralCount={referralCount}
-              milestonesClaimed={referralMilestonesClaimed}
-              onClaimMilestone={(count) => claimReferralMilestone(count)}
-            />
-          ) : null}
-
-          {loading && entries.length === 0 ? (
-            <View style={styles.emptyState}>
-              <ActivityIndicator size="large" color={COLORS.accent} />
-              <Text style={styles.emptySubtext}>Loading leaderboard...</Text>
-            </View>
-          ) : entries.length === 0 ? (
-            <View style={styles.emptyState}>
-              <GlyphMedallion size={72} accent={COLORS.gold}>
-                <StarBurstGlyph size={34} />
-              </GlyphMedallion>
-              <Text style={styles.emptyText}>
-                {scope === 'friends' ? 'No friend scores yet' : 'No leaderboard data yet'}
-              </Text>
-              <Text style={styles.emptySubtext}>
-                {scope === 'friends'
-                  ? 'Add friends with "+ Add Friend" above, or have them play today\'s daily.'
-                  : 'Play puzzles to appear on the leaderboard!'}
-              </Text>
-            </View>
-          ) : (
+          ListHeaderComponent={
             <>
-              {renderTopThree()}
+              <ReferralPendingRewards />
+              <FriendLeaderboardCard onViewAll={() => setScope('friends')} />
+              {referralCode ? (
+                <ReferralCard
+                  referralCode={referralCode}
+                  referralCount={referralCount}
+                  milestonesClaimed={referralMilestonesClaimed}
+                  onClaimMilestone={(count) => claimReferralMilestone(count)}
+                />
+              ) : null}
 
-              {/* Remaining entries */}
-              <LinearGradient
-                colors={[...GRADIENTS.surfaceCard] as [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.listCard}
-              >
-                {entries.slice(3).map((entry, index) => (
-                  <LeaderboardRow
-                    key={entry.id}
-                    entry={entry}
-                    isCurrentUser={entry.id === currentUserId}
-                    showDivider={index > 0}
-                    showGift={scope === 'friends' || friendIds.includes(entry.id)}
-                    alternate={index % 2 === 1}
-                    onChallenge={handleChallenge}
-                  />
-                ))}
-              </LinearGradient>
+              {loading && entries.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <ActivityIndicator size="large" color={COLORS.accent} />
+                  <Text style={styles.emptySubtext}>Loading leaderboard...</Text>
+                </View>
+              ) : entries.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <GlyphMedallion size={72} accent={COLORS.gold}>
+                    <StarBurstGlyph size={34} />
+                  </GlyphMedallion>
+                  <Text style={styles.emptyText}>
+                    {scope === 'friends' ? 'No friend scores yet' : 'No leaderboard data yet'}
+                  </Text>
+                  <Text style={styles.emptySubtext}>
+                    {scope === 'friends'
+                      ? 'Add friends with "+ Add Friend" above, or have them play today\'s daily.'
+                      : 'Play puzzles to appear on the leaderboard!'}
+                  </Text>
+                </View>
+              ) : (
+                renderTopThree()
+              )}
             </>
-          )}
-
-          {/* Current user bar (sticky at bottom if not in top list) */}
-          {currentUser && currentUser.rank > 3 && (
-            <LinearGradient
-              colors={
-                [COLORS.accent + '18', COLORS.accent + '08'] as [string, string]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.currentUserBar}
-            >
-              <View style={styles.currentUserContent}>
-                <Text style={styles.currentUserRank}>#{currentUser.rank}</Text>
-                <GlassAvatar name={currentUser.name} size={36} highlighted />
-                <Text style={styles.currentUserName} numberOfLines={1}>
-                  {currentUser.name}
-                </Text>
-                <Text style={styles.currentUserScore}>
-                  {currentUser.score.toLocaleString()}
-                </Text>
-              </View>
-            </LinearGradient>
-          )}
-
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
+          }
+          ListFooterComponent={
+            <>
+              {/* Current user bar (sticky at bottom if not in top list) */}
+              {currentUser && currentUser.rank > 3 && (
+                <LinearGradient
+                  colors={
+                    [COLORS.accent + '18', COLORS.accent + '08'] as [string, string]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.currentUserBar}
+                >
+                  <View style={styles.currentUserContent}>
+                    <Text style={styles.currentUserRank}>#{currentUser.rank}</Text>
+                    <GlassAvatar name={currentUser.name} size={36} highlighted />
+                    <Text style={styles.currentUserName} numberOfLines={1}>
+                      {currentUser.name}
+                    </Text>
+                    <Text style={styles.currentUserScore}>
+                      {currentUser.score.toLocaleString()}
+                    </Text>
+                  </View>
+                </LinearGradient>
+              )}
+              <View style={styles.bottomSpacer} />
+            </>
+          }
+        />
       </View>
     </ScreenScaffold>
   );
@@ -1904,12 +1987,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FONTS.display,
   },
-  listCard: {
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-    borderWidth: 1,
+  // The old single listCard LinearGradient wrapper, recomposed per
+  // virtualized cell: side borders on every cell, the rounded caps on the
+  // first/last cells (overflow hidden clips row content to the corners),
+  // and the surfaceCard gradient re-plotted as per-cell solids via
+  // `listCardColorAt`.
+  listCell: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
     borderColor: COLORS.borderSubtle,
-    ...SHADOWS.medium,
+    overflow: 'hidden',
+  },
+  listCellFirst: {
+    borderTopWidth: 1,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+  },
+  listCellLast: {
+    borderBottomWidth: 1,
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
   },
   listDivider: {
     height: 1,

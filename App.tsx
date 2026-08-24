@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -63,6 +63,20 @@ import { COLORS, DIFFICULTY_CONFIGS, MODE_CONFIGS, ECONOMY, ENERGY, FONTS, SHADO
 import { getAdjustedConfig } from './src/engine/difficultyAdjuster';
 import { useAuth } from './src/contexts/AuthContext';
 import { useEconomy } from './src/contexts/EconomyContext';
+import {
+  EconomyStoreContext,
+  useEconomyActions,
+  useEconomyStore,
+  selectGems,
+} from './src/stores/economyStore';
+import {
+  PlayerStoreContext,
+  usePlayerActions,
+  usePlayerStore,
+  selectFeaturesUnlocked,
+  selectCurrentLevel,
+} from './src/stores/playerStore';
+import { makeContextFacade } from './src/utils/contextFacade';
 import { useSettings } from './src/contexts/SettingsContext';
 import { usePlayer } from './src/contexts/PlayerContext';
 import { useHardEnergy } from './src/hooks/useHardEnergy';
@@ -192,11 +206,40 @@ function HomeStackScreen() {
   );
 }
 
+/**
+ * Stable player/economy handles for navigation wrappers.
+ *
+ * The context values from usePlayer()/useEconomy() rebuild on every state
+ * write, so wrappers that only need actions plus tap-time state reads were
+ * re-rendering (and re-minting their callbacks) 15+ times per puzzle
+ * completion. These facades have permanent identity: actions resolve to
+ * the stable action bags, state reads resolve to the store snapshot at
+ * call time (see src/utils/contextFacade.ts). Render-time reads must NOT
+ * go through them — subscribe narrowly via usePlayerStore/useEconomyStore.
+ */
+function useStableContextFacades() {
+  const playerActions = usePlayerActions();
+  const economyActions = useEconomyActions();
+  const playerStoreApi = useContext(PlayerStoreContext);
+  const economyStoreApi = useContext(EconomyStoreContext);
+  if (!playerStoreApi || !economyStoreApi) {
+    throw new Error('useStableContextFacades must render inside player/economy providers');
+  }
+  const player = useMemo(
+    () => makeContextFacade(playerStoreApi.getState, playerActions),
+    [playerStoreApi, playerActions],
+  );
+  const economy = useMemo(
+    () => makeContextFacade(economyStoreApi.getState, economyActions),
+    [economyStoreApi, economyActions],
+  );
+  return { player, economy };
+}
+
 // Play Tab Stack
 // Event screen wrapper — wires navigation callbacks for Play and Shop buttons
 function EventScreenWrapperNav({ navigation }: any) {
-  const player = usePlayer();
-  const economy = useEconomy();
+  const { player, economy } = useStableContextFacades();
 
   const handlePlayEventPuzzle = useCallback(() => {
     // Events run in the mode their rules describe (speedSolve → timer,
@@ -295,7 +338,8 @@ function EventScreenWrapperNav({ navigation }: any) {
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
-  }, [player, economy, navigation]);
+    // `player`/`economy` are stable facades (call-time reads) — not deps.
+  }, [navigation]);
 
   return (
     <EventScreen
@@ -459,10 +503,14 @@ function hideTabBarOnGame({ route }: { route: { name: string; state?: any } }) {
 // Main Tab Navigator with progressive tab unlocking
 function MainTabs() {
   const insets = useSafeAreaInsets();
-  const player = usePlayer();
+  // Narrow subscription: the root tab navigator reads exactly one player
+  // field. A full usePlayer() re-rendered the whole Tab.Navigator (and the
+  // inline NeonTabBar render prop) on every one of the 15+ player writes a
+  // puzzle completion makes — concurrent with victory animations.
+  const featuresUnlocked = usePlayerStore(selectFeaturesUnlocked);
   const reduceMotion = useReduceMotion();
 
-  const hasFeature = (id: string) => player.featuresUnlocked.includes(id);
+  const hasFeature = (id: string) => featuresUnlocked.includes(id);
 
   return (
     <Tab.Navigator
@@ -531,8 +579,7 @@ function MainTabs() {
 
 // Modes screen wrapper - wires navigation to start game in selected mode
 function ModesScreenWrapper({ navigation, route }: any) {
-  const player = usePlayer();
-  const economy = useEconomy();
+  const { player, economy } = useStableContextFacades();
 
   // Warm the shared-board caches while the player is reading the mode list.
   //
@@ -668,7 +715,10 @@ function ModesScreenWrapper({ navigation, route }: any) {
         Alert.alert('Error', 'Failed to generate puzzle. Please try again.');
       }
     }
-  }, [player.currentLevel, navigation, player, economy]);
+    // `player`/`economy` are stable facades read at tap time — keeping
+    // player.currentLevel out of deps also stops the autoStart effect
+    // below from re-running on every level change.
+  }, [navigation]);
 
   // R8: Home's "Try X Mode" recommendation deep-links straight into the
   // recommended mode instead of dropping the player on the grid to find it
@@ -689,8 +739,17 @@ function ModesScreenWrapper({ navigation, route }: any) {
 function GameScreenWrapper({ route, navigation }: any) {
   const params = route.params || {};
   const { user } = useAuth();
-  const player = usePlayer();
-  const economy = useEconomy();
+  // The wrapper sits directly above the perf-critical GameScreen, so it
+  // must NOT subscribe to the full Player/Economy contexts (their values
+  // rebuild on every one of the 15+ writes a completion makes, re-minting
+  // every callback below and defeating GameScreen's memo mid-animation).
+  // Reactive needs are exactly two narrow fields (subscribed below);
+  // everything else goes through stable facades: actions resolve to the
+  // stable action bags, state reads resolve to the store snapshot at
+  // call time. See src/utils/contextFacade.ts.
+  const { player, economy } = useStableContextFacades();
+  const mysteryWheelSpins = usePlayerStore((s) => s.mysteryWheel.spinsAvailable);
+  const gems = useEconomyStore(selectGems);
   const hardEnergy = useHardEnergy();
   const [showSpinPrompt, setShowSpinPrompt] = useState(false);
   const [earnedNewSpin, setEarnedNewSpin] = useState(false);
@@ -754,6 +813,18 @@ function GameScreenWrapper({ route, navigation }: any) {
   // the next board while the victory screen is on display and reuse it at
   // tap time when the target (mode/level/config) still matches.
   const prefetchedNext = useRef<{ key: string; board: Board } | null>(null);
+  // Handles for the deferred prefetch so unmount can cancel it — a bare
+  // setTimeout here used to run synchronous generateBoard (p95 <900ms)
+  // for an already-unmounted wrapper, janking the outgoing navigation.
+  const prefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefetchInteractionRef = useRef<{ cancel: () => void } | null>(null);
+  useEffect(
+    () => () => {
+      if (prefetchTimeoutRef.current) clearTimeout(prefetchTimeoutRef.current);
+      prefetchInteractionRef.current?.cancel();
+    },
+    [],
+  );
 
   const computeNextTarget = useCallback(() => {
     const mode = (params.mode || 'classic') as GameMode;
@@ -771,7 +842,8 @@ function GameScreenWrapper({ route, navigation }: any) {
     }
     const chapter = mode === 'classic' ? getChapterForLevel(modeLevel) : undefined;
     return { mode, modeLevel, config, chapter, key: `${mode}:${modeLevel}:${JSON.stringify(config)}` };
-  }, [params, player]);
+    // `player` is a stable facade (call-time reads) — not a dependency.
+  }, [params]);
 
   const handleComplete = useCallback((
     stars: number,
@@ -781,7 +853,7 @@ function GameScreenWrapper({ route, navigation }: any) {
     assists?: { hintsUsed: number; undosUsed: number },
   ) => {
     // Track spins before completion to detect if a new one is awarded
-    spinsBeforeComplete.current = player.mysteryWheel.spinsAvailable;
+    spinsBeforeComplete.current = mysteryWheelSpins;
     handleCompleteInner(stars, score, perfectRun, completionTimeSeconds, assists);
 
     // Pre-generate the next board while the player is looking at the
@@ -789,9 +861,14 @@ function GameScreenWrapper({ route, navigation }: any) {
     // generation in handleNextLevel. The 600ms delay lets the victory
     // animation start without competing for the JS thread; the key check
     // at tap time guards against the target shifting (e.g. adaptive
-    // difficulty settling after completion processing).
-    setTimeout(() => {
-      InteractionManager.runAfterInteractions(() => {
+    // difficulty settling after completion processing). Both handles are
+    // tracked so leaving the screen right after completing cancels the
+    // synchronous generateBoard instead of janking the exit navigation
+    // for an unmounted wrapper.
+    prefetchTimeoutRef.current = setTimeout(() => {
+      prefetchTimeoutRef.current = null;
+      prefetchInteractionRef.current = InteractionManager.runAfterInteractions(() => {
+        prefetchInteractionRef.current = null;
         try {
           const target = computeNextTarget();
           if (prefetchedNext.current?.key === target.key) return;
@@ -808,7 +885,7 @@ function GameScreenWrapper({ route, navigation }: any) {
         }
       });
     }, 600);
-  }, [handleCompleteInner, player.mysteryWheel.spinsAvailable, computeNextTarget]);
+  }, [handleCompleteInner, mysteryWheelSpins, computeNextTarget]);
 
   const handleNextLevel = useCallback(() => {
     try {
@@ -873,7 +950,8 @@ function GameScreenWrapper({ route, navigation }: any) {
         navigation.goBack();
       }
     }
-  }, [params, navigation, player, computeNextTarget]);
+    // `player` is a stable facade (call-time reads) — not a dependency.
+  }, [params, navigation, computeNextTarget]);
 
   const handleSkipLevel = useCallback(() => {
     const SKIP_COST = 200;
@@ -945,7 +1023,8 @@ function GameScreenWrapper({ route, navigation }: any) {
         navigation.goBack();
       }
     }
-  }, [params, navigation, player, economy]);
+    // `player`/`economy` are stable facades (call-time reads) — not deps.
+  }, [params, navigation]);
 
   if (!params.board) {
     return (
@@ -960,10 +1039,10 @@ function GameScreenWrapper({ route, navigation }: any) {
 
   // Detect when a new spin is earned during puzzle completion
   useEffect(() => {
-    if (player.mysteryWheel.spinsAvailable > spinsBeforeComplete.current) {
+    if (mysteryWheelSpins > spinsBeforeComplete.current) {
       setEarnedNewSpin(true);
     }
-  }, [player.mysteryWheel.spinsAvailable]);
+  }, [mysteryWheelSpins]);
 
   // Only show spin prompt when a NEW spin was earned this puzzle, not for old spins
   const handleHomeWithPrompt = useCallback(() => {
@@ -1059,7 +1138,7 @@ function GameScreenWrapper({ route, navigation }: any) {
             <Text style={spinPromptStyles.icon}>{'\u{1F3B0}'}</Text>
             <Text style={spinPromptStyles.title}>Free Spin Available!</Text>
             <Text style={spinPromptStyles.subtitle}>
-              You have {player.mysteryWheel.spinsAvailable} spin{player.mysteryWheel.spinsAvailable !== 1 ? 's' : ''} on the Mystery Wheel
+              You have {mysteryWheelSpins} spin{mysteryWheelSpins !== 1 ? 's' : ''} on the Mystery Wheel
             </Text>
             <Pressable
               style={({ pressed }) => [spinPromptStyles.spinButton, pressed && { transform: [{ scale: 0.96 }], opacity: 0.88 }]}
@@ -1081,7 +1160,7 @@ function GameScreenWrapper({ route, navigation }: any) {
       <NoLivesModal
         visible={showNoLives}
         livesRemaining={hardEnergy.livesRemaining}
-        gemsAvailable={economy.gems}
+        gemsAvailable={gems}
         gemRefillCost={hardEnergy.gemRefillCost}
         nextLifeAtMs={hardEnergy.nextLifeAtMs}
         onClose={handleNoLivesClose}

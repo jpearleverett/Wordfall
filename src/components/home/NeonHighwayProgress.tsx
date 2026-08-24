@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { COLORS, FONTS, SHADOWS } from '../../constants';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 
 interface NeonHighwayProgressProps {
   currentLevel: number;
@@ -74,9 +75,12 @@ const NeonHighwayProgress: React.FC<NeonHighwayProgressProps> = ({
   // doesn't stop running native-driver loops — gate them on focus so the
   // current-node pulse isn't burning frames behind gameplay all session.
   const isFocused = useIsFocused();
+  // Skip the decorative pulse entirely under reduce motion — the glow ring
+  // renders static at its resting opacity instead of running a shorter loop.
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
-    if (!isFocused) return;
+    if (!isFocused || reduceMotion) return;
     const scaleAnim = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseScale, {
@@ -113,8 +117,10 @@ const NeonHighwayProgress: React.FC<NeonHighwayProgressProps> = ({
     return () => {
       scaleAnim.stop();
       opacityAnim.stop();
+      pulseScale.setValue(1);
+      pulseOpacity.setValue(0.5);
     };
-  }, [isFocused, pulseScale, pulseOpacity]);
+  }, [isFocused, reduceMotion, pulseScale, pulseOpacity]);
 
   // Build array of 5 levels centered on currentLevel
   const levels = Array.from({ length: 5 }, (_, i) => currentLevel - 2 + i);

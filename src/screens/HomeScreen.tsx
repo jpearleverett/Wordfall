@@ -620,7 +620,7 @@ export function HomeScreen({
 
   // Pulse animation for wheel button when spins available
   useEffect(() => {
-    if (isFocused && (mysteryWheelSpins > 0 || dailyFreeSpinAvailable)) {
+    if (ambientActive && (mysteryWheelSpins > 0 || dailyFreeSpinAvailable)) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(wheelPulse, {
@@ -638,9 +638,12 @@ export function HomeScreen({
         ])
       );
       pulse.start();
-      return () => pulse.stop();
+      return () => {
+        pulse.stop();
+        wheelPulse.setValue(1);
+      };
     }
-  }, [isFocused, mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
+  }, [ambientActive, mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse]);
 
   // Free spin toast animation
   useEffect(() => {
@@ -710,11 +713,11 @@ export function HomeScreen({
   const mysteryWheelVisible = Boolean(showMysteryWheel);
 
   // Slow spin for the wheel disc icon (matches bento design — 8s per rotation).
-  // Runs only while Home is focused AND the wheel card is actually rendered —
-  // previously this looped unconditionally for the entire session, including
-  // behind GameScreen.
+  // Runs only while ambient motion is active (focused + motion allowed) AND
+  // the wheel card is actually rendered — previously this looped
+  // unconditionally for the entire session, including behind GameScreen.
   useEffect(() => {
-    if (!isFocused || !mysteryWheelVisible) return;
+    if (!ambientActive || !mysteryWheelVisible) return;
     const spin = Animated.loop(
       Animated.timing(wheelSpin, {
         toValue: 1,
@@ -724,8 +727,11 @@ export function HomeScreen({
       }),
     );
     spin.start();
-    return () => spin.stop();
-  }, [isFocused, mysteryWheelVisible, wheelSpin]);
+    return () => {
+      spin.stop();
+      wheelSpin.setValue(0);
+    };
+  }, [ambientActive, mysteryWheelVisible, wheelSpin]);
 
   // Auto-present the login calendar once per app session when today's
   // reward is unclaimed — the Wordscapes/Royal Match daily-sheet ritual.

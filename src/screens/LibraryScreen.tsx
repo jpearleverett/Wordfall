@@ -46,7 +46,8 @@ import {
 import GrandLibraryScene, { SceneWing, WingSceneState } from '../components/library/GrandLibraryScene';
 import { OwlIcon } from '../components/icons/iconsMisc';
 import PrimaryButton from '../components/common/PrimaryButton';
-import { useEconomy } from '../contexts/EconomyContext';
+import { useEconomyStore, selectLibraryPoints } from '../stores/economyStore';
+import { startAnimationWithCleanup } from '../utils/animationLifecycle';
 import { getDecoration } from '../data/cosmetics';
 import { generateBoard } from '../engine/boardGenerator';
 import { getLevelConfigExtended } from '../engine/puzzleGenerator';
@@ -336,7 +337,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
   const { placeDecoration, markTooltipShown } = usePlayerActions();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { libraryPoints } = useEconomy();
+  const libraryPoints = useEconomyStore(selectLibraryPoints);
   const showDecorations = route.params?.showDecorations === true;
   const restoredWings = restoredWingsProp ?? restoredWingsFromStore;
   const currentChapter = currentChapterProp ?? currentChapterFromStore;
@@ -401,6 +402,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
       wingAnims.forEach((anim) => anim.setValue(1));
       return;
     }
+    // Hold the entrance until the skeleton clears — the wing grid (the only
+    // consumer of these values) is unmounted while `loading`, so starting on
+    // mount burned the cascade underneath the skeleton and the cards then
+    // mounted mid-flight.
+    if (loading) return;
     const animations = wingAnims.map((anim, index) =>
       Animated.sequence([
         Animated.delay(index * 80),
@@ -412,8 +418,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({
         }),
       ])
     );
-    Animated.parallel(animations).start();
-  }, [wingAnims, reduceMotion]);
+    return startAnimationWithCleanup(Animated.parallel(animations));
+  }, [wingAnims, reduceMotion, loading]);
 
   const totalLibraryStars = Object.values(starsByLevel).reduce((sum, value) => sum + value, 0);
 

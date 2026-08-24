@@ -16,10 +16,12 @@
  * Architecture is one static <Svg>; wing emblems, state badges and touch
  * targets are absolutely-positioned overlays sharing the same geometry, so
  * the icon set and press feedback reuse the app's existing components.
- * A few drifting dust motes (reduce-motion gated) keep the hall alive.
+ * A few drifting dust motes (focus + reduce-motion gated) keep the hall
+ * alive.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 import GameIcon from '../icons/GameIcon';
 import { OwlIcon } from '../icons/iconsMisc';
@@ -494,11 +496,11 @@ function RuinedAlcove({ x, y, accent, index, wingId }: { x: number; y: number; a
   );
 }
 
-/** Drifting dust mote — slow rise + fade loop. */
-function DustMote({ x, delay, reduceMotion }: { x: number; delay: number; reduceMotion: boolean }) {
+/** Drifting dust mote — slow rise + fade loop (runs only while `active`). */
+function DustMote({ x, delay, active }: { x: number; delay: number; active: boolean }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (reduceMotion) return;
+    if (!active) return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
@@ -507,9 +509,12 @@ function DustMote({ x, delay, reduceMotion }: { x: number; delay: number; reduce
       ]),
     );
     loop.start();
-    return () => loop.stop();
-  }, [anim, delay, reduceMotion]);
-  if (reduceMotion) return null;
+    return () => {
+      loop.stop();
+      anim.setValue(0);
+    };
+  }, [anim, delay, active]);
+  if (!active) return null;
   return (
     <Animated.View
       pointerEvents="none"
@@ -533,13 +538,21 @@ function DustMote({ x, delay, reduceMotion }: { x: number; delay: number; reduce
 
 export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, width = W, pendingDecoration = false }: GrandLibrarySceneProps) {
   const reduceMotion = useReduceMotion();
+  // Focus gate for the decorative loops below. The Library tab sets
+  // freezeOnBlur, which suspends React rendering but does NOT stop
+  // already-running native-driver Animated loops — without this gate the
+  // Folio bob + dust-mote loops keep burning UI-thread frames behind every
+  // other screen for the rest of the session (HomeScreen's ambientActive
+  // gate exists for the same reason).
+  const isFocused = useIsFocused();
+  const active = isFocused && !reduceMotion;
   const scale = width / W;
   const height = H * scale;
 
   // Folio breathing bob on his dome perch.
   const bob = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (reduceMotion) return;
+    if (!active) return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(bob, { toValue: 1, duration: 2100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
@@ -547,8 +560,11 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
       ]),
     );
     loop.start();
-    return () => loop.stop();
-  }, [bob, reduceMotion]);
+    return () => {
+      loop.stop();
+      bob.setValue(0);
+    };
+  }, [bob, active]);
 
   const restoredCount = useMemo(() => wings.filter(w => w.state === 'restored').length, [wings]);
 
@@ -763,9 +779,9 @@ export default function GrandLibraryScene({ wings, selectedWingId, onWingPress, 
         })}
 
         {/* dust motes */}
-        <DustMote x={92} delay={0} reduceMotion={reduceMotion} />
-        <DustMote x={205} delay={1700} reduceMotion={reduceMotion} />
-        <DustMote x={296} delay={3400} reduceMotion={reduceMotion} />
+        <DustMote x={92} delay={0} active={active} />
+        <DustMote x={205} delay={1700} active={active} />
+        <DustMote x={296} delay={3400} active={active} />
       </View>
     </View>
   );

@@ -10,6 +10,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, FONTS, RADIUS, SHADOWS } from '../constants';
 import ScreenScaffold from '../components/common/ScreenScaffold';
@@ -829,13 +830,21 @@ const ATLAS_ACCENT_BY_ID: Record<string, string> = {
 
 /**
  * Looping gold sheen swept across a completed card. Reduce-motion users get
- * a static gold wash instead of the moving stripe.
+ * a static gold wash instead of the moving stripe. The loop only runs while
+ * `active` (screen focused AND motion allowed) — freezeOnBlur suspends React
+ * rendering but does NOT stop already-running native-driver loops, so without
+ * the focus gate every completed card's sweep would keep burning UI-thread
+ * frames behind other screens for the rest of the session (HomeScreen's
+ * ambientActive pattern).
  */
-const CardShine: React.FC<{ reduceMotion: boolean }> = ({ reduceMotion }) => {
+const CardShine: React.FC<{ active: boolean; reduceMotion: boolean }> = ({
+  active,
+  reduceMotion,
+}) => {
   const sweep = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (!active) return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(sweep, {
@@ -849,8 +858,11 @@ const CardShine: React.FC<{ reduceMotion: boolean }> = ({ reduceMotion }) => {
       ]),
     );
     loop.start();
-    return () => loop.stop();
-  }, [reduceMotion, sweep]);
+    return () => {
+      loop.stop();
+      sweep.setValue(0);
+    };
+  }, [active, sweep]);
 
   if (reduceMotion) {
     return (
@@ -900,6 +912,10 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
   const tooltipsShown = usePlayerStore(selectTooltipsShown);
   const { markTooltipShown } = usePlayerActions();
   const reduceMotion = useReduceMotion();
+  // Focus gate for the CardShine sweep loops — this screen lives in a
+  // freezeOnBlur tab, which does not stop running native-driver loops.
+  const isFocused = useIsFocused();
+  const shineActive = isFocused && !reduceMotion;
   // Loose typing preserved: `collections` prop is typed `any` (test/preview
   // bypass); fall back to the player store value otherwise.
   const collections: any = collectionsProp ?? collectionsFromStore;
@@ -1041,7 +1057,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
             start={{ x: 0, y: 0 }}
             end={{ x: 0.9, y: 0.9 }}
           />
-          {featuredComplete && <CardShine reduceMotion={reduceMotion} />}
+          {featuredComplete && <CardShine active={shineActive} reduceMotion={reduceMotion} />}
           <DrawnMedallion
             accent={featuredAccent}
             size={64}
@@ -1098,7 +1114,7 @@ const CollectionsScreen: React.FC<CollectionsScreenProps> = ({ collections: coll
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0.9, y: 0.9 }}
                 />
-                {isComplete && <CardShine reduceMotion={reduceMotion} />}
+                {isComplete && <CardShine active={shineActive} reduceMotion={reduceMotion} />}
                 <DrawnMedallion
                   accent={accent}
                   size={54}

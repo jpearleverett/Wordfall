@@ -1054,7 +1054,13 @@ export function useRewardWiring({
       );
       throw e;
     }
-  }, [params, player, economy, navigation, userId]);
+    // `player`/`economy` are stable context facades (state resolves to the
+    // store snapshot at call time — src/utils/contextFacade.ts), so they are
+    // deliberately NOT dependencies: listing the old full context values
+    // re-minted handleComplete on every one of the 15+ writes a completion
+    // makes, which defeated GameScreen's memo and re-rendered the whole
+    // gameplay tree during victory animations.
+  }, [params, navigation, userId]);
 
   return handleComplete;
 }

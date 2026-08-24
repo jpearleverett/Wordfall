@@ -13,6 +13,7 @@ import {
   Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useIsFocused } from '@react-navigation/native';
 import Svg, {
   ClipPath,
   Defs,
@@ -798,6 +799,7 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
 }) => {
   const { t } = useTranslation();
   const reduceMotion = useReduceMotion();
+  const isFocused = useIsFocused();
   const clubIdFromStore = usePlayerStore(selectClubId);
   const { setClubId } = usePlayerActions();
   const equippedTitle = usePlayerStore(selectEquippedTitle);
@@ -812,9 +814,14 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
   const [chatFocused, setChatFocused] = useState(false);
 
   // Ambient breathing scale on the hero crest cluster (recruitment moment).
+  // Sole consumer is renderNoClub's ShieldCrest, so the loop only runs while
+  // that branch can render (no clubId) AND the screen is focused —
+  // freezeOnBlur suspends rendering but does NOT stop an already-running
+  // native-driver loop (HomeScreen's ambientActive convention). Otherwise
+  // settle at 0 (scale 1).
   const crestPulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (reduceMotion) {
+    if (clubId || !isFocused || reduceMotion) {
       crestPulse.setValue(0);
       return;
     }
@@ -835,8 +842,11 @@ const ClubScreen: React.FC<ClubScreenProps> = ({
       ])
     );
     loop.start();
-    return () => loop.stop();
-  }, [reduceMotion, crestPulse]);
+    return () => {
+      loop.stop();
+      crestPulse.setValue(0);
+    };
+  }, [clubId, isFocused, reduceMotion, crestPulse]);
   // S1 in launch_blockers.md: browse public clubs alongside join-by-code.
   const [browseList, setBrowseList] = useState<
     Array<{

@@ -560,5 +560,1524 @@
         "pattern": "publishColorblindMode\\(settings\\.colorblindMode\\)"
       }
     ]
+  },
+  {
+    "id": "reward-wiring-unstable-context-deps",
+    "title": "handleComplete re-minted on every context write (15+/completion), defeating GameScreen's memo",
+    "file": "src/hooks/useRewardWiring.ts",
+    "klass": "P1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "\\}, \\[params, player, economy, navigation, userId\\]\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useRewardWiring.ts",
+        "pattern": "\\}, \\[params, navigation, userId\\]\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/utils/contextFacade.ts",
+        "pattern": "export function makeContextFacade"
+      },
+      {
+        "type": "test",
+        "suite": "src/utils/__tests__/contextFacade.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "gamescreenwrapper-full-context-subscription",
+    "title": "GameScreenWrapper subscribed to full Player/Economy contexts for two narrow fields",
+    "file": "App.tsx",
+    "klass": "P1",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const \\{ player, economy \\} = useStableContextFacades\\(\\);",
+        "count": 3
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "usePlayerStore\\(\\(s\\) => s\\.mysteryWheel\\.spinsAvailable\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const gems = useEconomyStore\\(selectGems\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "usePlayer\\(\\)",
+        "count": 4
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "useEconomy\\(\\)",
+        "count": 3
+      }
+    ]
+  },
+  {
+    "id": "maintabs-full-player-context",
+    "title": "Root tab navigator re-rendered on every player write for one field (featuresUnlocked)",
+    "file": "App.tsx",
+    "klass": "P1",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const featuresUnlocked = usePlayerStore\\(selectFeaturesUnlocked\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "const hasFeature = \\(id: string\\) => featuresUnlocked\\.includes\\(id\\);"
+      }
+    ]
+  },
+  {
+    "id": "modes-event-wrappers-full-context",
+    "title": "Modes/Event wrappers re-rendered per context write; unstable handleSelectMode re-ran the autoStart effect",
+    "file": "App.tsx",
+    "klass": "P1",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "App.tsx",
+        "pattern": "\\}, \\[player\\.currentLevel, navigation, player, economy\\]\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "App.tsx",
+        "pattern": "\\}, \\[player, economy, navigation\\]\\);"
+      }
+    ]
+  },
+  {
+    "id": "app-prefetch-timeout-untracked",
+    "title": "Next-board prefetch setTimeout/InteractionManager never cancelled on unmount (sync generateBoard for a dead wrapper)",
+    "file": "App.tsx",
+    "klass": "P3",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "prefetchTimeoutRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "prefetchInteractionRef\\.current\\?\\.cancel\\(\\)"
+      }
+    ]
+  },
+  {
+    "id": "mastery-ladder-unvirtualized",
+    "title": "Mastery ladder virtualized via FlatList (SeasonPass pattern)",
+    "file": "src/screens/MasteryScreen.tsx",
+    "klass": "P2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "MASTERY_REWARDS\\.map\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "<FlatList",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "data=\\{MASTERY_REWARDS\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "scroll=\\{false\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "ListHeaderComponent=\\{listHeader\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/MasteryScreen.tsx",
+        "pattern": "initialNumToRender=\\{8\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SeasonPassScreen.tsx",
+        "pattern": "<FlatList"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/SeasonPassScreen.tsx",
+        "pattern": "scroll=\\{false\\}"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "cosmetic-store-unvirtualized-svg-catalog",
+    "title": "Cosmetic store catalog virtualized (2-col FlatList replaces ScrollView.map of up to 71 SVG cards)",
+    "file": "src/screens/CosmeticStoreScreen.tsx",
+    "klass": "P2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "currentItems\\.map\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "<ScrollView"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "data=\\{currentItems\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "numColumns=\\{2\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "keyExtractor=\\{\\(item\\) => item\\.id\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "removeClippedSubviews=\\{Platform\\.OS === 'android'\\}",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "economy-actions-missing-spendlibrarypoints",
+    "title": "spendLibraryPoints read from useEconomyActions() instead of full EconomyContext",
+    "file": "src/screens/CosmeticStoreScreen.tsx",
+    "klass": "P1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "useEconomy\\(\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "from '\\.\\./contexts/EconomyContext'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CosmeticStoreScreen.tsx",
+        "pattern": "\\{[^}]*spendLibraryPoints[^}]*\\}\\s*=\\s*useEconomyActions\\(",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/stores/economyStore.ts",
+        "pattern": "'spendLibraryPoints'"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "leaderboard-unvirtualized-rows",
+    "title": "Leaderboard rows virtualized: ScrollView+map converted to windowed FlatList",
+    "file": "src/screens/LeaderboardScreen.tsx",
+    "klass": "P2",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "entries\\.slice\\(3\\)\\.map\\("
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "<ScrollView"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "<FlatList",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "ListHeaderComponent"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "ListFooterComponent"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "renderItem=\\{renderRow\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "keyExtractRow = \\(item: LeaderboardEntry\\) => item\\.id",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "removeClippedSubviews=\\{Platform\\.OS === 'android'\\}",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "leaderboard-champion-pulse-unfocused",
+    "title": "Champion pulse loop gated on focus and mounted podium",
+    "file": "src/screens/LeaderboardScreen.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "\\}, \\[reduceMotion, championPulse\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "useIsFocused"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "const championActive = isFocused && !reduceMotion && entries\\.length > 0",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "\\}, \\[championActive, championPulse\\]\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "leaderboard-fetch-race-no-cancel",
+    "title": "Leaderboard fetch race fixed with request-sequence guard + effect cleanup",
+    "file": "src/screens/LeaderboardScreen.tsx",
+    "klass": "P3",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "const seq = \\+\\+fetchSeqRef\\.current",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "seq !== fetchSeqRef\\.current",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "if \\(isStale\\(\\)\\) return;",
+        "count": 3
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "fetchSeqRef\\.current\\+\\+",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LeaderboardScreen.tsx",
+        "pattern": "useEffect\\(\\(\\) => \\{\\s*fetchLeaderboard\\(activeTime\\);\\s*\\}, \\[activeTime"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "editprofile-titles-unvirtualized",
+    "title": "Locked profile titles collapsed behind disclosure row (no eager full-catalog mount)",
+    "file": "src/screens/EditProfileScreen.tsx",
+    "klass": "P2",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/EditProfileScreen.tsx",
+        "pattern": "sortedTitles\\.map\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EditProfileScreen.tsx",
+        "pattern": "visibleTitles\\.map\\(",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EditProfileScreen.tsx",
+        "pattern": "showLockedTitles"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EditProfileScreen.tsx",
+        "pattern": "titleBuckets\\.locked\\.length"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "library-scene-loops-run-while-blurred",
+    "title": "GrandLibraryScene Folio bob + DustMote loops now focus-gated (freezeOnBlur does not stop native-driver loops)",
+    "file": "src/components/library/GrandLibraryScene.tsx",
+    "klass": "P4",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "\\[\\s*(anim,\\s*delay,\\s*reduceMotion|bob,\\s*reduceMotion)\\s*\\]"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "useIsFocused",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "const active = isFocused && !reduceMotion;",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "loop\\.stop\\(\\);\\s*(anim|bob)\\.setValue\\(0\\);",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "\\}, \\[anim, delay, active\\]\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "\\}, \\[bob, active\\]\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/library/GrandLibraryScene.tsx",
+        "pattern": "active=\\{active\\}",
+        "count": 3
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "library-wing-stagger-runs-under-skeleton",
+    "title": "Wing entrance stagger no longer plays under the skeleton; composite stopped on cleanup",
+    "file": "src/screens/LibraryScreen.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "Animated\\.parallel\\(animations\\)\\.start\\(\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "\\}, \\[wingAnims, reduceMotion\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "if \\(loading\\) return;",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "return startAnimationWithCleanup\\(Animated\\.parallel\\(animations\\)\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "\\}, \\[wingAnims, reduceMotion, loading\\]\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "libraryscreen-full-economy-for-librarypoints",
+    "title": "libraryPoints read via narrow economyStore selector instead of full useEconomy context",
+    "file": "src/screens/LibraryScreen.tsx",
+    "klass": "P1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "\\buseEconomy\\(\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "contexts/EconomyContext"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/LibraryScreen.tsx",
+        "pattern": "useEconomyStore\\(selectLibraryPoints\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "collections-cardshine-runs-while-blurred",
+    "title": "CardShine sweep loop gated on screen focus (freezeOnBlur tab)",
+    "file": "src/screens/CollectionsScreen.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "\\[\\s*reduceMotion,\\s*sweep\\s*\\]"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "useIsFocused"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "\\},\\s*\\[active,\\s*sweep\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "shineActive\\s*=\\s*isFocused\\s*&&\\s*!reduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "active=\\{shineActive\\}",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/CollectionsScreen.tsx",
+        "pattern": "sweep\\.setValue\\(0\\)"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "club-crest-pulse-no-consumer",
+    "title": "crestPulse loop gated on clubId + focus, settles when idle",
+    "file": "src/screens/ClubScreen.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ClubScreen.tsx",
+        "pattern": "\\},\\s*\\[reduceMotion,\\s*crestPulse\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ClubScreen.tsx",
+        "pattern": "import \\{ useIsFocused \\} from '@react-navigation/native'",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ClubScreen.tsx",
+        "pattern": "if \\(clubId \\|\\| !isFocused \\|\\| reduceMotion\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ClubScreen.tsx",
+        "pattern": "\\},\\s*\\[clubId,\\s*isFocused,\\s*reduceMotion,\\s*crestPulse\\]\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "profile-fake-loading-skeleton",
+    "title": "ProfileScreen fabricated 400ms loading skeleton removed",
+    "file": "src/screens/ProfileScreen.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "const \\[loading, setLoading\\] = useState\\(true\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "setTimeout\\(\\(\\) => setLoading\\(false\\), \\d+\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "if \\(loading\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "<Skeleton"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/ProfileScreen.tsx",
+        "pattern": "No loading branch: every value on this screen comes synchronously",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "referral-rewards-loading-flash",
+    "title": "Referral rewards card no longer flashes empty during in-flight fetch",
+    "file": "src/components/ReferralPendingRewards.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ReferralPendingRewards.tsx",
+        "pattern": "!loading\\s*&&\\s*rewards\\.length\\s*===\\s*0"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ReferralPendingRewards.tsx",
+        "pattern": "if\\s*\\(rewards\\.length\\s*===\\s*0\\)\\s*return\\s+null",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ReferralPendingRewards.tsx",
+        "pattern": "setLoading"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "onboarding-pulse-loop-no-reduce-motion",
+    "title": "Onboarding glow pulse loop now gated on reduce motion",
+    "file": "src/screens/OnboardingScreen.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "if \\(reduceMotion \\|\\| !pulseVisible\\) return",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "onboarding-pulse-runs-through-tutorial",
+    "title": "Pulse loop keyed on phase; stops+resets outside welcome/celebrate",
+    "file": "src/screens/OnboardingScreen.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "\\[scaleAnim, fadeAnim, pulseAnim\\]"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "phase === 'welcome' \\|\\| phase === 'celebrate'",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "pulseAnim\\.setValue\\(1\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/OnboardingScreen.tsx",
+        "pattern": "\\}, \\[phase, reduceMotion, pulseAnim\\]\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "home-wheel-loops-skip-reduce-motion",
+    "title": "Mystery-wheel pulse + disc spin loops gated on focus only, ignoring reduce-motion",
+    "file": "src/screens/HomeScreen.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "if \\(isFocused && \\(mysteryWheelSpins"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "!isFocused \\|\\| !mysteryWheelVisible"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "if \\(ambientActive && \\(mysteryWheelSpins > 0 \\|\\| dailyFreeSpinAvailable\\)\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "!ambientActive \\|\\| !mysteryWheelVisible",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "\\[ambientActive, mysteryWheelSpins, dailyFreeSpinAvailable, wheelPulse\\]",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "\\[ambientActive, mysteryWheelVisible, wheelSpin\\]",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "home-wheel-loop-cleanup-no-reset",
+    "title": "Wheel loop cleanups stop without resetting Animated.Values to resting state",
+    "file": "src/screens/HomeScreen.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "return \\(\\) => pulse\\.stop\\(\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "return \\(\\) => spin\\.stop\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "wheelPulse\\.setValue\\(1\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "wheelSpin\\.setValue\\(0\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "neon-highway-pulse-no-reduce-motion",
+    "title": "Current-node pulse loops now gated on reduce motion, not just focus",
+    "file": "src/components/home/NeonHighwayProgress.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "if \\(!isFocused\\) return;"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "import \\{ useReduceMotion \\} from '\\.\\./\\.\\./hooks/useReduceMotion';",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "if \\(!isFocused \\|\\| reduceMotion\\) return;",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "pulseScale\\.setValue\\(1\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/NeonHighwayProgress.tsx",
+        "pattern": "pulseOpacity\\.setValue\\(0\\.5\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "daily-reward-timers-interval-runs-blurred",
+    "title": "Shared countdown setInterval now pauses while HomeScreen is unfocused, recomputes on refocus",
+    "file": "src/components/DailyRewardTimers.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "clearInterval\\(id\\);\\s*\\}, \\[\\]\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "import \\{ useIsFocused \\} from '@react-navigation/native';",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "if \\(!isFocused\\) return;\\s*setTick\\(\\(t\\) => t \\+ 1\\);\\s*const id = setInterval",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "\\}, \\[isFocused\\]\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "daily-reward-timer-ready-pulse-ungated",
+    "title": "TimerCard ready pulse loop gated on focus + reduce-motion via parent-computed animate prop",
+    "file": "src/components/DailyRewardTimers.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "if \\(!isReady\\) \\{"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "\\}, \\[isReady, pulseAnim\\]\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "if \\(!isReady \\|\\| !animate\\) \\{",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "animate=\\{isFocused && !reduceMotion\\}",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "\\}, \\[isReady, animate, pulseAnim\\]\\);",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/DailyRewardTimers.tsx",
+        "pattern": "animation\\.stop\\(\\);\\s*pulseAnim\\.setValue\\(1\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "live-rail-index-keys-remount",
+    "title": "LiveRail cards keyed by array index remount downstream rail on conditional card toggle",
+    "file": "src/components/home/LiveRail.tsx",
+    "klass": "P8",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/home/LiveRail.tsx",
+        "pattern": "key=\\{idx\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/home/LiveRail.tsx",
+        "pattern": "key=\\{React\\.isValidElement\\(child\\) && child\\.key != null \\? child\\.key : idx\\}",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "contextual-ungated-urgency-pulse",
+    "title": "ContextualOffer entrance + FOMO pulse gated on reduce motion",
+    "file": "src/components/ContextualOffer.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "if \\(reduceMotion \\|\\| !urgent\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "fade\\.value = 1;"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "\\[secondsLeft < 60\\]"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "contextual-dismiss-inside-updater",
+    "title": "Expiry analytics + onDismiss moved out of setSecondsLeft updater",
+    "file": "src/components/ContextualOffer.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "set[A-Z]\\w*\\(\\s*\\(prev\\)\\s*=>\\s*\\{[\\s\\S]{0,400}?(onDismiss\\(|analytics\\.)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "setSecondsLeft\\(\\(prev\\) => Math\\.max\\(0, prev - 1\\)\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ContextualOffer.tsx",
+        "pattern": "expiredRef\\.current"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "postloss-scrim-scale-entrance",
+    "title": "PostLossModal entrance scale applied to full-screen scrim instead of card",
+    "file": "src/components/PostLossModal.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "styles\\.overlay\\s*,[\\s\\S]{0,250}?transform:\\s*\\[\\s*\\{\\s*scale"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "\\[styles\\.card,\\s*cardStyle\\]",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "postloss-no-reduce-motion",
+    "title": "PostLossModal private entrance ignores reduce-motion preference",
+    "file": "src/components/PostLossModal.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "useCeremonyTransition"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "Animated\\.(spring|timing)\\("
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "postloss-dismiss-inside-updater",
+    "title": "PostLossModal auto-dismiss calls onDismiss inside setTimeLeft updater",
+    "file": "src/components/PostLossModal.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "set[A-Z]\\w*\\(\\s*\\(prev\\)\\s*=>\\s*\\{[\\s\\S]{0,400}?(onDismiss|requestDismiss)\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "if \\(timeLeft === 0\\) \\{\\s*requestDismiss\\(\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "sessionreminder-exit-finished-unguarded",
+    "title": "SessionEndReminder exit dismiss unguarded by finished",
+    "file": "src/components/SessionEndReminder.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": ",\\s*\\(\\)\\s*=>\\s*\\{\\s*runOnJS\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "\\(finished\\)\\s*=>\\s*\\{\\s*if\\s*\\(finished\\)\\s*\\{\\s*runOnJS\\(onDismiss\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "cancelAnimation\\(slide\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "cancelAnimation\\(fade\\)"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "sessionreminder-no-reduce-motion",
+    "title": "SessionEndReminder ignores reduce-motion preference",
+    "file": "src/components/SessionEndReminder.tsx",
+    "klass": "P5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "if\\s*\\(reduceMotion\\)\\s*\\{"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "useSharedValue\\(reduceMotion \\? 0 : 80\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/SessionEndReminder.tsx",
+        "pattern": "const slide = useSharedValue\\(80\\);"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "tutorial-hand-loop-survives-step-change",
+    "title": "Tutorial hand bob loop leaked across step changes (cancel only in unreachable !visible branch)",
+    "file": "src/components/TutorialOverlay.tsx",
+    "klass": "P4",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "if\\s*\\(step\\.showHandPointer\\s*&&\\s*!reduceMotion\\)\\s*\\{[\\s\\S]*?\\}\\s*else\\s*\\{[\\s\\S]{0,400}?cancelAnimation\\(hand\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "\\}\\s*else\\s*\\{\\s*fade\\.value\\s*=\\s*withTiming\\(0[\\s\\S]{0,120}?cancelAnimation\\(hand\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "return \\(\\) => \\{\\s*cancelAnimation\\(hand\\);"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "tutorial-hand-loop-no-reduce-motion",
+    "title": "Tutorial pointer bob and entrance slide spring had no reduce-motion gate",
+    "file": "src/components/TutorialOverlay.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "if \\(step\\.showHandPointer\\) \\{"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/TutorialOverlay.tsx",
+        "pattern": "hand\\.value = step\\.showHandPointer \\? 1 : 0;"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mode-tutorial-springs-no-reduce-motion",
+    "title": "Mode tutorial springs/fades gated on reduce motion (covers mode-tutorial-entrance-bounce)",
+    "file": "src/components/ModeTutorialOverlay.tsx",
+    "klass": "P5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "from '\\.\\./hooks/useReduceMotion'",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "if \\(reduceMotion\\)",
+        "count": 3
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "iconScaleAnim\\.setValue\\(1\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "\\.start\\(\\(\\) =>"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "\\.start\\(\\(\\{ finished \\}\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/ModeTutorialOverlay.tsx",
+        "pattern": "return \\(\\) => entrance\\.stop\\(\\)",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mystery-wheel-spin-callback-ignores-finished",
+    "title": "Mystery wheel spin completion callback now checks Reanimated finished before runOnJS",
+    "file": "src/components/MysteryWheel.tsx",
+    "klass": "F6",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "\\},\\s*\\(finished\\)\\s*=>"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "if\\s*\\(finished\\)\\s*\\{\\s*runOnJS\\(onSpinComplete\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "\\},\\s*\\(\\)\\s*=>\\s*\\{\\s*runOnJS\\("
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "mystery-wheel-box-reveal-timer-leak",
+    "title": "Mystery box 1s reveal timeout stored in ref and cleared on unmount and re-spin",
+    "file": "src/components/MysteryWheel.tsx",
+    "klass": "P3",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "boxRevealTimer\\.current\\s*=\\s*setTimeout\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "clearTimeout\\(boxRevealTimer\\.current\\)",
+        "count": 2
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "setTimeout\\(\\(\\)\\s*=>\\s*\\{\\s*setMysteryBoxResult"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "ambient-backdrop-conditional-hooks",
+    "title": "AmbientBackdrop stars useMemo called after variant early-returns",
+    "file": "src/components/common/AmbientBackdrop.tsx",
+    "klass": "P1",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "const stars = useMemo[\\s\\S]*?if \\(variant === 'game'\\)",
+        "count": 1
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "getLocalBg\\(variant\\);[\\s\\S]*use(Memo|Effect|SharedValue|AnimatedStyle)\\("
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "ambient-backdrop-ungated-decorative-loops",
+    "title": "NebulaOrb/TwinklingStar infinite loops lack reduce-motion gate",
+    "file": "src/components/common/AmbientBackdrop.tsx",
+    "klass": "P5",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "isFocused\\s*&&\\s*!reduceMotion\\s*&&",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/AmbientBackdrop.tsx",
+        "pattern": "return \\(\\) => cancelAnimation\\(anim\\);",
+        "count": 2
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "gameheader-scorepop-ignores-reduce-motion",
+    "title": "ScorePop +N callout animated unconditionally under reduce motion",
+    "file": "src/components/GameHeader.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "color: string; reduceMotion: boolean"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "translateY\\.value = -24"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "cancelAnimation\\(translateY\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "reduceMotion=\\{reduceMotion\\}"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "<ScorePop key=\\{pop\\.key\\} amount=\\{pop\\.amount\\} color=\\{accentColor\\} />"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "progress-glow-dot-leads-spring-fill",
+    "title": "Progress glow dot snapped ahead of the spring-animated fill tip",
+    "file": "src/components/GameHeader.tsx",
+    "klass": "F2",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "left: `\\$\\{progress\\}%`"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "const progressGlowDotStyle = useAnimatedStyle"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "left: `\\$\\{interpolate\\(progressValue\\.value"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/GameHeader.tsx",
+        "pattern": "progressGlowDotStyle",
+        "count": 2
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "video-background-ignores-reduce-motion",
+    "title": "Looping background video now settles on static placeholder under reduce motion",
+    "file": "src/components/common/VideoBackground.tsx",
+    "klass": "P5",
+    "severity": "high",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "from '\\.\\./\\.\\./hooks/useReduceMotion'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "if \\(reduceMotion \\|\\| !shouldLoad\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "if \\(!lazy \\|\\| reduceMotion\\) return;"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/VideoBackground.tsx",
+        "pattern": "if \\(!shouldLoad\\)"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "skeleton-shimmer-no-reduce-motion",
+    "title": "Skeleton shimmer loop gated behind reduce motion with cancelAnimation cleanup",
+    "file": "src/components/common/Skeleton.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/Skeleton.tsx",
+        "pattern": "useReduceMotion"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/Skeleton.tsx",
+        "pattern": "if\\s*\\(\\s*reduceMotion\\s*\\)[\\s\\S]{0,200}withRepeat\\("
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/Skeleton.tsx",
+        "pattern": "cancelAnimation\\(shimmer\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/Skeleton.tsx",
+        "pattern": "-1,\\s*\\);\\s*\\},\\s*\\[\\]\\);"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "neonstarburst-unguarded-completion",
+    "title": "NeonStarBurst burst callback guarded on finished + unmount cancelAnimation cleanup",
+    "file": "src/components/victory/NeonStarBurst.tsx",
+    "klass": "F6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/victory/NeonStarBurst.tsx",
+        "pattern": "withTiming\\(0,\\s*\\{\\s*duration:\\s*BURST_DURATION\\s*\\},\\s*\\(\\)\\s*=>"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/victory/NeonStarBurst.tsx",
+        "pattern": "\\(finished\\)\\s*=>\\s*\\{[\\s\\S]{0,260}?if\\s*\\(finished\\)\\s*\\{[\\s\\S]{0,120}?withRepeat\\(",
+        "count": 1
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/victory/NeonStarBurst.tsx",
+        "pattern": "return\\s*\\(\\)\\s*=>\\s*\\{\\s*cancelAnimation\\(burstScale\\);\\s*cancelAnimation\\(burstOpacity\\);\\s*cancelAnimation\\(pulseScale\\);",
+        "count": 1
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "neon-progressbar-dot-scalex-squash",
+    "title": "Glow dot squashed by scaleX positioner; now translateX vs measured width",
+    "file": "src/components/common/NeonProgressBar.tsx",
+    "klass": "F2",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/NeonProgressBar.tsx",
+        "pattern": "dotAnimStyle = useAnimatedStyle\\(\\(\\) => \\(\\{\\s*transform: \\[\\{ scaleX"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/NeonProgressBar.tsx",
+        "pattern": "transformOrigin: 'left center',\\s*alignItems: 'flex-end'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/NeonProgressBar.tsx",
+        "pattern": "const dotAnimStyle = useAnimatedStyle\\(\\(\\) => \\{[\\s\\S]{0,400}?transform: \\[\\{ translateX \\}\\]"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/common/NeonProgressBar.tsx",
+        "pattern": "onLayout=\\{\\(event: LayoutChangeEvent\\) => setTrackWidth"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "seasonal-quest-pulse-ungated",
+    "title": "SeasonalQuestCard claimable pulse ignored reduce motion and left the scale unsettled",
+    "file": "src/components/SeasonalQuestCard.tsx",
+    "klass": "P5",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonalQuestCard.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonalQuestCard.tsx",
+        "pattern": "if \\(reduceMotion \\|\\| !stepReady\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/SeasonalQuestCard.tsx",
+        "pattern": "cancelAnimation\\(pulse\\);\\n      pulse\\.value = 1;"
+      }
+    ]
   }
 ]

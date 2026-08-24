@@ -9,6 +9,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS, SHADOWS, FONTS, SCREEN_WIDTH } from '../constants';
 import { ModeTutorialStep } from '../data/modeTutorials';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface ModeTutorialOverlayProps {
   steps: ModeTutorialStep[];
@@ -21,40 +22,58 @@ export function ModeTutorialOverlay({ steps, onComplete, visible }: ModeTutorial
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const iconScaleAnim = useRef(new Animated.Value(0.5)).current;
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
-    if (visible) {
-      fadeAnim.setValue(0);
-      slideAnim.setValue(30);
-      iconScaleAnim.setValue(0.5);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 60,
-          friction: 10,
-          useNativeDriver: true,
-        }),
-        Animated.spring(iconScaleAnim, {
-          toValue: 1,
-          tension: 50,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]).start();
+    if (!visible) return undefined;
+    if (reduceMotion) {
+      // Reduce motion: mount settled — no backdrop fade, no card slide
+      // spring, no icon scale pop. All tutorial content stays readable.
+      fadeAnim.setValue(1);
+      slideAnim.setValue(0);
+      iconScaleAnim.setValue(1);
+      return undefined;
     }
-  }, [visible]);
+    fadeAnim.setValue(0);
+    slideAnim.setValue(30);
+    iconScaleAnim.setValue(0.5);
+    const entrance = Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 60,
+        friction: 10,
+        useNativeDriver: true,
+      }),
+      Animated.spring(iconScaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]);
+    entrance.start();
+    return () => entrance.stop();
+  }, [visible, reduceMotion, fadeAnim, slideAnim, iconScaleAnim]);
 
   const animateStepTransition = useCallback((nextStep: number) => {
+    if (reduceMotion) {
+      // Reduce motion: swap the step content in place, already settled.
+      slideAnim.setValue(0);
+      iconScaleAnim.setValue(1);
+      setCurrentStep(nextStep);
+      return;
+    }
     Animated.timing(slideAnim, {
       toValue: -20,
       duration: 150,
       useNativeDriver: true,
-    }).start(() => {
+    }).start(({ finished }) => {
+      if (!finished) return;
       setCurrentStep(nextStep);
       slideAnim.setValue(20);
       iconScaleAnim.setValue(0.5);
@@ -73,21 +92,32 @@ export function ModeTutorialOverlay({ steps, onComplete, visible }: ModeTutorial
         }),
       ]).start();
     });
-  }, [slideAnim, iconScaleAnim]);
+  }, [reduceMotion, slideAnim, iconScaleAnim]);
+
+  const dismissWithFade = useCallback(() => {
+    if (reduceMotion) {
+      // Reduce motion: instant dismiss, mirroring the ceremony policy.
+      onComplete();
+      return;
+    }
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        onComplete();
+      }
+    });
+  }, [reduceMotion, fadeAnim, onComplete]);
 
   const handleNext = useCallback(() => {
     if (currentStep < steps.length - 1) {
       animateStepTransition(currentStep + 1);
     } else {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(() => {
-        onComplete();
-      });
+      dismissWithFade();
     }
-  }, [currentStep, steps.length, animateStepTransition, fadeAnim, onComplete]);
+  }, [currentStep, steps.length, animateStepTransition, dismissWithFade]);
 
   if (!visible || steps.length === 0) return null;
 
@@ -163,15 +193,11 @@ export function ModeTutorialOverlay({ steps, onComplete, visible }: ModeTutorial
 
           {/* Skip option */}
           {!isLastStep && (
-            <Pressable onPress={() => {
-              Animated.timing(fadeAnim, {
-                toValue: 0,
-                duration: 200,
-                useNativeDriver: true,
-              }).start(() => {
-                onComplete();
-              });
-            }} accessibilityRole="button" accessibilityLabel="Skip mode tutorial">
+            <Pressable
+              onPress={dismissWithFade}
+              accessibilityRole="button"
+              accessibilityLabel="Skip mode tutorial"
+            >
               <Text style={styles.skipText}>Skip tutorial</Text>
             </Pressable>
           )}

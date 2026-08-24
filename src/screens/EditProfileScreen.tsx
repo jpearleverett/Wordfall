@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useEffect } from 'react';
+import React, { useMemo, useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -336,7 +336,15 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
     return [...equipped, ...owned, ...locked];
   }, [equippedFrame, isOwned]);
 
-  const sortedTitles = useMemo(() => {
+  // PROFILE_TITLES is unbounded by construction (its seed arrays grow with
+  // every content system), and this section renders inside the scaffold's
+  // vertical ScrollView — so locked titles collapse behind a disclosure row
+  // instead of eagerly mounting the whole catalog (~50 Pressable rows, each
+  // locked one with a GlyphMedallion + LockGlyph) on every screen open. Only
+  // the player's equipped + owned rows mount up front; the locked list mounts
+  // on explicit request. Same equipped → owned → locked ordering as before.
+  const [showLockedTitles, setShowLockedTitles] = useState(false);
+  const titleBuckets = useMemo(() => {
     const equipped: ProfileTitle[] = [];
     const owned: ProfileTitle[] = [];
     const locked: ProfileTitle[] = [];
@@ -345,8 +353,16 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
       else if (isOwned(t.id)) owned.push(t);
       else locked.push(t);
     }
-    return [...equipped, ...owned, ...locked];
+    return { unlocked: [...equipped, ...owned], locked };
   }, [equippedTitle, isOwned]);
+
+  const visibleTitles = useMemo(
+    () =>
+      showLockedTitles
+        ? [...titleBuckets.unlocked, ...titleBuckets.locked]
+        : titleBuckets.unlocked,
+    [showLockedTitles, titleBuckets],
+  );
 
   const sortedThemes = useMemo(() => {
     const equipped: CosmeticTheme[] = [];
@@ -757,7 +773,7 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         />
-        {sortedTitles.map((title, index) => {
+        {visibleTitles.map((title, index) => {
           const owned = isOwned(title.id);
           const equipped = title.id === equippedTitle;
 
@@ -817,6 +833,32 @@ const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ navigation }) => 
             </React.Fragment>
           );
         })}
+        {titleBuckets.locked.length > 0 && (
+          <>
+            {visibleTitles.length > 0 && (
+              <View
+                style={[styles.titleDivider, { backgroundColor: bentoDividerColor('purple') }]}
+              />
+            )}
+            <Pressable
+              onPress={() => setShowLockedTitles((prev) => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                showLockedTitles
+                  ? 'Hide locked titles'
+                  : `Show ${titleBuckets.locked.length} locked titles`
+              }
+              accessibilityState={{ expanded: showLockedTitles }}
+              style={({ pressed }) => [styles.lockedToggleRow, pressed && styles.rowPressed]}
+            >
+              <Text style={styles.lockedToggleText}>
+                {showLockedTitles
+                  ? 'Hide locked titles'
+                  : `Show ${titleBuckets.locked.length} locked titles`}
+              </Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       {/* Color Themes */}
@@ -1092,6 +1134,19 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyMedium,
     color: COLORS.textMuted,
     maxWidth: 140,
+  },
+  // Disclosure row collapsing the locked-title catalog (see titleBuckets).
+  lockedToggleRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  lockedToggleText: {
+    fontSize: 12,
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.purpleLight,
+    letterSpacing: 0.3,
   },
 
   // Theme cards

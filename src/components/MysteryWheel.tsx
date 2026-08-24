@@ -72,6 +72,7 @@ export function MysteryWheel({
   const [mysteryBoxResult, setMysteryBoxResult] = useState<MysteryBoxReward | null>(null);
   const [oddsVisible, setOddsVisible] = useState(false);
   const currentRotation = useRef(0);
+  const boxRevealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = useReduceMotion();
 
   // The wheel actually on screen. Seasonal variants (spring/summer/autumn/
@@ -115,6 +116,14 @@ export function MysteryWheel({
     fade.value = withTiming(1, { duration: 300 });
   }, []);
 
+  // The mystery-box reveal is delayed 1s after the wheel lands; clear the
+  // pending timer on unmount so it can't fire after dismissal.
+  useEffect(() => () => {
+    if (boxRevealTimer.current != null) {
+      clearTimeout(boxRevealTimer.current);
+    }
+  }, []);
+
   const hasDailyFreeSpin = checkDailyFreeSpin(wheelState.lastDailySpinDate);
   const isDailyFreeSpinOnly = wheelState.spinsAvailable <= 0 && hasDailyFreeSpin;
 
@@ -125,6 +134,12 @@ export function MysteryWheel({
     setSpinning(true);
     setResult(null);
     setMysteryBoxResult(null);
+    // A re-spin within the 1s reveal window would otherwise let the previous
+    // spin's box timer fire mid-spin and show a stale reveal.
+    if (boxRevealTimer.current != null) {
+      clearTimeout(boxRevealTimer.current);
+      boxRevealTimer.current = null;
+    }
 
     // If using daily free spin (no puzzle-earned spins), temporarily add 1 so spinWheel works
     const stateForSpin = wheelState.spinsAvailable <= 0
@@ -149,8 +164,14 @@ export function MysteryWheel({
     rotate.value = withTiming(totalRotation, {
       duration: spinDuration,
       easing: reduceMotion ? Easing.linear : Easing.out(Easing.cubic),
-    }, () => {
-      runOnJS(onSpinComplete)(segment, updatedState, null);
+    }, (finished) => {
+      // Reanimated cancels this animation (and invokes the callback with
+      // finished=false) when the shared value unmounts — e.g. the player
+      // taps the dismiss backdrop mid-spin. Only run the completion path
+      // for a spin that actually landed.
+      if (finished) {
+        runOnJS(onSpinComplete)(segment, updatedState, null);
+      }
     });
 
     // Callback for spin completion
@@ -167,7 +188,8 @@ export function MysteryWheel({
       if (segment.reward.mysteryBox) {
         const boxResult = openMysteryBox();
         mysteryBoxReward = boxResult;
-        setTimeout(() => {
+        boxRevealTimer.current = setTimeout(() => {
+          boxRevealTimer.current = null;
           setMysteryBoxResult(boxResult);
         }, 1000);
       }

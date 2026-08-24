@@ -21,6 +21,7 @@ import { TutorialOverlay } from '../components/TutorialOverlay';
 import { funnelTracker } from '../services/funnelTracker';
 import { removeCellsAndApplyGravity } from '../engine/gravity';
 import GameIcon from '../components/icons/GameIcon';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,6 +33,7 @@ type Phase = 'welcome' | 'tutorial' | 'celebrate' | 'economy_primer';
 
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => {} }) => {
   const { t } = useTranslation();
+  const reduceMotion = useReduceMotion();
   const [phase, setPhase] = useState<Phase>('welcome');
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -72,13 +74,23 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
     }
   }, [phase]);
 
-  // Entrance animation
+  // Entrance animation (one-shot)
   useEffect(() => {
     Animated.parallel([
       Animated.spring(scaleAnim, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
     ]).start();
+  }, [scaleAnim, fadeAnim]);
 
+  // Decorative glow pulse. Only the 'welcome' and 'celebrate' phases render a
+  // view bound to pulseAnim, so the loop runs only during those phases — it
+  // stops (and resets to the settled scale) for the whole interactive
+  // tutorial / economy_primer stretch instead of ticking a value attached to
+  // nothing. Skipped entirely under reduce motion (static glow at scale 1),
+  // mirroring HomeScreen's ambientActive gating.
+  useEffect(() => {
+    const pulseVisible = phase === 'welcome' || phase === 'celebrate';
+    if (reduceMotion || !pulseVisible) return;
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.05, duration: 1500, useNativeDriver: true }),
@@ -86,8 +98,11 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete = () => 
       ]),
     );
     pulse.start();
-    return () => pulse.stop();
-  }, [scaleAnim, fadeAnim, pulseAnim]);
+    return () => {
+      pulse.stop();
+      pulseAnim.setValue(1);
+    };
+  }, [phase, reduceMotion, pulseAnim]);
 
   // Auto-advance welcome phase after 3 seconds (tap to skip is also available)
   useEffect(() => {
