@@ -1222,6 +1222,11 @@ function HomeMainScreen({ route, navigation }: any) {
   const [showMysteryWheel, setShowMysteryWheel] = useState(false);
   const [freeSpinToast, setFreeSpinToast] = useState(false);
   const prevSpinsRef = React.useRef(player.mysteryWheel.spinsAvailable);
+  // Synchronous daily-deal purchase claim. The persisted one-per-day guard
+  // below is read via AsyncStorage (async), so a fast double-tap passed it
+  // twice and charged/delivered twice before either write landed. This ref
+  // is claimed before the first await; released only on non-purchase exits.
+  const dealPurchaseGuardRef = React.useRef<string | null>(null);
   const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1854,9 +1859,14 @@ function HomeMainScreen({ route, navigation }: any) {
           // unbounded gem drain, since its delivery branch was also missing.
           const today = new Date().toISOString().slice(0, 10);
           const dealGuardKey = '@wordfall_daily_deal_purchase';
+          const claim = `${deal.id}:${today}`;
+          // Synchronous re-entry claim BEFORE the first await — the
+          // AsyncStorage guard alone let a double-tap charge twice.
+          if (dealPurchaseGuardRef.current === claim) return;
+          dealPurchaseGuardRef.current = claim;
           try {
             const prior = await AsyncStorage.getItem(dealGuardKey);
-            if (prior === `${deal.id}:${today}`) {
+            if (prior === claim) {
               Alert.alert('Already Purchased', "Today's deal is one per day — come back tomorrow!");
               return;
             }
@@ -1865,6 +1875,7 @@ function HomeMainScreen({ route, navigation }: any) {
           }
           const canAfford = economy.canAfford(deal.currency, deal.salePrice);
           if (!canAfford) {
+            dealPurchaseGuardRef.current = null;
             Alert.alert('Not Enough ' + (deal.currency === 'coins' ? 'Coins' : 'Gems'),
               `You need ${deal.salePrice} ${deal.currency} for this deal.`);
             return;
@@ -1872,6 +1883,9 @@ function HomeMainScreen({ route, navigation }: any) {
           const spent = deal.currency === 'coins'
             ? economy.spendCoins(deal.salePrice)
             : economy.spendGems(deal.salePrice);
+          if (!spent) {
+            dealPurchaseGuardRef.current = null;
+          }
           if (spent) {
             if (deal.contents.coins) economy.addCoins(deal.contents.coins);
             if (deal.contents.gems) economy.addGems(deal.contents.gems);

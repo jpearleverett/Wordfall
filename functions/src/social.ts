@@ -1536,6 +1536,15 @@ function maxPlausibleScore(mode: string, level: number, scope?: string): number 
   if (scope === 'weekly' || scope === 'event') {
     return Math.max(Math.min(base * multiplier, 250_000), 50_000);
   }
+  if (scope === 'daily') {
+    // The daily plays ONE known ~12-word board at level 0, so the per-level
+    // base collapses to 1000 there — which rejected virtually every
+    // legitimate daily score (12×100 word-found + ~20/letter + 500 perfect
+    // + 200 no-hints ≈ 3-4k, up to ~7k with a booster-combo 2×). Flat
+    // tight ceiling: comfortably above any real solve, far below what
+    // manipulation produces.
+    return 10_000;
+  }
   return Math.min(base * multiplier, 250_000);
 }
 

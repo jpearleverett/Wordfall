@@ -301,6 +301,13 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       let newStreak: number;
       let graceUsed = false;
       let shieldConsumed = false;
+      // True only when the final else actually resets the streak — the one
+      // branch that means "a real break happened". Deriving this from
+      // diffDays afterwards (>= 3) missed the diffDays === 2 break where
+      // grace was on cooldown and no shield was fresh, so that break kept
+      // the old grace cooldown — the exact inheritance the reset exists to
+      // prevent.
+      let streakReset = false;
       // A streak break big enough to regret (≥3 days) is remembered in
       // `recentBreak` so the HomeScreen can surface the restorative
       // "50 gems to save your streak" offer on next open. Small breaks
@@ -330,6 +337,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
         shieldConsumed = true;
       } else {
         newStreak = 1;
+        streakReset = true;
         if (streaks.currentStreak >= 3) {
           didBreakStreak = true;
         }
@@ -338,7 +346,7 @@ export function createProgressMethods<T extends PlayerProgressData & { tooltipsS
       // graceDaysUsed is now telemetry only — the cooldown decides
       // eligibility. A real break clears both, so a fresh streak starts with
       // forgiveness available rather than inheriting the old one's cooldown.
-      const streakBroke = diffDays >= 3 && !shieldConsumed;
+      const streakBroke = streakReset;
       const newGraceDaysUsed = graceUsed
         ? streaks.graceDaysUsed + 1
         : streakBroke ? 0 : streaks.graceDaysUsed;

@@ -2140,7 +2140,14 @@ function GameScreenImpl({
     if (
       isStuck &&
       status === 'playing' &&
-      mode !== 'relax' &&
+      // The rescue is an UNDO — it must respect the mode's own undo rule,
+      // not just skip relax. Expert and perfectSolve are allowUndo:false
+      // "no assists" modes; granting there violated their contract (and in
+      // perfectSolve the undo flips perfectRun, tripping the fail state).
+      // unlimitedUndo (relax) never needs a grant — same exclusion the old
+      // `mode !== 'relax'` check encoded, now stated as the actual rule.
+      modeConfig.rules.allowUndo &&
+      !modeConfig.rules.unlimitedUndo &&
       undosLeft <= 0 &&
       undoTokens <= 0 &&
       history.length > 0 &&

@@ -125,3 +125,29 @@ describe('grace over a long streak (the case the counter got wrong)', () => {
     }
   });
 });
+
+describe('a real break clears the grace cooldown — from the branch, not the day count', () => {
+  // The bug: `streakBroke` was re-derived as `diffDays >= 3`, but the streak
+  // also RESETS at diffDays === 2 when grace is on cooldown and no shield is
+  // fresh. That break kept the old lastGraceDate, so the rebuilt streak
+  // spent up to a fortnight unable to use grace — inheriting the dead
+  // streak's cooldown, which the reset exists to prevent. The fix derives
+  // streakBroke from the actual reset branch (`streakReset`).
+  const fs = require('fs');
+  const path = require('path');
+  const source = fs.readFileSync(
+    path.resolve(__dirname, '../contexts/PlayerProgressContext.tsx'),
+    'utf8',
+  );
+
+  it('streakBroke mirrors the reset branch, not a diffDays re-derivation', () => {
+    expect(source).toContain('const streakBroke = streakReset;');
+    expect(source).not.toContain('diffDays >= 3 && !shieldConsumed');
+  });
+
+  it('the reset branch is the only place that flips streakReset', () => {
+    expect(source.match(/streakReset = true;/g)).toHaveLength(1);
+    // And it sits with the newStreak = 1 reset, not in a shield/grace branch.
+    expect(source).toMatch(/newStreak = 1;\s*\n\s*streakReset = true;/);
+  });
+});

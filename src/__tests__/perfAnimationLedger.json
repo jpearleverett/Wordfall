@@ -2326,5 +2326,139 @@
         "pattern": "superseded\\.stop\\(\\);"
       }
     ]
+  },
+  {
+    "id": "daily-leaderboard-ceiling-rejects-real-scores",
+    "title": "Daily plays at level 0 so the server ceiling was 1000 \u2014 virtually every legitimate daily score rejected",
+    "file": "functions/src/social.ts",
+    "klass": "C2",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "if \\(scope === 'daily'\\) \\{"
+      },
+      {
+        "type": "pattern-present",
+        "file": "functions/src/social.ts",
+        "pattern": "return 10_000;"
+      }
+    ]
+  },
+  {
+    "id": "stuck-rescue-grants-undo-in-no-assist-modes",
+    "title": "Free stuck rescue granted a working undo in expert/perfectSolve (allowUndo:false modes)",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "modeConfig\\.rules\\.allowUndo &&\\n      !modeConfig\\.rules\\.unlimitedUndo &&"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "mode !== 'relax' &&\\n      undosLeft <= 0"
+      }
+    ]
+  },
+  {
+    "id": "shared-board-wallclock-nondeterminism",
+    "title": "Daily/weekly candidate acceptance depended on wall-clock solver budgets \u2014 slow devices could get a different shared board",
+    "file": "src/engine/boardGenerator.ts",
+    "klass": "C4",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/engine/boardGenerator.ts",
+        "pattern": "deterministic \\? undefined : GEN_SOLVE_BUDGET_MS"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/engine/boardGenerator.ts",
+        "pattern": "deterministic \\? Number\\.POSITIVE_INFINITY : GEN_SOLVE_BUDGET_MS"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/engine/boardGenerator.ts",
+        "pattern": "if \\(deterministic\\) return;"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/engine/boardGenerator.ts",
+        "pattern": "budgetMs: DAILY_FAIRNESS_BUDGET_MS,\\n  // The daily ranks on a shared leaderboard"
+      }
+    ]
+  },
+  {
+    "id": "daily-deal-double-tap-double-charge",
+    "title": "Daily-deal one-per-day guard was async-only \u2014 a fast double-tap charged and delivered twice",
+    "file": "App.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "dealPurchaseGuardRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "App.tsx",
+        "pattern": "if \\(dealPurchaseGuardRef\\.current === claim\\) return;"
+      }
+    ]
+  },
+  {
+    "id": "dead-trace-release-clips-drag-then-tap",
+    "title": "180ms dead-trace release wiped viable partial traces, breaking drag-then-tap-to-extend",
+    "file": "src/screens/game/PlayField.tsx",
+    "klass": "C5",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/game/PlayField.tsx",
+        "pattern": "selectionIsLivePrefixRef"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/game/PlayField.tsx",
+        "pattern": "if \\(selectionIsLivePrefixRef\\.current\\) return;"
+      }
+    ]
+  },
+  {
+    "id": "streak-break-inherits-grace-cooldown",
+    "title": "A diffDays===2 break (grace on cooldown, no shield) kept the dead streak's grace cooldown",
+    "file": "src/contexts/PlayerProgressContext.tsx",
+    "klass": "C6",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "const streakBroke = streakReset;"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/contexts/PlayerProgressContext.tsx",
+        "pattern": "diffDays >= 3 && !shieldConsumed"
+      },
+      {
+        "type": "test",
+        "suite": "src/__tests__/streakGrace.test.ts"
+      }
+    ]
   }
 ]
