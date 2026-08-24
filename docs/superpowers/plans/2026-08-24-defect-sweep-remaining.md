@@ -35,6 +35,16 @@ telemetry).
   jest cannot substitute for
 - `node scripts/defect-scorecard.js` — 183/183
 
+## Known residual (documented, not fixed)
+
+`requestAccountDeletion` now sweeps event scores, club member residue
+(memberLastActive, goal memberProgress/completedMembers, sharedGoal
+memberContributions/finalMemberIds) and referral dedup rows. It iterates
+clubs the user is **currently a member of**, so a `finalMemberIds`
+snapshot inside a club they previously LEFT is not swept. Closing that
+needs a `sharedGoals` collection-group index; it is a stale uid in a
+club-internal history array, not a public leaderboard row.
+
 ## Not done (deliberately)
 
 - **Device motion pass.** No physical device/emulator in this environment,

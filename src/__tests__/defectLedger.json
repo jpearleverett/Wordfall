@@ -5076,5 +5076,180 @@
       }
     ],
     "status": "fixed"
+  },
+  {
+    "id": "experiment-fallback-variant-not-control-and-exposure-ignores-segments",
+    "title": "Not-enrolled users got variants[0] (a paid treatment) instead of the control, and exposure logging re-assigned without segments",
+    "file": "src/services/experiments.ts",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/experiments.ts",
+        "pattern": "return getControlVariant\\(experiment\\);",
+        "count": 4
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/experiments.ts",
+        "pattern": "controlVariantId: 'C'"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/experiments.ts",
+        "pattern": "getAssignedVariant\\(experimentId, userId, segmentsForTargeting\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/experiments.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "unmute-never-resumes-bgm",
+    "title": "Raising a volume slider off zero never resumed BGM \u2014 music stayed dead until the next screen/level transition",
+    "file": "src/services/sound.ts",
+    "klass": "C5",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/sound.ts",
+        "pattern": "lastRequestedTrack"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/sound.ts",
+        "pattern": "wasMuted && this\\.lastRequestedTrack"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/sound.ts",
+        "pattern": "getCurrentTrack\\(\\): MusicTrack \\| null"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/soundMute.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "rc-interstitial-seconds-dead-mirror",
+    "title": "Remote Config key interstitialIntervalSeconds was documented as a live mirror but nothing read it",
+    "file": "src/services/remoteConfig.ts",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/services/remoteConfig.ts",
+        "pattern": "interstitialIntervalSeconds:"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/remoteConfigInit.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "login-calendar-7day-variant-display-grant-mismatch",
+    "title": "Login calendar grid rendered the hardcoded 30-day table while the claim path granted from the active variant",
+    "file": "src/screens/HomeScreen.tsx",
+    "klass": "C6",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "getActiveLoginCalendar\\(\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "ECONOMY\\.loginRewards"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "Math\\.min\\(Math\\.max\\(loginCycleDay, 1\\), 30\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/screens/__tests__/homeWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "home-shield-offer-props-never-wired",
+    "title": "Streak-shield upsell keyed on props App.tsx never passed \u2014 grace trigger dead, shield owners upsold again",
+    "file": "src/screens/HomeScreen.tsx",
+    "klass": "C1",
+    "severity": "low",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "streakShieldActive\\?: boolean"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "streakShieldActive = false"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "streakGraceDaysUsed\\?: number"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "export function homeStreakShieldRisk"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/HomeScreen.tsx",
+        "pattern": "streakShieldAvailable: playerStreaks\\.streakShieldAvailable"
+      },
+      {
+        "type": "test",
+        "suite": "src/screens/__tests__/homeWiring.test.ts"
+      }
+    ],
+    "status": "fixed"
+  },
+  {
+    "id": "friend-challenges-send-only-dead-delivery",
+    "title": "Friend challenges are send-only: undeliverable challenges no longer persist or write to other users, and the sent list is pruned/capped",
+    "file": "src/contexts/PlayerSocialContext.tsx",
+    "klass": "C7",
+    "severity": "medium",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerSocialContext.tsx",
+        "pattern": "getRemoteBoolean\\('friendChallengesEnabled'\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/contexts/PlayerSocialContext.tsx",
+        "pattern": "MAX_SENT_CHALLENGES"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/remoteConfig.ts",
+        "pattern": "friendChallengesEnabled: false"
+      },
+      {
+        "type": "test",
+        "suite": "src/contexts/__tests__/socialMethods.test.ts"
+      }
+    ],
+    "status": "fixed"
   }
 ]
