@@ -176,6 +176,44 @@ describe('puzzleSnapshot', () => {
     expect(snapshotMatchesTarget(snap, 5, 'timePressure')).toBe(false);
   });
 
+  it('shared-board snapshots are bounded to their own UTC period', () => {
+    // Daily/weekly always launch at level 0, so a (level, mode)-only match
+    // hydrated day D's half-played board verbatim into day D+1's different
+    // daily — stale letters, a find list half-marked found.
+    const dailySnap: PuzzleSnapshot = {
+      version: 1,
+      savedAtMs: Date.UTC(2026, 7, 24, 12, 0, 0),
+      level: 0,
+      mode: 'daily',
+      chapterId: 1,
+      state: makeState({ level: 0, mode: 'daily' }),
+    };
+    const sameDay = new Date(Date.UTC(2026, 7, 24, 23, 0, 0));
+    const nextDay = new Date(Date.UTC(2026, 7, 25, 0, 30, 0));
+    expect(snapshotMatchesTarget(dailySnap, 0, 'daily', sameDay)).toBe(true);
+    expect(snapshotMatchesTarget(dailySnap, 0, 'daily', nextDay)).toBe(false);
+
+    const weeklySnap: PuzzleSnapshot = {
+      ...dailySnap,
+      mode: 'weekly',
+      state: makeState({ level: 0, mode: 'weekly' }),
+    };
+    // Aug 24 2026 falls in the Sunday-anchored week of Aug 23–29.
+    const sameWeek = new Date(Date.UTC(2026, 7, 28, 12, 0, 0));
+    const nextWeek = new Date(Date.UTC(2026, 7, 31, 12, 0, 0));
+    expect(snapshotMatchesTarget(weeklySnap, 0, 'weekly', sameWeek)).toBe(true);
+    expect(snapshotMatchesTarget(weeklySnap, 0, 'weekly', nextWeek)).toBe(false);
+
+    // Non-shared modes keep the plain (level, mode) match across days.
+    const classicSnap: PuzzleSnapshot = {
+      ...dailySnap,
+      level: 5,
+      mode: 'classic',
+      state: makeState({ level: 5, mode: 'classic' }),
+    };
+    expect(snapshotMatchesTarget(classicSnap, 5, 'classic', nextDay)).toBe(true);
+  });
+
   it('clearPuzzleSnapshot removes the stored snapshot', async () => {
     await savePuzzleSnapshot(makeState({ moves: 1 }), 1);
     expect(storage.has('wordfall.puzzleSnapshot.v1')).toBe(true);

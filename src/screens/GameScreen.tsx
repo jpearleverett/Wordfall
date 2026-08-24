@@ -17,7 +17,7 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Board, CellPosition, GameMode, GameState, VictorySummaryItem } from '../types';
-import { useGame } from '../hooks/useGame';
+import { useGame, canProduceHint, canSmartShuffle } from '../hooks/useGame';
 import { GameStoreContext } from '../stores/gameStore';
 import { GameHeader } from '../components/GameHeader';
 import { PuzzleComplete } from '../components/PuzzleComplete';
@@ -50,6 +50,7 @@ import {
   selectConsecutiveFailures,
   selectLastLevelStars,
   selectLastBreatherOfferedAt,
+  selectPrestige,
   selectPuzzlesSolved,
   selectStreaks,
   selectFlawlessStreak,
@@ -72,6 +73,7 @@ import { detectCombo, type BoosterType, type ComboType } from '../data/boosterCo
 import { getTheme } from '../data/cosmetics';
 import { getChapterForLevel, getChapterPalette, getChapterTileRamp } from '../data/chapters';
 import { getWing } from '../data/library';
+import { getPrestigeHintBonus } from '../data/prestigeSystem';
 import { rollBonusTile } from '../utils/bonusTile';
 
 import { ContextualOffer, OfferType } from '../components/ContextualOffer';
@@ -659,6 +661,7 @@ function GameScreenImpl({
   const consecutiveFailures = usePlayerStore(selectConsecutiveFailures);
   const lastLevelStars = usePlayerStore(selectLastLevelStars);
   const lastBreatherOfferedAt = usePlayerStore(selectLastBreatherOfferedAt);
+  const prestige = usePlayerStore(selectPrestige);
   const puzzlesSolved = usePlayerStore(selectPuzzlesSolved);
   const playerStreaks = usePlayerStore(selectStreaks);
   const flawlessStreakData = usePlayerStore(selectFlawlessStreak);
@@ -1157,7 +1160,11 @@ function GameScreenImpl({
         // Gem-priced escalation: spend N gems and auto-solve the last word.
         // Price is Remote Config driven so LiveOps can tune without a build.
         const gemCost = Math.max(1, Math.round(getRemoteNumber('closeFinishPremiumGemCost')));
-        if (spendGems(gemCost)) {
+        // Never take the gems when the auto-solve cannot deliver: on a dead
+        // board USE_PREMIUM_HINT no-ops and the queued SUBMIT_WORD fires on
+        // an empty selection — the exact spot this offer targets (1 word
+        // left) is also where dead boards are guaranteed possible.
+        if (canProduceHint(store.getState()) && spendGems(gemCost)) {
           // Select the current positions of the last word (post-gravity) via
           // USE_PREMIUM_HINT, then submit on the next tick so the player
           // sees the trace briefly before it resolves.
@@ -1973,6 +1980,21 @@ function GameScreenImpl({
     setFreeUndoGranted(false);
   }, [level, mode]);
 
+  // Prestige tier-1's permanent "+1 hint" — displayed by the prestige
+  // ceremony since launch, never applied anywhere. Realized as N free hint
+  // USES per puzzle: the first N hints skip the token charge in handleHint
+  // (granting raw hintsLeft would be invisible — the hint button always
+  // routes through the token spend). Rare-tile companion bonus applies in
+  // useRewardWiring's drop roll.
+  const prestigeFreeHintsRef = useRef(0);
+  useEffect(() => {
+    prestigeFreeHintsRef.current = hintsAllowed
+      ? getPrestigeHintBonus(prestige?.permanentBonuses ?? [])
+      : 0;
+    // Re-provisioned per puzzle load only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level, mode]);
+
   // Purchased one-shot effects from the coin shop. The shop stores them as
   // temporary entitlements (so an unused purchase survives an app restart);
   // this is the point where they become real: activate in the game store,
@@ -2235,11 +2257,21 @@ function GameScreenImpl({
     // not just hide buttons — this is the single choke point every hint
     // surface routes through.
     if (!hintsAllowed) return;
+    // A dead board has no traceable hint: USE_HINT would silently no-op,
+    // so spending the persistent token below bought nothing. Charge only
+    // when the mode-aware picker can actually produce one.
+    if (!canProduceHint(store.getState())) return;
     if (mode !== 'relax') {
-      // Spend from persistent inventory and grant into game state
-      if (hintTokens <= 0) return;
-      spendHintToken();
-      grantHint();
+      if (prestigeFreeHintsRef.current > 0) {
+        // Prestige permanent bonus: this hint is on the house.
+        prestigeFreeHintsRef.current -= 1;
+        grantHint();
+      } else {
+        // Spend from persistent inventory and grant into game state
+        if (hintTokens <= 0) return;
+        spendHintToken();
+        grantHint();
+      }
     }
     void soundManager.playSound('hintUsed');
     void analytics.logEvent('hint_used', { level, mode, hintsAvailable });
@@ -2401,15 +2433,29 @@ function GameScreenImpl({
   });
 
   const handleWildcard = useStableCallback(() => {
-    if ((boosterTokens?.wildcardTile ?? 0) <= 0) return;
-    spendBoosterToken('wildcardTile');
-    grantBooster('wildcardTile');
+    const gameState = store.getState();
+    if (gameState.wildcardMode) {
+      // Second tap = CANCEL placement mode. This used to run the full
+      // activation path again — a second economy token spent for toggling
+      // the mode back off. Cancelling costs nothing; the already-granted
+      // in-puzzle count stays and re-activates for free below.
+      void soundManager.playSound('buttonPress');
+      activateWildcard();
+      return;
+    }
+    // An unconsumed in-puzzle wildcard (a cancelled activation, or one
+    // granted by an entitlement) re-activates without a new charge.
+    if (gameState.boosterCounts.wildcardTile <= 0) {
+      if ((boosterTokens?.wildcardTile ?? 0) <= 0) return;
+      spendBoosterToken('wildcardTile');
+      grantBooster('wildcardTile');
+      void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
+      recordDailyQuestEvent({ type: 'booster_used' });
+      checkFirstBooster();
+      checkAndActivateCombo('wildcardTile');
+    }
     void soundManager.playSound('buttonPress');
-    void analytics.logEvent('booster_used', { level, mode, booster: 'wildcardTile' });
-    recordDailyQuestEvent({ type: 'booster_used' });
-    checkFirstBooster();
     activateWildcard();
-    checkAndActivateCombo('wildcardTile');
   });
 
   const handleSpotlight = useStableCallback(() => {
@@ -2426,6 +2472,11 @@ function GameScreenImpl({
 
   const handleSmartShuffle = useStableCallback(() => {
     if ((boosterTokens?.smartShuffle ?? 0) <= 0) return;
+    // SMART_SHUFFLE preserves remaining word paths, so it can only succeed
+    // when every remaining word is currently findable — on a dead board the
+    // reducer "refunds" the in-puzzle count by no-oping, but the economy
+    // token spent below was already gone. Charge only when it can apply.
+    if (!canSmartShuffle(store.getState())) return;
     spendBoosterToken('smartShuffle');
     grantBooster('smartShuffle');
     void soundManager.playSound('buttonPress');

@@ -2460,5 +2460,204 @@
         "suite": "src/__tests__/streakGrace.test.ts"
       }
     ]
+  },
+  {
+    "id": "hint-token-spent-when-solver-returns-null",
+    "title": "Hint token charged when USE_HINT would no-op on a dead board",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "export function canProduceHint"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(!canProduceHint\\(store\\.getState\\(\\)\\)\\) return;"
+      }
+    ]
+  },
+  {
+    "id": "premium-autosolve-charges-gems-on-dead-board",
+    "title": "close_finish_premium took gems before USE_PREMIUM_HINT could no-op on a dead board",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "canProduceHint\\(store\\.getState\\(\\)\\) && spendGems\\(gemCost\\)"
+      }
+    ]
+  },
+  {
+    "id": "smart-shuffle-refund-never-reaches-economy",
+    "title": "SMART_SHUFFLE failure refunded only in-puzzle counts; the economy token stayed spent",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C1",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "export function canSmartShuffle"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(!canSmartShuffle\\(store\\.getState\\(\\)\\)\\) return;"
+      }
+    ]
+  },
+  {
+    "id": "wildcard-cancel-spends-second-token",
+    "title": "Cancelling wildcard placement spent a second booster token",
+    "file": "src/screens/GameScreen.tsx",
+    "klass": "C1",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(gameState\\.wildcardMode\\) \\{"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "if \\(gameState\\.boosterCounts\\.wildcardTile <= 0\\) \\{"
+      }
+    ]
+  },
+  {
+    "id": "wildcard-position-not-remapped-after-gravity",
+    "title": "Unused wildcard marker kept stale coordinates after gravity (reassigned to whatever slid in)",
+    "file": "src/hooks/useGame.ts",
+    "klass": "C3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "const wildcardIds = new Set"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "wildcardsDestroyed"
+      }
+    ]
+  },
+  {
+    "id": "undo-does-not-restore-consumed-freeze-doubler",
+    "title": "Undo rolled back a doubler/freeze's benefit but not its consumption",
+    "file": "src/hooks/useGame.ts",
+    "klass": "C1",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "scoreDoubler: lastHistory\\.scoreDoubler \\?\\? state\\.scoreDoubler"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "scoreDoubler: state\\.scoreDoubler,\\n        boardFreezeActive: state\\.boardFreezeActive,"
+      }
+    ]
+  },
+  {
+    "id": "premium-hint-preserves-flawless-and-3-stars",
+    "title": "A paid premium reveal kept the FLAWLESS badge and streak (doc defines flawless as no hints)",
+    "file": "src/hooks/useGame.ts",
+    "klass": "C3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "premiumHintUsed: true,[\\s\\S]{0,400}?perfectRun: false,"
+      }
+    ]
+  },
+  {
+    "id": "daily-snapshot-survives-rollover",
+    "title": "Mid-daily snapshot from day D hydrated verbatim into day D+1's different board",
+    "file": "src/services/puzzleSnapshot.ts",
+    "klass": "C3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/services/puzzleSnapshot.ts",
+        "pattern": "if \\(snapshot\\.mode === 'daily'\\)"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/services/puzzleSnapshot.ts",
+        "pattern": "getWeekId\\(savedAt\\) === getWeekId\\(now\\)"
+      },
+      {
+        "type": "test",
+        "suite": "src/services/__tests__/puzzleSnapshot.test.ts"
+      }
+    ]
+  },
+  {
+    "id": "timer-pauses-in-background-despite-anticheat-doc",
+    "title": "timePressure clock froze while backgrounded despite the documented anti-cheat",
+    "file": "src/hooks/useGame.ts",
+    "klass": "C3",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useGame.ts",
+        "pattern": "elapsedSeconds"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/types.ts",
+        "pattern": "type: 'TICK_TIMER'; elapsedSeconds\\?: number"
+      }
+    ]
+  },
+  {
+    "id": "prestige-hint-bonus-never-applied",
+    "title": "Prestige tier-1 '+1 hint' displayed as permanent but never provisioned (rare-tile decoder landed too)",
+    "file": "src/data/prestigeSystem.ts",
+    "klass": "C6",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/data/prestigeSystem.ts",
+        "pattern": "export function getPrestigeHintBonus"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/data/prestigeSystem.ts",
+        "pattern": "export function getPrestigeRareTileBonus"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/GameScreen.tsx",
+        "pattern": "prestigeFreeHintsRef"
+      }
+    ]
   }
 ]
