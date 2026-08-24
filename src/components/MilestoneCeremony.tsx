@@ -62,6 +62,9 @@ function CeremonySpark({ left, top, size, delay, dur, drift, peak, color }: (typ
   const t = useSharedValue(0);
   useEffect(() => {
     t.value = withDelay(delay, withRepeat(withTiming(1, { duration: dur }), -1, true));
+    // Infinite repeat — without cancellation the UI-thread animation keeps
+    // driving the orphaned shared value after the ceremony unmounts.
+    return () => cancelAnimation(t);
   }, []);
   const sparkStyle = useAnimatedStyle(() => ({
     opacity: interpolate(t.value, [0, 0.3, 0.7, 1], [0.12, peak, peak, 0.18]),

@@ -103,7 +103,7 @@ export default function EventLeaderboardCard({
         const isMe = entry.userId === currentUserId;
         return (
           <Row
-            key={`${entry.userId}-${rank}`}
+            key={entry.userId}
             rank={rank}
             name={entry.displayName}
             score={entry.score}

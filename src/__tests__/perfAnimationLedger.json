@@ -2079,5 +2079,176 @@
         "pattern": "cancelAnimation\\(pulse\\);\\n      pulse\\.value = 1;"
       }
     ]
+  },
+  {
+    "id": "ceremony-spark-infinite-repeat-leak",
+    "title": "CeremonySpark ambient dots ran infinite Reanimated repeats with no cancellation on unmount",
+    "file": "src/components/MilestoneCeremony.tsx",
+    "klass": "P3",
+    "severity": "high",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "withDelay\\(delay, withRepeat\\(withTiming\\(1, \\{ duration: dur \\}\\), -1, true\\)\\);\\n    // Infinite repeat"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/MilestoneCeremony.tsx",
+        "pattern": "return \\(\\) => cancelAnimation\\(t\\);"
+      }
+    ]
+  },
+  {
+    "id": "celebration-burst-hardcoded-origin",
+    "title": "CelebrationBurst origins hardcoded to one device's pixels (off-center everywhere else)",
+    "file": "src/components/StreakMilestoneCeremony.tsx",
+    "klass": "F2",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "centerX=\\{180\\}"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "centerX=\\{180\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/StreakMilestoneCeremony.tsx",
+        "pattern": "useWindowDimensions"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/CollectionCompleteCeremony.tsx",
+        "pattern": "useWindowDimensions"
+      }
+    ]
+  },
+  {
+    "id": "achievement-dead-animated-text",
+    "title": "Dead module-scope AnimatedText in AchievementCeremony",
+    "file": "src/components/AchievementCeremony.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/AchievementCeremony.tsx",
+        "pattern": "AnimatedText"
+      }
+    ]
+  },
+  {
+    "id": "scanline-animated-path-dead-and-ungated",
+    "title": "ScanLineOverlay carried a dead, ungated infinite scroll loop no caller ever enabled",
+    "file": "src/components/common/ScanLineOverlay.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/ScanLineOverlay.tsx",
+        "pattern": "withRepeat"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/ScanLineOverlay.tsx",
+        "pattern": "animated\\?: boolean"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/common/ScanLineOverlay.tsx",
+        "pattern": "scrollingLine"
+      }
+    ]
+  },
+  {
+    "id": "particlesystem-dead-exports",
+    "title": "ShimmerEffect and PulsingGlowRing exported with zero importers",
+    "file": "src/components/effects/ParticleSystem.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/effects/ParticleSystem.tsx",
+        "pattern": "ShimmerEffect"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/effects/ParticleSystem.tsx",
+        "pattern": "PulsingGlowRing"
+      }
+    ]
+  },
+  {
+    "id": "not-synced-banner-dead-exit-fade",
+    "title": "NotSyncedBanner's exit fade unmounted on the frame it started (never displayed)",
+    "file": "src/components/NotSyncedBanner.tsx",
+    "klass": "P9",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/NotSyncedBanner.tsx",
+        "pattern": "if \\(!shouldShow\\) return null;"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/NotSyncedBanner.tsx",
+        "pattern": "if \\(finished && !shouldShow\\) setRendered\\(false\\);"
+      }
+    ]
+  },
+  {
+    "id": "event-claim-anim-ungated",
+    "title": "Event reward-claim bounce ran for reduce-motion users",
+    "file": "src/screens/EventScreen.tsx",
+    "klass": "P5",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EventScreen.tsx",
+        "pattern": "const reduceMotion = useReduceMotion\\(\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/screens/EventScreen.tsx",
+        "pattern": "if \\(!reduceMotion\\) \\{\\n      Animated\\.sequence",
+        "count": 1
+      }
+    ]
+  },
+  {
+    "id": "event-leaderboard-rank-in-row-key",
+    "title": "Event leaderboard rows keyed by userId+rank (index key in disguise, remounts on reorder)",
+    "file": "src/components/events/EventLeaderboardCard.tsx",
+    "klass": "P8",
+    "severity": "low",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-absent",
+        "file": "src/components/events/EventLeaderboardCard.tsx",
+        "pattern": "key=\\{`\\$\\{entry\\.userId\\}-\\$\\{rank\\}`\\}"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/events/EventLeaderboardCard.tsx",
+        "pattern": "key=\\{entry\\.userId\\}"
+      }
+    ]
   }
 ]

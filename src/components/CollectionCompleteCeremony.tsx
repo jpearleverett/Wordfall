@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated as RNAnimated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated as RNAnimated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS } from '../constants';
 import { SparkleField, CelebrationBurst } from './effects/ParticleSystem';
@@ -26,6 +26,9 @@ export function CollectionCompleteCeremony({
   const { animateDecorations, overlayStyle, cardStyle, requestDismiss } =
     useCeremonyTransition(onDismiss);
   const { t } = useTranslation();
+  // Burst origin follows the real window (the old hardcoded 180/200 was
+  // tuned for one device width and drifted off-center everywhere else).
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const decorationsMounted = useDeferredMount(280);
 
   return (
@@ -39,7 +42,7 @@ export function CollectionCompleteCeremony({
         <SparkleField count={26} intensity="intense" colors={[COLORS.gold, COLORS.accent, COLORS.purple, '#fff']} />
       )}
       {decorationsMounted && animateDecorations && (
-        <CelebrationBurst centerX={180} centerY={200} particleCount={20} />
+        <CelebrationBurst centerX={windowWidth / 2} centerY={windowHeight * 0.25} particleCount={20} />
       )}
       <RNAnimated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated as RNAnimated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated as RNAnimated, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, cancelAnimation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, FONTS, GRADIENTS, SHADOWS, STREAK } from '../constants';
@@ -20,6 +20,9 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
   // settle + instant dismiss under reduced motion, stop-on-unmount.
   const { animateDecorations, overlayStyle, cardStyle, requestDismiss } =
     useCeremonyTransition(onDismiss);
+  // Burst origin follows the real window (the old hardcoded 180/250 was
+  // tuned for one device width and drifted off-center everywhere else).
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   // Fire pulse rests at 1, so it is already settled under reduced motion.
   const fire = useSharedValue(1);
   const decorationsMounted = useDeferredMount(280);
@@ -55,7 +58,7 @@ export function StreakMilestoneCeremony({ milestone, onDismiss }: StreakMileston
         <SparkleField count={24} intensity="intense" colors={[COLORS.coral, COLORS.gold, COLORS.orange, '#fff']} />
       )}
       {decorationsMounted && animateDecorations && (
-        <CelebrationBurst centerX={180} centerY={250} particleCount={16} colors={[COLORS.coral, COLORS.gold, COLORS.orange]} />
+        <CelebrationBurst centerX={windowWidth / 2} centerY={windowHeight * 0.31} particleCount={16} colors={[COLORS.coral, COLORS.gold, COLORS.orange]} />
       )}
       <RNAnimated.View style={[styles.card, cardStyle]}>
         <LinearGradient colors={GRADIENTS.surfaceCard} style={styles.cardInner}>

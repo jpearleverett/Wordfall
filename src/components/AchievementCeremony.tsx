@@ -122,8 +122,6 @@ export function AchievementCeremony({
   );
 }
 
-const AnimatedText = Animated.createAnimatedComponent(Text);
-
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
