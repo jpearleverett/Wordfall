@@ -2250,5 +2250,81 @@
         "pattern": "key=\\{entry\\.userId\\}"
       }
     ]
+  },
+  {
+    "id": "mystery-wheel-dismiss-mid-spin-reroll",
+    "title": "Finished-guard on the spin callback made mid-spin dismissal a free re-roll \u2014 dismissal now locked while spinning",
+    "file": "src/components/MysteryWheel.tsx",
+    "klass": "F6",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/MysteryWheel.tsx",
+        "pattern": "onPress=\\{spinning \\? undefined : onDismiss\\}",
+        "count": 2
+      }
+    ]
+  },
+  {
+    "id": "ceremony-dismiss-registry-wrong-target",
+    "title": "Single-slot graceful-dismiss registry could be stolen by a non-queue modal (auto-dismiss would close the wrong surface)",
+    "file": "src/hooks/useCeremonyTransition.ts",
+    "klass": "F3",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/hooks/useCeremonyTransition.ts",
+        "pattern": "queueManaged"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/PostLossModal.tsx",
+        "pattern": "queueManaged: false"
+      }
+    ]
+  },
+  {
+    "id": "auto-advance-delay-unclamped",
+    "title": "autoAdvanceDelayMs read unclamped \u2014 a blanked RC value would auto-navigate off every victory screen instantly",
+    "file": "src/components/PuzzleComplete.tsx",
+    "klass": "F4",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/PuzzleComplete.tsx",
+        "pattern": "getRemoteNumberClamped\\('autoAdvanceDelayMs', 3500, 1500, 15000\\)"
+      },
+      {
+        "type": "pattern-absent",
+        "file": "src/components/PuzzleComplete.tsx",
+        "pattern": "getRemoteNumber\\('autoAdvanceDelayMs'\\)"
+      }
+    ]
+  },
+  {
+    "id": "grid-superseded-fall-not-stopped",
+    "title": "A re-fall during the predecessor's hold/stagger left the old sequence running \u2014 stale timing clobber + dropped onGravitySettled",
+    "file": "src/components/Grid.tsx",
+    "klass": "F6",
+    "severity": "medium",
+    "status": "fixed",
+    "checks": [
+      {
+        "type": "pattern-present",
+        "file": "src/components/Grid.tsx",
+        "pattern": "const superseded = activeFallsRef\\.current\\.get\\(fall\\.id\\);"
+      },
+      {
+        "type": "pattern-present",
+        "file": "src/components/Grid.tsx",
+        "pattern": "superseded\\.stop\\(\\);"
+      }
+    ]
   }
 ]

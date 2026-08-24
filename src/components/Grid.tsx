@@ -532,6 +532,18 @@ function GameGridImpl({
         liveOffsetRef.current,
       );
       for (const fall of transition.falls) {
+        // A tile re-falling while its previous fall is still in flight (or
+        // still in its hold/stagger delay): stop the superseded sequence
+        // BEFORE seeding the value. Left running, a predecessor still in
+        // its delay phase would start after the successor and clobber the
+        // shared Animated.ValueXY with stale timing — and its not-finished
+        // completion meant the successor run's settle accounting never
+        // reached zero, dropping onGravitySettled (the landing haptic).
+        const superseded = activeFallsRef.current.get(fall.id);
+        if (superseded) {
+          superseded.stop();
+          activeFallsRef.current.delete(fall.id);
+        }
         const existing = fallAnimMapRef.current.get(fall.id);
         if (existing) {
           existing.setValue({ x: fall.dx, y: fall.dy });

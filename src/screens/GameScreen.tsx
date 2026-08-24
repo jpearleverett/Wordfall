@@ -737,8 +737,11 @@ function GameScreenImpl({
   const wordsUntilShrink = useStore(store, s => s.wordsUntilShrink);
   const perfectRun = useStore(store, s => s.perfectRun);
   // NOTE: deliberately NOT subscribed to per-tap markers (lastInvalidTap /
-  // lastSelectionResetTap) — the invalid-tap feedback below watches the store
-  // transiently so trace restarts never re-render this 3000-line component.
+  // lastSelectionResetTap) so trace restarts never re-render this
+  // 3000-line component. (The invalid-tap sound/haptic/flash that once
+  // watched them transiently was removed with the rest of the
+  // invalid-word feedback — the reducer still maintains the markers, but
+  // nothing consumes them today.)
   const activeComboType = useStore(store, s => s.activeComboType);
   const comboWordsRemaining = useStore(store, s => s.comboWordsRemaining);
   const comboMultiplierValue = useStore(store, s => s.comboMultiplier);

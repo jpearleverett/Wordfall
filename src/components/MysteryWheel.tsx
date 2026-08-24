@@ -219,7 +219,15 @@ export function MysteryWheel({
 
   return (
     <Animated.View style={[styles.overlay, overlayFadeStyle]}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel="Dismiss mystery wheel" />
+      {/* Dismissal is locked while the wheel spins: with the finished-guard
+          on the spin callback, unmounting mid-spin would neither consume the
+          spin nor deliver the result — a free re-roll of a disclosed-odds,
+          gem-purchasable prize once the landing wedge becomes predictable. */}
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={spinning ? undefined : onDismiss}
+        accessibilityLabel="Dismiss mystery wheel"
+      />
       <View style={styles.sheet} pointerEvents="box-none">
         <LinearGradient
           colors={['#1a0a3a', '#0a0215']}
@@ -236,7 +244,7 @@ export function MysteryWheel({
           </Text>
           <Pressable
             style={styles.closeX}
-            onPress={onDismiss}
+            onPress={spinning ? undefined : onDismiss}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Close mystery wheel"

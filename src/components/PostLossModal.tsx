@@ -105,7 +105,12 @@ export function PostLossModal({
   const theme = VARIANTS[variant];
   // Shared ceremony policy: overlay fades, card scales, instant settle +
   // instant dismiss under reduced motion, finished-guarded exit.
-  const { overlayStyle, cardStyle, requestDismiss } = useCeremonyTransition(onDismiss);
+  // queueManaged: false — this modal reuses the ceremony transition but is
+  // NOT a queue ceremony; it must never become the target of the queue's
+  // auto-dismiss timer (see CeremonyTransitionOptions).
+  const { overlayStyle, cardStyle, requestDismiss } = useCeremonyTransition(onDismiss, {
+    queueManaged: false,
+  });
   const [timeLeft, setTimeLeft] = useState(Math.ceil(AUTO_DISMISS_MS / 1000));
 
   useEffect(() => {

@@ -88,7 +88,22 @@ export interface CeremonyTransition {
   requestDismiss: () => void;
 }
 
-export function useCeremonyTransition(onDismiss: () => void): CeremonyTransition {
+export interface CeremonyTransitionOptions {
+  /**
+   * Whether this surface is the ceremony the queue's auto-dismiss timer may
+   * target (default true — the CeremonyRouter-rendered ceremonies). Set
+   * false for standalone modals that merely reuse the transition
+   * (PostLossModal): if such a modal registered, it could steal the slot
+   * while a Tier-2 ceremony is on screen and the timer would dismiss the
+   * WRONG surface, leaving the ceremony stuck.
+   */
+  queueManaged?: boolean;
+}
+
+export function useCeremonyTransition(
+  onDismiss: () => void,
+  { queueManaged = true }: CeremonyTransitionOptions = {},
+): CeremonyTransition {
   const reduceMotion = useReduceMotion();
   // The plan at mount decides initial values; live preference changes apply
   // to the NEXT ceremony rather than snapping one already on screen.
@@ -168,13 +183,14 @@ export function useCeremonyTransition(onDismiss: () => void): CeremonyTransition
   }, [plan.exitDurationMs]);
 
   useEffect(() => {
+    if (!queueManaged) return undefined;
     activeGracefulDismiss = requestDismiss;
     return () => {
       if (activeGracefulDismiss === requestDismiss) {
         activeGracefulDismiss = null;
       }
     };
-  }, [requestDismiss]);
+  }, [requestDismiss, queueManaged]);
 
   const overlayStyle = useMemo(() => ({ opacity: overlayOpacity }), [overlayOpacity]);
   const cardStyle = useMemo(
